@@ -1,8 +1,15 @@
 @echo off
+:: Replace Torch inside ComfyUI's Python only (runtime\comfy\python_embeded).
+:: Called by the version bats in this folder:
+::   _switch.bat TORCH  TORCHVISION  TORCHAUDIO  cu128|cu130
+::
+:: Does not touch BlomboUI Python in runtime\python_embeded.
+
 setlocal EnableExtensions
 cd /D "%~dp0..\.."
 title BlomboUI - Switch Torch
 
+:: --- Paths -----------------------------------------------------------------
 set "ROOT=%cd%"
 set "UI=%~dp0..\_ui.bat"
 set "PY=%ROOT%\runtime\comfy\python_embeded\python.exe"
@@ -22,6 +29,7 @@ if "%TORCH%"=="" (
 
 call "%UI%" header "switch Torch"
 
+:: --- Guard -----------------------------------------------------------------
 if not exist "%PY%" (
     call "%UI%" warn "ComfyUI Python not found."
     call "%UI%" kv "python" "%PY%" err
@@ -30,9 +38,11 @@ if not exist "%PY%" (
     exit /b 1
 )
 
+:: CUDA 13 packs need NVIDIA driver 580+.
 if /I "%CUDA%"=="cu130" call :NVIDIA_DRIVER_CHECK
 if errorlevel 1 exit /b 1
 
+:: --- Install ---------------------------------------------------------------
 call "%UI%" section "%TORCH% + %CUDA%"
 call "%UI%" kv "python" "%PY%"
 call "%UI%" kv "torch" "%TORCH%"
@@ -63,6 +73,7 @@ call "%UI%" ok "Torch %TORCH%+%CUDA% installed."
 call "%UI%" wait
 exit /b 0
 
+:: --- NVIDIA driver (cu130 only) --------------------------------------------
 :NVIDIA_DRIVER_CHECK
 set "NV_MIN=580"
 where.exe nvidia-smi.exe >nul 2>&1

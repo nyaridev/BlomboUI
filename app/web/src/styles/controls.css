@@ -1,0 +1,243 @@
+input[type='number'].number-field {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+input[type='number'].number-field::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type='number'].number-field::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.field-select {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.25rem;
+  background: var(--color-field);
+  padding: 0.375rem 0.5rem 0.375rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-ink);
+}
+
+.field-select:focus-within {
+  border-color: var(--color-accent);
+}
+
+.field-select input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  line-height: inherit;
+  color: inherit;
+  outline: none;
+}
+
+.field-select-chevron {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--color-muted);
+  cursor: pointer;
+}
+
+.select-menu {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  max-height: 16rem;
+  overflow: auto;
+  overscroll-behavior: contain;
+  margin: 0;
+  padding: 0.25rem;
+  list-style: none;
+  border: 1px solid var(--color-line);
+  border-radius: 0.25rem;
+  background: var(--color-panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+}
+
+.select-menu button {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 0.2rem;
+  background: transparent;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  color: var(--color-ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.select-menu button:hover {
+  background: var(--color-field);
+}
+
+.select-menu button.is-selected {
+  background: color-mix(in srgb, var(--color-accent) 35%, var(--color-field));
+  color: var(--color-ink);
+}
+
+input[type='range'].slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+input[type='range'].slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) var(--fill),
+    var(--color-track) var(--fill)
+  );
+}
+
+input[type='range'].slider::-moz-range-track {
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(
+    to right,
+    var(--color-accent) var(--fill),
+    var(--color-track) var(--fill)
+  );
+}
+
+input[type='range'].slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border-radius: 999px;
+  background: var(--color-thumb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-thumb) 22%, transparent);
+}
+
+input[type='range'].slider::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--color-thumb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-thumb) 22%, transparent);
+}
+
+.check,
+.radio {
+  appearance: none;
+  margin: 0;
+  flex-shrink: 0;
+  cursor: pointer;
+  box-sizing: border-box;
+  background-color: var(--color-field);
+  background-position: center;
+  background-repeat: no-repeat;
+  border: 2px solid var(--color-track);
+}
+
+.check {
+  width: 18px;
+  height: 18px;
+  border-radius: 2px;
+}
+
+.check:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round' d='M2.2 6.4 5 9.2 10 3.2'/%3E%3C/svg%3E");
+}
+
+.radio {
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+}
+
+.radio:checked {
+  border-color: var(--color-accent);
+  background-color: var(--color-accent);
+  background-image: radial-gradient(circle, var(--color-thumb) 0 3px, transparent 3.5px);
+}
+
+.radio-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--color-line);
+  border-radius: 0.375rem;
+  background: var(--color-field);
+  cursor: pointer;
+}
+
+.radio-card:has(:checked) {
+  border-color: var(--color-accent);
+}
+
+.radio-card .radio {
+  background-color: var(--color-bg);
+}
+
+.radio-card .radio:checked {
+  background-color: var(--color-accent);
+}
+
+.section-body .number-field,
+.section-body input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.section-body textarea,
+.section-body select {
+  background-color: var(--color-bg);
+}
+
+.section-body .field-select input {
+  background: transparent;
+}
+
+.icon-btn {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--color-line);
+  border-radius: 0.25rem;
+  background: var(--color-field);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  background: var(--color-line);
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}

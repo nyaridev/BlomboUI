@@ -1,6 +1,15 @@
 @echo off
-:: Python 3.12 embed + pip + uv into a folder.
-::   call _embed.bat DEST_DIR PTH_FIRST_LINE
+:: Bootstrap a CPython 3.12 embed folder: python.exe, pip, and uv.
+::
+::   call _embed.bat DEST_DIR  [first line for python312._pth]
+::
+:: DEST_DIR is either:
+::   runtime\python_embeded          (BlomboUI / FastAPI)
+::   runtime\comfy\python_embeded    (ComfyUI / Torch)
+::
+:: PTH_FIRST_LINE is prepended to python312._pth so that folder can import
+:: app code without a venv (../../app/api or ../ComfyUI).
+
 setlocal EnableExtensions
 set "UI=%~dp0_ui.bat"
 set "PYEMBED=%~1"
@@ -24,6 +33,7 @@ if exist "%PY%" (
     goto :pth
 )
 
+:: --- Download + extract ----------------------------------------------------
 pushd "%PYEMBED%"
 call "%UI%" download "%PY_URL%" "%PY_ZIP%"
 if errorlevel 1 goto :fail_popd
@@ -44,6 +54,8 @@ if not exist "python.exe" (
 )
 popd
 
+:: --- python312._pth --------------------------------------------------------
+:: Embed Python ignores site-packages unless those paths are listed here.
 :pth
 (
     if not "%PTH_EXTRA%"=="" echo %PTH_EXTRA%
@@ -55,6 +67,7 @@ popd
     echo # import site
 ) > "%PYEMBED%\python312._pth"
 
+:: --- pip -------------------------------------------------------------------
 "%PY%" -I -m pip --help >nul 2>&1
 if %errorlevel%==0 goto :uv
 pushd "%PYEMBED%"
@@ -68,6 +81,7 @@ if errorlevel 1 (
 )
 popd
 
+:: --- uv --------------------------------------------------------------------
 :uv
 "%PY%" -I -m uv --help >nul 2>&1
 if %errorlevel%==0 (

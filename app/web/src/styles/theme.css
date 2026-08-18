@@ -1,0 +1,16 @@
+@theme {
+  --font-sans: 'Segoe UI', system-ui, sans-serif;
+  --color-bg: #11151a;
+  --color-panel: #171c24;
+  --color-field: #252c38;
+  --color-line: #2c3542;
+  --color-ink: #e8eef4;
+  --color-muted: #8794a0;
+  --color-label: #c4ced6;
+  --color-track: #a4b0bc;
+  --color-thumb: #ffffff;
+  --color-accent: #2f5ad8;
+  --color-generate: #e07028;
+}
+
+/* New theme: copy tokens under [data-theme='name'] and set data-theme on <html>. */

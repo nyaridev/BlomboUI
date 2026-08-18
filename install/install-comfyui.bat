@@ -1,8 +1,15 @@
 @echo off
+:: Install bundled ComfyUI under runtime\comfy\
+::   ComfyUI\                 clone of comfyanonymous/ComfyUI
+::   python_embeded\          ComfyUI's Python + Torch (separate from BlomboUI)
+::
+:: Existing installs: skip this and set COMFYUI_PATH in webui-user.bat.
+
 setlocal EnableExtensions EnableDelayedExpansion
 cd /D "%~dp0.."
 title BlomboUI - Install ComfyUI
 
+:: --- Paths -----------------------------------------------------------------
 set "ROOT=%cd%"
 set "UI=%~dp0_ui.bat"
 set "GIT_TERMINAL_PROMPT=0"
@@ -19,15 +26,18 @@ set "PY=%PYEMBED%\python.exe"
 set "COMFY_REPO=https://github.com/comfyanonymous/ComfyUI"
 set "MANAGER_REPO=https://github.com/Comfy-Org/ComfyUI-Manager"
 
+:: Prefer a real Git on PATH; keep System32 / PowerShell / Apps behind it.
 for /f "delims=" %%G in ('cmd /c "where.exe git.exe 2>nul"') do (set "GIT_PATH=%%~dpG")
 set "PATH=%GIT_PATH%;%windir%\System32;%windir%\System32\WindowsPowerShell\v1.0;%LocalAppData%\Microsoft\WindowsApps;%PATH%"
 
+:: --- Header ----------------------------------------------------------------
 call "%UI%"
 call "%UI%" header "install ComfyUI"
 call "%UI%" note "Git, Python 3.12 embed, ComfyUI, Torch, and ComfyUI-Manager."
 call "%UI%" kv "target" "%COMFY%"
 call :NVIDIA_DRIVER_CHECK
 
+:: --- Git -------------------------------------------------------------------
 call :install_git
 
 git --version >nul 2>&1
@@ -46,6 +56,7 @@ if not exist "%VENDOR%" (
     goto :fail
 )
 
+:: --- Steps -----------------------------------------------------------------
 call :install_comfyui
 if errorlevel 1 goto :fail
 call :install_python
@@ -70,7 +81,10 @@ call "%UI%" wait
 exit /b 1
 
 ::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
+:: Subroutines
+::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::::
 
+:: --- Git (winget if missing) -----------------------------------------------
 :install_git
 call "%UI%" section "Git"
 where.exe git.exe >nul 2>&1
@@ -88,6 +102,7 @@ winget.exe install --id Git.Git -e --source winget --accept-package-agreements -
 set "PATH=%PATH%;%ProgramFiles%\Git\cmd"
 goto :eof
 
+:: --- Clone ComfyUI ---------------------------------------------------------
 :install_comfyui
 call "%UI%" section "ComfyUI"
 if exist "%COMFY%\main.py" (
@@ -102,6 +117,7 @@ if errorlevel 1 (
 )
 goto :eof
 
+:: --- ComfyUI Python embed (not BlomboUI's) ---------------------------------
 :install_python
 call "%UI%" section "Python 3.12 embed"
 if exist "%PY%" call "%UI%" note "Already present. Ensuring pip and uv."
@@ -110,6 +126,8 @@ if errorlevel 1 exit /b 1
 call "%UI%" kv "python" "%PY%"
 goto :eof
 
+:: --- Torch + ComfyUI requirements ------------------------------------------
+:: CURRENT_CUDA is set by :NVIDIA_DRIVER_CHECK (13.0 default, 12.8 if driver < 580).
 :install_torch_and_reqs
 call "%UI%" section "Torch + requirements"
 if not exist "%PY%" (
@@ -138,6 +156,7 @@ if errorlevel 1 (
 )
 goto :eof
 
+:: --- ComfyUI-Manager custom node -------------------------------------------
 :install_manager
 call "%UI%" section "ComfyUI-Manager"
 set "NODE_DIR=%COMFY%\custom_nodes\ComfyUI-Manager"
@@ -164,6 +183,8 @@ if exist "%COMFY%\manager_requirements.txt" (
 )
 goto :eof
 
+:: --- NVIDIA driver -> CUDA wheel -------------------------------------------
+:: CUDA 13 wheels need driver 580+. Older drivers get CUDA 12.8 / torch 2.8.0.
 :NVIDIA_DRIVER_CHECK
 set "NV_MIN=580"
 set "CURRENT_CUDA=13.0"

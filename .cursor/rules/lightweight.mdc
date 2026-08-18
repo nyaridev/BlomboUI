@@ -1,0 +1,37 @@
+---
+description: Keep BlomboUI lightweight. Simple structure, small single-purpose files, cleaner when it is clearly better, still easy to extend later.
+alwaysApply: true
+---
+
+# Lightweight and simple
+
+BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still easy to change next month.
+
+## Structure
+
+- Keep the tree obvious: launcher, API, web screens, Comfy as the backend.
+- Do not add layers, services, or "core" packages for one caller.
+- A new feature is usually one small module plus the screen that uses it — not a new architecture.
+
+## File size and one job
+
+- One file, one job. If you cannot name the file in a few words, split it.
+- Soft limit **500 lines**. If a file is heading there, extract a sibling — do not grow a god file.
+- Split by responsibility (`jobs.py`, `comfy.py`), not by ceremony (`JobServiceFactory`).
+
+```text
+❌  api.py (routes + sqlite + Comfy websocket + image import)
+✅  main.py (routes)  jobs.py (run + db)  comfy.py (Comfy only)
+```
+
+## Cleaner when it is clearly better
+
+- If the same thing can be done with less code, fewer types, or a straighter data flow, do that.
+- Delete indirection that does not earn its keep. Do not "simplify" by rewriting working code into a new pattern.
+- Match what is already here (FastAPI, small React screens, zustand). No extra framework.
+
+## Robust later
+
+- Robust means obvious seams and stable names, not speculative flexibility.
+- Put I/O at the edges (Comfy, disk, HTTP). Keep the middle boring.
+- New work should plug in as another small file. If it needs a config system, a plugin loader, or a shared base class "for later", stop.

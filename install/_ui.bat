@@ -1,5 +1,7 @@
 @echo off
-:: Shared console UI. Load colors, then:
+:: Shared console UI for launchers and installers.
+:: Load once (no args), then call commands:
+::
 ::   call "%UI%" header "launcher"
 ::   call "%UI%" section "Python"
 ::   call "%UI%" kv "python" "C:\..."
@@ -12,6 +14,7 @@
 ::   call "%UI%" wait
 ::   call "%UI%" download URL outfile
 
+:: --- Colors ----------------------------------------------------------------
 set brand=[38;5;213m
 set accent=[38;5;81m
 set muted=[38;5;245m
@@ -30,10 +33,14 @@ set yellow=[38;5;229m
 set cyan=[38;5;81m
 set reset=[0m
 
+:: --- ANSI / VT -------------------------------------------------------------
+:: Enable virtual-terminal sequences so colors work in conhost, not only WT.
 if not defined BLOMBO_VT (
     set "BLOMBO_VT=1"
     if not defined WT_SESSION powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='[DllImport(\"kernel32.dll\")]public static extern IntPtr GetStdHandle(int n);[DllImport(\"kernel32.dll\")]public static extern bool GetConsoleMode(IntPtr h,out uint m);[DllImport(\"kernel32.dll\")]public static extern bool SetConsoleMode(IntPtr h,uint m);'; $t=Add-Type -MemberDefinition $d -Name T -PassThru; $h=$t::GetStdHandle(-11); $m=0; [void]$t::GetConsoleMode($h,[ref]$m); [void]$t::SetConsoleMode($h,$m -bor 4)" >nul 2>&1
 )
+
+:: --- Dispatch --------------------------------------------------------------
 if "%~1"=="" exit /b 0
 if /I "%~1"=="header" goto :header
 if /I "%~1"=="section" goto :section
@@ -47,6 +54,7 @@ if /I "%~1"=="wait" goto :wait
 if /I "%~1"=="download" goto :download
 exit /b 1
 
+:: --- header ----------------------------------------------------------------
 :header
 cls
 echo.
@@ -56,12 +64,15 @@ echo   %brand%------------------------------------------------------------%reset
 echo.
 exit /b 0
 
+:: --- section ---------------------------------------------------------------
 :section
 echo.
 echo   %accent%%~2%reset%
 echo   %muted%------------------------------------------------------------%reset%
 exit /b 0
 
+:: --- kv --------------------------------------------------------------------
+:: call "%UI%" kv KEY VALUE [warn|err]
 :kv
 setlocal EnableDelayedExpansion
 set "K=%~2                "
@@ -73,6 +84,7 @@ echo     %muted%!K:~0,16!%reset% %TONE%!V!%reset%
 endlocal
 exit /b 0
 
+:: --- note / item / ok / warn / err -----------------------------------------
 :note
 echo     %muted%%~2%reset%
 exit /b 0
@@ -93,12 +105,15 @@ exit /b 0
 echo     %errc%ERROR%reset%  %~2
 exit /b 0
 
+:: --- wait ------------------------------------------------------------------
 :wait
 echo.
 echo   %muted%Press any key to close%reset%
 pause >nul
 exit /b 0
 
+:: --- download --------------------------------------------------------------
+:: Solid tqdm-style bar via _download.ps1. curl / BITS are fallbacks.
 :download
 setlocal
 set "DL_URL=%~2"
@@ -108,6 +123,8 @@ if exist "%DL_OUT%" (
     exit /b 0
 )
 echo     %muted%get    %reset% %val%%~nx3%reset%
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0_download.ps1" "%DL_URL%" "%DL_OUT%"
+if exist "%DL_OUT%" exit /b 0
 curl.exe -L --progress-bar --ssl-no-revoke --retry 5 --retry-delay 2 -o "%DL_OUT%" "%DL_URL%"
 if exist "%DL_OUT%" exit /b 0
 curl.exe -L --progress-bar --ssl-no-revoke -k --retry 5 --retry-delay 2 -o "%DL_OUT%" "%DL_URL%"

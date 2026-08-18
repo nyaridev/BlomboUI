@@ -4,14 +4,42 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import subprocess
 import sys
+import time
+import webbrowser
 from pathlib import Path
 
 APP = Path(__file__).resolve().parent
 ROOT = APP.parent
+sys.path.insert(0, str(APP))
+
+from version import VERSION
+from launcher.proc import (
+    create_job_object,
+    free_port,
+    install_close_handler,
+    pids_listening,
+    reachable,
+    spawn,
+    stop,
+    wait_ready,
+)
+
 RUNTIME = ROOT / "runtime"
 USER = ROOT / "user"
 COMFY_BUNDLED = RUNTIME / "comfy" / "ComfyUI"
+WEB = APP / "web"
+API = APP / "api"
+RESTART_FLAG = RUNTIME / "tmp" / "restart"
+
+API_HOST = "127.0.0.1"
+API_PORT = 4173
+WEB_HOST = "127.0.0.1"
+WEB_PORT = 5173
+COMFY_HOST = "127.0.0.1"
+COMFY_PORT = 8188
 
 MODEL_SUBDIRS = ("checkpoints", "loras", "vae", "controlnet", "embeddings")
 
@@ -100,6 +128,27 @@ def write_launcher_env(settings: dict[str, str | None]) -> Path:
     return path
 
 
+def write_extra_model_paths(models_root: Path) -> Path:
+    path = RUNTIME / "data" / "extra_model_paths.yaml"
+    models = str(models_root.resolve()).replace("\\", "/")
+    path.write_text(
+        "\n".join(
+            [
+                "blomboui:",
+                f"    base_path: '{models}'",
+                "    checkpoints: checkpoints",
+                "    loras: loras",
+                "    vae: vae",
+                "    controlnet: controlnet",
+                "    embeddings: embeddings",
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    return path
+
+
 def _enable_ansi() -> None:
     if sys.platform != "win32":
         return
@@ -123,8 +172,263 @@ def _row(label: str, value: str, *, warn: bool = False) -> None:
     print(f"    {_c('38;5;245', f'{label:<16}')} {_c(tone, value)}")
 
 
+def _find_npm() -> str | None:
+    return shutil.which("npm.cmd") or shutil.which("npm")
+
+
+def ensure_api_deps() -> None:
+    try:
+        import fastapi  # noqa: F401
+        import uvicorn  # noqa: F401
+        import websockets  # noqa: F401
+        from PIL import Image  # noqa: F401
+    except ImportError:
+        print(f"    {_c('38;5;245', 'pip')}    installing FastAPI")
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--no-warn-script-location", "setuptools>=69"]
+        )
+        subprocess.check_call(
+            [sys.executable, "-m", "pip", "install", "--no-warn-script-location", "-e", str(API)]
+        )
+
+
+def ensure_web_deps() -> str:
+    npm = _find_npm()
+    if not npm:
+        raise RuntimeError("Node.js / npm not found on PATH. Install Node.js LTS and relaunch.")
+    if not (WEB / "package.json").is_file():
+        raise RuntimeError(f"Frontend is missing: {WEB / 'package.json'}")
+    if not (WEB / "node_modules").is_dir():
+        print(f"    {_c('38;5;245', 'npm')}    installing frontend")
+        subprocess.check_call([npm, "install"], cwd=WEB)
+    return npm
+
+
+_LOGS: list = []
+
+
+def _vite_cmd() -> list[str]:
+    node = shutil.which("node.exe") or shutil.which("node")
+    if not node:
+        raise RuntimeError("Node.js not found on PATH. Install Node.js LTS and relaunch.")
+    script = WEB / "node_modules" / "vite" / "bin" / "vite.js"
+    if not script.is_file():
+        raise RuntimeError(f"Vite is missing: {script}")
+    return [node, str(script), "--host", WEB_HOST, "--port", str(WEB_PORT), "--strictPort"]
+
+
+def _api_cmd() -> list[str]:
+    return [
+        sys.executable,
+        "-m",
+        "uvicorn",
+        "blombo.main:app",
+        "--host",
+        API_HOST,
+        "--port",
+        str(API_PORT),
+        "--no-access-log",
+    ]
+
+
+def _consume_restart() -> bool:
+    if not RESTART_FLAG.is_file():
+        return False
+    try:
+        RESTART_FLAG.unlink()
+    except OSError:
+        pass
+    return True
+
+
+def _comfy_url() -> str:
+    return f"http://{COMFY_HOST}:{COMFY_PORT}"
+
+
+def _open_browser(url: str) -> None:
+    try:
+        if sys.platform == "win32":
+            os.startfile(url)
+            return
+    except OSError:
+        pass
+    webbrowser.open(url)
+
+
+def start_comfy(settings: dict[str, str | None]) -> subprocess.Popen | None:
+    stats = f"{_comfy_url()}/system_stats"
+    if reachable(stats):
+        print(f"    {_c('38;5;245', 'comfy')}  already running, attaching")
+        return None
+    if pids_listening(COMFY_PORT):
+        print(f"    {_c('38;5;245', 'comfy')}  port {COMFY_PORT} in use, attaching")
+        return None
+    if settings["comfyui.mode"] == "missing":
+        return None
+    py = settings["comfyui.python"]
+    if not py:
+        print(f"    {_c('38;5;221', 'WARN')}   ComfyUI Python not found; backend not started")
+        return None
+
+    comfy_path = Path(settings["comfyui.path"] or "")
+    models = Path(settings["models.root"] or (USER / "models"))
+    outputs = Path(settings["outputs.root"] or (USER / "output"))
+    outputs.mkdir(parents=True, exist_ok=True)
+    yaml = write_extra_model_paths(models)
+    log_path = RUNTIME / "tmp" / "comfyui.log"
+    log_file = log_path.open("w", encoding="utf-8", errors="replace")
+    _LOGS.append(log_file)
+
+    env = os.environ.copy()
+    for key in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV"):
+        env.pop(key, None)
+
+    proc = spawn(
+        [
+            py,
+            "-u",
+            "main.py",
+            "--listen",
+            COMFY_HOST,
+            "--port",
+            str(COMFY_PORT),
+            "--disable-auto-launch",
+            "--preview-method",
+            "auto",
+            "--extra-model-paths-config",
+            str(yaml),
+            "--output-directory",
+            str(outputs),
+        ],
+        cwd=comfy_path,
+        env=env,
+        log=log_file,
+    )
+    time.sleep(0.6)
+    if proc.poll() is not None:
+        print(f"    {_c('38;5;203', 'ERROR')}  ComfyUI exited immediately. See {log_path}")
+        return None
+    print(f"    {_c('38;5;245', 'comfy')}  starting backend  {_comfy_url()}")
+    print(f"    {_c('38;5;245', 'log')}    {log_path}")
+    return proc
+
+
+def run_servers(settings: dict[str, str | None]) -> int:
+    ensure_api_deps()
+    ensure_web_deps()
+    create_job_object()
+    install_close_handler()
+    free_port(API_PORT)
+    free_port(WEB_PORT)
+
+    env = os.environ.copy()
+    pythonpath = str(API)
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = pythonpath if not existing else pythonpath + os.pathsep + existing
+
+    api_proc: subprocess.Popen | None = None
+    web_proc: subprocess.Popen | None = None
+    comfy_proc: subprocess.Popen | None = None
+    web_url = f"http://{WEB_HOST}:{WEB_PORT}"
+    api_url = f"http://{API_HOST}:{API_PORT}"
+    comfy_ready = False
+
+    try:
+        comfy_proc = start_comfy(settings)
+        api_proc = spawn(_api_cmd(), cwd=API, env=env)
+        web_proc = spawn(_vite_cmd(), cwd=WEB)
+
+        api_ok = wait_ready(f"{api_url}/health", api_proc, API_PORT)
+        web_ok = wait_ready(web_url, web_proc, WEB_PORT)
+        if not api_ok or not web_ok:
+            print(f"    {_c('38;5;203', 'ERROR')}  Server failed to start.")
+            if api_proc.poll() is not None:
+                print(f"    {_c('38;5;245', 'API exit')} {api_proc.returncode}")
+            if web_proc.poll() is not None:
+                print(f"    {_c('38;5;245', 'Vite exit')} {web_proc.returncode}")
+            return 1
+
+        print()
+        _row("app", f"BlomboUI {VERSION}")
+        _row("api", f"{api_url}/health")
+        _row("ui", web_url)
+        if reachable(f"{_comfy_url()}/system_stats"):
+            _row("comfy", f"{_comfy_url()}  backend")
+            comfy_ready = True
+        elif comfy_proc is not None:
+            _row("comfy", f"{_comfy_url()}  starting (backend, no browser)")
+        else:
+            _row("comfy", "not running", warn=True)
+        print(f"    {_c('38;5;114', 'OK')}     Opening {web_url}")
+        print(f"    {_c('38;5;245', 'Close this window or Ctrl+C to stop')}")
+        print()
+        _open_browser(web_url)
+
+        while True:
+            if _consume_restart():
+                print(f"    {_c('38;5;245', 'reload')} API + UI")
+                stop(web_proc)
+                stop(api_proc)
+                free_port(API_PORT)
+                free_port(WEB_PORT)
+                api_proc = spawn(_api_cmd(), cwd=API, env=env)
+                web_proc = spawn(_vite_cmd(), cwd=WEB)
+                api_ok = wait_ready(f"{api_url}/health", api_proc, API_PORT)
+                web_ok = wait_ready(web_url, web_proc, WEB_PORT)
+                if not api_ok or not web_ok:
+                    print(f"    {_c('38;5;203', 'ERROR')}  Reload failed.")
+                    return 1
+                print(f"    {_c('38;5;114', 'OK')}     Reloaded")
+                continue
+            if api_proc.poll() is not None:
+                print(f"    {_c('38;5;221', 'WARN')}   API exited ({api_proc.returncode}); restarting")
+                stop(api_proc)
+                free_port(API_PORT)
+                api_proc = spawn(_api_cmd(), cwd=API, env=env)
+                if not wait_ready(f"{api_url}/health", api_proc, API_PORT):
+                    print(f"    {_c('38;5;203', 'ERROR')}  API failed to restart.")
+                    return 1
+                print(f"    {_c('38;5;114', 'OK')}     API restarted")
+                continue
+            if web_proc.poll() is not None:
+                print(f"    {_c('38;5;221', 'WARN')}   Vite exited ({web_proc.returncode}); restarting")
+                stop(web_proc)
+                free_port(WEB_PORT)
+                web_proc = spawn(_vite_cmd(), cwd=WEB)
+                if not wait_ready(web_url, web_proc, WEB_PORT):
+                    print(f"    {_c('38;5;203', 'ERROR')}  Vite failed to restart.")
+                    return 1
+                print(f"    {_c('38;5;114', 'OK')}     Vite restarted")
+                continue
+            if comfy_proc is not None and comfy_proc.poll() is not None:
+                print(f"    {_c('38;5;203', 'ERROR')}  ComfyUI exited ({comfy_proc.returncode})")
+                comfy_proc = None
+            if not comfy_ready and reachable(f"{_comfy_url()}/system_stats"):
+                print(f"    {_c('38;5;114', 'OK')}     ComfyUI backend ready")
+                comfy_ready = True
+            time.sleep(0.4)
+    except KeyboardInterrupt:
+        print()
+        print(f"    {_c('38;5;245', 'Stopping')}")
+        return 0
+    finally:
+        stop(web_proc)
+        stop(api_proc)
+        stop(comfy_proc)
+        for log in _LOGS:
+            try:
+                log.close()
+            except OSError:
+                pass
+
+
 def main() -> int:
     _enable_ansi()
+    try:
+        sys.stdout.reconfigure(line_buffering=True)
+        sys.stderr.reconfigure(line_buffering=True)
+    except (OSError, AttributeError, ValueError):
+        pass
     ensure_dirs()
     settings = resolve()
     env_file = write_launcher_env(settings)
@@ -150,9 +454,14 @@ def main() -> int:
         print(f"    {_c('38;5;245', 'or set COMFYUI_PATH in webui-user.bat.')}")
         print()
 
-    print(f"    {_c('38;5;114', 'OK')}     Launcher ready")
-    print(f"    {_c('38;5;245', 'App servers are the next step (FastAPI + Vite).')}")
-    return 0
+    try:
+        return run_servers(settings)
+    except RuntimeError as exc:
+        print(f"    {_c('38;5;203', 'ERROR')}  {exc}")
+        return 1
+    except subprocess.CalledProcessError as exc:
+        print(f"    {_c('38;5;203', 'ERROR')}  Command failed ({exc.returncode})")
+        return exc.returncode or 1
 
 
 if __name__ == "__main__":

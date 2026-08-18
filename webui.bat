@@ -1,8 +1,11 @@
 @echo off
 :: BlomboUI launcher. Prefer starting from webui-user.bat so your settings apply.
+:: This file picks a Python, then runs app\launch.py (FastAPI + Vite + ComfyUI backend).
+
 cd /D "%~dp0"
 title BlomboUI
 
+:: --- Paths -----------------------------------------------------------------
 set "ROOT=%~dp0"
 set "APP=%ROOT%app"
 set "RUNTIME=%ROOT%runtime"
@@ -10,12 +13,16 @@ set "UI=%ROOT%install\_ui.bat"
 set "EMBED_PY=%RUNTIME%\python_embeded\python.exe"
 set "LOG=%RUNTIME%\tmp"
 
+:: --- Console UI ------------------------------------------------------------
 call "%UI%"
 
+:: --- Optional overrides ----------------------------------------------------
+:: webui.settings.bat is unused by default; webui-user.bat is the settings file.
 if exist webui.settings.bat call webui.settings.bat
 if defined GIT set "GIT_PYTHON_GIT_EXECUTABLE=%GIT%"
 if not defined VENV_DIR set "VENV_DIR=%RUNTIME%\venv"
 
+:: --- Guard -----------------------------------------------------------------
 if not exist "%APP%\launch.py" (
     call "%UI%" err "app\launch.py is missing."
     goto :fail
@@ -24,6 +31,9 @@ if not exist "%APP%\launch.py" (
 mkdir "%LOG%" 2>NUL
 call "%UI%" header "launcher"
 
+:: --- Python ----------------------------------------------------------------
+:: Order: PYTHON from webui-user.bat, else bundled embed, else download embed.
+:: Bundled embed skips venv. A custom PYTHON uses runtime\venv unless VENV_DIR=-.
 if defined PYTHON goto :have_python
 if exist "%EMBED_PY%" goto :use_embed
 
@@ -43,6 +53,7 @@ goto :check
 call "%UI%" kv "python" "%PYTHON%"
 call "%UI%" note "from webui-user.bat"
 
+:: --- pip -------------------------------------------------------------------
 :check
 %PYTHON% -c "" >"%LOG%\stdout.txt" 2>"%LOG%\stderr.txt"
 if errorlevel 1 (
@@ -56,6 +67,8 @@ if errorlevel 1 (
     goto :show_logs
 )
 
+:: --- venv ------------------------------------------------------------------
+:: Only when PYTHON is overridden. Embed sets SKIP_VENV=1. VENV_DIR=- skips it.
 if ["%VENV_DIR%"]==["-"] goto :run
 if ["%SKIP_VENV%"]==["1"] goto :run
 if exist "%VENV_DIR%\Scripts\Python.exe" goto :venv_ok
@@ -76,6 +89,7 @@ set PYTHON="%VENV_DIR%\Scripts\Python.exe"
 call "%VENV_DIR%\Scripts\activate.bat"
 call "%UI%" kv "venv" "%PYTHON%"
 
+:: --- Launch ----------------------------------------------------------------
 :run
 call "%UI%" section "Status"
 %PYTHON% "%APP%\launch.py" %COMMANDLINE_ARGS% %*
@@ -83,6 +97,7 @@ set "RC=%ERRORLEVEL%"
 call "%UI%" wait
 exit /b %RC%
 
+:: --- Errors ----------------------------------------------------------------
 :show_logs
 echo.
 call "%UI%" kv "exit code" "%ERRORLEVEL%" err

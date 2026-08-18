@@ -1,5 +1,5 @@
 @echo off
-:: BlomboUI user settings
+:: BlomboUI user settings.
 :: Edit this file, then double-click it to start.
 :: Do not edit webui.bat unless you are changing how the app launches.
 
@@ -16,6 +16,8 @@ cd /D "%~dp0"
 :: --- ComfyUI ---------------------------------------------------------------
 :: Bundled ComfyUI is runtime\comfy\ComfyUI after install\install-comfyui.bat.
 :: Point this at an existing install instead if you already have one.
+:: The app starts ComfyUI as an API backend (no node editor in the browser).
+:: Double-click comfyui.bat only if you want Comfy's graph UI.
 :: set COMFYUI_PATH=B:\AI\Diffusion\Interfaces\ComfyUI
 
 :: --- Paths -----------------------------------------------------------------
@@ -27,7 +29,9 @@ cd /D "%~dp0"
 :: set WILDCARDS_ROOT=
 
 :: --- Launch ----------------------------------------------------------------
-:: Extra args passed to launch.py
+:: Extra args passed to app\launch.py
 set COMMANDLINE_ARGS=
 
+:: comfyui.bat loads this file for COMFYUI_PATH / MODELS_ROOT, then returns.
+if defined BLOMBO_LOAD_SETTINGS_ONLY exit /b 0
 call webui.bat

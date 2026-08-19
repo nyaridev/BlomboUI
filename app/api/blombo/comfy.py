@@ -157,8 +157,14 @@ def warmup_model_lists(kind: str | None = None) -> None:
             continue
 
 
+def _comfy_graph(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        return {}
+    return {key: node for key, node in data.items() if isinstance(node, dict) and node.get("class_type")}
+
+
 def _workflow_nodes(data: Any) -> list:
-    return [node for node in (data.values() if isinstance(data, dict) else []) if isinstance(node, dict)]
+    return list(_comfy_graph(data).values())
 
 
 def _workflow_category(data: Any) -> str:
@@ -229,7 +235,7 @@ def comfy_filename(name: str) -> str:
 
 
 def fill_txt2img(values: dict[str, Any]) -> dict[str, Any]:
-    graph = copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img")))
+    graph = _comfy_graph(copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img"))))
     positive_done = False
     for node in graph.values():
         if not isinstance(node, dict):

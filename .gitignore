@@ -32,6 +32,14 @@ user/gallery/*
 user/wildcards/*
 !user/wildcards/.gitkeep
 
+user/user_settings.json
+
+user/model_meta/**
+!user/model_meta/.gitkeep
+
+user/workflow_templates/*
+!user/workflow_templates/.gitkeep
+
 *.log
 
 .DS_Store

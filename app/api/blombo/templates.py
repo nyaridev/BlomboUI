@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from blombo.paths import USER
+from blombo.paths import USER, WORKFLOWS
 
 DEFAULT_ID = "default"
 _SAFE_WORKFLOW = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -45,19 +45,31 @@ _APPLY = (
 _APPLY_OFF = {"prompt", "resolution", "batchCount", "batchSize"}
 
 
-def default_apply() -> list[str]:
+def _fallback_apply() -> list[str]:
     return [key for key in _APPLY if key not in _APPLY_OFF]
 
 
-def _clean_apply(raw: Any) -> list[str]:
+def _clean_apply(raw: Any, fallback: list[str] | None = None) -> list[str]:
     if not isinstance(raw, list):
-        return default_apply()
+        return list(fallback) if fallback is not None else _fallback_apply()
     seen: list[str] = []
     for item in raw:
         ident = str(item)
         if ident in _APPLY and ident not in seen:
             seen.append(ident)
     return seen
+
+
+def default_apply(workflow: str) -> list[str]:
+    path = WORKFLOWS / f"{_workflow_id(workflow)}.json"
+    if path.is_file():
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            data = None
+        if isinstance(data, dict) and "apply" in data:
+            return _clean_apply(data.get("apply"), _fallback_apply())
+    return _fallback_apply()
 
 
 class TemplateError(Exception):
@@ -101,13 +113,14 @@ def _clean_params(raw: Any) -> dict[str, Any]:
 
 
 def _load(workflow: str) -> tuple[list[dict[str, Any]], list[str]]:
+    defaults = default_apply(workflow)
     path = _file(workflow)
     if not path.is_file():
-        return [], default_apply()
+        return [], defaults
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return [], default_apply()
+        return [], defaults
     raw_items = data.get("templates") if isinstance(data, dict) else None
     items: list[dict[str, Any]] = []
     migrated: list[str] | None = None
@@ -120,20 +133,27 @@ def _load(workflow: str) -> tuple[list[dict[str, Any]], list[str]]:
             if not ident or ident.lower() == DEFAULT_ID:
                 continue
             if migrated is None and "apply" in item:
-                migrated = _clean_apply(item.get("apply"))
+                migrated = _clean_apply(item.get("apply"), defaults)
             items.append({"id": ident, "name": name or ident, "params": _clean_params(item.get("params"))})
     if isinstance(data, dict) and "apply" in data:
-        apply = _clean_apply(data.get("apply"))
+        apply = _clean_apply(data.get("apply"), defaults)
     else:
-        apply = migrated if migrated is not None else default_apply()
+        apply = migrated if migrated is not None else defaults
     return items, apply
 
 
 def _save(workflow: str, items: list[dict[str, Any]], apply: list[str]) -> None:
     path = _file(workflow)
+    payload: dict[str, Any] = {}
+    if apply != default_apply(workflow):
+        payload["apply"] = apply
+    if items:
+        payload["templates"] = items
+    if not payload:
+        path.unlink(missing_ok=True)
+        return
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(".json.tmp")
-    payload = {"apply": apply, "templates": items}
     tmp.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     tmp.replace(path)
 
@@ -169,7 +189,7 @@ def list_templates(workflow: str) -> tuple[list[dict[str, Any]], list[str]]:
 
 def set_apply(workflow: str, apply: Any) -> list[str]:
     items, _ = _load(workflow)
-    next_apply = _clean_apply(apply)
+    next_apply = _clean_apply(apply, default_apply(workflow))
     _save(workflow, items, next_apply)
     return next_apply
 

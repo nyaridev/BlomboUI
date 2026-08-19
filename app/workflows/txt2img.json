@@ -1,4 +1,13 @@
 {
+  "apply": [
+    "negativePrompt",
+    "checkpoint",
+    "sampler",
+    "scheduler",
+    "steps",
+    "cfg",
+    "seed"
+  ],
   "1": {
     "inputs": {
       "ckpt_name": "waiIllustriousSDXL_v140.safetensors"

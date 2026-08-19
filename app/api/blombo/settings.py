@@ -81,6 +81,9 @@ def load() -> dict[str, Any]:
 
 def save(raw: Any) -> dict[str, Any]:
     data = _clean(raw)
+    if not data:
+        FILE.unlink(missing_ok=True)
+        return {}
     FILE.parent.mkdir(parents=True, exist_ok=True)
     FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return data

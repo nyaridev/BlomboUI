@@ -4,8 +4,8 @@ import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { ImageStage } from './ImageStage.tsx'
 import { GenerationParams } from './GenerationParams.tsx'
 import { PromptStack } from './PromptStack.tsx'
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import {
   createJob,
   getJob,
@@ -15,10 +15,14 @@ import {
   jobGridUrl,
   type Job,
 } from '@/lib/api.ts'
+import { toggleLoraPrompts } from '@/lib/loraTags.ts'
+import { toggleWildcard } from '@/lib/wildcardTags.ts'
+import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { toast } from '@/stores/toastStore.ts'
 import { GENERATE_TABS, type GenerateTab } from './tabs.ts'
 
 function idsFromJob(job: Job): string[] {
@@ -104,6 +108,7 @@ export function GenerateScreen() {
   const sampler = useGenerateStore((s) => s.sampler)
   const scheduler = useGenerateStore((s) => s.scheduler)
   const workflow = useGenerateStore((s) => s.workflow)
+  const templateId = useGenerateStore((s) => s.templateId) || 'default'
   const setPrompt = useGenerateStore((s) => s.setPrompt)
   const setNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const setCheckpoint = useGenerateStore((s) => s.setCheckpoint)
@@ -114,7 +119,8 @@ export function GenerateScreen() {
   const batchGridFill = useSettingsStore((s) => s.batchGridFill)
   const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs) ?? []
   const checkpoints = useModelsStore((s) => s.checkpoints)
-  const loras = useModelsStore((s) => s.loras)
+  const loraItems = useModelsStore((s) => s.loras)
+  const wildcardItems = useModelsStore((s) => s.wildcards)
 
   const health = useHealthStore((s) => s.health)
 
@@ -122,10 +128,11 @@ export function GenerateScreen() {
   const [imageIds, setImageIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<GenerateTab>('Generation')
-  const interruptAt = useRef(0)
   const genRowRef = useRef<HTMLDivElement>(null)
+  const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
   const location = useLocation()
+  const navigate = useNavigate()
 
   useEffect(() => {
     const incoming = location.state as { tab?: GenerateTab } | null
@@ -168,6 +175,27 @@ export function GenerateScreen() {
     return () => window.clearInterval(timer)
   }, [jobId, busy])
 
+  const toastedMissing = useRef('')
+  useEffect(() => {
+    if (!busy) {
+      toastedMissing.current = ''
+      return
+    }
+    const raw = job?.payload?.wildcard_missing
+    const missing = Array.isArray(raw)
+      ? raw.filter((item): item is string => typeof item === 'string' && Boolean(item))
+      : []
+    if (!missing.length) {
+      return
+    }
+    const key = `${job?.id}:${missing.join(',')}`
+    if (toastedMissing.current === key) {
+      return
+    }
+    toastedMissing.current = key
+    toast(`Missing wildcard: ${missing.join(', ')}`, 'error')
+  }, [busy, job])
+
   async function generate() {
     setError(null)
     try {
@@ -190,6 +218,7 @@ export function GenerateScreen() {
         sampler,
         scheduler,
         workflow,
+        template: templateId,
       })
       setJob(next)
       setImageIds([])
@@ -198,37 +227,102 @@ export function GenerateScreen() {
     }
   }
 
-  async function onGenerateClick() {
-    const now = Date.now()
-    if (busy && jobId) {
-      const mode = now - interruptAt.current < 400 ? 'cancel' : 'skip'
-      interruptAt.current = now
-      try {
-        const next = await interruptJob(jobId, mode)
-        setJob(next)
-        setImageIds(idsFromJob(next))
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Interrupt failed')
+  async function restart() {
+    if (runLock.current) {
+      return
+    }
+    runLock.current = true
+    try {
+      if (busy && jobId) {
+        const stopped = await interrupt('cancel')
+        if (!stopped) {
+          return
+        }
+        for (let i = 0; i < 40; i++) {
+          const next = await getJob(jobId)
+          setJob(next)
+          setImageIds(idsFromJob(next))
+          if (next.status !== 'queued' && next.status !== 'running') {
+            break
+          }
+          await new Promise((resolve) => window.setTimeout(resolve, 150))
+        }
       }
-      return
+      await generate()
+    } finally {
+      runLock.current = false
     }
-    if (now - interruptAt.current < 400) {
-      return
-    }
-    void generate()
   }
 
-  function onKeyDown(event: KeyboardEvent) {
-    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+  async function interrupt(mode: 'skip' | 'cancel') {
+    if (!busy || !jobId) {
+      return false
+    }
+    try {
+      const next = await interruptJob(jobId, mode)
+      setJob(next)
+      setImageIds(idsFromJob(next))
+      toast(mode === 'cancel' ? 'Generation cancelled' : 'Generation interrupted', 'info')
+      return true
+    } catch (err) {
+      setError(err instanceof Error ? err.message : mode === 'cancel' ? 'Cancel failed' : 'Interrupt failed')
+      return false
+    }
+  }
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.repeat) {
+        return
+      }
+      const digit = digitKey(event)
+      if (event.altKey && !event.ctrlKey && !event.metaKey && digit && digit <= GENERATE_TABS.length) {
+        const id = GENERATE_TABS[digit - 1]
+        if (!id || (id !== 'Generation' && hiddenGenerateTabs.includes(id))) {
+          return
+        }
+        event.preventDefault()
+        navigate('/')
+        setTab(id)
+        return
+      }
+      if (overlayOpen()) {
+        return
+      }
+      if (event.key === 'Escape') {
+        if (busy) {
+          event.preventDefault()
+          void interrupt('skip')
+        }
+        return
+      }
+      if (!(event.ctrlKey || event.metaKey) || event.key !== 'Enter') {
+        return
+      }
       event.preventDefault()
+      if (event.altKey) {
+        void interrupt('cancel')
+        return
+      }
+      if (event.shiftKey) {
+        void restart()
+        return
+      }
       if (!busy) {
         void generate()
       }
     }
-  }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [busy, generate, hiddenGenerateTabs, interrupt, navigate, restart])
 
   const comfyOk = health?.comfy.reachable === true
   const payload = job?.payload ?? {}
+  const missingLoras = Array.isArray(payload.lora_missing)
+    ? payload.lora_missing.filter((item): item is string => typeof item === 'string' && Boolean(item))
+    : []
+  const loraWarning = missingLoras.length ? `Missing LoRA: ${missingLoras.join(', ')}` : null
+  const warning = loraWarning
   const batchTotal =
     Math.max(1, Number(payload.batch_size) || 1) * Math.max(1, Number(payload.batch_count) || 1)
   const batched = batchTotal > 1
@@ -265,10 +359,9 @@ export function GenerateScreen() {
     <div
       data-generate-root
       className={[
-        'flex h-full flex-col gap-3',
-        shownTab === 'Generation' ? 'min-h-full' : 'min-h-0 overflow-hidden',
+        'flex min-h-full flex-col gap-3',
+        shownTab === 'Generation' ? 'h-full' : '',
       ].join(' ')}
-      onKeyDown={onKeyDown}
     >
       <CheckpointField value={checkpoint} onChange={setCheckpoint} refresh />
       <div className="flex shrink-0 items-stretch gap-3">
@@ -279,22 +372,40 @@ export function GenerateScreen() {
           onNegative={setNegativePrompt}
           negativeDisabled={cfg <= 1}
         />
-        <button
-          type="button"
-          className={[
-            'w-80 shrink-0 self-stretch rounded px-6 text-xl font-semibold text-ink disabled:opacity-40',
-            busy ? 'bg-muted' : 'bg-generate',
-          ].join(' ')}
-          disabled={!busy && !comfyOk}
-          title={busy ? 'Skip current batch. Double-click to cancel.' : undefined}
-          onClick={() => void onGenerateClick()}
-        >
-          {busy ? 'Interrupt' : 'Generate'}
-        </button>
+        <div className="flex w-80 shrink-0 flex-col gap-2 self-stretch">
+          <button
+            type="button"
+            className="flex-1 rounded bg-generate px-6 text-xl font-semibold text-ink disabled:opacity-40"
+            disabled={busy || !comfyOk}
+            onClick={() => void generate()}
+          >
+            Generate
+          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="flex-1 rounded bg-muted px-3 py-2.5 text-sm font-semibold text-ink disabled:opacity-40"
+              disabled={!busy}
+              title="Skip current image"
+              onClick={() => void interrupt('skip')}
+            >
+              Interrupt
+            </button>
+            <button
+              type="button"
+              className="flex-1 rounded bg-red-800 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-red-700 disabled:opacity-40 disabled:hover:bg-red-800"
+              disabled={!busy}
+              title="Cancel remaining jobs"
+              onClick={() => void interrupt('cancel')}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
       </div>
 
       <div
-        className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'min-h-0 flex-1' : ''].join(' ')}
+        className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'flex-1' : ''].join(' ')}
       >
         <div className="flex shrink-0 gap-1 px-2">
           {visibleTabs.map((item) => (
@@ -316,13 +427,14 @@ export function GenerateScreen() {
         <div
           className={[
             'mb-4 rounded-b-md rounded-tr-md border border-line bg-panel p-3',
-            shownTab !== 'Generation' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
+            shownTab !== 'Generation' ? 'flex flex-1 flex-col' : '',
           ].join(' ')}
         >
           <div ref={genRowRef} className={shownTab === 'Generation' ? 'flex min-w-0' : 'hidden'}>
             <div className="min-w-0 shrink-0" style={{ width: paramsWidth ?? `${PARAMS_RATIO * 100}%` }}>
               <GenerationParams
                 error={error}
+                warning={warning}
                 comfyOk={comfyOk}
                 lastSeed={typeof payload.seed === 'number' ? payload.seed : null}
               />
@@ -343,6 +455,7 @@ export function GenerateScreen() {
                   ? Array.from({ length: job.grid_count || 1 }, (_, i) => jobGridUrl(jobId, i))
                   : []
               }
+              generations={job?.generations ?? []}
               busy={busy}
               previewUrl={busy && job?.has_preview && jobId ? jobPreviewUrl(jobId, progressValue) : null}
               progressPct={progressPct}
@@ -352,19 +465,43 @@ export function GenerateScreen() {
               timing={timing}
             />
           </div>
-          <div className={shownTab === 'Base Model' ? 'h-full min-h-0 flex-1' : 'hidden'}>
-            <GalleryView
-              kind="checkpoints"
-              items={checkpoints}
-              value={checkpoint}
-              onSelect={setCheckpoint}
-            />
-          </div>
-          <div className={shownTab === 'Lora' ? 'h-full min-h-0 flex-1' : 'hidden'}>
-            <GalleryView kind="loras" items={loras} />
-          </div>
-          {shownTab !== 'Generation' && shownTab !== 'Base Model' && shownTab !== 'Lora' ? (
-            <p className="text-sm text-muted">Stub.</p>
+          {shownTab === 'Base Model' ? (
+            <div className="flex-1">
+              <GalleryView
+                kind="checkpoints"
+                items={checkpoints}
+                value={checkpoint}
+                onSelect={setCheckpoint}
+              />
+            </div>
+          ) : null}
+          {shownTab === 'Lora' ? (
+            <div className="flex-1">
+              <GalleryView
+                kind="loras"
+                items={loraItems}
+                onSelect={(path) => {
+                  const item = loraItems.find((row) => row.path === path)
+                  const next = toggleLoraPrompts(prompt, negativePrompt, path, item?.prompt || '')
+                  setPrompt(next.prompt)
+                  setNegativePrompt(next.negativePrompt)
+                }}
+              />
+            </div>
+          ) : null}
+          {shownTab === 'Wildcards' ? (
+            <div className="flex-1">
+              <GalleryView
+                kind="wildcards"
+                items={wildcardItems}
+                onSelect={(path) => {
+                  const item = wildcardItems.find((row) => row.path === path)
+                  if (item) {
+                    setPrompt(toggleWildcard(prompt, item))
+                  }
+                }}
+              />
+            </div>
           ) : null}
         </div>
       </div>

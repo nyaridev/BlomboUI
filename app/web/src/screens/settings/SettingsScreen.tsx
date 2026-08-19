@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
+import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
 import { PrimitivesPanel } from './PrimitivesPanel.tsx'
+import { SavingPanel, SAVING_QUERY } from './SavingPanel.tsx'
+import { ShortcutsPanel, SHORTCUTS_QUERY } from './ShortcutsPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
 import { SettingsNav } from './SettingsNav.tsx'
 
@@ -15,9 +18,17 @@ const GROUPS = [
     pages: [
       { id: 'General', terms: GENERAL_QUERY, Panel: GeneralPanel },
       { id: 'Grids', terms: GRIDS_QUERY, Panel: GridsPanel },
+      { id: 'Gallery View', terms: GALLERY_QUERY, Panel: GalleryPanel },
     ],
   },
-  { title: 'Other', pages: [{ id: 'Primitives', terms: '', search: false, Panel: PrimitivesPanel }] },
+  { title: 'Saving', pages: [{ id: 'Saving', terms: SAVING_QUERY, Panel: SavingPanel }] },
+  {
+    title: 'Other',
+    pages: [
+      { id: 'Shortcuts', terms: SHORTCUTS_QUERY, Panel: ShortcutsPanel },
+      { id: 'Primitives', terms: '', search: false, Panel: PrimitivesPanel },
+    ],
+  },
 ] as const
 
 type PageId = (typeof GROUPS)[number]['pages'][number]['id']

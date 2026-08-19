@@ -102,3 +102,21 @@ export function filterTypeSections(sections: ModelTypeSection[], keep: (item: st
     .map((section) => ({ title: section.title, options: section.options.filter(keep) }))
     .filter((section) => section.options.length > 0)
 }
+
+const TYPE_ALIASES: Record<string, string> = {
+  sdxl: 'SDXL 1.0',
+  'sdxl 0.9': 'SDXL 1.0',
+  'flux.1 dev': 'Flux.1 D',
+  'flux.1 schnell': 'Flux.1 S',
+  'illustrious xl': 'Illustrious',
+  'pony diffusion': 'Pony',
+  'noobai xl': 'NoobAI',
+}
+
+export function matchModelType(value: string) {
+  const want = value.trim().toLowerCase()
+  if (!want) {
+    return ''
+  }
+  return MODEL_TYPES.find((item) => item.toLowerCase() === want) || TYPE_ALIASES[want] || ''
+}

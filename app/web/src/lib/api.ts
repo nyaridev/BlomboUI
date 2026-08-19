@@ -35,6 +35,29 @@ export type Job = {
   job_progress: { value: number; max: number } | null
   has_preview: boolean
   preview_steps: number[]
+  generations?: JobGeneration[]
+}
+
+export type JobLora = {
+  path: string
+  strength: number
+  hash?: string
+}
+
+export type JobGeneration = {
+  id: string
+  prompt: string
+  negative_prompt: string
+  seed: number | null
+  width: number | null
+  height: number | null
+  checkpoint: string
+  checkpoint_hash: string
+  steps: number | null
+  cfg: number | null
+  sampler: string
+  scheduler: string
+  loras: JobLora[]
 }
 
 export type Generation = {
@@ -64,6 +87,7 @@ export type JobRequest = {
   sampler: string
   scheduler: string
   workflow: string
+  template: string
 }
 
 async function readError(res: Response): Promise<string> {
@@ -174,6 +198,13 @@ export type ModelEntry = {
   edited: number
   size: number
   thumb?: number
+  prompt?: string
+  negative_prompt?: string
+  label?: string
+  tag?: string
+  source?: string
+  dir?: boolean
+  entries?: string[]
 }
 
 export type ModelHashes = {
@@ -192,6 +223,8 @@ export type ModelInfo = {
   hashes?: ModelHashes
   hashing?: boolean
   types?: string[]
+  prompt?: string
+  negative_prompt?: string
   type_options?: string[]
   thumb?: number
 }
@@ -203,6 +236,23 @@ export type ModelLists = {
   controlnet: ModelEntry[]
   embeddings: ModelEntry[]
   wildcards: ModelEntry[]
+}
+
+export type GuiIssue = {
+  code: 'duplicate_name' | 'duplicate_tag' | 'invalid_file' | string
+  kind: keyof ModelLists | string
+  name: string
+  message: string
+  paths: string[]
+}
+
+export async function getIssues(): Promise<GuiIssue[]> {
+  const res = await fetch('/issues')
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { issues?: GuiIssue[] }
+  return Array.isArray(data.issues) ? data.issues : []
 }
 
 export async function getModels(): Promise<ModelLists> {
@@ -230,11 +280,20 @@ export async function getModelSafetensors(kind: keyof ModelLists, path: string):
   return data.metadata && typeof data.metadata === 'object' ? data.metadata : {}
 }
 
-export async function saveModelInfo(kind: keyof ModelLists, path: string, types: string[]): Promise<string[]> {
+export async function saveModelInfo(
+  kind: keyof ModelLists,
+  path: string,
+  types: string[],
+  extra?: { prompt?: string; negative_prompt?: string },
+): Promise<string[]> {
   const res = await fetch(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ types }),
+    body: JSON.stringify({
+      types,
+      prompt: extra?.prompt,
+      negative_prompt: extra?.negative_prompt,
+    }),
   })
   if (!res.ok) {
     throw new Error(await readError(res))
@@ -390,6 +449,12 @@ export type UserSettings = {
   hiddenModelTypes?: string[]
   theme?: string
   civitaiSite?: string
+  wildcardYamlByFilename?: boolean
+  imagePath?: string
+  gridPath?: string
+  gallerySortKey?: Record<string, string> | string
+  gallerySortDir?: Record<string, string> | string
+  galleryTileScale?: number
 }
 
 export async function getSettings(): Promise<UserSettings> {

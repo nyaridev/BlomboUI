@@ -1,17 +1,21 @@
+# runtime
 .tmp/
 runtime/*
 !runtime/README.md
 
+# python
 __pycache__/
 *.py[cod]
 .Python
 *.egg-info/
 .pytest_cache/
 
+# frontend
 node_modules/
 dist/
 .vite/
 
+# user models
 user/models/checkpoints/*
 !user/models/checkpoints/.gitkeep
 user/models/loras/*
@@ -23,6 +27,7 @@ user/models/controlnet/*
 user/models/embeddings/*
 !user/models/embeddings/.gitkeep
 
+# user output, gallery, wildcards
 user/output/*
 !user/output/.gitkeep
 
@@ -31,7 +36,10 @@ user/gallery/*
 
 user/wildcards/*
 !user/wildcards/.gitkeep
+!user/wildcards/colors.txt
+!user/wildcards/styles.yaml
 
+# user overwrites
 user/user_settings.json
 
 user/model_meta/**
@@ -40,6 +48,7 @@ user/model_meta/**
 user/workflow_templates/*
 !user/workflow_templates/.gitkeep
 
+# logs and editor
 *.log
 
 .DS_Store

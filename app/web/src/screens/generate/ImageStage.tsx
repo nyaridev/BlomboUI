@@ -1,13 +1,17 @@
 import { LightboxView } from '@/components/LightboxView.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
-import { generationImageUrl } from '@/lib/api.ts'
+import { generationImageUrl, type JobGeneration } from '@/lib/api.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
+import { GenerationInfo } from './GenerationInfo.tsx'
 import { ThumbStrip, type ThumbItem } from './ThumbStrip.tsx'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
+import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
 
 type ImageStageProps = {
   images: string[]
   gridUrls: string[]
+  generations?: JobGeneration[]
   busy: boolean
   previewUrl: string | null
   progressPct: number
@@ -20,6 +24,7 @@ type ImageStageProps = {
 export function ImageStage({
   images,
   gridUrls,
+  generations = [],
   busy,
   previewUrl,
   progressPct,
@@ -33,6 +38,9 @@ export function ImageStage({
   const [failed, setFailed] = useState<Set<string>>(() => new Set())
   const [previewFailed, setPreviewFailed] = useState(false)
   const [ready, setReady] = useState(false)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const location = useLocation()
+  const generate = location.pathname === '/'
   const setViewedImageUrl = useGenerateStore((s) => s.setViewedImageUrl)
   const wasBusy = useRef(busy)
   const sourceKey = `${gridUrls.join('\n')}\n${images.join('\n')}`
@@ -41,6 +49,9 @@ export function ImageStage({
     ...images.map((id) => ({ key: id, src: generationImageUrl(id) })),
   ].filter((item) => !failed.has(item.key))
   const current = items[index]
+  const viewingGrid = Boolean(current?.key.startsWith('grid-'))
+  const genId = viewingGrid ? images[0] : current?.key
+  const genInfo = generations.find((item) => item.id === genId) ?? null
   const many = items.length > 1
   const showPreview = busy && Boolean(previewUrl) && !previewFailed
 
@@ -63,8 +74,9 @@ export function ImageStage({
     setPreviewFailed(false)
   }, [previewUrl])
 
-  useEffect(() => {
-    setReady(false)
+  useLayoutEffect(() => {
+    const img = imgRef.current
+    setReady(Boolean(img?.complete && img.naturalWidth > 0))
   }, [current?.src])
 
   useEffect(() => {
@@ -85,6 +97,24 @@ export function ImageStage({
     setViewedImageUrl(current?.src ?? null)
   }, [current?.src, setViewedImageUrl])
 
+  useEffect(() => {
+    if (!generate) {
+      return
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key.toLowerCase() !== 'f' || event.repeat || event.ctrlKey || event.altKey || event.metaKey) {
+        return
+      }
+      if (isTyping(event) || overlayOpen() || !current) {
+        return
+      }
+      event.preventDefault()
+      setLightbox(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [current, generate])
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
@@ -98,6 +128,7 @@ export function ImageStage({
         ) : current ? (
           <button type="button" className="h-full w-full" onClick={() => setLightbox(true)}>
             <img
+              ref={imgRef}
               src={current.src}
               alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
               className={['h-full w-full object-contain', ready ? '' : 'invisible'].join(' ')}
@@ -120,6 +151,7 @@ export function ImageStage({
         ) : null}
       </div>
       {many ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
+      {!showPreview ? <GenerationInfo info={genInfo} /> : null}
       {lightbox && current ? (
         <LightboxView
           src={current.src}

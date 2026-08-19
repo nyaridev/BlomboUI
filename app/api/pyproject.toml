@@ -8,6 +8,7 @@ dependencies = [
     "uvicorn[standard]>=0.34",
     "websockets>=14",
     "pillow>=11",
+    "pyyaml>=6",
 ]
 
 [build-system]

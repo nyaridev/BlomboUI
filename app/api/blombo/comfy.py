@@ -5,6 +5,7 @@ import json
 import os
 import struct
 import subprocess
+import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -14,11 +15,15 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from blombo.paths import COMFY_HOST, COMFY_PORT, WORKFLOWS, comfy_base
+from blombo import loras as lora_tags
 
 TIMEOUT = 30
 PREVIEW_IMAGE = 1
 PREVIEW_IMAGE_WITH_METADATA = 4
+_SMI_TTL = 2.0
 OnEvent = Callable[[dict[str, Any]], None]
+_smi_lock = threading.Lock()
+_smi_cache: tuple[float, dict[str, Any]] | None = None
 
 
 class ComfyError(Exception):
@@ -77,9 +82,6 @@ def gpu_stats() -> dict[str, Any]:
             total = int(picked.get("vram_total") or 0)
             free = int(picked.get("vram_free") or 0)
             used = max(0, total - free)
-    if smi.get("vram_total"):
-        total = int(smi["vram_total"])
-        used = int(smi.get("vram_used") or used)
     return {
         "reachable": stats is not None,
         "vram_used": used,
@@ -89,12 +91,27 @@ def gpu_stats() -> dict[str, Any]:
 
 
 def gpu_smi() -> dict[str, Any]:
+    global _smi_cache
+    now = time.monotonic()
+    cached = _smi_cache
+    if cached and now - cached[0] < _SMI_TTL:
+        return cached[1]
+    with _smi_lock:
+        cached = _smi_cache
+        if cached and now - cached[0] < _SMI_TTL:
+            return cached[1]
+        data = _query_smi()
+        _smi_cache = (time.monotonic(), data)
+        return data
+
+
+def _query_smi() -> dict[str, Any]:
     flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
     try:
         out = subprocess.check_output(
             [
                 "nvidia-smi",
-                "--query-gpu=temperature.gpu,memory.used,memory.total",
+                "--query-gpu=temperature.gpu",
                 "--format=csv,noheader,nounits",
             ],
             timeout=1.5,
@@ -104,20 +121,11 @@ def gpu_smi() -> dict[str, Any]:
         )
     except (OSError, subprocess.SubprocessError):
         return {}
-    parts = [p.strip() for p in (out.strip().splitlines() or [""])[0].split(",")]
-    data: dict[str, Any] = {}
-    if parts:
-        try:
-            data["temp_c"] = int(float(parts[0]))
-        except ValueError:
-            pass
-    if len(parts) >= 3:
-        try:
-            data["vram_used"] = int(float(parts[1]) * 1024 * 1024)
-            data["vram_total"] = int(float(parts[2]) * 1024 * 1024)
-        except ValueError:
-            pass
-    return data
+    line = (out.strip().splitlines() or [""])[0].strip()
+    try:
+        return {"temp_c": int(float(line))}
+    except ValueError:
+        return {}
 
 
 def free(unload_models: bool = False, free_memory: bool = False) -> None:
@@ -194,6 +202,8 @@ def _workflow_params(data: Any) -> list[str]:
             keys.update({"seed", "steps", "cfg", "sampler", "scheduler"})
         elif kind == "EmptyLatentImage":
             keys.update({"width", "height", "batchSize"})
+        elif kind == "Power Lora Loader (rgthree)":
+            keys.add("loras")
     if clips >= 2:
         keys.update({"prompt", "negativePrompt"})
     return sorted(keys)
@@ -234,7 +244,37 @@ def comfy_filename(name: str) -> str:
     return os.sep.join(part for part in parts if part and part not in {".", ".."})
 
 
+def _fill_power_loras(inputs: dict[str, Any], values: dict[str, Any]) -> None:
+    for key in [k for k in inputs if str(k).startswith("lora_")]:
+        del inputs[key]
+    rows = values.get("loras")
+    if not isinstance(rows, list):
+        return
+    i = 1
+    for item in rows:
+        if isinstance(item, str):
+            name, strength = item, 1.0
+        elif isinstance(item, dict):
+            name = str(item.get("lora") or item.get("path") or "")
+            try:
+                strength = float(item.get("strength") or 1)
+            except (TypeError, ValueError):
+                strength = 1.0
+        else:
+            continue
+        name = name.strip()
+        if not name:
+            continue
+        inputs[f"lora_{i}"] = {"on": True, "lora": comfy_filename(name), "strength": strength}
+        i += 1
+
+
 def fill_txt2img(values: dict[str, Any]) -> dict[str, Any]:
+    lora_tags.apply(values)
+    clip_prompt = lora_tags.strip_tags(str(values.get("prompt") or ""))
+    clip_negative = lora_tags.strip_tags(str(values.get("negative_prompt") or ""))
+    values["prompt_clip"] = clip_prompt
+    values["negative_clip"] = clip_negative
     graph = _comfy_graph(copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img"))))
     positive_done = False
     for node in graph.values():
@@ -247,12 +287,12 @@ def fill_txt2img(values: dict[str, Any]) -> dict[str, Any]:
             inputs["ckpt_name"] = comfy_filename(str(values["checkpoint"]))
         elif kind == "CLIPTextEncode":
             if "negative" in title:
-                inputs["text"] = values["negative_prompt"]
+                inputs["text"] = clip_negative
             elif "positive" in title or not positive_done:
-                inputs["text"] = values["prompt"]
+                inputs["text"] = clip_prompt
                 positive_done = True
             else:
-                inputs["text"] = values["negative_prompt"]
+                inputs["text"] = clip_negative
         elif kind == "KSampler":
             inputs["seed"] = int(values["seed"])
             inputs["steps"] = int(values["steps"])
@@ -263,6 +303,8 @@ def fill_txt2img(values: dict[str, Any]) -> dict[str, Any]:
             inputs["width"] = int(values["width"])
             inputs["height"] = int(values["height"])
             inputs["batch_size"] = max(1, int(values.get("batch_size") or 1))
+        elif kind == "Power Lora Loader (rgthree)":
+            _fill_power_loras(inputs, values)
     latent = graph.get("7")
     if isinstance(latent, dict):
         latent.setdefault("inputs", {})["batch_size"] = max(1, int(values.get("batch_size") or 1))

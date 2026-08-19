@@ -13,7 +13,7 @@ const CATS = [
 
 function WorkflowIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <rect x="1.5" y="1.5" width="5" height="4" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="7.5" y="8.5" width="5" height="4" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <path d="M4 5.5v2.2h5.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -23,7 +23,7 @@ function WorkflowIcon() {
 
 function AllIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <rect x="1.5" y="1.5" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="8" y="1.5" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="1.5" y="8" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -34,7 +34,7 @@ function AllIcon() {
 
 function ImageIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <circle cx="4.5" cy="5.5" r="1" fill="currentColor" />
       <path d="M2.5 10.2 5.8 7.2 8 9.2 10 7.5 12.2 10.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -44,7 +44,7 @@ function ImageIcon() {
 
 function VideoIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <rect x="1.5" y="3" width="11" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <path d="M6 5.5 9 7 6 8.5Z" fill="currentColor" />
     </svg>
@@ -62,7 +62,7 @@ function SearchIcon() {
 
 function UtilityIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <path
         d="M8.8 2.4 11.6 5.2 6.2 10.6 3.4 11.6 4.4 8.8Z"
         fill="none"
@@ -149,6 +149,7 @@ export function WorkflowPicker() {
         ? createPortal(
             <div
               className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4"
+              data-overlay
               onClick={() => setOpen(false)}
             >
               <div

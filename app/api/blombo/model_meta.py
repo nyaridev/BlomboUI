@@ -85,6 +85,7 @@ ROOT = USER / "model_meta"
 DATA = ROOT / "data"
 THUMBS = ROOT / "thumbnails"
 THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+THUMB_MAX = 512
 _ALLOWED = frozenset(OPTIONS)
 _FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}
 _MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
@@ -144,14 +145,19 @@ def _clean_types(raw: object) -> list[str]:
 
 def _row(raw: object) -> dict:
     if isinstance(raw, list):
-        return {"types": _clean_types(raw), "modified": 0}
+        return {"types": _clean_types(raw), "modified": 0, "prompt": "", "negative_prompt": ""}
     if isinstance(raw, dict):
         try:
             stamp = int(raw.get("modified") or 0)
         except (TypeError, ValueError):
             stamp = 0
-        return {"types": _clean_types(raw.get("types")), "modified": max(0, stamp)}
-    return {"types": [], "modified": 0}
+        return {
+            "types": _clean_types(raw.get("types")),
+            "modified": max(0, stamp),
+            "prompt": str(raw.get("prompt") or ""),
+            "negative_prompt": str(raw.get("negative_prompt") or ""),
+        }
+    return {"types": [], "modified": 0, "prompt": "", "negative_prompt": ""}
 
 
 def _load(kind: str) -> dict[str, dict]:
@@ -171,7 +177,7 @@ def _load(kind: str) -> dict[str, dict]:
             if not ident:
                 continue
             row = _row(raw)
-            if row["types"] or row["modified"]:
+            if row["types"] or row["modified"] or row["prompt"] or row["negative_prompt"]:
                 out[ident] = row
         return out
     return {}
@@ -188,6 +194,10 @@ def _write(kind: str, data: dict[str, dict]) -> None:
             out["types"] = row["types"]
         if row.get("modified"):
             out["modified"] = int(row["modified"])
+        if str(row.get("prompt") or "").strip():
+            out["prompt"] = str(row["prompt"])
+        if str(row.get("negative_prompt") or "").strip():
+            out["negative_prompt"] = str(row["negative_prompt"])
         if out:
             packed[key] = out
     path.write_text(json.dumps(packed, indent=2) + "\n", encoding="utf-8")
@@ -203,10 +213,24 @@ def _hits(idents: list[str] | dict[str, object], name: str) -> list[str]:
 
 
 def get_types(kind: str, rel: str) -> list[str]:
+    return get_info(kind, rel)["types"]
+
+
+def get_info(kind: str, rel: str) -> dict[str, object]:
     ident = _ident(rel)
+    empty = {"types": [], "prompt": "", "negative_prompt": ""}
     if not ident:
-        return []
-    return list(_load(kind).get(ident, {}).get("types", []))
+        return empty
+    row = _load(kind).get(ident) or {}
+    return {
+        "types": list(row.get("types") or []),
+        "prompt": str(row.get("prompt") or ""),
+        "negative_prompt": str(row.get("negative_prompt") or ""),
+    }
+
+
+def all_info(kind: str) -> dict[str, dict]:
+    return _load(kind)
 
 
 def user_mtime(kind: str, rel: str) -> int:
@@ -238,17 +262,35 @@ def touch(kind: str, rel: str) -> int:
 
 
 def set_types(kind: str, rel: str, types: list[str]) -> list[str]:
+    return list(set_info(kind, rel, types)["types"])
+
+
+def set_info(
+    kind: str,
+    rel: str,
+    types: list[str],
+    prompt: str | None = None,
+    negative_prompt: str | None = None,
+) -> dict[str, object]:
     ident = _ident(rel)
+    empty = {"types": [], "prompt": "", "negative_prompt": ""}
     if not ident:
-        return []
-    clean = _clean_types(types)
+        return empty
     data = _load(kind)
-    row = data.get(ident) or {"types": [], "modified": 0}
-    row["types"] = clean
+    row = data.get(ident) or {"types": [], "modified": 0, "prompt": "", "negative_prompt": ""}
+    row["types"] = _clean_types(types)
+    if prompt is not None:
+        row["prompt"] = str(prompt).strip()
+    if negative_prompt is not None:
+        row["negative_prompt"] = str(negative_prompt).strip()
     row["modified"] = int(time.time())
     data[ident] = row
     _write(kind, data)
-    return clean
+    return {
+        "types": list(row["types"]),
+        "prompt": str(row.get("prompt") or ""),
+        "negative_prompt": str(row.get("negative_prompt") or ""),
+    }
 
 
 def _thumb_paths(kind: str, ident: str) -> list[Path]:
@@ -271,7 +313,7 @@ def _iter_thumb_idents(kind: str) -> list[str]:
         if not ext:
             continue
         ident = _ident(rel[: -len(ext)])
-        if ident:
+        if ident and ident not in out:
             out.append(ident)
     return out
 
@@ -290,41 +332,73 @@ def thumb_file(kind: str, rel: str) -> Path | None:
     return _thumb_at(kind, ident)
 
 
-def _copy_thumb(kind: str, old: str, new: str) -> None:
+def _prune_empty(path: Path, stop: Path) -> None:
+    try:
+        current = path if path.is_dir() else path.parent
+        limit = stop.resolve()
+        while current.is_dir() and current.resolve() != limit:
+            parent = current.parent
+            try:
+                current.rmdir()
+            except OSError:
+                return
+            current = parent
+    except OSError:
+        return
+
+
+def _move_thumb(kind: str, old: str, new: str) -> None:
     src = _thumb_at(kind, old)
-    if not src or _thumb_at(kind, new):
+    if not src:
         return
-    dest = Path(str(THUMBS / kind / new) + src.suffix)
-    if dest.resolve() == src.resolve():
-        return
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(src.read_bytes())
+    dest = _thumb_at(kind, new)
+    if dest is None:
+        dest = Path(str(THUMBS / kind / new) + src.suffix)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.resolve() != src.resolve():
+            try:
+                src.rename(dest)
+            except OSError:
+                dest.write_bytes(src.read_bytes())
+                src.unlink(missing_ok=True)
+    elif dest.resolve() != src.resolve():
+        src.unlink(missing_ok=True)
+    _prune_empty(src.parent, THUMBS / kind)
 
 
 def reconcile(kind: str, present: list[str]) -> None:
     here = {item.replace("\\", "/").strip().lstrip("/") for item in present}
+    here.discard("")
     data = _load(kind)
-    stale = {key for key in data if key not in here}
-    stale.update(ident for ident in _iter_thumb_idents(kind) if ident not in here)
-    need = [rel for rel in sorted(here) if rel not in data and not _thumb_at(kind, rel)]
-    if not stale or not need:
+    stale_thumbs = [ident for ident in _iter_thumb_idents(kind) if ident not in here]
+    stale_meta = [key for key in data if key not in here]
+    unique = {name for name in {_name(item) for item in here} if len(_hits(sorted(here), name)) == 1}
+    if not unique or (not stale_thumbs and not stale_meta):
         return
 
     changed = False
-    for new in need:
-        olds = _hits(sorted(stale), _name(new))
-        if len(olds) != 1:
+    for new in sorted(here):
+        name = _name(new)
+        if name not in unique:
             continue
-        if len(_hits(need, _name(new))) != 1:
+        old_thumbs = _hits(stale_thumbs, name)
+        old_meta = _hits(stale_meta, name)
+        if len(old_thumbs) == 1:
+            _move_thumb(kind, old_thumbs[0], new)
+        if len(old_meta) != 1:
             continue
-        old = olds[0]
-        if old in data:
+        old = old_meta[0]
+        if old == new:
+            continue
+        if new not in data:
             data[new] = {
                 "types": list(data[old].get("types", [])),
                 "modified": int(data[old].get("modified") or 0),
+                "prompt": str(data[old].get("prompt") or ""),
+                "negative_prompt": str(data[old].get("negative_prompt") or ""),
             }
-            changed = True
-        _copy_thumb(kind, old, new)
+        del data[old]
+        changed = True
 
     if changed:
         _write(kind, data)
@@ -356,15 +430,25 @@ def save_thumb(kind: str, rel: str, data: bytes) -> int:
         image.load()
     except Exception as exc:
         raise ValueError("could not read image") from exc
-    ext = _FORMATS.get((image.format or "").upper())
+    fmt = (image.format or "").upper()
+    ext = _FORMATS.get(fmt)
     if not ext:
         raise ValueError("use png, jpg, or webp")
+    if max(image.size) > THUMB_MAX:
+        image.thumbnail((THUMB_MAX, THUMB_MAX))
+    if fmt == "JPEG" and image.mode in ("RGBA", "P"):
+        image = image.convert("RGB")
     dest = Path(str(THUMBS / kind / ident) + ext)
     dest.parent.mkdir(parents=True, exist_ok=True)
     for old in _thumb_paths(kind, ident):
         if old != dest and old.is_file():
             old.unlink()
-    dest.write_bytes(data)
+    out = BytesIO()
+    if fmt == "JPEG":
+        image.save(out, format=fmt, quality=85)
+    else:
+        image.save(out, format=fmt)
+    dest.write_bytes(out.getvalue())
     touch(kind, rel)
     return int(dest.stat().st_mtime)
 

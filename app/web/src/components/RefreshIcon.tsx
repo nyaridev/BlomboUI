@@ -1,6 +1,6 @@
 export function RefreshIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <path
         d="M11.2 7A4.2 4.2 0 1 1 7 2.8"
         fill="none"

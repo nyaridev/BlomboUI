@@ -1,58 +1,59 @@
 import { Chevron } from '@/components/Chevron.tsx'
+import { ConfirmDialog } from '@/components/Dialog.tsx'
+import { DownloadIcon } from '@/components/DownloadIcon.tsx'
 import { buildGalleryTree, dirExists, type GalleryNode } from '@/lib/galleryTree.ts'
+import { InfoIcon } from '@/components/InfoIcon.tsx'
 import { ModelInfoDialog } from '@/components/ModelInfoDialog.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { RefreshIcon } from '@/components/RefreshIcon.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { modelThumbUrl, type ModelEntry, type ModelLists } from '@/lib/api.ts'
-import { useNavigate } from 'react-router-dom'
+import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { modelThumbUrl, type CivitaiVersion, type ModelEntry, type ModelLists } from '@/lib/api.ts'
+import { applyCivitaiMeta, civitaiHashes, hasCivitaiLocalData, lookupCivitai, waitModelInfo } from '@/lib/civitaiFill.ts'
 
 const TREE_REM = 18
 const TREE_MIN_REM = 12
+const TILE_COL_REM = 16
+const TILE_ROW_REM = 24
+const GALLERY_ROWS = 2
+const TILE_GAP_REM = 1
+const TILE_PAD_REM = 1
 
-const SORTS = [
+export const GALLERY_SORTS = [
   { value: 'name', label: 'Name' },
   { value: 'added', label: 'Date Created' },
   { value: 'edited', label: 'Date Modified' },
   { value: 'path', label: 'Path' },
 ] as const
 
-type SortKey = (typeof SORTS)[number]['value']
-type SortDir = 'asc' | 'desc'
+export type GallerySortKey = (typeof GALLERY_SORTS)[number]['value']
+export type GallerySortDir = 'asc' | 'desc'
+
+type SortKey = GallerySortKey
+type SortDir = GallerySortDir
+
+type GalleryChrome = {
+  query: string
+  sortKey?: SortKey
+  sortDir?: SortDir
+  showTree: boolean
+  treeWidth: number
+  openDirs: string[]
+  treeScroll: number
+  tileScroll: number
+}
+
+const chrome = new Map<string, GalleryChrome>()
 
 type GalleryViewProps = {
   kind: keyof ModelLists
   items: ModelEntry[]
   value?: string
+  selected?: string[]
   onSelect?: (id: string) => void
-}
-
-function InfoIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M7 6.4v3.4" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <circle cx="7" cy="4.5" r="0.8" fill="currentColor" />
-    </svg>
-  )
-}
-
-function WrenchIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M8.8 2.4 11.6 5.2 6.2 10.6 3.4 11.6 4.4 8.8Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path d="M7.4 3.8 10.2 6.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
 }
 
 function remPx() {
@@ -99,7 +100,7 @@ function FileIcon() {
 
 function TreeIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <rect x="5" y="1.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <path d="M7 4.5v2M4 8.5V6.5h6v2" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="1.5" y="8.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
@@ -110,7 +111,7 @@ function TreeIcon() {
 
 function SortDirIcon({ dir }: { dir: SortDir }) {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <path
         d="M4 6.2 7 3.2 10 6.2"
         fill="none"
@@ -144,12 +145,34 @@ function fileName(path: string) {
   return modelLabel(path.split(/[\\/]/).pop() || path)
 }
 
+function treePath(item: ModelEntry) {
+  return (item.tag || item.path).replace(/\\/g, '/')
+}
+
+function filePath(item: ModelEntry) {
+  return item.source || item.path.split('#')[0] || item.path
+}
+
+function tileName(item: ModelEntry) {
+  return item.label || item.tag || fileName(item.path)
+}
+
 function matchesQuery(item: ModelEntry, query: string) {
   const q = query.trim().toLowerCase()
   if (!q) {
     return true
   }
-  return item.path.toLowerCase().includes(q) || fileName(item.path).toLowerCase().includes(q)
+  const tag = treePath(item).toLowerCase()
+  const path = item.path.replace(/\\/g, '/').toLowerCase()
+  if (tag === q || tag.startsWith(`${q}/`) || path === q || path.startsWith(`${q}/`)) {
+    return true
+  }
+  return (
+    path.includes(q) ||
+    tag.includes(q) ||
+    fileName(item.path).toLowerCase().includes(q) ||
+    (item.label || '').toLowerCase().includes(q)
+  )
 }
 
 function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
@@ -161,8 +184,8 @@ function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
         return delta
       }
     }
-    const av = key === 'path' ? a.path : modelLabel(a.path)
-    const bv = key === 'path' ? b.path : modelLabel(b.path)
+    const av = key === 'path' ? a.path : tileName(a)
+    const bv = key === 'path' ? b.path : tileName(b)
     return av.localeCompare(bv, undefined, { sensitivity: 'base' })
   })
   if (dir === 'desc') {
@@ -171,32 +194,150 @@ function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
   return next
 }
 
-export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) {
-  const navigate = useNavigate()
+export function GalleryView({ kind, items, value, selected, onSelect }: GalleryViewProps) {
+  const saved = chrome.get(kind)
+  const sortKind: GalleryViewKind = kind === 'loras' || kind === 'wildcards' ? kind : 'checkpoints'
+  const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[sortKind])
+  const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[sortKind])
+  const tileScale = useSettingsStore((s) => s.galleryTileScale)
   const rowRef = useRef<HTMLDivElement>(null)
-  const [treeWidth, setTreeWidth] = useState(() => TREE_REM * 16)
-  const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set())
-  const [showTree, setShowTree] = useState(true)
-  const [query, setQuery] = useState('')
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const treeRef = useRef<HTMLDivElement>(null)
+  const tilesRef = useRef<HTMLDivElement>(null)
+  const [treeWidth, setTreeWidth] = useState(() => saved?.treeWidth ?? TREE_REM * 16)
+  const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(saved?.openDirs))
+  const [showTree, setShowTree] = useState(() => saved?.showTree ?? true)
+  const [query, setQuery] = useState(() => saved?.query ?? '')
+  const [sortKey, setSortKey] = useState<SortKey | null>(saved?.sortKey ?? null)
+  const [sortDir, setSortDir] = useState<SortDir | null>(saved?.sortDir ?? null)
   const [infoItem, setInfoItem] = useState<ModelEntry | null>(null)
+  const [fillConfirm, setFillConfirm] = useState<{ path: string; hit: CivitaiVersion } | null>(null)
+  const [filling, setFilling] = useState<string | null>(null)
+  const shownSortKey = sortKey ?? gallerySortKey
+  const shownSortDir = sortDir ?? gallerySortDir
+  const tileW = TILE_COL_REM * tileScale
+  const tileH = TILE_ROW_REM * tileScale
+  const snap = useRef({
+    query,
+    sortKey: sortKey ?? undefined,
+    sortDir: sortDir ?? undefined,
+    showTree,
+    treeWidth,
+    openDirs,
+    treeScroll: saved?.treeScroll ?? 0,
+    tileScroll: saved?.tileScroll ?? 0,
+  })
+  snap.current = {
+    ...snap.current,
+    query,
+    sortKey: sortKey ?? undefined,
+    sortDir: sortDir ?? undefined,
+    showTree,
+    treeWidth,
+    openDirs,
+  }
   const busy = useModelsStore((s) => s.busy)
   const refreshKind = useModelsStore((s) => s.refreshKind)
   const setThumb = useModelsStore((s) => s.setThumb)
-  const paths = useMemo(() => items.map(modelPath).filter(Boolean), [items])
+  const setMeta = useModelsStore((s) => s.setMeta)
+  const paths = useMemo(() => items.map(treePath).filter(Boolean), [items])
+  const byTree = useMemo(() => new Map(items.map((item) => [treePath(item), item])), [items])
   const tree = useMemo(() => buildGalleryTree(paths), [paths])
   const tiles = useMemo(() => {
     return sortItems(
       items.filter((item) => modelPath(item) && matchesQuery(item, query)),
-      sortKey,
-      sortDir,
+      shownSortKey,
+      shownSortDir,
     )
-  }, [items, query, sortKey, sortDir])
+  }, [items, query, shownSortKey, shownSortDir])
+
+  function isOn(path: string) {
+    if (selected) {
+      return selected.includes(path)
+    }
+    return Boolean(onSelect) && value === path
+  }
+
+  async function saveCivitai(path: string, hit: CivitaiVersion) {
+    const info = await waitModelInfo(kind, path)
+    const next = await applyCivitaiMeta(kind, path, hit, { types: info.types || [], prompt: info.prompt || '' })
+    if (next.thumb) {
+      setThumb(kind, path, next.thumb)
+    }
+    if (kind === 'loras') {
+      setMeta(kind, path, { prompt: next.prompt })
+    }
+  }
+
+  async function downloadCivitai(path: string) {
+    if (filling) {
+      return
+    }
+    setFilling(path)
+    try {
+      const info = await waitModelInfo(kind, path)
+      const hit = await lookupCivitai(civitaiHashes(info))
+      if (!hit) {
+        return
+      }
+      if (hasCivitaiLocalData(info, kind === 'loras')) {
+        setFillConfirm({ path, hit })
+        return
+      }
+      await saveCivitai(path, hit)
+    } catch {
+      /* keep current */
+    } finally {
+      setFilling(null)
+    }
+  }
 
   useEffect(() => {
+    if (saved?.treeWidth) {
+      return
+    }
     setTreeWidth(TREE_REM * remPx())
-  }, [])
+  }, [saved?.treeWidth])
+
+  useLayoutEffect(() => {
+    const yTree = saved?.treeScroll ?? 0
+    const yTiles = saved?.tileScroll ?? 0
+    function apply() {
+      if (treeRef.current) {
+        treeRef.current.scrollTop = yTree
+      }
+      if (tilesRef.current) {
+        tilesRef.current.scrollTop = yTiles
+      }
+    }
+    apply()
+    const frame = window.requestAnimationFrame(apply)
+    return () => window.cancelAnimationFrame(frame)
+  }, [kind, tiles.length, saved?.treeScroll, saved?.tileScroll])
+
+  useEffect(() => {
+    if (treeRef.current) {
+      treeRef.current.scrollTop = saved?.treeScroll ?? 0
+    }
+    if (tilesRef.current) {
+      tilesRef.current.scrollTop = saved?.tileScroll ?? 0
+    }
+  }, [kind, tiles.length, saved?.treeScroll, saved?.tileScroll])
+
+  useLayoutEffect(() => {
+    return () => {
+      const now = snap.current
+      chrome.set(kind, {
+        query: now.query,
+        sortKey: now.sortKey,
+        sortDir: now.sortDir,
+        showTree: now.showTree,
+        treeWidth: now.treeWidth,
+        openDirs: [...now.openDirs],
+        treeScroll: treeRef.current?.scrollTop ?? now.treeScroll,
+        tileScroll: tilesRef.current?.scrollTop ?? now.tileScroll,
+      })
+    }
+  }, [kind])
 
   useEffect(() => {
     setOpenDirs((current) => {
@@ -232,33 +373,17 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
 
   function renderNode(node: GalleryNode) {
     if (node.kind === 'file') {
-      const selected = Boolean(onSelect) && value === node.path
-      const body = (
-        <>
+      const item = byTree.get(node.path)
+      const selected = isOn(item?.path || node.path)
+      const label = item ? tileName(item) : node.name
+      return (
+        <div key={node.path} title={node.path} className={rowClass(selected)}>
           <span className="w-4 shrink-0" />
           <span className="shrink-0 text-muted">
             <FileIcon />
           </span>
-          <span className="truncate">{node.name}</span>
-        </>
-      )
-      if (!onSelect) {
-        return (
-          <div key={node.path} title={node.path} className={rowClass(false)}>
-            {body}
-          </div>
-        )
-      }
-      return (
-        <button
-          key={node.path}
-          type="button"
-          title={node.path}
-          className={rowClass(selected)}
-          onClick={() => onSelect(node.path)}
-        >
-          {body}
-        </button>
+          <span className="truncate">{label}</span>
+        </div>
       )
     }
     const open = openDirs.has(node.path)
@@ -267,7 +392,7 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
       <div
         key={node.path}
         className={[
-          'overflow-hidden rounded-md border',
+          'shrink-0 rounded-md border',
           on ? 'border-accent' : 'border-line',
           open ? 'bg-field' : 'bg-transparent',
         ].join(' ')}
@@ -296,7 +421,7 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2">
+    <div className="flex flex-col gap-2">
       <div className="flex h-8 shrink-0 items-stretch gap-1">
         <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
@@ -310,16 +435,26 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
           />
         </div>
         <div className="flex h-full w-40 shrink-0 [&>div]:h-full [&>div]:w-full [&_.field-select]:h-full [&_.field-select]:py-0">
-          <SelectField value={sortKey} onChange={(value) => setSortKey(value as SortKey)} options={[...SORTS]} />
+          <SelectField
+            value={shownSortKey}
+            onChange={(value) => {
+              setSortKey(value as SortKey)
+              setSortDir(shownSortDir)
+            }}
+            options={[...GALLERY_SORTS]}
+          />
         </div>
         <button
           type="button"
           className="icon-btn"
-          aria-label={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-          title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-          onClick={() => setSortDir((dir) => (dir === 'asc' ? 'desc' : 'asc'))}
+          aria-label={shownSortDir === 'asc' ? 'Ascending' : 'Descending'}
+          title={shownSortDir === 'asc' ? 'Ascending' : 'Descending'}
+          onClick={() => {
+            setSortKey(shownSortKey)
+            setSortDir(shownSortDir === 'asc' ? 'desc' : 'asc')
+          }}
         >
-          <SortDirIcon dir={sortDir} />
+          <SortDirIcon dir={shownSortDir} />
         </button>
         <button
           type="button"
@@ -342,10 +477,21 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
           <RefreshIcon />
         </button>
       </div>
-      <div ref={rowRef} className="flex min-h-0 flex-1 select-none">
+      <div
+        ref={rowRef}
+        className="flex min-h-0 flex-1 select-none"
+        style={{ minHeight: `${GALLERY_ROWS * tileH + TILE_GAP_REM + TILE_PAD_REM}rem` }}
+      >
         {showTree ? (
           <>
-            <div className="flex min-h-0 shrink-0 flex-col gap-1.5 overflow-y-auto pr-1" style={{ width: treeWidth }}>
+            <div
+              ref={treeRef}
+              className="flex min-h-0 shrink-0 flex-col gap-1.5 overflow-y-auto pr-1"
+              style={{ width: treeWidth }}
+              onScroll={(event) => {
+                snap.current.treeScroll = event.currentTarget.scrollTop
+              }}
+            >
               {tree.map((node) => renderNode(node))}
             </div>
             <PaneSplitter
@@ -357,23 +503,36 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
             />
           </>
         ) : null}
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2">
+        <div
+          ref={tilesRef}
+          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
+          onScroll={(event) => {
+            snap.current.tileScroll = event.currentTarget.scrollTop
+          }}
+        >
           {tiles.length === 0 ? (
             <p className="text-xs text-muted">No items.</p>
           ) : (
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-4">
+            <div
+              className="grid gap-4"
+              style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${tileW}rem, 1fr))` }}
+            >
               {tiles.map((item) => {
-                const selected = Boolean(onSelect) && value === item.path
+                const selected = isOn(item.path)
                 const preview = (
                   <TilePreview
                     className="w-full"
-                    src={item.thumb ? modelThumbUrl(kind, item.path, item.thumb) : null}
+                    src={item.thumb ? modelThumbUrl(kind, filePath(item), item.thumb) : null}
                     mark="?"
-                    label={fileName(item.path)}
+                    label={tileName(item)}
                   />
                 )
                 return (
-                  <div key={item.path} className="group relative min-w-0">
+                  <div
+                    key={item.path}
+                    className="group relative min-w-0 [content-visibility:auto]"
+                    style={{ containIntrinsicSize: `${tileW}rem ${tileH}rem` }}
+                  >
                     {onSelect ? (
                       <button
                         type="button"
@@ -389,17 +548,16 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
                       </div>
                     )}
                     <div className="absolute top-2 right-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100">
-                      {item.path.toLowerCase().endsWith('.safetensors') ? (
+                      {kind !== 'wildcards' && filePath(item).toLowerCase().endsWith('.safetensors') ? (
                         <button
                           type="button"
                           className="icon-btn"
-                          aria-label="File info"
-                          title="File info"
-                          onClick={() =>
-                            navigate('/file-info', { state: { kind, path: item.path, thumb: item.thumb || 0 } })
-                          }
+                          aria-label="Download from Civitai"
+                          title="Download from Civitai"
+                          disabled={filling === filePath(item)}
+                          onClick={() => void downloadCivitai(filePath(item))}
                         >
-                          <InfoIcon />
+                          <DownloadIcon />
                         </button>
                       ) : null}
                       <button
@@ -407,9 +565,9 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
                         className="icon-btn"
                         aria-label="Model settings"
                         title="Model settings"
-                        onClick={() => setInfoItem(item)}
+                        onClick={() => setInfoItem({ ...item, path: filePath(item) })}
                       >
-                        <WrenchIcon />
+                        <InfoIcon />
                       </button>
                     </div>
                   </div>
@@ -428,6 +586,30 @@ export function GalleryView({ kind, items, value, onSelect }: GalleryViewProps) 
             setThumb(kind, infoItem.path, thumb)
             setInfoItem({ ...infoItem, thumb })
           }}
+        />
+      ) : null}
+      {fillConfirm ? (
+        <ConfirmDialog
+          title="Replace existing data?"
+          body={
+            kind === 'loras'
+              ? 'Thumbnail, model type, or trigger words are already set. Download from Civitai anyway?'
+              : 'Thumbnail or model type is already set. Download from Civitai anyway?'
+          }
+          onClose={() => setFillConfirm(null)}
+          actions={[
+            { label: 'Cancel', onClick: () => setFillConfirm(null) },
+            {
+              label: 'Replace',
+              kind: 'primary',
+              onClick: () => {
+                const next = fillConfirm
+                setFillConfirm(null)
+                setFilling(next.path)
+                void saveCivitai(next.path, next.hit).finally(() => setFilling(null))
+              },
+            },
+          ]}
         />
       ) : null}
     </div>

@@ -27,6 +27,14 @@ export function civitaiHost(site: CivitaiSite) {
   return site === 'civitai' ? 'civitai.com' : 'civitai.red'
 }
 
+export const GALLERY_VIEWS = ['checkpoints', 'loras', 'wildcards'] as const
+
+export type GalleryViewKind = (typeof GALLERY_VIEWS)[number]
+export type GallerySortKey = 'name' | 'added' | 'edited' | 'path'
+export type GallerySortDir = 'asc' | 'desc'
+
+const SORT_KEYS = new Set<string>(['name', 'added', 'edited', 'path'])
+
 export const SETTINGS_DEFAULTS = {
   batchGrid: true,
   batchGridMax: 16,
@@ -37,6 +45,20 @@ export const SETTINGS_DEFAULTS = {
   hiddenModelTypes: defaultHiddenModelTypes(),
   theme: 'darker' as Theme,
   civitaiSite: 'red' as CivitaiSite,
+  wildcardYamlByFilename: false,
+  imagePath: '[workflow]/images/[date]',
+  gridPath: '[workflow]/grids/[date]',
+  gallerySortKey: {
+    checkpoints: 'name',
+    loras: 'name',
+    wildcards: 'name',
+  } as Record<GalleryViewKind, GallerySortKey>,
+  gallerySortDir: {
+    checkpoints: 'asc',
+    loras: 'asc',
+    wildcards: 'asc',
+  } as Record<GalleryViewKind, GallerySortDir>,
+  galleryTileScale: 1,
 }
 
 type SettingsState = typeof SETTINGS_DEFAULTS & {
@@ -51,6 +73,12 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setHiddenModelTypes: (value: string[]) => void
   setTheme: (value: Theme) => void
   setCivitaiSite: (value: CivitaiSite) => void
+  setWildcardYamlByFilename: (value: boolean) => void
+  setImagePath: (value: string) => void
+  setGridPath: (value: string) => void
+  setGallerySortKey: (kind: GalleryViewKind, value: GallerySortKey) => void
+  setGallerySortDir: (kind: GalleryViewKind, value: GallerySortDir) => void
+  setGalleryTileScale: (value: number) => void
 }
 
 const KEYS = [
@@ -63,6 +91,12 @@ const KEYS = [
   'hiddenModelTypes',
   'theme',
   'civitaiSite',
+  'wildcardYamlByFilename',
+  'imagePath',
+  'gridPath',
+  'gallerySortKey',
+  'gallerySortDir',
+  'galleryTileScale',
 ] as const
 
 function same(a: unknown, b: unknown) {
@@ -107,6 +141,67 @@ function cleanCivitaiSite(raw: unknown): CivitaiSite {
   return raw === 'civitai' ? 'civitai' : SETTINGS_DEFAULTS.civitaiSite
 }
 
+function cleanPath(raw: unknown, fallback: string) {
+  if (typeof raw !== 'string') {
+    return fallback
+  }
+  const text = raw.trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  if (!text) {
+    return fallback
+  }
+  return text
+}
+
+function cleanSortKey(raw: unknown): GallerySortKey {
+  return SORT_KEYS.has(raw as string) ? (raw as GallerySortKey) : 'name'
+}
+
+function cleanSortDir(raw: unknown): GallerySortDir {
+  return raw === 'desc' ? 'desc' : 'asc'
+}
+
+function cleanSortKeyMap(raw: unknown): Record<GalleryViewKind, GallerySortKey> {
+  const fallback = SETTINGS_DEFAULTS.gallerySortKey
+  if (typeof raw === 'string') {
+    const value = cleanSortKey(raw)
+    return { checkpoints: value, loras: value, wildcards: value }
+  }
+  if (!raw || typeof raw !== 'object') {
+    return fallback
+  }
+  const row = raw as Record<string, unknown>
+  return {
+    checkpoints: cleanSortKey(row.checkpoints ?? fallback.checkpoints),
+    loras: cleanSortKey(row.loras ?? fallback.loras),
+    wildcards: cleanSortKey(row.wildcards ?? fallback.wildcards),
+  }
+}
+
+function cleanSortDirMap(raw: unknown): Record<GalleryViewKind, GallerySortDir> {
+  const fallback = SETTINGS_DEFAULTS.gallerySortDir
+  if (typeof raw === 'string') {
+    const value = cleanSortDir(raw)
+    return { checkpoints: value, loras: value, wildcards: value }
+  }
+  if (!raw || typeof raw !== 'object') {
+    return fallback
+  }
+  const row = raw as Record<string, unknown>
+  return {
+    checkpoints: cleanSortDir(row.checkpoints ?? fallback.checkpoints),
+    loras: cleanSortDir(row.loras ?? fallback.loras),
+    wildcards: cleanSortDir(row.wildcards ?? fallback.wildcards),
+  }
+}
+
+function cleanTileScale(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.galleryTileScale
+  }
+  return Math.round(Math.min(2, Math.max(0.5, n)) * 10) / 10
+}
+
 function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
   return {
     batchGrid: typeof patch.batchGrid === 'boolean' ? patch.batchGrid : SETTINGS_DEFAULTS.batchGrid,
@@ -118,6 +213,16 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     hiddenModelTypes: patch.hiddenModelTypes ? cleanTypes(patch.hiddenModelTypes) : SETTINGS_DEFAULTS.hiddenModelTypes,
     theme: patch.theme ? cleanTheme(patch.theme) : SETTINGS_DEFAULTS.theme,
     civitaiSite: patch.civitaiSite ? cleanCivitaiSite(patch.civitaiSite) : SETTINGS_DEFAULTS.civitaiSite,
+    wildcardYamlByFilename:
+      typeof patch.wildcardYamlByFilename === 'boolean'
+        ? patch.wildcardYamlByFilename
+        : SETTINGS_DEFAULTS.wildcardYamlByFilename,
+    imagePath: cleanPath(patch.imagePath, SETTINGS_DEFAULTS.imagePath),
+    gridPath: cleanPath(patch.gridPath, SETTINGS_DEFAULTS.gridPath),
+    gallerySortKey: patch.gallerySortKey ? cleanSortKeyMap(patch.gallerySortKey) : SETTINGS_DEFAULTS.gallerySortKey,
+    gallerySortDir: patch.gallerySortDir ? cleanSortDirMap(patch.gallerySortDir) : SETTINGS_DEFAULTS.gallerySortDir,
+    galleryTileScale:
+      typeof patch.galleryTileScale === 'number' ? cleanTileScale(patch.galleryTileScale) : SETTINGS_DEFAULTS.galleryTileScale,
   }
 }
 
@@ -125,7 +230,7 @@ function diff(state: typeof SETTINGS_DEFAULTS): UserSettings {
   const out: UserSettings = {}
   for (const key of KEYS) {
     if (!same(state[key], SETTINGS_DEFAULTS[key])) {
-      out[key] = state[key]
+      Object.assign(out, { [key]: state[key] })
     }
   }
   return out
@@ -164,6 +269,24 @@ function pickLegacy(raw: unknown): UserSettings {
   }
   if (typeof state.civitaiSite === 'string') {
     patch.civitaiSite = state.civitaiSite
+  }
+  if (typeof state.wildcardYamlByFilename === 'boolean') {
+    patch.wildcardYamlByFilename = state.wildcardYamlByFilename
+  }
+  if (typeof state.imagePath === 'string') {
+    patch.imagePath = state.imagePath
+  }
+  if (typeof state.gridPath === 'string') {
+    patch.gridPath = state.gridPath
+  }
+  if (typeof state.gallerySortKey === 'string' || (state.gallerySortKey && typeof state.gallerySortKey === 'object')) {
+    patch.gallerySortKey = state.gallerySortKey as UserSettings['gallerySortKey']
+  }
+  if (typeof state.gallerySortDir === 'string' || (state.gallerySortDir && typeof state.gallerySortDir === 'object')) {
+    patch.gallerySortDir = state.gallerySortDir as UserSettings['gallerySortDir']
+  }
+  if (typeof state.galleryTileScale === 'number') {
+    patch.galleryTileScale = state.galleryTileScale
   }
   return patch
 }
@@ -244,6 +367,34 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setCivitaiSite: (civitaiSite) => {
     set({ civitaiSite: cleanCivitaiSite(civitaiSite) })
+    persist()
+  },
+  setWildcardYamlByFilename: (wildcardYamlByFilename) => {
+    set({ wildcardYamlByFilename })
+    persist()
+  },
+  setImagePath: (imagePath) => {
+    set({ imagePath })
+    persist()
+  },
+  setGridPath: (gridPath) => {
+    set({ gridPath })
+    persist()
+  },
+  setGallerySortKey: (kind, gallerySortKey) => {
+    set((state) => ({
+      gallerySortKey: { ...state.gallerySortKey, [kind]: cleanSortKey(gallerySortKey) },
+    }))
+    persist()
+  },
+  setGallerySortDir: (kind, gallerySortDir) => {
+    set((state) => ({
+      gallerySortDir: { ...state.gallerySortDir, [kind]: cleanSortDir(gallerySortDir) },
+    }))
+    persist()
+  },
+  setGalleryTileScale: (galleryTileScale) => {
+    set({ galleryTileScale: cleanTileScale(galleryTileScale) })
     persist()
   },
 }))

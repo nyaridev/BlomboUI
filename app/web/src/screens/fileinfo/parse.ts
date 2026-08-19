@@ -1,11 +1,18 @@
 import type { TemplateParams } from '@/stores/generateStore.ts'
 import { PARAM_KEYS, pickParams } from '@/stores/generateStore.ts'
 
+export type PngLora = {
+  name: string
+  strength?: number
+  hash?: string
+}
+
 export type PngInfoParams = Partial<TemplateParams> & {
   modelHash?: string
   autov1?: string
   autov3?: string
   sha256?: string
+  loras?: PngLora[]
 }
 
 const HEX_HASH = /^[0-9a-f]{8,64}$/i
@@ -14,9 +21,14 @@ export function pngModelHashes(parsed: PngInfoParams): string[] {
   return [...new Set([parsed.autov3, parsed.modelHash, parsed.autov1, parsed.sha256].filter((value): value is string => Boolean(value)))]
 }
 
+export function pngLoraHashes(parsed: PngInfoParams): string[] {
+  return [...new Set((parsed.loras || []).map((item) => item.hash).filter((value): value is string => Boolean(value)))]
+}
+
 const SETTINGS = /^Steps:/i
 const NEGATIVE = /^Negative prompt:/i
 const GENERATED = /^Generated using /i
+const LORA_LINE = /^(Lora hashes|Lora weights|Loras):/i
 
 export function parsePngInfo(text: string): PngInfoParams {
   const lines = text.replace(/\r\n/g, '\n').split('\n')
@@ -42,6 +54,12 @@ export function parsePngInfo(text: string): PngInfoParams {
   }
   if (i < lines.length && SETTINGS.test(lines[i])) {
     applySettings(out, lines[i])
+    applyLoraHashes(out, lines[i])
+    i += 1
+    while (i < lines.length && LORA_LINE.test(lines[i])) {
+      applyLoraLine(out, lines[i])
+      i += 1
+    }
   }
   return out
 }
@@ -109,6 +127,95 @@ function applySettings(out: PngInfoParams, line: string) {
   const batchCount = intIn(fields['batch count'], 1, 100)
   if (batchCount != null) {
     out.batchCount = batchCount
+  }
+}
+
+function parseNamedPairs(value: string): [string, string][] {
+  const out: [string, string][] = []
+  for (const chunk of value.split(', ')) {
+    const split = chunk.indexOf(':')
+    if (split < 0) {
+      continue
+    }
+    const name = chunk.slice(0, split).trim()
+    const rest = chunk.slice(split + 1).trim()
+    if (name && rest) {
+      out.push([name, rest])
+    }
+  }
+  return out
+}
+
+function mergeLora(out: PngInfoParams, name: string, patch: { hash?: string; strength?: number }) {
+  if (!out.loras) {
+    out.loras = []
+  }
+  let item = out.loras.find((row) => row.name === name)
+  if (!item) {
+    item = { name }
+    out.loras.push(item)
+  }
+  if (patch.hash) {
+    item.hash = patch.hash
+  }
+  if (patch.strength != null) {
+    item.strength = patch.strength
+  }
+}
+
+function applyLoraHashes(out: PngInfoParams, text: string) {
+  const match = text.match(/Lora hashes:\s*(.*)$/i)
+  if (!match) {
+    return
+  }
+  for (const [name, rest] of parseNamedPairs(match[1])) {
+    const hash = hexHash(rest)
+    if (hash) {
+      mergeLora(out, name, { hash })
+    }
+  }
+}
+
+function applyLoraLine(out: PngInfoParams, line: string) {
+  const split = line.indexOf(':')
+  if (split < 0) {
+    return
+  }
+  const key = line.slice(0, split).trim().toLowerCase()
+  const value = line.slice(split + 1).trim()
+  if (key === 'lora hashes') {
+    applyLoraHashes(out, line)
+    return
+  }
+  if (key === 'lora weights') {
+    for (const [name, rest] of parseNamedPairs(value)) {
+      const n = Number(rest)
+      if (Number.isFinite(n)) {
+        mergeLora(out, name, { strength: n })
+      }
+    }
+    return
+  }
+  if (key !== 'loras') {
+    return
+  }
+  for (const [name, rest] of parseNamedPairs(value)) {
+    const bits = rest.split(':').map((bit) => bit.trim()).filter(Boolean)
+    const patch: { hash?: string; strength?: number } = {}
+    for (const bit of bits) {
+      const hash = hexHash(bit)
+      if (hash) {
+        patch.hash = hash
+        continue
+      }
+      const n = Number(bit)
+      if (Number.isFinite(n)) {
+        patch.strength = n
+      }
+    }
+    if (patch.hash || patch.strength != null) {
+      mergeLora(out, name, patch)
+    }
   }
 }
 

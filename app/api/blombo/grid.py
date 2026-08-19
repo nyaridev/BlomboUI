@@ -41,6 +41,7 @@ def save_contact_sheet(
     quality: int = 85,
     rows: int = 0,
     fill: bool = False,
+    comment: str = "",
 ) -> None:
     from PIL import Image
 
@@ -56,4 +57,11 @@ def save_contact_sheet(
     if sheet.width > max_edge or sheet.height > max_edge:
         sheet.thumbnail((max_edge, max_edge))
     dest.parent.mkdir(parents=True, exist_ok=True)
-    sheet.save(dest, "JPEG", quality=max(40, min(95, quality)), optimize=True)
+    extra: dict = {}
+    if comment:
+        from blombo.pnginfo import jpeg_exif
+
+        exif = jpeg_exif(comment)
+        if exif is not None:
+            extra["exif"] = exif.tobytes()
+    sheet.save(dest, "JPEG", quality=max(40, min(95, quality)), optimize=True, **extra)

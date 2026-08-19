@@ -17,7 +17,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CivitaiSection } from './CivitaiSection.tsx'
 import { ImageInfo } from './ImageInfo.tsx'
-import { applyPngInfo, parsePngInfo, pngModelHashes } from './parse.ts'
+import { applyPngInfo, parsePngInfo, pngLoraHashes, pngModelHashes } from './parse.ts'
 import { SafetensorsInfo } from './SafetensorsInfo.tsx'
 import { embeddedHashes, readSafetensorsMetadata, type SafetensorsMeta } from './safetensors.ts'
 
@@ -56,6 +56,7 @@ export function FileInfoScreen() {
   const [meta, setMeta] = useState<SafetensorsMeta | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [civitai, setCivitai] = useState<CivitaiVersion | null>(null)
+  const [loraCivitai, setLoraCivitai] = useState<Record<string, CivitaiVersion | null>>({})
   const [civitaiStatus, setCivitaiStatus] = useState<'idle' | 'looking' | 'found' | 'none'>('idle')
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
@@ -94,6 +95,27 @@ export function FileInfoScreen() {
     }
   }
 
+  async function loadLoraCivitai(id: number, hashes: string[]) {
+    const unique = [...new Set(hashes.map((hash) => hash.trim().toLowerCase()).filter(Boolean))]
+    if (!unique.length) {
+      setLoraCivitai({})
+      return
+    }
+    const entries = await Promise.all(
+      unique.map(async (hash) => {
+        try {
+          return [hash, await getCivitaiByHash(hash)] as const
+        } catch {
+          return [hash, null] as const
+        }
+      }),
+    )
+    if (id !== seq.current) {
+      return
+    }
+    setLoraCivitai(Object.fromEntries(entries))
+  }
+
   async function libraryHashes(id: number, modelKind: keyof ModelLists, path: string): Promise<string[]> {
     while (id === seq.current) {
       const info = await getModelInfo(modelKind, path)
@@ -115,6 +137,7 @@ export function FileInfoScreen() {
     setMeta(null)
     setError(null)
     setCivitai(null)
+    setLoraCivitai({})
     setPreview(null)
     setLibrary({ kind: modelKind, path })
     setBusy(true)
@@ -164,6 +187,7 @@ export function FileInfoScreen() {
       setMeta(null)
       setError(null)
       setCivitai(null)
+      setLoraCivitai({})
       setCivitaiStatus('idle')
       setBusy(false)
       setPreview(null)
@@ -173,6 +197,7 @@ export function FileInfoScreen() {
     setBusy(true)
     setError(null)
     setCivitai(null)
+    setLoraCivitai({})
     setCivitaiStatus('idle')
     setLibrary(null)
     setPreview(isImage(file) ? URL.createObjectURL(file) : null)
@@ -211,7 +236,8 @@ export function FileInfoScreen() {
       }
       setText(info.text)
       setRaw(info.raw)
-      await loadCivitai(id, pngModelHashes(parsePngInfo(info.text)))
+      const parsed = parsePngInfo(info.text)
+      await Promise.all([loadCivitai(id, pngModelHashes(parsed)), loadLoraCivitai(id, pngLoraHashes(parsed))])
     } catch (err) {
       if (id !== seq.current) {
         return
@@ -381,7 +407,7 @@ export function FileInfoScreen() {
                 civitaiStatus={civitaiStatus}
               />
             ) : kind === 'image' ? (
-              <ImageInfo text={text} raw={raw} busy={busy} civitai={civitai} />
+              <ImageInfo text={text} raw={raw} busy={busy} civitai={civitai} loraCivitai={loraCivitai} />
             ) : null}
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { SliderField } from '@/components/SliderField.tsx'
+import { ShuffleIcon, SwapIcon, UndoIcon } from '@/components/ControlIcons.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { getKSamplerChoices } from '@/lib/api.ts'
@@ -12,11 +13,12 @@ function FieldLabel({ children }: { children: string }) {
 
 type GenerationParamsProps = {
   error: string | null
+  warning?: string | null
   comfyOk: boolean
   lastSeed: number | null
 }
 
-export function GenerationParams({ error, comfyOk, lastSeed }: GenerationParamsProps) {
+export function GenerationParams({ error, warning, comfyOk, lastSeed }: GenerationParamsProps) {
   const width = useGenerateStore((s) => s.width)
   const height = useGenerateStore((s) => s.height)
   const steps = useGenerateStore((s) => s.steps)
@@ -162,7 +164,7 @@ export function GenerationParams({ error, comfyOk, lastSeed }: GenerationParamsP
           )}
         </div>
         <button type="button" className="icon-btn" aria-label="Swap width and height" onClick={swapSize}>
-          ⇅
+          <SwapIcon />
         </button>
         <div className="flex min-w-0 flex-col gap-2">
           <SliderField label="Batch count" value={batchCount} onChange={setBatchCount} min={1} max={100} />
@@ -177,7 +179,7 @@ export function GenerationParams({ error, comfyOk, lastSeed }: GenerationParamsP
             <NumberField value={seed} onChange={setSeed} />
           </div>
           <button type="button" className="icon-btn" aria-label="Random seed" onClick={() => setSeed(-1)}>
-            🎲
+            <ShuffleIcon />
           </button>
           <button
             type="button"
@@ -186,11 +188,12 @@ export function GenerationParams({ error, comfyOk, lastSeed }: GenerationParamsP
             disabled={lastSeed == null}
             onClick={() => lastSeed != null && setSeed(lastSeed)}
           >
-            ↩
+            <UndoIcon />
           </button>
         </div>
       </label>
       {error ? <p className="text-xs text-accent">{error}</p> : null}
+      {warning ? <p className="text-xs text-muted">{warning}</p> : null}
     </aside>
   )
 }

@@ -36,6 +36,8 @@ export function TilePreview({
           src={src || ''}
           alt=""
           className="absolute inset-0 h-full w-full object-cover"
+          loading="lazy"
+          decoding="async"
           onError={() => setBroken(true)}
         />
       ) : (

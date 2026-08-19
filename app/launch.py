@@ -181,6 +181,7 @@ def ensure_api_deps() -> None:
         import fastapi  # noqa: F401
         import uvicorn  # noqa: F401
         import websockets  # noqa: F401
+        import yaml  # noqa: F401
         from PIL import Image  # noqa: F401
     except ImportError:
         print(f"    {_c('38;5;245', 'pip')}    installing FastAPI")

@@ -1,9 +1,12 @@
 import { ChipInput } from '@/components/ChipInput.tsx'
 import { ChipSelect } from '@/components/ChipSelect.tsx'
+import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { ShuffleIcon, SwapIcon, UndoIcon } from '@/components/ControlIcons.tsx'
 import { ExpandSection } from '@/components/ExpandSection.tsx'
 import { ImageDrop } from '@/components/ImageDrop.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
+import { RefreshIcon } from '@/components/RefreshIcon.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
 import { SettingsBlock } from './SettingsBlock.tsx'
@@ -42,25 +45,22 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button type="button" className="icon-btn" aria-label="Random seed">
-            🎲
+            <ShuffleIcon />
           </button>
-          <button type="button" className="icon-btn" aria-label="Open folder">
-            📁
+          <button type="button" className="icon-btn" aria-label="Restore last seed">
+            <UndoIcon />
+          </button>
+          <button type="button" className="icon-btn" aria-label="Swap width and height">
+            <SwapIcon />
           </button>
           <button type="button" className="icon-btn" aria-label="Refresh">
-            🔄
+            <RefreshIcon />
           </button>
-          <button type="button" className="icon-btn" aria-label="Image">
-            🖼️
-          </button>
-          <button type="button" className="icon-btn" aria-label="Settings">
-            ⚙️
-          </button>
-          <button type="button" className="icon-btn" aria-label="Delete">
-            🗑️
+          <button type="button" className="icon-btn" aria-label="Close">
+            <CloseIcon />
           </button>
           <button type="button" className="icon-btn" aria-label="Disabled" disabled>
-            🎲
+            <ShuffleIcon />
           </button>
         </div>
       </SettingsBlock>

@@ -1,3 +1,4 @@
+import { CloseIcon } from '@/components/CloseIcon.tsx'
 import { useEffect, useRef, useState } from 'react'
 
 function isImage(file: File) {
@@ -132,22 +133,14 @@ export function ImageDrop({
           ) : null}
           <button
             type="button"
-            className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
+            className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
             aria-label="Remove file"
             onClick={(event) => {
               event.stopPropagation()
               take(null)
             }}
           >
-            <svg width="11" height="11" viewBox="0 0 14 14" aria-hidden="true">
-              <path
-                d="M3 3 11 11M11 3 3 11"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-              />
-            </svg>
+            <CloseIcon />
           </button>
         </>
       ) : (

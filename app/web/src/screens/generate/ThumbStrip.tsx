@@ -14,7 +14,7 @@ type ThumbStripProps = {
 
 function StripArrow({ dir }: { dir: 'left' | 'right' }) {
   return (
-    <svg width="12" height="12" viewBox="0 0 18 18" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
       <path
         d={dir === 'left' ? 'M11 4 6 9l5 5' : 'M7 4l5 5-5 5'}
         fill="none"
@@ -82,6 +82,8 @@ export function ThumbStrip({ items, index, onSelect, onError }: ThumbStripProps)
                   src={item.src}
                   alt=""
                   className="h-full w-full object-cover"
+                  loading="lazy"
+                  decoding="async"
                   onError={() => onError?.(item.key)}
                 />
               </span>

@@ -1,0 +1,319 @@
+from __future__ import annotations
+
+import random
+import re
+from pathlib import Path
+from typing import Any
+
+from blombo.paths import wildcards_root
+
+# Tags are `__name__` tokens. Surrounding commas are optional.
+TAG = re.compile(r"__(\S+?)__")
+DEPTH = 20
+YAML_EXTS = {".yaml", ".yml"}
+TXT_EXT = ".txt"
+
+YamlNode = dict[str, "YamlNode"] | list[str]
+
+
+def iter_tiles(path: Path, rel: str, claimed: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    suffix = path.suffix.lower()
+    rel = rel.replace("\\", "/")
+    if suffix == TXT_EXT:
+        stem = rel[: -len(path.suffix)] if path.suffix else rel
+        return [{"tag": stem, "dir": False, "source": rel}]
+    if suffix not in YAML_EXTS:
+        return []
+    parent = rel.rpartition("/")[0]
+    out: list[dict[str, Any]] = []
+    for name, node in _yaml_tree(path).items():
+        key = name.lower()
+        if claimed is not None:
+            owner = claimed.get(key)
+            if owner and owner != rel:
+                continue
+            claimed[key] = rel
+        base = f"{parent}/{name}" if parent else name
+        out.extend(_flatten_tiles(base, node, rel))
+    return out
+
+
+def expand(text: str, rng: random.Random, by_filename: bool = False, missing: list[str] | None = None) -> str:
+    found = missing if missing is not None else []
+    index = _index()
+    return _expand(text, rng, by_filename, index, found, 0)
+
+
+def apply(values: dict[str, Any], rng: random.Random) -> None:
+    from blombo import settings as user_settings
+
+    by_filename = bool(user_settings.load().get("wildcardYamlByFilename"))
+    missing: list[str] = []
+    values["prompt_expanded"] = expand(str(values.get("prompt") or ""), rng, by_filename, missing)
+    values["negative_prompt_expanded"] = expand(
+        str(values.get("negative_prompt") or ""), rng, by_filename, missing
+    )
+    values["wildcard_missing"] = missing
+
+
+def _flatten_tiles(tag: str, node: YamlNode, source: str) -> list[dict[str, Any]]:
+    rows = [{"tag": tag, "dir": isinstance(node, dict) and bool(node), "source": source}]
+    if isinstance(node, dict):
+        for name, child in node.items():
+            if name:
+                rows.extend(_flatten_tiles(f"{tag}/{name}", child, source))
+    return rows
+
+
+def _expand(
+    text: str,
+    rng: random.Random,
+    by_filename: bool,
+    index: dict[str, Any],
+    missing: list[str],
+    depth: int,
+) -> str:
+    if depth > DEPTH or "__" not in text:
+        return text
+
+    def repl(match: re.Match[str]) -> str:
+        tag = match.group(1).strip().replace("\\", "/").strip("/")
+        line = _pick(tag, rng, by_filename, index)
+        if line is None:
+            if tag not in missing:
+                missing.append(tag)
+            return match.group(0)
+        return _expand(line, rng, by_filename, index, missing, depth + 1)
+
+    return TAG.sub(repl, text)
+
+
+def _pick(tag: str, rng: random.Random, by_filename: bool, index: dict[str, Any]) -> str | None:
+    key = tag.strip().replace("\\", "/").strip("/").lower()
+    if not key:
+        return None
+    path = index["txt"].get(key)
+    if path:
+        return _choice(_txt_lines(path), rng)
+    node = index["yaml"].get(key)
+    if node is not None:
+        return _pick_node(node, rng)
+    if by_filename:
+        hit = _yaml_file_node(key, index["files"])
+        if hit is not None:
+            return _pick_node(hit, rng)
+    files = index["dirs"].get(key)
+    if files:
+        return _file_line(rng.choice(files), rng)
+    return None
+
+
+def _yaml_file_node(key: str, files: dict[str, dict[str, YamlNode]]) -> YamlNode | None:
+    parts = key.split("/")
+    for i in range(len(parts), 0, -1):
+        stem = "/".join(parts[:i])
+        doc = files.get(stem)
+        if doc is None:
+            continue
+        rest = parts[i:]
+        if not rest:
+            return doc
+        walked = _walk(doc, rest)
+        if walked is not None:
+            return walked
+        if len(doc) == 1:
+            walked = _walk(next(iter(doc.values())), rest)
+            if walked is not None:
+                return walked
+    return None
+
+
+def _walk(node: YamlNode, parts: list[str]) -> YamlNode | None:
+    current: YamlNode = node
+    for part in parts:
+        if not isinstance(current, dict):
+            return None
+        match = next((name for name in current if name.lower() == part), None)
+        if match is None:
+            return None
+        current = current[match]
+    return current
+
+
+def _pick_node(node: YamlNode, rng: random.Random) -> str:
+    if isinstance(node, list):
+        return _choice(node, rng)
+    if isinstance(node, dict):
+        keys = [name for name, child in node.items() if child]
+        if not keys:
+            return ""
+        return _pick_node(node[rng.choice(keys)], rng)
+    return ""
+
+
+def _file_line(path: Path, rng: random.Random) -> str:
+    if path.suffix.lower() in YAML_EXTS:
+        tree = _yaml_tree(path)
+        if not tree:
+            return ""
+        return _pick_node(tree, rng)
+    return _choice(_txt_lines(path), rng)
+
+
+def _choice(lines: list[str], rng: random.Random) -> str:
+    if not lines:
+        return ""
+    return rng.choice(lines)
+
+
+def _index() -> dict[str, Any]:
+    root = wildcards_root()
+    txt: dict[str, Path] = {}
+    yaml_nodes: dict[str, YamlNode] = {}
+    yaml_files: dict[str, dict[str, YamlNode]] = {}
+    dirs: dict[str, list[Path]] = {}
+    empty: dict[str, Any] = {"txt": txt, "yaml": yaml_nodes, "files": yaml_files, "dirs": dirs}
+    if not root.is_dir():
+        return empty
+    claimed: dict[str, str] = {}
+    for path, rel in iter_sources(root):
+        suffix = path.suffix.lower()
+        stem = rel[: -len(path.suffix)] if path.suffix else rel
+        parent = stem.rpartition("/")[0]
+        if parent:
+            dirs.setdefault(parent.lower(), []).append(path)
+        if suffix == TXT_EXT:
+            txt[stem.lower()] = path
+            continue
+        tree = _yaml_tree(path)
+        if not tree:
+            continue
+        yaml_files.setdefault(stem.lower(), tree)
+        yaml_files.setdefault(path.stem.lower(), tree)
+        for name, node in tree.items():
+            key = name.lower()
+            owner = claimed.get(key)
+            if owner and owner != rel:
+                continue
+            claimed[key] = rel
+            _index_yaml(yaml_nodes, name, node, parent)
+    return empty
+
+
+def iter_sources(root: Path | None = None) -> list[tuple[Path, str]]:
+    folder = root or wildcards_root()
+    if not folder.is_dir():
+        return []
+    items: list[tuple[Path, str]] = []
+    for path in folder.rglob("*"):
+        if not path.is_file() or path.name in {".gitkeep", "desktop.ini"}:
+            continue
+        if path.suffix.lower() not in {TXT_EXT, *YAML_EXTS}:
+            continue
+        items.append((path, path.relative_to(folder).as_posix()))
+    items.sort(key=lambda row: (row[1].count("/"), row[1].lower()))
+    return items
+
+
+def _index_yaml(out: dict[str, YamlNode], name: str, node: YamlNode, parent: str) -> None:
+    bases = [name.lower()]
+    if parent:
+        bases.append(f"{parent.lower()}/{name.lower()}")
+
+    def walk(prefix: str, current: YamlNode) -> None:
+        for base in bases:
+            key = f"{base}/{prefix}" if prefix else base
+            out[key] = current
+        if isinstance(current, dict):
+            for child_name, child in current.items():
+                next_prefix = f"{prefix}/{child_name.lower()}" if prefix else child_name.lower()
+                walk(next_prefix, child)
+
+    walk("", node)
+
+
+def _txt_lines(path: Path) -> list[str]:
+    try:
+        text = path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return []
+    out: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if line and not line.startswith("#"):
+            out.append(line)
+    return out
+
+
+def _yaml_tree(path: Path) -> dict[str, YamlNode]:
+    data, _err = load_yaml(path)
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, YamlNode] = {}
+    for raw_name, body in data.items():
+        node = _yaml_node(body)
+        if node:
+            out[str(raw_name)] = node
+    return out
+
+
+def load_yaml(path: Path) -> tuple[object | None, str | None]:
+    try:
+        import yaml
+    except ImportError:
+        return None, "PyYAML is not installed"
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except OSError as exc:
+        return None, str(exc)
+    except yaml.YAMLError as exc:
+        text = str(exc).strip() or "invalid YAML"
+        return None, text.replace('in "<unicode string>", ', "in ")
+    return data, None
+
+
+def yaml_headers(path: Path) -> list[str]:
+    if path.suffix.lower() not in YAML_EXTS:
+        return []
+    return list(_yaml_tree(path))
+
+
+def file_error(path: Path) -> str | None:
+    if path.suffix.lower() not in YAML_EXTS:
+        return None
+    data, err = load_yaml(path)
+    if err:
+        return None if err == "PyYAML is not installed" else err
+    if data is None:
+        return None
+    if not isinstance(data, dict):
+        return "root value must be a mapping of tag names"
+    return None
+
+
+def _yaml_node(body: object) -> YamlNode | None:
+    if isinstance(body, list):
+        lines = _lines(body)
+        return lines or None
+    if isinstance(body, str):
+        line = body.strip()
+        return [line] if line else None
+    if not isinstance(body, dict):
+        return None
+    out: dict[str, YamlNode] = {}
+    for raw_name, raw in body.items():
+        child = _yaml_node(raw)
+        if child:
+            out[str(raw_name)] = child
+    return out or None
+
+
+def _lines(items: list[object]) -> list[str]:
+    out: list[str] = []
+    for item in items:
+        if item is None:
+            continue
+        line = str(item).strip()
+        if line and not line.startswith("#"):
+            out.append(line)
+    return out

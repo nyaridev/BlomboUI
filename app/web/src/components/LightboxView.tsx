@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { useEffect, useRef, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 
 type LightboxViewProps = {
@@ -18,22 +19,14 @@ function CloseButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
-      className="absolute top-1.5 right-1.5 z-10 flex h-6 w-6 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
+      className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
       aria-label="Close"
       onClick={(event) => {
         event.stopPropagation()
         onClick()
       }}
     >
-      <svg width="11" height="11" viewBox="0 0 14 14" aria-hidden="true">
-        <path
-          d="M3 3 11 11M11 3 3 11"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-        />
-      </svg>
+      <CloseIcon />
     </button>
   )
 }
@@ -66,24 +59,27 @@ function Arrow({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void })
   )
 }
 
+function paint(img: HTMLImageElement | null, next: { scale: number; x: number; y: number }) {
+  if (next.scale <= MIN) {
+    next = { scale: MIN, x: 0, y: 0 }
+  }
+  if (img) {
+    img.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`
+  }
+  return next
+}
+
 export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext }: LightboxViewProps) {
   const stageRef = useRef<HTMLDivElement>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
   const viewRef = useRef({ scale: MIN, x: 0, y: 0 })
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   const navRef = useRef({ many, onPrev, onNext })
   const wheelAcc = useRef(0)
-  const [scale, setScale] = useState(MIN)
-  const [pos, setPos] = useState({ x: 0, y: 0 })
-  const [panning, setPanning] = useState(false)
   navRef.current = { many, onPrev, onNext }
 
   function apply(next: { scale: number; x: number; y: number }) {
-    if (next.scale <= MIN) {
-      next = { scale: MIN, x: 0, y: 0 }
-    }
-    viewRef.current = next
-    setScale(next.scale)
-    setPos({ x: next.x, y: next.y })
+    viewRef.current = paint(imgRef.current, next)
   }
 
   useEffect(() => {
@@ -92,8 +88,10 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' || event.key.toLowerCase() === 'f') {
+        event.preventDefault()
         onClose()
+        return
       }
       if (event.key === 'ArrowLeft' && many) {
         onPrev()
@@ -111,12 +109,21 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
     if (!el) {
       return
     }
+    function overImage(event: WheelEvent) {
+      const img = imgRef.current
+      if (!img) {
+        return false
+      }
+      const r = img.getBoundingClientRect()
+      return event.clientX >= r.left && event.clientX <= r.right && event.clientY >= r.top && event.clientY <= r.bottom
+    }
+
     function onWheel(event: WheelEvent) {
       event.preventDefault()
       const nav = navRef.current
       const view = viewRef.current
       const delta = event.deltaX || event.deltaY
-      if (nav.many && !event.ctrlKey && view.scale <= MIN) {
+      if (nav.many && view.scale <= MIN && !overImage(event)) {
         wheelAcc.current += delta
         let moved = false
         while (Math.abs(wheelAcc.current) >= 100) {
@@ -133,6 +140,7 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
         }
         return
       }
+      wheelAcc.current = 0
       const nextScale = Math.min(MAX, Math.max(MIN, view.scale * Math.exp(-event.deltaY * 0.002)))
       const ratio = nextScale / view.scale
       const rect = el.getBoundingClientRect()
@@ -153,7 +161,7 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
     event.currentTarget.setPointerCapture(event.pointerId)
     const view = viewRef.current
     dragRef.current = { x: view.x, y: view.y, px: event.clientX, py: event.clientY }
-    setPanning(true)
+    event.currentTarget.style.transition = 'none'
   }
 
   function onPointerMove(event: PointerEvent<HTMLImageElement>) {
@@ -168,26 +176,28 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
     })
   }
 
-  function onPointerUp() {
+  function onPointerUp(event: PointerEvent<HTMLImageElement>) {
     dragRef.current = null
-    setPanning(false)
+    event.currentTarget.style.transition = 'transform 140ms ease-out'
   }
 
   return createPortal(
     <div
       ref={stageRef}
-      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg/90"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg/75 backdrop-blur-md"
+      data-overlay
       onClick={onClose}
     >
       <CloseButton onClick={onClose} />
       {many ? <Arrow dir="left" onClick={onPrev} /> : null}
       <img
+        ref={imgRef}
         src={src}
         alt={alt}
         className="max-h-[92vh] max-w-[92vw] object-contain"
         style={{
-          transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
-          transition: panning ? 'none' : 'transform 140ms ease-out',
+          transform: 'translate(0px, 0px) scale(1)',
+          transition: 'transform 140ms ease-out',
           cursor: 'all-scroll',
           touchAction: 'none',
         }}

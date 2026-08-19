@@ -42,16 +42,22 @@ def embed(data: bytes, values: dict[str, Any], graph: dict[str, Any] | None = No
     return out.getvalue()
 
 
-def parameters_text(values: dict[str, Any]) -> str:
+def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:
     hashes = values.get("model_hashes")
     autov1 = autov3 = sha256 = ""
     if isinstance(hashes, dict):
         autov1 = str(hashes.get("autov1") or "")
         autov3 = str(hashes.get("autov3") or "")
         sha256 = str(hashes.get("sha256") or "")
+    if raw:
+        prompt = str(values.get("prompt") or "")
+        negative = str(values.get("negative_prompt") or "")
+    else:
+        prompt = str(values.get("prompt_expanded") or values.get("prompt") or "")
+        negative = str(values.get("negative_prompt_expanded") or values.get("negative_prompt") or "")
     return _lines(
-        str(values.get("prompt") or ""),
-        str(values.get("negative_prompt") or ""),
+        prompt,
+        negative,
         values.get("steps"),
         values.get("sampler"),
         values.get("scheduler"),
@@ -64,7 +70,26 @@ def parameters_text(values: dict[str, Any]) -> str:
         autov3,
         sha256,
         autov1,
+        values.get("loras"),
     )
+
+
+def jpeg_exif(text: str) -> Any:
+    from PIL import Image
+
+    comment = str(text or "").strip()
+    if not comment:
+        return None
+    exif = Image.Exif()
+    payload = b"UNICODE\x00" + comment.encode("utf-16")
+    if len(payload) > 60000:
+        payload = payload[:60000]
+    exif[0x9286] = payload
+    try:
+        exif[270] = comment[:4096]
+    except Exception:
+        pass
+    return exif
 
 
 def _texts(image: Any) -> dict[str, str]:
@@ -248,6 +273,7 @@ def _lines(
     autov3: Any = None,
     sha256: Any = None,
     autov1: Any = None,
+    loras: Any = None,
 ) -> str:
     parts = [str(prompt or "").strip()]
     if str(negative or "").strip():
@@ -277,10 +303,49 @@ def _lines(
         bits.append(f"Model: {model}")
     if bits:
         parts.append(", ".join(bits))
+    parts.extend(_lora_lines(loras))
     text = "\n".join(part for part in parts if part).strip()
     if not text:
         return ""
     return f"{text}\nGenerated using BlomboUI {VERSION}"
+
+
+def _lora_stem(path: str) -> str:
+    name = path.replace("\\", "/").rsplit("/", 1)[-1]
+    if "." in name:
+        return name.rsplit(".", 1)[0]
+    return name
+
+
+def _lora_lines(raw: Any) -> list[str]:
+    if not isinstance(raw, list) or not raw:
+        return []
+    hashes: list[str] = []
+    weights: list[str] = []
+    for item in raw:
+        if isinstance(item, str):
+            name, strength, digest = item, 1.0, ""
+        elif isinstance(item, dict):
+            name = str(item.get("lora") or item.get("path") or "")
+            digest = str(item.get("hash") or "")
+            try:
+                strength = float(item.get("strength") if item.get("strength") is not None else 1)
+            except (TypeError, ValueError):
+                strength = 1.0
+        else:
+            continue
+        stem = _lora_stem(name.strip())
+        if not stem:
+            continue
+        if digest:
+            hashes.append(f"{stem}: {digest}")
+        weights.append(f"{stem}: {strength:g}")
+    out: list[str] = []
+    if hashes:
+        out.append(f"Lora hashes: {', '.join(hashes)}")
+    if weights:
+        out.append(f"Lora weights: {', '.join(weights)}")
+    return out
 
 
 def _from_sidecar(filename: str) -> str:

@@ -11,6 +11,7 @@ export function Dialog({ onClose, children, className = 'w-[min(92vw,22rem)]' }:
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/80 p-4"
+      data-overlay
       onClick={onClose}
     >
       <div

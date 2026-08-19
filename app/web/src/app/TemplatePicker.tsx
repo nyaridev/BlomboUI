@@ -14,7 +14,7 @@ type Pending = { type: 'load' } | { type: 'switch'; id: string } | { type: 'clos
 
 function PencilIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <path
         d="M8.2 2.5 11.5 5.8 5 12.3H1.7v-3.3Z"
         fill="none"
@@ -241,7 +241,7 @@ export function TemplatePicker({
   return (
     <>
       {createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4" onClick={requestClose}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4" data-overlay onClick={requestClose}>
           <div
             className="flex h-[min(72vh,38rem)] w-[min(92vw,64rem)] gap-2"
             onClick={(event) => event.stopPropagation()}

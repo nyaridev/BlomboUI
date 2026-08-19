@@ -1,6 +1,8 @@
 import { Chevron } from '@/components/Chevron.tsx'
 import { LightboxView } from '@/components/LightboxView.tsx'
+import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 
 function Nav({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
   return (
@@ -32,6 +34,8 @@ export function ImageCarousel({
   const stageRef = useRef<HTMLDivElement>(null)
   const wheelAcc = useRef(0)
   const n = urls.length
+  const location = useLocation()
+  const fileInfo = location.pathname === '/file-info'
 
   useEffect(() => {
     const el = stageRef.current
@@ -64,16 +68,39 @@ export function ImageCarousel({
     onCurrent?.(urls[((index % n) + n) % n] || '')
   }, [index, n, onCurrent, urls])
 
+  useEffect(() => {
+    if (!fileInfo || !n) {
+      return
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key.toLowerCase() !== 'f' || event.repeat || event.ctrlKey || event.altKey || event.metaKey) {
+        return
+      }
+      if (isTyping(event) || overlayOpen()) {
+        return
+      }
+      event.preventDefault()
+      setOpen(true)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [fileInfo, n])
+
   if (!n) {
     return null
   }
   const many = n > 1
   const current = ((index % n) + n) % n
+  const shown =
+    n <= 3
+      ? urls.map((_, i) => i)
+      : [current, (current + 1) % n, (current + n - 1) % n]
 
   return (
     <>
       <div ref={stageRef} className="relative h-full w-full overflow-hidden">
-        {urls.map((url, i) => {
+        {shown.map((i) => {
+          const url = urls[i]
           const front = i === current
           return (
             <button
@@ -88,7 +115,14 @@ export function ImageCarousel({
               }}
               onClick={() => setOpen(true)}
             >
-              <img src={url} alt="" className="h-full w-full object-contain" loading="eager" draggable={false} />
+              <img
+                src={url}
+                alt=""
+                className="h-full w-full object-contain"
+                loading={front ? undefined : 'lazy'}
+                decoding="async"
+                draggable={false}
+              />
             </button>
           )
         })}

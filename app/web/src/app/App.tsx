@@ -1,43 +1,59 @@
-import { Navigate, NavLink, useLocation } from 'react-router-dom'
-import { useEffect, useRef, useState } from 'react'
+import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useRef } from 'react'
 import { GalleryScreen } from '../screens/gallery/GalleryScreen.tsx'
 import { GenerateScreen } from '../screens/generate/GenerateScreen.tsx'
 import { ModelsScreen } from '../screens/models/ModelsScreen.tsx'
 import { FileInfoScreen } from '../screens/fileinfo/FileInfoScreen.tsx'
 import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
+import { ErrorsScreen } from '../screens/errors/ErrorsScreen.tsx'
 import { getHealth, reloadApp } from '../lib/api.ts'
+import { digitKey, isTyping } from '../lib/hotkeys.ts'
 import { useHealthStore } from '../stores/healthStore.ts'
+import { useIssuesStore } from '../stores/issuesStore.ts'
 import { useModelsStore } from '../stores/modelsStore.ts'
 import { useSettingsStore } from '../stores/settingsStore.ts'
 import { FooterLinks } from './FooterLinks.tsx'
 import { GpuBar } from './GpuBar.tsx'
 import { TemplateBar } from './TemplateBar.tsx'
+import { ToastStack } from './ToastStack.tsx'
 import { WorkflowPicker } from './WorkflowPicker.tsx'
+
+const APP_TABS = ['/', '/file-info', '/gallery', '/models', '/errors', '/settings']
 
 const nav = [
   { to: '/', label: 'Generate', end: true },
   { to: '/file-info', label: 'File Info' },
   { to: '/gallery', label: 'Gallery' },
   { to: '/models', label: 'Models' },
-  { to: '/settings', label: 'Settings' },
 ]
+
+function tabClass(isActive: boolean, extra = '') {
+  return [
+    extra,
+    '-mb-px rounded-t-md border px-3 py-1.5 text-sm',
+    isActive ? 'border-line border-b-bg bg-bg text-ink' : 'border-transparent text-muted hover:text-ink',
+  ].join(' ')
+}
 
 function pane(on: boolean, fill = false) {
   if (!on) {
     return 'hidden'
   }
-  return fill ? 'flex h-full min-h-0 flex-col' : ''
+  return fill ? 'flex h-full min-h-0 flex-col' : 'flex min-h-full flex-col'
 }
 
 export function App() {
-  const [reloading, setReloading] = useState(false)
+  const reloading = useRef(false)
   const mainRef = useRef<HTMLElement>(null)
   const location = useLocation()
+  const navigate = useNavigate()
   const fileInfo = location.pathname === '/file-info'
   const settings = location.pathname === '/settings'
   const generate = location.pathname === '/'
   const gallery = location.pathname === '/gallery'
   const models = location.pathname === '/models'
+  const errors = location.pathname === '/errors'
+  const issueCount = useIssuesStore((s) => s.items.length)
   const health = useHealthStore((s) => s.health)
   const refreshHealth = useHealthStore((s) => s.refresh)
   const refreshModels = useModelsStore((s) => s.refresh)
@@ -68,31 +84,38 @@ export function App() {
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key.toLowerCase() !== 'r' || event.repeat) {
+      if (event.repeat) {
         return
       }
-      if (event.ctrlKey || event.altKey || event.metaKey) {
+      const digit = digitKey(event)
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= APP_TABS.length) {
+        event.preventDefault()
+        navigate(APP_TABS[digit - 1] || '/')
         return
       }
-      const target = event.target
-      if (target instanceof HTMLElement) {
-        const tag = target.tagName
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target.isContentEditable) {
-          return
-        }
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'r') {
+        event.preventDefault()
+        void onReload()
+        return
+      }
+      if (event.key.toLowerCase() !== 'r' || event.ctrlKey || event.altKey || event.metaKey) {
+        return
+      }
+      if (isTyping(event)) {
+        return
       }
       event.preventDefault()
       void refreshModels()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [refreshModels])
+  }, [navigate, refreshModels])
 
   async function onReload() {
-    if (reloading) {
+    if (reloading.current) {
       return
     }
-    setReloading(true)
+    reloading.current = true
     await reloadApp()
     for (let i = 0; i < 80; i++) {
       await new Promise((resolve) => window.setTimeout(resolve, 250))
@@ -129,18 +152,22 @@ export function App() {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) =>
-                [
-                  '-mb-px rounded-t-md border px-3 py-1.5 text-sm',
-                  isActive
-                    ? 'border-line border-b-bg bg-bg text-ink'
-                    : 'border-transparent text-muted hover:text-ink',
-                ].join(' ')
-              }
+              className={({ isActive }) => tabClass(isActive)}
             >
               {item.label}
             </NavLink>
           ))}
+          <div className="ml-auto flex gap-1">
+            <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center')}>
+              Errors
+              {issueCount > 0 ? (
+                <span className="ml-1.5 rounded-full bg-red-800 px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
+              ) : null}
+            </NavLink>
+            <NavLink to="/settings" className={({ isActive }) => tabClass(isActive)}>
+              Settings
+            </NavLink>
+          </div>
         </nav>
       </header>
       <main
@@ -152,7 +179,7 @@ export function App() {
       >
         <div className={['flex h-full min-h-0 flex-col', settings || fileInfo ? '' : 'px-10 py-4'].join(' ')}>
           {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
-          <div className={pane(generate, true)}>
+          <div className={pane(generate)}>
             <GenerateScreen />
           </div>
           <div className={pane(fileInfo, true)}>
@@ -167,19 +194,15 @@ export function App() {
           <div className={pane(settings, true)}>
             <SettingsScreen />
           </div>
+          <div className={pane(errors)}>
+            <ErrorsScreen />
+          </div>
         </div>
       </main>
       <footer className="flex h-8 items-center border-t border-line bg-panel px-4">
-        <button
-          type="button"
-          className="text-xs text-muted hover:text-ink disabled:opacity-40"
-          disabled={reloading}
-          onClick={() => void onReload()}
-        >
-          {reloading ? 'Reloading…' : 'Reload'}
-        </button>
         <FooterLinks comfyUrl={health?.comfy.url || 'http://127.0.0.1:8188'} />
       </footer>
+      <ToastStack />
     </div>
   )
 }

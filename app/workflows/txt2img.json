@@ -20,7 +20,7 @@
   "2": {
     "inputs": {
       "text": "1girl, black hair",
-      "clip": ["1", 1]
+      "clip": ["12", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -30,7 +30,7 @@
   "3": {
     "inputs": {
       "text": "",
-      "clip": ["1", 1]
+      "clip": ["12", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -45,7 +45,7 @@
       "sampler_name": "euler",
       "scheduler": "sgm_uniform",
       "denoise": 1,
-      "model": ["1", 0],
+      "model": ["12", 0],
       "positive": ["2", 0],
       "negative": ["3", 0],
       "latent_image": ["7", 0]
@@ -84,6 +84,20 @@
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
+    }
+  },
+  "12": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "➕ Add Lora": "",
+      "model": ["1", 0],
+      "clip": ["1", 1]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Power Lora Loader (rgthree)"
     }
   }
 }

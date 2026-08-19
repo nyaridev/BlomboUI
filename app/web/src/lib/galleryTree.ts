@@ -26,6 +26,17 @@ function sortNodes(nodes: GalleryNode[]) {
 export function buildGalleryTree(items: string[]): GalleryNode[] {
   const root: GalleryNode[] = []
   const dirs = new Map<string, GalleryNode>()
+  const prefixes = new Set<string>()
+  for (const item of items) {
+    if (!item) {
+      continue
+    }
+    let cut = item.lastIndexOf('/')
+    while (cut > 0) {
+      prefixes.add(item.slice(0, cut))
+      cut = item.slice(0, cut).lastIndexOf('/')
+    }
+  }
 
   function ensureDir(path: string): GalleryNode {
     const existing = dirs.get(path)
@@ -46,6 +57,9 @@ export function buildGalleryTree(items: string[]): GalleryNode[] {
 
   for (const item of items) {
     if (!item) {
+      continue
+    }
+    if (prefixes.has(item)) {
       continue
     }
     const cut = item.lastIndexOf('/')

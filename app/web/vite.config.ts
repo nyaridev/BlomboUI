@@ -26,6 +26,7 @@ export default defineConfig({
       '/templates': API,
       '/user-settings': API,
       '/user-models': API,
+      '/issues': API,
       '/jobs': API,
       '/generations': API,
     },

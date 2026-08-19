@@ -260,3 +260,31 @@ input[type='range'].slider::-moz-range-thumb {
   opacity: 0.4;
   cursor: default;
 }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes toast-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.toast-in {
+  animation: toast-in 0.2s ease-out;
+}
+
+.toast-out {
+  animation: toast-out 0.18s ease-in forwards;
+}

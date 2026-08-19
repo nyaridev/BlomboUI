@@ -1,4 +1,5 @@
 import { freeComfy, getComfyStats, type ComfyStats } from '@/lib/api.ts'
+import { toast } from '@/stores/toastStore.ts'
 import { useEffect, useState } from 'react'
 
 function gb(bytes: number) {
@@ -12,7 +13,7 @@ function tempColor(c: number) {
 
 function UnloadIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <rect x="2" y="8.5" width="10" height="3.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <path
         d="M7 2.2v5.2M4.6 5.2 7 7.6 9.4 5.2"
@@ -28,7 +29,7 @@ function UnloadIcon() {
 
 function CacheIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
       <path
         d="M3.2 11.2c1.6-1.2 2.2-3.2 2.2-5.2V3.2h3.2V6c0 2 0.6 4 2.2 5.2"
         fill="none"
@@ -41,21 +42,48 @@ function CacheIcon() {
   )
 }
 
+function sameStats(a: ComfyStats | null, b: ComfyStats) {
+  return (
+    a !== null &&
+    a.reachable === b.reachable &&
+    a.vram_used === b.vram_used &&
+    a.vram_total === b.vram_total &&
+    a.temp_c === b.temp_c
+  )
+}
+
 export function GpuBar() {
   const [stats, setStats] = useState<ComfyStats | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function refresh() {
-    try {
-      setStats(await getComfyStats())
-    } catch {
-      setStats(null)
-    }
-  }
-
   useEffect(() => {
+    let inflight = false
+    let last: ComfyStats | null = null
+
+    async function refresh() {
+      if (inflight) {
+        return
+      }
+      inflight = true
+      try {
+        const next = await getComfyStats()
+        if (sameStats(last, next)) {
+          return
+        }
+        last = next
+        setStats(next)
+      } catch {
+        if (last !== null) {
+          last = null
+          setStats(null)
+        }
+      } finally {
+        inflight = false
+      }
+    }
+
     void refresh()
-    const timer = window.setInterval(() => void refresh(), 1000)
+    const timer = window.setInterval(() => void refresh(), 2000)
     return () => window.clearInterval(timer)
   }, [])
 
@@ -66,7 +94,8 @@ export function GpuBar() {
     setBusy(true)
     try {
       await freeComfy(unloadModels, freeMemory)
-      await refresh()
+      setStats(await getComfyStats())
+      toast(unloadModels ? 'VRAM cleared' : 'Node cache cleared', 'info')
     } catch {
       /* keep last stats */
     } finally {
@@ -87,7 +116,7 @@ export function GpuBar() {
         <span className="flex items-center bg-line px-2 text-[10px] font-medium tracking-wide text-muted">VRAM</span>
         <div className="relative w-28 bg-field">
           <div
-            className="absolute inset-0 origin-left bg-accent/70 transition-transform duration-1000 ease-out will-change-transform"
+            className="absolute inset-0 origin-left bg-accent/70 transition-transform duration-1000 ease-out"
             style={{ transform: `scaleX(${usedPct / 100})` }}
           />
           <span className="relative z-10 flex h-full items-center justify-center px-2 text-xs tabular-nums text-ink">

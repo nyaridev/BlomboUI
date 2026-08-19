@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from blombo import civitai, comfy, db, hashes, jobs, model_meta, models, pnginfo, safetensors_meta, settings, templates
+from blombo import civitai, comfy, db, hashes, issues, jobs, model_meta, models, pnginfo, safetensors_meta, settings, templates
 from blombo.paths import RUNTIME, VERSION, launcher_env
 
 
@@ -49,6 +49,7 @@ class JobIn(BaseModel):
     sampler: str | None = None
     scheduler: str | None = None
     workflow: str | None = None
+    template: str | None = None
 
 
 class InterruptIn(BaseModel):
@@ -90,6 +91,8 @@ class WorkflowApplyIn(BaseModel):
 
 class ModelInfoUpdate(BaseModel):
     types: list[str] = Field(default_factory=list)
+    prompt: str | None = None
+    negative_prompt: str | None = None
 
 
 class ComfyFreeIn(BaseModel):
@@ -133,6 +136,11 @@ def get_models() -> dict:
     return models.list_models()
 
 
+@app.get("/issues")
+def get_issues() -> dict:
+    return {"issues": issues.list_issues()}
+
+
 @app.post("/user-models/refresh")
 def post_models_refresh(kind: str | None = None) -> dict:
     if kind and kind not in models.ALL_KINDS:
@@ -171,8 +179,13 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     if not models.model_file(kind, path):
         raise ApiError("not_found", "model not found")
-    types = model_meta.set_types(kind, path, body.types)
-    return {"types": types, "thumb": model_meta.thumb_mtime(kind, path)}
+    info = model_meta.set_info(kind, path, body.types, body.prompt, body.negative_prompt)
+    return {
+        "types": info["types"],
+        "prompt": info["prompt"],
+        "negative_prompt": info["negative_prompt"],
+        "thumb": model_meta.thumb_mtime(kind, path),
+    }
 
 
 @app.get("/user-models/{kind}/thumb")

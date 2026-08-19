@@ -1,33 +1,49 @@
-import { NavLink, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { GalleryScreen } from '../screens/gallery/GalleryScreen.tsx'
 import { GenerateScreen } from '../screens/generate/GenerateScreen.tsx'
 import { ModelsScreen } from '../screens/models/ModelsScreen.tsx'
-import { PngInfoScreen } from '../screens/pnginfo/PngInfoScreen.tsx'
+import { FileInfoScreen } from '../screens/fileinfo/FileInfoScreen.tsx'
 import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
 import { getHealth, reloadApp } from '../lib/api.ts'
 import { useHealthStore } from '../stores/healthStore.ts'
 import { useModelsStore } from '../stores/modelsStore.ts'
+import { useSettingsStore } from '../stores/settingsStore.ts'
+import { FooterLinks } from './FooterLinks.tsx'
+import { GpuBar } from './GpuBar.tsx'
 import { TemplateBar } from './TemplateBar.tsx'
 import { WorkflowPicker } from './WorkflowPicker.tsx'
 
 const nav = [
   { to: '/', label: 'Generate', end: true },
-  { to: '/png-info', label: 'PNG Info' },
+  { to: '/file-info', label: 'File Info' },
   { to: '/gallery', label: 'Gallery' },
   { to: '/models', label: 'Models' },
   { to: '/settings', label: 'Settings' },
 ]
 
+function pane(on: boolean, fill = false) {
+  if (!on) {
+    return 'hidden'
+  }
+  return fill ? 'flex h-full min-h-0 flex-col' : ''
+}
+
 export function App() {
   const [reloading, setReloading] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const location = useLocation()
-  const pngInfo = location.pathname === '/png-info'
+  const fileInfo = location.pathname === '/file-info'
+  const settings = location.pathname === '/settings'
+  const generate = location.pathname === '/'
+  const gallery = location.pathname === '/gallery'
+  const models = location.pathname === '/models'
   const health = useHealthStore((s) => s.health)
   const refreshHealth = useHealthStore((s) => s.refresh)
   const refreshModels = useModelsStore((s) => s.refresh)
   const loadModels = useModelsStore((s) => s.load)
+  const loadSettings = useSettingsStore((s) => s.load)
+  const theme = useSettingsStore((s) => s.theme)
   const comfyOk = health?.comfy.reachable === true
   const comfyMissing = health?.comfy.mode === 'missing'
 
@@ -37,13 +53,18 @@ export function App() {
   }, [])
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme
+  }, [theme])
+
+  useEffect(() => {
     void refreshHealth()
     void loadModels()
+    void loadSettings()
     const timer = window.setInterval(() => {
       void refreshHealth()
     }, 4000)
     return () => window.clearInterval(timer)
-  }, [loadModels, refreshHealth])
+  }, [loadModels, loadSettings, refreshHealth])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -92,11 +113,15 @@ export function App() {
         <div className="flex items-center gap-2 pb-2">
           <WorkflowPicker />
           <TemplateBar />
-          {!comfyOk ? (
-            <p className="ml-auto text-xs text-muted">
-              {comfyMissing ? 'Run install\\install-comfyui.bat, then relaunch.' : 'ComfyUI backend is starting…'}
-            </p>
-          ) : null}
+          <div className="ml-auto flex items-center gap-3">
+            {!comfyOk ? (
+              <p className="text-xs text-muted">
+                {comfyMissing ? 'Run install\\install-comfyui.bat, then relaunch.' : 'ComfyUI backend is starting…'}
+              </p>
+            ) : (
+              <GpuBar />
+            )}
+          </div>
         </div>
         <nav className="flex gap-1 border-b border-line px-2">
           {nav.map((item) => (
@@ -118,18 +143,30 @@ export function App() {
           ))}
         </nav>
       </header>
-      <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto [overflow-anchor:none]">
-        <div className="flex min-h-full flex-col px-10 py-4">
-          <div className={pngInfo ? '' : 'hidden'}>
-            <PngInfoScreen />
+      <main
+        ref={mainRef}
+        className={[
+          'min-h-0 flex-1 [overflow-anchor:none]',
+          settings || fileInfo ? 'overflow-hidden' : 'overflow-y-auto',
+        ].join(' ')}
+      >
+        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo ? '' : 'px-10 py-4'].join(' ')}>
+          {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
+          <div className={pane(generate, true)}>
+            <GenerateScreen />
           </div>
-          <Routes>
-            <Route path="/" element={<GenerateScreen />} />
-            <Route path="/png-info" element={null} />
-            <Route path="/gallery" element={<GalleryScreen />} />
-            <Route path="/models" element={<ModelsScreen />} />
-            <Route path="/settings" element={<SettingsScreen />} />
-          </Routes>
+          <div className={pane(fileInfo, true)}>
+            <FileInfoScreen />
+          </div>
+          <div className={pane(gallery)}>
+            <GalleryScreen />
+          </div>
+          <div className={pane(models)}>
+            <ModelsScreen />
+          </div>
+          <div className={pane(settings, true)}>
+            <SettingsScreen />
+          </div>
         </div>
       </main>
       <footer className="flex h-8 items-center border-t border-line bg-panel px-4">
@@ -141,6 +178,7 @@ export function App() {
         >
           {reloading ? 'Reloading…' : 'Reload'}
         </button>
+        <FooterLinks comfyUrl={health?.comfy.url || 'http://127.0.0.1:8188'} />
       </footer>
     </div>
   )

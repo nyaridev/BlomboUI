@@ -272,7 +272,7 @@ def start_comfy(settings: dict[str, str | None]) -> subprocess.Popen | None:
 
     comfy_path = Path(settings["comfyui.path"] or "")
     models = Path(settings["models.root"] or (USER / "models"))
-    outputs = Path(settings["outputs.root"] or (USER / "output"))
+    outputs = RUNTIME / "tmp" / "comfy-output"
     outputs.mkdir(parents=True, exist_ok=True)
     yaml = write_extra_model_paths(models)
     log_path = RUNTIME / "tmp" / "comfyui.log"

@@ -204,6 +204,8 @@ type GenerateState = {
   setWorkflow: (value: string) => void
   setTemplateId: (value: string) => void
   applyParams: (params: TemplateParams) => void
+  viewedImageUrl: string | null
+  setViewedImageUrl: (value: string | null) => void
 }
 
 export const useGenerateStore = create<GenerateState>()(
@@ -212,6 +214,7 @@ export const useGenerateStore = create<GenerateState>()(
       ...DEFAULTS,
       templateId: 'default',
       templateByWorkflow: {},
+      viewedImageUrl: null,
       setPrompt: (prompt) => set({ prompt }),
       setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
       setCheckpoint: (checkpoint) => set({ checkpoint }),
@@ -238,7 +241,11 @@ export const useGenerateStore = create<GenerateState>()(
           templateByWorkflow: { ...s.templateByWorkflow, [s.workflow]: templateId },
         })),
       applyParams: (params) => set(pickParams({ ...params, cfg: Math.max(1, params.cfg) })),
+      setViewedImageUrl: (viewedImageUrl) => set({ viewedImageUrl }),
     }),
-    { name: 'blombo-generate' },
+    {
+      name: 'blombo-generate',
+      partialize: ({ viewedImageUrl: _viewed, ...rest }) => rest,
+    },
   ),
 )

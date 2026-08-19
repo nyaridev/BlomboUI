@@ -99,7 +99,7 @@ export function GenerationParams({ error, comfyOk, lastSeed }: GenerationParamsP
   }
 
   return (
-    <aside className="flex min-w-0 flex-[3] flex-col gap-2">
+    <aside className="flex min-w-0 flex-col gap-2">
       <div className="grid grid-cols-3 gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <FieldLabel>Sampler</FieldLabel>

@@ -4,7 +4,8 @@ Installer bats. Launch bats stay at the repo root (`webui-user.bat`, `comfyui.ba
 
 | File | What it installs |
 | --- | --- |
-| `install-comfyui.bat` | Git (if needed), ComfyUI, Comfy Python 3.12 embed, Torch, ComfyUI-Manager |
+| `install-comfyui.bat` | Git (if needed), ComfyUI, Comfy Python 3.12 embed, Torch, then `install-comfyui-deps.bat` |
+| `install-comfyui-deps.bat` | ComfyUI-Manager and rgthree-comfy into `custom_nodes`. Uses `COMFYUI_PATH` if set |
 | `install-python.bat` | BlomboUI Python embed (`runtime\python_embeded`). Also called by `webui.bat` |
 | `torch\*.bat` | Swap Torch inside **ComfyUI's** Python only |
 | `_ui.bat` | Shared console colors, sections, downloads |

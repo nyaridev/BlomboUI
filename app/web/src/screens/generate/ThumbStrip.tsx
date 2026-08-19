@@ -9,6 +9,7 @@ type ThumbStripProps = {
   items: ThumbItem[]
   index: number
   onSelect: (i: number) => void
+  onError?: (key: string) => void
 }
 
 function StripArrow({ dir }: { dir: 'left' | 'right' }) {
@@ -26,7 +27,7 @@ function StripArrow({ dir }: { dir: 'left' | 'right' }) {
   )
 }
 
-export function ThumbStrip({ items, index, onSelect }: ThumbStripProps) {
+export function ThumbStrip({ items, index, onSelect, onError }: ThumbStripProps) {
   const scrollerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -77,7 +78,12 @@ export function ThumbStrip({ items, index, onSelect }: ThumbStripProps) {
               onClick={() => onSelect(i)}
             >
               <span className="block h-full w-full overflow-hidden rounded">
-                <img src={item.src} alt="" className="h-full w-full object-cover" />
+                <img
+                  src={item.src}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  onError={() => onError?.(item.key)}
+                />
               </span>
             </button>
           ))}

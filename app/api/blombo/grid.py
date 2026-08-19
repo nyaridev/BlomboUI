@@ -15,13 +15,39 @@ def nearest_grid(count: int, cell_w: int, cell_h: int) -> tuple[int, int]:
     return cols, rows
 
 
-def save_contact_sheet(paths: list[Path], dest: Path, quality: int = 85) -> None:
+def filled_grid(count: int, cell_w: int, cell_h: int, prefer_rows: int = 0) -> tuple[int, int]:
+    options = [(cols, count // cols) for cols in range(1, count + 1) if count % cols == 0]
+    if not options:
+        return nearest_grid(count, cell_w, cell_h)
+    if prefer_rows > 0:
+        return min(options, key=lambda item: abs(item[1] - prefer_rows))
+    landscape = [item for item in options if item[0] * cell_w >= item[1] * cell_h]
+    pool = landscape or options
+    return min(pool, key=lambda item: (abs(item[0] * cell_w - item[1] * cell_h), -item[0]))
+
+
+def layout(count: int, cell_w: int, cell_h: int, rows: int = 0, fill: bool = False) -> tuple[int, int]:
+    if fill:
+        return filled_grid(count, cell_w, cell_h, rows)
+    if rows > 0:
+        rows = max(1, min(rows, count))
+        return math.ceil(count / rows), rows
+    return nearest_grid(count, cell_w, cell_h)
+
+
+def save_contact_sheet(
+    paths: list[Path],
+    dest: Path,
+    quality: int = 85,
+    rows: int = 0,
+    fill: bool = False,
+) -> None:
     from PIL import Image
 
     images = [Image.open(path).convert("RGB") for path in paths]
     cell_w, cell_h = images[0].size
-    cols, rows = nearest_grid(len(images), cell_w, cell_h)
-    sheet = Image.new("RGB", (cols * cell_w, rows * cell_h), (17, 21, 26))
+    cols, row_n = layout(len(images), cell_w, cell_h, rows, fill)
+    sheet = Image.new("RGB", (cols * cell_w, row_n * cell_h), (17, 21, 26))
     for i, image in enumerate(images):
         if image.size != (cell_w, cell_h):
             image = image.resize((cell_w, cell_h))

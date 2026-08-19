@@ -5,13 +5,15 @@ import { ImageDrop } from '@/components/ImageDrop.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
+import { SliderField } from '@/components/SliderField.tsx'
+import { SettingsBlock } from './SettingsBlock.tsx'
 import { useState, type CSSProperties } from 'react'
 
 function fieldClass() {
   return 'w-full rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none focus:border-accent'
 }
 
-export function PrimitivesPanel() {
+export function PrimitivesPanel({ query = '' }: { query?: string }) {
   const [text, setText] = useState('1girl, black hair')
   const [number, setNumber] = useState(20)
   const [area, setArea] = useState('')
@@ -25,8 +27,7 @@ export function PrimitivesPanel() {
 
   return (
     <div className="flex max-w-xl flex-col gap-6">
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Button</h2>
+      <SettingsBlock query={query} title="Button" terms="generate interrupt disabled icon" className="flex flex-col gap-2">
         <div className="flex flex-wrap gap-2">
           <button type="button" className="rounded bg-accent px-3 py-2 text-sm font-semibold text-ink">
             Generate
@@ -62,55 +63,47 @@ export function PrimitivesPanel() {
             🎲
           </button>
         </div>
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Text</h2>
+      <SettingsBlock query={query} title="Text" className="flex flex-col gap-2">
         <input className={fieldClass()} value={text} onChange={(e) => setText(e.target.value)} />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Number</h2>
+      <SettingsBlock query={query} title="Number" className="flex flex-col gap-2">
         <NumberField value={number} onChange={setNumber} />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Textarea</h2>
+      <SettingsBlock query={query} title="Textarea" className="flex flex-col gap-2">
         <textarea
           className={`${fieldClass()} min-h-20 resize-y font-mono`}
           value={area}
           onChange={(e) => setArea(e.target.value)}
           spellCheck={false}
         />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Select</h2>
+      <SettingsBlock query={query} title="Select" terms="euler" className="flex flex-col gap-2">
         <SelectField value={choice} onChange={setChoice} options={['euler', 'euler_a', 'dpmpp_2m']} />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Chip select</h2>
+      <SettingsBlock query={query} title="Chip select" terms="sampler" className="flex flex-col gap-2">
         <ChipSelect
           options={['euler', 'euler_a', 'dpmpp_2m', 'dpmpp_sde', 'uni_pc']}
           value={picks}
           onChange={setPicks}
           placeholder="Add sampler…"
         />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Chip input</h2>
+      <SettingsBlock query={query} title="Chip input" terms="tag" className="flex flex-col gap-2">
         <ChipInput value={tags} onChange={setTags} placeholder="Type a tag and press Enter…" />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Image drop</h2>
+      <SettingsBlock query={query} title="Image drop" className="flex flex-col gap-2">
         <ImageDrop />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Checkbox</h2>
+      <SettingsBlock query={query} title="Checkbox" className="flex flex-col gap-2">
         <div className="flex gap-6">
           <label className="flex items-center gap-2 text-sm text-ink">
             <input type="checkbox" className="check" defaultChecked />
@@ -121,10 +114,9 @@ export function PrimitivesPanel() {
             Off
           </label>
         </div>
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="text-xs text-label">Radio</h2>
+      <SettingsBlock query={query} title="Radio" terms="plain card" className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-[10px] text-muted">plain</span>
           <div className="flex gap-6">
@@ -151,10 +143,9 @@ export function PrimitivesPanel() {
             </label>
           </div>
         </div>
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Slider</h2>
+      <SettingsBlock query={query} title="Slider" className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <input
             className="slider"
@@ -168,10 +159,10 @@ export function PrimitivesPanel() {
           />
           <span className="w-8 shrink-0 text-right text-sm text-muted">{slider}</span>
         </div>
-      </section>
+        <SliderField label="With number" value={slider} onChange={setSlider} min={1} max={20} step={0.5} />
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-4">
-        <h2 className="text-xs text-label">Progress</h2>
+      <SettingsBlock query={query} title="Progress" terms="eta" className="flex flex-col gap-4">
         <div className="flex items-center gap-3">
           <input
             className="slider"
@@ -185,21 +176,19 @@ export function PrimitivesPanel() {
           <span className="w-10 shrink-0 text-right text-sm text-muted">{pct}%</span>
         </div>
         <ProgressBar pct={pct} label={`${pct}% ETA: ${eta}s`} />
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Section</h2>
+      <SettingsBlock query={query} title="Section" terms="advanced" className="flex flex-col gap-2">
         <ExpandSection title="Advanced">
           <p className="text-sm text-muted">Extra settings go here.</p>
         </ExpandSection>
-      </section>
+      </SettingsBlock>
 
-      <section className="flex flex-col gap-2">
-        <h2 className="text-xs text-label">Toggle section</h2>
+      <SettingsBlock query={query} title="Toggle section" terms="hires fix" className="flex flex-col gap-2">
         <ExpandSection title="Hires fix" enabled={hires} onEnabled={setHires}>
           <NumberField value={number} onChange={setNumber} />
         </ExpandSection>
-      </section>
+      </SettingsBlock>
     </div>
   )
 }

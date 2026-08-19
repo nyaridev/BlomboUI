@@ -6,7 +6,15 @@ export type Health = {
     reachable: boolean
     mode: string | null
     path: string | null
+    url?: string
   }
+}
+
+export type ComfyStats = {
+  reachable: boolean
+  vram_used: number
+  vram_total: number
+  temp_c: number | null
 }
 
 export type Job = {
@@ -19,6 +27,7 @@ export type Job = {
   generation_id: string | null
   generation_ids: string[]
   has_grid: boolean
+  grid_count: number
   created_at: string
   started_at: string | null
   finished_at: string | null
@@ -50,6 +59,8 @@ export type JobRequest = {
   batch_grid: boolean
   batch_grid_max: number
   batch_grid_quality: number
+  batch_grid_rows: number
+  batch_grid_fill: boolean
   sampler: string
   scheduler: string
   workflow: string
@@ -157,32 +168,124 @@ export async function getKSamplerChoices(): Promise<KSamplerChoices> {
   return (await res.json()) as KSamplerChoices
 }
 
+export type ModelEntry = {
+  path: string
+  added: number
+  edited: number
+  size: number
+  thumb?: number
+}
+
+export type ModelHashes = {
+  sha256: string
+  autov1: string
+  autov2: string
+  autov3: string
+}
+
+export type ModelInfo = {
+  path: string
+  name: string
+  size: number
+  edited: number
+  hash: string
+  hashes?: ModelHashes
+  hashing?: boolean
+  types?: string[]
+  type_options?: string[]
+  thumb?: number
+}
+
 export type ModelLists = {
-  checkpoints: string[]
-  loras: string[]
-  vae: string[]
-  controlnet: string[]
-  embeddings: string[]
-  wildcards: string[]
+  checkpoints: ModelEntry[]
+  loras: ModelEntry[]
+  vae: ModelEntry[]
+  controlnet: ModelEntry[]
+  embeddings: ModelEntry[]
+  wildcards: ModelEntry[]
 }
 
 export async function getModels(): Promise<ModelLists> {
-  const res = await fetch('/models')
+  const res = await fetch('/user-models')
   if (!res.ok) {
     throw new Error(await readError(res))
   }
   return (await res.json()) as ModelLists
 }
 
-export async function refreshModels(): Promise<ModelLists> {
-  const res = await fetch('/models/refresh', { method: 'POST' })
+export async function getModelInfo(kind: keyof ModelLists, path: string): Promise<ModelInfo> {
+  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`)
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  return (await res.json()) as ModelLists
+  return (await res.json()) as ModelInfo
 }
 
-export async function readPngInfo(file: File): Promise<string> {
+export async function getModelSafetensors(kind: keyof ModelLists, path: string): Promise<Record<string, unknown>> {
+  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/safetensors?path=${encodeURIComponent(path)}`)
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { metadata?: Record<string, unknown> }
+  return data.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+}
+
+export async function saveModelInfo(kind: keyof ModelLists, path: string, types: string[]): Promise<string[]> {
+  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ types }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { types: string[] }
+  return data.types
+}
+
+export function modelThumbUrl(kind: keyof ModelLists, path: string, tick = 0): string {
+  return `/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}&t=${tick}`
+}
+
+export async function saveModelThumb(kind: keyof ModelLists, path: string, file: File): Promise<number> {
+  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { thumb: number }
+  return data.thumb
+}
+
+export async function deleteModelThumb(kind: keyof ModelLists, path: string): Promise<number> {
+  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { thumb: number }
+  return data.thumb
+}
+
+export async function refreshModels(kind?: keyof ModelLists): Promise<Partial<ModelLists>> {
+  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : ''
+  const res = await fetch(`/user-models/refresh${qs}`, { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as Partial<ModelLists>
+}
+
+export type PngInfoResult = {
+  text: string
+  raw: Record<string, string>
+}
+
+export async function readPngInfo(file: File): Promise<PngInfoResult> {
   const res = await fetch('/pnginfo', {
     method: 'POST',
     headers: { 'X-Filename': file.name },
@@ -191,8 +294,63 @@ export async function readPngInfo(file: File): Promise<string> {
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  const data = (await res.json()) as { text?: string }
-  return data.text || 'No generation metadata found.'
+  const data = (await res.json()) as { text?: string; raw?: Record<string, string> }
+  const raw = data.raw && typeof data.raw === 'object' ? data.raw : {}
+  return { text: data.text || 'No generation metadata found.', raw }
+}
+
+export type CivitaiImageMeta = {
+  prompt?: string
+  negativePrompt?: string
+  cfgScale?: number
+  steps?: number
+  sampler?: string
+  scheduler?: string
+  seed?: number
+  Size?: string
+  Model?: string
+  clipSkip?: number
+  [key: string]: unknown
+}
+
+export type CivitaiImage = {
+  url?: string
+  username?: string
+  type?: string
+  meta?: CivitaiImageMeta | null
+}
+
+export type CivitaiVersion = {
+  id: number
+  modelId: number
+  name?: string
+  description?: string
+  baseModel?: string
+  trainedWords?: string[]
+  images?: CivitaiImage[]
+  model?: { name?: string; type?: string; description?: string; creator?: { username?: string } }
+}
+
+export async function getCivitaiByHash(hash: string): Promise<CivitaiVersion | null> {
+  const res = await fetch(`/civitai/by-hash/${encodeURIComponent(hash)}`)
+  if (res.status === 404) {
+    return null
+  }
+  if (!res.ok) {
+    return null
+  }
+  return (await res.json()) as CivitaiVersion
+}
+
+export async function fetchCivitaiImage(url: string): Promise<File> {
+  const res = await fetch(`/civitai/image?url=${encodeURIComponent(url)}`)
+  if (!res.ok) {
+    throw new Error(`civitai image ${res.status}`)
+  }
+  const blob = await res.blob()
+  const type = blob.type || 'image/jpeg'
+  const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg'
+  return new File([blob], `preview.${ext}`, { type })
 }
 
 export async function getHealth(): Promise<Health> {
@@ -201,6 +359,59 @@ export async function getHealth(): Promise<Health> {
     throw new Error(`health ${res.status}`)
   }
   return (await res.json()) as Health
+}
+
+export async function getComfyStats(): Promise<ComfyStats> {
+  const res = await fetch('/comfy/stats')
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as ComfyStats
+}
+
+export async function freeComfy(unloadModels: boolean, freeMemory: boolean): Promise<void> {
+  const res = await fetch('/comfy/free', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unload_models: unloadModels, free_memory: freeMemory }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export type UserSettings = {
+  batchGrid?: boolean
+  batchGridMax?: number
+  batchGridQuality?: number
+  batchGridRows?: number
+  batchGridFill?: boolean
+  hiddenGenerateTabs?: string[]
+  hiddenModelTypes?: string[]
+  theme?: string
+  civitaiSite?: string
+}
+
+export async function getSettings(): Promise<UserSettings> {
+  const res = await fetch('/user-settings')
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { settings?: UserSettings }
+  return data.settings && typeof data.settings === 'object' ? data.settings : {}
+}
+
+export async function saveSettings(settings: UserSettings): Promise<UserSettings> {
+  const res = await fetch('/user-settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(settings),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { settings?: UserSettings }
+  return data.settings && typeof data.settings === 'object' ? data.settings : settings
 }
 
 export async function reloadApp(): Promise<void> {
@@ -268,8 +479,8 @@ export function generationImageUrl(id: string): string {
   return `/generations/${id}/image`
 }
 
-export function jobGridUrl(jobId: string): string {
-  return `/jobs/${jobId}/grid`
+export function jobGridUrl(jobId: string, index = 0): string {
+  return `/jobs/${jobId}/grid/${index}`
 }
 
 export function jobPreviewUrl(jobId: string, tick: number): string {

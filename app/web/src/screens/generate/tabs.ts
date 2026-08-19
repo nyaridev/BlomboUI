@@ -1,4 +1,4 @@
-export const GENERATE_TABS = ['Generation', 'Checkpoints', 'Lora', 'Wildcards'] as const
+export const GENERATE_TABS = ['Generation', 'Base Model', 'Lora', 'Wildcards'] as const
 
 export type GenerateTab = (typeof GENERATE_TABS)[number]
 

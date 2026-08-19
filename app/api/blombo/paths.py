@@ -44,6 +44,12 @@ def outputs_root() -> Path:
     return path
 
 
+def comfy_output_root() -> Path:
+    path = RUNTIME / "tmp" / "comfy-output"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def models_root() -> Path:
     env = launcher_env()
     raw = env.get("models.root")

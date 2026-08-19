@@ -1,0 +1,54 @@
+import { useEffect, useState } from 'react'
+
+export const TILE_GRAD = 'bg-gradient-to-tr from-field via-line to-muted/45'
+export const TILE_PATTERN =
+  'bg-[linear-gradient(45deg,rgb(255_255_255_/_0.08)_25%,transparent_25%_75%,rgb(255_255_255_/_0.08)_75%),linear-gradient(45deg,rgb(255_255_255_/_0.08)_25%,transparent_25%_75%,rgb(255_255_255_/_0.08)_75%)] bg-size-[18px_18px] bg-position-[0_0,9px_9px]'
+
+export function TilePreview({
+  src,
+  mark = '?',
+  label,
+  className = '',
+}: {
+  src?: string | null
+  mark?: string
+  label?: string
+  className?: string
+}) {
+  const [broken, setBroken] = useState(false)
+
+  useEffect(() => {
+    setBroken(false)
+  }, [src])
+
+  const showImg = Boolean(src) && !broken
+
+  return (
+    <span
+      className={[
+        'relative flex aspect-[2/3] items-center justify-center overflow-hidden rounded text-2xl text-muted',
+        TILE_GRAD,
+        className,
+      ].join(' ')}
+    >
+      {showImg ? (
+        <img
+          src={src || ''}
+          alt=""
+          className="absolute inset-0 h-full w-full object-cover"
+          onError={() => setBroken(true)}
+        />
+      ) : (
+        <>
+          <span aria-hidden="true" className={['pointer-events-none absolute inset-0', TILE_PATTERN].join(' ')} />
+          <span className="relative z-10">{mark}</span>
+        </>
+      )}
+      {label ? (
+        <span className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] text-ink">
+          {label}
+        </span>
+      ) : null}
+    </span>
+  )
+}

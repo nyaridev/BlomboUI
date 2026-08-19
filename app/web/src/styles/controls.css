@@ -73,6 +73,25 @@ input[type='number'].number-field::-webkit-outer-spin-button {
   box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
 }
 
+.select-menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.select-menu-group + .select-menu-group {
+  margin-top: 0.25rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid color-mix(in srgb, var(--color-line) 70%, transparent);
+}
+
+.select-menu-section {
+  padding: 0.25rem 0.5rem 0.1rem;
+  font-size: 0.625rem;
+  line-height: 0.875rem;
+  color: color-mix(in srgb, var(--color-muted) 55%, transparent);
+}
+
 .select-menu button {
   display: block;
   width: 100%;

@@ -8,16 +8,17 @@ from typing import Any
 from blombo.paths import VERSION, outputs_root
 
 
-def read(data: bytes, filename: str = "") -> dict[str, str]:
+def read(data: bytes, filename: str = "") -> dict[str, Any]:
     from PIL import Image
 
     try:
         image = Image.open(BytesIO(data))
         image.load()
     except Exception:
-        return {"text": "Could not read image."}
-    text = _format(_texts(image)) or _from_sidecar(filename)
-    return {"text": text or "No generation metadata found."}
+        return {"text": "Could not read image.", "raw": {}}
+    texts = _texts(image)
+    text = _format(texts) or _from_sidecar(filename)
+    return {"text": text or "No generation metadata found.", "raw": texts}
 
 
 def embed(data: bytes, values: dict[str, Any], graph: dict[str, Any] | None = None) -> bytes:
@@ -42,6 +43,12 @@ def embed(data: bytes, values: dict[str, Any], graph: dict[str, Any] | None = No
 
 
 def parameters_text(values: dict[str, Any]) -> str:
+    hashes = values.get("model_hashes")
+    autov1 = autov3 = sha256 = ""
+    if isinstance(hashes, dict):
+        autov1 = str(hashes.get("autov1") or "")
+        autov3 = str(hashes.get("autov3") or "")
+        sha256 = str(hashes.get("sha256") or "")
     return _lines(
         str(values.get("prompt") or ""),
         str(values.get("negative_prompt") or ""),
@@ -54,6 +61,9 @@ def parameters_text(values: dict[str, Any]) -> str:
         values.get("height"),
         values.get("checkpoint"),
         values.get("model_hash"),
+        autov3,
+        sha256,
+        autov1,
     )
 
 
@@ -235,6 +245,9 @@ def _lines(
     height: Any,
     model: Any,
     model_hash: Any = None,
+    autov3: Any = None,
+    sha256: Any = None,
+    autov1: Any = None,
 ) -> str:
     parts = [str(prompt or "").strip()]
     if str(negative or "").strip():
@@ -254,6 +267,12 @@ def _lines(
         bits.append(f"Size: {int(width)}x{int(height)}")
     if model_hash:
         bits.append(f"Model hash: {model_hash}")
+    if autov1:
+        bits.append(f"AutoV1: {autov1}")
+    if autov3:
+        bits.append(f"AutoV3: {autov3}")
+    if sha256:
+        bits.append(f"SHA256: {sha256}")
     if model:
         bits.append(f"Model: {model}")
     if bits:

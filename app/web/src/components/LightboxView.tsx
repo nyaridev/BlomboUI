@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
+import { createPortal } from 'react-dom'
 
 type LightboxViewProps = {
   src: string
@@ -69,9 +70,12 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
   const stageRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef({ scale: MIN, x: 0, y: 0 })
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
+  const navRef = useRef({ many, onPrev, onNext })
+  const wheelAcc = useRef(0)
   const [scale, setScale] = useState(MIN)
   const [pos, setPos] = useState({ x: 0, y: 0 })
   const [panning, setPanning] = useState(false)
+  navRef.current = { many, onPrev, onNext }
 
   function apply(next: { scale: number; x: number; y: number }) {
     if (next.scale <= MIN) {
@@ -87,13 +91,48 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
   }, [resetKey])
 
   useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+      if (event.key === 'ArrowLeft' && many) {
+        onPrev()
+      }
+      if (event.key === 'ArrowRight' && many) {
+        onNext()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [many, onClose, onPrev, onNext])
+
+  useEffect(() => {
     const el = stageRef.current
     if (!el) {
       return
     }
     function onWheel(event: WheelEvent) {
       event.preventDefault()
+      const nav = navRef.current
       const view = viewRef.current
+      const delta = event.deltaX || event.deltaY
+      if (nav.many && !event.ctrlKey && view.scale <= MIN) {
+        wheelAcc.current += delta
+        let moved = false
+        while (Math.abs(wheelAcc.current) >= 100) {
+          if (wheelAcc.current > 0) {
+            nav.onNext()
+          } else {
+            nav.onPrev()
+          }
+          wheelAcc.current -= Math.sign(wheelAcc.current) * 100
+          moved = true
+        }
+        if (moved) {
+          wheelAcc.current = 0
+        }
+        return
+      }
       const nextScale = Math.min(MAX, Math.max(MIN, view.scale * Math.exp(-event.deltaY * 0.002)))
       const ratio = nextScale / view.scale
       const rect = el.getBoundingClientRect()
@@ -134,7 +173,7 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
     setPanning(false)
   }
 
-  return (
+  return createPortal(
     <div
       ref={stageRef}
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-bg/90"
@@ -160,6 +199,7 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
         draggable={false}
       />
       {many ? <Arrow dir="right" onClick={onNext} /> : null}
-    </div>
+    </div>,
+    document.body,
   )
 }

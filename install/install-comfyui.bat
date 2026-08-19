@@ -24,7 +24,6 @@ set "COMFY=%VENDOR%\ComfyUI"
 set "PYEMBED=%VENDOR%\python_embeded"
 set "PY=%PYEMBED%\python.exe"
 set "COMFY_REPO=https://github.com/comfyanonymous/ComfyUI"
-set "MANAGER_REPO=https://github.com/Comfy-Org/ComfyUI-Manager"
 
 :: Prefer a real Git on PATH; keep System32 / PowerShell / Apps behind it.
 for /f "delims=" %%G in ('cmd /c "where.exe git.exe 2>nul"') do (set "GIT_PATH=%%~dpG")
@@ -33,7 +32,7 @@ set "PATH=%GIT_PATH%;%windir%\System32;%windir%\System32\WindowsPowerShell\v1.0;
 :: --- Header ----------------------------------------------------------------
 call "%UI%"
 call "%UI%" header "install ComfyUI"
-call "%UI%" note "Git, Python 3.12 embed, ComfyUI, Torch, and ComfyUI-Manager."
+call "%UI%" note "Git, Python 3.12 embed, ComfyUI, Torch, then custom nodes."
 call "%UI%" kv "target" "%COMFY%"
 call :NVIDIA_DRIVER_CHECK
 
@@ -63,7 +62,7 @@ call :install_python
 if errorlevel 1 goto :fail
 call :install_torch_and_reqs
 if errorlevel 1 goto :fail
-call :install_manager
+call "%~dp0install-comfyui-deps.bat" nopause
 if errorlevel 1 goto :fail
 
 call "%UI%" section "Done"
@@ -153,33 +152,6 @@ call "%UI%" note "Installing ComfyUI requirements"
 if errorlevel 1 (
     call "%UI%" err "ComfyUI requirements failed."
     exit /b 1
-)
-goto :eof
-
-:: --- ComfyUI-Manager custom node -------------------------------------------
-:install_manager
-call "%UI%" section "ComfyUI-Manager"
-set "NODE_DIR=%COMFY%\custom_nodes\ComfyUI-Manager"
-if not exist "%COMFY%\custom_nodes" md "%COMFY%\custom_nodes"
-
-if exist "%NODE_DIR%\.git" (
-    call "%UI%" note "Manager already present. Skipping clone."
-) else (
-    call "%UI%" kv "clone" "%MANAGER_REPO%"
-    git.exe clone "%MANAGER_REPO%" "%NODE_DIR%"
-    if errorlevel 1 (
-        call "%UI%" err "Failed to clone ComfyUI-Manager."
-        exit /b 1
-    )
-)
-
-if exist "%NODE_DIR%\requirements.txt" (
-    call "%UI%" note "Installing Manager requirements"
-    "%PY%" -I -m uv pip install -r "%NODE_DIR%\requirements.txt" %UVargs%
-)
-
-if exist "%COMFY%\manager_requirements.txt" (
-    "%PY%" -I -m uv pip install -r "%COMFY%\manager_requirements.txt" %UVargs%
 )
 goto :eof
 

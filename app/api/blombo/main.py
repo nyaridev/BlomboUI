@@ -7,7 +7,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from blombo import comfy, db, jobs, models, pnginfo, templates
+from blombo import civitai, comfy, db, hashes, jobs, model_meta, models, pnginfo, safetensors_meta, settings, templates
 from blombo.paths import RUNTIME, VERSION, launcher_env
 
 
@@ -21,7 +21,10 @@ class ApiError(Exception):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.connect()
+    hashes.start()
+    hashes.warm(models.hash_files())
     yield
+    hashes.stop()
 
 
 app = FastAPI(title="BlomboUI", lifespan=lifespan)
@@ -39,8 +42,10 @@ class JobIn(BaseModel):
     batch_size: int = Field(default=1, ge=1, le=8)
     batch_count: int = Field(default=1, ge=1, le=100)
     batch_grid: bool | None = None
-    batch_grid_max: int | None = Field(default=None, ge=2, le=64)
+    batch_grid_max: int | None = Field(default=None, ge=2, le=100)
     batch_grid_quality: int | None = Field(default=None, ge=40, le=95)
+    batch_grid_rows: int | None = Field(default=None, ge=0, le=25)
+    batch_grid_fill: bool | None = None
     sampler: str | None = None
     scheduler: str | None = None
     workflow: str | None = None
@@ -83,6 +88,15 @@ class WorkflowApplyIn(BaseModel):
     apply: list[str]
 
 
+class ModelInfoUpdate(BaseModel):
+    types: list[str] = Field(default_factory=list)
+
+
+class ComfyFreeIn(BaseModel):
+    unload_models: bool = False
+    free_memory: bool = False
+
+
 @app.get("/workflows")
 def workflows() -> dict:
     return {"workflows": comfy.list_workflows()}
@@ -114,20 +128,112 @@ def comfy_ksampler() -> dict:
     return comfy.ksampler_choices()
 
 
-@app.get("/models")
+@app.get("/user-models")
 def get_models() -> dict:
     return models.list_models()
 
 
-@app.post("/models/refresh")
-def post_models_refresh() -> dict:
-    return models.refresh_models()
+@app.post("/user-models/refresh")
+def post_models_refresh(kind: str | None = None) -> dict:
+    if kind and kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    return models.refresh_models(kind)
+
+
+@app.get("/user-models/{kind}/info")
+def get_model_info(kind: str, path: str) -> dict:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    info = models.model_info(kind, path)
+    if not info:
+        raise ApiError("not_found", "model not found")
+    return info
+
+
+@app.get("/user-models/{kind}/safetensors")
+def get_model_safetensors(kind: str, path: str) -> dict:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    file = models.model_file(kind, path)
+    if not file:
+        raise ApiError("not_found", "model not found")
+    if not file.name.lower().endswith(".safetensors"):
+        raise ApiError("bad_request", "not a safetensors file", 400)
+    try:
+        return {"metadata": safetensors_meta.read(file)}
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@app.put("/user-models/{kind}/info")
+def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    if not models.model_file(kind, path):
+        raise ApiError("not_found", "model not found")
+    types = model_meta.set_types(kind, path, body.types)
+    return {"types": types, "thumb": model_meta.thumb_mtime(kind, path)}
+
+
+@app.get("/user-models/{kind}/thumb")
+def get_model_thumb(kind: str, path: str) -> FileResponse:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    file = model_meta.thumb_file(kind, path)
+    if not file:
+        raise ApiError("not_found", "thumb not found")
+    return FileResponse(file, media_type=model_meta.thumb_media(file))
+
+
+@app.put("/user-models/{kind}/thumb")
+async def put_model_thumb(kind: str, path: str, request: Request) -> dict:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    if not models.model_file(kind, path):
+        raise ApiError("not_found", "model not found")
+    try:
+        thumb = model_meta.save_thumb(kind, path, await request.body())
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+    return {"thumb": thumb}
+
+
+@app.delete("/user-models/{kind}/thumb")
+def delete_model_thumb(kind: str, path: str) -> dict:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    if not models.model_file(kind, path):
+        raise ApiError("not_found", "model not found")
+    try:
+        model_meta.delete_thumb(kind, path)
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+    return {"thumb": 0}
 
 
 @app.post("/pnginfo")
 async def post_pnginfo(request: Request) -> dict:
     data = await request.body()
     return pnginfo.read(data, request.headers.get("x-filename") or "")
+
+
+@app.get("/civitai/by-hash/{hash}")
+def civitai_by_hash(hash: str) -> dict:
+    if not civitai.valid_hash(hash):
+        raise ApiError("bad_request", "invalid hash", 400)
+    data = civitai.by_hash(hash)
+    if not data:
+        raise ApiError("not_found", "no matching resource")
+    return data
+
+
+@app.get("/civitai/image")
+def civitai_image(url: str) -> Response:
+    hit = civitai.fetch_image(url)
+    if not hit:
+        raise ApiError("not_found", "image not found")
+    data, media = hit
+    return Response(content=data, media_type=media)
 
 
 @app.get("/health")
@@ -141,8 +247,30 @@ def health() -> dict:
             "reachable": comfy.reachable(),
             "mode": env.get("comfyui.mode"),
             "path": env.get("comfyui.path"),
+            "url": comfy.comfy_base(),
         },
     }
+
+
+@app.get("/comfy/stats")
+def comfy_stats() -> dict:
+    return comfy.gpu_stats()
+
+
+@app.post("/comfy/free")
+def comfy_free(body: ComfyFreeIn) -> dict:
+    comfy.free(body.unload_models, body.free_memory)
+    return {"ok": True}
+
+
+@app.get("/user-settings")
+def get_settings() -> dict:
+    return {"settings": settings.load()}
+
+
+@app.put("/user-settings")
+def put_settings(body: dict[str, Any]) -> dict:
+    return {"settings": settings.save(body)}
 
 
 @app.post("/reload")
@@ -183,7 +311,15 @@ def interrupt_job(job_id: str, body: InterruptIn) -> dict:
 
 @app.get("/jobs/{job_id}/grid")
 def job_grid(job_id: str) -> FileResponse:
-    path = jobs.grid_path(job_id)
+    path = jobs.grid_path(job_id, 0)
+    if not path:
+        raise ApiError("not_found", "grid not found")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@app.get("/jobs/{job_id}/grid/{index}")
+def job_grid_at(job_id: str, index: int) -> FileResponse:
+    path = jobs.grid_path(job_id, index)
     if not path:
         raise ApiError("not_found", "grid not found")
     return FileResponse(path, media_type="image/jpeg")

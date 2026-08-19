@@ -1,5 +1,10 @@
-import { type ReactNode, useState } from 'react'
+import { type ReactNode, useRef, useState } from 'react'
 import { Chevron } from '@/components/Chevron.tsx'
+import { ResizeGrip } from '@/components/ResizeGrip.tsx'
+
+function remPx() {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+}
 
 type ExpandSectionProps = {
   title: string
@@ -10,8 +15,14 @@ type ExpandSectionProps = {
 
 export function ExpandSection({ title, children, enabled = true, onEnabled }: ExpandSectionProps) {
   const [open, setOpen] = useState(false)
+  const [height, setHeight] = useState<number | null>(null)
+  const bodyRef = useRef<HTMLDivElement>(null)
   const togglable = onEnabled != null
   const dimmed = togglable && !enabled
+  const rem = remPx()
+  const minH = 4 * rem
+  const maxH = 48 * rem
+  const defaultH = 16 * rem
 
   return (
     <div className="rounded border border-line bg-field">
@@ -36,10 +47,21 @@ export function ExpandSection({ title, children, enabled = true, onEnabled }: Ex
         </button>
       </div>
       {open ? (
-        <div
-          className={`section-body border-t border-line p-2 ${dimmed ? 'pointer-events-none opacity-40' : ''}`}
-        >
-          {children}
+        <div className="relative border-t border-line">
+          <div
+            ref={bodyRef}
+            className={`section-body overflow-auto p-2 pb-5 ${dimmed ? 'pointer-events-none opacity-40' : ''}`}
+            style={height != null ? { height } : { maxHeight: defaultH }}
+          >
+            {children}
+          </div>
+          <ResizeGrip
+            value={height ?? bodyRef.current?.offsetHeight ?? defaultH}
+            onChange={setHeight}
+            onReset={() => setHeight(null)}
+            min={minH}
+            max={maxH}
+          />
         </div>
       ) : null}
     </div>

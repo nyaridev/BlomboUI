@@ -1,13 +1,13 @@
-import { generationImageUrl } from '@/lib/api.ts'
+import { LightboxView } from '@/components/LightboxView.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
-import { LightboxView } from './LightboxView.tsx'
+import { generationImageUrl } from '@/lib/api.ts'
+import { useGenerateStore } from '@/stores/generateStore.ts'
 import { ThumbStrip, type ThumbItem } from './ThumbStrip.tsx'
 import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
 
 type ImageStageProps = {
   images: string[]
-  gridUrl: string | null
+  gridUrls: string[]
   busy: boolean
   previewUrl: string | null
   progressPct: number
@@ -19,7 +19,7 @@ type ImageStageProps = {
 
 export function ImageStage({
   images,
-  gridUrl,
+  gridUrls,
   busy,
   previewUrl,
   progressPct,
@@ -30,14 +30,42 @@ export function ImageStage({
 }: ImageStageProps) {
   const [index, setIndex] = useState(0)
   const [lightbox, setLightbox] = useState(false)
+  const [failed, setFailed] = useState<Set<string>>(() => new Set())
+  const [previewFailed, setPreviewFailed] = useState(false)
+  const [ready, setReady] = useState(false)
+  const setViewedImageUrl = useGenerateStore((s) => s.setViewedImageUrl)
   const wasBusy = useRef(busy)
+  const sourceKey = `${gridUrls.join('\n')}\n${images.join('\n')}`
   const items: ThumbItem[] = [
-    ...(gridUrl ? [{ key: 'grid', src: gridUrl }] : []),
+    ...gridUrls.map((src, i) => ({ key: `grid-${i}`, src })),
     ...images.map((id) => ({ key: id, src: generationImageUrl(id) })),
-  ]
+  ].filter((item) => !failed.has(item.key))
   const current = items[index]
   const many = items.length > 1
-  const showPreview = busy && previewUrl
+  const showPreview = busy && Boolean(previewUrl) && !previewFailed
+
+  function markFailed(key: string) {
+    setFailed((prev) => {
+      if (prev.has(key)) {
+        return prev
+      }
+      const next = new Set(prev)
+      next.add(key)
+      return next
+    })
+  }
+
+  useEffect(() => {
+    setFailed(new Set())
+  }, [sourceKey])
+
+  useEffect(() => {
+    setPreviewFailed(false)
+  }, [previewUrl])
+
+  useEffect(() => {
+    setReady(false)
+  }, [current?.src])
 
   useEffect(() => {
     if (wasBusy.current && !busy) {
@@ -54,35 +82,27 @@ export function ImageStage({
   }, [index, items.length])
 
   useEffect(() => {
-    if (!lightbox) {
-      return
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setLightbox(false)
-      }
-      if (event.key === 'ArrowLeft' && items.length) {
-        setIndex((i) => (i + items.length - 1) % items.length)
-      }
-      if (event.key === 'ArrowRight' && items.length) {
-        setIndex((i) => (i + 1) % items.length)
-      }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox, items.length])
+    setViewedImageUrl(current?.src ?? null)
+  }, [current?.src, setViewedImageUrl])
 
   return (
-    <div className="flex min-w-0 flex-[2] flex-col gap-2">
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
         {showPreview ? (
-          <img src={previewUrl} alt="Sampling preview" className="h-full w-full object-contain" />
+          <img
+            src={previewUrl}
+            alt="Sampling preview"
+            className="h-full w-full object-contain"
+            onError={() => setPreviewFailed(true)}
+          />
         ) : current ? (
           <button type="button" className="h-full w-full" onClick={() => setLightbox(true)}>
             <img
               src={current.src}
-              alt={current.key === 'grid' ? 'Batch grid' : 'Generated'}
-              className="h-full w-full object-contain"
+              alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
+              className={['h-full w-full object-contain', ready ? '' : 'invisible'].join(' ')}
+              onLoad={() => setReady(true)}
+              onError={() => markFailed(current.key)}
             />
           </button>
         ) : (
@@ -99,21 +119,18 @@ export function ImageStage({
           </div>
         ) : null}
       </div>
-      {many ? <ThumbStrip items={items} index={index} onSelect={setIndex} /> : null}
-      {lightbox && current
-        ? createPortal(
-            <LightboxView
-              src={current.src}
-              alt={current.key === 'grid' ? 'Batch grid' : 'Generated'}
-              resetKey={current.key}
-              many={many}
-              onClose={() => setLightbox(false)}
-              onPrev={() => setIndex((i) => (i + items.length - 1) % items.length)}
-              onNext={() => setIndex((i) => (i + 1) % items.length)}
-            />,
-            document.body,
-          )
-        : null}
+      {many ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
+      {lightbox && current ? (
+        <LightboxView
+          src={current.src}
+          alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
+          resetKey={current.key}
+          many={many}
+          onClose={() => setLightbox(false)}
+          onPrev={() => setIndex((i) => (i + items.length - 1) % items.length)}
+          onNext={() => setIndex((i) => (i + 1) % items.length)}
+        />
+      ) : null}
     </div>
   )
 }

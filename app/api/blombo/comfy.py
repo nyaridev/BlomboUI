@@ -4,6 +4,7 @@ import copy
 import json
 import os
 import struct
+import subprocess
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -46,11 +47,82 @@ def _request(method: str, path: str, body: bytes | None = None, timeout: float =
 
 
 def reachable() -> bool:
+    return system_stats() is not None
+
+
+def system_stats() -> dict[str, Any] | None:
     try:
-        _request("GET", "/system_stats", timeout=1.5)
-        return True
-    except ComfyError:
-        return False
+        raw = _request("GET", "/system_stats", timeout=1.5)
+        data = json.loads(raw.decode("utf-8"))
+    except (ComfyError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def gpu_stats() -> dict[str, Any]:
+    smi = gpu_smi()
+    stats = system_stats()
+    used = total = 0
+    if stats:
+        devices = stats.get("devices")
+        rows = devices if isinstance(devices, list) else []
+        picked: dict[str, Any] | None = None
+        for item in rows:
+            if isinstance(item, dict) and str(item.get("type") or "").lower() == "cuda":
+                picked = item
+                break
+        if picked is None:
+            picked = next((item for item in rows if isinstance(item, dict)), None)
+        if picked:
+            total = int(picked.get("vram_total") or 0)
+            free = int(picked.get("vram_free") or 0)
+            used = max(0, total - free)
+    if smi.get("vram_total"):
+        total = int(smi["vram_total"])
+        used = int(smi.get("vram_used") or used)
+    return {
+        "reachable": stats is not None,
+        "vram_used": used,
+        "vram_total": total,
+        "temp_c": smi.get("temp_c"),
+    }
+
+
+def gpu_smi() -> dict[str, Any]:
+    flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+    try:
+        out = subprocess.check_output(
+            [
+                "nvidia-smi",
+                "--query-gpu=temperature.gpu,memory.used,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            timeout=1.5,
+            text=True,
+            errors="ignore",
+            creationflags=flags,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {}
+    parts = [p.strip() for p in (out.strip().splitlines() or [""])[0].split(",")]
+    data: dict[str, Any] = {}
+    if parts:
+        try:
+            data["temp_c"] = int(float(parts[0]))
+        except ValueError:
+            pass
+    if len(parts) >= 3:
+        try:
+            data["vram_used"] = int(float(parts[1]) * 1024 * 1024)
+            data["vram_total"] = int(float(parts[2]) * 1024 * 1024)
+        except ValueError:
+            pass
+    return data
+
+
+def free(unload_models: bool = False, free_memory: bool = False) -> None:
+    payload = json.dumps({"unload_models": unload_models, "free_memory": free_memory}).encode("utf-8")
+    _request("POST", "/free", payload, timeout=30)
 
 
 def _combo(info: dict[str, Any], node: str, name: str) -> list[str]:
@@ -72,10 +144,13 @@ def ksampler_choices() -> dict[str, list[str]]:
     }
 
 
-def warmup_model_lists() -> None:
+def warmup_model_lists(kind: str | None = None) -> None:
     if not reachable():
         return
-    for folder in ("checkpoints", "loras", "vae", "controlnet", "embeddings"):
+    folders = ("checkpoints", "loras", "vae", "controlnet", "embeddings")
+    if kind:
+        folders = (kind,) if kind in folders else ()
+    for folder in folders:
         try:
             _request("GET", f"/models/{folder}", timeout=5)
         except ComfyError:

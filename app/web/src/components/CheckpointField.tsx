@@ -1,5 +1,6 @@
+import { RefreshIcon } from '@/components/RefreshIcon.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
-import { modelLabel, useModelsStore } from '@/stores/modelsStore.ts'
+import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useEffect, useMemo } from 'react'
 
 type CheckpointFieldProps = {
@@ -12,21 +13,23 @@ export function CheckpointField({ value, onChange, refresh = false }: Checkpoint
   const checkpoints = useModelsStore((s) => s.checkpoints)
   const busy = useModelsStore((s) => s.busy)
   const refreshModels = useModelsStore((s) => s.refresh)
+  const paths = useMemo(() => checkpoints.map(modelPath).filter(Boolean), [checkpoints])
   const options = useMemo(() => {
-    const ids = checkpoints.includes(value) ? checkpoints : value ? [value, ...checkpoints] : checkpoints
+    const current = typeof value === 'string' ? value : ''
+    const ids = current && !paths.includes(current) ? [current, ...paths] : paths
     return ids.map((id) => ({ value: id, label: modelLabel(id) }))
-  }, [checkpoints, value])
+  }, [paths, value])
 
   useEffect(() => {
-    if (!checkpoints.length || checkpoints.includes(value)) {
+    if (!paths.length || typeof value !== 'string' || paths.includes(value)) {
       return
     }
     const base = value.split(/[\\/]/).pop()
-    const hits = checkpoints.filter((id) => id.split(/[\\/]/).pop() === base)
+    const hits = paths.filter((id) => id.split(/[\\/]/).pop() === base)
     if (hits.length === 1) {
       onChange(hits[0])
     }
-  }, [checkpoints, onChange, value])
+  }, [paths, onChange, value])
 
   return (
     <div className="flex min-w-0 items-end gap-1">
@@ -43,7 +46,7 @@ export function CheckpointField({ value, onChange, refresh = false }: Checkpoint
           disabled={busy}
           onClick={() => void refreshModels()}
         >
-          🔄
+          <RefreshIcon />
         </button>
       ) : null}
     </div>

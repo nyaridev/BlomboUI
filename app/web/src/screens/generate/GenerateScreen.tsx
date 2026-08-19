@@ -1,7 +1,11 @@
 import { CheckpointField } from '@/components/CheckpointField.tsx'
+import { GalleryView } from '@/components/GalleryView.tsx'
+import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { ImageStage } from './ImageStage.tsx'
 import { GenerationParams } from './GenerationParams.tsx'
+import { PromptStack } from './PromptStack.tsx'
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { useLocation } from 'react-router-dom'
 import {
   createJob,
   getJob,
@@ -13,6 +17,7 @@ import {
 } from '@/lib/api.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
+import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { GENERATE_TABS, type GenerateTab } from './tabs.ts'
 
@@ -24,10 +29,6 @@ function idsFromJob(job: Job): string[] {
     return [job.generation_id]
   }
   return []
-}
-
-function fieldClass() {
-  return 'w-full rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent'
 }
 
 function etaSeconds(startedAt: string | null, value: number, max: number): number | null {
@@ -67,6 +68,18 @@ function jobSeconds(job: Job): number | null {
   return null
 }
 
+const PARAMS_RATIO = 0.5
+const PARAMS_MIN_REM = 18
+const PARAMS_MAX_RATIO = 0.75
+
+function remPx() {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+}
+
+function defaultParamsWidth(row: HTMLElement | null) {
+  return row && row.clientWidth > 0 ? row.clientWidth * PARAMS_RATIO : PARAMS_MIN_REM * remPx()
+}
+
 function progressLabel(pct: number, eta: number | null): string {
   if (pct <= 0) {
     return 'Starting…'
@@ -97,7 +110,11 @@ export function GenerateScreen() {
   const batchGrid = useSettingsStore((s) => s.batchGrid)
   const batchGridMax = useSettingsStore((s) => s.batchGridMax)
   const batchGridQuality = useSettingsStore((s) => s.batchGridQuality)
+  const batchGridRows = useSettingsStore((s) => s.batchGridRows)
+  const batchGridFill = useSettingsStore((s) => s.batchGridFill)
   const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs) ?? []
+  const checkpoints = useModelsStore((s) => s.checkpoints)
+  const loras = useModelsStore((s) => s.loras)
 
   const health = useHealthStore((s) => s.health)
 
@@ -106,6 +123,16 @@ export function GenerateScreen() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<GenerateTab>('Generation')
   const interruptAt = useRef(0)
+  const genRowRef = useRef<HTMLDivElement>(null)
+  const [paramsWidth, setParamsWidth] = useState<number | null>(null)
+  const location = useLocation()
+
+  useEffect(() => {
+    const incoming = location.state as { tab?: GenerateTab } | null
+    if (incoming?.tab && GENERATE_TABS.includes(incoming.tab)) {
+      setTab(incoming.tab)
+    }
+  }, [location.key])
   const busy = job?.status === 'queued' || job?.status === 'running'
   const jobId = job?.id
 
@@ -158,6 +185,8 @@ export function GenerateScreen() {
         batch_grid: batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
+        batch_grid_rows: batchGridRows,
+        batch_grid_fill: batchGridFill,
         sampler,
         scheduler,
         workflow,
@@ -233,26 +262,23 @@ export function GenerateScreen() {
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
 
   return (
-    <div className="flex h-full flex-col gap-3" onKeyDown={onKeyDown}>
+    <div
+      data-generate-root
+      className={[
+        'flex h-full flex-col gap-3',
+        shownTab === 'Generation' ? 'min-h-full' : 'min-h-0 overflow-hidden',
+      ].join(' ')}
+      onKeyDown={onKeyDown}
+    >
       <CheckpointField value={checkpoint} onChange={setCheckpoint} refresh />
-      <div className="flex h-[26%] min-h-40 shrink-0 items-stretch gap-3">
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <textarea
-            className={`${fieldClass()} min-h-0 flex-[3] resize-y font-mono`}
-            value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
-            placeholder="Positive"
-            spellCheck={false}
-          />
-          <textarea
-            className={`${fieldClass()} min-h-0 flex-1 resize-y font-mono disabled:cursor-not-allowed`}
-            value={negativePrompt}
-            onChange={(e) => setNegativePrompt(e.target.value)}
-            placeholder="Negative"
-            spellCheck={false}
-            disabled={cfg <= 1}
-          />
-        </div>
+      <div className="flex shrink-0 items-stretch gap-3">
+        <PromptStack
+          prompt={prompt}
+          negativePrompt={negativePrompt}
+          onPrompt={setPrompt}
+          onNegative={setNegativePrompt}
+          negativeDisabled={cfg <= 1}
+        />
         <button
           type="button"
           className={[
@@ -267,8 +293,10 @@ export function GenerateScreen() {
         </button>
       </div>
 
-      <div className="flex min-w-0 flex-col">
-        <div className="flex gap-1 px-2">
+      <div
+        className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'min-h-0 flex-1' : ''].join(' ')}
+      >
+        <div className="flex shrink-0 gap-1 px-2">
           {visibleTabs.map((item) => (
             <button
               key={item}
@@ -285,17 +313,36 @@ export function GenerateScreen() {
             </button>
           ))}
         </div>
-        <div className="rounded-b-md rounded-tr-md border border-line bg-panel p-3">
-          <div className={shownTab === 'Generation' ? 'flex gap-4' : 'hidden'}>
-            <GenerationParams
-              error={error}
-              comfyOk={comfyOk}
-              lastSeed={typeof payload.seed === 'number' ? payload.seed : null}
+        <div
+          className={[
+            'mb-4 rounded-b-md rounded-tr-md border border-line bg-panel p-3',
+            shownTab !== 'Generation' ? 'flex min-h-0 flex-1 flex-col overflow-hidden' : '',
+          ].join(' ')}
+        >
+          <div ref={genRowRef} className={shownTab === 'Generation' ? 'flex min-w-0' : 'hidden'}>
+            <div className="min-w-0 shrink-0" style={{ width: paramsWidth ?? `${PARAMS_RATIO * 100}%` }}>
+              <GenerationParams
+                error={error}
+                comfyOk={comfyOk}
+                lastSeed={typeof payload.seed === 'number' ? payload.seed : null}
+              />
+            </div>
+            <PaneSplitter
+              value={paramsWidth ?? defaultParamsWidth(genRowRef.current)}
+              onChange={setParamsWidth}
+              onReset={() => setParamsWidth(null)}
+              min={PARAMS_MIN_REM * remPx()}
+              containerRef={genRowRef}
+              maxRatio={PARAMS_MAX_RATIO}
             />
             <ImageStage
               key={jobId || 'empty'}
               images={imageIds}
-              gridUrl={job?.has_grid && jobId ? jobGridUrl(jobId) : null}
+              gridUrls={
+                jobId && (job?.grid_count || (job?.has_grid ? 1 : 0))
+                  ? Array.from({ length: job.grid_count || 1 }, (_, i) => jobGridUrl(jobId, i))
+                  : []
+              }
               busy={busy}
               previewUrl={busy && job?.has_preview && jobId ? jobPreviewUrl(jobId, progressValue) : null}
               progressPct={progressPct}
@@ -305,7 +352,20 @@ export function GenerateScreen() {
               timing={timing}
             />
           </div>
-          {shownTab !== 'Generation' ? <p className="text-sm text-muted">Stub.</p> : null}
+          <div className={shownTab === 'Base Model' ? 'h-full min-h-0 flex-1' : 'hidden'}>
+            <GalleryView
+              kind="checkpoints"
+              items={checkpoints}
+              value={checkpoint}
+              onSelect={setCheckpoint}
+            />
+          </div>
+          <div className={shownTab === 'Lora' ? 'h-full min-h-0 flex-1' : 'hidden'}>
+            <GalleryView kind="loras" items={loras} />
+          </div>
+          {shownTab !== 'Generation' && shownTab !== 'Base Model' && shownTab !== 'Lora' ? (
+            <p className="text-sm text-muted">Stub.</p>
+          ) : null}
         </div>
       </div>
     </div>

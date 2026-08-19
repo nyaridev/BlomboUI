@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import random
+import re
 import threading
 import time
 import uuid
@@ -11,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from blombo import comfy, db, hashes, pnginfo
-from blombo.paths import VERSION, comfy_base, outputs_root
+from blombo.paths import comfy_base, comfy_output_root, outputs_root
 
 DEFAULTS = {
     "checkpoint": "waiIllustriousSDXL_v140.safetensors",
@@ -44,7 +45,9 @@ class LiveJob:
 
 _live: dict[str, LiveJob] = {}
 _live_lock = threading.Lock()
+_save_lock = threading.Lock()
 _tasks: set[asyncio.Task[None]] = set()
+_PNG_STEM = re.compile(r"^blombo_(\d+)\.png$", re.I)
 
 
 def _now() -> str:
@@ -123,6 +126,12 @@ def _row_job(row: Any) -> dict[str, Any]:
         (row["id"],),
     )
     grid = payload.get("grid_path")
+    grids = payload.get("grid_paths")
+    paths: list[str] = []
+    if isinstance(grids, list):
+        paths = [item for item in grids if isinstance(item, str) and Path(item).is_file()]
+    elif isinstance(grid, str) and Path(grid).is_file():
+        paths = [grid]
     data = {
         "id": row["id"],
         "status": row["status"],
@@ -132,7 +141,8 @@ def _row_job(row: Any) -> dict[str, Any]:
         "error": row["error"],
         "generation_id": gens[-1]["id"] if gens else None,
         "generation_ids": [g["id"] for g in gens],
-        "has_grid": isinstance(grid, str) and Path(grid).is_file(),
+        "has_grid": bool(paths),
+        "grid_count": len(paths),
         "created_at": row["created_at"],
         "started_at": row["started_at"],
         "finished_at": row["finished_at"],
@@ -189,8 +199,10 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values["batch_size"] = max(1, int(values.get("batch_size") or 1))
     values["batch_count"] = max(1, int(values.get("batch_count") or 1))
     values["batch_grid"] = bool(values.get("batch_grid", True))
-    values["batch_grid_max"] = max(2, int(values.get("batch_grid_max") or 16))
+    values["batch_grid_max"] = max(2, min(100, int(values.get("batch_grid_max") or 16)))
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
+    values["batch_grid_rows"] = max(0, min(25, int(values.get("batch_grid_rows") or 0)))
+    values["batch_grid_fill"] = bool(values.get("batch_grid_fill", False))
     values["prompt"] = str(body.get("prompt") or "")
     values["negative_prompt"] = str(body.get("negative_prompt") or "")
     job_id = str(uuid.uuid4())
@@ -220,7 +232,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         saved: list[Path] = []
         started = time.monotonic()
         canceled = False
-        values["model_hash"] = await asyncio.to_thread(hashes.checkpoint_hash, str(values.get("checkpoint") or ""))
+        row = await asyncio.to_thread(hashes.checkpoint_hashes, str(values.get("checkpoint") or ""))
+        values["model_hash"] = row.get("autov2") or ""
+        values["model_hashes"] = row
         for i in range(batch_count):
             with _live_lock:
                 live = _live.get(job_id)
@@ -297,29 +311,8 @@ def _import_image(job_id: str, values: dict[str, Any], info: dict[str, str], gra
     folder = root / day
     folder.mkdir(parents=True, exist_ok=True)
     gen_id = str(uuid.uuid4())
-    stem = f"blombo_{gen_id[:8]}"
-    png = folder / f"{stem}.png"
-    png.write_bytes(data)
-    sidecar = {
-        "id": gen_id,
-        "job_id": job_id,
-        "prompt": values.get("prompt"),
-        "negative_prompt": values.get("negative_prompt"),
-        "seed": values.get("seed"),
-        "checkpoint": values.get("checkpoint"),
-        "model_hash": values.get("model_hash"),
-        "width": values.get("width"),
-        "height": values.get("height"),
-        "steps": values.get("steps"),
-        "cfg": values.get("cfg"),
-        "batch_size": values.get("batch_size"),
-        "batch_count": values.get("batch_count"),
-        "sampler": values.get("sampler"),
-        "scheduler": values.get("scheduler"),
-        "software": f"BlomboUI {VERSION}",
-        "path": str(png),
-    }
-    (folder / f"{stem}.json").write_text(json.dumps(sidecar, indent=2), encoding="utf-8")
+    png = _save_png(folder, data)
+    _forget_comfy_file(info)
     db.execute(
         """
         INSERT INTO generations (
@@ -345,20 +338,64 @@ def _import_image(job_id: str, values: dict[str, Any], info: dict[str, str], gra
     return gen_id
 
 
+def _save_png(folder: Path, data: bytes) -> Path:
+    with _save_lock:
+        n = 0
+        for path in folder.glob("blombo_*.png"):
+            match = _PNG_STEM.match(path.name)
+            if match:
+                n = max(n, int(match.group(1)))
+        while True:
+            n += 1
+            dest = folder / f"blombo_{n:06d}.png"
+            if not dest.exists():
+                dest.write_bytes(data)
+                return dest
+
+
+def _forget_comfy_file(info: dict[str, str]) -> None:
+    name = Path(str(info.get("filename") or "")).name
+    if not name or name in {".", ".."}:
+        return
+    root = comfy_output_root()
+    sub = str(info.get("subfolder") or "").replace("\\", "/").strip("/")
+    parts = [part for part in sub.split("/") if part and part not in {".", ".."}]
+    path = root.joinpath(*parts) / name
+    try:
+        path.resolve().relative_to(root.resolve())
+        path.unlink(missing_ok=True)
+    except (OSError, ValueError):
+        pass
+
+
 def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
     if not values.get("batch_grid", True):
         return
-    max_n = int(values.get("batch_grid_max") or 16)
-    if len(paths) < 2 or len(paths) > max_n:
+    if len(paths) < 2:
         return
-    dest = paths[0].parent / f"blombo_{job_id[:8]}_grid.jpg"
+    max_n = max(2, min(100, int(values.get("batch_grid_max") or 16)))
+    quality = int(values.get("batch_grid_quality") or 85)
+    rows = int(values.get("batch_grid_rows") or 0)
+    fill = bool(values.get("batch_grid_fill", False))
+    dests: list[str] = []
     try:
         from blombo.grid import save_contact_sheet
 
-        save_contact_sheet(paths, dest, int(values.get("batch_grid_quality") or 85))
+        for i in range(0, len(paths), max_n):
+            chunk = paths[i : i + max_n]
+            if len(chunk) < 2:
+                continue
+            n = len(dests) + 1
+            name = f"blombo_{job_id[:8]}_grid.jpg" if n == 1 else f"blombo_{job_id[:8]}_grid_{n}.jpg"
+            dest = chunk[0].parent / name
+            save_contact_sheet(chunk, dest, quality, rows, fill)
+            dests.append(str(dest))
     except Exception:
         return
-    values["grid_path"] = str(dest)
+    if not dests:
+        return
+    values["grid_path"] = dests[0]
+    values["grid_paths"] = dests
     db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
 
 
@@ -367,16 +404,33 @@ def latest_job() -> dict[str, Any] | None:
     return _row_job(row) if row else None
 
 
-def grid_path(job_id: str) -> Path | None:
+def grid_paths(job_id: str) -> list[Path]:
     row = db.query_one("SELECT payload_json FROM jobs WHERE id = ?", (job_id,))
     if not row:
-        return None
+        return []
     payload = json.loads(row["payload_json"])
-    raw = payload.get("grid_path")
-    if not isinstance(raw, str):
+    raw = payload.get("grid_paths")
+    out: list[Path] = []
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, str):
+                path = Path(item)
+                if path.is_file():
+                    out.append(path)
+        return out
+    single = payload.get("grid_path")
+    if isinstance(single, str):
+        path = Path(single)
+        if path.is_file():
+            return [path]
+    return []
+
+
+def grid_path(job_id: str, index: int = 0) -> Path | None:
+    paths = grid_paths(job_id)
+    if index < 0 or index >= len(paths):
         return None
-    path = Path(raw)
-    return path if path.is_file() else None
+    return paths[index]
 
 
 def generation_path(gen_id: str) -> Path | None:

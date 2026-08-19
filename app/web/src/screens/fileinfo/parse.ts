@@ -1,7 +1,18 @@
 import type { TemplateParams } from '@/stores/generateStore.ts'
 import { PARAM_KEYS, pickParams } from '@/stores/generateStore.ts'
 
-export type PngInfoParams = Partial<TemplateParams>
+export type PngInfoParams = Partial<TemplateParams> & {
+  modelHash?: string
+  autov1?: string
+  autov3?: string
+  sha256?: string
+}
+
+const HEX_HASH = /^[0-9a-f]{8,64}$/i
+
+export function pngModelHashes(parsed: PngInfoParams): string[] {
+  return [...new Set([parsed.autov3, parsed.modelHash, parsed.autov1, parsed.sha256].filter((value): value is string => Boolean(value)))]
+}
 
 const SETTINGS = /^Steps:/i
 const NEGATIVE = /^Negative prompt:/i
@@ -74,6 +85,22 @@ function applySettings(out: PngInfoParams, line: string) {
   }
   if (fields.model) {
     out.checkpoint = fields.model
+  }
+  const modelHash = hexHash(fields['model hash'] || fields.autov2)
+  if (modelHash) {
+    out.modelHash = modelHash
+  }
+  const autov1 = hexHash(fields.autov1)
+  if (autov1) {
+    out.autov1 = autov1
+  }
+  const autov3 = hexHash(fields.autov3)
+  if (autov3) {
+    out.autov3 = autov3
+  }
+  const sha256 = hexHash(fields.sha256)
+  if (sha256) {
+    out.sha256 = sha256
   }
   const batchSize = intIn(fields['batch size'], 1, 8)
   if (batchSize != null) {
@@ -185,6 +212,11 @@ function intIn(value: unknown, min: number, max: number): number | null {
     return null
   }
   return n
+}
+
+function hexHash(value: string | undefined): string {
+  const hex = (value || '').trim().toLowerCase()
+  return HEX_HASH.test(hex) ? hex : ''
 }
 
 function floatIn(value: unknown, min: number, max: number): number | null {

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, FastAPI, Request
@@ -22,6 +23,8 @@ class ApiError(Exception):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.connect()
+    model_meta.migrate()
+    thumbnail_scopes.list_scopes()
     tag_complete.schedule_rebuild()
     hashes.start()
     hashes.warm(models.hash_files())
@@ -807,6 +810,45 @@ def job_preview_step(job_id: str, step: int) -> Response:
     return _preview_response(jobs.preview_bytes(job_id, step))
 
 
+def _image_response(path: Path) -> FileResponse:
+    if not path:
+        raise ApiError("not_found", "image not found")
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        media = "image/jpeg"
+    elif suffix == ".webp":
+        media = "image/webp"
+    else:
+        media = "image/png"
+    return FileResponse(path, media_type=media)
+
+
+@api.get("/gallery/items")
+def list_gallery_items() -> dict:
+    return {"items": gallery.list_items()}
+
+
+@api.get("/gallery/items/latest")
+def latest_gallery_item() -> dict:
+    return {"item": jobs.latest_generation()}
+
+
+@api.get("/gallery/items/{ident}/thumb")
+def gallery_item_thumb(ident: str) -> FileResponse:
+    path = gallery.item_thumb(ident)
+    if not path:
+        raise ApiError("not_found", "image not found")
+    return FileResponse(path, media_type="image/jpeg")
+
+
+@api.get("/gallery/items/{ident}/image")
+def gallery_item_image(ident: str) -> FileResponse:
+    path = gallery.item_image(ident)
+    if not path:
+        raise ApiError("not_found", "image not found")
+    return _image_response(path)
+
+
 @api.get("/generations")
 def list_generations() -> dict:
     return {"generations": gallery.list_items()}
@@ -831,14 +873,7 @@ def gallery_disk_image(ident: str) -> FileResponse:
     path = gallery.disk_image(ident)
     if not path:
         raise ApiError("not_found", "image not found")
-    suffix = path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        media = "image/jpeg"
-    elif suffix == ".webp":
-        media = "image/webp"
-    else:
-        media = "image/png"
-    return FileResponse(path, media_type=media)
+    return _image_response(path)
 
 
 @api.get("/generations/{gen_id}/thumb")
@@ -851,17 +886,10 @@ def generation_thumb(gen_id: str) -> FileResponse:
 
 @api.get("/generations/{gen_id}/image")
 def generation_image(gen_id: str) -> FileResponse:
-    path = jobs.generation_path(gen_id)
+    path = gallery.generation_image(gen_id)
     if not path:
         raise ApiError("not_found", "image not found")
-    suffix = path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        media = "image/jpeg"
-    elif suffix == ".webp":
-        media = "image/webp"
-    else:
-        media = "image/png"
-    return FileResponse(path, media_type=media)
+    return _image_response(path)
 
 
 app.include_router(api, prefix="/api")

@@ -120,7 +120,7 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
           livePaths={{ [OUTPUT_ID]: paths?.output || '' }}
           pinLocked
         />
-        <p className="text-xs text-muted">Extra folders are listed on the Gallery tab with saved generations.</p>
+        <p className="text-xs text-muted">Extra folders are listed on the Gallery tab with cached gallery images.</p>
       </SettingsCard>
     </div>
   )

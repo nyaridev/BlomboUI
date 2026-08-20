@@ -1,5 +1,5 @@
 import { MetaCard } from '@/components/MetaCard.tsx'
-import type { JobGeneration, JobLora } from '@/lib/api.ts'
+import type { JobGalleryItem, JobLora } from '@/lib/api.ts'
 
 function stem(path: string) {
   const base = path.replace(/\\/g, '/').split('/').pop() || path
@@ -24,7 +24,7 @@ function loraLine(item: JobLora) {
   return bits.join(' · ')
 }
 
-function fields(info: JobGeneration) {
+function fields(info: JobGalleryItem) {
   const size = info.width && info.height ? `${info.width}x${info.height}` : ''
   return [
     ['Steps', num(info.steps)],
@@ -38,7 +38,7 @@ function fields(info: JobGeneration) {
   ].filter((row) => row[1]) as [string, string][]
 }
 
-export function GenerationInfo({ info }: { info: JobGeneration | null }) {
+export function GenerationInfo({ info }: { info: JobGalleryItem | null }) {
   if (!info) {
     return null
   }

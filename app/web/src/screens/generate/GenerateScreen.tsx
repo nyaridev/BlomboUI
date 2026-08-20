@@ -26,6 +26,9 @@ import { toast } from '@/stores/toastStore.ts'
 import { GENERATE_TABS, orderedGenerateTabs, type GenerateTab } from './tabs.ts'
 
 function idsFromJob(job: Job): string[] {
+  if (job.gallery_ids?.length) {
+    return job.gallery_ids
+  }
   if (job.generation_ids?.length) {
     return job.generation_ids
   }
@@ -512,7 +515,9 @@ export function GenerateScreen() {
                 warning={warning}
                 comfyOk={comfyOk}
                 lastSeed={
-                  [...(job?.generations ?? [])].reverse().find((item) => typeof item.seed === 'number')?.seed ??
+                  [...(job?.gallery ?? job?.generations ?? [])]
+                    .reverse()
+                    .find((item) => typeof item.seed === 'number')?.seed ??
                   (typeof payload.seed === 'number' ? payload.seed : null)
                 }
               />
@@ -533,7 +538,7 @@ export function GenerateScreen() {
                   ? Array.from({ length: job.grid_count || 1 }, (_, i) => jobGridUrl(jobId, i))
                   : []
               }
-              generations={starting ? [] : (job?.generations ?? [])}
+              gallery={starting ? [] : (job?.gallery ?? job?.generations ?? [])}
               busy={busy}
               previewUrl={!starting && busy && job?.has_preview && jobId ? jobPreviewUrl(jobId, progressValue) : null}
               progressPct={progressPct}

@@ -6,12 +6,14 @@ import secrets
 from typing import Any
 from pathlib import Path
 
+from blombo import model_meta_db
 from blombo.paths import USER, USER_DATA
 
 GLOBAL_ID = "global"
 GLOBAL_NAME = "Global"
-FILE = USER_DATA / "scopes.json"
-LEGACY = USER / "model_meta" / "scopes.json"
+FILE = USER / "model_meta" / "data" / "scopes.json"
+LEGACY = (USER_DATA / "scopes.json", USER / "model_meta" / "scopes.json")
+_READY_DB: str | None = None
 _ID = re.compile(r"^[a-f0-9]{12}$")
 _KEY = re.compile(r"^[a-f0-9]{12}(?:\+[a-f0-9]{12})*$")
 _WEIGHT = re.compile(r"^\((.*?)(?::\s*[-+]?\d+(?:\.\d+)?)?\)$")
@@ -104,9 +106,7 @@ def create_scope(raw: dict[str, Any]) -> dict[str, Any]:
     row = _row(raw, secrets.token_hex(6))
     if not row["name"]:
         raise ValueError("name is required")
-    data = _load()
-    data.append(row)
-    _write(data)
+    _store(row)
     return dict(row)
 
 
@@ -122,7 +122,7 @@ def update_scope(ident: str, raw: dict[str, Any]) -> dict[str, Any]:
         if not row["name"]:
             raise ValueError("name is required")
         data[index] = row
-        _write(data)
+        _store(row, replace=True)
         return dict(row)
     raise ValueError("not found")
 
@@ -135,7 +135,7 @@ def delete_scope(ident: str) -> None:
     keep = [item for item in data if item["id"] != name]
     if len(keep) == len(data):
         raise ValueError("not found")
-    _write(keep)
+    model_meta_db.execute("DELETE FROM thumb_scopes WHERE id = ?", (name,))
 
 
 def query_for(ids: list[str] | None) -> dict[str, Any]:
@@ -267,21 +267,58 @@ def _groups(raw: Any) -> list[list[str]]:
 
 
 def _load() -> list[dict[str, Any]]:
+    _ensure_db()
+    rows = model_meta_db.load_scopes()
+    out: list[dict[str, Any]] = []
+    for item in rows:
+        out.append(
+            _row(
+                {
+                    "name": item["name"],
+                    "group": item["group_name"],
+                    "required": _json_value(item["required_json"]),
+                    "optional": _json_value(item["optional_json"]),
+                    "anyGroups": _json_value(item["any_groups_json"]),
+                    "exclude": _json_value(item["exclude_json"]),
+                    "priority": item["priority"],
+                },
+                str(item["id"]),
+            )
+        )
+    return out
+
+
+def _ensure_db() -> None:
+    global _READY_DB
+    path = str(model_meta_db.db_path())
+    model_meta_db.connect()
+    if _READY_DB == path:
+        return
+    _migrate_json()
+    _READY_DB = path
+
+
+def _migrate_json() -> None:
+    if model_meta_db.scope_count() > 0:
+        return
+    _migrate_main_scopes()
+    if model_meta_db.scope_count() > 0:
+        _file().unlink(missing_ok=True)
+        return
     path = _file()
     if not path.is_file():
-        _write([])
-        return []
+        return
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return []
-    rows = data.get("scopes") if isinstance(data, dict) else data
-    if not isinstance(rows, list):
-        return []
-    out: list[dict[str, Any]] = []
+        return
+    raw_rows = data.get("scopes") if isinstance(data, dict) else data
+    if not isinstance(raw_rows, list):
+        return
+
+    rows: list[dict[str, Any]] = []
     seen: set[str] = set()
-    repaired = False
-    for item in rows:
+    for item in raw_rows:
         if not isinstance(item, dict):
             continue
         ident = str(item.get("id") or "").strip().lower()
@@ -289,25 +326,109 @@ def _load() -> list[dict[str, Any]]:
             continue
         if not _ID.fullmatch(ident):
             ident = secrets.token_hex(6)
-            repaired = True
         row = _row(item, ident)
         if not row["name"]:
             continue
         seen.add(ident)
-        out.append(row)
-    if repaired:
-        _write(out)
-    return out
+        rows.append(row)
+
+    def migrate(conn) -> None:
+        for item in rows:
+            _write_scope(conn, item)
+
+    model_meta_db.transaction(migrate)
+    path.unlink(missing_ok=True)
 
 
-def _write(data: list[dict[str, Any]]) -> None:
-    FILE.parent.mkdir(parents=True, exist_ok=True)
-    FILE.write_text(json.dumps({"scopes": data}, indent=2) + "\n", encoding="utf-8")
+def _migrate_main_scopes() -> None:
+    try:
+        from blombo import db as main_db
+
+        rows = main_db.query(
+            "SELECT id, name, group_name, required_json, optional_json, "
+            "any_groups_json, exclude_json, priority FROM thumb_scopes ORDER BY rowid"
+        )
+    except Exception:
+        return
+    if not rows:
+        return
+
+    def migrate(conn) -> None:
+        for item in rows:
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO thumb_scopes (
+                    id, name, group_name, required_json, optional_json,
+                    any_groups_json, exclude_json, priority
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    item["id"],
+                    item["name"],
+                    item["group_name"],
+                    item["required_json"],
+                    item["optional_json"],
+                    item["any_groups_json"],
+                    item["exclude_json"],
+                    item["priority"],
+                ),
+            )
+
+    model_meta_db.transaction(migrate)
+
+
+def _store(row: dict[str, Any], replace: bool = False) -> None:
+    _ensure_db()
+
+    def write(conn) -> None:
+        _write_scope(conn, row, replace)
+
+    model_meta_db.transaction(write)
+
+
+def _write_scope(conn, row: dict[str, Any], replace: bool = False) -> None:
+    values = (
+        row["name"],
+        row["group"],
+        json.dumps(row["required"]),
+        json.dumps(row["optional"]),
+        json.dumps(row["anyGroups"]),
+        json.dumps(row["exclude"]),
+        row["priority"],
+    )
+    if replace:
+        conn.execute(
+            """
+            UPDATE thumb_scopes
+            SET name = ?, group_name = ?, required_json = ?, optional_json = ?,
+                any_groups_json = ?, exclude_json = ?, priority = ?
+            WHERE id = ?
+            """,
+            (*values, row["id"]),
+        )
+        return
+    conn.execute(
+        """
+        INSERT INTO thumb_scopes (
+            id, name, group_name, required_json, optional_json,
+            any_groups_json, exclude_json, priority
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (row["id"], *values),
+    )
+
+
+def _json_value(raw: Any) -> Any:
+    try:
+        return json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return None
 
 
 def _file() -> Path:
-    if FILE.is_file() or FILE != USER_DATA / "scopes.json" or not LEGACY.is_file():
+    if FILE.is_file():
         return FILE
-    USER_DATA.mkdir(parents=True, exist_ok=True)
-    LEGACY.replace(FILE)
+    for path in LEGACY:
+        if path.is_file():
+            return path
     return FILE

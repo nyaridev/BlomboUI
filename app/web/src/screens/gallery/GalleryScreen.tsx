@@ -1,5 +1,5 @@
 import { LightboxView } from '@/components/LightboxView.tsx'
-import { generationImageUrl, generationThumbUrl, listGenerations } from '@/lib/api.ts'
+import { galleryItemImageUrl, galleryItemThumbUrl, listGalleryItems } from '@/lib/api.ts'
 import { middleOpen } from '@/lib/openImage.ts'
 import { useVisible } from '@/lib/visible.ts'
 import { useEffect, useState, type MouseEvent } from 'react'
@@ -25,7 +25,7 @@ function GalleryThumb({
     >
       {visible ? (
         <img
-          src={generationThumbUrl(id)}
+          src={galleryItemThumbUrl(id)}
           alt=""
           className="h-full w-full object-cover"
           loading="lazy"
@@ -42,7 +42,7 @@ export function GalleryScreen() {
   const [index, setIndex] = useState<number | null>(null)
 
   useEffect(() => {
-    void listGenerations()
+    void listGalleryItems()
       .then((next) => {
         setItems(next)
         setError(null)
@@ -63,7 +63,7 @@ export function GalleryScreen() {
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-2">
           {items.map((item, i) => {
-            const full = generationImageUrl(item.id)
+            const full = galleryItemImageUrl(item.id)
             return (
               <GalleryThumb
                 key={item.id}
@@ -77,7 +77,7 @@ export function GalleryScreen() {
       )}
       {current ? (
         <LightboxView
-          src={generationImageUrl(current.id)}
+          src={galleryItemImageUrl(current.id)}
           alt="Generated"
           resetKey={current.id}
           many={many}

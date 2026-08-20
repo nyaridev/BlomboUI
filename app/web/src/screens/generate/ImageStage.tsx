@@ -1,6 +1,6 @@
 import { LightboxView } from '@/components/LightboxView.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
-import { generationImageUrl, type JobGeneration } from '@/lib/api.ts'
+import { galleryItemImageUrl, type JobGalleryItem } from '@/lib/api.ts'
 import { middleOpen } from '@/lib/openImage.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { GenerationInfo } from './GenerationInfo.tsx'
@@ -12,7 +12,7 @@ import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
 type ImageStageProps = {
   images: string[]
   gridUrls: string[]
-  generations?: JobGeneration[]
+  gallery?: JobGalleryItem[]
   busy: boolean
   previewUrl: string | null
   progressPct: number
@@ -25,7 +25,7 @@ type ImageStageProps = {
 export function ImageStage({
   images,
   gridUrls,
-  generations = [],
+  gallery = [],
   busy,
   previewUrl,
   progressPct,
@@ -46,12 +46,12 @@ export function ImageStage({
   const sourceKey = `${gridUrls.join('\n')}\n${images.join('\n')}`
   const items: ThumbItem[] = [
     ...gridUrls.map((src, i) => ({ key: `grid-${i}`, src })),
-    ...images.map((id) => ({ key: id, src: generationImageUrl(id) })),
+    ...images.map((id) => ({ key: id, src: galleryItemImageUrl(id) })),
   ].filter((item) => !failed.has(item.key))
   const current = items[index]
   const viewingGrid = Boolean(current?.key.startsWith('grid-'))
   const genId = viewingGrid ? images[0] : current?.key
-  const genInfo = generations.find((item) => item.id === genId) ?? null
+  const genInfo = gallery.find((item) => item.id === genId) ?? null
   const many = items.length > 1
   const showPreview = busy && Boolean(previewUrl) && !previewFailed
   const ready = Boolean(current?.src && loadedSrc === current.src)
@@ -116,7 +116,7 @@ export function ImageStage({
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
         {showPreview ? (
           <img
-            src={previewUrl}
+            src={previewUrl || undefined}
             alt="Sampling preview"
             className="h-full w-full object-contain"
             onError={() => setPreviewFailed(true)}

@@ -6,12 +6,14 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
+from blombo import model_meta_db
 from blombo.paths import USER
 from blombo import thumbnail_embed, thumbnail_scopes
 
-ROOT = USER / "model_meta"
-THUMBS = ROOT / "thumbnails"
-INDEX = ROOT / "data" / "thumbs.json"
+ROOT = USER / "model_thumbs"
+THUMBS = ROOT
+LEGACY_ROOT = USER / "model_meta" / "thumbnails"
+INDEX = USER / "model_meta" / "data" / "thumbs.json"
 THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 THUMB_MAX = 512
 _FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}
@@ -312,7 +314,8 @@ def migrate() -> None:
     THUMBS.mkdir(parents=True, exist_ok=True)
     if not THUMBS.is_dir():
         return
-    moved = False
+    _move_legacy_root()
+    _migrate_index()
     for kind_dir in list(THUMBS.iterdir()):
         if not kind_dir.is_dir():
             continue
@@ -329,17 +332,40 @@ def migrate() -> None:
             if not ident:
                 continue
             dest = Path(str(thumb_dir(kind_dir.name, ident) / GLOBAL) + ext)
-            if dest.resolve() == path.resolve():
-                continue
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            if dest.exists():
-                path.unlink(missing_ok=True)
-            else:
-                _relocate(path, dest)
+            _relocate(path, dest)
             _prune_empty(path.parent, kind_dir)
-            moved = True
-    if moved or not INDEX.is_file():
-        rebuild_index()
+    rebuild_index()
+
+
+def _move_legacy_root() -> None:
+    if not LEGACY_ROOT.is_dir():
+        return
+    for path in list(LEGACY_ROOT.rglob("*")):
+        if not path.is_file() or path.suffix.lower() not in THUMB_EXTS:
+            continue
+        try:
+            rel = path.relative_to(LEGACY_ROOT)
+        except ValueError:
+            continue
+        _relocate(path, THUMBS / rel)
+    _prune_empty(LEGACY_ROOT, LEGACY_ROOT.parent)
+
+
+def _migrate_index() -> None:
+    if model_meta_db.state("thumb_index_json_migrated") == "1":
+        return
+    data: dict[str, Any] = {}
+    if INDEX.is_file():
+        try:
+            raw = json.loads(INDEX.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            raw = {}
+        if isinstance(raw, dict):
+            data = raw
+        INDEX.unlink(missing_ok=True)
+    if data:
+        _write_index(data)
+    model_meta_db.set_state("thumb_index_json_migrated")
 
 
 def rebuild_index() -> None:
@@ -407,7 +433,15 @@ def _mtime(path: Path | None) -> int:
 
 def _relocate(src: Path, dest: Path) -> None:
     dest.parent.mkdir(parents=True, exist_ok=True)
-    if dest.exists():
+    try:
+        if dest.resolve() == src.resolve():
+            return
+    except OSError:
+        pass
+    if dest.is_dir():
+        dest = dest / src.name
+        dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.is_file():
         src.unlink(missing_ok=True)
         return
     try:
@@ -449,18 +483,11 @@ def _prune_empty(path: Path, stop: Path) -> None:
 
 
 def _load_index() -> dict[str, Any]:
-    if not INDEX.is_file():
-        return {}
-    try:
-        data = json.loads(INDEX.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    return model_meta_db.load_thumb_index()
 
 
 def _write_index(data: dict[str, Any]) -> None:
-    INDEX.parent.mkdir(parents=True, exist_ok=True)
-    INDEX.write_text(json.dumps(data) + "\n", encoding="utf-8")
+    model_meta_db.replace_thumb_index(data)
 
 
 def _ident_index(kind: str, ident: str) -> dict[str, Any]:

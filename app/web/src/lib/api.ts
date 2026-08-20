@@ -32,6 +32,9 @@ export type Job = {
   payload: Record<string, unknown>
   comfy_prompt_id: string | null
   error: string | null
+  gallery_id: string | null
+  gallery_ids: string[]
+  gallery?: JobGalleryItem[]
   generation_id: string | null
   generation_ids: string[]
   has_grid: boolean
@@ -43,7 +46,8 @@ export type Job = {
   job_progress: { value: number; max: number } | null
   has_preview: boolean
   preview_steps: number[]
-  generations?: JobGeneration[]
+  generations?: JobGalleryItem[]
+  legacy_generations?: JobGalleryItem[]
 }
 
 export type JobLora = {
@@ -52,7 +56,7 @@ export type JobLora = {
   hash?: string
 }
 
-export type JobGeneration = {
+export type JobGalleryItem = {
   id: string
   prompt: string
   negative_prompt: string
@@ -66,15 +70,20 @@ export type JobGeneration = {
   sampler: string
   scheduler: string
   loras: JobLora[]
+  workflow: string
+  template_id: string
+  template_name: string
+  template_params: Record<string, unknown>
 }
 
-export type Generation = {
+export type GalleryItem = {
   id: string
-  job_id: string
-  path: string
-  prompt: string
-  negative_prompt: string
+  created_at: string
+  asset_kind?: 'image' | 'interrupted' | 'grid'
 }
+
+export type JobGeneration = JobGalleryItem
+export type Generation = GalleryItem
 
 export type JobRequest = {
   prompt: string
@@ -1154,37 +1163,36 @@ export async function getLatestJob(): Promise<Job | null> {
   return data.job
 }
 
-export async function listGenerations(): Promise<{ id: string; created_at: string }[]> {
-  const res = await fetch(api('/generations'))
+export async function listGalleryItems(): Promise<GalleryItem[]> {
+  const res = await fetch(api('/gallery/items'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  const data = (await res.json()) as { generations?: { id: string; created_at: string }[] }
-  return data.generations ?? []
+  const data = (await res.json()) as { items?: GalleryItem[] }
+  return data.items ?? []
 }
 
-export async function getLatestGeneration(): Promise<Generation | null> {
-  const res = await fetch(api('/generations/latest'))
+export async function getLatestGalleryItem(): Promise<GalleryItem | null> {
+  const res = await fetch(api('/gallery/items/latest'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  const data = (await res.json()) as { generation: Generation | null }
-  return data.generation
+  const data = (await res.json()) as { item: GalleryItem | null }
+  return data.item
 }
 
-export function generationImageUrl(id: string): string {
-  if (id.startsWith('disk:')) {
-    return api(`/gallery/disk/${id.slice(5)}/image`)
-  }
-  return api(`/generations/${id}/image`)
+export function galleryItemImageUrl(id: string): string {
+  return api(`/gallery/items/${encodeURIComponent(id)}/image`)
 }
 
-export function generationThumbUrl(id: string): string {
-  if (id.startsWith('disk:')) {
-    return api(`/gallery/disk/${id.slice(5)}/thumb`)
-  }
-  return api(`/generations/${id}/thumb`)
+export function galleryItemThumbUrl(id: string): string {
+  return api(`/gallery/items/${encodeURIComponent(id)}/thumb`)
 }
+
+export const listGenerations = listGalleryItems
+export const getLatestGeneration = getLatestGalleryItem
+export const generationImageUrl = galleryItemImageUrl
+export const generationThumbUrl = galleryItemThumbUrl
 
 export function jobGridUrl(jobId: string, index = 0): string {
   return api(`/jobs/${jobId}/grid/${index}`)

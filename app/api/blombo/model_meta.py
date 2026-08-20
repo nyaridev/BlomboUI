@@ -5,7 +5,7 @@ import math
 import time
 from pathlib import Path
 
-from blombo import model_thumbs
+from blombo import model_meta_db, model_thumbs
 from blombo.paths import USER
 
 OPTIONS = (
@@ -109,31 +109,48 @@ def _migrate() -> None:
     global _migrated
     if _migrated:
         return
-    DATA.mkdir(parents=True, exist_ok=True)
-    THUMBS.mkdir(parents=True, exist_ok=True)
+    model_meta_db.connect()
     model_thumbs.migrate()
-    if ROOT.is_dir():
-        keep = {"data", "thumbnails", ".gitkeep"}
-        for path in list(ROOT.iterdir()):
-            if path.name in keep:
+    if model_meta_db.state("info_json_migrated") != "1":
+        for kind in ("checkpoints", "loras", "vae", "controlnet", "embeddings", "wildcards"):
+            if model_meta_db.query_one("SELECT 1 FROM model_info WHERE kind = ? LIMIT 1", (kind,)):
                 continue
-            if path.is_file() and path.suffix.lower() == ".json":
-                dest = DATA / path.name
-            elif path.is_dir():
-                dest = THUMBS / path.name
-            else:
-                continue
-            if dest.exists():
+            source = next((path for path in (*_info_file_candidates(kind),) if path.is_file()), None)
+            if not source:
                 continue
             try:
-                path.rename(dest)
-            except OSError:
+                raw = json.loads(source.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
                 continue
+            if not isinstance(raw, dict):
+                continue
+            data: dict[str, dict] = {}
+            for key, value in raw.items():
+                ident = _ident(str(key))
+                if ident:
+                    row = _row(value)
+                    if row != _blank_row():
+                        data[ident] = row
+            model_meta_db.replace_info(kind, data)
+            source.unlink(missing_ok=True)
+        model_meta_db.set_state("info_json_migrated")
     _migrated = True
+
+
+def migrate() -> None:
+    _migrate()
 
 
 def _info_file(kind: str) -> Path:
     return DATA / f"{kind}.json"
+
+
+def _info_file_candidates(kind: str) -> tuple[Path, ...]:
+    return (
+        _info_file(kind),
+        ROOT / f"{kind}.json",
+        USER / "model_types" / f"{kind}.json",
+    )
 
 
 def _legacy_info_files(kind: str) -> tuple[Path, Path]:
@@ -205,63 +222,12 @@ def _row(raw: object) -> dict:
 
 def _load(kind: str) -> dict[str, dict]:
     _migrate()
-    for path in (_info_file(kind), *_legacy_info_files(kind)):
-        if not path.is_file():
-            continue
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {}
-        if not isinstance(data, dict):
-            return {}
-        out: dict[str, dict] = {}
-        for key, raw in data.items():
-            ident = _ident(str(key))
-            if not ident:
-                continue
-            row = _row(raw)
-            if (
-                row["types"]
-                or row["modified"]
-                or row["prompt"]
-                or row["negative_prompt"]
-                or row["notes"]
-                or row["slider"]
-                or row["strength"] != 1.0
-            ):
-                out[ident] = row
-        return out
-    return {}
+    return model_meta_db.load_info(kind)
 
 
 def _write(kind: str, data: dict[str, dict]) -> None:
     _migrate()
-    path = _info_file(kind)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    packed: dict[str, dict] = {}
-    for key, row in data.items():
-        out: dict = {}
-        if row.get("types"):
-            out["types"] = row["types"]
-        if row.get("modified"):
-            out["modified"] = int(row["modified"])
-        if str(row.get("prompt") or "").strip():
-            out["prompt"] = str(row["prompt"])
-        if str(row.get("negative_prompt") or "").strip():
-            out["negative_prompt"] = str(row["negative_prompt"])
-        if str(row.get("notes") or "").strip():
-            out["notes"] = str(row["notes"])
-        if row.get("slider"):
-            out["slider"] = True
-        try:
-            strength = float(row.get("strength") if row.get("strength") is not None else 1)
-        except (TypeError, ValueError):
-            strength = 1.0
-        if strength != 1.0:
-            out["strength"] = strength
-        if out:
-            packed[key] = out
-    path.write_text(json.dumps(packed, indent=2) + "\n", encoding="utf-8")
+    model_meta_db.replace_info(kind, data)
 
 
 def _name(rel: str) -> str:

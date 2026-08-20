@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from blombo import comfy, db, hashes, pnginfo, settings, tag_complete, templates
+from blombo import comfy, db, gallery_cache, hashes, pnginfo, settings, tag_complete, templates
 from blombo import loras as lora_tags
 from blombo import wildcards as wildcard_tags
 from blombo.paths import comfy_base, comfy_output_root, outputs_root
@@ -32,6 +32,7 @@ DEFAULTS = {
 }
 
 PREVIEW_EVERY = 4
+MAX_STORED_JOBS = 500
 _SEED_AFTER = {"randomize", "fixed", "increment", "decrement"}
 
 
@@ -84,6 +85,32 @@ _NAME_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
+def _prune_jobs() -> None:
+    rows = db.query(
+        "SELECT id FROM jobs WHERE status IN ('completed', 'failed', 'canceled') "
+        "ORDER BY COALESCE(finished_at, created_at) DESC LIMIT ?",
+        (MAX_STORED_JOBS,),
+    )
+    keep = {str(row["id"]) for row in rows}
+    if not keep:
+        return
+    marks = ",".join("?" for _ in keep)
+    db.execute(
+        "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'canceled') "
+        f"AND id NOT IN ({marks})",
+        tuple(keep),
+    )
+
+
+def _record_output(job_id: str, values: dict[str, Any], ident: str, path: Path, kind: str) -> None:
+    outputs = values.setdefault("outputs", [])
+    if not isinstance(outputs, list):
+        outputs = []
+        values["outputs"] = outputs
+    outputs.append({"id": ident, "path": str(path), "kind": kind, "created_at": _now()})
+    db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
 
 
 def _keep_snapshot(step: int, total: int) -> bool:
@@ -223,16 +250,26 @@ def _public_generation(row: Any) -> dict[str, Any]:
         "sampler": str(params.get("sampler") or ""),
         "scheduler": str(params.get("scheduler") or ""),
         "loras": _public_loras(params.get("loras")),
+        "workflow": str(params.get("workflow_id") or params.get("workflow") or ""),
+        "template_id": str(params.get("template_id") or ""),
+        "template_name": str(params.get("template_name") or params.get("template") or ""),
+        "template_params": params.get("template_params")
+        if isinstance(params.get("template_params"), dict)
+        else {},
     }
 
 
 def _row_job(row: Any) -> dict[str, Any]:
     payload = json.loads(row["payload_json"])
-    gens = db.query(
-        "SELECT * FROM generations WHERE job_id = ? ORDER BY created_at ASC",
-        (row["id"],),
-    )
-    public = [_public_generation(item) for item in gens]
+    outputs = payload.get("outputs")
+    outputs = outputs if isinstance(outputs, list) else []
+    public: list[dict[str, Any]] = []
+    for output in outputs:
+        if not isinstance(output, dict):
+            continue
+        item = gallery_cache.output_row(output)
+        if item:
+            public.append(_public_generation(item))
     grid = payload.get("grid_path")
     grids = payload.get("grid_paths")
     paths: list[str] = []
@@ -250,6 +287,9 @@ def _row_job(row: Any) -> dict[str, Any]:
         "generation_id": public[-1]["id"] if public else None,
         "generation_ids": [item["id"] for item in public],
         "generations": public,
+        "gallery_id": public[-1]["id"] if public else None,
+        "gallery_ids": [item["id"] for item in public],
+        "gallery": public,
         "has_grid": bool(paths),
         "grid_count": len(paths),
         "created_at": row["created_at"],
@@ -286,29 +326,21 @@ def interrupt_job(job_id: str, mode: str) -> dict[str, Any] | None:
 
 
 def latest_generation() -> dict[str, Any] | None:
-    row = db.query_one("SELECT * FROM generations ORDER BY created_at DESC LIMIT 1")
+    gallery_cache.sync()
+    row = db.query_one(
+        "SELECT * FROM gallery_items WHERE asset_kind != 'grid' "
+        "ORDER BY created_at DESC LIMIT 1"
+    )
     if not row:
         return None
     return dict(row)
 
 
 def list_generations(limit: int = 200, hide_interrupted: bool = False) -> list[dict[str, Any]]:
-    cap = max(1, min(200, int(limit)))
-    fetch = min(800, cap * 4) if hide_interrupted else cap
-    rows = db.query(
-        "SELECT id, created_at, path, params_json FROM generations ORDER BY created_at DESC LIMIT ?",
-        (fetch,),
-    )
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        if not Path(row["path"]).is_file():
-            continue
-        if hide_interrupted and _is_interrupted(row["path"], row["params_json"]):
-            continue
-        out.append({"id": row["id"], "created_at": row["created_at"]})
-        if len(out) >= cap:
-            break
-    return out
+    return [
+        {"id": row["id"], "created_at": row["created_at"]}
+        for row in gallery_cache.list_rows(limit, hide_interrupted)
+    ]
 
 
 def _is_interrupted(path: str, params_json: str | None = None) -> bool:
@@ -329,6 +361,8 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
             f"ComfyUI is not running on {comfy_base()}.",
         )
     values = {**DEFAULTS, **{k: v for k, v in body.items() if v is not None}}
+    values["workflow_id"] = str(values.get("workflow") or DEFAULTS["workflow"])
+    values["template_id"] = str(values.get("template") or DEFAULTS["template"])
     seed = int(values["seed"])
     if seed < 0:
         seed = random.randint(0, 2**53 - 1)
@@ -344,8 +378,11 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values["save_interrupted"] = bool(values.get("save_interrupted", True))
     values["interrupted_in_grid"] = bool(values.get("interrupted_in_grid", False))
     values["template"] = _template_name(values)
+    values["template_name"] = values["template"]
+    values["template_params"] = _template_snapshot(values)["params"]
     values["prompt"] = str(body.get("prompt") or "")
     values["negative_prompt"] = str(body.get("negative_prompt") or "")
+    values["outputs"] = []
     lora_tags.apply(values)
     job_id = str(uuid.uuid4())
     db.execute(
@@ -358,6 +395,7 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     with _live_lock:
         _live.clear()
         _live[job_id] = LiveJob(int(values["steps"]), _batch_plan(values)[0])
+    _prune_jobs()
     task = asyncio.create_task(run_job(job_id, values))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -444,22 +482,20 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                     live.preview = None
                     live.snapshots.clear()
             if (skip or canceled) and preview and values.get("save_interrupted", True):
-                gen_id = await asyncio.to_thread(_import_preview, job_id, run_values, preview, graph)
-                path = generation_path(gen_id)
-                if path:
-                    had_image = True
-                    if values.get("interrupted_in_grid", False):
-                        saved.append(path)
+                gen_id, path = await asyncio.to_thread(_import_preview, job_id, run_values, preview, graph)
+                _record_output(job_id, values, gen_id, path, "interrupted")
+                had_image = True
+                if values.get("interrupted_in_grid", False):
+                    saved.append(path)
             if canceled:
                 break
             if skip:
                 continue
             for info in images:
-                gen_id = await asyncio.to_thread(_import_image, job_id, run_values, info, graph)
-                path = generation_path(gen_id)
-                if path:
-                    had_image = True
-                    saved.append(path)
+                gen_id, path = await asyncio.to_thread(_import_image, job_id, run_values, info, graph)
+                _record_output(job_id, values, gen_id, path, "image")
+                had_image = True
+                saved.append(path)
         values["duration_ms"] = int((time.monotonic() - started) * 1000)
         if canceled:
             if saved and values.get("batch_grid_on_cancel", True):
@@ -468,28 +504,33 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 "UPDATE jobs SET status = 'canceled', finished_at = ?, payload_json = ? WHERE id = ?",
                 (_now(), json.dumps(values), job_id),
             )
+            _prune_jobs()
             return
         if not had_image:
             db.execute(
                 "UPDATE jobs SET status = 'canceled', finished_at = ?, payload_json = ? WHERE id = ?",
                 (_now(), json.dumps(values), job_id),
             )
+            _prune_jobs()
             return
         _maybe_grid(job_id, values, saved)
         db.execute(
             "UPDATE jobs SET status = 'completed', finished_at = ?, payload_json = ? WHERE id = ?",
             (_now(), json.dumps(values), job_id),
         )
+        _prune_jobs()
     except comfy.ComfyError as exc:
         db.execute(
             "UPDATE jobs SET status = 'failed', error = ?, finished_at = ? WHERE id = ?",
             (str(exc), _now(), job_id),
         )
+        _prune_jobs()
     except Exception as exc:
         db.execute(
             "UPDATE jobs SET status = 'failed', error = ?, finished_at = ? WHERE id = ?",
             (str(exc), _now(), job_id),
         )
+        _prune_jobs()
 
 
 def _workflow_dir(values: dict[str, Any]) -> str:
@@ -518,7 +559,16 @@ def _model_dir(values: dict[str, Any]) -> str:
 
 
 def _template_name(values: dict[str, Any]) -> str:
-    raw = str(values.get("template") or DEFAULTS["template"]).strip() or str(DEFAULTS["template"])
+    item = _template_entry(values)
+    if item:
+        return _safe_segment(str(item.get("name") or item.get("id") or DEFAULTS["template"]))
+    raw = str(values.get("template_id") or values.get("template") or DEFAULTS["template"]).strip()
+    return _safe_segment(raw or str(DEFAULTS["template"]))
+
+
+def _template_entry(values: dict[str, Any]) -> dict[str, Any] | None:
+    raw = str(values.get("template_id") or values.get("template") or DEFAULTS["template"]).strip()
+    raw = raw or str(DEFAULTS["template"])
     needle = raw.lower()
     try:
         items, _ = templates.list_templates(_workflow_dir(values))
@@ -526,8 +576,20 @@ def _template_name(values: dict[str, Any]) -> str:
         items = []
     for item in items:
         if str(item.get("id") or "").lower() == needle or str(item.get("name") or "").lower() == needle:
-            return _safe_segment(str(item.get("name") or raw))
-    return _safe_segment(raw)
+            return item
+    return None
+
+
+def _template_snapshot(values: dict[str, Any]) -> dict[str, Any]:
+    item = _template_entry(values)
+    if not item:
+        ident = str(values.get("template_id") or values.get("template") or DEFAULTS["template"])
+        return {"id": ident, "name": ident, "params": {}}
+    return {
+        "id": str(item.get("id") or DEFAULTS["template"]),
+        "name": str(item.get("name") or item.get("id") or DEFAULTS["template"]),
+        "params": dict(item.get("params") or {}) if isinstance(item.get("params"), dict) else {},
+    }
 
 
 def _fmt_num(value: Any) -> str:
@@ -753,59 +815,64 @@ def _image_save_opts() -> tuple[str, int, bool, int]:
     return fmt, quality, sidecar, max_kb
 
 
-def _import_image(job_id: str, values: dict[str, Any], info: dict[str, str], graph: dict[str, Any] | None = None) -> str:
+def _import_image(
+    job_id: str, values: dict[str, Any], info: dict[str, str], graph: dict[str, Any] | None = None
+) -> tuple[str, Path]:
     raw = comfy.download_image(info)
-    gen_id = _import_bytes(job_id, values, raw, graph, "images")
+    result = _import_bytes(job_id, values, raw, graph, "images")
     _forget_comfy_file(info)
-    return gen_id
+    return result
 
 
-def _import_preview(job_id: str, values: dict[str, Any], data: bytes, graph: dict[str, Any] | None = None) -> str:
+def _import_preview(
+    job_id: str, values: dict[str, Any], data: bytes, graph: dict[str, Any] | None = None
+) -> tuple[str, Path]:
     return _import_bytes(job_id, values, data, graph, "interrupted")
 
 
 def _import_bytes(
     job_id: str, values: dict[str, Any], raw: bytes, graph: dict[str, Any] | None, kind: str
-) -> str:
+) -> tuple[str, Path]:
     fmt, quality, sidecar, max_kb = _image_save_opts()
-    packed = dict(values)
+    packed = {
+        key: value
+        for key, value in values.items()
+        if key not in {"outputs", "grid_path", "grid_paths", "duration_ms"}
+    }
     if kind == "interrupted":
         packed["interrupted"] = True
-    data = pnginfo.embed(raw, packed, graph, fmt=fmt, quality=quality)
-    root = outputs_root()
     folder = _output_dir(values, kind)
-    gen_id = str(uuid.uuid4())
+    created_at = _now()
+    metadata = {
+        "version": 1,
+        "asset_kind": "interrupted" if kind == "interrupted" else "image",
+        "created_at": created_at,
+        "job_id": job_id,
+        "workflow_id": str(values.get("workflow_id") or values.get("workflow") or ""),
+        "template_id": str(values.get("template_id") or ""),
+        "template_name": str(values.get("template_name") or values.get("template") or ""),
+        "template_params": values.get("template_params")
+        if isinstance(values.get("template_params"), dict)
+        else {},
+        "params": packed,
+    }
+    data = pnginfo.embed(raw, packed, graph, fmt=fmt, quality=quality, metadata=metadata)
     dest = _save_image(folder, data, fmt, packed, kind)
     if sidecar and fmt != "jpg" and dest.stat().st_size > max_kb * 1024:
         try:
-            jpeg = pnginfo.embed(raw, packed, graph, fmt="jpg", quality=quality)
+            jpeg = pnginfo.embed(
+                raw,
+                packed,
+                graph,
+                fmt="jpg",
+                quality=quality,
+                metadata={**metadata, "sidecar": True, "sidecar_for": str(dest)},
+            )
             with _save_lock:
                 dest.with_suffix(".jpg").write_bytes(jpeg)
         except Exception:
             pass
-    db.execute(
-        """
-        INSERT INTO generations (
-            id, job_id, path, root, width, height, seed, checkpoint_name,
-            prompt, negative_prompt, params_json, created_at, favorite
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)
-        """,
-        (
-            gen_id,
-            job_id,
-            str(dest),
-            str(root),
-            int(packed["width"]),
-            int(packed["height"]),
-            int(packed["seed"]),
-            str(packed["checkpoint"]),
-            str(packed.get("prompt") or ""),
-            str(packed.get("negative_prompt") or ""),
-            json.dumps(packed),
-            _now(),
-        ),
-    )
-    return gen_id
+    return gallery_cache.item_id(dest), dest
 
 
 def _save_image(folder: Path, data: bytes, ext: str, values: dict[str, Any], kind: str) -> Path:
@@ -816,7 +883,9 @@ def _save_image(folder: Path, data: bytes, ext: str, values: dict[str, Any], kin
 
 
 def _grid_values(first: Path, job_values: dict[str, Any]) -> dict[str, Any]:
-    row = db.query_one("SELECT params_json FROM generations WHERE path = ?", (str(first),))
+    row = gallery_cache.row_for_path(str(first))
+    if not row:
+        row = gallery_cache.output_row({"id": gallery_cache.item_id(first), "path": str(first)})
     data: dict[str, Any] = dict(job_values)
     if row:
         try:
@@ -921,8 +990,4 @@ def grid_path(job_id: str, index: int = 0) -> Path | None:
 
 
 def generation_path(gen_id: str) -> Path | None:
-    row = db.query_one("SELECT path FROM generations WHERE id = ?", (gen_id,))
-    if not row:
-        return None
-    path = Path(row["path"])
-    return path if path.is_file() else None
+    return gallery_cache.path_for_id(gen_id)

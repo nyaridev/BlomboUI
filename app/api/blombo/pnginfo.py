@@ -7,6 +7,8 @@ from typing import Any
 
 from blombo.paths import VERSION, outputs_root
 
+BLOMBOUI_KEY = "blomboui"
+
 
 def read(data: bytes, filename: str = "") -> dict[str, Any]:
     from PIL import Image
@@ -18,7 +20,12 @@ def read(data: bytes, filename: str = "") -> dict[str, Any]:
         return {"text": "Could not read image.", "raw": {}}
     texts = _texts(image)
     text = _format(texts) or _from_sidecar(filename)
-    return {"text": text or "No generation metadata found.", "raw": texts}
+    metadata = _json(texts.get(BLOMBOUI_KEY, ""))
+    return {
+        "text": text or "No generation metadata found.",
+        "raw": texts,
+        "metadata": metadata if isinstance(metadata, dict) else {},
+    }
 
 
 def embed(
@@ -27,6 +34,7 @@ def embed(
     graph: dict[str, Any] | None = None,
     fmt: str = "png",
     quality: int = 100,
+    metadata: dict[str, Any] | None = None,
 ) -> bytes:
     from PIL import Image
     from PIL.PngImagePlugin import PngInfo
@@ -45,13 +53,15 @@ def embed(
         info.add_text("parameters", parameters_text(values))
         if graph:
             info.add_text("prompt", json.dumps(graph), zip=True)
+        if metadata:
+            info.add_text(BLOMBOUI_KEY, json.dumps(metadata, ensure_ascii=False), zip=True)
         out = BytesIO()
         image.save(out, format="PNG", pnginfo=info)
         return out.getvalue()
     if fmt == "jpg":
         image = _rgb(image)
     q = max(1, min(100, int(quality)))
-    exif = jpeg_exif(parameters_text(values))
+    exif = jpeg_exif(parameters_text(values), metadata)
     out = BytesIO()
     opts: dict[str, Any] = {"quality": q}
     if exif is not None:
@@ -113,12 +123,18 @@ def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:
     )
 
 
-def jpeg_exif(text: str) -> Any:
+def jpeg_exif(text: str, metadata: dict[str, Any] | None = None) -> Any:
     from PIL import Image
 
     comment = str(text or "").strip()
     if not comment:
         return None
+    if metadata:
+        comment = json.dumps(
+            {"blomboui": metadata, "parameters": comment},
+            ensure_ascii=False,
+            separators=(",", ":"),
+        )
     exif = Image.Exif()
     payload = b"UNICODE\x00" + comment.encode("utf-16")
     if len(payload) > 60000:
@@ -146,6 +162,12 @@ def _texts(image: Any) -> dict[str, str]:
     comment = _exif_comment(image)
     if comment:
         out.setdefault("UserComment", comment)
+        envelope = _json(comment)
+        if isinstance(envelope, dict) and isinstance(envelope.get(BLOMBOUI_KEY), dict):
+            out[BLOMBOUI_KEY] = json.dumps(envelope[BLOMBOUI_KEY], ensure_ascii=False)
+            params = envelope.get("parameters")
+            if isinstance(params, str) and params.strip():
+                out.setdefault("parameters", params)
     return out
 
 
@@ -411,3 +433,77 @@ def _json(raw: str) -> Any:
         return json.loads(raw)
     except json.JSONDecodeError:
         return None
+
+
+def parse_parameters(text: str) -> dict[str, Any]:
+    lines = str(text or "").replace("\r\n", "\n").split("\n")
+    prompt: list[str] = []
+    negative: list[str] = []
+    index = 0
+    while index < len(lines) and not lines[index].lower().startswith(
+        ("negative prompt:", "steps:", "generated using ")
+    ):
+        prompt.append(lines[index])
+        index += 1
+    if index < len(lines) and lines[index].lower().startswith("negative prompt:"):
+        negative.append(lines[index].split(":", 1)[1].strip())
+        index += 1
+        while index < len(lines) and not lines[index].lower().startswith(("steps:", "generated using ")):
+            negative.append(lines[index])
+            index += 1
+    out: dict[str, Any] = {}
+    prompt_text = "\n".join(prompt).strip()
+    negative_text = "\n".join(negative).strip()
+    if prompt_text:
+        out["prompt"] = prompt_text
+    if negative_text:
+        out["negative_prompt"] = negative_text
+    if index >= len(lines) or not lines[index].lower().startswith("steps:"):
+        return out
+
+    fields: dict[str, str] = {}
+    for chunk in lines[index][len("Steps:") :].split(", "):
+        if ":" not in chunk:
+            continue
+        key, value = chunk.split(":", 1)
+        fields[key.strip().lower()] = value.strip()
+
+    def number(key: str) -> int | float | None:
+        raw = fields.get(key)
+        if not raw:
+            return None
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return int(value) if value.is_integer() else value
+
+    mapping = {
+        "sampler": "sampler",
+        "scheduler": "scheduler",
+        "model": "checkpoint",
+        "model hash": "model_hash",
+        "autov1": "autov1",
+        "autov3": "autov3",
+        "sha256": "sha256",
+    }
+    for source, target in mapping.items():
+        value = fields.get(source)
+        if value:
+            out[target] = value
+    steps = number("steps")
+    seed = number("seed")
+    cfg = number("cfg scale")
+    if steps is not None:
+        out["steps"] = int(steps)
+    if seed is not None:
+        out["seed"] = int(seed)
+    if cfg is not None:
+        out["cfg"] = cfg
+    size = fields.get("size", "").lower().split("x")
+    if len(size) == 2:
+        try:
+            out["width"], out["height"] = int(size[0]), int(size[1])
+        except ValueError:
+            pass
+    return out

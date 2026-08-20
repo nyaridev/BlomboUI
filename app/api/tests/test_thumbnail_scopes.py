@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from blombo import model_thumbs, removed, thumbnail_embed, thumbnail_scopes
+from blombo import db, model_meta_db, model_thumbs, removed, thumbnail_embed, thumbnail_scopes
 
 
 def _png(color=(12, 80, 160)) -> bytes:
@@ -28,6 +28,10 @@ class ScopeTests(unittest.TestCase):
         thumbs = meta / "thumbnails"
         trash = self.tmp / "removed"
         self.patches = [
+            patch.object(db, "_CONN", None),
+            patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
+            patch.object(model_meta_db, "_CONN", None),
+            patch.object(model_meta_db, "db_path", return_value=self.tmp / "model_meta.sqlite"),
             patch.object(thumbnail_scopes, "FILE", meta / "scopes.json"),
             patch.object(model_thumbs, "ROOT", meta),
             patch.object(model_thumbs, "THUMBS", thumbs),
@@ -38,6 +42,12 @@ class ScopeTests(unittest.TestCase):
             item.start()
 
     def tearDown(self) -> None:
+        if db._CONN is not None:
+            db._CONN.close()
+            db._CONN = None
+        if model_meta_db._CONN is not None:
+            model_meta_db._CONN.close()
+            model_meta_db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -70,6 +80,53 @@ class ScopeTests(unittest.TestCase):
         self.assertIn(marin["id"], ids)
         self.assertNotIn(ruby["id"], ids)
         self.assertIn(skirt["id"], ids)
+
+    def test_migrate_json_to_sqlite(self) -> None:
+        source = thumbnail_scopes.FILE
+        source.parent.mkdir(parents=True)
+        source.write_text(
+            json.dumps(
+                {
+                    "scopes": [
+                        {
+                            "id": "aaaaaaaaaaaa",
+                            "name": "Ruby",
+                            "group": "Character",
+                            "required": ["ruby rose"],
+                            "optional": [],
+                            "anyGroups": [["smile", "happy"]],
+                            "exclude": ["outdoors"],
+                            "priority": 2,
+                        }
+                    ]
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        self.assertEqual(thumbnail_scopes.list_scopes()[1]["id"], "aaaaaaaaaaaa")
+        self.assertFalse(source.exists())
+        self.assertTrue((self.tmp / "blombo.sqlite").is_file())
+        self.assertEqual(thumbnail_scopes.get_scope("aaaaaaaaaaaa")["priority"], 2)
+
+    def test_scopes_use_one_sqlite_table(self) -> None:
+        thumbnail_scopes.create_scope(
+            {
+                "name": "Ruby",
+                "required": ["ruby rose"],
+                "anyGroups": [["smile", "happy"]],
+            }
+        )
+
+        tables = {
+            str(row["name"])
+            for row in model_meta_db.query("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+
+        self.assertIn("thumb_scopes", tables)
+        self.assertNotIn("scopes", tables)
+        self.assertNotIn("scope_tags", tables)
+        self.assertNotIn("scope_any_tags", tables)
 
     def test_rank_tags_optional_then_required(self) -> None:
         query = {"required": ["ruby rose"], "optional": ["skirt"], "anyGroups": [], "exclude": []}

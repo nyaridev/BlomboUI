@@ -8,6 +8,7 @@ import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
 import { ErrorsScreen } from '../screens/errors/ErrorsScreen.tsx'
 import { getHealth, reloadApp } from '../lib/api.ts'
 import { digitKey, isTyping } from '../lib/hotkeys.ts'
+import { bindSmoothWheel } from '../lib/smoothWheel.ts'
 import { useHealthStore } from '../stores/healthStore.ts'
 import { useIssuesStore } from '../stores/issuesStore.ts'
 import { useModelsStore } from '../stores/modelsStore.ts'
@@ -17,15 +18,14 @@ import { GpuBar } from './GpuBar.tsx'
 import { TemplateBar } from './TemplateBar.tsx'
 import { ToastStack } from './ToastStack.tsx'
 import { WorkflowPicker } from './WorkflowPicker.tsx'
-
-const APP_TABS = ['/', '/file-info', '/gallery', '/models', '/errors', '/settings']
-
-const nav = [
-  { to: '/', label: 'Generate', end: true },
-  { to: '/file-info', label: 'File Info' },
-  { to: '/gallery', label: 'Gallery' },
-  { to: '/models', label: 'Models' },
-]
+import {
+  firstVisiblePath,
+  mainTab,
+  mainTabByPath,
+  mainTabHidden,
+  visibleLeftTabIds,
+  visibleMainTabIds,
+} from './appTabs.ts'
 
 function tabClass(isActive: boolean, extra = '') {
   return [
@@ -60,17 +60,36 @@ export function App() {
   const loadModels = useModelsStore((s) => s.load)
   const loadSettings = useSettingsStore((s) => s.load)
   const theme = useSettingsStore((s) => s.theme)
+  const loaded = useSettingsStore((s) => s.loaded)
+  const hiddenMainTabs = useSettingsStore((s) => s.hiddenMainTabs)
+  const mainTabOrder = useSettingsStore((s) => s.mainTabOrder)
+  const mainTabKeysFollowLayout = useSettingsStore((s) => s.mainTabKeysFollowLayout)
   const comfyOk = health?.comfy.reachable === true
   const comfyMissing = health?.comfy.mode === 'missing'
+  const leftTabs = visibleLeftTabIds(mainTabOrder, hiddenMainTabs)
+  const showErrors = !hiddenMainTabs.includes('Errors')
 
   useEffect(() => {
     window.scrollTo(0, 0)
     mainRef.current?.scrollTo(0, 0)
   }, [])
 
+  useEffect(() => bindSmoothWheel(), [])
+
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
+
+  useEffect(() => {
+    if (!loaded) {
+      return
+    }
+    const tab = mainTabByPath(location.pathname)
+    if (!tab || !mainTabHidden(tab.id, hiddenMainTabs)) {
+      return
+    }
+    navigate(firstVisiblePath(mainTabOrder, hiddenMainTabs), { replace: true })
+  }, [hiddenMainTabs, loaded, location.pathname, mainTabOrder, navigate])
 
   useEffect(() => {
     void refreshHealth()
@@ -88,9 +107,23 @@ export function App() {
         return
       }
       const digit = digitKey(event)
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= APP_TABS.length) {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 6) {
         event.preventDefault()
-        navigate(APP_TABS[digit - 1] || '/')
+        const fixed = ['/', '/file-info', '/gallery', '/models', '/errors', '/settings']
+        const routes = mainTabKeysFollowLayout
+          ? visibleMainTabIds(mainTabOrder, hiddenMainTabs).map((id) => mainTab(id)?.to ?? '/')
+          : fixed
+        const to = routes[digit - 1]
+        if (!to) {
+          return
+        }
+        if (!mainTabKeysFollowLayout) {
+          const tab = mainTabByPath(to)
+          if (tab && mainTabHidden(tab.id, hiddenMainTabs)) {
+            return
+          }
+        }
+        navigate(to)
         return
       }
       if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 'r') {
@@ -109,7 +142,7 @@ export function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [navigate, refreshModels])
+  }, [hiddenMainTabs, mainTabKeysFollowLayout, mainTabOrder, navigate, refreshModels])
 
   async function onReload() {
     if (reloading.current) {
@@ -147,23 +180,31 @@ export function App() {
           </div>
         </div>
         <nav className="flex gap-1 border-b border-line px-2">
-          {nav.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              className={({ isActive }) => tabClass(isActive)}
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {leftTabs.map((id) => {
+            const item = mainTab(id)
+            if (!item) {
+              return null
+            }
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) => tabClass(isActive)}
+              >
+                {item.label}
+              </NavLink>
+            )
+          })}
           <div className="ml-auto flex gap-1">
-            <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center')}>
-              Errors
-              {issueCount > 0 ? (
-                <span className="ml-1.5 rounded-full bg-red-800 px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
-              ) : null}
-            </NavLink>
+            {showErrors ? (
+              <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center')}>
+                Errors
+                {issueCount > 0 ? (
+                  <span className="ml-1.5 rounded-full bg-red-800 px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
+                ) : null}
+              </NavLink>
+            ) : null}
             <NavLink to="/settings" className={({ isActive }) => tabClass(isActive)}>
               Settings
             </NavLink>

@@ -8,11 +8,15 @@ export function TilePreview({
   src,
   mark = '?',
   label,
+  badge,
+  warn = false,
   className = '',
 }: {
   src?: string | null
   mark?: string
   label?: string
+  badge?: string
+  warn?: boolean
   className?: string
 }) {
   const [broken, setBroken] = useState(false)
@@ -46,9 +50,15 @@ export function TilePreview({
           <span className="relative z-10">{mark}</span>
         </>
       )}
+      {warn ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-red-700/40" /> : null}
       {label ? (
         <span className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] text-ink">
           {label}
+        </span>
+      ) : null}
+      {badge ? (
+        <span className="absolute top-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] tabular-nums text-ink">
+          {badge}
         </span>
       ) : null}
     </span>

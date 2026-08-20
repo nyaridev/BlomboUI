@@ -1,8 +1,8 @@
-import { CheckpointField } from '@/components/CheckpointField.tsx'
 import { GalleryView } from '@/components/GalleryView.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { ImageStage } from './ImageStage.tsx'
 import { GenerationParams } from './GenerationParams.tsx'
+import { GenerateModels } from './GenerateModels.tsx'
 import { PromptStack } from './PromptStack.tsx'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -15,15 +15,15 @@ import {
   jobGridUrl,
   type Job,
 } from '@/lib/api.ts'
-import { toggleLoraPrompts } from '@/lib/loraTags.ts'
-import { toggleWildcard } from '@/lib/wildcardTags.ts'
+import { loraNameMatches, parseLoraHits, toggleLoraPrompts } from '@/lib/loraTags.ts'
+import { parseWildcardTags, toggleWildcard, wildcardMatches } from '@/lib/wildcardTags.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { useGenerateStore } from '@/stores/generateStore.ts'
+import { nextSeed, usedSeed, useGenerateStore } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { toast } from '@/stores/toastStore.ts'
-import { GENERATE_TABS, type GenerateTab } from './tabs.ts'
+import { GENERATE_TABS, orderedGenerateTabs, type GenerateTab } from './tabs.ts'
 
 function idsFromJob(job: Job): string[] {
   if (job.generation_ids?.length) {
@@ -33,6 +33,32 @@ function idsFromJob(job: Job): string[] {
     return [job.generation_id]
   }
   return []
+}
+
+function selectedLoraPaths(prompt: string, items: { path: string }[]) {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const hit of parseLoraHits(prompt)) {
+    const item = items.find((row) => loraNameMatches(hit.name, row.path))
+    if (item && !seen.has(item.path)) {
+      seen.add(item.path)
+      out.push(item.path)
+    }
+  }
+  return out
+}
+
+function selectedWildcardPaths(prompt: string, items: { path: string }[]) {
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const hit of parseWildcardTags(prompt)) {
+    const item = items.find((row) => wildcardMatches(row, hit.name))
+    if (item && !seen.has(item.path)) {
+      seen.add(item.path)
+      out.push(item.path)
+    }
+  }
+  return out
 }
 
 function etaSeconds(startedAt: string | null, value: number, max: number): number | null {
@@ -103,12 +129,19 @@ export function GenerateScreen() {
   const steps = useGenerateStore((s) => s.steps)
   const cfg = useGenerateStore((s) => s.cfg)
   const seed = useGenerateStore((s) => s.seed)
+  const seedAfter = useGenerateStore((s) => s.seedAfter)
+  const setSeed = useGenerateStore((s) => s.setSeed)
   const batchSize = useGenerateStore((s) => s.batchSize)
   const batchCount = useGenerateStore((s) => s.batchCount)
   const sampler = useGenerateStore((s) => s.sampler)
   const scheduler = useGenerateStore((s) => s.scheduler)
   const workflow = useGenerateStore((s) => s.workflow)
   const templateId = useGenerateStore((s) => s.templateId) || 'default'
+  const outputImagePath = useGenerateStore((s) => s.outputImagePath)
+  const outputGridPath = useGenerateStore((s) => s.outputGridPath)
+  const outputImageName = useGenerateStore((s) => s.outputImageName)
+  const outputGridName = useGenerateStore((s) => s.outputGridName)
+  const modelTileStyle = useGenerateStore((s) => s.modelTileStyle)
   const setPrompt = useGenerateStore((s) => s.setPrompt)
   const setNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const setCheckpoint = useGenerateStore((s) => s.setCheckpoint)
@@ -117,7 +150,12 @@ export function GenerateScreen() {
   const batchGridQuality = useSettingsStore((s) => s.batchGridQuality)
   const batchGridRows = useSettingsStore((s) => s.batchGridRows)
   const batchGridFill = useSettingsStore((s) => s.batchGridFill)
-  const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs) ?? []
+  const batchGridOnCancel = useSettingsStore((s) => s.batchGridOnCancel)
+  const saveInterrupted = useSettingsStore((s) => s.saveInterrupted)
+  const interruptedInGrid = useSettingsStore((s) => s.interruptedInGrid)
+  const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs)
+  const generateTabOrder = useSettingsStore((s) => s.generateTabOrder)
+  const generateTabKeysFollowLayout = useSettingsStore((s) => s.generateTabKeysFollowLayout)
   const checkpoints = useModelsStore((s) => s.checkpoints)
   const loraItems = useModelsStore((s) => s.loras)
   const wildcardItems = useModelsStore((s) => s.wildcards)
@@ -197,7 +235,14 @@ export function GenerateScreen() {
   }, [busy, job])
 
   async function generate() {
+    if (!checkpoint.trim()) {
+      return
+    }
     setError(null)
+    const used = usedSeed(seed, seedAfter)
+    const previous = seed
+    const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
+    setSeed(nextSeed(used, seedAfter, count))
     try {
       const next = await createJob({
         prompt,
@@ -207,7 +252,8 @@ export function GenerateScreen() {
         height,
         steps,
         cfg: Math.max(1, cfg),
-        seed,
+        seed: used,
+        seed_after: seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
         batch_grid: batchGrid,
@@ -215,14 +261,22 @@ export function GenerateScreen() {
         batch_grid_quality: batchGridQuality,
         batch_grid_rows: batchGridRows,
         batch_grid_fill: batchGridFill,
+        batch_grid_on_cancel: batchGridOnCancel,
+        save_interrupted: saveInterrupted,
+        interrupted_in_grid: interruptedInGrid,
         sampler,
         scheduler,
         workflow,
         template: templateId,
+        output_image_path: outputImagePath.trim() || undefined,
+        output_grid_path: outputGridPath.trim() || undefined,
+        output_image_name: outputImageName.trim() || undefined,
+        output_grid_name: outputGridName.trim() || undefined,
       })
       setJob(next)
       setImageIds([])
     } catch (err) {
+      setSeed(previous)
       setError(err instanceof Error ? err.message : 'Generate failed')
     }
   }
@@ -277,11 +331,14 @@ export function GenerateScreen() {
       }
       const digit = digitKey(event)
       if (event.altKey && !event.ctrlKey && !event.metaKey && digit && digit <= GENERATE_TABS.length) {
-        const id = GENERATE_TABS[digit - 1]
-        if (!id || (id !== 'Generation' && hiddenGenerateTabs.includes(id))) {
+        event.preventDefault()
+        const tabs = generateTabKeysFollowLayout
+          ? orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
+          : GENERATE_TABS
+        const id = tabs[digit - 1]
+        if (!id || (!generateTabKeysFollowLayout && id !== 'Generation' && hiddenGenerateTabs.includes(id))) {
           return
         }
-        event.preventDefault()
         navigate('/')
         setTab(id)
         return
@@ -308,15 +365,16 @@ export function GenerateScreen() {
         void restart()
         return
       }
-      if (!busy) {
+      if (!busy && checkpoint.trim() && health?.comfy.reachable === true) {
         void generate()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, generate, hiddenGenerateTabs, interrupt, navigate, restart])
+  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, restart])
 
   const comfyOk = health?.comfy.reachable === true
+  const canGenerate = comfyOk && Boolean(checkpoint.trim())
   const payload = job?.payload ?? {}
   const missingLoras = Array.isArray(payload.lora_missing)
     ? payload.lora_missing.filter((item): item is string => typeof item === 'string' && Boolean(item))
@@ -350,9 +408,7 @@ export function GenerateScreen() {
       : imageCount > 1
         ? `${formatDuration(seconds)} · ${formatDuration(seconds / imageCount)}/img`
         : formatDuration(seconds)
-  const visibleTabs = GENERATE_TABS.filter(
-    (item) => item === 'Generation' || !hiddenGenerateTabs.includes(item),
-  )
+  const visibleTabs = orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
 
   return (
@@ -363,46 +419,51 @@ export function GenerateScreen() {
         shownTab === 'Generation' ? 'h-full' : '',
       ].join(' ')}
     >
-      <CheckpointField value={checkpoint} onChange={setCheckpoint} refresh />
-      <div className="flex shrink-0 items-stretch gap-3">
-        <PromptStack
-          prompt={prompt}
-          negativePrompt={negativePrompt}
-          onPrompt={setPrompt}
-          onNegative={setNegativePrompt}
-          negativeDisabled={cfg <= 1}
-        />
-        <div className="flex w-80 shrink-0 flex-col gap-2 self-stretch">
-          <button
-            type="button"
-            className="flex-1 rounded bg-generate px-6 text-xl font-semibold text-ink disabled:opacity-40"
-            disabled={busy || !comfyOk}
-            onClick={() => void generate()}
-          >
-            Generate
-          </button>
-          <div className="flex gap-2">
+      <GenerateModels
+        style={modelTileStyle}
+        onOpenTab={setTab}
+        prompt={
+          <PromptStack
+            prompt={prompt}
+            negativePrompt={negativePrompt}
+            onPrompt={setPrompt}
+            onNegative={setNegativePrompt}
+            negativeDisabled={cfg <= 1}
+          />
+        }
+        actions={
+          <div className="flex w-80 shrink-0 flex-col gap-2 self-stretch">
             <button
               type="button"
-              className="flex-1 rounded bg-muted px-3 py-2.5 text-sm font-semibold text-ink disabled:opacity-40"
-              disabled={!busy}
-              title="Skip current image"
-              onClick={() => void interrupt('skip')}
+              className="flex-1 rounded bg-generate px-6 text-xl font-semibold text-ink disabled:opacity-40"
+              disabled={busy || !canGenerate}
+              onClick={() => void generate()}
             >
-              Interrupt
+              Generate
             </button>
-            <button
-              type="button"
-              className="flex-1 rounded bg-red-800 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-red-700 disabled:opacity-40 disabled:hover:bg-red-800"
-              disabled={!busy}
-              title="Cancel remaining jobs"
-              onClick={() => void interrupt('cancel')}
-            >
-              Cancel
-            </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                className="flex-1 rounded bg-muted px-3 py-2.5 text-sm font-semibold text-ink disabled:opacity-40"
+                disabled={!busy}
+                title="Skip current image"
+                onClick={() => void interrupt('skip')}
+              >
+                Interrupt
+              </button>
+              <button
+                type="button"
+                className="flex-1 rounded bg-red-800 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-red-700 disabled:opacity-40 disabled:hover:bg-red-800"
+                disabled={!busy}
+                title="Cancel remaining jobs"
+                onClick={() => void interrupt('cancel')}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div
         className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'flex-1' : ''].join(' ')}
@@ -436,7 +497,10 @@ export function GenerateScreen() {
                 error={error}
                 warning={warning}
                 comfyOk={comfyOk}
-                lastSeed={typeof payload.seed === 'number' ? payload.seed : null}
+                lastSeed={
+                  [...(job?.generations ?? [])].reverse().find((item) => typeof item.seed === 'number')?.seed ??
+                  (typeof payload.seed === 'number' ? payload.seed : null)
+                }
               />
             </div>
             <PaneSplitter
@@ -480,9 +544,10 @@ export function GenerateScreen() {
               <GalleryView
                 kind="loras"
                 items={loraItems}
+                selected={selectedLoraPaths(prompt, loraItems)}
                 onSelect={(path) => {
                   const item = loraItems.find((row) => row.path === path)
-                  const next = toggleLoraPrompts(prompt, negativePrompt, path, item?.prompt || '')
+                  const next = toggleLoraPrompts(prompt, negativePrompt, path, item?.prompt || '', '', item?.strength ?? 1)
                   setPrompt(next.prompt)
                   setNegativePrompt(next.negativePrompt)
                 }}
@@ -494,6 +559,7 @@ export function GenerateScreen() {
               <GalleryView
                 kind="wildcards"
                 items={wildcardItems}
+                selected={selectedWildcardPaths(prompt, wildcardItems)}
                 onSelect={(path) => {
                   const item = wildcardItems.find((row) => row.path === path)
                   if (item) {

@@ -18,7 +18,11 @@ type ModelsState = ModelLists & {
   refresh: () => Promise<void>
   refreshKind: (kind: keyof ModelLists) => Promise<void>
   setThumb: (kind: keyof ModelLists, path: string, thumb: number) => void
-  setMeta: (kind: keyof ModelLists, path: string, meta: { prompt?: string; negative_prompt?: string }) => void
+  setMeta: (
+    kind: keyof ModelLists,
+    path: string,
+    meta: { prompt?: string; negative_prompt?: string; notes?: string; strength?: number; slider?: boolean },
+  ) => void
 }
 
 function asEntry(item: unknown): ModelEntry | null {
@@ -36,6 +40,9 @@ function asEntry(item: unknown): ModelEntry | null {
         thumb: Number(row.thumb) || 0,
         prompt: typeof row.prompt === 'string' ? row.prompt : '',
         negative_prompt: typeof row.negative_prompt === 'string' ? row.negative_prompt : '',
+        notes: typeof row.notes === 'string' ? row.notes : '',
+        strength: Number.isFinite(Number(row.strength)) ? Number(row.strength) : 1,
+        slider: Boolean(row.slider),
         label: typeof row.label === 'string' ? row.label : '',
         tag: typeof row.tag === 'string' ? row.tag : '',
         source: typeof row.source === 'string' ? row.source : '',

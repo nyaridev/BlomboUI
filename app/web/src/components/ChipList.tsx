@@ -5,9 +5,10 @@ type ChipListProps = {
   onChange: (value: string[]) => void
   onChipClick?: () => void
   children?: ReactNode
+  removable?: boolean
 }
 
-export function ChipList({ value, onChange, onChipClick, children }: ChipListProps) {
+export function ChipList({ value, onChange, onChipClick, children, removable = true }: ChipListProps) {
   const [drag, setDrag] = useState<number | null>(null)
   const [slot, setSlot] = useState<number | null>(null)
 
@@ -80,17 +81,19 @@ export function ChipList({ value, onChange, onChipClick, children }: ChipListPro
             onDragEnd={clearDrag}
           >
             {item}
-            <button
-              type="button"
-              className="px-0.5 text-sm leading-none text-muted hover:text-ink"
-              aria-label={`Remove ${item}`}
-              onClick={(event) => {
-                event.stopPropagation()
-                remove(item)
-              }}
-            >
-              ×
-            </button>
+            {removable ? (
+              <button
+                type="button"
+                className="px-0.5 text-sm leading-none text-muted hover:text-ink"
+                aria-label={`Remove ${item}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  remove(item)
+                }}
+              >
+                ×
+              </button>
+            ) : null}
           </span>
         </Fragment>
       ))}

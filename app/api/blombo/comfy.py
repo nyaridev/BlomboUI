@@ -303,6 +303,9 @@ def fill_txt2img(values: dict[str, Any]) -> dict[str, Any]:
             inputs["width"] = int(values["width"])
             inputs["height"] = int(values["height"])
             inputs["batch_size"] = max(1, int(values.get("batch_size") or 1))
+        elif kind == "SaveImage":
+            prefix = str(values.get("filename_prefix") or "").strip() or "blombo"
+            inputs["filename_prefix"] = prefix
         elif kind == "Power Lora Loader (rgthree)":
             _fill_power_loras(inputs, values)
     latent = graph.get("7")

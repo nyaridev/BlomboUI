@@ -32,6 +32,30 @@ DEFAULTS = {
 }
 
 PREVIEW_EVERY = 4
+_SEED_AFTER = {"randomize", "fixed", "increment", "decrement"}
+
+
+def _seed_after(values: dict[str, Any]) -> str:
+    mode = str(values.get("seed_after") or "")
+    return mode if mode in _SEED_AFTER else "increment"
+
+
+def _batch_plan(values: dict[str, Any]) -> tuple[int, int]:
+    count = max(1, int(values.get("batch_count") or 1))
+    size = max(1, int(values.get("batch_size") or 1))
+    if _seed_after(values) in {"randomize", "fixed"}:
+        return count * size, 1
+    return count, size
+
+
+def _run_seed(mode: str, base: int, index: int) -> int:
+    if mode == "randomize":
+        return base if index == 0 else random.randint(0, 2**53 - 1)
+    if mode == "fixed":
+        return base
+    if mode == "decrement":
+        return base - index
+    return base + index
 
 
 class LiveJob:
@@ -51,9 +75,11 @@ _live_lock = threading.Lock()
 _save_lock = threading.Lock()
 _tasks: set[asyncio.Task[None]] = set()
 _SAFE_DIR = re.compile(r"^[A-Za-z0-9._-]+$")
-_BLOMBO_STEM = re.compile(r"^blombo_(\d+)\.[^.]+$", re.I)
 _PATH_TOKEN = re.compile(r"\[([A-Za-z_]+)\]")
 _UNSAFE_SEG = re.compile(r'[<>:"/\\|?*\x00-\x1f]+')
+_LAST_DIGITS = re.compile(r"(\d+)(?!.*\d)")
+_NAME_NUMBER = "___NUM___"
+_NAME_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 
 
 def _now() -> str:
@@ -252,8 +278,6 @@ def interrupt_job(job_id: str, mode: str) -> dict[str, Any] | None:
                 live.cancel = True
             else:
                 live.skip = True
-            live.preview = None
-            live.snapshots.clear()
     try:
         comfy.interrupt()
     except comfy.ComfyError:
@@ -286,6 +310,9 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
     values["batch_grid_rows"] = max(0, min(25, int(values.get("batch_grid_rows") or 0)))
     values["batch_grid_fill"] = bool(values.get("batch_grid_fill", False))
+    values["batch_grid_on_cancel"] = bool(values.get("batch_grid_on_cancel", True))
+    values["save_interrupted"] = bool(values.get("save_interrupted", True))
+    values["interrupted_in_grid"] = bool(values.get("interrupted_in_grid", True))
     values["template"] = _template_name(values)
     values["prompt"] = str(body.get("prompt") or "")
     values["negative_prompt"] = str(body.get("negative_prompt") or "")
@@ -300,7 +327,7 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     )
     with _live_lock:
         _live.clear()
-        _live[job_id] = LiveJob(int(values["steps"]), int(values["batch_count"]))
+        _live[job_id] = LiveJob(int(values["steps"]), _batch_plan(values)[0])
     task = asyncio.create_task(run_job(job_id, values))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
@@ -311,10 +338,12 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
 
 async def run_job(job_id: str, values: dict[str, Any]) -> None:
     try:
-        batch_count = int(values["batch_count"])
+        mode = _seed_after(values)
+        batch_count, batch_size = _batch_plan(values)
         base_seed = int(values["seed"])
         prompt_id = ""
         saved: list[Path] = []
+        had_image = False
         started = time.monotonic()
         canceled = False
         missing_wildcards: list[str] = []
@@ -332,7 +361,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                     live.batch_i = i
                     live.value = 0
 
-            run_values = {**values, "seed": base_seed + i}
+            run_values = {**values, "seed": _run_seed(mode, base_seed, i), "batch_size": batch_size}
             rng = random.Random(int(run_values["seed"]))
             wildcard_tags.apply(run_values, rng)
             run_values["prompt"] = str(run_values.get("prompt_expanded") or run_values.get("prompt") or "")
@@ -351,7 +380,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             def on_event(event: dict[str, Any], batch_i: int = i) -> None:
                 _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": batch_count})
 
-            graph = comfy.fill_txt2img(run_values)
+            graph = comfy.fill_txt2img({**run_values, "filename_prefix": f"blombo/{job_id}-{i}"})
             _attach_lora_hashes(run_values)
             prompt_id, images = await asyncio.to_thread(
                 comfy.run_prompt,
@@ -366,12 +395,25 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             with _live_lock:
                 live = _live.get(job_id)
                 skip = bool(live and live.skip)
+                preview = b""
+                if live:
+                    if live.preview:
+                        preview = bytes(live.preview)
+                    elif live.snapshots:
+                        preview = bytes(live.snapshots[max(live.snapshots)])
                 if live and live.cancel:
                     canceled = True
                 if live and (skip or canceled):
                     live.skip = False
                     live.preview = None
                     live.snapshots.clear()
+            if (skip or canceled) and preview and values.get("save_interrupted", True):
+                gen_id = await asyncio.to_thread(_import_preview, job_id, run_values, preview, graph)
+                path = generation_path(gen_id)
+                if path:
+                    had_image = True
+                    if values.get("interrupted_in_grid", True):
+                        saved.append(path)
             if canceled:
                 break
             if skip:
@@ -380,9 +422,18 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 gen_id = await asyncio.to_thread(_import_image, job_id, run_values, info, graph)
                 path = generation_path(gen_id)
                 if path:
+                    had_image = True
                     saved.append(path)
         values["duration_ms"] = int((time.monotonic() - started) * 1000)
-        if canceled or not saved:
+        if canceled:
+            if saved and values.get("batch_grid_on_cancel", True):
+                _maybe_grid(job_id, values, saved)
+            db.execute(
+                "UPDATE jobs SET status = 'canceled', finished_at = ?, payload_json = ? WHERE id = ?",
+                (_now(), json.dumps(values), job_id),
+            )
+            return
+        if not had_image:
             db.execute(
                 "UPDATE jobs SET status = 'canceled', finished_at = ?, payload_json = ? WHERE id = ?",
                 (_now(), json.dumps(values), job_id),
@@ -531,41 +582,168 @@ def _expand_path(template: str, values: dict[str, Any], fallback: str) -> Path:
 def _output_dir(values: dict[str, Any], kind: str) -> Path:
     cfg = settings.load()
     if kind == "grids":
-        template = str(cfg.get("gridPath") or settings.GRID_PATH_DEFAULT)
+        override = str(values.get("output_grid_path") or "").strip()
+        template = override or str(cfg.get("gridPath") or settings.GRID_PATH_DEFAULT)
         fallback = settings.GRID_PATH_DEFAULT
+    elif kind == "interrupted":
+        override = str(values.get("output_interrupted_path") or "").strip()
+        template = override or str(cfg.get("interruptedPath") or settings.INTERRUPTED_PATH_DEFAULT)
+        fallback = settings.INTERRUPTED_PATH_DEFAULT
     else:
-        template = str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
+        override = str(values.get("output_image_path") or "").strip()
+        template = override or str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
         fallback = settings.IMAGE_PATH_DEFAULT
     return _expand_path(template, values, fallback)
 
 
-def _blombo_index(path: Path) -> int:
-    match = _BLOMBO_STEM.match(path.name)
+def _strip_name_ext(text: str) -> str:
+    lower = text.lower()
+    for ext in _NAME_EXTS:
+        if lower.endswith(ext):
+            return text[: -len(ext)]
+    return text
+
+
+def _name_template(values: dict[str, Any], kind: str) -> tuple[str, str]:
+    cfg = settings.load()
+    if kind == "grids":
+        override = str(values.get("output_grid_name") or "").strip()
+        raw = override or str(cfg.get("gridName") or settings.GRID_NAME_DEFAULT)
+        fallback = settings.GRID_NAME_DEFAULT
+    else:
+        override = str(values.get("output_image_name") or "").strip()
+        raw = override or str(cfg.get("imageName") or settings.IMAGE_NAME_DEFAULT)
+        fallback = settings.IMAGE_NAME_DEFAULT
+    return _strip_name_ext(raw) or fallback, fallback
+
+
+def _name_parts(template: str, values: dict[str, Any], now: datetime) -> list[str]:
+    def repl(match: re.Match[str]) -> str:
+        if match.group(1).lower() == "number":
+            return _NAME_NUMBER
+        return _token_value(match.group(1), values, now)
+
+    filled = _PATH_TOKEN.sub(repl, template)
+    return [_UNSAFE_SEG.sub("_", part) for part in filled.split(_NAME_NUMBER)]
+
+
+def _join_name(parts: list[str], number: int | None) -> str:
+    if len(parts) == 1 or number is None:
+        stem = parts[0] if len(parts) == 1 else "".join(parts)
+    else:
+        stem = f"{number:06d}".join(parts)
+    stem = re.sub(r"\s+", "_", stem).strip(" .")
+    if not stem or stem in {".", ".."}:
+        return "blombo"
+    return stem[:120]
+
+
+def _max_named(folder: Path, parts: list[str], ext: str) -> int:
+    if len(parts) != 2:
+        return 0
+    prefix, suffix = parts
+    n = 0
+    suffixes = {f".{ext.lower()}"}
+    if ext.lower() == "jpg":
+        suffixes.add(".jpeg")
+    try:
+        names = list(folder.iterdir())
+    except OSError:
+        return 0
+    for path in names:
+        if not path.is_file() or path.suffix.lower() not in suffixes:
+            continue
+        stem = path.stem
+        if prefix and not stem.startswith(prefix):
+            continue
+        if suffix and not stem.endswith(suffix):
+            continue
+        mid = stem[len(prefix) : len(stem) - len(suffix) if suffix else len(stem)]
+        if mid.isdigit():
+            n = max(n, int(mid))
+    return n
+
+
+def _file_index(path: Path) -> int:
+    match = _LAST_DIGITS.search(path.stem)
     return int(match.group(1)) if match else 0
 
 
-def _alloc_blombo(folder: Path, ext: str, start: int = 0) -> Path:
-    n = start
-    for path in folder.glob(f"blombo_*.{ext}"):
-        n = max(n, _blombo_index(path))
+def _alloc_named(folder: Path, ext: str, values: dict[str, Any], kind: str, start: int = 0) -> Path:
+    template, fallback = _name_template(values, kind)
+    now = datetime.now()
+    parts = _name_parts(template, values, now)
+    if not _join_name(parts, 1 if len(parts) > 1 else None).strip("._") and template != fallback:
+        parts = _name_parts(fallback, values, now)
+    if len(parts) == 1:
+        stem = _join_name(parts, None)
+        dest = folder / f"{stem}.{ext}"
+        if not dest.exists():
+            return dest
+        n = 1
+        while True:
+            n += 1
+            dest = folder / f"{stem}_{n}.{ext}"
+            if not dest.exists():
+                return dest
+    n = max(start, _max_named(folder, parts, ext))
     if start > 0:
-        dest = folder / f"blombo_{start:06d}.{ext}"
+        dest = folder / f"{_join_name(parts, start)}.{ext}"
         if not dest.exists():
             return dest
     while True:
         n += 1
-        dest = folder / f"blombo_{n:06d}.{ext}"
+        dest = folder / f"{_join_name(parts, n)}.{ext}"
         if not dest.exists():
             return dest
 
 
+def _image_save_opts() -> tuple[str, int, bool, int]:
+    cfg = settings.load()
+    fmt = str(cfg.get("imageFormat") or "png").lower()
+    if fmt == "jpeg":
+        fmt = "jpg"
+    if fmt not in {"png", "jpg", "webp"}:
+        fmt = "png"
+    try:
+        quality = max(1, min(100, int(cfg.get("imageQuality") or 100)))
+    except (TypeError, ValueError):
+        quality = 100
+    sidecar = bool(cfg.get("saveLargeAsJpeg", False))
+    try:
+        max_kb = max(256, min(65536, int(cfg.get("largeJpegMaxKb") or 4096)))
+    except (TypeError, ValueError):
+        max_kb = 4096
+    return fmt, quality, sidecar, max_kb
+
+
 def _import_image(job_id: str, values: dict[str, Any], info: dict[str, str], graph: dict[str, Any] | None = None) -> str:
-    data = pnginfo.embed(comfy.download_image(info), values, graph)
-    root = outputs_root()
-    folder = _output_dir(values, "images")
-    gen_id = str(uuid.uuid4())
-    png = _save_png(folder, data)
+    raw = comfy.download_image(info)
+    gen_id = _import_bytes(job_id, values, raw, graph, "images")
     _forget_comfy_file(info)
+    return gen_id
+
+
+def _import_preview(job_id: str, values: dict[str, Any], data: bytes, graph: dict[str, Any] | None = None) -> str:
+    return _import_bytes(job_id, values, data, graph, "interrupted")
+
+
+def _import_bytes(
+    job_id: str, values: dict[str, Any], raw: bytes, graph: dict[str, Any] | None, kind: str
+) -> str:
+    fmt, quality, sidecar, max_kb = _image_save_opts()
+    data = pnginfo.embed(raw, values, graph, fmt=fmt, quality=quality)
+    root = outputs_root()
+    folder = _output_dir(values, kind)
+    gen_id = str(uuid.uuid4())
+    dest = _save_image(folder, data, fmt, values, kind)
+    if sidecar and fmt != "jpg" and dest.stat().st_size > max_kb * 1024:
+        try:
+            jpeg = pnginfo.embed(raw, values, graph, fmt="jpg", quality=quality)
+            with _save_lock:
+                dest.with_suffix(".jpg").write_bytes(jpeg)
+        except Exception:
+            pass
     db.execute(
         """
         INSERT INTO generations (
@@ -576,7 +754,7 @@ def _import_image(job_id: str, values: dict[str, Any], info: dict[str, str], gra
         (
             gen_id,
             job_id,
-            str(png),
+            str(dest),
             str(root),
             int(values["width"]),
             int(values["height"]),
@@ -591,9 +769,9 @@ def _import_image(job_id: str, values: dict[str, Any], info: dict[str, str], gra
     return gen_id
 
 
-def _save_png(folder: Path, data: bytes) -> Path:
+def _save_image(folder: Path, data: bytes, ext: str, values: dict[str, Any], kind: str) -> Path:
     with _save_lock:
-        dest = _alloc_blombo(folder, "png")
+        dest = _alloc_named(folder, ext, values, kind)
         dest.write_bytes(data)
         return dest
 
@@ -649,7 +827,7 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
             if len(chunk) < 2:
                 continue
             with _save_lock:
-                dest = _alloc_blombo(folder, "jpg", _blombo_index(chunk[0]))
+                dest = _alloc_named(folder, "jpg", values, "grids", start=_file_index(chunk[0]))
                 save_contact_sheet(
                     chunk,
                     dest,

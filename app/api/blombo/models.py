@@ -132,6 +132,9 @@ def _scan(kind: str, folder: Path, exts: tuple[str, ...]) -> list[dict[str, Any]
         row = info.get(rel) or {}
         item["prompt"] = str(row.get("prompt") or "")
         item["negative_prompt"] = str(row.get("negative_prompt") or "")
+        item["notes"] = str(row.get("notes") or "")
+        item["strength"] = float(row["strength"]) if "strength" in row else 1.0
+        item["slider"] = bool(row.get("slider"))
     items.sort(key=lambda item: str(item.get("tag") or item["path"]).lower())
     return items
 
@@ -175,6 +178,9 @@ def model_info(kind: str, rel: str) -> dict | None:
         "types": info["types"],
         "prompt": info["prompt"],
         "negative_prompt": info["negative_prompt"],
+        "notes": info["notes"],
+        "strength": info["strength"],
+        "slider": info["slider"],
         "type_options": list(model_meta.OPTIONS),
         "thumb": model_meta.thumb_mtime(kind, posix),
     }

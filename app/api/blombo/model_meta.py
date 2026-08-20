@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import time
 from io import BytesIO
 from pathlib import Path
@@ -143,9 +144,42 @@ def _clean_types(raw: object) -> list[str]:
     return seen
 
 
+def _blank_row() -> dict:
+    return {
+        "types": [],
+        "modified": 0,
+        "prompt": "",
+        "negative_prompt": "",
+        "notes": "",
+        "strength": 1.0,
+        "slider": False,
+    }
+
+
+def _strength(raw: object) -> float:
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 1.0
+    if not math.isfinite(value):
+        return 1.0
+    return value
+
+
+def _info_out(row: dict) -> dict[str, object]:
+    return {
+        "types": list(row.get("types") or []),
+        "prompt": str(row.get("prompt") or ""),
+        "negative_prompt": str(row.get("negative_prompt") or ""),
+        "notes": str(row.get("notes") or ""),
+        "strength": _strength(row["strength"]) if "strength" in row else 1.0,
+        "slider": bool(row.get("slider")),
+    }
+
+
 def _row(raw: object) -> dict:
     if isinstance(raw, list):
-        return {"types": _clean_types(raw), "modified": 0, "prompt": "", "negative_prompt": ""}
+        return {**_blank_row(), "types": _clean_types(raw)}
     if isinstance(raw, dict):
         try:
             stamp = int(raw.get("modified") or 0)
@@ -156,8 +190,11 @@ def _row(raw: object) -> dict:
             "modified": max(0, stamp),
             "prompt": str(raw.get("prompt") or ""),
             "negative_prompt": str(raw.get("negative_prompt") or ""),
+            "notes": str(raw.get("notes") or ""),
+            "strength": _strength(raw["strength"]) if "strength" in raw else 1.0,
+            "slider": bool(raw.get("slider")),
         }
-    return {"types": [], "modified": 0, "prompt": "", "negative_prompt": ""}
+    return _blank_row()
 
 
 def _load(kind: str) -> dict[str, dict]:
@@ -177,7 +214,15 @@ def _load(kind: str) -> dict[str, dict]:
             if not ident:
                 continue
             row = _row(raw)
-            if row["types"] or row["modified"] or row["prompt"] or row["negative_prompt"]:
+            if (
+                row["types"]
+                or row["modified"]
+                or row["prompt"]
+                or row["negative_prompt"]
+                or row["notes"]
+                or row["slider"]
+                or row["strength"] != 1.0
+            ):
                 out[ident] = row
         return out
     return {}
@@ -198,6 +243,16 @@ def _write(kind: str, data: dict[str, dict]) -> None:
             out["prompt"] = str(row["prompt"])
         if str(row.get("negative_prompt") or "").strip():
             out["negative_prompt"] = str(row["negative_prompt"])
+        if str(row.get("notes") or "").strip():
+            out["notes"] = str(row["notes"])
+        if row.get("slider"):
+            out["slider"] = True
+        try:
+            strength = float(row.get("strength") if row.get("strength") is not None else 1)
+        except (TypeError, ValueError):
+            strength = 1.0
+        if strength != 1.0:
+            out["strength"] = strength
         if out:
             packed[key] = out
     path.write_text(json.dumps(packed, indent=2) + "\n", encoding="utf-8")
@@ -218,15 +273,9 @@ def get_types(kind: str, rel: str) -> list[str]:
 
 def get_info(kind: str, rel: str) -> dict[str, object]:
     ident = _ident(rel)
-    empty = {"types": [], "prompt": "", "negative_prompt": ""}
     if not ident:
-        return empty
-    row = _load(kind).get(ident) or {}
-    return {
-        "types": list(row.get("types") or []),
-        "prompt": str(row.get("prompt") or ""),
-        "negative_prompt": str(row.get("negative_prompt") or ""),
-    }
+        return _info_out({})
+    return _info_out(_load(kind).get(ident) or {})
 
 
 def all_info(kind: str) -> dict[str, dict]:
@@ -271,26 +320,30 @@ def set_info(
     types: list[str],
     prompt: str | None = None,
     negative_prompt: str | None = None,
+    notes: str | None = None,
+    strength: float | None = None,
+    slider: bool | None = None,
 ) -> dict[str, object]:
     ident = _ident(rel)
-    empty = {"types": [], "prompt": "", "negative_prompt": ""}
     if not ident:
-        return empty
+        return _info_out({})
     data = _load(kind)
-    row = data.get(ident) or {"types": [], "modified": 0, "prompt": "", "negative_prompt": ""}
+    row = data.get(ident) or _blank_row()
     row["types"] = _clean_types(types)
     if prompt is not None:
         row["prompt"] = str(prompt).strip()
     if negative_prompt is not None:
         row["negative_prompt"] = str(negative_prompt).strip()
+    if notes is not None:
+        row["notes"] = str(notes).strip()
+    if strength is not None:
+        row["strength"] = _strength(strength)
+    if slider is not None:
+        row["slider"] = bool(slider)
     row["modified"] = int(time.time())
     data[ident] = row
     _write(kind, data)
-    return {
-        "types": list(row["types"]),
-        "prompt": str(row.get("prompt") or ""),
-        "negative_prompt": str(row.get("negative_prompt") or ""),
-    }
+    return _info_out(row)
 
 
 def _thumb_paths(kind: str, ident: str) -> list[Path]:
@@ -391,12 +444,7 @@ def reconcile(kind: str, present: list[str]) -> None:
         if old == new:
             continue
         if new not in data:
-            data[new] = {
-                "types": list(data[old].get("types", [])),
-                "modified": int(data[old].get("modified") or 0),
-                "prompt": str(data[old].get("prompt") or ""),
-                "negative_prompt": str(data[old].get("negative_prompt") or ""),
-            }
+            data[new] = dict(data[old])
         del data[old]
         changed = True
 

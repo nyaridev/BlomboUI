@@ -1,8 +1,10 @@
 import { Chevron } from '@/components/Chevron.tsx'
+import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { Dialog } from '@/components/Dialog.tsx'
+import { TilePreview } from '@/components/TilePreview.tsx'
 import { getWorkflows, type WorkflowInfo } from '@/lib/api.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
 
 const CATS = [
   { id: 'all', label: 'All' },
@@ -82,6 +84,8 @@ const CAT_ICON = {
   utility: UtilityIcon,
 }
 
+const ICON_BTN = 'flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink'
+
 export function WorkflowPicker() {
   const workflow = useGenerateStore((s) => s.workflow)
   const setWorkflow = useGenerateStore((s) => s.setWorkflow)
@@ -145,82 +149,89 @@ export function WorkflowPicker() {
           <Chevron dir="down" />
         </span>
       </button>
-      {open
-        ? createPortal(
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4"
-              data-overlay
-              onClick={() => setOpen(false)}
-            >
-              <div
-                className="flex h-[min(72vh,38rem)] w-[min(92vw,48rem)] overflow-hidden rounded-md border border-line bg-panel"
-                onClick={(event) => event.stopPropagation()}
-              >
-                <aside className="flex w-[8.5rem] shrink-0 flex-col p-2">
-                  {CATS.map((item) => {
-                    const Icon = CAT_ICON[item.id]
-                    const on = cat === item.id
-                    return (
+      {open ? (
+        <Dialog
+          onClose={() => setOpen(false)}
+          className="flex h-[min(72vh,38rem)] w-[min(92vw,56rem)] min-w-0 flex-col gap-3"
+        >
+          <div className="-mx-3 -mt-3 flex items-center gap-2 border-b border-line px-3 py-2">
+            <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">Workflows</span>
+            <button type="button" className={ICON_BTN} aria-label="Close" onClick={() => setOpen(false)}>
+              <CloseIcon />
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 gap-4">
+            <aside className="flex w-44 shrink-0 flex-col">
+              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+                {CATS.map((item, index) => {
+                  const Icon = CAT_ICON[item.id]
+                  const on = cat === item.id
+                  return (
+                    <div key={item.id} className="shrink-0">
+                      {index === 1 ? <div className="my-1 border-t border-line" /> : null}
                       <button
-                        key={item.id}
                         type="button"
                         className={[
-                          'flex w-full items-center gap-2 rounded px-2 py-2 text-sm',
-                          item.id === 'image' ? 'mt-3' : '',
-                          on ? 'bg-line text-ink' : 'text-muted hover:bg-field hover:text-ink',
+                          'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm',
+                          on ? 'bg-accent text-ink' : 'text-muted hover:bg-line hover:text-ink',
                         ].join(' ')}
                         onClick={() => setCat(item.id)}
                       >
-                        <span className={['shrink-0', on ? 'text-ink' : 'text-muted'].join(' ')}>
+                        <span className="shrink-0">
                           <Icon />
                         </span>
                         {item.label}
                       </button>
-                    )
-                  })}
-                </aside>
-                <div className="flex min-w-0 flex-1 flex-col gap-2 p-2.5">
-                  <div className="relative">
-                    <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
-                      <SearchIcon />
-                    </span>
-                    <input
-                      className="w-full rounded border border-line bg-field py-1 pr-2 pl-7 text-xs text-ink outline-none placeholder:text-muted focus:border-accent"
-                      value={query}
-                      onChange={(e) => setQuery(e.target.value)}
-                      placeholder="Search…"
-                      autoFocus
-                    />
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-y-auto">
-                    {shown.length === 0 ? (
-                      <p className="text-xs text-muted">No workflows.</p>
-                    ) : (
-                      <div className="grid grid-cols-3 gap-3 pb-1">
-                        {shown.map((item) => (
+                    </div>
+                  )
+                })}
+              </div>
+            </aside>
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <div className="relative shrink-0">
+                <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
+                  <SearchIcon />
+                </span>
+                <input
+                  className="w-full rounded border border-line bg-field py-1 pr-2 pl-7 text-xs text-ink outline-none placeholder:text-muted focus:border-accent"
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search…"
+                  autoFocus
+                />
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-2 pr-3">
+                {shown.length === 0 ? (
+                  <p className="text-xs text-muted">No workflows.</p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4 pb-1">
+                    {shown.map((item) => {
+                      const current = item.id === workflow
+                      return (
+                        <div key={item.id} className="min-w-0 p-1.5">
                           <button
-                            key={item.id}
                             type="button"
-                            className="min-w-0 overflow-hidden rounded"
+                            title={item.name}
+                            className={['w-full rounded', current ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : ''].join(' ')}
                             onClick={() => pick(item.id)}
                           >
-                            <span className="relative flex aspect-[2/3] w-full items-center justify-center bg-gradient-to-tr from-bg via-field to-line text-lg text-muted">
-                              ?
-                              <span className="absolute bottom-1.5 left-1.5 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] text-ink">
-                                {item.name}
-                              </span>
-                            </span>
+                            <TilePreview
+                              className="w-full"
+                              mark="?"
+                              label={item.name}
+                              badge={current ? 'current' : undefined}
+                            />
                           </button>
-                        ))}
-                      </div>
-                    )}
+                        </div>
+                      )
+                    })}
                   </div>
-                </div>
+                )}
               </div>
-            </div>,
-            document.body,
-          )
-        : null}
+            </div>
+          </div>
+        </Dialog>
+      ) : null}
     </>
   )
 }

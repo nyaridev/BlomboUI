@@ -1,4 +1,4 @@
-const TAG = /<lora:([^:>]+)(?::(-?\d+(?:\.\d+)?))?>/gi
+const TAG = /<lora:([^:>]+)(?::([^>]*))?>/gi
 
 export function loraStem(path: string) {
   const base = path.replace(/\\/g, '/').split('/').pop() || path
@@ -6,24 +6,69 @@ export function loraStem(path: string) {
 }
 
 export function parseLoraTags(prompt: string) {
-  const out: { name: string; strength: number }[] = []
+  return parseLoraHits(prompt).map(({ name, strength }) => ({ name, strength }))
+}
+
+export function parseLoraHits(prompt: string) {
+  const out: { name: string; strength: number; invalid: boolean; raw: string; start: number; end: number }[] = []
   const re = new RegExp(TAG.source, 'gi')
   let match: RegExpExecArray | null
   while ((match = re.exec(prompt))) {
-    out.push({ name: match[1], strength: match[2] ? Number(match[2]) : 1 })
+    const raw = match[2]
+    const parsed = parseLoraStrength(raw)
+    out.push({
+      name: match[1],
+      strength: parsed.strength,
+      invalid: parsed.invalid,
+      raw: raw ?? '',
+      start: match.index,
+      end: match.index + match[0].length,
+    })
   }
   return out
 }
 
-export function promptHasLora(prompt: string, path: string) {
+function parseLoraStrength(raw: string | undefined) {
+  if (raw == null) {
+    return { strength: 1, invalid: false }
+  }
+  const text = raw.trim()
+  if (!text) {
+    return { strength: 1, invalid: true }
+  }
+  const strength = Number(text)
+  if (!Number.isFinite(strength)) {
+    return { strength: 1, invalid: true }
+  }
+  return { strength, invalid: false }
+}
+
+export function formatLoraStrength(value: number) {
+  if (!Number.isFinite(value)) {
+    return '1'
+  }
+  return String(Number(value.toFixed(2)))
+}
+
+export function storedLoraStrengthLabel(strength?: number, slider?: boolean) {
+  const n = Number.isFinite(Number(strength)) ? Number(strength) : 1
+  if (!slider && Math.abs(n - 1) < 1e-6) {
+    return ''
+  }
+  return formatLoraStrength(n)
+}
+
+export function loraNameMatches(tagName: string, path: string) {
   const stem = loraStem(path).toLowerCase()
   const posix = path.replace(/\\/g, '/').toLowerCase()
   const file = posix.split('/').pop() || posix
   const noExt = posix.replace(/\.[^/.]+$/, '')
-  return parseLoraTags(prompt).some((tag) => {
-    const name = tag.name.replace(/\\/g, '/').toLowerCase()
-    return name === stem || name === posix || name === file || name === noExt
-  })
+  const name = tagName.replace(/\\/g, '/').toLowerCase()
+  return name === stem || name === posix || name === file || name === noExt
+}
+
+export function promptHasLora(prompt: string, path: string) {
+  return parseLoraTags(prompt).some((tag) => loraNameMatches(tag.name, path))
 }
 
 export function toggleLoraPrompts(
@@ -84,6 +129,21 @@ function removeLoraBlock(prompt: string, name: string, extraPositive: string) {
   if (!hit) {
     return prompt
   }
+  return cutLoraHit(prompt, hit, extraPositive)
+}
+
+export function removeLoraAt(prompt: string, negative: string, index: number, extraPositive = '', extraNegative = '') {
+  const hit = parseLoraHits(prompt)[index]
+  if (!hit) {
+    return { prompt, negativePrompt: negative }
+  }
+  return {
+    prompt: cutLoraHit(prompt, hit, extraPositive),
+    negativePrompt: removeTrailingTags(negative, extraNegative),
+  }
+}
+
+function cutLoraHit(prompt: string, hit: { start: number; end: number }, extraPositive: string) {
   const allowed = new Set(splitTags(extraPositive).map((item) => item.toLowerCase()))
   let end = hit.end
   while (end < prompt.length && isSpaceOrComma(prompt[end] || '')) {

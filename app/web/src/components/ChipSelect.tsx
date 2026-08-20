@@ -9,6 +9,7 @@ type ChipSelectProps = {
   value: string[]
   onChange: (value: string[]) => void
   placeholder?: string
+  mode?: 'select' | 'order'
 }
 
 function asSections(options: string[] | ChipSection[]): ChipSection[] {
@@ -22,7 +23,7 @@ function matches(item: string, query: string) {
   return !query || item.toLowerCase().includes(query.toLowerCase())
 }
 
-export function ChipSelect({ options, value, onChange, placeholder = 'Select…' }: ChipSelectProps) {
+export function ChipSelect({ options, value, onChange, placeholder = 'Select…', mode = 'select' }: ChipSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [tall, setTall] = useState(false)
@@ -104,6 +105,14 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
     ro.observe(el)
     return () => ro.disconnect()
   }, [value, query])
+
+  if (mode === 'order') {
+    return (
+      <div className="flex min-h-9 items-center rounded border border-line bg-field px-2 py-1.5">
+        <ChipList value={value} onChange={onChange} removable={false} />
+      </div>
+    )
+  }
 
   return (
     <div ref={root} className="relative min-w-0">

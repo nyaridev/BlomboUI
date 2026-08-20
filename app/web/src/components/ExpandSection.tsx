@@ -11,9 +11,10 @@ type ExpandSectionProps = {
   children: ReactNode
   enabled?: boolean
   onEnabled?: (value: boolean) => void
+  fit?: boolean
 }
 
-export function ExpandSection({ title, children, enabled = true, onEnabled }: ExpandSectionProps) {
+export function ExpandSection({ title, children, enabled = true, onEnabled, fit = false }: ExpandSectionProps) {
   const [open, setOpen] = useState(false)
   const [height, setHeight] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -50,18 +51,24 @@ export function ExpandSection({ title, children, enabled = true, onEnabled }: Ex
         <div className="relative border-t border-line">
           <div
             ref={bodyRef}
-            className={`section-body overflow-auto p-2 pb-5 ${dimmed ? 'pointer-events-none opacity-40' : ''}`}
-            style={height != null ? { height } : { maxHeight: defaultH }}
+            className={[
+              'section-body p-2',
+              fit ? '' : 'overflow-auto pb-5',
+              dimmed ? 'pointer-events-none opacity-40' : '',
+            ].join(' ')}
+            style={fit ? undefined : height != null ? { height } : { maxHeight: defaultH }}
           >
             {children}
           </div>
-          <ResizeGrip
-            value={height ?? bodyRef.current?.offsetHeight ?? defaultH}
-            onChange={setHeight}
-            onReset={() => setHeight(null)}
-            min={minH}
-            max={maxH}
-          />
+          {fit ? null : (
+            <ResizeGrip
+              value={height ?? bodyRef.current?.offsetHeight ?? defaultH}
+              onChange={setHeight}
+              onReset={() => setHeight(null)}
+              min={minH}
+              max={maxH}
+            />
+          )}
         </div>
       ) : null}
     </div>

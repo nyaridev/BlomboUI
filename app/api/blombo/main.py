@@ -39,6 +39,7 @@ class JobIn(BaseModel):
     steps: int | None = Field(default=None, ge=1, le=150)
     cfg: float | None = Field(default=None, ge=1, le=30)
     seed: int | None = None
+    seed_after: str | None = None
     batch_size: int = Field(default=1, ge=1, le=8)
     batch_count: int = Field(default=1, ge=1, le=100)
     batch_grid: bool | None = None
@@ -46,10 +47,17 @@ class JobIn(BaseModel):
     batch_grid_quality: int | None = Field(default=None, ge=40, le=95)
     batch_grid_rows: int | None = Field(default=None, ge=0, le=25)
     batch_grid_fill: bool | None = None
+    batch_grid_on_cancel: bool | None = None
+    save_interrupted: bool | None = None
+    interrupted_in_grid: bool | None = None
     sampler: str | None = None
     scheduler: str | None = None
     workflow: str | None = None
     template: str | None = None
+    output_image_path: str | None = None
+    output_grid_path: str | None = None
+    output_image_name: str | None = None
+    output_grid_name: str | None = None
 
 
 class InterruptIn(BaseModel):
@@ -83,6 +91,7 @@ class TemplateIn(BaseModel):
 class TemplateUpdate(BaseModel):
     params: dict[str, Any] | None = None
     name: str | None = None
+    icon: dict[str, Any] | None = None
 
 
 class WorkflowApplyIn(BaseModel):
@@ -93,6 +102,9 @@ class ModelInfoUpdate(BaseModel):
     types: list[str] = Field(default_factory=list)
     prompt: str | None = None
     negative_prompt: str | None = None
+    notes: str | None = None
+    strength: float | None = None
+    slider: bool | None = None
 
 
 class ComfyFreeIn(BaseModel):
@@ -123,7 +135,7 @@ def post_template(workflow: str, body: TemplateIn) -> dict:
 
 @app.put("/templates/{workflow}/{template_id}")
 def put_template(workflow: str, template_id: str, body: TemplateUpdate) -> dict:
-    return {"template": templates.update_template(workflow, template_id, body.params, body.name)}
+    return {"template": templates.update_template(workflow, template_id, body.params, body.name, body.icon)}
 
 
 @app.get("/comfy/ksampler")
@@ -179,11 +191,23 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     if not models.model_file(kind, path):
         raise ApiError("not_found", "model not found")
-    info = model_meta.set_info(kind, path, body.types, body.prompt, body.negative_prompt)
+    info = model_meta.set_info(
+        kind,
+        path,
+        body.types,
+        body.prompt,
+        body.negative_prompt,
+        body.notes,
+        body.strength,
+        body.slider,
+    )
     return {
         "types": info["types"],
         "prompt": info["prompt"],
         "negative_prompt": info["negative_prompt"],
+        "notes": info["notes"],
+        "strength": info["strength"],
+        "slider": info["slider"],
         "thumb": model_meta.thumb_mtime(kind, path),
     }
 
@@ -373,4 +397,11 @@ def generation_image(gen_id: str) -> FileResponse:
     path = jobs.generation_path(gen_id)
     if not path:
         raise ApiError("not_found", "image not found")
-    return FileResponse(path, media_type="image/jpeg" if path.suffix.lower() in {".jpg", ".jpeg"} else "image/png")
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        media = "image/jpeg"
+    elif suffix == ".webp":
+        media = "image/webp"
+    else:
+        media = "image/png"
+    return FileResponse(path, media_type=media)

@@ -1,3 +1,5 @@
+import type { Glyph } from '@/components/glyph.ts'
+
 export type Health = {
   ok: boolean
   api: string
@@ -77,6 +79,7 @@ export type JobRequest = {
   steps: number
   cfg: number
   seed: number
+  seed_after?: string
   batch_size: number
   batch_count: number
   batch_grid: boolean
@@ -84,10 +87,17 @@ export type JobRequest = {
   batch_grid_quality: number
   batch_grid_rows: number
   batch_grid_fill: boolean
+  batch_grid_on_cancel: boolean
+  save_interrupted: boolean
+  interrupted_in_grid: boolean
   sampler: string
   scheduler: string
   workflow: string
   template: string
+  output_image_path?: string
+  output_grid_path?: string
+  output_image_name?: string
+  output_grid_name?: string
 }
 
 async function readError(res: Response): Promise<string> {
@@ -125,6 +135,7 @@ export type TemplateInfo = {
   name: string
   builtin: boolean
   params?: Record<string, unknown>
+  icon?: Glyph
 }
 
 export async function getTemplates(workflow: string): Promise<{ templates: TemplateInfo[]; apply: string[] }> {
@@ -171,11 +182,12 @@ export async function updateTemplate(
   id: string,
   params?: Record<string, unknown>,
   name?: string,
+  icon?: Glyph,
 ): Promise<TemplateInfo> {
   const res = await fetch(`/templates/${encodeURIComponent(workflow)}/${encodeURIComponent(id)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ params, name }),
+    body: JSON.stringify({ params, name, icon }),
   })
   if (!res.ok) {
     throw new Error(await readError(res))
@@ -200,6 +212,9 @@ export type ModelEntry = {
   thumb?: number
   prompt?: string
   negative_prompt?: string
+  notes?: string
+  strength?: number
+  slider?: boolean
   label?: string
   tag?: string
   source?: string
@@ -225,6 +240,9 @@ export type ModelInfo = {
   types?: string[]
   prompt?: string
   negative_prompt?: string
+  notes?: string
+  strength?: number
+  slider?: boolean
   type_options?: string[]
   thumb?: number
 }
@@ -284,7 +302,7 @@ export async function saveModelInfo(
   kind: keyof ModelLists,
   path: string,
   types: string[],
-  extra?: { prompt?: string; negative_prompt?: string },
+  extra?: { prompt?: string; negative_prompt?: string; notes?: string; strength?: number; slider?: boolean },
 ): Promise<string[]> {
   const res = await fetch(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`, {
     method: 'PUT',
@@ -293,6 +311,9 @@ export async function saveModelInfo(
       types,
       prompt: extra?.prompt,
       negative_prompt: extra?.negative_prompt,
+      notes: extra?.notes,
+      strength: extra?.strength,
+      slider: extra?.slider,
     }),
   })
   if (!res.ok) {
@@ -445,16 +466,37 @@ export type UserSettings = {
   batchGridQuality?: number
   batchGridRows?: number
   batchGridFill?: boolean
+  batchGridOnCancel?: boolean
+  saveInterrupted?: boolean
+  interruptedInGrid?: boolean
   hiddenGenerateTabs?: string[]
+  hiddenMainTabs?: string[]
+  mainTabOrder?: string[]
+  generateTabOrder?: string[]
+  mainTabKeysFollowLayout?: boolean
+  generateTabKeysFollowLayout?: boolean
   hiddenModelTypes?: string[]
+  hiddenSamplers?: string[]
+  hiddenSchedulers?: string[]
   theme?: string
   civitaiSite?: string
   wildcardYamlByFilename?: boolean
   imagePath?: string
   gridPath?: string
+  interruptedPath?: string
+  imageName?: string
+  gridName?: string
+  imageFormat?: string
+  imageQuality?: number
+  saveLargeAsJpeg?: boolean
+  largeJpegMaxKb?: number
   gallerySortKey?: Record<string, string> | string
   gallerySortDir?: Record<string, string> | string
   galleryTileScale?: number
+  loraStrengthMin?: number
+  loraStrengthMax?: number
+  loraSliderMin?: number
+  loraSliderMax?: number
 }
 
 export async function getSettings(): Promise<UserSettings> {

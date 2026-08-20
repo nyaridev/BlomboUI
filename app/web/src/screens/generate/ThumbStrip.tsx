@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import { middleOpen } from '@/lib/openImage.ts'
 
 export type ThumbItem = {
   key: string
@@ -76,6 +77,7 @@ export function ThumbStrip({ items, index, onSelect, onError }: ThumbStripProps)
                   : 'opacity-40 hover:opacity-75',
               ].join(' ')}
               onClick={() => onSelect(i)}
+              onMouseDown={(event) => middleOpen(event, item.src)}
             >
               <span className="block h-full w-full overflow-hidden rounded">
                 <img

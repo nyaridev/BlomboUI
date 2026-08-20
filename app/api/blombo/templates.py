@@ -10,6 +10,22 @@ from blombo.paths import USER, WORKFLOWS
 DEFAULT_ID = "default"
 _SAFE_WORKFLOW = re.compile(r"^[A-Za-z0-9._-]+$")
 _BAD_NAME = re.compile(r'[/\\:*?"<>|\0]')
+_ICON_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+_ICON_COLORS = (
+    "ink",
+    "muted",
+    "accent",
+    "red",
+    "orange",
+    "yellow",
+    "green",
+    "cyan",
+    "blue",
+    "purple",
+    "pink",
+)
+BUILTIN_ICON = {"kind": "icon", "id": "layout-template", "color": "accent"}
+CUSTOM_ICON = {"kind": "icon", "id": "bookmark", "color": "ink"}
 
 _KEYS = {
     "prompt": str,
@@ -20,6 +36,11 @@ _KEYS = {
     "steps": int,
     "cfg": float,
     "seed": int,
+    "seedAfter": str,
+    "outputImagePath": str,
+    "outputGridPath": str,
+    "outputImageName": str,
+    "outputGridName": str,
     "batchSize": int,
     "batchCount": int,
     "sampler": str,
@@ -38,6 +59,7 @@ _APPLY = (
     "steps",
     "cfg",
     "seed",
+    "outputPath",
     "resolution",
     "batchCount",
     "batchSize",
@@ -90,6 +112,29 @@ def _file(workflow: str) -> Path:
     return USER / "workflow_templates" / f"{_workflow_id(workflow)}.json"
 
 
+def _clean_icon(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    kind = str(raw.get("kind") or "").strip()
+    ident = str(raw.get("id") or "").strip()
+    if kind == "emoji":
+        if not ident or len(ident) > 32:
+            return None
+        return {"kind": "emoji", "id": ident}
+    if kind == "icon" and _ICON_ID.fullmatch(ident):
+        color = str(raw.get("color") or "ink")
+        if color not in _ICON_COLORS:
+            color = "ink"
+        return {"kind": "icon", "id": ident, "color": color}
+    return None
+
+
+def _icon_of(item: dict[str, Any], *, builtin: bool = False) -> dict[str, Any]:
+    if builtin:
+        return dict(BUILTIN_ICON)
+    return _clean_icon(item.get("icon")) or dict(CUSTOM_ICON)
+
+
 def _clean_params(raw: Any) -> dict[str, Any]:
     if not isinstance(raw, dict):
         return {}
@@ -109,6 +154,8 @@ def _clean_params(raw: Any) -> dict[str, Any]:
             continue
     if out.get("resMode") not in (None, "raw", "scaler"):
         out.pop("resMode", None)
+    if out.get("seedAfter") not in (None, "randomize", "fixed", "increment", "decrement"):
+        out.pop("seedAfter", None)
     return out
 
 
@@ -134,7 +181,11 @@ def _load(workflow: str) -> tuple[list[dict[str, Any]], list[str]]:
                 continue
             if migrated is None and "apply" in item:
                 migrated = _clean_apply(item.get("apply"), defaults)
-            items.append({"id": ident, "name": name or ident, "params": _clean_params(item.get("params"))})
+            entry = {"id": ident, "name": name or ident, "params": _clean_params(item.get("params"))}
+            icon = _clean_icon(item.get("icon"))
+            if icon:
+                entry["icon"] = icon
+            items.append(entry)
     if isinstance(data, dict) and "apply" in data:
         apply = _clean_apply(data.get("apply"), defaults)
     else:
@@ -181,9 +232,9 @@ def _taken(items: list[dict[str, Any]], name: str, skip: str | None = None) -> b
 
 def list_templates(workflow: str) -> tuple[list[dict[str, Any]], list[str]]:
     stored, apply = _load(workflow)
-    items = [{"id": DEFAULT_ID, "name": "Default", "builtin": True}]
+    items = [{"id": DEFAULT_ID, "name": "Default", "builtin": True, "icon": dict(BUILTIN_ICON)}]
     for item in stored:
-        items.append({**item, "builtin": False})
+        items.append({**item, "builtin": False, "icon": _icon_of(item)})
     return items, apply
 
 
@@ -199,13 +250,19 @@ def create_template(workflow: str, name: str, params: Any) -> dict[str, Any]:
     items, apply = _load(workflow)
     if _taken(items, ident):
         raise TemplateError("exists", f'A template named "{ident}" already exists', status=409)
-    item = {"id": ident, "name": ident, "params": _clean_params(params)}
+    item = {"id": ident, "name": ident, "params": _clean_params(params), "icon": dict(CUSTOM_ICON)}
     items.append(item)
     _save(workflow, items, apply)
     return {**item, "builtin": False}
 
 
-def update_template(workflow: str, template_id: str, params: Any, name: str | None = None) -> dict[str, Any]:
+def update_template(
+    workflow: str,
+    template_id: str,
+    params: Any,
+    name: str | None = None,
+    icon: Any = None,
+) -> dict[str, Any]:
     ident = template_id.strip()
     if ident.lower() == DEFAULT_ID:
         raise TemplateError("builtin", "Default is built-in. Save a new template instead.")
@@ -221,7 +278,11 @@ def update_template(workflow: str, template_id: str, params: Any, name: str | No
             if _taken(items, label, skip=item["id"]):
                 raise TemplateError("exists", f'A template named "{label}" already exists', status=409)
             next_item["name"] = label
+        if icon is not None:
+            cleaned = _clean_icon(icon)
+            if cleaned:
+                next_item["icon"] = cleaned
         items[index] = next_item
         _save(workflow, items, apply)
-        return {**next_item, "builtin": False}
+        return {**next_item, "builtin": False, "icon": _icon_of(next_item)}
     raise TemplateError("not_found", "template not found", status=404)

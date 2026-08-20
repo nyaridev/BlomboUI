@@ -1,6 +1,7 @@
 import { Chevron } from '@/components/Chevron.tsx'
 import { LightboxView } from '@/components/LightboxView.tsx'
 import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
+import { middleOpen } from '@/lib/openImage.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 
@@ -114,6 +115,7 @@ export function ImageCarousel({
                 pointerEvents: front ? 'auto' : 'none',
               }}
               onClick={() => setOpen(true)}
+              onMouseDown={(event) => middleOpen(event, url)}
             >
               <img
                 src={url}

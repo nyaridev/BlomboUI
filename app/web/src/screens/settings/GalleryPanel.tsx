@@ -1,7 +1,7 @@
 import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
 import { GALLERY_SORTS, type GallerySortDir, type GallerySortKey } from '@/components/GalleryView.tsx'
-import { SettingsBlock } from './SettingsBlock.tsx'
+import { SettingsCard } from './SettingsBlock.tsx'
 import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
 
 const DIRS = [
@@ -27,14 +27,9 @@ export function GalleryPanel({ query = '' }: { query?: string }) {
   const setGalleryTileScale = useSettingsStore((s) => s.setGalleryTileScale)
 
   return (
-    <div className="flex max-w-xl flex-col gap-6">
+    <div className="flex max-w-xl flex-col gap-3">
       {VIEWS.map((view) => (
-        <SettingsBlock
-          key={view.kind}
-          query={query}
-          title={view.title}
-          terms={`sort by order ${view.terms}`}
-        >
+        <SettingsCard key={view.kind} query={query} title={view.title} terms={`sort by order ${view.terms}`}>
           <div className="flex gap-2">
             <div className="flex min-w-0 flex-1 flex-col gap-1">
               <span className="text-xs text-muted">Sort by</span>
@@ -56,12 +51,12 @@ export function GalleryPanel({ query = '' }: { query?: string }) {
           <p className="text-xs text-muted">
             Used after launch or a UI reload. Changing sort in this gallery is only for that session.
           </p>
-        </SettingsBlock>
+        </SettingsCard>
       ))}
-      <SettingsBlock query={query} title="Tile scale" terms="size zoom">
+      <SettingsCard query={query} title="Tiles" terms="tile scale size zoom">
         <SliderField value={galleryTileScale} onChange={setGalleryTileScale} min={0.5} max={2} step={0.1} />
         <p className="text-xs text-muted">1 is the current tile size.</p>
-      </SettingsBlock>
+      </SettingsCard>
     </div>
   )
 }

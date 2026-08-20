@@ -9,26 +9,55 @@ from blombo.paths import USER
 FILE = USER / "user_settings.json"
 IMAGE_PATH_DEFAULT = "[workflow]/images/[date]"
 GRID_PATH_DEFAULT = "[workflow]/grids/[date]"
+INTERRUPTED_PATH_DEFAULT = "[workflow]/interrupted/[date]"
+IMAGE_NAME_DEFAULT = "blombo_[number]"
+GRID_NAME_DEFAULT = "blombo_[number]"
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9._\[\]/-]+$")
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9._\[\]-]+$")
 _GALLERY_SORTS = ("name", "added", "edited", "path")
 _GALLERY_DIRS = ("asc", "desc")
 _GALLERY_VIEWS = ("checkpoints", "loras", "wildcards")
+_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models")
+_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Errors")
+_GENERATE_TABS = ("Generation", "Base Model", "Lora", "Wildcards")
+_IMAGE_FORMATS = ("png", "jpg", "webp")
 _KEYS = (
     "batchGrid",
     "batchGridMax",
     "batchGridQuality",
     "batchGridRows",
     "batchGridFill",
+    "batchGridOnCancel",
+    "saveInterrupted",
+    "interruptedInGrid",
     "hiddenGenerateTabs",
+    "hiddenMainTabs",
+    "mainTabOrder",
+    "generateTabOrder",
+    "mainTabKeysFollowLayout",
+    "generateTabKeysFollowLayout",
     "hiddenModelTypes",
+    "hiddenSamplers",
+    "hiddenSchedulers",
     "theme",
     "civitaiSite",
     "wildcardYamlByFilename",
     "imagePath",
+    "imageName",
     "gridPath",
+    "gridName",
+    "interruptedPath",
+    "imageFormat",
+    "imageQuality",
+    "saveLargeAsJpeg",
+    "largeJpegMaxKb",
     "gallerySortKey",
     "gallerySortDir",
     "galleryTileScale",
+    "loraStrengthMin",
+    "loraStrengthMax",
+    "loraSliderMin",
+    "loraSliderMax",
 )
 
 
@@ -55,6 +84,12 @@ def _clean(raw: Any) -> dict[str, Any]:
             pass
     if "batchGridFill" in raw:
         out["batchGridFill"] = bool(raw["batchGridFill"])
+    if "batchGridOnCancel" in raw:
+        out["batchGridOnCancel"] = bool(raw["batchGridOnCancel"])
+    if "saveInterrupted" in raw:
+        out["saveInterrupted"] = bool(raw["saveInterrupted"])
+    if "interruptedInGrid" in raw:
+        out["interruptedInGrid"] = bool(raw["interruptedInGrid"])
     if "hiddenGenerateTabs" in raw and isinstance(raw["hiddenGenerateTabs"], list):
         tabs: list[str] = []
         for item in raw["hiddenGenerateTabs"]:
@@ -62,6 +97,20 @@ def _clean(raw: Any) -> dict[str, Any]:
             if name and name != "Generation" and name not in tabs:
                 tabs.append(name)
         out["hiddenGenerateTabs"] = tabs
+    if "hiddenMainTabs" in raw and isinstance(raw["hiddenMainTabs"], list):
+        out["hiddenMainTabs"] = _unique_allowed(raw["hiddenMainTabs"], _HIDEABLE_MAIN_TABS)
+    if "mainTabOrder" in raw:
+        ordered = _order_list(raw["mainTabOrder"], _ORDERABLE_MAIN_TABS)
+        if ordered:
+            out["mainTabOrder"] = ordered
+    if "generateTabOrder" in raw:
+        ordered = _order_list(raw["generateTabOrder"], _GENERATE_TABS, rename={"Checkpoints": "Base Model"})
+        if ordered:
+            out["generateTabOrder"] = ordered
+    if "mainTabKeysFollowLayout" in raw:
+        out["mainTabKeysFollowLayout"] = bool(raw["mainTabKeysFollowLayout"])
+    if "generateTabKeysFollowLayout" in raw:
+        out["generateTabKeysFollowLayout"] = bool(raw["generateTabKeysFollowLayout"])
     if "hiddenModelTypes" in raw and isinstance(raw["hiddenModelTypes"], list):
         types: list[str] = []
         for item in raw["hiddenModelTypes"]:
@@ -69,6 +118,10 @@ def _clean(raw: Any) -> dict[str, Any]:
             if name and name not in types:
                 types.append(name)
         out["hiddenModelTypes"] = types
+    if "hiddenSamplers" in raw and isinstance(raw["hiddenSamplers"], list):
+        out["hiddenSamplers"] = _unique_names(raw["hiddenSamplers"])
+    if "hiddenSchedulers" in raw and isinstance(raw["hiddenSchedulers"], list):
+        out["hiddenSchedulers"] = _unique_names(raw["hiddenSchedulers"])
     if "theme" in raw:
         name = str(raw["theme"])
         if name == "default":
@@ -84,9 +137,38 @@ def _clean(raw: Any) -> dict[str, Any]:
     image_path = _path_template(raw.get("imagePath"), IMAGE_PATH_DEFAULT) if "imagePath" in raw else None
     if image_path:
         out["imagePath"] = image_path
+    image_name = _name_template(raw.get("imageName"), IMAGE_NAME_DEFAULT) if "imageName" in raw else None
+    if image_name:
+        out["imageName"] = image_name
     grid_path = _path_template(raw.get("gridPath"), GRID_PATH_DEFAULT) if "gridPath" in raw else None
     if grid_path:
         out["gridPath"] = grid_path
+    grid_name = _name_template(raw.get("gridName"), GRID_NAME_DEFAULT) if "gridName" in raw else None
+    if grid_name:
+        out["gridName"] = grid_name
+    interrupted_path = (
+        _path_template(raw.get("interruptedPath"), INTERRUPTED_PATH_DEFAULT) if "interruptedPath" in raw else None
+    )
+    if interrupted_path:
+        out["interruptedPath"] = interrupted_path
+    if "imageFormat" in raw:
+        name = str(raw["imageFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["imageFormat"] = name
+    if "imageQuality" in raw:
+        try:
+            out["imageQuality"] = max(1, min(100, int(raw["imageQuality"])))
+        except (TypeError, ValueError):
+            pass
+    if "saveLargeAsJpeg" in raw:
+        out["saveLargeAsJpeg"] = bool(raw["saveLargeAsJpeg"])
+    if "largeJpegMaxKb" in raw:
+        try:
+            out["largeJpegMaxKb"] = max(256, min(65536, int(raw["largeJpegMaxKb"])))
+        except (TypeError, ValueError):
+            pass
     if "gallerySortKey" in raw:
         mapped = _gallery_map(raw["gallerySortKey"], _GALLERY_SORTS, "name")
         if mapped:
@@ -100,7 +182,58 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["galleryTileScale"] = round(min(2.0, max(0.5, float(raw["galleryTileScale"]))), 1)
         except (TypeError, ValueError):
             pass
+    for key in ("loraStrengthMin", "loraStrengthMax", "loraSliderMin", "loraSliderMax"):
+        if key not in raw:
+            continue
+        bound = _lora_bound(raw[key])
+        if bound is not None:
+            out[key] = bound
     return {key: out[key] for key in _KEYS if key in out}
+
+
+def _lora_bound(raw: Any) -> float | None:
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return None
+    if value != value or value in (float("inf"), float("-inf")):
+        return None
+    return round(min(20.0, max(-20.0, value)), 2)
+
+
+def _unique_names(raw: list[Any]) -> list[str]:
+    out: list[str] = []
+    for item in raw:
+        name = str(item).strip()
+        if name and name not in out:
+            out.append(name)
+    return out
+
+
+def _unique_allowed(raw: list[Any], allowed: tuple[str, ...]) -> list[str]:
+    known = set(allowed)
+    out: list[str] = []
+    for item in raw:
+        name = str(item)
+        if name in known and name not in out:
+            out.append(name)
+    return out
+
+
+def _order_list(raw: Any, allowed: tuple[str, ...], rename: dict[str, str] | None = None) -> list[str] | None:
+    if not isinstance(raw, list):
+        return None
+    aliases = rename or {}
+    known = set(allowed)
+    seen: list[str] = []
+    for item in raw:
+        name = aliases.get(str(item), str(item))
+        if name in known and name not in seen:
+            seen.append(name)
+    for name in allowed:
+        if name not in seen:
+            seen.append(name)
+    return seen
 
 
 def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, str] | None:
@@ -131,21 +264,45 @@ def _path_template(raw: Any, default: str) -> str | None:
     return text
 
 
+def _name_template(raw: Any, default: str) -> str | None:
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip()
+    lower = text.lower()
+    for ext in (".png", ".jpg", ".jpeg", ".webp"):
+        if lower.endswith(ext):
+            text = text[: -len(ext)]
+            lower = text.lower()
+            break
+    if not text or text == default:
+        return None
+    if len(text) > 80:
+        return None
+    if "/" in text or "\\" in text:
+        return None
+    if not _SAFE_NAME.fullmatch(text):
+        return None
+    return text
+
+
 def load() -> dict[str, Any]:
     if not FILE.is_file():
+        _write({})
         return {}
     try:
         data = json.loads(FILE.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
+        _write({})
         return {}
     return _clean(data)
 
 
 def save(raw: Any) -> dict[str, Any]:
     data = _clean(raw)
-    if not data:
-        FILE.unlink(missing_ok=True)
-        return {}
+    _write(data)
+    return data
+
+
+def _write(data: dict[str, Any]) -> None:
     FILE.parent.mkdir(parents=True, exist_ok=True)
     FILE.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    return data

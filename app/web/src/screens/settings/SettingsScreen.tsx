@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
 import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
+import { ModelsPanel, MODELS_QUERY } from './ModelsPanel.tsx'
 import { PrimitivesPanel } from './PrimitivesPanel.tsx'
 import { SavingPanel, SAVING_QUERY } from './SavingPanel.tsx'
 import { ShortcutsPanel, SHORTCUTS_QUERY } from './ShortcutsPanel.tsx'
+import { TabsPanel, TABS_QUERY } from './TabsPanel.tsx'
+import { WildcardsPanel, WILDCARDS_QUERY } from './WildcardsPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
 import { SettingsNav } from './SettingsNav.tsx'
 
@@ -17,10 +21,13 @@ const GROUPS = [
     title: 'General',
     pages: [
       { id: 'General', terms: GENERAL_QUERY, Panel: GeneralPanel },
+      { id: 'Tabs', terms: TABS_QUERY, Panel: TabsPanel },
       { id: 'Grids', terms: GRIDS_QUERY, Panel: GridsPanel },
       { id: 'Gallery View', terms: GALLERY_QUERY, Panel: GalleryPanel },
     ],
   },
+  { title: 'Models', pages: [{ id: 'Models', terms: MODELS_QUERY, Panel: ModelsPanel }] },
+  { title: 'Wildcards', pages: [{ id: 'Wildcards', terms: WILDCARDS_QUERY, Panel: WildcardsPanel }] },
   { title: 'Saving', pages: [{ id: 'Saving', terms: SAVING_QUERY, Panel: SavingPanel }] },
   {
     title: 'Other',
@@ -47,11 +54,13 @@ function SearchIcon() {
 }
 
 export function SettingsScreen() {
+  const location = useLocation()
   const rowRef = useRef<HTMLDivElement>(null)
   const [navWidth, setNavWidth] = useState(() => NAV_REM * 16)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState<PageId>('General')
   const searching = query.trim().length > 0
+  const highlightPlaceholders = location.pathname === '/settings' && location.hash === '#placeholders'
   const groups = useMemo(
     () =>
       GROUPS.map((group) => ({
@@ -76,6 +85,42 @@ export function SettingsScreen() {
   useEffect(() => {
     setNavWidth(NAV_REM * remPx())
   }, [])
+
+  useEffect(() => {
+    if (!highlightPlaceholders) {
+      return
+    }
+    setQuery('')
+    setPage('Saving')
+  }, [highlightPlaceholders])
+
+  useLayoutEffect(() => {
+    if (!highlightPlaceholders || page !== 'Saving' || searching) {
+      return
+    }
+    const run = () => {
+      const el = document.getElementById('settings-placeholders')
+      if (!el) {
+        return
+      }
+      el.scrollIntoView({ block: 'center' })
+      el.classList.remove('settings-glow')
+      void el.offsetWidth
+      el.classList.add('settings-glow')
+    }
+    let inner = 0
+    const frame = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(run)
+    })
+    const hide = window.setTimeout(() => {
+      document.getElementById('settings-placeholders')?.classList.remove('settings-glow')
+    }, 450)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(inner)
+      window.clearTimeout(hide)
+    }
+  }, [highlightPlaceholders, page, searching])
 
   useEffect(() => {
     if (shown.some((item) => item.id === page)) {

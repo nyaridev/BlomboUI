@@ -284,6 +284,9 @@ function validParam(key: keyof TemplateParams, value: unknown, choices: { sample
   if (key === 'seed') {
     return intRaw(value) != null
   }
+  if (key === 'seedAfter') {
+    return value === 'randomize' || value === 'fixed' || value === 'increment' || value === 'decrement'
+  }
   if (key === 'batchSize') {
     return intIn(value, 1, 8) != null
   }
@@ -292,6 +295,9 @@ function validParam(key: keyof TemplateParams, value: unknown, choices: { sample
   }
   if (key === 'resMode') {
     return value === 'raw' || value === 'scaler'
+  }
+  if (key === 'outputImagePath' || key === 'outputGridPath' || key === 'outputImageName' || key === 'outputGridName') {
+    return typeof value === 'string'
   }
   return false
 }

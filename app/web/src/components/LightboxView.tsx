@@ -1,4 +1,5 @@
 import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { middleOpen } from '@/lib/openImage.ts'
 import { useEffect, useRef, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 
@@ -157,6 +158,10 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
   }, [])
 
   function onPointerDown(event: PointerEvent<HTMLImageElement>) {
+    if (middleOpen(event, src)) {
+      event.stopPropagation()
+      return
+    }
     event.stopPropagation()
     event.currentTarget.setPointerCapture(event.pointerId)
     const view = viewRef.current

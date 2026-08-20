@@ -1,5 +1,7 @@
 import { Chevron } from '@/components/Chevron.tsx'
 import { ConfirmDialog, Dialog } from '@/components/Dialog.tsx'
+import { GlyphMark } from '@/components/GlyphMark.tsx'
+import { glyphOf } from '@/components/glyph.ts'
 import { TemplatePicker } from '@/app/TemplatePicker.tsx'
 import { createTemplate, getTemplates, setTemplateApply, updateTemplate, type TemplateInfo } from '@/lib/api.ts'
 import {
@@ -48,15 +50,6 @@ function RestoreIcon() {
         strokeLinecap="round"
         strokeLinejoin="round"
       />
-    </svg>
-  )
-}
-
-function TemplateIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="2" y="1.5" width="8" height="11" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M4.5 4.5h5M4.5 7h5M4.5 9.5h3" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -160,8 +153,8 @@ export function TemplateBar() {
         className="flex items-center gap-1.5 rounded-l px-2 py-1 text-sm text-ink hover:bg-line"
         onClick={() => setOpen(true)}
       >
-        <span className="text-muted">
-          <TemplateIcon />
+        <span className="flex items-center text-muted">
+          <GlyphMark value={glyphOf(active ?? { builtin: true })} size={16} />
         </span>
         <span className="max-w-[9rem] truncate">{active?.name ?? 'Default'}</span>
         {dirty ? '*' : ''}

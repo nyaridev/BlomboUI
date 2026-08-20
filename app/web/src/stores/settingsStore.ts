@@ -1,7 +1,14 @@
 import { create } from 'zustand'
 import { getSettings, saveSettings, type UserSettings } from '@/lib/api.ts'
 import { defaultHiddenModelTypes, MODEL_TYPES } from '@/lib/modelTypes.ts'
-import { type GenerateTab } from '@/screens/generate/tabs.ts'
+import { GENERATE_TABS, generateTabOrderList, type GenerateTab } from '@/screens/generate/tabs.ts'
+import {
+  HIDEABLE_MAIN_TABS,
+  mergeOrder,
+  ORDERABLE_MAIN_TABS,
+  type HideableMainTab,
+  type OrderableMainTab,
+} from '@/app/appTabs.ts'
 
 export const THEMES = [
   { value: 'darker', label: 'Default' },
@@ -35,19 +42,46 @@ export type GallerySortDir = 'asc' | 'desc'
 
 const SORT_KEYS = new Set<string>(['name', 'added', 'edited', 'path'])
 
+export const IMAGE_FORMATS = [
+  { value: 'png', label: 'PNG' },
+  { value: 'jpg', label: 'JPEG' },
+  { value: 'webp', label: 'WebP' },
+] as const
+
+export type ImageFormat = (typeof IMAGE_FORMATS)[number]['value']
+
+const IMAGE_FORMAT_IDS = new Set<string>(IMAGE_FORMATS.map((item) => item.value))
+
 export const SETTINGS_DEFAULTS = {
   batchGrid: true,
   batchGridMax: 16,
   batchGridQuality: 85,
   batchGridRows: 0,
   batchGridFill: false,
+  batchGridOnCancel: true,
+  saveInterrupted: true,
+  interruptedInGrid: true,
   hiddenGenerateTabs: [] as GenerateTab[],
+  hiddenMainTabs: [] as HideableMainTab[],
+  mainTabOrder: [...ORDERABLE_MAIN_TABS] as OrderableMainTab[],
+  generateTabOrder: [...GENERATE_TABS] as GenerateTab[],
+  mainTabKeysFollowLayout: true,
+  generateTabKeysFollowLayout: true,
   hiddenModelTypes: defaultHiddenModelTypes(),
+  hiddenSamplers: [] as string[],
+  hiddenSchedulers: [] as string[],
   theme: 'darker' as Theme,
   civitaiSite: 'red' as CivitaiSite,
   wildcardYamlByFilename: false,
   imagePath: '[workflow]/images/[date]',
   gridPath: '[workflow]/grids/[date]',
+  interruptedPath: '[workflow]/interrupted/[date]',
+  imageName: 'blombo_[number]',
+  gridName: 'blombo_[number]',
+  imageFormat: 'png' as ImageFormat,
+  imageQuality: 100,
+  saveLargeAsJpeg: false,
+  largeJpegMaxKb: 4096,
   gallerySortKey: {
     checkpoints: 'name',
     loras: 'name',
@@ -59,6 +93,10 @@ export const SETTINGS_DEFAULTS = {
     wildcards: 'asc',
   } as Record<GalleryViewKind, GallerySortDir>,
   galleryTileScale: 1,
+  loraStrengthMin: 0,
+  loraStrengthMax: 1,
+  loraSliderMin: -5,
+  loraSliderMax: 5,
 }
 
 type SettingsState = typeof SETTINGS_DEFAULTS & {
@@ -69,16 +107,37 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setBatchGridQuality: (value: number) => void
   setBatchGridRows: (value: number) => void
   setBatchGridFill: (value: boolean) => void
+  setBatchGridOnCancel: (value: boolean) => void
+  setSaveInterrupted: (value: boolean) => void
+  setInterruptedInGrid: (value: boolean) => void
   setHiddenGenerateTabs: (value: GenerateTab[]) => void
+  setHiddenMainTabs: (value: HideableMainTab[]) => void
+  setMainTabOrder: (value: OrderableMainTab[]) => void
+  setGenerateTabOrder: (value: GenerateTab[]) => void
+  setMainTabKeysFollowLayout: (value: boolean) => void
+  setGenerateTabKeysFollowLayout: (value: boolean) => void
   setHiddenModelTypes: (value: string[]) => void
+  setHiddenSamplers: (value: string[]) => void
+  setHiddenSchedulers: (value: string[]) => void
   setTheme: (value: Theme) => void
   setCivitaiSite: (value: CivitaiSite) => void
   setWildcardYamlByFilename: (value: boolean) => void
   setImagePath: (value: string) => void
   setGridPath: (value: string) => void
+  setInterruptedPath: (value: string) => void
+  setImageName: (value: string) => void
+  setGridName: (value: string) => void
+  setImageFormat: (value: ImageFormat) => void
+  setImageQuality: (value: number) => void
+  setSaveLargeAsJpeg: (value: boolean) => void
+  setLargeJpegMaxKb: (value: number) => void
   setGallerySortKey: (kind: GalleryViewKind, value: GallerySortKey) => void
   setGallerySortDir: (kind: GalleryViewKind, value: GallerySortDir) => void
   setGalleryTileScale: (value: number) => void
+  setLoraStrengthMin: (value: number) => void
+  setLoraStrengthMax: (value: number) => void
+  setLoraSliderMin: (value: number) => void
+  setLoraSliderMax: (value: number) => void
 }
 
 const KEYS = [
@@ -87,16 +146,37 @@ const KEYS = [
   'batchGridQuality',
   'batchGridRows',
   'batchGridFill',
+  'batchGridOnCancel',
+  'saveInterrupted',
+  'interruptedInGrid',
   'hiddenGenerateTabs',
+  'hiddenMainTabs',
+  'mainTabOrder',
+  'generateTabOrder',
+  'mainTabKeysFollowLayout',
+  'generateTabKeysFollowLayout',
   'hiddenModelTypes',
+  'hiddenSamplers',
+  'hiddenSchedulers',
   'theme',
   'civitaiSite',
   'wildcardYamlByFilename',
   'imagePath',
   'gridPath',
+  'interruptedPath',
+  'imageName',
+  'gridName',
+  'imageFormat',
+  'imageQuality',
+  'saveLargeAsJpeg',
+  'largeJpegMaxKb',
   'gallerySortKey',
   'gallerySortDir',
   'galleryTileScale',
+  'loraStrengthMin',
+  'loraStrengthMax',
+  'loraSliderMin',
+  'loraSliderMax',
 ] as const
 
 function same(a: unknown, b: unknown) {
@@ -115,6 +195,70 @@ function cleanTabs(raw: unknown): GenerateTab[] {
     }
   }
   return out
+}
+
+function cleanHiddenMainTabs(raw: unknown): HideableMainTab[] {
+  if (!Array.isArray(raw)) {
+    return SETTINGS_DEFAULTS.hiddenMainTabs
+  }
+  const allowed = new Set<string>(HIDEABLE_MAIN_TABS)
+  const out: HideableMainTab[] = []
+  for (const item of raw) {
+    const name = String(item)
+    if (allowed.has(name) && !out.includes(name as HideableMainTab)) {
+      out.push(name as HideableMainTab)
+    }
+  }
+  return out
+}
+
+function cleanMainTabOrder(raw: unknown): OrderableMainTab[] {
+  if (!Array.isArray(raw)) {
+    return SETTINGS_DEFAULTS.mainTabOrder
+  }
+  return mergeOrder(raw.map(String), ORDERABLE_MAIN_TABS)
+}
+
+function cleanGenerateTabOrder(raw: unknown): GenerateTab[] {
+  if (!Array.isArray(raw)) {
+    return SETTINGS_DEFAULTS.generateTabOrder
+  }
+  return generateTabOrderList(raw.map(String))
+}
+
+function cleanNames(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const out: string[] = []
+  for (const item of raw) {
+    const name = String(item).trim()
+    if (name && !out.includes(name)) {
+      out.push(name)
+    }
+  }
+  return out
+}
+
+function cleanImageFormat(raw: unknown): ImageFormat {
+  const name = raw === 'jpeg' ? 'jpg' : raw
+  return IMAGE_FORMAT_IDS.has(name as string) ? (name as ImageFormat) : SETTINGS_DEFAULTS.imageFormat
+}
+
+function cleanImageQuality(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.imageQuality
+  }
+  return Math.max(1, Math.min(100, Math.round(n)))
+}
+
+function cleanLargeJpegMaxKb(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.largeJpegMaxKb
+  }
+  return Math.max(256, Math.min(65536, Math.round(n)))
 }
 
 function cleanTypes(raw: unknown): string[] {
@@ -146,6 +290,17 @@ function cleanPath(raw: unknown, fallback: string) {
     return fallback
   }
   const text = raw.trim().replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')
+  if (!text) {
+    return fallback
+  }
+  return text
+}
+
+function cleanName(raw: unknown, fallback: string) {
+  if (typeof raw !== 'string') {
+    return fallback
+  }
+  const text = raw.trim().replaceAll('\\', '/').split('/').pop() ?? ''
   if (!text) {
     return fallback
   }
@@ -202,6 +357,14 @@ function cleanTileScale(raw: unknown) {
   return Math.round(Math.min(2, Math.max(0.5, n)) * 10) / 10
 }
 
+function cleanLoraBound(raw: unknown, fallback: number) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return fallback
+  }
+  return Math.round(Math.min(20, Math.max(-20, n)) * 100) / 100
+}
+
 function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
   return {
     batchGrid: typeof patch.batchGrid === 'boolean' ? patch.batchGrid : SETTINGS_DEFAULTS.batchGrid,
@@ -209,8 +372,26 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     batchGridQuality: typeof patch.batchGridQuality === 'number' ? patch.batchGridQuality : SETTINGS_DEFAULTS.batchGridQuality,
     batchGridRows: typeof patch.batchGridRows === 'number' ? patch.batchGridRows : SETTINGS_DEFAULTS.batchGridRows,
     batchGridFill: typeof patch.batchGridFill === 'boolean' ? patch.batchGridFill : SETTINGS_DEFAULTS.batchGridFill,
+    batchGridOnCancel: typeof patch.batchGridOnCancel === 'boolean' ? patch.batchGridOnCancel : SETTINGS_DEFAULTS.batchGridOnCancel,
+    saveInterrupted: typeof patch.saveInterrupted === 'boolean' ? patch.saveInterrupted : SETTINGS_DEFAULTS.saveInterrupted,
+    interruptedInGrid: typeof patch.interruptedInGrid === 'boolean' ? patch.interruptedInGrid : SETTINGS_DEFAULTS.interruptedInGrid,
     hiddenGenerateTabs: patch.hiddenGenerateTabs ? cleanTabs(patch.hiddenGenerateTabs) : SETTINGS_DEFAULTS.hiddenGenerateTabs,
+    hiddenMainTabs: patch.hiddenMainTabs ? cleanHiddenMainTabs(patch.hiddenMainTabs) : SETTINGS_DEFAULTS.hiddenMainTabs,
+    mainTabOrder: patch.mainTabOrder ? cleanMainTabOrder(patch.mainTabOrder) : SETTINGS_DEFAULTS.mainTabOrder,
+    generateTabOrder: patch.generateTabOrder
+      ? cleanGenerateTabOrder(patch.generateTabOrder)
+      : SETTINGS_DEFAULTS.generateTabOrder,
+    mainTabKeysFollowLayout:
+      typeof patch.mainTabKeysFollowLayout === 'boolean'
+        ? patch.mainTabKeysFollowLayout
+        : SETTINGS_DEFAULTS.mainTabKeysFollowLayout,
+    generateTabKeysFollowLayout:
+      typeof patch.generateTabKeysFollowLayout === 'boolean'
+        ? patch.generateTabKeysFollowLayout
+        : SETTINGS_DEFAULTS.generateTabKeysFollowLayout,
     hiddenModelTypes: patch.hiddenModelTypes ? cleanTypes(patch.hiddenModelTypes) : SETTINGS_DEFAULTS.hiddenModelTypes,
+    hiddenSamplers: patch.hiddenSamplers ? cleanNames(patch.hiddenSamplers) : SETTINGS_DEFAULTS.hiddenSamplers,
+    hiddenSchedulers: patch.hiddenSchedulers ? cleanNames(patch.hiddenSchedulers) : SETTINGS_DEFAULTS.hiddenSchedulers,
     theme: patch.theme ? cleanTheme(patch.theme) : SETTINGS_DEFAULTS.theme,
     civitaiSite: patch.civitaiSite ? cleanCivitaiSite(patch.civitaiSite) : SETTINGS_DEFAULTS.civitaiSite,
     wildcardYamlByFilename:
@@ -219,10 +400,34 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
         : SETTINGS_DEFAULTS.wildcardYamlByFilename,
     imagePath: cleanPath(patch.imagePath, SETTINGS_DEFAULTS.imagePath),
     gridPath: cleanPath(patch.gridPath, SETTINGS_DEFAULTS.gridPath),
+    interruptedPath: cleanPath(patch.interruptedPath, SETTINGS_DEFAULTS.interruptedPath),
+    imageName: cleanName(patch.imageName, SETTINGS_DEFAULTS.imageName),
+    gridName: cleanName(patch.gridName, SETTINGS_DEFAULTS.gridName),
+    imageFormat: patch.imageFormat ? cleanImageFormat(patch.imageFormat) : SETTINGS_DEFAULTS.imageFormat,
+    imageQuality: typeof patch.imageQuality === 'number' ? cleanImageQuality(patch.imageQuality) : SETTINGS_DEFAULTS.imageQuality,
+    saveLargeAsJpeg: typeof patch.saveLargeAsJpeg === 'boolean' ? patch.saveLargeAsJpeg : SETTINGS_DEFAULTS.saveLargeAsJpeg,
+    largeJpegMaxKb:
+      typeof patch.largeJpegMaxKb === 'number' ? cleanLargeJpegMaxKb(patch.largeJpegMaxKb) : SETTINGS_DEFAULTS.largeJpegMaxKb,
     gallerySortKey: patch.gallerySortKey ? cleanSortKeyMap(patch.gallerySortKey) : SETTINGS_DEFAULTS.gallerySortKey,
     gallerySortDir: patch.gallerySortDir ? cleanSortDirMap(patch.gallerySortDir) : SETTINGS_DEFAULTS.gallerySortDir,
     galleryTileScale:
       typeof patch.galleryTileScale === 'number' ? cleanTileScale(patch.galleryTileScale) : SETTINGS_DEFAULTS.galleryTileScale,
+    loraStrengthMin:
+      typeof patch.loraStrengthMin === 'number'
+        ? cleanLoraBound(patch.loraStrengthMin, SETTINGS_DEFAULTS.loraStrengthMin)
+        : SETTINGS_DEFAULTS.loraStrengthMin,
+    loraStrengthMax:
+      typeof patch.loraStrengthMax === 'number'
+        ? cleanLoraBound(patch.loraStrengthMax, SETTINGS_DEFAULTS.loraStrengthMax)
+        : SETTINGS_DEFAULTS.loraStrengthMax,
+    loraSliderMin:
+      typeof patch.loraSliderMin === 'number'
+        ? cleanLoraBound(patch.loraSliderMin, SETTINGS_DEFAULTS.loraSliderMin)
+        : SETTINGS_DEFAULTS.loraSliderMin,
+    loraSliderMax:
+      typeof patch.loraSliderMax === 'number'
+        ? cleanLoraBound(patch.loraSliderMax, SETTINGS_DEFAULTS.loraSliderMax)
+        : SETTINGS_DEFAULTS.loraSliderMax,
   }
 }
 
@@ -258,11 +463,41 @@ function pickLegacy(raw: unknown): UserSettings {
   if (typeof state.batchGridFill === 'boolean') {
     patch.batchGridFill = state.batchGridFill
   }
+  if (typeof state.batchGridOnCancel === 'boolean') {
+    patch.batchGridOnCancel = state.batchGridOnCancel
+  }
+  if (typeof state.saveInterrupted === 'boolean') {
+    patch.saveInterrupted = state.saveInterrupted
+  }
+  if (typeof state.interruptedInGrid === 'boolean') {
+    patch.interruptedInGrid = state.interruptedInGrid
+  }
   if (Array.isArray(state.hiddenGenerateTabs)) {
     patch.hiddenGenerateTabs = state.hiddenGenerateTabs as string[]
   }
+  if (Array.isArray(state.hiddenMainTabs)) {
+    patch.hiddenMainTabs = state.hiddenMainTabs as string[]
+  }
+  if (Array.isArray(state.mainTabOrder)) {
+    patch.mainTabOrder = state.mainTabOrder as string[]
+  }
+  if (Array.isArray(state.generateTabOrder)) {
+    patch.generateTabOrder = state.generateTabOrder as string[]
+  }
+  if (typeof state.mainTabKeysFollowLayout === 'boolean') {
+    patch.mainTabKeysFollowLayout = state.mainTabKeysFollowLayout
+  }
+  if (typeof state.generateTabKeysFollowLayout === 'boolean') {
+    patch.generateTabKeysFollowLayout = state.generateTabKeysFollowLayout
+  }
   if (Array.isArray(state.hiddenModelTypes)) {
     patch.hiddenModelTypes = state.hiddenModelTypes as string[]
+  }
+  if (Array.isArray(state.hiddenSamplers)) {
+    patch.hiddenSamplers = state.hiddenSamplers as string[]
+  }
+  if (Array.isArray(state.hiddenSchedulers)) {
+    patch.hiddenSchedulers = state.hiddenSchedulers as string[]
   }
   if (typeof state.theme === 'string') {
     patch.theme = state.theme
@@ -278,6 +513,27 @@ function pickLegacy(raw: unknown): UserSettings {
   }
   if (typeof state.gridPath === 'string') {
     patch.gridPath = state.gridPath
+  }
+  if (typeof state.interruptedPath === 'string') {
+    patch.interruptedPath = state.interruptedPath
+  }
+  if (typeof state.imageName === 'string') {
+    patch.imageName = state.imageName
+  }
+  if (typeof state.gridName === 'string') {
+    patch.gridName = state.gridName
+  }
+  if (typeof state.imageFormat === 'string') {
+    patch.imageFormat = state.imageFormat
+  }
+  if (typeof state.imageQuality === 'number') {
+    patch.imageQuality = state.imageQuality
+  }
+  if (typeof state.saveLargeAsJpeg === 'boolean') {
+    patch.saveLargeAsJpeg = state.saveLargeAsJpeg
+  }
+  if (typeof state.largeJpegMaxKb === 'number') {
+    patch.largeJpegMaxKb = state.largeJpegMaxKb
   }
   if (typeof state.gallerySortKey === 'string' || (state.gallerySortKey && typeof state.gallerySortKey === 'object')) {
     patch.gallerySortKey = state.gallerySortKey as UserSettings['gallerySortKey']
@@ -353,12 +609,52 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ batchGridFill })
     persist()
   },
+  setBatchGridOnCancel: (batchGridOnCancel) => {
+    set({ batchGridOnCancel })
+    persist()
+  },
+  setSaveInterrupted: (saveInterrupted) => {
+    set({ saveInterrupted })
+    persist()
+  },
+  setInterruptedInGrid: (interruptedInGrid) => {
+    set({ interruptedInGrid })
+    persist()
+  },
   setHiddenGenerateTabs: (hiddenGenerateTabs) => {
     set({ hiddenGenerateTabs: hiddenGenerateTabs.filter((item) => item !== 'Generation') })
     persist()
   },
+  setHiddenMainTabs: (hiddenMainTabs) => {
+    set({ hiddenMainTabs: cleanHiddenMainTabs(hiddenMainTabs) })
+    persist()
+  },
+  setMainTabOrder: (mainTabOrder) => {
+    set({ mainTabOrder: cleanMainTabOrder(mainTabOrder) })
+    persist()
+  },
+  setGenerateTabOrder: (generateTabOrder) => {
+    set({ generateTabOrder: cleanGenerateTabOrder(generateTabOrder) })
+    persist()
+  },
+  setMainTabKeysFollowLayout: (mainTabKeysFollowLayout) => {
+    set({ mainTabKeysFollowLayout })
+    persist()
+  },
+  setGenerateTabKeysFollowLayout: (generateTabKeysFollowLayout) => {
+    set({ generateTabKeysFollowLayout })
+    persist()
+  },
   setHiddenModelTypes: (hiddenModelTypes) => {
     set({ hiddenModelTypes })
+    persist()
+  },
+  setHiddenSamplers: (hiddenSamplers) => {
+    set({ hiddenSamplers: cleanNames(hiddenSamplers) })
+    persist()
+  },
+  setHiddenSchedulers: (hiddenSchedulers) => {
+    set({ hiddenSchedulers: cleanNames(hiddenSchedulers) })
     persist()
   },
   setTheme: (theme) => {
@@ -381,6 +677,34 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ gridPath })
     persist()
   },
+  setInterruptedPath: (interruptedPath) => {
+    set({ interruptedPath })
+    persist()
+  },
+  setImageName: (imageName) => {
+    set({ imageName })
+    persist()
+  },
+  setGridName: (gridName) => {
+    set({ gridName })
+    persist()
+  },
+  setImageFormat: (imageFormat) => {
+    set({ imageFormat: cleanImageFormat(imageFormat) })
+    persist()
+  },
+  setImageQuality: (imageQuality) => {
+    set({ imageQuality: cleanImageQuality(imageQuality) })
+    persist()
+  },
+  setSaveLargeAsJpeg: (saveLargeAsJpeg) => {
+    set({ saveLargeAsJpeg })
+    persist()
+  },
+  setLargeJpegMaxKb: (largeJpegMaxKb) => {
+    set({ largeJpegMaxKb: cleanLargeJpegMaxKb(largeJpegMaxKb) })
+    persist()
+  },
   setGallerySortKey: (kind, gallerySortKey) => {
     set((state) => ({
       gallerySortKey: { ...state.gallerySortKey, [kind]: cleanSortKey(gallerySortKey) },
@@ -395,6 +719,22 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setGalleryTileScale: (galleryTileScale) => {
     set({ galleryTileScale: cleanTileScale(galleryTileScale) })
+    persist()
+  },
+  setLoraStrengthMin: (loraStrengthMin) => {
+    set({ loraStrengthMin: cleanLoraBound(loraStrengthMin, SETTINGS_DEFAULTS.loraStrengthMin) })
+    persist()
+  },
+  setLoraStrengthMax: (loraStrengthMax) => {
+    set({ loraStrengthMax: cleanLoraBound(loraStrengthMax, SETTINGS_DEFAULTS.loraStrengthMax) })
+    persist()
+  },
+  setLoraSliderMin: (loraSliderMin) => {
+    set({ loraSliderMin: cleanLoraBound(loraSliderMin, SETTINGS_DEFAULTS.loraSliderMin) })
+    persist()
+  },
+  setLoraSliderMax: (loraSliderMax) => {
+    set({ loraSliderMax: cleanLoraBound(loraSliderMax, SETTINGS_DEFAULTS.loraSliderMax) })
     persist()
   },
 }))

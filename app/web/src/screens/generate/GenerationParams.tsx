@@ -1,11 +1,13 @@
+import { OutputPathOverride } from './OutputPathOverride.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
-import { ShuffleIcon, SwapIcon, UndoIcon } from '@/components/ControlIcons.tsx'
+import { SwapIcon } from '@/components/ControlIcons.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { getKSamplerChoices } from '@/lib/api.ts'
-import { useGenerateStore } from '@/stores/generateStore.ts'
+import { useGenerateStore, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
+import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
-import { ASPECTS, SAMPLERS, SCHEDULERS, inferScaler, sizeFromScaler } from './resolutions.ts'
+import { ASPECTS, SAMPLERS, SCHEDULERS, inferScaler, listedChoices, sizeFromScaler } from './resolutions.ts'
 
 function FieldLabel({ children }: { children: string }) {
   return <span className="text-xs text-muted">{children}</span>
@@ -24,6 +26,7 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
   const steps = useGenerateStore((s) => s.steps)
   const cfg = useGenerateStore((s) => s.cfg)
   const seed = useGenerateStore((s) => s.seed)
+  const seedAfter = useGenerateStore((s) => s.seedAfter)
   const batchSize = useGenerateStore((s) => s.batchSize)
   const batchCount = useGenerateStore((s) => s.batchCount)
   const sampler = useGenerateStore((s) => s.sampler)
@@ -36,6 +39,7 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
   const setSteps = useGenerateStore((s) => s.setSteps)
   const setCfg = useGenerateStore((s) => s.setCfg)
   const setSeed = useGenerateStore((s) => s.setSeed)
+  const setSeedAfter = useGenerateStore((s) => s.setSeedAfter)
   const setBatchSize = useGenerateStore((s) => s.setBatchSize)
   const setBatchCount = useGenerateStore((s) => s.setBatchCount)
   const setSampler = useGenerateStore((s) => s.setSampler)
@@ -43,6 +47,16 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
   const setResMode = useGenerateStore((s) => s.setResMode)
   const setAspect = useGenerateStore((s) => s.setAspect)
   const setMegapixels = useGenerateStore((s) => s.setMegapixels)
+  const outputImagePath = useGenerateStore((s) => s.outputImagePath)
+  const outputGridPath = useGenerateStore((s) => s.outputGridPath)
+  const outputImageName = useGenerateStore((s) => s.outputImageName)
+  const outputGridName = useGenerateStore((s) => s.outputGridName)
+  const setOutputImagePath = useGenerateStore((s) => s.setOutputImagePath)
+  const setOutputGridPath = useGenerateStore((s) => s.setOutputGridPath)
+  const setOutputImageName = useGenerateStore((s) => s.setOutputImageName)
+  const setOutputGridName = useGenerateStore((s) => s.setOutputGridName)
+  const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
+  const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
 
@@ -105,14 +119,14 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
       <div className="grid grid-cols-3 gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <FieldLabel>Sampler</FieldLabel>
-          <SelectField value={sampler} onChange={setSampler} options={[...new Set([sampler, ...samplers])]} />
+          <SelectField value={sampler} onChange={setSampler} options={listedChoices(samplers, hiddenSamplers, sampler)} />
         </div>
         <div className="flex min-w-0 flex-col gap-1">
           <FieldLabel>Scheduler</FieldLabel>
           <SelectField
             value={scheduler}
             onChange={setScheduler}
-            options={[...new Set([scheduler, ...schedulers])]}
+            options={listedChoices(schedulers, hiddenSchedulers, scheduler)}
           />
         </div>
         <SliderField label="Steps" value={steps} onChange={setSteps} min={1} max={150} />
@@ -172,26 +186,30 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
         </div>
       </div>
       <SliderField label="CFG" value={cfg} onChange={setCfg} min={1} max={30} step={0.5} />
-      <label className="flex flex-col gap-1">
-        <span className="text-xs text-muted">Seed</span>
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <NumberField value={seed} onChange={setSeed} />
-          </div>
-          <button type="button" className="icon-btn" aria-label="Random seed" onClick={() => setSeed(-1)}>
-            <ShuffleIcon />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label="Restore last seed"
-            disabled={lastSeed == null}
-            onClick={() => lastSeed != null && setSeed(lastSeed)}
-          >
-            <UndoIcon />
-          </button>
+      <div className="flex items-end gap-2">
+        <label className="flex min-w-0 flex-1 flex-col gap-1">
+          <span className="text-xs text-muted">Seed</span>
+          <NumberField value={seed} onChange={setSeed} />
+        </label>
+        <div className="flex w-32 shrink-0 flex-col gap-1">
+          <FieldLabel>After generation</FieldLabel>
+          <SelectField
+            value={seedAfter}
+            onChange={(value) => setSeedAfter(value as SeedAfter, lastSeed)}
+            options={[...SEED_AFTER]}
+          />
         </div>
-      </label>
+      </div>
+      <OutputPathOverride
+        imagePath={outputImagePath}
+        gridPath={outputGridPath}
+        imageName={outputImageName}
+        gridName={outputGridName}
+        onImagePath={setOutputImagePath}
+        onGridPath={setOutputGridPath}
+        onImageName={setOutputImageName}
+        onGridName={setOutputGridName}
+      />
       {error ? <p className="text-xs text-accent">{error}</p> : null}
       {warning ? <p className="text-xs text-muted">{warning}</p> : null}
     </aside>

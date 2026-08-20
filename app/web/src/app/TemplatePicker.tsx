@@ -1,4 +1,8 @@
-import { ConfirmDialog } from '@/components/Dialog.tsx'
+import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { ConfirmDialog, Dialog } from '@/components/Dialog.tsx'
+import { GlyphMark } from '@/components/GlyphMark.tsx'
+import { IconPicker } from '@/components/IconPicker.tsx'
+import { glyphOf, type Glyph } from '@/components/glyph.ts'
 import { TemplateParamsForm } from '@/app/TemplateParamsForm.tsx'
 import { updateTemplate, type TemplateInfo } from '@/lib/api.ts'
 import {
@@ -7,8 +11,7 @@ import {
   paramsOf,
   type TemplateParams,
 } from '@/stores/generateStore.ts'
-import { useEffect, useState, type ReactNode } from 'react'
-import { createPortal } from 'react-dom'
+import { useEffect, useState } from 'react'
 
 type Pending = { type: 'load' } | { type: 'switch'; id: string } | { type: 'close' }
 
@@ -27,12 +30,10 @@ function PencilIcon() {
   )
 }
 
-function PanelHead({ children }: { children: ReactNode }) {
-  return (
-    <div className="-mx-2 -mt-2 mb-2 flex h-9 shrink-0 items-center gap-2 border-b border-line px-3">
-      {children}
-    </div>
-  )
+const ICON_BTN = 'flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink'
+
+function SectionTitle({ children }: { children: string }) {
+  return <h3 className="border-b border-line pb-1 text-xs font-medium text-ink">{children}</h3>
 }
 
 type TemplatePickerProps = {
@@ -238,153 +239,171 @@ export function TemplatePicker({
     }
   }
 
+  async function saveIcon(icon: Glyph) {
+    if (!selected || locked) {
+      return
+    }
+    setError(null)
+    try {
+      await updateTemplate(workflow, selected.id, undefined, undefined, icon)
+      await onSaved()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Icon failed')
+    }
+  }
+
   return (
     <>
-      {createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-bg/80 p-4" data-overlay onClick={requestClose}>
-          <div
-            className="flex h-[min(72vh,38rem)] w-[min(92vw,64rem)] gap-2"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <aside className="flex w-44 shrink-0 flex-col overflow-hidden rounded-md border border-line bg-panel p-2">
-              <PanelHead>
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Templates</p>
-              </PanelHead>
-              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-                {items.map((item, index) => {
-                  const on = item.id === selectedId
-                  return (
+      <Dialog
+        onClose={requestClose}
+        className="flex h-[min(72vh,38rem)] w-[min(92vw,56rem)] min-w-0 flex-col gap-3"
+      >
+        <div className="-mx-3 -mt-3 flex items-center gap-2 border-b border-line px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">Templates</span>
+          <button type="button" className={ICON_BTN} aria-label="Close" onClick={requestClose}>
+            <CloseIcon />
+          </button>
+        </div>
+        <div className="flex min-h-0 flex-1 gap-4">
+          <aside className="flex w-44 shrink-0 flex-col">
+            <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+              {items.map((item, index) => {
+                const on = item.id === selectedId
+                return (
+                  <div key={item.id} className="shrink-0">
+                    {index === 1 ? <div className="my-1 border-t border-line" /> : null}
                     <button
-                      key={item.id}
                       type="button"
                       className={[
-                        'w-full truncate rounded px-2 py-2 text-left text-sm',
-                        index === 1 ? 'mt-2' : '',
-                        on ? 'bg-line text-ink' : 'text-muted hover:bg-field hover:text-ink',
+                        'flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-sm',
+                        on ? 'bg-accent text-ink' : 'text-muted hover:bg-line hover:text-ink',
                       ].join(' ')}
                       onClick={() => select(item.id)}
                     >
-                      {item.name}
+                      <GlyphMark value={glyphOf(item)} size={16} />
+                      <span className="min-w-0 flex-1 truncate">{item.name}</span>
                       {item.id === activeId ? (
-                        <span className="ml-1 text-[10px] text-muted">current</span>
+                        <span
+                          className={[
+                            'shrink-0 rounded px-1 py-px text-[10px] font-medium',
+                            on ? 'bg-bg text-ink' : 'bg-accent text-ink',
+                          ].join(' ')}
+                        >
+                          current
+                        </span>
                       ) : null}
                     </button>
-                  )
-                })}
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-center rounded px-2 py-2 text-lg leading-none text-muted hover:bg-field hover:text-ink"
-                  aria-label="New template"
-                  title="New template"
-                  onClick={() => onSaveAs(editor)}
+                  </div>
+                )
+              })}
+              <button
+                type="button"
+                className="flex w-full shrink-0 items-center justify-center rounded px-2 py-1.5 text-sm leading-none text-muted hover:bg-line hover:text-ink"
+                aria-label="New template"
+                title="New template"
+                onClick={() => onSaveAs(editor)}
+              >
+                +
+              </button>
+            </div>
+          </aside>
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            <div className="flex h-7 shrink-0 items-center gap-2">
+              <IconPicker value={glyphOf(selected ?? { builtin: true })} disabled={locked} onChange={(icon) => void saveIcon(icon)} />
+              {rename != null && !locked ? (
+                <form
+                  className="flex min-w-0 flex-1 items-center gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    void saveName()
+                  }}
                 >
-                  +
-                </button>
-              </div>
-            </aside>
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-md border border-line bg-panel p-2">
-              <PanelHead>
-                {rename != null && !locked ? (
-                  <form
-                    className="flex min-w-0 flex-1 items-center gap-2"
-                    onSubmit={(e) => {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      void saveName()
-                    }}
-                  >
-                    <input
-                      className="min-w-0 flex-1 rounded border border-line bg-field px-2 py-0.5 text-sm font-semibold text-ink outline-none focus:border-accent"
-                      value={rename}
-                      onChange={(e) => setRename(e.target.value)}
-                      autoFocus
-                    />
+                  <input
+                    className="min-w-0 flex-1 rounded border border-line bg-field px-2 py-0.5 text-sm font-bold text-ink outline-none focus:border-accent"
+                    value={rename}
+                    onChange={(e) => setRename(e.target.value)}
+                    autoFocus
+                  />
+                  <button type="submit" className={ICON_BTN} aria-label="Save name" title="Save name">
+                    <PencilIcon />
+                  </button>
+                </form>
+              ) : (
+                <>
+                  <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{selected?.name ?? 'Template'}</span>
+                  {locked ? (
+                    <span className="shrink-0 rounded bg-accent/25 px-1.5 py-0.5 text-[10px] font-medium text-ink">
+                      read-only
+                    </span>
+                  ) : (
                     <button
-                      type="submit"
-                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink"
-                      aria-label="Save name"
-                      title="Save name"
+                      type="button"
+                      className={ICON_BTN}
+                      aria-label="Rename template"
+                      title="Rename"
+                      onClick={() => setRename(selected?.name ?? '')}
                     >
                       <PencilIcon />
                     </button>
-                  </form>
-                ) : (
-                  <>
-                    <p className="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-                      {selected?.name ?? 'Template'}
-                    </p>
-                    {locked ? (
-                      <span className="shrink-0 rounded bg-accent/25 px-1.5 py-0.5 text-[10px] font-medium text-ink">
-                        read-only
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink"
-                        aria-label="Rename template"
-                        title="Rename"
-                        onClick={() => setRename(selected?.name ?? '')}
-                      >
-                        <PencilIcon />
-                      </button>
-                    )}
-                  </>
-                )}
-              </PanelHead>
-              <fieldset
-                disabled={locked}
-                className="min-h-0 min-w-0 flex-1 overflow-y-auto border-0 pt-0 pr-1 pb-2 pl-0 disabled:opacity-60"
-              >
-                <TemplateParamsForm value={editor} onChange={locked ? () => undefined : setEditor} />
-              </fieldset>
-              {error ? <p className="mt-2 text-xs text-accent">{error}</p> : null}
-              <div className="mt-2 flex gap-2">
-                {dirty ? (
-                  <button
-                    type="button"
-                    className="flex-1 rounded bg-line px-2 py-1.5 text-sm text-ink hover:bg-field"
-                    onClick={() => void saveEditor()}
-                  >
-                    Save
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={[
-                    'rounded bg-accent px-2 py-1.5 text-sm text-ink',
-                    dirty ? 'flex-1' : 'w-full',
-                  ].join(' ')}
-                  onClick={() => (dirty ? setPending({ type: 'load' }) : loadSaved())}
-                >
-                  Load
-                </button>
-              </div>
+                  )}
+                </>
+              )}
             </div>
-            <aside className="flex w-52 shrink-0 flex-col overflow-hidden rounded-md border border-line bg-panel p-2">
-              <PanelHead>
-                <p className="text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Apply</p>
-              </PanelHead>
-              <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-                {APPLY_FIELDS.map((field) => (
-                  <label
-                    key={field.id}
-                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-ink hover:bg-field"
-                  >
-                    <input
-                      type="checkbox"
-                      className="check"
-                      checked={apply.includes(field.id)}
-                      onChange={() => toggleApply(field.id)}
-                    />
-                    {field.label}
-                  </label>
-                ))}
-              </div>
-            </aside>
+            <fieldset
+              disabled={locked}
+              className="min-h-0 min-w-0 flex-1 overflow-y-auto border-0 p-0 pr-3 disabled:opacity-60"
+            >
+              <TemplateParamsForm value={editor} apply={apply} onChange={locked ? () => undefined : setEditor} />
+            </fieldset>
           </div>
-        </div>,
-        document.body,
-      )}
+          <aside className="flex w-44 shrink-0 flex-col gap-1.5">
+            <SectionTitle>Apply</SectionTitle>
+            <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+              {APPLY_FIELDS.map((field) => (
+                <label
+                  key={field.id}
+                  className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm text-ink hover:bg-line"
+                >
+                  <input
+                    type="checkbox"
+                    className="check"
+                    checked={apply.includes(field.id)}
+                    onChange={() => toggleApply(field.id)}
+                  />
+                  {field.label}
+                </label>
+              ))}
+            </div>
+          </aside>
+        </div>
+        {error ? <p className="-mb-1 text-xs text-accent">{error}</p> : null}
+        <div className="flex gap-2">
+          <button
+            type="button"
+            className="flex-1 rounded px-2.5 py-1.5 text-sm text-muted hover:bg-line hover:text-ink"
+            onClick={requestClose}
+          >
+            Cancel
+          </button>
+          {dirty ? (
+            <button
+              type="button"
+              className="flex-1 rounded px-2.5 py-1.5 text-sm text-muted hover:bg-line hover:text-ink"
+              onClick={() => void saveEditor()}
+            >
+              Save
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="flex-1 rounded bg-accent px-2.5 py-1.5 text-sm text-ink"
+            onClick={() => (dirty ? setPending({ type: 'load' }) : loadSaved())}
+          >
+            Load
+          </button>
+        </div>
+      </Dialog>
       {pending && !blocked ? (
         <ConfirmDialog
           title={pending.type === 'load' ? 'Unsaved changes' : 'Discard edits?'}

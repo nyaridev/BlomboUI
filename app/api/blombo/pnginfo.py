@@ -21,7 +21,13 @@ def read(data: bytes, filename: str = "") -> dict[str, Any]:
     return {"text": text or "No generation metadata found.", "raw": texts}
 
 
-def embed(data: bytes, values: dict[str, Any], graph: dict[str, Any] | None = None) -> bytes:
+def embed(
+    data: bytes,
+    values: dict[str, Any],
+    graph: dict[str, Any] | None = None,
+    fmt: str = "png",
+    quality: int = 100,
+) -> bytes:
     from PIL import Image
     from PIL.PngImagePlugin import PngInfo
 
@@ -30,16 +36,48 @@ def embed(data: bytes, values: dict[str, Any], graph: dict[str, Any] | None = No
         image.load()
     except Exception:
         return data
-    info = PngInfo()
-    for key, value in (getattr(image, "text", None) or {}).items():
-        if isinstance(key, str) and isinstance(value, str) and key not in {"parameters", "prompt"}:
-            info.add_text(key, value, zip=True)
-    info.add_text("parameters", parameters_text(values))
-    if graph:
-        info.add_text("prompt", json.dumps(graph), zip=True)
+    fmt = "jpg" if fmt in {"jpg", "jpeg"} else fmt
+    if fmt == "png":
+        info = PngInfo()
+        for key, value in (getattr(image, "text", None) or {}).items():
+            if isinstance(key, str) and isinstance(value, str) and key not in {"parameters", "prompt"}:
+                info.add_text(key, value, zip=True)
+        info.add_text("parameters", parameters_text(values))
+        if graph:
+            info.add_text("prompt", json.dumps(graph), zip=True)
+        out = BytesIO()
+        image.save(out, format="PNG", pnginfo=info)
+        return out.getvalue()
+    if fmt == "jpg":
+        image = _rgb(image)
+    q = max(1, min(100, int(quality)))
+    exif = jpeg_exif(parameters_text(values))
     out = BytesIO()
-    image.save(out, format="PNG", pnginfo=info)
+    opts: dict[str, Any] = {"quality": q}
+    if exif is not None:
+        opts["exif"] = exif
+    try:
+        if fmt == "webp":
+            image.save(out, format="WEBP", **opts)
+        else:
+            image.save(out, format="JPEG", optimize=True, **opts)
+    except OSError:
+        if fmt == "webp":
+            image.save(out, format="WEBP", quality=q)
+        else:
+            image.save(out, format="JPEG", quality=q, optimize=True)
     return out.getvalue()
+
+
+def _rgb(image: Any) -> Any:
+    from PIL import Image
+
+    if image.mode in ("RGBA", "LA") or (image.mode == "P" and "transparency" in image.info):
+        bg = Image.new("RGB", image.size, (255, 255, 255))
+        rgba = image.convert("RGBA")
+        bg.paste(rgba, mask=rgba.split()[-1])
+        return bg
+    return image.convert("RGB")
 
 
 def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:

@@ -1,5 +1,15 @@
+import { parseModelTileStyle, type ModelTileStyle } from '@/screens/generate/modelLayouts.ts'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+
+export const SEED_AFTER = [
+  { value: 'randomize', label: 'Randomize' },
+  { value: 'fixed', label: 'Fixed' },
+  { value: 'increment', label: 'Increment' },
+  { value: 'decrement', label: 'Decrement' },
+] as const
+
+export type SeedAfter = (typeof SEED_AFTER)[number]['value']
 
 export const DEFAULTS = {
   prompt: '1girl, black hair',
@@ -10,6 +20,11 @@ export const DEFAULTS = {
   steps: 20,
   cfg: 4,
   seed: -1,
+  seedAfter: 'randomize' as SeedAfter,
+  outputImagePath: '',
+  outputGridPath: '',
+  outputImageName: '',
+  outputGridName: '',
   batchSize: 1,
   batchCount: 1,
   sampler: 'euler',
@@ -29,6 +44,11 @@ export const PARAM_KEYS = [
   'steps',
   'cfg',
   'seed',
+  'seedAfter',
+  'outputImagePath',
+  'outputGridPath',
+  'outputImageName',
+  'outputGridName',
   'batchSize',
   'batchCount',
   'sampler',
@@ -47,6 +67,11 @@ export type TemplateParams = {
   steps: number
   cfg: number
   seed: number
+  seedAfter: SeedAfter
+  outputImagePath: string
+  outputGridPath: string
+  outputImageName: string
+  outputGridName: string
   batchSize: number
   batchCount: number
   sampler: string
@@ -66,6 +91,11 @@ export function pickParams(source: TemplateParams): TemplateParams {
     steps: source.steps,
     cfg: source.cfg,
     seed: source.seed,
+    seedAfter: source.seedAfter,
+    outputImagePath: source.outputImagePath,
+    outputGridPath: source.outputGridPath,
+    outputImageName: source.outputImageName,
+    outputGridName: source.outputGridName,
     batchSize: source.batchSize,
     batchCount: source.batchCount,
     sampler: source.sampler,
@@ -89,8 +119,14 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       if (key === 'resMode' && value !== 'raw' && value !== 'scaler') {
         continue
       }
+      if (key === 'seedAfter' && !SEED_AFTER.some((item) => item.value === value)) {
+        continue
+      }
       ;(next as Record<string, unknown>)[key] = value
     }
+  }
+  if (!raw || raw.seedAfter == null) {
+    next.seedAfter = next.seed < 0 ? 'randomize' : 'fixed'
   }
   return next
 }
@@ -111,7 +147,8 @@ export const APPLY_FIELDS = [
   { id: 'scheduler', label: 'Scheduler', keys: ['scheduler'] },
   { id: 'steps', label: 'Steps', keys: ['steps'] },
   { id: 'cfg', label: 'CFG', keys: ['cfg'] },
-  { id: 'seed', label: 'Seed', keys: ['seed'] },
+  { id: 'seed', label: 'Seed', keys: ['seed', 'seedAfter'] },
+  { id: 'outputPath', label: 'Output path', keys: ['outputImagePath', 'outputGridPath', 'outputImageName', 'outputGridName'] },
   { id: 'resolution', label: 'Resolution', keys: ['width', 'height', 'resMode', 'aspect', 'megapixels'] },
   { id: 'batchCount', label: 'Batch count', keys: ['batchCount'] },
   { id: 'batchSize', label: 'Batch size', keys: ['batchSize'] },
@@ -120,6 +157,30 @@ export const APPLY_FIELDS = [
 const APPLY_OFF = new Set(['prompt', 'resolution', 'batchCount', 'batchSize'])
 
 export const DEFAULT_APPLY = APPLY_FIELDS.filter((field) => !APPLY_OFF.has(field.id)).map((field) => field.id)
+
+export function randomSeed() {
+  return Math.floor(Math.random() * (2 ** 53))
+}
+
+export function usedSeed(seed: number, mode: SeedAfter) {
+  if (mode === 'randomize' || seed < 0) {
+    return randomSeed()
+  }
+  return seed
+}
+
+export function nextSeed(used: number, mode: SeedAfter, steps = 1) {
+  if (mode === 'randomize') {
+    return -1
+  }
+  if (mode === 'increment') {
+    return used + steps
+  }
+  if (mode === 'decrement') {
+    return used - steps
+  }
+  return used
+}
 
 export function applyOf(raw?: string[] | null): string[] {
   if (raw == null) {
@@ -186,6 +247,14 @@ type GenerateState = {
   workflow: string
   templateId: string
   templateByWorkflow: Record<string, string>
+  seedAfter: SeedAfter
+  outputImagePath: string
+  outputGridPath: string
+  outputImageName: string
+  outputGridName: string
+  modelTileStyle: ModelTileStyle
+  vae: string
+  textEncoder: string
   setPrompt: (value: string) => void
   setNegativePrompt: (value: string) => void
   setCheckpoint: (value: string) => void
@@ -194,6 +263,14 @@ type GenerateState = {
   setSteps: (value: number) => void
   setCfg: (value: number) => void
   setSeed: (value: number) => void
+  setSeedAfter: (value: SeedAfter, lastSeed?: number | null) => void
+  setOutputImagePath: (value: string) => void
+  setOutputGridPath: (value: string) => void
+  setOutputImageName: (value: string) => void
+  setOutputGridName: (value: string) => void
+  setModelTileStyle: (value: ModelTileStyle) => void
+  setVae: (value: string) => void
+  setTextEncoder: (value: string) => void
   setBatchSize: (value: number) => void
   setBatchCount: (value: number) => void
   setSampler: (value: string) => void
@@ -215,6 +292,9 @@ export const useGenerateStore = create<GenerateState>()(
       templateId: 'default',
       templateByWorkflow: {},
       viewedImageUrl: null,
+      modelTileStyle: 'tall',
+      vae: '',
+      textEncoder: '',
       setPrompt: (prompt) => set({ prompt }),
       setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
       setCheckpoint: (checkpoint) => set({ checkpoint }),
@@ -223,6 +303,23 @@ export const useGenerateStore = create<GenerateState>()(
       setSteps: (steps) => set({ steps }),
       setCfg: (cfg) => set({ cfg: Math.max(1, cfg) }),
       setSeed: (seed) => set({ seed }),
+      setSeedAfter: (seedAfter, lastSeed) =>
+        set((s) => {
+          if (seedAfter === 'randomize') {
+            return { seedAfter, seed: -1 }
+          }
+          if (s.seedAfter === 'randomize' && lastSeed != null) {
+            return { seedAfter, seed: lastSeed }
+          }
+          return { seedAfter }
+        }),
+      setOutputImagePath: (outputImagePath) => set({ outputImagePath }),
+      setOutputGridPath: (outputGridPath) => set({ outputGridPath }),
+      setOutputImageName: (outputImageName) => set({ outputImageName }),
+      setOutputGridName: (outputGridName) => set({ outputGridName }),
+      setModelTileStyle: (modelTileStyle) => set({ modelTileStyle: parseModelTileStyle(modelTileStyle) }),
+      setVae: (vae) => set({ vae }),
+      setTextEncoder: (textEncoder) => set({ textEncoder }),
       setBatchSize: (batchSize) => set({ batchSize }),
       setBatchCount: (batchCount) => set({ batchCount }),
       setSampler: (sampler) => set({ sampler }),
@@ -246,6 +343,15 @@ export const useGenerateStore = create<GenerateState>()(
     {
       name: 'blombo-generate',
       partialize: ({ viewedImageUrl: _viewed, ...rest }) => rest,
+      merge: (persisted, current) => {
+        const incoming = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
+        const { modelLayout: _layout, ...rest } = incoming
+        return {
+          ...current,
+          ...rest,
+          modelTileStyle: parseModelTileStyle(rest.modelTileStyle),
+        }
+      },
     },
   ),
 )

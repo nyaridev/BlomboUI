@@ -6,7 +6,8 @@
     "scheduler",
     "steps",
     "cfg",
-    "seed"
+    "seed",
+    "outputPath"
   ],
   "1": {
     "inputs": {

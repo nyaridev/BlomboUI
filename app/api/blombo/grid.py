@@ -46,7 +46,7 @@ def save_contact_sheet(
     from PIL import Image
 
     images = [Image.open(path).convert("RGB") for path in paths]
-    cell_w, cell_h = images[0].size
+    cell_w, cell_h = max(images, key=lambda image: image.size[0] * image.size[1]).size
     cols, row_n = layout(len(images), cell_w, cell_h, rows, fill)
     sheet = Image.new("RGB", (cols * cell_w, row_n * cell_h), (17, 21, 26))
     for i, image in enumerate(images):

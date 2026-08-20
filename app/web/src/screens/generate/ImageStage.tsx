@@ -1,6 +1,7 @@
 import { LightboxView } from '@/components/LightboxView.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
 import { generationImageUrl, type JobGeneration } from '@/lib/api.ts'
+import { middleOpen } from '@/lib/openImage.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { GenerationInfo } from './GenerationInfo.tsx'
 import { ThumbStrip, type ThumbItem } from './ThumbStrip.tsx'
@@ -126,7 +127,12 @@ export function ImageStage({
             onError={() => setPreviewFailed(true)}
           />
         ) : current ? (
-          <button type="button" className="h-full w-full" onClick={() => setLightbox(true)}>
+          <button
+            type="button"
+            className="h-full w-full"
+            onClick={() => setLightbox(true)}
+            onMouseDown={(event) => middleOpen(event, current.src)}
+          >
             <img
               ref={imgRef}
               src={current.src}

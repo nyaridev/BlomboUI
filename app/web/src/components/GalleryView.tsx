@@ -13,6 +13,7 @@ import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.t
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { modelThumbUrl, type CivitaiVersion, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { applyCivitaiMeta, civitaiHashes, hasCivitaiLocalData, lookupCivitai, waitModelInfo } from '@/lib/civitaiFill.ts'
+import { storedLoraStrengthLabel } from '@/lib/loraTags.ts'
 
 const TREE_REM = 18
 const TREE_MIN_REM = 12
@@ -40,6 +41,7 @@ type GalleryChrome = {
   sortKey?: SortKey
   sortDir?: SortDir
   showTree: boolean
+  pinSelected: boolean
   treeWidth: number
   openDirs: string[]
   treeScroll: number
@@ -105,6 +107,37 @@ function TreeIcon() {
       <path d="M7 4.5v2M4 8.5V6.5h6v2" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="1.5" y="8.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
       <rect x="8.5" y="8.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  )
+}
+
+function EyeIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d="M1.6 7s2.1-3.6 5.4-3.6S12.4 7 12.4 7s-2.1 3.6-5.4 3.6S1.6 7 1.6 7Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <circle cx="7" cy="7" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  )
+}
+
+function EyeOffIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
+      <path
+        d="M1.6 7s2.1-3.6 5.4-3.6S12.4 7 12.4 7s-2.1 3.6-5.4 3.6S1.6 7 1.6 7Z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <circle cx="7" cy="7" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M2.4 2.4 11.6 11.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -206,6 +239,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const [treeWidth, setTreeWidth] = useState(() => saved?.treeWidth ?? TREE_REM * 16)
   const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(saved?.openDirs))
   const [showTree, setShowTree] = useState(() => saved?.showTree ?? true)
+  const [pinSelected, setPinSelected] = useState(() => saved?.pinSelected ?? true)
   const [query, setQuery] = useState(() => saved?.query ?? '')
   const [sortKey, setSortKey] = useState<SortKey | null>(saved?.sortKey ?? null)
   const [sortDir, setSortDir] = useState<SortDir | null>(saved?.sortDir ?? null)
@@ -221,6 +255,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     sortKey: sortKey ?? undefined,
     sortDir: sortDir ?? undefined,
     showTree,
+    pinSelected,
     treeWidth,
     openDirs,
     treeScroll: saved?.treeScroll ?? 0,
@@ -232,6 +267,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     sortKey: sortKey ?? undefined,
     sortDir: sortDir ?? undefined,
     showTree,
+    pinSelected,
     treeWidth,
     openDirs,
   }
@@ -243,12 +279,32 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const byTree = useMemo(() => new Map(items.map((item) => [treePath(item), item])), [items])
   const tree = useMemo(() => buildGalleryTree(paths), [paths])
   const tiles = useMemo(() => {
-    return sortItems(
-      items.filter((item) => modelPath(item) && matchesQuery(item, query)),
-      shownSortKey,
-      shownSortDir,
-    )
-  }, [items, query, shownSortKey, shownSortDir])
+    const isSelected = (item: ModelEntry) =>
+      selected ? selected.includes(item.path) : Boolean(value) && value === item.path
+    if (!pinSelected) {
+      return sortItems(
+        items.filter((item) => modelPath(item) && matchesQuery(item, query)),
+        shownSortKey,
+        shownSortDir,
+      )
+    }
+    const pinned: ModelEntry[] = []
+    const rest: ModelEntry[] = []
+    for (const item of items) {
+      if (!modelPath(item)) {
+        continue
+      }
+      if (isSelected(item)) {
+        pinned.push(item)
+      } else if (matchesQuery(item, query)) {
+        rest.push(item)
+      }
+    }
+    const orderedPinned = selected?.length
+      ? selected.flatMap((path) => pinned.filter((item) => item.path === path))
+      : sortItems(pinned, shownSortKey, shownSortDir)
+    return [...orderedPinned, ...sortItems(rest, shownSortKey, shownSortDir)]
+  }, [items, query, shownSortKey, shownSortDir, pinSelected, selected, value])
 
   function isOn(path: string) {
     if (selected) {
@@ -331,6 +387,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
         sortKey: now.sortKey,
         sortDir: now.sortDir,
         showTree: now.showTree,
+        pinSelected: now.pinSelected,
         treeWidth: now.treeWidth,
         openDirs: [...now.openDirs],
         treeScroll: treeRef.current?.scrollTop ?? now.treeScroll,
@@ -468,6 +525,16 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
         </button>
         <button
           type="button"
+          className={['icon-btn', pinSelected ? 'bg-line' : ''].join(' ')}
+          aria-label={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
+          aria-pressed={pinSelected}
+          title={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
+          onClick={() => setPinSelected((on) => !on)}
+        >
+          {pinSelected ? <EyeIcon /> : <EyeOffIcon />}
+        </button>
+        <button
+          type="button"
           className="icon-btn"
           aria-label="Refresh models"
           title="Refresh models (R)"
@@ -519,35 +586,38 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
             >
               {tiles.map((item) => {
                 const selected = isOn(item.path)
+                const strength = kind === 'loras' ? storedLoraStrengthLabel(item.strength, item.slider) : ''
                 const preview = (
                   <TilePreview
                     className="w-full"
                     src={item.thumb ? modelThumbUrl(kind, filePath(item), item.thumb) : null}
                     mark="?"
                     label={tileName(item)}
+                    badge={strength || undefined}
                   />
                 )
                 return (
                   <div
                     key={item.path}
-                    className="group relative min-w-0 [content-visibility:auto]"
+                    className="min-w-0 p-1.5 [content-visibility:auto]"
                     style={{ containIntrinsicSize: `${tileW}rem ${tileH}rem` }}
                   >
-                    {onSelect ? (
-                      <button
-                        type="button"
-                        title={item.path}
-                        className={['w-full rounded', selected ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : ''].join(' ')}
-                        onClick={() => onSelect(item.path)}
-                      >
-                        {preview}
-                      </button>
-                    ) : (
-                      <div title={item.path} className="w-full rounded">
-                        {preview}
-                      </div>
-                    )}
-                    <div className="absolute top-2 right-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100">
+                    <div className="group relative">
+                      {onSelect ? (
+                        <button
+                          type="button"
+                          title={item.path}
+                          className={['w-full rounded', selected ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : ''].join(' ')}
+                          onClick={() => onSelect(item.path)}
+                        >
+                          {preview}
+                        </button>
+                      ) : (
+                        <div title={item.path} className="w-full rounded">
+                          {preview}
+                        </div>
+                      )}
+                      <div className="absolute top-2 right-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100">
                       {kind !== 'wildcards' && filePath(item).toLowerCase().endsWith('.safetensors') ? (
                         <button
                           type="button"
@@ -569,6 +639,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                       >
                         <InfoIcon />
                       </button>
+                    </div>
                     </div>
                   </div>
                 )

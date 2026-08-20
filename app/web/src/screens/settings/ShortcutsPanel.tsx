@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { SettingsBlock } from './SettingsBlock.tsx'
+import { SettingsCard } from './SettingsBlock.tsx'
 
 export const SHORTCUTS_QUERY =
   'shortcuts keys keyboard hotkey reload models generate cancel interrupt enter ctrl shift alt escape fullscreen tabs'
@@ -23,8 +23,8 @@ const SHORTCUT_SECTIONS: { title: string; items: Shortcut[] }[] = [
   {
     title: 'Navigation',
     items: [
-      { keys: ['Alt', '1…4'], action: 'Generate tabs (Generation, Base Model, LoRA, Wildcards)' },
-      { keys: ['Ctrl', '1…6'], action: 'App tabs (Generate, File Info, Gallery, Models, Errors, Settings)' },
+      { keys: ['Alt', '1…4'], action: 'Generate tabs. Follows order and exclusions if that setting is on' },
+      { keys: ['Ctrl', '1…6'], action: 'App tabs. Follows order and exclusions if that setting is on' },
     ],
   },
   {
@@ -51,8 +51,8 @@ function Keys({ keys }: { keys: string[] }) {
 
 export function ShortcutsPanel({ query = '' }: { query?: string }) {
   return (
-    <div className="flex max-w-xl flex-col gap-6">
-      <SettingsBlock query={query} title="Shortcuts" terms={SHORTCUTS_QUERY}>
+    <div className="flex max-w-xl flex-col gap-3">
+      <SettingsCard query={query} title="Shortcuts" terms={SHORTCUTS_QUERY}>
         <div className="overflow-hidden rounded-md border border-line">
           <table className="w-full text-sm">
             <thead>
@@ -86,7 +86,7 @@ export function ShortcutsPanel({ query = '' }: { query?: string }) {
           </table>
         </div>
         <p className="text-xs text-muted">R and F are ignored while typing in a field.</p>
-      </SettingsBlock>
+      </SettingsCard>
     </div>
   )
 }

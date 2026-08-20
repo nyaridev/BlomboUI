@@ -32,6 +32,10 @@ export const SCHEDULERS = [
   'beta',
 ] as const
 
+export function listedChoices(all: readonly string[], hidden: readonly string[], keep: string) {
+  return [...new Set([keep, ...all.filter((item) => !hidden.includes(item))])]
+}
+
 function snap8(value: number, min: number, max: number) {
   const snapped = Math.round(value / 8) * 8
   return Math.min(max, Math.max(min, snapped))

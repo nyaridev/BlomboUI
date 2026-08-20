@@ -5,7 +5,7 @@ import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 
 export const TABS_QUERY =
-  'tabs exclude hide order reorder generate main keybind shortcut ctrl alt 1 2 3 4 5 6 7 errors settings file info gallery models wildcard manager'
+  'tabs exclude hide order reorder generate main keybind shortcut ctrl alt 1 2 3 4 5 6 7 8 errors settings file info gallery models wildcard manager scopes'
 
 export function TabsPanel({ query = '' }: { query?: string }) {
   const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs) ?? []
@@ -26,9 +26,9 @@ export function TabsPanel({ query = '' }: { query?: string }) {
       <SettingsCard
         query={query}
         title="Main tabs"
-        terms="exclude hide order reorder left generate file info gallery models wildcard manager errors"
+        terms="exclude hide order reorder left generate file info gallery models wildcard manager scopes errors"
       >
-        <SettingsBlock query={query} title="Exclude" terms="hide generate file info gallery models wildcard manager errors">
+        <SettingsBlock query={query} title="Exclude" terms="hide generate file info gallery models wildcard manager scopes errors">
           <ChipSelect
             options={[...HIDEABLE_MAIN_TABS]}
             value={hiddenMainTabs}
@@ -37,7 +37,7 @@ export function TabsPanel({ query = '' }: { query?: string }) {
           />
           <p className="text-xs text-muted">Settings stays visible. Selected tabs leave the header.</p>
         </SettingsBlock>
-        <SettingsBlock query={query} title="Order" terms="reorder left generate file info gallery models wildcard manager">
+        <SettingsBlock query={query} title="Order" terms="reorder left generate file info gallery models wildcard manager scopes">
           <ChipSelect
             mode="order"
             options={[...ORDERABLE_MAIN_TABS]}
@@ -79,7 +79,7 @@ export function TabsPanel({ query = '' }: { query?: string }) {
             checked={mainTabKeysFollowLayout}
             onChange={(e) => setMainTabKeysFollowLayout(e.target.checked)}
           />
-          Ctrl+1…7 follow main tab order and exclusions
+          Ctrl+1…8 follow main tab order and exclusions
         </label>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input

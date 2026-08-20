@@ -10,6 +10,7 @@ import {
   type CivitaiVersion,
   type ModelLists,
 } from '@/lib/api.ts'
+import { civitaiSaveThumbView } from '@/lib/thumbView.ts'
 import { SAMPLERS, SCHEDULERS } from '@/screens/generate/resolutions.ts'
 import { PARAM_KEYS, pickParams, useGenerateStore } from '@/stores/generateStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
@@ -296,8 +297,19 @@ export function FileInfoScreen() {
     setReplacing(true)
     try {
       const file = await fetchCivitaiImage(url)
-      const tick = await saveModelThumb(library.kind, library.path, file)
+      const parsed = parsePngInfo(text)
+      const image = (civitai?.images || []).find((item) => item.url === url)
+      const tick = await saveModelThumb(library.kind, library.path, file, civitaiSaveThumbView(), {
+        prompt: String(image?.meta?.prompt || parsed.prompt || ''),
+        parameters: text,
+        raw,
+        origin: 'civitai',
+        civitai: civitai
+          ? { id: civitai.id, modelId: civitai.modelId, name: civitai.name, baseModel: civitai.baseModel, image: url }
+          : undefined,
+      })
       setThumb(library.kind, library.path, tick)
+      await useModelsStore.getState().pull()
       navigate('/', { state: { tab: library.kind === 'loras' ? 'Lora' : 'Base Model' } })
     } catch {
       /* keep current preview */

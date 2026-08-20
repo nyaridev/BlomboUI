@@ -7,6 +7,7 @@ APP = Path(__file__).resolve().parents[2]
 ROOT = APP.parent
 RUNTIME = ROOT / "runtime"
 USER = ROOT / "user"
+USER_DATA = USER / "user_data"
 WORKFLOWS = APP / "workflows"
 
 COMFY_HOST = "127.0.0.1"

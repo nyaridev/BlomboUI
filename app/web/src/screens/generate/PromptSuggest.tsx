@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
-import { getPromptTagUsage, modelThumbUrl, suggestPromptTags, type FrequentPromptTag, type PromptTagHit } from '@/lib/api.ts'
+import { getPromptTagUsage, suggestPromptTags, type FrequentPromptTag, type ModelEntry, type PromptTagHit } from '@/lib/api.ts'
+import { modelThumbSrc } from '@/lib/thumbView.ts'
 import { appendPromptChunk } from '@/lib/loraTags.ts'
 import {
   applyTagUsage,
@@ -18,10 +19,21 @@ import { usePromptWeightKey } from '@/lib/promptWeight.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { autocompleteApplies, useSettingsStore } from '@/stores/settingsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 const WINDOW = 10
 const THUMB_W = 192
+
+function suggestThumb(hit: SuggestHit, loras: ModelEntry[], wildcards: ModelEntry[]) {
+  if ((hit.kind !== 'lora' && hit.kind !== 'wildcard') || !hit.path) {
+    return null
+  }
+  const kind = hit.kind === 'lora' ? 'loras' : 'wildcards'
+  const items = hit.kind === 'lora' ? loras : wildcards
+  const item = items.find((row) => row.path === hit.path) || { path: hit.path, thumb: hit.thumb || 0, thumb_global: 0 }
+  return modelThumbSrc(kind, item)
+}
 
 function abbrevCount(value: number) {
   if (value >= 1_000_000) {
@@ -71,6 +83,7 @@ export function PromptField({
   const loraCompleteThumbs = useSettingsStore((s) => s.loraCompleteThumbs)
   const autocompleteThumbScale = useSettingsStore((s) => s.autocompleteThumbScale)
   const frequentTagsEnabled = useSettingsStore((s) => s.frequentTagsEnabled)
+  useThumbView()
   const modelTypes = useMemo(() => {
     const item = checkpoints.find((row) => modelPath(row) === checkpoint)
     return item?.types ?? []
@@ -433,11 +446,7 @@ export function PromptField({
             >
               <div style={{ width: thumbW }}>
                 <TilePreview
-                  src={
-                    active.path && active.thumb
-                      ? modelThumbUrl(active.kind === 'lora' ? 'loras' : 'wildcards', active.path, active.thumb)
-                      : null
-                  }
+                  src={suggestThumb(active, loras, wildcards)}
                   mark=""
                   eager
                   className="w-full rounded border border-line shadow-lg"

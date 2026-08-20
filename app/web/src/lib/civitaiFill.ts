@@ -7,8 +7,11 @@ import {
   type CivitaiVersion,
   type ModelInfo,
   type ModelLists,
+  type ThumbMeta,
+  type ThumbView,
 } from '@/lib/api.ts'
 import { matchModelType } from '@/lib/modelTypes.ts'
+import { civitaiSaveThumbView } from '@/lib/thumbView.ts'
 
 export function civitaiPreviewUrl(info: CivitaiVersion) {
   const creator = info.model?.creator?.username
@@ -27,8 +30,24 @@ export function civitaiHashes(info: { hashes?: { sha256?: string; autov1?: strin
   return [...new Set([hashes?.autov3, hashes?.autov2 || info.hash, hashes?.autov1, hashes?.sha256].filter(Boolean))] as string[]
 }
 
-export function hasCivitaiLocalData(info: Pick<ModelInfo, 'types' | 'thumb' | 'prompt'>, lora: boolean) {
-  return Boolean((info.types || []).length || info.thumb || (lora && (info.prompt || '').trim()))
+export function civitaiThumbMeta(hit: CivitaiVersion): ThumbMeta {
+  const url = civitaiPreviewUrl(hit)
+  const image = (hit.images || []).find((item) => item.url === url)
+  return {
+    prompt: String(image?.meta?.prompt || ''),
+    origin: 'civitai',
+    civitai: {
+      id: hit.id,
+      modelId: hit.modelId,
+      name: hit.name,
+      baseModel: hit.baseModel,
+      image: url,
+    },
+  }
+}
+
+export function hasCivitaiLocalData(info: Pick<ModelInfo, 'types' | 'thumb' | 'thumb_exact' | 'prompt'>, lora: boolean) {
+  return Boolean((info.types || []).length || info.thumb_exact || (lora && (info.prompt || '').trim()))
 }
 
 export async function lookupCivitai(hashes: string[]) {
@@ -47,12 +66,12 @@ export async function lookupCivitai(hashes: string[]) {
   return null
 }
 
-export async function waitModelInfo(kind: keyof ModelLists, path: string, signal?: AbortSignal) {
+export async function waitModelInfo(kind: keyof ModelLists, path: string, signal?: AbortSignal, view?: ThumbView) {
   for (;;) {
     if (signal?.aborted) {
       throw new DOMException('Aborted', 'AbortError')
     }
-    const info = await getModelInfo(kind, path)
+    const info = await getModelInfo(kind, path, view)
     const hashes = civitaiHashes(info)
     if (hashes.length && (!info.hashing || info.hashes?.autov2 || info.hash)) {
       return info
@@ -75,7 +94,7 @@ export async function applyCivitaiMeta(kind: keyof ModelLists, path: string, hit
   let thumb = 0
   if (url) {
     const file = await fetchCivitaiImage(url)
-    thumb = await saveModelThumb(kind, path, file)
+    thumb = await saveModelThumb(kind, path, file, civitaiSaveThumbView(), civitaiThumbMeta(hit))
   }
   return { thumb, types, prompt }
 }

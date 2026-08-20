@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from blombo import comfy, dirs, hashes, model_meta
+from blombo import comfy, dirs, hashes, model_meta, model_thumbs
 from blombo import wildcards as wildcard_meta
 from blombo.paths import models_root, wildcards_root
 
@@ -20,13 +20,18 @@ ALL_KINDS = frozenset((*KINDS, "wildcards"))
 HASH_KINDS = ("checkpoints", "loras")
 
 
-def list_models() -> dict[str, list[dict[str, Any]]]:
-    data = {kind: list_kind(kind) for kind in KINDS}
-    data["wildcards"] = list_kind("wildcards")
+def list_models(context: str = model_thumbs.GLOBAL, mode: str = "exact", fallback: bool = False) -> dict[str, list[dict[str, Any]]]:
+    data = {kind: list_kind(kind, context, mode, fallback) for kind in KINDS}
+    data["wildcards"] = list_kind("wildcards", context, mode, fallback)
     return data
 
 
-def list_kind(kind: str) -> list[dict[str, Any]]:
+def list_kind(
+    kind: str,
+    context: str = model_thumbs.GLOBAL,
+    mode: str = "exact",
+    fallback: bool = False,
+) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     files: list[str] = []
     if kind == "wildcards":
@@ -52,9 +57,11 @@ def list_kind(kind: str) -> list[dict[str, Any]]:
     for item in items:
         tile = str(item["path"])
         rel = str(item.get("source") or tile).split("#", 1)[0]
-        thumb = model_meta.thumb_mtime(kind, tile)
+        thumb = model_thumbs.resolved_mtime(kind, tile, context, mode, fallback)
         item["thumb"] = thumb
-        item["edited"] = max(int(item["edited"]), thumb, stamps.get(rel, 0))
+        item["thumb_global"] = model_thumbs.thumb_mtime(kind, tile, model_thumbs.GLOBAL)
+        item["thumb_exact"] = model_thumbs.thumb_mtime(kind, tile, context)
+        item["edited"] = max(int(item["edited"]), thumb, item["thumb_global"], stamps.get(rel, 0))
         row = info.get(rel) or {}
         item["prompt"] = str(row.get("prompt") or "")
         item["negative_prompt"] = str(row.get("negative_prompt") or "")
@@ -66,9 +73,14 @@ def list_kind(kind: str) -> list[dict[str, Any]]:
     return items
 
 
-def refresh_models(kind: str | None = None) -> dict[str, list[dict[str, Any]]]:
+def refresh_models(
+    kind: str | None = None,
+    context: str = model_thumbs.GLOBAL,
+    mode: str = "exact",
+    fallback: bool = False,
+) -> dict[str, list[dict[str, Any]]]:
     comfy.warmup_model_lists(kind)
-    data = {kind: list_kind(kind)} if kind else list_models()
+    data = {kind: list_kind(kind, context, mode, fallback)} if kind else list_models(context, mode, fallback)
     hashes.warm(hash_files())
     return data
 
@@ -187,7 +199,13 @@ def model_file(kind: str, rel: str) -> Path | None:
     return path if path.is_file() else None
 
 
-def model_info(kind: str, rel: str) -> dict | None:
+def model_info(
+    kind: str,
+    rel: str,
+    context: str = model_thumbs.GLOBAL,
+    mode: str = "exact",
+    fallback: bool = False,
+) -> dict | None:
     path = model_file(kind, rel)
     if not path:
         return None
@@ -216,5 +234,7 @@ def model_info(kind: str, rel: str) -> dict | None:
         "strength": info["strength"],
         "slider": info["slider"],
         "type_options": list(model_meta.OPTIONS),
-        "thumb": model_meta.thumb_mtime(kind, posix),
+        "thumb": model_thumbs.resolved_mtime(kind, posix, context, mode, fallback),
+        "thumb_global": model_thumbs.thumb_mtime(kind, posix, model_thumbs.GLOBAL),
+        "thumb_exact": model_thumbs.thumb_mtime(kind, posix, context),
     }

@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import { getModels, refreshModels, type ModelEntry, type ModelLists } from '@/lib/api.ts'
+import { thumbView } from '@/lib/thumbView.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { toast, toastIssues } from '@/stores/toastStore.ts'
 
@@ -39,6 +40,8 @@ function asEntry(item: unknown): ModelEntry | null {
         edited: Number(row.edited) || 0,
         size: Number(row.size) || 0,
         thumb: Number(row.thumb) || 0,
+        thumb_global: Number(row.thumb_global) || 0,
+        thumb_exact: Number(row.thumb_exact) || 0,
         prompt: typeof row.prompt === 'string' ? row.prompt : '',
         negative_prompt: typeof row.negative_prompt === 'string' ? row.negative_prompt : '',
         notes: typeof row.notes === 'string' ? row.notes : '',
@@ -82,6 +85,10 @@ function notifyIssues() {
   void useIssuesStore.getState().load().then((items) => toastIssues(items))
 }
 
+function view() {
+  return thumbView(false)
+}
+
 export const useModelsStore = create<ModelsState>((set, get) => ({
   ...EMPTY,
   busy: false,
@@ -91,7 +98,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     }
     set({ busy: true })
     try {
-      set(apply(await getModels()))
+      set(apply(await getModels(view())))
     } catch {
       /* keep current */
     } finally {
@@ -101,7 +108,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   },
   pull: async () => {
     try {
-      set(apply(await getModels()))
+      set(apply(await getModels(view())))
     } catch {
       /* keep current */
     }
@@ -112,11 +119,11 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     }
     set({ busy: true })
     try {
-      set(apply(await refreshModels()))
+      set(apply(await refreshModels(undefined, view())))
       toast('Models reloaded', 'ok')
     } catch {
       try {
-        set(apply(await getModels()))
+        set(apply(await getModels(view())))
         toast('Models reloaded', 'ok')
       } catch {
         /* keep current */
@@ -132,12 +139,12 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     }
     set({ busy: true })
     try {
-      const lists = await refreshModels(kind)
+      const lists = await refreshModels(kind, view())
       set({ [kind]: asList(lists[kind]) })
       toast('Models reloaded', 'ok')
     } catch {
       try {
-        const lists = await getModels()
+        const lists = await getModels(view())
         set({ [kind]: asList(lists[kind]) })
         toast('Models reloaded', 'ok')
       } catch {

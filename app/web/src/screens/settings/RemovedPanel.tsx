@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { AppIcon } from '@/components/AppIcon.tsx'
 import { ConfirmDialog } from '@/components/Dialog.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
+import { ThumbnailScopePicker } from '@/components/ThumbnailScopePicker.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
 import {
   deleteAllRemoved,
@@ -12,13 +13,15 @@ import {
   revealRemoved,
   type RemovedItem,
 } from '@/lib/api.ts'
+import { trashThumbView } from '@/lib/thumbView.ts'
 import { formatUnix } from '@/lib/timeDisplay.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
 
-export const REMOVED_QUERY = 'removed trash restore delete hours size gigabyte explorer'
+export const REMOVED_QUERY = 'removed trash restore delete hours size gigabyte explorer thumbnail scope fallback'
 
 const KINDS: Record<string, string> = {
   checkpoints: 'Checkpoint',
@@ -48,6 +51,7 @@ export function RemovedPanel({ query = '' }: { query?: string }) {
   const setRemovedAfterHours = useSettingsStore((s) => s.setRemovedAfterHours)
   const setRemovedMaxGb = useSettingsStore((s) => s.setRemovedMaxGb)
   const timeDisplay = useSettingsStore((s) => s.timeDisplay)
+  const view = useThumbView('trash')
   const pull = useModelsStore((s) => s.pull)
   const modelStamp = useModelsStore((s) =>
     ['checkpoints', 'loras', 'wildcards']
@@ -136,7 +140,8 @@ export function RemovedPanel({ query = '' }: { query?: string }) {
         <NumberField value={removedMaxGb} onChange={setRemovedMaxGb} min={1} max={10000} suffix="GB" />
         <p className="text-xs text-muted">Oldest files are deleted first when over this size.</p>
       </SettingsCard>
-      <SettingsCard query={query} title="Trash" terms="list restore delete explorer trash clear removed">
+      <SettingsCard query={query} title="Trash" terms="list restore delete explorer trash clear removed thumbnail scope">
+        <ThumbnailScopePicker fallbackKind="trash" />
         {items.length === 0 ? (
           <p className="text-xs text-muted">Trash is empty.</p>
         ) : (
@@ -163,7 +168,7 @@ export function RemovedPanel({ query = '' }: { query?: string }) {
                 <div className="flex items-center gap-2 pr-8">
                   <TilePreview
                     className="w-11 shrink-0"
-                    src={item.thumb ? removedThumbUrl(item.id, Math.round(item.removed_at)) : null}
+                    src={item.thumb ? removedThumbUrl(item.id, Math.round(item.removed_at), view || trashThumbView()) : null}
                     mark="?"
                   />
                   <div className="min-w-0 flex-1">

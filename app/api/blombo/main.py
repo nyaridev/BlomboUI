@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from contextlib import asynccontextmanager
 from typing import Any, Literal
 
@@ -7,7 +8,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from blombo import autocomplete, civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, wildcard_files
+from blombo import autocomplete, civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, model_thumbs, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, thumbnail_embed, thumbnail_scopes, wildcard_files
 from blombo.paths import RUNTIME, VERSION, launcher_env
 
 
@@ -179,6 +180,34 @@ class AutocompleteCsvIn(BaseModel):
     name: str
 
 
+class ScopeIn(BaseModel):
+    name: str = ""
+    group: str = ""
+    required: list[str] = Field(default_factory=list)
+    optional: list[str] = Field(default_factory=list)
+    anyGroups: list[list[str]] = Field(default_factory=list)
+    exclude: list[str] = Field(default_factory=list)
+    priority: int = 0
+
+
+def _view(context: str = "", mode: str = "exact", fallback: bool = False) -> tuple[str, str, bool]:
+    parts = [part.strip() for part in context.replace(",", "+").split("+") if part.strip()]
+    key = thumbnail_scopes.context_key(parts)
+    view = "likely" if mode == "likely" else "exact"
+    return key, view, bool(fallback)
+
+
+def _thumb_meta(request: Request) -> dict[str, Any]:
+    raw = request.headers.get("x-blombo-thumb-meta") or ""
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
 @api.get("/workflows")
 def workflows() -> dict:
     return {"workflows": comfy.list_workflows()}
@@ -211,8 +240,9 @@ def comfy_ksampler() -> dict:
 
 
 @api.get("/user-models")
-def get_models() -> dict:
-    return models.list_models()
+def get_models(context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+    key, view, use_global = _view(context, mode, fallback)
+    return models.list_models(key, view, use_global)
 
 
 @api.get("/issues")
@@ -221,10 +251,11 @@ def get_issues() -> dict:
 
 
 @api.post("/user-models/refresh")
-def post_models_refresh(kind: str | None = None) -> dict:
+def post_models_refresh(kind: str | None = None, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
     if kind and kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    return models.refresh_models(kind)
+    key, view, use_global = _view(context, mode, fallback)
+    return models.refresh_models(kind, key, view, use_global)
 
 
 @api.get("/user-wildcards/tree")
@@ -387,9 +418,10 @@ def open_user_removed(item_id: str) -> dict:
 
 
 @api.get("/user-removed/{item_id}/thumb")
-def get_user_removed_thumb(item_id: str) -> FileResponse:
+def get_user_removed_thumb(item_id: str, context: str = "", mode: str = "exact", fallback: bool = False) -> FileResponse:
     try:
-        path = removed.thumb_file(item_id)
+        key, view, use_global = _view(context, mode, fallback)
+        path = removed.thumb_file(item_id, key, view, use_global)
     except removed.RemovedError as exc:
         raise _removed_error(exc) from exc
     if not path:
@@ -397,11 +429,21 @@ def get_user_removed_thumb(item_id: str) -> FileResponse:
     return FileResponse(path, media_type=model_meta.thumb_media(path))
 
 
+@api.get("/user-removed/{item_id}/thumb-meta")
+def get_user_removed_thumb_meta(item_id: str, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+    try:
+        key, view, use_global = _view(context, mode, fallback)
+        return removed.thumb_meta(item_id, key, view, use_global)
+    except removed.RemovedError as exc:
+        raise _removed_error(exc) from exc
+
+
 @api.get("/user-models/{kind}/info")
-def get_model_info(kind: str, path: str) -> dict:
+def get_model_info(kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    info = models.model_info(kind, path)
+    key, view, use_global = _view(context, mode, fallback)
+    info = models.model_info(kind, path, key, view, use_global)
     if not info:
         raise ApiError("not_found", "model not found")
     return info
@@ -450,36 +492,48 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
 
 
 @api.get("/user-models/{kind}/thumb")
-def get_model_thumb(kind: str, path: str) -> FileResponse:
+def get_model_thumb(kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False) -> FileResponse:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    file = model_meta.thumb_file(kind, path)
+    key, view, use_global = _view(context, mode, fallback)
+    file = model_thumbs.resolved_file(kind, path, key, view, use_global)
     if not file:
         raise ApiError("not_found", "thumb not found")
     return FileResponse(file, media_type=model_meta.thumb_media(file))
 
 
+@api.get("/user-models/{kind}/thumb-meta")
+def get_model_thumb_meta(kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+    if kind not in models.ALL_KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+    key, view, use_global = _view(context, mode, fallback)
+    file = model_thumbs.resolved_file(kind, path, key, view, use_global)
+    return thumbnail_embed.read_file(file) if file else {}
+
+
 @api.put("/user-models/{kind}/thumb")
-async def put_model_thumb(kind: str, path: str, request: Request) -> dict:
+async def put_model_thumb(kind: str, path: str, request: Request, context: str = "") -> dict:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     if not models.model_file(kind, path):
         raise ApiError("not_found", "model not found")
+    key, _, _ = _view(context)
     try:
-        thumb = model_meta.save_thumb(kind, path, await request.body())
+        thumb = model_meta.save_thumb(kind, path, await request.body(), key, _thumb_meta(request))
     except ValueError as exc:
         raise ApiError("bad_request", str(exc), 400) from exc
     return {"thumb": thumb}
 
 
 @api.delete("/user-models/{kind}/thumb")
-def delete_model_thumb(kind: str, path: str) -> dict:
+def delete_model_thumb(kind: str, path: str, context: str = "", all_contexts: bool = False) -> dict:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     if not models.model_file(kind, path):
         raise ApiError("not_found", "model not found")
+    key, _, _ = _view(context)
     try:
-        model_meta.delete_thumb(kind, path)
+        model_meta.delete_thumb(kind, path, key, all_contexts)
     except ValueError as exc:
         raise ApiError("bad_request", str(exc), 400) from exc
     return {"thumb": 0}
@@ -508,6 +562,46 @@ def civitai_image(url: str) -> Response:
         raise ApiError("not_found", "image not found")
     data, media = hit
     return Response(content=data, media_type=media)
+
+
+@api.get("/user-scopes")
+def get_scopes() -> dict:
+    return {"scopes": thumbnail_scopes.list_scopes()}
+
+
+@api.get("/user-scopes/auto")
+def auto_scopes(prompt: str = "") -> dict:
+    return {"ids": thumbnail_scopes.auto_ids(prompt)}
+
+
+@api.post("/user-scopes")
+def post_scope(body: ScopeIn) -> dict:
+    try:
+        return {"scope": thumbnail_scopes.create_scope(body.model_dump())}
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@api.put("/user-scopes/{ident}")
+def put_scope(ident: str, body: ScopeIn) -> dict:
+    try:
+        return {"scope": thumbnail_scopes.update_scope(ident, body.model_dump())}
+    except ValueError as exc:
+        text = str(exc)
+        status = 404 if text == "not found" else 400
+        raise ApiError("not_found" if status == 404 else "bad_request", text, status) from exc
+
+
+@api.delete("/user-scopes/{ident}")
+def delete_scope(ident: str) -> dict:
+    try:
+        thumbnail_scopes.delete_scope(ident)
+    except ValueError as exc:
+        text = str(exc)
+        status = 404 if text == "not found" else 400
+        raise ApiError("not_found" if status == 404 else "bad_request", text, status) from exc
+    model_thumbs.drop_scope(ident)
+    return {"ok": True}
 
 
 @api.get("/health")

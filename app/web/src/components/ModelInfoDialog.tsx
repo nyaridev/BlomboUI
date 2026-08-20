@@ -5,19 +5,21 @@ import { clampLora, loraRange, modelFileName } from '@/components/modelInfoLayou
 import {
   fetchCivitaiImage,
   getModelInfo,
-  modelThumbUrl,
   saveModelInfo,
   saveModelThumb,
   deleteModelThumb,
   type CivitaiVersion,
   type ModelEntry,
   type ModelLists,
+  type ThumbMeta,
 } from '@/lib/api.ts'
-import { civitaiPreviewUrl, lookupCivitai } from '@/lib/civitaiFill.ts'
+import { civitaiPreviewUrl, civitaiThumbMeta, lookupCivitai } from '@/lib/civitaiFill.ts'
+import { civitaiSaveThumbView, modelThumbSrc, saveThumbView } from '@/lib/thumbView.ts'
 import { filterTypeSections, matchModelType, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { modelLabel, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 
@@ -58,6 +60,7 @@ export function ModelInfoDialog({
   const strengthMax = useSettingsStore((s) => s.loraStrengthMax)
   const sliderMin = useSettingsStore((s) => s.loraSliderMin)
   const sliderMax = useSettingsStore((s) => s.loraSliderMax)
+  const view = useThumbView(kind)
   const pickerOptions = useMemo(
     () =>
       filterTypeSections(
@@ -69,6 +72,7 @@ export function ModelInfoDialog({
   const [thumb, setThumb] = useState(item.thumb || 0)
   const [pending, setPending] = useState<File | 'clear' | null>(null)
   const [pendingUrl, setPendingUrl] = useState<string | null>(null)
+  const [pendingMeta, setPendingMeta] = useState<ThumbMeta>({ origin: 'modelinfo' })
   const [saving, setSaving] = useState(false)
   const [pulling, setPulling] = useState(false)
   const [confirmFill, setConfirmFill] = useState<CivitaiVersion | null>(null)
@@ -114,7 +118,7 @@ export function ModelInfoDialog({
     }
 
     function pull() {
-      void getModelInfo(kind, item.path)
+      void getModelInfo(kind, item.path, view)
         .then((info) => {
           if (alive) {
             apply(info)
@@ -132,7 +136,7 @@ export function ModelInfoDialog({
       alive = false
       window.clearTimeout(timer)
     }
-  }, [kind, item.path])
+  }, [kind, item.path, view])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -174,7 +178,7 @@ export function ModelInfoDialog({
     }
   }, [pendingUrl])
 
-  function pickPreview(file: File | null) {
+  function pickPreview(file: File | null, meta: ThumbMeta = { origin: 'modelinfo' }) {
     setPendingUrl((current) => {
       if (current) {
         URL.revokeObjectURL(current)
@@ -182,6 +186,7 @@ export function ModelInfoDialog({
       return file ? URL.createObjectURL(file) : null
     })
     setPending(file)
+    setPendingMeta(meta)
   }
 
   function clearPreview() {
@@ -199,7 +204,7 @@ export function ModelInfoDialog({
     }
     const blob = await res.blob()
     const ext = blob.type === 'image/jpeg' ? 'jpg' : blob.type === 'image/webp' ? 'webp' : 'png'
-    pickPreview(new File([blob], `preview.${ext}`, { type: blob.type || 'image/png' }))
+    pickPreview(new File([blob], `preview.${ext}`, { type: blob.type || 'image/png' }), { origin: 'generation' })
   }
 
   function save() {
@@ -229,16 +234,19 @@ export function ModelInfoDialog({
         ...(lora ? { prompt: pos, strength, slider } : {}),
       })
       if (pending === 'clear') {
-        const tick = await deleteModelThumb(kind, item.path)
+        const tick = await deleteModelThumb(kind, item.path, saveThumbView())
         setThumb(tick)
         setPending(null)
         setEdited(Math.floor(Date.now() / 1000))
+        await useModelsStore.getState().pull()
         onSaved?.(tick)
       } else if (pending) {
-        const tick = await saveModelThumb(kind, item.path, pending)
+        const dest = pendingMeta.origin === 'civitai' ? civitaiSaveThumbView() : saveThumbView()
+        const tick = await saveModelThumb(kind, item.path, pending, dest, pendingMeta)
         setThumb(tick)
         pickPreview(null)
         setEdited(Math.floor(Date.now() / 1000))
+        await useModelsStore.getState().pull()
         onSaved?.(tick)
       } else {
         setEdited(Math.floor(Date.now() / 1000))
@@ -271,7 +279,7 @@ export function ModelInfoDialog({
       return
     }
     const file = await fetchCivitaiImage(url)
-    pickPreview(file)
+    pickPreview(file, civitaiThumbMeta(info))
   }
 
   async function fromCivitai() {
@@ -343,7 +351,7 @@ export function ModelInfoDialog({
           <TilePreview
             className="h-full w-full"
             eager
-            src={pending === 'clear' ? null : pendingUrl || (thumb ? modelThumbUrl(kind, item.path, thumb) : null)}
+            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { path: item.path, thumb, thumb_global: item.thumb_global }, view)}
           />
         }
       />

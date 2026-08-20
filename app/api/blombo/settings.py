@@ -4,9 +4,10 @@ import json
 import re
 from typing import Any
 
-from blombo.paths import USER
+from blombo.paths import USER, USER_DATA
 
-FILE = USER / "user_settings.json"
+FILE = USER_DATA / "user_settings.json"
+LEGACY = USER / "user_settings.json"
 IMAGE_PATH_DEFAULT = "[workflow]/images/[date]"
 GRID_PATH_DEFAULT = "[workflow]/grids/[date]"
 INTERRUPTED_PATH_DEFAULT = "[workflow]/interrupted/[date]"
@@ -19,8 +20,8 @@ _SIZE = re.compile(r"^(\d+)[x×*](\d+)$", re.I)
 _GALLERY_SORTS = ("name", "added", "edited", "path")
 _GALLERY_DIRS = ("asc", "desc")
 _GALLERY_VIEWS = ("checkpoints", "loras", "wildcards")
-_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager")
-_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Errors")
+_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes")
+_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes", "Errors")
 _GENERATE_TABS = ("Generation", "Base Model", "Lora", "Wildcards")
 _IMAGE_FORMATS = ("png", "jpg", "webp")
 _KEYS = (
@@ -82,6 +83,12 @@ _KEYS = (
     "autocompleteThumbScale",
     "frequentTagsEnabled",
     "autocompleteLists",
+    "galleryThumbFallback",
+    "thumbSaveTo",
+    "thumbDisplayMode",
+    "thumbScopeIds",
+    "thumbScopeAuto",
+    "trashThumbFallback",
 )
 
 
@@ -277,6 +284,24 @@ def _clean(raw: Any) -> dict[str, Any]:
         lists = _autocomplete_lists(raw["autocompleteLists"])
         if lists is not None:
             out["autocompleteLists"] = lists
+    if "galleryThumbFallback" in raw:
+        mapped = _bool_gallery_map(raw["galleryThumbFallback"], False)
+        if mapped:
+            out["galleryThumbFallback"] = mapped
+    if "thumbSaveTo" in raw:
+        name = str(raw["thumbSaveTo"])
+        out["thumbSaveTo"] = name if name in ("active", "global") else "global"
+    if "thumbDisplayMode" in raw:
+        name = str(raw["thumbDisplayMode"])
+        out["thumbDisplayMode"] = name if name in ("likely", "exact") else "likely"
+    if "thumbScopeIds" in raw and isinstance(raw["thumbScopeIds"], list):
+        from blombo.thumbnail_scopes import context_key, parse_context
+
+        out["thumbScopeIds"] = [item for item in parse_context(context_key(raw["thumbScopeIds"])) if item != "global"]
+    if "thumbScopeAuto" in raw:
+        out["thumbScopeAuto"] = bool(raw["thumbScopeAuto"])
+    if "trashThumbFallback" in raw:
+        out["trashThumbFallback"] = bool(raw["trashThumbFallback"])
     return {key: out[key] for key in _KEYS if key in out}
 
 
@@ -405,6 +430,14 @@ def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, 
     return out
 
 
+def _bool_gallery_map(raw: Any, default: bool) -> dict[str, bool] | None:
+    if isinstance(raw, bool):
+        return {kind: raw for kind in _GALLERY_VIEWS}
+    if not isinstance(raw, dict):
+        return None
+    return {kind: bool(raw[kind]) if kind in raw else default for kind in _GALLERY_VIEWS}
+
+
 def _path_template(raw: Any, default: str) -> str | None:
     if not isinstance(raw, str):
         return None
@@ -442,6 +475,7 @@ def _name_template(raw: Any, default: str) -> str | None:
 
 
 def load() -> dict[str, Any]:
+    _migrate()
     if not FILE.is_file():
         _write({})
         return {}
@@ -457,6 +491,13 @@ def save(raw: Any) -> dict[str, Any]:
     data = _clean(raw)
     _write(data)
     return data
+
+
+def _migrate() -> None:
+    if FILE.is_file() or FILE != USER_DATA / "user_settings.json" or not LEGACY.is_file():
+        return
+    USER_DATA.mkdir(parents=True, exist_ok=True)
+    LEGACY.replace(FILE)
 
 
 def _write(data: dict[str, Any]) -> None:

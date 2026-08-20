@@ -16,17 +16,19 @@ const VIEWS: { kind: GalleryViewKind; title: string; terms: string }[] = [
 ]
 
 export const GALLERY_QUERY =
-  'gallery view tiles sort name date created modified path ascending descending scale size base model lora wildcards tree folder parent unselect'
+  'gallery view tiles sort name date created modified path ascending descending scale size base model lora wildcards tree folder parent unselect thumbnail global fallback scope'
 
 export function GalleryPanel({ query = '' }: { query?: string }) {
   const gallerySortKey = useSettingsStore((s) => s.gallerySortKey)
   const gallerySortDir = useSettingsStore((s) => s.gallerySortDir)
   const galleryTileScale = useSettingsStore((s) => s.galleryTileScale)
   const galleryParentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
+  const galleryThumbFallback = useSettingsStore((s) => s.galleryThumbFallback)
   const setGallerySortKey = useSettingsStore((s) => s.setGallerySortKey)
   const setGallerySortDir = useSettingsStore((s) => s.setGallerySortDir)
   const setGalleryTileScale = useSettingsStore((s) => s.setGalleryTileScale)
   const setGalleryParentOnUnselect = useSettingsStore((s) => s.setGalleryParentOnUnselect)
+  const setGalleryThumbFallback = useSettingsStore((s) => s.setGalleryThumbFallback)
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
@@ -53,6 +55,16 @@ export function GalleryPanel({ query = '' }: { query?: string }) {
           <p className="text-xs text-muted">
             Used after launch or a UI reload. Changing sort in this gallery is only for that session.
           </p>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              className="check"
+              checked={galleryThumbFallback[view.kind]}
+              onChange={(event) => setGalleryThumbFallback(view.kind, event.target.checked)}
+            />
+            Use Global thumbnails in scoped view
+          </label>
+          <p className="text-xs text-muted">Off shows the default tile when this scope has no thumbnail.</p>
         </SettingsCard>
       ))}
       <SettingsCard query={query} title="Tiles" terms="tile scale size zoom">

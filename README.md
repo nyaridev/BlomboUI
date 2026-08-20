@@ -15,7 +15,7 @@ BlomboUI/
 └── user/
     ├── models/
     ├── output/
-    ├── gallery/
+    ├── user_data/
     └── wildcards/
 ```
 

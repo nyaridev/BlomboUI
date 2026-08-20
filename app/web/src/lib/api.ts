@@ -216,6 +216,8 @@ export type ModelEntry = {
   edited: number
   size: number
   thumb?: number
+  thumb_global?: number
+  thumb_exact?: number
   prompt?: string
   negative_prompt?: string
   notes?: string
@@ -252,6 +254,8 @@ export type ModelInfo = {
   slider?: boolean
   type_options?: string[]
   thumb?: number
+  thumb_global?: number
+  thumb_exact?: number
 }
 
 export type ModelLists = {
@@ -280,16 +284,37 @@ export async function getIssues(): Promise<GuiIssue[]> {
   return Array.isArray(data.issues) ? data.issues : []
 }
 
-export async function getModels(): Promise<ModelLists> {
-  const res = await fetch(api('/user-models'))
+export type ThumbView = {
+  context?: string
+  mode?: 'exact' | 'likely'
+  fallback?: boolean
+}
+
+function thumbQs(view?: ThumbView, extra: Record<string, string> = {}) {
+  const qs = new URLSearchParams(extra)
+  if (view?.context) {
+    qs.set('context', view.context)
+  }
+  if (view?.mode) {
+    qs.set('mode', view.mode)
+  }
+  if (view?.fallback) {
+    qs.set('fallback', 'true')
+  }
+  const text = qs.toString()
+  return text ? `?${text}` : ''
+}
+
+export async function getModels(view?: ThumbView): Promise<ModelLists> {
+  const res = await fetch(api(`/user-models${thumbQs(view)}`))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
   return (await res.json()) as ModelLists
 }
 
-export async function getModelInfo(kind: keyof ModelLists, path: string): Promise<ModelInfo> {
-  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`))
+export async function getModelInfo(kind: keyof ModelLists, path: string, view?: ThumbView): Promise<ModelInfo> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/info${thumbQs(view, { path })}`))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -330,14 +355,44 @@ export async function saveModelInfo(
   return data.types
 }
 
-export function modelThumbUrl(kind: keyof ModelLists, path: string, tick = 0): string {
-  return api(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}&t=${tick}`)
+export type ThumbMeta = {
+  v?: number
+  context?: string
+  tags?: string[]
+  prompt?: string
+  parameters?: string
+  raw?: Record<string, unknown>
+  origin?: string
+  civitai?: Record<string, unknown>
+  captured_at?: number
 }
 
-export async function saveModelThumb(kind: keyof ModelLists, path: string, file: File): Promise<number> {
-  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`), {
+export function modelThumbUrl(kind: keyof ModelLists, path: string, tick = 0, view?: ThumbView): string {
+  return api(`/user-models/${encodeURIComponent(kind)}/thumb${thumbQs(view, { path, t: String(tick) })}`)
+}
+
+export async function getModelThumbMeta(kind: keyof ModelLists, path: string, view?: ThumbView): Promise<ThumbMeta> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb-meta${thumbQs(view, { path })}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as ThumbMeta
+}
+
+export async function saveModelThumb(
+  kind: keyof ModelLists,
+  path: string,
+  file: File,
+  view?: ThumbView,
+  meta?: ThumbMeta,
+): Promise<number> {
+  const headers: Record<string, string> = { 'Content-Type': file.type || 'application/octet-stream' }
+  if (meta) {
+    headers['X-Blombo-Thumb-Meta'] = JSON.stringify(meta)
+  }
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb${thumbQs(view, { path })}`), {
     method: 'PUT',
-    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    headers,
     body: file,
   })
   if (!res.ok) {
@@ -347,8 +402,17 @@ export async function saveModelThumb(kind: keyof ModelLists, path: string, file:
   return data.thumb
 }
 
-export async function deleteModelThumb(kind: keyof ModelLists, path: string): Promise<number> {
-  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`), {
+export async function deleteModelThumb(
+  kind: keyof ModelLists,
+  path: string,
+  view?: ThumbView,
+  allContexts = false,
+): Promise<number> {
+  const extra: Record<string, string> = { path }
+  if (allContexts) {
+    extra.all_contexts = 'true'
+  }
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb${thumbQs(view, extra)}`), {
     method: 'DELETE',
   })
   if (!res.ok) {
@@ -358,9 +422,12 @@ export async function deleteModelThumb(kind: keyof ModelLists, path: string): Pr
   return data.thumb
 }
 
-export async function refreshModels(kind?: keyof ModelLists): Promise<Partial<ModelLists>> {
-  const qs = kind ? `?kind=${encodeURIComponent(kind)}` : ''
-  const res = await fetch(api(`/user-models/refresh${qs}`), { method: 'POST' })
+export async function refreshModels(kind?: keyof ModelLists, view?: ThumbView): Promise<Partial<ModelLists>> {
+  const extra: Record<string, string> = {}
+  if (kind) {
+    extra.kind = kind
+  }
+  const res = await fetch(api(`/user-models/refresh${thumbQs(view, extra)}`), { method: 'POST' })
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -875,8 +942,70 @@ export async function revealRemoved(id: string): Promise<void> {
   }
 }
 
-export function removedThumbUrl(id: string, tick = 0) {
-  return api(`/user-removed/${encodeURIComponent(id)}/thumb?t=${tick}`)
+export function removedThumbUrl(id: string, tick = 0, view?: ThumbView) {
+  return api(`/user-removed/${encodeURIComponent(id)}/thumb${thumbQs(view, { t: String(tick) })}`)
+}
+
+export type ThumbScope = {
+  id: string
+  name: string
+  group: string
+  required: string[]
+  optional: string[]
+  anyGroups: string[][]
+  exclude: string[]
+  priority: number
+}
+
+export async function getThumbScopes(): Promise<ThumbScope[]> {
+  const res = await fetch(api('/user-scopes'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { scopes?: ThumbScope[] }
+  return Array.isArray(data.scopes) ? data.scopes : []
+}
+
+export async function createThumbScope(body: Partial<ThumbScope>): Promise<ThumbScope> {
+  const res = await fetch(api('/user-scopes'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { scope: ThumbScope }
+  return data.scope
+}
+
+export async function updateThumbScope(id: string, body: Partial<ThumbScope>): Promise<ThumbScope> {
+  const res = await fetch(api(`/user-scopes/${encodeURIComponent(id)}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { scope: ThumbScope }
+  return data.scope
+}
+
+export async function deleteThumbScope(id: string): Promise<void> {
+  const res = await fetch(api(`/user-scopes/${encodeURIComponent(id)}`), { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function autoThumbScopes(prompt: string): Promise<string[]> {
+  const res = await fetch(api(`/user-scopes/auto?prompt=${encodeURIComponent(prompt)}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { ids?: string[] }
+  return Array.isArray(data.ids) ? data.ids : []
 }
 
 export async function formatWildcardYaml(body: {

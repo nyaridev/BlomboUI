@@ -27,12 +27,10 @@ user/models/controlnet/*
 user/models/embeddings/*
 !user/models/embeddings/.gitkeep
 
-# user output, gallery, wildcards
+# user output, wildcards
 user/output/*
 !user/output/.gitkeep
 
-user/gallery/*
-!user/gallery/.gitkeep
 user/gallery_thumbs/*
 !user/gallery_thumbs/.gitkeep
 user/removed/*
@@ -46,8 +44,9 @@ user/wildcards/*
 !user/wildcards/colors.txt
 !user/wildcards/styles.yaml
 
-# user overwrites
-user/user_settings.json
+# user data
+user/user_data/*
+!user/user_data/.gitkeep
 
 user/model_meta/**
 !user/model_meta/.gitkeep

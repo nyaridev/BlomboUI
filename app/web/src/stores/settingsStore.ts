@@ -157,6 +157,16 @@ export const SETTINGS_DEFAULTS = {
   autocompleteThumbScale: 1,
   frequentTagsEnabled: true,
   autocompleteLists: {} as Record<string, AutocompleteListRule>,
+  galleryThumbFallback: {
+    checkpoints: false,
+    loras: false,
+    wildcards: false,
+  } as Record<GalleryViewKind, boolean>,
+  thumbSaveTo: 'global' as 'active' | 'global',
+  thumbDisplayMode: 'likely' as 'likely' | 'exact',
+  thumbScopeIds: [] as string[],
+  thumbScopeAuto: false,
+  trashThumbFallback: false,
 }
 
 type SettingsState = typeof SETTINGS_DEFAULTS & {
@@ -220,6 +230,12 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setAutocompleteThumbScale: (value: number) => void
   setFrequentTagsEnabled: (value: boolean) => void
   setAutocompleteList: (name: string, patch: Partial<AutocompleteListRule>) => void
+  setGalleryThumbFallback: (kind: GalleryViewKind, value: boolean) => void
+  setThumbSaveTo: (value: 'active' | 'global') => void
+  setThumbDisplayMode: (value: 'likely' | 'exact') => void
+  setThumbScopeIds: (value: string[]) => void
+  setThumbScopeAuto: (value: boolean) => void
+  setTrashThumbFallback: (value: boolean) => void
 }
 
 const KEYS = [
@@ -281,6 +297,12 @@ const KEYS = [
   'autocompleteThumbScale',
   'frequentTagsEnabled',
   'autocompleteLists',
+  'galleryThumbFallback',
+  'thumbSaveTo',
+  'thumbDisplayMode',
+  'thumbScopeIds',
+  'thumbScopeAuto',
+  'trashThumbFallback',
 ] as const
 
 function same(a: unknown, b: unknown) {
@@ -409,6 +431,40 @@ function cleanListTypes(raw: unknown): string[] {
     }
   }
   return out
+}
+
+function cleanScopeIds(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const out: string[] = []
+  for (const item of raw) {
+    const name = String(item).trim().toLowerCase()
+    if (!name || name === 'global' || out.includes(name)) {
+      continue
+    }
+    if (!/^[a-f0-9]{12}$/.test(name)) {
+      continue
+    }
+    out.push(name)
+  }
+  return out
+}
+
+function cleanFallbackMap(raw: unknown): Record<GalleryViewKind, boolean> {
+  const fallback = SETTINGS_DEFAULTS.galleryThumbFallback
+  if (typeof raw === 'boolean') {
+    return { checkpoints: raw, loras: raw, wildcards: raw }
+  }
+  if (!raw || typeof raw !== 'object') {
+    return fallback
+  }
+  const row = raw as Record<string, unknown>
+  return {
+    checkpoints: typeof row.checkpoints === 'boolean' ? row.checkpoints : fallback.checkpoints,
+    loras: typeof row.loras === 'boolean' ? row.loras : fallback.loras,
+    wildcards: typeof row.wildcards === 'boolean' ? row.wildcards : fallback.wildcards,
+  }
 }
 
 function cleanAutocompleteLists(raw: unknown): Record<string, AutocompleteListRule> {
@@ -703,6 +759,15 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     autocompleteLists: patch.autocompleteLists
       ? cleanAutocompleteLists(patch.autocompleteLists)
       : SETTINGS_DEFAULTS.autocompleteLists,
+    galleryThumbFallback: patch.galleryThumbFallback
+      ? cleanFallbackMap(patch.galleryThumbFallback)
+      : SETTINGS_DEFAULTS.galleryThumbFallback,
+    thumbSaveTo: patch.thumbSaveTo === 'active' ? 'active' : SETTINGS_DEFAULTS.thumbSaveTo,
+    thumbDisplayMode: patch.thumbDisplayMode === 'exact' ? 'exact' : SETTINGS_DEFAULTS.thumbDisplayMode,
+    thumbScopeIds: Array.isArray(patch.thumbScopeIds) ? cleanScopeIds(patch.thumbScopeIds) : SETTINGS_DEFAULTS.thumbScopeIds,
+    thumbScopeAuto: typeof patch.thumbScopeAuto === 'boolean' ? patch.thumbScopeAuto : SETTINGS_DEFAULTS.thumbScopeAuto,
+    trashThumbFallback:
+      typeof patch.trashThumbFallback === 'boolean' ? patch.trashThumbFallback : SETTINGS_DEFAULTS.trashThumbFallback,
   }
 }
 
@@ -866,6 +931,24 @@ function pickLegacy(raw: unknown): UserSettings {
   }
   if (state.autocompleteLists && typeof state.autocompleteLists === 'object') {
     patch.autocompleteLists = state.autocompleteLists as UserSettings['autocompleteLists']
+  }
+  if (typeof state.galleryThumbFallback === 'boolean' || (state.galleryThumbFallback && typeof state.galleryThumbFallback === 'object')) {
+    patch.galleryThumbFallback = state.galleryThumbFallback as UserSettings['galleryThumbFallback']
+  }
+  if (typeof state.thumbSaveTo === 'string') {
+    patch.thumbSaveTo = state.thumbSaveTo
+  }
+  if (typeof state.thumbDisplayMode === 'string') {
+    patch.thumbDisplayMode = state.thumbDisplayMode
+  }
+  if (Array.isArray(state.thumbScopeIds)) {
+    patch.thumbScopeIds = state.thumbScopeIds as string[]
+  }
+  if (typeof state.thumbScopeAuto === 'boolean') {
+    patch.thumbScopeAuto = state.thumbScopeAuto
+  }
+  if (typeof state.trashThumbFallback === 'boolean') {
+    patch.trashThumbFallback = state.trashThumbFallback
   }
   return patch
 }
@@ -1164,6 +1247,32 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       }
       return { autocompleteLists }
     })
+    persist()
+  },
+  setGalleryThumbFallback: (kind, value) => {
+    set((state) => ({
+      galleryThumbFallback: { ...state.galleryThumbFallback, [kind]: value },
+    }))
+    persist()
+  },
+  setThumbSaveTo: (thumbSaveTo) => {
+    set({ thumbSaveTo: thumbSaveTo === 'global' ? 'global' : 'active' })
+    persist()
+  },
+  setThumbDisplayMode: (thumbDisplayMode) => {
+    set({ thumbDisplayMode: thumbDisplayMode === 'exact' ? 'exact' : 'likely' })
+    persist()
+  },
+  setThumbScopeIds: (thumbScopeIds) => {
+    set({ thumbScopeIds: cleanScopeIds(thumbScopeIds) })
+    persist()
+  },
+  setThumbScopeAuto: (thumbScopeAuto) => {
+    set({ thumbScopeAuto })
+    persist()
+  },
+  setTrashThumbFallback: (trashThumbFallback) => {
+    set({ trashThumbFallback })
     persist()
   },
 }))

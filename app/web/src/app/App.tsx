@@ -4,6 +4,7 @@ import { GalleryScreen } from '../screens/gallery/GalleryScreen.tsx'
 import { GenerateScreen } from '../screens/generate/GenerateScreen.tsx'
 import { ModelsScreen } from '../screens/models/ModelsScreen.tsx'
 import { WildcardManagerScreen } from '../screens/wildcards/WildcardManagerScreen.tsx'
+import { ScopesScreen } from '../screens/scopes/ScopesScreen.tsx'
 import { FileInfoScreen } from '../screens/fileinfo/FileInfoScreen.tsx'
 import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
 import { ErrorsScreen } from '../screens/errors/ErrorsScreen.tsx'
@@ -14,6 +15,8 @@ import { useHealthStore } from '../stores/healthStore.ts'
 import { useIssuesStore } from '../stores/issuesStore.ts'
 import { useModelsStore } from '../stores/modelsStore.ts'
 import { useSettingsStore } from '../stores/settingsStore.ts'
+import { useThumbnailScopeStore } from '../stores/thumbnailScopeStore.ts'
+import { useGenerateStore } from '../stores/generateStore.ts'
 import { FooterLinks } from './FooterLinks.tsx'
 import { GpuBar } from './GpuBar.tsx'
 import { TemplateBar } from './TemplateBar.tsx'
@@ -54,6 +57,7 @@ export function App() {
   const gallery = location.pathname === '/gallery'
   const models = location.pathname === '/models'
   const wildcards = location.pathname === '/wildcards'
+  const scopes = location.pathname === '/scopes'
   const errors = location.pathname === '/errors'
   const issueCount = useIssuesStore((s) => s.items.length)
   const health = useHealthStore((s) => s.health)
@@ -63,6 +67,8 @@ export function App() {
   const loadSettings = useSettingsStore((s) => s.load)
   const theme = useSettingsStore((s) => s.theme)
   const loaded = useSettingsStore((s) => s.loaded)
+  const thumbScopeAuto = useSettingsStore((s) => s.thumbScopeAuto)
+  const prompt = useGenerateStore((s) => s.prompt)
   const hiddenMainTabs = useSettingsStore((s) => s.hiddenMainTabs)
   const mainTabOrder = useSettingsStore((s) => s.mainTabOrder)
   const mainTabKeysFollowLayout = useSettingsStore((s) => s.mainTabKeysFollowLayout)
@@ -104,14 +110,31 @@ export function App() {
   }, [loadModels, loadSettings, refreshHealth])
 
   useEffect(() => {
+    if (!loaded) {
+      return
+    }
+    void useThumbnailScopeStore.getState().load()
+  }, [loaded])
+
+  useEffect(() => {
+    if (!loaded || !thumbScopeAuto) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      void useThumbnailScopeStore.getState().refreshAuto(prompt)
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [loaded, prompt, thumbScopeAuto])
+
+  useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.repeat) {
         return
       }
       const digit = digitKey(event)
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 7) {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 8) {
         event.preventDefault()
-        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/errors', '/settings']
+        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/scopes', '/errors', '/settings']
         const routes = mainTabKeysFollowLayout
           ? visibleMainTabIds(mainTabOrder, hiddenMainTabs).map((id) => mainTab(id)?.to ?? '/')
           : fixed
@@ -217,10 +240,10 @@ export function App() {
         ref={mainRef}
         className={[
           'min-h-0 flex-1 [overflow-anchor:none]',
-          settings || fileInfo || wildcards ? 'overflow-hidden' : 'overflow-y-auto',
+          settings || fileInfo || wildcards || scopes ? 'overflow-hidden' : 'overflow-y-auto',
         ].join(' ')}
       >
-        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards ? '' : 'px-10 py-4'].join(' ')}>
+        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes ? '' : 'px-10 py-4'].join(' ')}>
           {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
           <div className={pane(generate)}>
             <GenerateScreen />
@@ -236,6 +259,9 @@ export function App() {
           </div>
           <div className={pane(wildcards, true)}>
             <WildcardManagerScreen />
+          </div>
+          <div className={pane(scopes, true)}>
+            <ScopesScreen />
           </div>
           <div className={pane(settings, true)}>
             <SettingsScreen />

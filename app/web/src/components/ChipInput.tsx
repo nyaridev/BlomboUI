@@ -36,6 +36,11 @@ export function ChipInput({ value, onChange, placeholder = 'Type and press Enter
             if (event.key === 'Enter') {
               event.preventDefault()
               commit()
+              return
+            }
+            if (event.key === 'Backspace' && !draft && value.length) {
+              event.preventDefault()
+              onChange(value.slice(0, -1))
             }
           }}
           onClick={(event) => event.stopPropagation()}

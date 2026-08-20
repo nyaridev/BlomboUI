@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 import math
 import time
-from io import BytesIO
 from pathlib import Path
 
+from blombo import model_thumbs
 from blombo.paths import USER
 
 OPTIONS = (
@@ -84,12 +84,10 @@ OPTIONS = (
 
 ROOT = USER / "model_meta"
 DATA = ROOT / "data"
-THUMBS = ROOT / "thumbnails"
-THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp")
-THUMB_MAX = 512
+THUMBS = model_thumbs.THUMBS
+THUMB_EXTS = model_thumbs.THUMB_EXTS
+THUMB_MAX = model_thumbs.THUMB_MAX
 _ALLOWED = frozenset(OPTIONS)
-_FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}
-_MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
 _migrated = False
 
 
@@ -113,6 +111,7 @@ def _migrate() -> None:
         return
     DATA.mkdir(parents=True, exist_ok=True)
     THUMBS.mkdir(parents=True, exist_ok=True)
+    model_thumbs.migrate()
     if ROOT.is_dir():
         keep = {"data", "thumbnails", ".gitkeep"}
         for path in list(ROOT.iterdir()):
@@ -294,7 +293,7 @@ def user_mtime(kind: str, rel: str) -> int:
     if not ident:
         return 0
     row = _load(kind).get(ident) or {}
-    return max(int(row.get("modified") or 0), thumb_mtime(kind, rel))
+    return max(int(row.get("modified") or 0), model_thumbs.thumb_mtime(kind, rel))
 
 
 def user_stamps(kind: str) -> dict[str, int]:
@@ -353,77 +352,9 @@ def set_info(
     return _info_out(row)
 
 
-def _thumb_paths(kind: str, ident: str) -> list[Path]:
+def thumb_file(kind: str, rel: str, context: str = model_thumbs.GLOBAL) -> Path | None:
     _migrate()
-    base = THUMBS / kind / ident
-    return [Path(str(base) + ext) for ext in THUMB_EXTS]
-
-
-def _iter_thumb_idents(kind: str) -> list[str]:
-    folder = THUMBS / kind
-    if not folder.is_dir():
-        return []
-    out: list[str] = []
-    for path in folder.rglob("*"):
-        if not path.is_file():
-            continue
-        rel = path.relative_to(folder).as_posix()
-        lower = rel.lower()
-        ext = next((item for item in THUMB_EXTS if lower.endswith(item)), "")
-        if not ext:
-            continue
-        ident = _ident(rel[: -len(ext)])
-        if ident and ident not in out:
-            out.append(ident)
-    return out
-
-
-def _thumb_at(kind: str, ident: str) -> Path | None:
-    for path in _thumb_paths(kind, ident):
-        if path.is_file():
-            return path
-    return None
-
-
-def thumb_file(kind: str, rel: str) -> Path | None:
-    ident = _ident(rel)
-    if not ident:
-        return None
-    return _thumb_at(kind, ident)
-
-
-def _prune_empty(path: Path, stop: Path) -> None:
-    try:
-        current = path if path.is_dir() else path.parent
-        limit = stop.resolve()
-        while current.is_dir() and current.resolve() != limit:
-            parent = current.parent
-            try:
-                current.rmdir()
-            except OSError:
-                return
-            current = parent
-    except OSError:
-        return
-
-
-def _move_thumb(kind: str, old: str, new: str) -> None:
-    src = _thumb_at(kind, old)
-    if not src:
-        return
-    dest = _thumb_at(kind, new)
-    if dest is None:
-        dest = Path(str(THUMBS / kind / new) + src.suffix)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.resolve() != src.resolve():
-            try:
-                src.rename(dest)
-            except OSError:
-                dest.write_bytes(src.read_bytes())
-                src.unlink(missing_ok=True)
-    elif dest.resolve() != src.resolve():
-        src.unlink(missing_ok=True)
-    _prune_empty(src.parent, THUMBS / kind)
+    return model_thumbs.thumb_file(kind, rel, context)
 
 
 def remap_ident(kind: str, old: str, new: str) -> None:
@@ -440,10 +371,7 @@ def remap_ident(kind: str, old: str, new: str) -> None:
                 return dest + key[len(src) :]
         return None
 
-    for ident in list(_iter_thumb_idents(kind)):
-        nxt = mapped(ident)
-        if nxt:
-            _move_thumb(kind, ident, nxt)
+    model_thumbs.move_thumbs(kind, old, new)
 
     data = _load(kind)
     out: dict[str, dict] = {}
@@ -479,28 +407,7 @@ def take_bundle(kind: str, ident: str, dest: Path) -> dict[str, dict]:
             keep[key] = row
     if taken:
         _write(kind, keep)
-    root = THUMBS / kind
-    for thumb_ident in list(_iter_thumb_idents(kind)):
-        if not _key_matches(thumb_ident, src):
-            continue
-        file = _thumb_at(kind, thumb_ident)
-        if not file:
-            continue
-        try:
-            rel = file.relative_to(root)
-        except ValueError:
-            rel = Path(file.name)
-        out = dest / rel
-        out.parent.mkdir(parents=True, exist_ok=True)
-        if out.exists():
-            file.unlink(missing_ok=True)
-        else:
-            try:
-                file.rename(out)
-            except OSError:
-                out.write_bytes(file.read_bytes())
-                file.unlink(missing_ok=True)
-        _prune_empty(file.parent, root)
+    model_thumbs.take(kind, src, dest)
     return taken
 
 
@@ -516,29 +423,14 @@ def put_bundle(kind: str, rows: dict[str, dict], thumbs: Path) -> None:
             changed = True
         if changed:
             _write(kind, data)
-    if not thumbs.is_dir():
-        return
-    root = THUMBS / kind
-    root.mkdir(parents=True, exist_ok=True)
-    for file in thumbs.rglob("*"):
-        if not file.is_file():
-            continue
-        dest = root / file.relative_to(thumbs)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        if dest.exists():
-            continue
-        try:
-            file.rename(dest)
-        except OSError:
-            dest.write_bytes(file.read_bytes())
-            file.unlink(missing_ok=True)
+    model_thumbs.put(kind, thumbs)
 
 
 def reconcile(kind: str, present: list[str]) -> None:
     here = {item.replace("\\", "/").strip().lstrip("/") for item in present}
     here.discard("")
     data = _load(kind)
-    stale_thumbs = [ident for ident in _iter_thumb_idents(kind) if (_file_ident(ident) or ident) not in here]
+    stale_thumbs = [ident for ident in model_thumbs.iter_idents(kind) if (_file_ident(ident) or ident) not in here]
     stale_meta = [key for key in data if (_file_ident(key) or key) not in here]
     unique = {name for name in {_name(item) for item in here} if len(_hits(sorted(here), name)) == 1}
     if not unique or (not stale_thumbs and not stale_meta):
@@ -552,7 +444,7 @@ def reconcile(kind: str, present: list[str]) -> None:
         old_thumbs = _hits(stale_thumbs, name)
         old_meta = _hits(stale_meta, name)
         if len(old_thumbs) == 1:
-            _move_thumb(kind, old_thumbs[0], new)
+            model_thumbs.move_thumbs(kind, old_thumbs[0], new)
         if len(old_meta) != 1:
             continue
         old = old_meta[0]
@@ -567,60 +459,23 @@ def reconcile(kind: str, present: list[str]) -> None:
         _write(kind, data)
 
 
-def thumb_mtime(kind: str, rel: str) -> int:
-    path = thumb_file(kind, rel)
-    if not path:
-        return 0
-    try:
-        return int(path.stat().st_mtime)
-    except OSError:
-        return 0
+def thumb_mtime(kind: str, rel: str, context: str = model_thumbs.GLOBAL) -> int:
+    _migrate()
+    return model_thumbs.thumb_mtime(kind, rel, context)
 
 
 def thumb_media(path: Path) -> str:
-    return _MEDIA.get(path.suffix.lower(), "application/octet-stream")
+    return model_thumbs.thumb_media(path)
 
 
-def save_thumb(kind: str, rel: str, data: bytes) -> int:
-    ident = _ident(rel)
-    if not ident:
-        raise ValueError("invalid path")
+def save_thumb(kind: str, rel: str, data: bytes, context: str = model_thumbs.GLOBAL, meta: dict | None = None) -> int:
     _migrate()
-    from PIL import Image
-
-    try:
-        image = Image.open(BytesIO(data))
-        image.load()
-    except Exception as exc:
-        raise ValueError("could not read image") from exc
-    fmt = (image.format or "").upper()
-    ext = _FORMATS.get(fmt)
-    if not ext:
-        raise ValueError("use png, jpg, or webp")
-    if max(image.size) > THUMB_MAX:
-        image.thumbnail((THUMB_MAX, THUMB_MAX))
-    if fmt == "JPEG" and image.mode in ("RGBA", "P"):
-        image = image.convert("RGB")
-    dest = Path(str(THUMBS / kind / ident) + ext)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    for old in _thumb_paths(kind, ident):
-        if old != dest and old.is_file():
-            old.unlink()
-    out = BytesIO()
-    if fmt == "JPEG":
-        image.save(out, format=fmt, quality=85)
-    else:
-        image.save(out, format=fmt)
-    dest.write_bytes(out.getvalue())
+    stamp = model_thumbs.save_thumb(kind, rel, data, context, meta)
     touch(kind, rel)
-    return int(dest.stat().st_mtime)
+    return stamp
 
 
-def delete_thumb(kind: str, rel: str) -> None:
-    ident = _ident(rel)
-    if not ident:
-        raise ValueError("invalid path")
-    for path in _thumb_paths(kind, ident):
-        if path.is_file():
-            path.unlink()
+def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: bool = False) -> None:
+    _migrate()
+    model_thumbs.delete_thumb(kind, rel, context, all_contexts)
     touch(kind, rel)

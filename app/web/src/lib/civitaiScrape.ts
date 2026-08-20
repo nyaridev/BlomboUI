@@ -6,6 +6,7 @@ import {
   waitModelInfo,
 } from '@/lib/civitaiFill.ts'
 import { deleteModelThumb, saveModelInfo, type ModelEntry, type ModelLists } from '@/lib/api.ts'
+import { civitaiSaveThumbView } from '@/lib/thumbView.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 
 export type ScrapeKind = 'checkpoints' | 'loras'
@@ -65,7 +66,8 @@ export async function scrapeCivitai(
       onProgress?.(i, total)
       const path = list[i]
       try {
-        const info = await waitModelInfo(kind, path, signal)
+        const dest = civitaiSaveThumbView()
+        const info = await waitModelInfo(kind, path, signal, dest)
         if (signal.aborted) {
           return { filled, skipped, missed, cancelled: true }
         }
@@ -77,7 +79,7 @@ export async function scrapeCivitai(
           skipped += 1
           continue
         }
-        if (mode === 'force' && info.thumb) {
+        if (mode === 'force' && info.thumb_exact) {
           skipped += 1
           continue
         }
@@ -135,7 +137,7 @@ export async function clearCivitai(
       const path = list[i]
       try {
         if (mode === 'thumbs') {
-          await deleteModelThumb(kind, path)
+          await deleteModelThumb(kind, path, undefined, true)
           useModelsStore.getState().setThumb(kind, path, 0)
         } else {
           await saveModelInfo(kind, path, [], lora ? { prompt: '' } : undefined)

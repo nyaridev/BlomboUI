@@ -10,7 +10,7 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from blombo import dirs, model_files, model_meta, models, settings, wildcard_files
+from blombo import dirs, model_files, model_meta, model_thumbs, models, settings, thumbnail_embed, thumbnail_scopes, wildcard_files
 from blombo.paths import USER, models_root, wildcards_root
 
 REMOVED = USER / "removed"
@@ -101,22 +101,51 @@ def reveal(item_id: str) -> None:
     os.startfile(resolved)
 
 
-def thumb_file(item_id: str) -> Path | None:
+def thumb_file(
+    item_id: str,
+    context: str = model_thumbs.GLOBAL,
+    mode: str = "exact",
+    fallback: bool = False,
+) -> Path | None:
     folder = _item_dir(item_id)
     man = _manifest(folder)
     ident = _ident(str(man.get("ident") or ""))
     thumbs = folder / "thumbs"
-    if ident:
-        for ext in model_meta.THUMB_EXTS:
-            path = Path(str(thumbs / ident) + ext)
-            if path.is_file():
-                return path
-    if not thumbs.is_dir():
-        return None
-    for path in thumbs.rglob("*"):
-        if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS:
-            return path
+    key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
+    exact = _trash_thumb(thumbs, ident, key)
+    if mode != "likely":
+        if exact:
+            return exact
+        if fallback and key != model_thumbs.GLOBAL:
+            return _trash_thumb(thumbs, ident, model_thumbs.GLOBAL)
+        return _legacy_thumb(thumbs, ident) if key == model_thumbs.GLOBAL else None
+    if exact:
+        return exact
+    query = thumbnail_scopes.query_for(thumbnail_scopes.parse_context(key))
+    best: tuple[tuple[int, int, int], Path] | None = None
+    for path in _trash_thumbs(thumbs, ident):
+        payload = thumbnail_embed.read_file(path)
+        tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
+        rank = thumbnail_scopes.rank_tags(query, tags)
+        if not rank:
+            continue
+        if best is None or rank > best[0]:
+            best = (rank, path)
+    if best:
+        return best[1]
+    if fallback:
+        return _trash_thumb(thumbs, ident, model_thumbs.GLOBAL) or _legacy_thumb(thumbs, ident)
     return None
+
+
+def thumb_meta(
+    item_id: str,
+    context: str = model_thumbs.GLOBAL,
+    mode: str = "exact",
+    fallback: bool = False,
+) -> dict[str, Any]:
+    path = thumb_file(item_id, context, mode, fallback)
+    return thumbnail_embed.read_file(path) if path else {}
 
 
 def purge_expired() -> None:
@@ -374,6 +403,48 @@ def _entry(kind: str, rel: str) -> Path:
         return model_files._entry(kind, rel)
     except (model_files.ModelFileError, wildcard_files.WildcardError) as exc:
         raise RemovedError(str(exc), exc.status) from exc
+
+
+def _trash_thumb(thumbs: Path, ident: str, context: str) -> Path | None:
+    if ident:
+        for ext in model_meta.THUMB_EXTS:
+            path = Path(str(thumbs / ident / context) + ext)
+            if path.is_file():
+                return path
+    if context == model_thumbs.GLOBAL:
+        return _legacy_thumb(thumbs, ident)
+    return None
+
+
+def _legacy_thumb(thumbs: Path, ident: str) -> Path | None:
+    if ident:
+        for ext in model_meta.THUMB_EXTS:
+            path = Path(str(thumbs / ident) + ext)
+            if path.is_file():
+                return path
+    if not thumbs.is_dir():
+        return None
+    for path in thumbs.rglob("*"):
+        if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS:
+            return path
+    return None
+
+
+def _trash_thumbs(thumbs: Path, ident: str) -> list[Path]:
+    if not thumbs.is_dir():
+        found = _legacy_thumb(thumbs, ident)
+        return [found] if found else []
+    out: list[Path] = []
+    for folder in thumbs.iterdir():
+        if not folder.is_dir():
+            continue
+        if folder.name != ident and not folder.name.startswith(f"{ident}#"):
+            continue
+        out.extend(path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS)
+    if out:
+        return out
+    found = _legacy_thumb(thumbs, ident)
+    return [found] if found else []
 
 
 def _hours() -> int:

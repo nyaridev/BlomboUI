@@ -1,9 +1,11 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
-import { modelThumbUrl, type ModelEntry, type ModelLists } from '@/lib/api.ts'
+import { modelThumbSrc } from '@/lib/thumbView.ts'
+import { type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt } from '@/lib/loraTags.ts'
 import { parseWildcardTags, removeWildcardAt, wildcardMatches } from '@/lib/wildcardTags.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { ModelTile } from './ModelTile.tsx'
 import { modelTileSpec, type ModelTileStyle } from './modelLayouts.ts'
@@ -33,6 +35,7 @@ export function ModelTileRow({
   const vaes = useModelsStore((s) => s.vae)
   const loras = useModelsStore((s) => s.loras)
   const wildcards = useModelsStore((s) => s.wildcards)
+  useThumbView()
 
   useEffect(() => {
     if (!checkpoint || checkpoints.some((item) => modelPath(item) === checkpoint)) {
@@ -349,8 +352,5 @@ function fileName(path: string) {
 }
 
 function thumbSrc(kind: keyof ModelLists, item: ModelEntry | null) {
-  if (!item?.thumb) {
-    return null
-  }
-  return modelThumbUrl(kind, item.path, item.thumb)
+  return modelThumbSrc(kind, item)
 }

@@ -145,6 +145,11 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
               if (event.key === 'Enter' && open && first) {
                 event.preventDefault()
                 add(first)
+                return
+              }
+              if (event.key === 'Backspace' && !query && value.length) {
+                event.preventDefault()
+                onChange(value.slice(0, -1))
               }
             }}
             onClick={(event) => event.stopPropagation()}

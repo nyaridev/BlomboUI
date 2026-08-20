@@ -92,7 +92,7 @@ def ensure_dirs() -> None:
     for sub in MODEL_SUBDIRS:
         (models / sub).mkdir(exist_ok=True)
     (USER / "output").mkdir(exist_ok=True)
-    (USER / "gallery").mkdir(exist_ok=True)
+    (USER / "user_data").mkdir(exist_ok=True)
     (USER / "wildcards").mkdir(exist_ok=True)
     (USER / "autocompletion").mkdir(exist_ok=True)
 
@@ -101,7 +101,6 @@ def resolve() -> dict[str, str | None]:
     comfy = _env_path("COMFYUI_PATH") or COMFY_BUNDLED
     models = _env_path("MODELS_ROOT") or (USER / "models")
     wildcards = _env_path("WILDCARDS_ROOT") or (USER / "wildcards")
-    gallery = _env_path("GALLERY_ROOT") or (USER / "gallery")
     outputs = _env_path("OUTPUTS_ROOT") or _kept_output() or (USER / "output")
     py = comfy_python(comfy)
 
@@ -118,7 +117,6 @@ def resolve() -> dict[str, str | None]:
         "comfyui.python": str(py) if py else None,
         "models.root": str(models.resolve()),
         "outputs.root": str(outputs.resolve()),
-        "gallery.root": str(gallery.resolve()),
         "wildcards.root": str(wildcards.resolve()),
     }
 
@@ -176,7 +174,9 @@ def _yaml_model_block(ident: str, root: Path) -> str:
 
 
 def _user_model_dirs() -> list[tuple[str, Path]]:
-    file = USER / "user_settings.json"
+    file = USER / "user_data" / "user_settings.json"
+    if not file.is_file():
+        file = USER / "user_settings.json"
     if not file.is_file():
         return []
     try:
@@ -394,9 +394,8 @@ def run_servers(settings: dict[str, str | None]) -> int:
     try:
         comfy_proc = start_comfy(settings)
         api_proc = spawn(_api_cmd(), cwd=API, env=env)
-        web_proc = spawn(_vite_cmd(), cwd=WEB)
-
         api_ok = wait_ready(f"{api_url}/api/health", api_proc, API_PORT)
+        web_proc = spawn(_vite_cmd(), cwd=WEB)
         web_ok = wait_ready(web_url, web_proc, WEB_PORT)
         if not api_ok or not web_ok:
             print(f"    {_c('38;5;203', 'ERROR')}  Server failed to start.")
@@ -430,8 +429,8 @@ def run_servers(settings: dict[str, str | None]) -> int:
                 free_port(API_PORT)
                 free_port(WEB_PORT)
                 api_proc = spawn(_api_cmd(), cwd=API, env=env)
-                web_proc = spawn(_vite_cmd(), cwd=WEB)
                 api_ok = wait_ready(f"{api_url}/api/health", api_proc, API_PORT)
+                web_proc = spawn(_vite_cmd(), cwd=WEB)
                 web_ok = wait_ready(web_url, web_proc, WEB_PORT)
                 if not api_ok or not web_ok:
                     print(f"    {_c('38;5;203', 'ERROR')}  Reload failed.")
@@ -500,7 +499,6 @@ def main() -> int:
     _row("comfy py", settings["comfyui.python"] or "(not found)", warn=not settings["comfyui.python"])
     _row("models", settings["models.root"] or "")
     _row("output", settings["outputs.root"] or "")
-    _row("gallery", settings["gallery.root"] or "")
     _row("wildcards", settings["wildcards.root"] or "")
     _row("wrote", str(env_file))
     print()

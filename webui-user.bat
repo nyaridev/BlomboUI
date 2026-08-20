@@ -21,11 +21,10 @@ cd /D "%~dp0"
 :: set COMFYUI_PATH=B:\AI\Diffusion\Interfaces\ComfyUI
 
 :: --- Paths -----------------------------------------------------------------
-:: Defaults are .\user\models, .\user\output, .\user\gallery, and .\user\wildcards.
+:: Defaults are .\user\models, .\user\output, and .\user\wildcards.
 :: Override here, or change later in app Settings.
 :: set MODELS_ROOT=B:\AI\Diffusion\Models
 :: set OUTPUTS_ROOT=
-:: set GALLERY_ROOT=
 :: set WILDCARDS_ROOT=
 
 :: --- Launch ----------------------------------------------------------------

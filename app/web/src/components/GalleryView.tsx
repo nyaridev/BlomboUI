@@ -20,9 +20,12 @@ import {
 import { ModelInfoDialog } from '@/components/ModelInfoDialog.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
+import { ThumbnailScopePicker } from '@/components/ThumbnailScopePicker.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
+import { civitaiSaveThumbView, modelThumbSrc } from '@/lib/thumbView.ts'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -31,7 +34,6 @@ import {
   createWildcardFolder,
   getModelTree,
   getWildcardTree,
-  modelThumbUrl,
   moveModelEntry,
   moveWildcardEntry,
   renameModelEntry,
@@ -234,6 +236,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const [pendingMove, setPendingMove] = useState<{ path: string; folder: string; from: string; to: string } | null>(null)
   const [tileMenu, setTileMenu] = useState<{ x: number; y: number; path: string; name: string; fileTile: boolean } | null>(null)
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  const thumbView = useThumbView(sortKind)
   const shownSortKey = sortKey ?? gallerySortKey
   const shownSortDir = sortDir ?? gallerySortDir
   const tileW = TILE_COL_REM * tileScale
@@ -389,7 +392,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   }
 
   async function saveCivitai(path: string, hit: CivitaiVersion) {
-    const info = await waitModelInfo(kind, path)
+    const info = await waitModelInfo(kind, path, undefined, civitaiSaveThumbView())
     const next = await applyCivitaiMeta(kind, path, hit, { types: info.types || [], prompt: info.prompt || '' })
     if (next.thumb) {
       setThumb(kind, path, next.thumb)
@@ -405,7 +408,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     }
     setFilling(path)
     try {
-      const info = await waitModelInfo(kind, path)
+      const info = await waitModelInfo(kind, path, undefined, civitaiSaveThumbView())
       const hit = await lookupCivitai(civitaiHashes(info))
       if (!hit) {
         return
@@ -636,6 +639,9 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   return (
     <div className="flex flex-col gap-2">
       <div className="flex h-8 shrink-0 items-stretch gap-1">
+        <ThumbnailScopePicker fallbackKind={sortKind} />
+      </div>
+      <div className="flex h-8 shrink-0 items-stretch gap-1">
         <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
             <AppIcon id="search" size={12} />
@@ -776,7 +782,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                 const preview = (
                   <TilePreview
                     className="w-full"
-                    src={item.thumb ? modelThumbUrl(kind, item.path, item.thumb) : null}
+                    src={modelThumbSrc(kind, item, thumbView)}
                     mark="?"
                     label={tileName(item)}
                     badge={strength || undefined}

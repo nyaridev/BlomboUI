@@ -16,6 +16,7 @@ import { TabsPanel, TABS_QUERY } from './TabsPanel.tsx'
 import { AutocompleteGeneralPanel, AutocompletePanel, AUTOCOMPLETE_GENERAL_QUERY, AUTOCOMPLETE_QUERY } from './AutocompletePanel.tsx'
 import { FrequentTagsPanel, FREQUENT_TAGS_QUERY } from './FrequentTagsPanel.tsx'
 import { RemovedPanel, REMOVED_QUERY } from './RemovedPanel.tsx'
+import { ScopesPanel, SCOPES_QUERY } from './ScopesPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
 import { pageLabel, SettingsNav } from './SettingsNav.tsx'
 
@@ -44,6 +45,7 @@ const GROUPS = [
     title: 'Models',
     pages: [
       { id: 'Models', terms: MODELS_QUERY, Panel: ModelsPanel },
+      { id: 'Thumbnail Scopes', terms: SCOPES_QUERY, Panel: ScopesPanel },
       { id: 'Metadata', terms: CIVITAI_QUERY, Panel: CivitaiPanel },
     ],
   },

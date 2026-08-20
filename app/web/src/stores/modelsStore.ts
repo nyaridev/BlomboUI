@@ -51,6 +51,9 @@ function asEntry(item: unknown): ModelEntry | null {
         entries: Array.isArray(row.entries)
           ? row.entries.filter((item): item is string => typeof item === 'string' && Boolean(item))
           : [],
+        types: Array.isArray(row.types)
+          ? row.types.filter((item): item is string => typeof item === 'string' && Boolean(item))
+          : [],
       }
     }
   }

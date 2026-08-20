@@ -7,7 +7,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from blombo import civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, models, pnginfo, removed, safetensors_meta, settings, templates, wildcard_files
+from blombo import autocomplete, civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, wildcard_files
 from blombo.paths import RUNTIME, VERSION, launcher_env
 
 
@@ -21,6 +21,7 @@ class ApiError(Exception):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.connect()
+    tag_complete.schedule_rebuild()
     hashes.start()
     hashes.warm(models.hash_files())
     try:
@@ -172,6 +173,10 @@ class ModelMoveIn(BaseModel):
 class RemovedIn(BaseModel):
     kind: str
     path: str = ""
+
+
+class AutocompleteCsvIn(BaseModel):
+    name: str
 
 
 @api.get("/workflows")
@@ -529,6 +534,47 @@ def comfy_stats() -> dict:
 @api.post("/comfy/free")
 def comfy_free(body: ComfyFreeIn) -> dict:
     comfy.free(body.unload_models, body.free_memory)
+    return {"ok": True}
+
+
+@api.get("/autocomplete/csv")
+def list_autocomplete_csv() -> dict:
+    return {"files": autocomplete.list_csv()}
+
+
+@api.post("/autocomplete/csv")
+def download_autocomplete_csv(body: AutocompleteCsvIn) -> dict:
+    try:
+        out = autocomplete.download_csv(body.name)
+    except ValueError as exc:
+        text = str(exc)
+        status = 400 if text.startswith("invalid") else 502
+        raise ApiError("bad_request" if status == 400 else "download_failed", text, status) from exc
+    tag_complete.schedule_rebuild()
+    return out
+
+
+@api.get("/autocomplete/suggest")
+def autocomplete_suggest(q: str = "", checkpoint: str = "") -> dict:
+    return {"tags": tag_complete.suggest(q, checkpoint), "ready": tag_complete.ready()}
+
+
+@api.get("/autocomplete/frequent")
+def autocomplete_frequent() -> dict:
+    return tag_complete.frequent()
+
+
+@api.get("/autocomplete/usage")
+def autocomplete_usage(prefix: str = "") -> dict:
+    return tag_complete.prefix_usage(prefix)
+
+
+@api.post("/autocomplete/open")
+def open_autocomplete() -> dict:
+    try:
+        dirs.open_folder(str(autocomplete.csv_root()))
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
     return {"ok": True}
 
 

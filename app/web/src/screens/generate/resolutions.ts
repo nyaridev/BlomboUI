@@ -36,9 +36,81 @@ export function listedChoices(all: readonly string[], hidden: readonly string[],
   return [...new Set([keep, ...all.filter((item) => !hidden.includes(item))])]
 }
 
+export type ResMode = 'raw' | 'scaler' | 'set'
+
+export function isResMode(value: unknown): value is ResMode {
+  return value === 'raw' || value === 'scaler' || value === 'set'
+}
+
+export const DEFAULT_SET_RESOLUTIONS = ['1024x1024', '1152x896', '1216x832', '1344x768', '1536x640']
+
+export type Size = { w: number; h: number }
+
 function snap8(value: number, min: number, max: number) {
   const snapped = Math.round(value / 8) * 8
   return Math.min(max, Math.max(min, snapped))
+}
+
+export function snapDim(value: number) {
+  return snap8(value, 64, 4096)
+}
+
+export function parseSize(raw: string): Size | null {
+  const match = String(raw).trim().match(/^(\d+)\s*[x×*]\s*(\d+)$/i)
+  if (!match) {
+    return null
+  }
+  const w = Number(match[1])
+  const h = Number(match[2])
+  if (!Number.isFinite(w) || !Number.isFinite(h)) {
+    return null
+  }
+  return { w: snapDim(w), h: snapDim(h) }
+}
+
+export function formatSize(size: Size) {
+  return `${size.w}x${size.h}`
+}
+
+export function landscapeSize(size: Size): Size {
+  return size.w >= size.h ? size : { w: size.h, h: size.w }
+}
+
+export function orientSize(size: Size, vertical: boolean): Size {
+  const land = landscapeSize(size)
+  if (!vertical || land.w === land.h) {
+    return land
+  }
+  return { w: land.h, h: land.w }
+}
+
+export function cleanSetResolutions(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const size = parseSize(String(item ?? ''))
+    if (!size) {
+      continue
+    }
+    const key = formatSize(landscapeSize(size))
+    if (seen.has(key)) {
+      continue
+    }
+    seen.add(key)
+    out.push(key)
+  }
+  return out
+}
+
+export function snapToSet(width: number, height: number, sets: string[]): Size {
+  const vertical = height > width
+  const land = formatSize(landscapeSize({ w: snapDim(width), h: snapDim(height) }))
+  const hit = sets.find((item) => item === land) || sets[0]
+  const size = (hit && parseSize(hit)) || { w: snapDim(width), h: snapDim(height) }
+  return orientSize(size, vertical)
 }
 
 export function sizeFromScaler(aspectId: string, megapixels: number) {

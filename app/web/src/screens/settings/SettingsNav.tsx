@@ -2,7 +2,11 @@ import { AppIcon } from '@/components/AppIcon.tsx'
 
 export type SettingsNavGroup = {
   title: string
-  pages: { id: string; danger?: boolean; icon?: string }[]
+  pages: { id: string; label?: string; danger?: boolean; icon?: string }[]
+}
+
+export function pageLabel(item: { id: string; label?: string }) {
+  return item.label || item.id
 }
 
 export function SettingsNav({
@@ -33,7 +37,7 @@ export function SettingsNav({
               onClick={() => onOpen(item.id)}
             >
               {item.icon ? <AppIcon id={item.icon} size={14} /> : null}
-              {item.id}
+              {pageLabel(item)}
             </button>
           ))}
         </div>

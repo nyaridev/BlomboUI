@@ -214,6 +214,33 @@ export function WildcardManagerScreen() {
     if (!active) {
       return
     }
+    const incoming = location.state as { open?: string; dir?: boolean } | null
+    if (!incoming || incoming.open === undefined) {
+      return
+    }
+    if (incoming.dir) {
+      setFolderPath(incoming.open)
+      setOpenDirs((current) => {
+        const next = new Set(current)
+        let prefix = incoming.open || ''
+        while (true) {
+          next.add(prefix)
+          if (!prefix) {
+            break
+          }
+          prefix = parentPath(prefix)
+        }
+        return next
+      })
+      return
+    }
+    requestFile(incoming.open)
+  }, [active, location.key])
+
+  useEffect(() => {
+    if (!active) {
+      return
+    }
     function onKey(event: KeyboardEvent) {
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault()

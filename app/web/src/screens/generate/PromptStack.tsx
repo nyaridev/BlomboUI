@@ -1,5 +1,5 @@
 import { ResizeGrip } from '@/components/ResizeGrip.tsx'
-import { usePromptWeightKey } from '@/lib/promptWeight.ts'
+import { PromptField } from '@/screens/generate/PromptSuggest.tsx'
 import { useLayoutEffect, useRef, useState } from 'react'
 
 function remPx() {
@@ -8,13 +8,6 @@ function remPx() {
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
-}
-
-function fieldClass(disabled: boolean) {
-  return [
-    'h-full w-full resize-none overflow-y-auto rounded border border-line bg-field px-2 py-1.5 pr-5 pb-4 font-mono text-sm text-ink outline-none placeholder:text-muted focus:border-accent',
-    disabled ? 'cursor-not-allowed' : '',
-  ].join(' ')
 }
 
 type PromptStackProps = {
@@ -35,8 +28,6 @@ export function PromptStack({
   const rem = remPx()
   const minH = 2.5 * rem
   const maxH = 20 * rem
-  const onPromptKey = usePromptWeightKey(onPrompt)
-  const onNegativeKey = usePromptWeightKey(onNegative)
   const stackRef = useRef<HTMLDivElement>(null)
   const ready = useRef(false)
   const [defaults, setDefaults] = useState({ prompt: Math.round(minH * 2.4), negative: minH })
@@ -64,14 +55,7 @@ export function PromptStack({
   return (
     <div ref={stackRef} className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="relative" style={{ height: promptH }}>
-        <textarea
-          className={fieldClass(false)}
-          value={prompt}
-          onChange={(e) => onPrompt(e.target.value)}
-          onKeyDown={onPromptKey}
-          placeholder="Positive"
-          spellCheck={false}
-        />
+        <PromptField value={prompt} onChange={onPrompt} placeholder="Positive" side="prompt" />
         <ResizeGrip
           value={promptH}
           onChange={setPromptH}
@@ -81,14 +65,12 @@ export function PromptStack({
         />
       </div>
       <div className="relative" style={{ height: negativeH }}>
-        <textarea
-          className={fieldClass(negativeDisabled)}
+        <PromptField
           value={negativePrompt}
-          onChange={(e) => onNegative(e.target.value)}
-          onKeyDown={onNegativeKey}
+          onChange={onNegative}
           placeholder="Negative"
-          spellCheck={false}
           disabled={negativeDisabled}
+          side="negative"
         />
         <ResizeGrip
           value={negativeH}

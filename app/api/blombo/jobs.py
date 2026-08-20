@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from blombo import comfy, db, hashes, pnginfo, settings, templates
+from blombo import comfy, db, hashes, pnginfo, settings, tag_complete, templates
 from blombo import loras as lora_tags
 from blombo import wildcards as wildcard_tags
 from blombo.paths import comfy_base, comfy_output_root, outputs_root
@@ -398,6 +398,12 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             run_values["negative_prompt"] = str(
                 run_values.get("negative_prompt_expanded") or run_values.get("negative_prompt") or ""
             )
+            if i == 0:
+                tag_complete.record(
+                    str(values.get("prompt") or ""),
+                    str(values.get("negative_prompt") or ""),
+                    [run_values["prompt"], run_values["negative_prompt"]],
+                )
             grew = False
             for name in run_values.get("wildcard_missing") or []:
                 if name not in missing_wildcards:

@@ -342,6 +342,7 @@ export function ModelInfoDialog({
         preview={
           <TilePreview
             className="h-full w-full"
+            eager
             src={pending === 'clear' ? null : pendingUrl || (thumb ? modelThumbUrl(kind, item.path, thumb) : null)}
           />
         }

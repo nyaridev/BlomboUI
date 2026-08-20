@@ -39,8 +39,8 @@ function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex w-full min-w-0 flex-col gap-0.5">
       <span className="text-xs text-muted">{label}</span>
-      <div className="w-full min-w-0 overflow-x-auto rounded border border-line bg-bg px-2 py-1 [scrollbar-width:thin]">
-        <div className="w-max font-mono text-sm whitespace-nowrap text-ink">{value}</div>
+      <div className="h-7 w-full min-w-0 overflow-x-auto rounded border border-line bg-bg px-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex h-full w-max items-center font-mono text-sm whitespace-nowrap text-ink">{value}</div>
       </div>
     </div>
   )
@@ -296,7 +296,9 @@ function StaticBlock(props: ViewProps) {
     <Section title="File">
       <div className="flex flex-col gap-1.5">
         <FileFacts path={props.path} size={props.size} edited={props.edited} />
-        {props.showHashes ? <HashFields hashes={props.hashes} hashing={props.hashing} /> : null}
+        <div className={props.showHashes ? '' : 'invisible'}>
+          <HashFields hashes={props.hashes} hashing={props.hashing} />
+        </div>
       </div>
     </Section>
   )
@@ -349,32 +351,30 @@ function EditBlock(props: ViewProps) {
   )
 }
 
-function FittedPreview({ children }: { children: ReactNode }) {
+function Cover({ children }: { children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [height, setHeight] = useState(0)
+  const [box, setBox] = useState<{ height: number; width: number } | null>(null)
 
   useLayoutEffect(() => {
-    const side = ref.current?.nextElementSibling
-    if (!(side instanceof HTMLElement)) {
+    const node = ref.current
+    const side = node?.nextElementSibling
+    if (!node || !(side instanceof HTMLElement)) {
       return
     }
-    const sync = () => {
-      const next = Math.round(side.getBoundingClientRect().height)
-      setHeight((prev) => (prev === next ? prev : next))
-    }
-    sync()
-    const ro = new ResizeObserver(sync)
-    ro.observe(side)
-    return () => ro.disconnect()
+    const height = side.getBoundingClientRect().height
+    const width = (height * 2) / 3
+    node.style.height = `${height}px`
+    node.style.width = `${width}px`
+    setBox({ height, width })
   }, [])
 
   return (
     <div
       ref={ref}
-      className="shrink-0"
-      style={height ? { height, width: (height * 2) / 3 } : { width: '18rem' }}
+      className="shrink-0 overflow-hidden"
+      style={box ?? { width: 0, height: 0, visibility: 'hidden' }}
     >
-      {children}
+      <div className="h-full w-full [&>*]:h-full [&>*]:w-full [&>*]:aspect-auto">{children}</div>
     </div>
   )
 }
@@ -383,7 +383,7 @@ export function ModelInfoBody(props: ViewProps) {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-stretch gap-4">
-        <FittedPreview>{props.preview}</FittedPreview>
+        <Cover>{props.preview}</Cover>
         <div className="min-w-0 flex-1">
           <StaticBlock {...props} />
         </div>

@@ -11,6 +11,7 @@ import {
   type OrderableMainTab,
 } from '@/app/appTabs.ts'
 import { type TimeDisplay } from '@/lib/timeDisplay.ts'
+import { cleanSetResolutions, DEFAULT_SET_RESOLUTIONS } from '@/screens/generate/resolutions.ts'
 
 export const THEMES = [
   { value: 'darker', label: 'Default' },
@@ -61,6 +62,34 @@ export type ImageFormat = (typeof IMAGE_FORMATS)[number]['value']
 
 const IMAGE_FORMAT_IDS = new Set<string>(IMAGE_FORMATS.map((item) => item.value))
 
+export type AutocompleteMode = 'exclude' | 'include'
+
+export type AutocompleteListRule = {
+  enabled: boolean
+  mode: AutocompleteMode
+  types: string[]
+}
+
+export const AUTOCOMPLETE_LIST_DEFAULT: AutocompleteListRule = {
+  enabled: true,
+  mode: 'exclude',
+  types: [],
+}
+
+export function autocompleteListRule(lists: Record<string, AutocompleteListRule>, name: string): AutocompleteListRule {
+  return lists[name] ?? AUTOCOMPLETE_LIST_DEFAULT
+}
+
+export function autocompleteApplies(mode: AutocompleteMode, types: string[], modelTypes: string[]): boolean {
+  if (!modelTypes.length) {
+    return mode === 'exclude'
+  }
+  if (mode === 'exclude') {
+    return !modelTypes.some((item) => types.includes(item))
+  }
+  return modelTypes.some((item) => types.includes(item))
+}
+
 export const SETTINGS_DEFAULTS = {
   batchGrid: true,
   batchGridMax: 16,
@@ -83,7 +112,7 @@ export const SETTINGS_DEFAULTS = {
   theme: 'darker' as Theme,
   civitaiSite: 'red' as CivitaiSite,
   timeDisplay: 'full' as TimeDisplay,
-  wildcardYamlByFilename: false,
+  setResolutions: [...DEFAULT_SET_RESOLUTIONS],
   imagePath: '[workflow]/images/[date]',
   gridPath: '[workflow]/grids/[date]',
   interruptedPath: '[workflow]/interrupted/[date]',
@@ -117,6 +146,17 @@ export const SETTINGS_DEFAULTS = {
   forceDownloadWildcardsLocal: true,
   removedAfterHours: 48,
   removedMaxGb: 100,
+  autocompleteEnabled: true,
+  autocompleteMode: 'exclude' as AutocompleteMode,
+  autocompleteTypes: [] as string[],
+  wildcardCompleteEnabled: true,
+  loraCompleteEnabled: true,
+  loraTriggerCompleteEnabled: true,
+  wildcardCompleteThumbs: true,
+  loraCompleteThumbs: true,
+  autocompleteThumbScale: 1,
+  frequentTagsEnabled: true,
+  autocompleteLists: {} as Record<string, AutocompleteListRule>,
 }
 
 type SettingsState = typeof SETTINGS_DEFAULTS & {
@@ -143,7 +183,7 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setTheme: (value: Theme) => void
   setCivitaiSite: (value: CivitaiSite) => void
   setTimeDisplay: (value: TimeDisplay) => void
-  setWildcardYamlByFilename: (value: boolean) => void
+  setSetResolutions: (value: string[]) => void
   setImagePath: (value: string) => void
   setGridPath: (value: string) => void
   setInterruptedPath: (value: string) => void
@@ -169,6 +209,17 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setForceDownloadWildcardsLocal: (value: boolean) => void
   setRemovedAfterHours: (value: number) => void
   setRemovedMaxGb: (value: number) => void
+  setAutocompleteEnabled: (value: boolean) => void
+  setAutocompleteMode: (value: AutocompleteMode) => void
+  setAutocompleteTypes: (value: string[]) => void
+  setWildcardCompleteEnabled: (value: boolean) => void
+  setLoraCompleteEnabled: (value: boolean) => void
+  setLoraTriggerCompleteEnabled: (value: boolean) => void
+  setWildcardCompleteThumbs: (value: boolean) => void
+  setLoraCompleteThumbs: (value: boolean) => void
+  setAutocompleteThumbScale: (value: number) => void
+  setFrequentTagsEnabled: (value: boolean) => void
+  setAutocompleteList: (name: string, patch: Partial<AutocompleteListRule>) => void
 }
 
 const KEYS = [
@@ -193,7 +244,7 @@ const KEYS = [
   'theme',
   'civitaiSite',
   'timeDisplay',
-  'wildcardYamlByFilename',
+  'setResolutions',
   'imagePath',
   'gridPath',
   'interruptedPath',
@@ -219,6 +270,17 @@ const KEYS = [
   'forceDownloadWildcardsLocal',
   'removedAfterHours',
   'removedMaxGb',
+  'autocompleteEnabled',
+  'autocompleteMode',
+  'autocompleteTypes',
+  'wildcardCompleteEnabled',
+  'loraCompleteEnabled',
+  'loraTriggerCompleteEnabled',
+  'wildcardCompleteThumbs',
+  'loraCompleteThumbs',
+  'autocompleteThumbScale',
+  'frequentTagsEnabled',
+  'autocompleteLists',
 ] as const
 
 function same(a: unknown, b: unknown) {
@@ -334,6 +396,41 @@ function cleanTypes(raw: unknown): string[] {
   return out
 }
 
+function cleanListTypes(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const allowed = new Set(MODEL_TYPES)
+  const out: string[] = []
+  for (const item of raw) {
+    const name = String(item)
+    if (name && allowed.has(name) && !out.includes(name)) {
+      out.push(name)
+    }
+  }
+  return out
+}
+
+function cleanAutocompleteLists(raw: unknown): Record<string, AutocompleteListRule> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const out: Record<string, AutocompleteListRule> = {}
+  for (const [key, item] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.replaceAll('\\', '/').split('/').pop() || ''
+    if (!name.endsWith('.csv') || !item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    out[name] = {
+      enabled: typeof row.enabled === 'boolean' ? row.enabled : AUTOCOMPLETE_LIST_DEFAULT.enabled,
+      mode: row.mode === 'include' ? 'include' : 'exclude',
+      types: cleanListTypes(row.types),
+    }
+  }
+  return out
+}
+
 function cleanTheme(raw: unknown): Theme {
   const name = raw === 'default' ? 'slate' : raw
   return THEME_IDS.has(name as string) ? (name as Theme) : SETTINGS_DEFAULTS.theme
@@ -409,6 +506,14 @@ function cleanSortDirMap(raw: unknown): Record<GalleryViewKind, GallerySortDir> 
     loras: cleanSortDir(row.loras ?? fallback.loras),
     wildcards: cleanSortDir(row.wildcards ?? fallback.wildcards),
   }
+}
+
+function cleanCompleteThumbScale(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.autocompleteThumbScale
+  }
+  return Math.round(Math.min(2, Math.max(0.5, n)) * 10) / 10
 }
 
 function cleanTileScale(raw: unknown) {
@@ -505,10 +610,9 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     theme: patch.theme ? cleanTheme(patch.theme) : SETTINGS_DEFAULTS.theme,
     civitaiSite: patch.civitaiSite ? cleanCivitaiSite(patch.civitaiSite) : SETTINGS_DEFAULTS.civitaiSite,
     timeDisplay: patch.timeDisplay ? cleanTimeDisplay(patch.timeDisplay) : SETTINGS_DEFAULTS.timeDisplay,
-    wildcardYamlByFilename:
-      typeof patch.wildcardYamlByFilename === 'boolean'
-        ? patch.wildcardYamlByFilename
-        : SETTINGS_DEFAULTS.wildcardYamlByFilename,
+    setResolutions: Array.isArray(patch.setResolutions)
+      ? cleanSetResolutions(patch.setResolutions)
+      : SETTINGS_DEFAULTS.setResolutions,
     imagePath: cleanPath(patch.imagePath, SETTINGS_DEFAULTS.imagePath),
     gridPath: cleanPath(patch.gridPath, SETTINGS_DEFAULTS.gridPath),
     interruptedPath: cleanPath(patch.interruptedPath, SETTINGS_DEFAULTS.interruptedPath),
@@ -570,6 +674,35 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
         : SETTINGS_DEFAULTS.removedAfterHours,
     removedMaxGb:
       typeof patch.removedMaxGb === 'number' ? cleanRemovedMaxGb(patch.removedMaxGb) : SETTINGS_DEFAULTS.removedMaxGb,
+    autocompleteEnabled:
+      typeof patch.autocompleteEnabled === 'boolean' ? patch.autocompleteEnabled : SETTINGS_DEFAULTS.autocompleteEnabled,
+    autocompleteMode: patch.autocompleteMode === 'include' ? 'include' : SETTINGS_DEFAULTS.autocompleteMode,
+    autocompleteTypes: patch.autocompleteTypes ? cleanListTypes(patch.autocompleteTypes) : SETTINGS_DEFAULTS.autocompleteTypes,
+    wildcardCompleteEnabled:
+      typeof patch.wildcardCompleteEnabled === 'boolean'
+        ? patch.wildcardCompleteEnabled
+        : SETTINGS_DEFAULTS.wildcardCompleteEnabled,
+    loraCompleteEnabled:
+      typeof patch.loraCompleteEnabled === 'boolean' ? patch.loraCompleteEnabled : SETTINGS_DEFAULTS.loraCompleteEnabled,
+    loraTriggerCompleteEnabled:
+      typeof patch.loraTriggerCompleteEnabled === 'boolean'
+        ? patch.loraTriggerCompleteEnabled
+        : SETTINGS_DEFAULTS.loraTriggerCompleteEnabled,
+    wildcardCompleteThumbs:
+      typeof patch.wildcardCompleteThumbs === 'boolean'
+        ? patch.wildcardCompleteThumbs
+        : SETTINGS_DEFAULTS.wildcardCompleteThumbs,
+    loraCompleteThumbs:
+      typeof patch.loraCompleteThumbs === 'boolean' ? patch.loraCompleteThumbs : SETTINGS_DEFAULTS.loraCompleteThumbs,
+    autocompleteThumbScale:
+      typeof patch.autocompleteThumbScale === 'number'
+        ? cleanCompleteThumbScale(patch.autocompleteThumbScale)
+        : SETTINGS_DEFAULTS.autocompleteThumbScale,
+    frequentTagsEnabled:
+      typeof patch.frequentTagsEnabled === 'boolean' ? patch.frequentTagsEnabled : SETTINGS_DEFAULTS.frequentTagsEnabled,
+    autocompleteLists: patch.autocompleteLists
+      ? cleanAutocompleteLists(patch.autocompleteLists)
+      : SETTINGS_DEFAULTS.autocompleteLists,
   }
 }
 
@@ -653,9 +786,6 @@ function pickLegacy(raw: unknown): UserSettings {
   if (typeof state.timeDisplay === 'string') {
     patch.timeDisplay = state.timeDisplay
   }
-  if (typeof state.wildcardYamlByFilename === 'boolean') {
-    patch.wildcardYamlByFilename = state.wildcardYamlByFilename
-  }
   if (typeof state.imagePath === 'string') {
     patch.imagePath = state.imagePath
   }
@@ -703,6 +833,39 @@ function pickLegacy(raw: unknown): UserSettings {
   }
   if (typeof state.removedMaxGb === 'number') {
     patch.removedMaxGb = state.removedMaxGb
+  }
+  if (typeof state.autocompleteEnabled === 'boolean') {
+    patch.autocompleteEnabled = state.autocompleteEnabled
+  }
+  if (state.autocompleteMode === 'include' || state.autocompleteMode === 'exclude') {
+    patch.autocompleteMode = state.autocompleteMode
+  }
+  if (Array.isArray(state.autocompleteTypes)) {
+    patch.autocompleteTypes = state.autocompleteTypes as string[]
+  }
+  if (typeof state.wildcardCompleteEnabled === 'boolean') {
+    patch.wildcardCompleteEnabled = state.wildcardCompleteEnabled
+  }
+  if (typeof state.loraCompleteEnabled === 'boolean') {
+    patch.loraCompleteEnabled = state.loraCompleteEnabled
+  }
+  if (typeof state.loraTriggerCompleteEnabled === 'boolean') {
+    patch.loraTriggerCompleteEnabled = state.loraTriggerCompleteEnabled
+  }
+  if (typeof state.wildcardCompleteThumbs === 'boolean') {
+    patch.wildcardCompleteThumbs = state.wildcardCompleteThumbs
+  }
+  if (typeof state.loraCompleteThumbs === 'boolean') {
+    patch.loraCompleteThumbs = state.loraCompleteThumbs
+  }
+  if (typeof state.autocompleteThumbScale === 'number') {
+    patch.autocompleteThumbScale = state.autocompleteThumbScale
+  }
+  if (typeof state.frequentTagsEnabled === 'boolean') {
+    patch.frequentTagsEnabled = state.frequentTagsEnabled
+  }
+  if (state.autocompleteLists && typeof state.autocompleteLists === 'object') {
+    patch.autocompleteLists = state.autocompleteLists as UserSettings['autocompleteLists']
   }
   return patch
 }
@@ -835,8 +998,8 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ timeDisplay: cleanTimeDisplay(timeDisplay) })
     persist()
   },
-  setWildcardYamlByFilename: (wildcardYamlByFilename) => {
-    set({ wildcardYamlByFilename })
+  setSetResolutions: (setResolutions) => {
+    set({ setResolutions: cleanSetResolutions(setResolutions) })
     persist()
   },
   setImagePath: (imagePath) => {
@@ -941,6 +1104,66 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setRemovedMaxGb: (removedMaxGb) => {
     set({ removedMaxGb: cleanRemovedMaxGb(removedMaxGb) })
+    persist()
+  },
+  setAutocompleteEnabled: (autocompleteEnabled) => {
+    set({ autocompleteEnabled })
+    persist()
+  },
+  setAutocompleteMode: (autocompleteMode) => {
+    set({ autocompleteMode })
+    persist()
+  },
+  setAutocompleteTypes: (autocompleteTypes) => {
+    set({ autocompleteTypes: cleanListTypes(autocompleteTypes) })
+    persist()
+  },
+  setWildcardCompleteEnabled: (wildcardCompleteEnabled) => {
+    set({ wildcardCompleteEnabled })
+    persist()
+  },
+  setLoraCompleteEnabled: (loraCompleteEnabled) => {
+    set({ loraCompleteEnabled })
+    persist()
+  },
+  setLoraTriggerCompleteEnabled: (loraTriggerCompleteEnabled) => {
+    set({ loraTriggerCompleteEnabled })
+    persist()
+  },
+  setWildcardCompleteThumbs: (wildcardCompleteThumbs) => {
+    set({ wildcardCompleteThumbs })
+    persist()
+  },
+  setLoraCompleteThumbs: (loraCompleteThumbs) => {
+    set({ loraCompleteThumbs })
+    persist()
+  },
+  setAutocompleteThumbScale: (autocompleteThumbScale) => {
+    set({ autocompleteThumbScale: cleanCompleteThumbScale(autocompleteThumbScale) })
+    persist()
+  },
+  setFrequentTagsEnabled: (frequentTagsEnabled) => {
+    set({ frequentTagsEnabled })
+    persist()
+  },
+  setAutocompleteList: (name, patch) => {
+    set((state) => {
+      const prev = autocompleteListRule(state.autocompleteLists, name)
+      const next: AutocompleteListRule = {
+        enabled: patch.enabled ?? prev.enabled,
+        mode: patch.mode ?? prev.mode,
+        types: patch.types ?? prev.types,
+      }
+      const autocompleteLists = { ...state.autocompleteLists, [name]: next }
+      if (
+        next.enabled === AUTOCOMPLETE_LIST_DEFAULT.enabled &&
+        next.mode === AUTOCOMPLETE_LIST_DEFAULT.mode &&
+        next.types.length === 0
+      ) {
+        delete autocompleteLists[name]
+      }
+      return { autocompleteLists }
+    })
     persist()
   },
 }))

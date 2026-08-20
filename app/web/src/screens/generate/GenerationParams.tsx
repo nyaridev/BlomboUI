@@ -7,7 +7,7 @@ import { getKSamplerChoices } from '@/lib/api.ts'
 import { useGenerateStore, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
-import { ASPECTS, SAMPLERS, SCHEDULERS, inferScaler, listedChoices, sizeFromScaler } from './resolutions.ts'
+import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, inferScaler, listedChoices, orientSize, parseSize, sizeFromScaler, snapToSet, type ResMode } from './resolutions.ts'
 
 function FieldLabel({ children }: { children: string }) {
   return <span className="text-xs text-muted">{children}</span>
@@ -57,6 +57,7 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
   const setOutputGridName = useGenerateStore((s) => s.setOutputGridName)
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
+  const setResolutions = useSettingsStore((s) => s.setResolutions)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
 
@@ -76,7 +77,7 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
       .catch(() => {})
   }, [comfyOk])
 
-  function onResMode(mode: 'raw' | 'scaler') {
+  function onResMode(mode: ResMode) {
     if (mode === 'scaler') {
       const inferred = inferScaler(width, height)
       const size = sizeFromScaler(inferred.aspect, inferred.megapixels)
@@ -87,7 +88,30 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
       setHeight(size.height)
       return
     }
+    if (mode === 'set') {
+      const size = snapToSet(width, height, setResolutions)
+      setResMode('set')
+      setWidth(size.w)
+      setHeight(size.h)
+      return
+    }
     setResMode('raw')
+  }
+
+  function onSetSize(key: string) {
+    const size = parseSize(key)
+    if (!size) {
+      return
+    }
+    const next = orientSize(size, height > width)
+    setWidth(next.w)
+    setHeight(next.h)
+  }
+
+  function onOrient(vertical: boolean) {
+    const next = orientSize({ w: width, h: height }, vertical)
+    setWidth(next.w)
+    setHeight(next.h)
   }
 
   function onAspect(id: string) {
@@ -145,13 +169,20 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
           </button>
           <button
             type="button"
-            className={[
-              'rounded-r px-2 py-1',
-              resMode === 'scaler' ? 'bg-line text-ink' : 'text-muted hover:text-ink',
-            ].join(' ')}
+            className={['px-2 py-1', resMode === 'scaler' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
             onClick={() => onResMode('scaler')}
           >
             Scaler
+          </button>
+          <button
+            type="button"
+            className={[
+              'rounded-r px-2 py-1',
+              resMode === 'set' ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+            ].join(' ')}
+            onClick={() => onResMode('set')}
+          >
+            Set
           </button>
         </div>
         {resMode === 'scaler' ? <span className="text-xs text-muted">{width} × {height}</span> : null}
@@ -163,6 +194,50 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
               <SliderField label="Width" value={width} onChange={setWidth} min={64} max={4096} step={8} />
               <SliderField label="Height" value={height} onChange={setHeight} min={64} max={4096} step={8} />
             </>
+          ) : resMode === 'set' ? (
+            <div className="flex min-w-0 flex-col gap-2">
+              <div className="flex min-w-0 flex-col gap-1">
+                <FieldLabel>Resolution</FieldLabel>
+                <SelectField
+                  value={formatSize({ w: Math.max(width, height), h: Math.min(width, height) })}
+                  onChange={onSetSize}
+                  options={[
+                    ...new Set([
+                      formatSize({ w: Math.max(width, height), h: Math.min(width, height) }),
+                      ...setResolutions,
+                    ]),
+                  ].map((key) => {
+                    const size = parseSize(key)
+                    return {
+                      value: key,
+                      label: size ? formatSize(orientSize(size, height > width)) : key,
+                    }
+                  })}
+                />
+              </div>
+              <div className="inline-flex self-start rounded border border-line text-xs">
+                <button
+                  type="button"
+                  className={[
+                    'rounded-l px-2 py-1',
+                    height <= width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                  ].join(' ')}
+                  onClick={() => onOrient(false)}
+                >
+                  Horizontal
+                </button>
+                <button
+                  type="button"
+                  className={[
+                    'rounded-r px-2 py-1',
+                    height > width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                  ].join(' ')}
+                  onClick={() => onOrient(true)}
+                >
+                  Vertical
+                </button>
+              </div>
+            </div>
           ) : (
             <>
               <div className="flex min-w-0 flex-col gap-1">

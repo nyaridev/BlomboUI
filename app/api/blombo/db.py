@@ -44,7 +44,24 @@ CREATE TABLE IF NOT EXISTS generations (
 """
 
 # (version, sql) applied in order when schema_version is behind.
-STEPS: list[tuple[int, str]] = []
+STEPS: list[tuple[int, str]] = [
+    (
+        2,
+        """
+CREATE TABLE IF NOT EXISTS prompt_tags (
+    tag TEXT PRIMARY KEY,
+    count INTEGER NOT NULL,
+    last_used TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS prompt_tag_state (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    prompt TEXT NOT NULL,
+    negative TEXT NOT NULL
+);
+INSERT OR IGNORE INTO prompt_tag_state (id, prompt, negative) VALUES (1, '', '');
+""",
+    ),
+]
 
 
 def db_path() -> Path:

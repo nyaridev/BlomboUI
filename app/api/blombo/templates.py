@@ -152,7 +152,7 @@ def _clean_params(raw: Any) -> dict[str, Any]:
                 out[key] = float(value)
         except (TypeError, ValueError):
             continue
-    if out.get("resMode") not in (None, "raw", "scaler"):
+    if out.get("resMode") not in (None, "raw", "scaler", "set"):
         out.pop("resMode", None)
     if out.get("seedAfter") not in (None, "randomize", "fixed", "increment", "decrement"):
         out.pop("seedAfter", None)

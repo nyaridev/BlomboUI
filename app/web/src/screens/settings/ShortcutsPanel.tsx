@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { SettingsCard } from './SettingsBlock.tsx'
 
 export const SHORTCUTS_QUERY =
-  'shortcuts keys keyboard hotkey reload models generate cancel interrupt enter ctrl shift alt escape fullscreen tabs prompt weight attention lora arrow indent wildcard raw'
+  'shortcuts keys keyboard hotkey reload models generate cancel interrupt enter ctrl shift alt escape fullscreen tabs prompt weight attention lora arrow indent wildcard raw autocomplete tab'
 
 type Shortcut = { keys: string[]; action: string }
 
@@ -21,6 +21,10 @@ const SHORTCUT_SECTIONS: { title: string; items: Shortcut[] }[] = [
     items: [
       { keys: ['Ctrl', 'Up'], action: 'Increase weight of the selected prompt text, or LoRA strength' },
       { keys: ['Ctrl', 'Down'], action: 'Decrease weight of the selected prompt text, or LoRA strength' },
+      { keys: ['Tab'], action: 'Complete the selected tag in the prompt autocomplete list' },
+      { keys: ['Enter'], action: 'Complete the selected tag in the prompt autocomplete list' },
+      { keys: ['Up'], action: 'Move up in the prompt autocomplete list' },
+      { keys: ['Down'], action: 'Move down in the prompt autocomplete list' },
     ],
   },
   {

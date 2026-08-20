@@ -13,6 +13,7 @@ export function TilePreview({
   label,
   badge,
   warn = false,
+  eager = false,
   className = '',
 }: {
   src?: string | null
@@ -22,6 +23,7 @@ export function TilePreview({
   label?: string
   badge?: string
   warn?: boolean
+  eager?: boolean
   className?: string
 }) {
   const [broken, setBroken] = useState(false)
@@ -44,7 +46,7 @@ export function TilePreview({
         className,
       ].join(' ')}
     >
-      {showImg && visible ? (
+      {showImg && (eager || visible) ? (
         <img
           src={src || ''}
           alt=""

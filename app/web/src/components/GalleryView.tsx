@@ -25,6 +25,7 @@ import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   createModelFolder,
   createWildcardFolder,
@@ -186,6 +187,7 @@ function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
 }
 
 export function GalleryView({ kind, items, value, selected, onSelect }: GalleryViewProps) {
+  const navigate = useNavigate()
   const saved = chrome.get(kind)
   const sortKind: GalleryViewKind = kind === 'loras' || kind === 'wildcards' ? kind : 'checkpoints'
   const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[sortKind])
@@ -586,6 +588,10 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     }
   }
 
+  function openInManager(ident: string, dir: boolean) {
+    navigate('/wildcards', { state: { open: ident, dir } })
+  }
+
   async function revealEntry(path: string) {
     try {
       if (kind === 'wildcards') {
@@ -734,6 +740,11 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                 onReveal={(path) => void revealEntry(displayToIdent(path))}
                 onRemove={(path) => setPendingRemove(displayToIdent(path))}
                 onAdd={(folder) => setCreating({ folder: displayToIdent(folder), name: '' })}
+                onOpenManager={
+                  kind === 'wildcards'
+                    ? (path, nodeKind) => openInManager(displayToIdent(path), nodeKind === 'dir')
+                    : undefined
+                }
               />
             </div>
             <PaneSplitter
@@ -979,6 +990,16 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
               setTileMenu(null)
             }}
           />
+          {kind === 'wildcards' ? (
+            <ContextMenuItem
+              icon="file-pen"
+              label="Open in Wildcard Manager"
+              onClick={() => {
+                openInManager(tileMenu.path, false)
+                setTileMenu(null)
+              }}
+            />
+          ) : null}
           {tileMenu.fileTile ? (
             <ContextMenuItem
               label="Remove"

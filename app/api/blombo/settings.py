@@ -14,6 +14,8 @@ IMAGE_NAME_DEFAULT = "blombo_[number]"
 GRID_NAME_DEFAULT = "blombo_[number]"
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9._\[\]/-]+$")
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._\[\]-]+$")
+_CSV_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.csv$")
+_SIZE = re.compile(r"^(\d+)[x×*](\d+)$", re.I)
 _GALLERY_SORTS = ("name", "added", "edited", "path")
 _GALLERY_DIRS = ("asc", "desc")
 _GALLERY_VIEWS = ("checkpoints", "loras", "wildcards")
@@ -43,7 +45,7 @@ _KEYS = (
     "theme",
     "civitaiSite",
     "timeDisplay",
-    "wildcardYamlByFilename",
+    "setResolutions",
     "imagePath",
     "imageName",
     "gridPath",
@@ -69,6 +71,17 @@ _KEYS = (
     "forceDownloadWildcardsLocal",
     "removedAfterHours",
     "removedMaxGb",
+    "autocompleteEnabled",
+    "autocompleteMode",
+    "autocompleteTypes",
+    "wildcardCompleteEnabled",
+    "loraCompleteEnabled",
+    "loraTriggerCompleteEnabled",
+    "wildcardCompleteThumbs",
+    "loraCompleteThumbs",
+    "autocompleteThumbScale",
+    "frequentTagsEnabled",
+    "autocompleteLists",
 )
 
 
@@ -149,8 +162,10 @@ def _clean(raw: Any) -> dict[str, Any]:
         name = str(raw["timeDisplay"])
         if name in ("full", "ampm"):
             out["timeDisplay"] = name
-    if "wildcardYamlByFilename" in raw:
-        out["wildcardYamlByFilename"] = bool(raw["wildcardYamlByFilename"])
+    if "setResolutions" in raw and isinstance(raw["setResolutions"], list):
+        sizes = _set_resolutions(raw["setResolutions"])
+        if sizes is not None:
+            out["setResolutions"] = sizes
     image_path = _path_template(raw.get("imagePath"), IMAGE_PATH_DEFAULT) if "imagePath" in raw else None
     if image_path:
         out["imagePath"] = image_path
@@ -234,6 +249,34 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["removedMaxGb"] = max(1, min(10000, int(raw["removedMaxGb"])))
         except (TypeError, ValueError):
             pass
+    if "autocompleteEnabled" in raw:
+        out["autocompleteEnabled"] = bool(raw["autocompleteEnabled"])
+    if "autocompleteMode" in raw:
+        mode = str(raw["autocompleteMode"])
+        out["autocompleteMode"] = mode if mode in ("exclude", "include") else "exclude"
+    if "autocompleteTypes" in raw and isinstance(raw["autocompleteTypes"], list):
+        out["autocompleteTypes"] = _unique_names(raw["autocompleteTypes"])
+    if "wildcardCompleteEnabled" in raw:
+        out["wildcardCompleteEnabled"] = bool(raw["wildcardCompleteEnabled"])
+    if "loraCompleteEnabled" in raw:
+        out["loraCompleteEnabled"] = bool(raw["loraCompleteEnabled"])
+    if "loraTriggerCompleteEnabled" in raw:
+        out["loraTriggerCompleteEnabled"] = bool(raw["loraTriggerCompleteEnabled"])
+    if "wildcardCompleteThumbs" in raw:
+        out["wildcardCompleteThumbs"] = bool(raw["wildcardCompleteThumbs"])
+    if "loraCompleteThumbs" in raw:
+        out["loraCompleteThumbs"] = bool(raw["loraCompleteThumbs"])
+    if "autocompleteThumbScale" in raw:
+        try:
+            out["autocompleteThumbScale"] = round(min(2.0, max(0.5, float(raw["autocompleteThumbScale"]))), 1)
+        except (TypeError, ValueError):
+            pass
+    if "frequentTagsEnabled" in raw:
+        out["frequentTagsEnabled"] = bool(raw["frequentTagsEnabled"])
+    if "autocompleteLists" in raw:
+        lists = _autocomplete_lists(raw["autocompleteLists"])
+        if lists is not None:
+            out["autocompleteLists"] = lists
     return {key: out[key] for key in _KEYS if key in out}
 
 
@@ -267,6 +310,29 @@ def _lora_bound(raw: Any) -> float | None:
     return round(min(20.0, max(-20.0, value)), 2)
 
 
+def _autocomplete_lists(raw: Any) -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    out: dict[str, Any] = {}
+    for key, item in raw.items():
+        name = str(key).replace("\\", "/").rsplit("/", 1)[-1]
+        if not _CSV_NAME.fullmatch(name) or not isinstance(item, dict):
+            continue
+        mode = item.get("mode")
+        if mode not in ("exclude", "include"):
+            mode = "exclude"
+        types: list[str] = []
+        raw_types = item.get("types")
+        if isinstance(raw_types, list):
+            for entry in raw_types:
+                text = str(entry).strip()
+                if text and text not in types:
+                    types.append(text)
+        enabled = bool(item["enabled"]) if "enabled" in item else True
+        out[name] = {"enabled": enabled, "mode": mode, "types": types}
+    return out
+
+
 def _unique_names(raw: list[Any]) -> list[str]:
     out: list[str] = []
     for item in raw:
@@ -274,6 +340,30 @@ def _unique_names(raw: list[Any]) -> list[str]:
         if name and name not in out:
             out.append(name)
     return out
+
+
+def _set_resolutions(raw: list[Any]) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        match = _SIZE.match(str(item).replace(" ", ""))
+        if not match:
+            continue
+        width = _snap_dim(int(match.group(1)))
+        height = _snap_dim(int(match.group(2)))
+        if width < height:
+            width, height = height, width
+        key = f"{width}x{height}"
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(key)
+    return out
+
+
+def _snap_dim(value: int) -> int:
+    snapped = int(round(value / 8) * 8)
+    return max(64, min(4096, snapped))
 
 
 def _unique_allowed(raw: list[Any], allowed: tuple[str, ...]) -> list[str]:

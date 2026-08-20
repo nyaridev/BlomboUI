@@ -226,6 +226,7 @@ export type ModelEntry = {
   source?: string
   dir?: boolean
   entries?: string[]
+  types?: string[]
 }
 
 export type ModelHashes = {
@@ -569,7 +570,7 @@ export type UserSettings = {
   theme?: string
   civitaiSite?: string
   timeDisplay?: string
-  wildcardYamlByFilename?: boolean
+  setResolutions?: string[]
   imagePath?: string
   gridPath?: string
   interruptedPath?: string
@@ -595,6 +596,17 @@ export type UserSettings = {
   forceDownloadWildcardsLocal?: boolean
   removedAfterHours?: number
   removedMaxGb?: number
+  autocompleteEnabled?: boolean
+  autocompleteMode?: string
+  autocompleteTypes?: string[]
+  wildcardCompleteEnabled?: boolean
+  loraCompleteEnabled?: boolean
+  loraTriggerCompleteEnabled?: boolean
+  wildcardCompleteThumbs?: boolean
+  loraCompleteThumbs?: boolean
+  autocompleteThumbScale?: number
+  frequentTagsEnabled?: boolean
+  autocompleteLists?: Record<string, { enabled?: boolean; mode?: string; types?: string[] }>
 }
 
 export async function pickFolder(): Promise<string | null> {
@@ -604,6 +616,94 @@ export async function pickFolder(): Promise<string | null> {
   }
   const data = (await res.json()) as { path?: string | null }
   return data.path || null
+}
+
+export type AutocompleteCsv = {
+  name: string
+  size: number
+  downloaded: boolean
+}
+
+export async function getAutocompleteCsv(): Promise<AutocompleteCsv[]> {
+  const res = await fetch(api('/autocomplete/csv'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { files?: AutocompleteCsv[] }
+  return Array.isArray(data.files) ? data.files : []
+}
+
+export async function downloadAutocompleteCsv(name: string): Promise<AutocompleteCsv> {
+  const res = await fetch(api('/autocomplete/csv'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as AutocompleteCsv
+}
+
+export async function openAutocompleteFolder(): Promise<void> {
+  const res = await fetch(api('/autocomplete/open'), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export type PromptTagHit = {
+  tag: string
+  posts: number
+  count: number
+  favorite: boolean
+  alias?: string
+}
+
+export async function suggestPromptTags(
+  q: string,
+  checkpoint: string,
+  signal?: AbortSignal,
+): Promise<{ tags: PromptTagHit[]; ready: boolean }> {
+  const res = await fetch(
+    api(`/autocomplete/suggest?q=${encodeURIComponent(q)}&checkpoint=${encodeURIComponent(checkpoint)}`),
+    { signal },
+  )
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { tags?: PromptTagHit[]; ready?: boolean }
+  return {
+    tags: Array.isArray(data.tags) ? data.tags : [],
+    ready: data.ready !== false,
+  }
+}
+
+export type FrequentPromptTag = {
+  tag: string
+  count: number
+  favorite: boolean
+}
+
+export async function getPromptTagUsage(prefix: string, signal?: AbortSignal): Promise<FrequentPromptTag[]> {
+  const res = await fetch(api(`/autocomplete/usage?prefix=${encodeURIComponent(prefix)}`), { signal })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { tags?: FrequentPromptTag[] }
+  return Array.isArray(data.tags) ? data.tags : []
+}
+
+export async function getFrequentPromptTags(): Promise<{ tags: FrequentPromptTag[]; threshold: number }> {
+  const res = await fetch(api('/autocomplete/frequent'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { tags?: FrequentPromptTag[]; threshold?: number }
+  return {
+    tags: Array.isArray(data.tags) ? data.tags : [],
+    threshold: typeof data.threshold === 'number' ? data.threshold : 2,
+  }
 }
 
 export type WildcardTreeNode = {

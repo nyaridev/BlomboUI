@@ -87,8 +87,8 @@ export function toggleLoraPrompts(
     }
   }
   return {
-    prompt: appendChunk(addLoraTag(prompt, name, strength), extraPositive),
-    negativePrompt: appendChunk(negative, extraNegative),
+    prompt: appendPromptChunk(addLoraTag(prompt, name, strength), extraPositive),
+    negativePrompt: appendPromptChunk(negative, extraNegative),
   }
 }
 
@@ -103,11 +103,26 @@ function splitTags(text: string) {
     .filter(Boolean)
 }
 
-function tidy(text: string) {
+function tidyPrompt(text: string) {
   return text
     .replace(/,\s*,+/g, ',')
     .replace(/^[ \t,]+/, '')
     .replace(/[ \t,]+$/, '')
+}
+
+export function appendPromptChunk(text: string, chunk: string) {
+  const extra = chunk.trim()
+  if (!extra) {
+    return text
+  }
+  const trimmed = text.replace(/[ \t,]+$/, '')
+  if (!trimmed) {
+    return extra
+  }
+  if (trimmed.endsWith(',')) {
+    return `${trimmed} ${extra}`
+  }
+  return `${trimmed}, ${extra}`
 }
 
 function isSpaceOrComma(ch: string) {
@@ -165,7 +180,7 @@ function cutLoraHit(prompt: string, hit: { start: number; end: number }, extraPo
     }
     pos = end
   }
-  return tidy(prompt.slice(0, hit.start) + prompt.slice(end))
+  return tidyPrompt(prompt.slice(0, hit.start) + prompt.slice(end))
 }
 
 function addLoraTag(prompt: string, name: string, strength: number) {
@@ -178,21 +193,6 @@ function addLoraTag(prompt: string, name: string, strength: number) {
     return `${trimmed} ${tag}`
   }
   return `${trimmed}, ${tag}`
-}
-
-function appendChunk(text: string, chunk: string) {
-  const extra = chunk.trim()
-  if (!extra) {
-    return text
-  }
-  const trimmed = text.replace(/[ \t,]+$/, '')
-  if (!trimmed) {
-    return extra
-  }
-  if (trimmed.endsWith(',')) {
-    return `${trimmed} ${extra}`
-  }
-  return `${trimmed}, ${extra}`
 }
 
 function removeTrailingTags(text: string, extra: string) {

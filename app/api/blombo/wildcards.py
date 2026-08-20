@@ -38,21 +38,16 @@ def iter_tiles(path: Path, rel: str, claimed: dict[str, str] | None = None) -> l
     return out
 
 
-def expand(text: str, rng: random.Random, by_filename: bool = False, missing: list[str] | None = None) -> str:
+def expand(text: str, rng: random.Random, missing: list[str] | None = None) -> str:
     found = missing if missing is not None else []
     index = _index()
-    return _expand(text, rng, by_filename, index, found, 0)
+    return _expand(text, rng, index, found, 0)
 
 
 def apply(values: dict[str, Any], rng: random.Random) -> None:
-    from blombo import settings as user_settings
-
-    by_filename = bool(user_settings.load().get("wildcardYamlByFilename"))
     missing: list[str] = []
-    values["prompt_expanded"] = expand(str(values.get("prompt") or ""), rng, by_filename, missing)
-    values["negative_prompt_expanded"] = expand(
-        str(values.get("negative_prompt") or ""), rng, by_filename, missing
-    )
+    values["prompt_expanded"] = expand(str(values.get("prompt") or ""), rng, missing)
+    values["negative_prompt_expanded"] = expand(str(values.get("negative_prompt") or ""), rng, missing)
     values["wildcard_missing"] = missing
 
 
@@ -68,7 +63,6 @@ def _flatten_tiles(tag: str, node: YamlNode, source: str) -> list[dict[str, Any]
 def _expand(
     text: str,
     rng: random.Random,
-    by_filename: bool,
     index: dict[str, Any],
     missing: list[str],
     depth: int,
@@ -78,17 +72,17 @@ def _expand(
 
     def repl(match: re.Match[str]) -> str:
         tag = match.group(1).strip().replace("\\", "/").strip("/")
-        line = _pick(tag, rng, by_filename, index)
+        line = _pick(tag, rng, index)
         if line is None:
             if tag not in missing:
                 missing.append(tag)
             return match.group(0)
-        return _expand(line, rng, by_filename, index, missing, depth + 1)
+        return _expand(line, rng, index, missing, depth + 1)
 
     return TAG.sub(repl, text)
 
 
-def _pick(tag: str, rng: random.Random, by_filename: bool, index: dict[str, Any]) -> str | None:
+def _pick(tag: str, rng: random.Random, index: dict[str, Any]) -> str | None:
     key = tag.strip().replace("\\", "/").strip("/").lower()
     if not key:
         return None
@@ -98,46 +92,10 @@ def _pick(tag: str, rng: random.Random, by_filename: bool, index: dict[str, Any]
     node = index["yaml"].get(key)
     if node is not None:
         return _pick_node(node, rng)
-    if by_filename:
-        hit = _yaml_file_node(key, index["files"])
-        if hit is not None:
-            return _pick_node(hit, rng)
     files = index["dirs"].get(key)
     if files:
         return _file_line(rng.choice(files), rng)
     return None
-
-
-def _yaml_file_node(key: str, files: dict[str, dict[str, YamlNode]]) -> YamlNode | None:
-    parts = key.split("/")
-    for i in range(len(parts), 0, -1):
-        stem = "/".join(parts[:i])
-        doc = files.get(stem)
-        if doc is None:
-            continue
-        rest = parts[i:]
-        if not rest:
-            return doc
-        walked = _walk(doc, rest)
-        if walked is not None:
-            return walked
-        if len(doc) == 1:
-            walked = _walk(next(iter(doc.values())), rest)
-            if walked is not None:
-                return walked
-    return None
-
-
-def _walk(node: YamlNode, parts: list[str]) -> YamlNode | None:
-    current: YamlNode = node
-    for part in parts:
-        if not isinstance(current, dict):
-            return None
-        match = next((name for name in current if name.lower() == part), None)
-        if match is None:
-            return None
-        current = current[match]
-    return current
 
 
 def _pick_node(node: YamlNode, rng: random.Random) -> str:
@@ -170,9 +128,8 @@ def _index() -> dict[str, Any]:
     root = wildcards_root()
     txt: dict[str, Path] = {}
     yaml_nodes: dict[str, YamlNode] = {}
-    yaml_files: dict[str, dict[str, YamlNode]] = {}
     dirs: dict[str, list[Path]] = {}
-    empty: dict[str, Any] = {"txt": txt, "yaml": yaml_nodes, "files": yaml_files, "dirs": dirs}
+    empty: dict[str, Any] = {"txt": txt, "yaml": yaml_nodes, "dirs": dirs}
     if not root.is_dir():
         return empty
     claimed: dict[str, str] = {}
@@ -188,8 +145,6 @@ def _index() -> dict[str, Any]:
         tree = _yaml_tree(path)
         if not tree:
             continue
-        yaml_files.setdefault(stem.lower(), tree)
-        yaml_files.setdefault(path.stem.lower(), tree)
         for name, node in tree.items():
             key = name.lower()
             owner = claimed.get(key)

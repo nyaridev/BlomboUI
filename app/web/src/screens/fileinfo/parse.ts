@@ -298,7 +298,7 @@ function validParam(key: keyof TemplateParams, value: unknown, choices: { sample
     return intIn(value, 1, 100) != null
   }
   if (key === 'resMode') {
-    return value === 'raw' || value === 'scaler'
+    return value === 'raw' || value === 'scaler' || value === 'set'
   }
   if (key === 'outputImagePath' || key === 'outputGridPath' || key === 'outputImageName' || key === 'outputGridName') {
     return typeof value === 'string'

@@ -94,6 +94,7 @@ def ensure_dirs() -> None:
     (USER / "output").mkdir(exist_ok=True)
     (USER / "gallery").mkdir(exist_ok=True)
     (USER / "wildcards").mkdir(exist_ok=True)
+    (USER / "autocompletion").mkdir(exist_ok=True)
 
 
 def resolve() -> dict[str, str | None]:

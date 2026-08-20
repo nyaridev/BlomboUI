@@ -13,10 +13,11 @@ import { SavingPanel, SAVING_QUERY } from './SavingPanel.tsx'
 import { OutputGalleryPanel, OUTPUT_GALLERY_QUERY } from './OutputGalleryPanel.tsx'
 import { ShortcutsPanel, SHORTCUTS_QUERY } from './ShortcutsPanel.tsx'
 import { TabsPanel, TABS_QUERY } from './TabsPanel.tsx'
-import { WildcardsPanel, WILDCARDS_QUERY } from './WildcardsPanel.tsx'
+import { AutocompleteGeneralPanel, AutocompletePanel, AUTOCOMPLETE_GENERAL_QUERY, AUTOCOMPLETE_QUERY } from './AutocompletePanel.tsx'
+import { FrequentTagsPanel, FREQUENT_TAGS_QUERY } from './FrequentTagsPanel.tsx'
 import { RemovedPanel, REMOVED_QUERY } from './RemovedPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
-import { SettingsNav } from './SettingsNav.tsx'
+import { pageLabel, SettingsNav } from './SettingsNav.tsx'
 
 const NAV_REM = 12
 const NAV_MIN_REM = 10
@@ -46,7 +47,14 @@ const GROUPS = [
       { id: 'Metadata', terms: CIVITAI_QUERY, Panel: CivitaiPanel },
     ],
   },
-  { title: 'Wildcards', pages: [{ id: 'Wildcards', terms: WILDCARDS_QUERY, Panel: WildcardsPanel }] },
+  {
+    title: 'Autocomplete',
+    pages: [
+      { id: 'autocomplete-general', label: 'General', terms: AUTOCOMPLETE_GENERAL_QUERY, Panel: AutocompleteGeneralPanel },
+      { id: 'autocomplete-tag-lists', label: 'Tag Lists', terms: AUTOCOMPLETE_QUERY, Panel: AutocompletePanel },
+      { id: 'autocomplete-frequent-tags', label: 'Frequent Tags', terms: FREQUENT_TAGS_QUERY, Panel: FrequentTagsPanel },
+    ],
+  },
   {
     title: 'Other',
     pages: [
@@ -79,7 +87,7 @@ export function SettingsScreen() {
           if (query.trim() && 'search' in item && item.search === false) {
             return false
           }
-          return matchesSetting(query, item.id, item.terms)
+          return matchesSetting(query, item.id, pageLabel(item), item.terms)
         }),
       })).filter((group) => group.pages.length > 0),
     [query],
@@ -179,7 +187,7 @@ export function SettingsScreen() {
           <div className="flex flex-col gap-10">
             {shown.map((item) => (
               <div key={item.id} id={`settings-${item.id}`} className="flex flex-col gap-4">
-                {searching ? <h1 className="text-sm font-medium text-ink">{item.id}</h1> : null}
+                {searching ? <h1 className="text-sm font-medium text-ink">{pageLabel(item)}</h1> : null}
                 <item.Panel query={query} />
               </div>
             ))}

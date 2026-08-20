@@ -14,8 +14,8 @@ export function ContextMenu({
   children: ReactNode
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const left = Math.max(8, Math.min(x, window.innerWidth - 168))
-  const top = Math.max(8, Math.min(y, window.innerHeight - 160))
+  const left = Math.max(8, Math.min(x, window.innerWidth - 240))
+  const top = Math.max(8, Math.min(y, window.innerHeight - 200))
 
   useEffect(() => {
     function onDown(event: MouseEvent) {
@@ -39,7 +39,7 @@ export function ContextMenu({
   return createPortal(
     <div
       ref={ref}
-      className="fixed z-[70] min-w-40 rounded border border-line bg-panel py-1 shadow-lg"
+      className="fixed z-[70] min-w-52 rounded border border-line bg-panel py-1 shadow-lg"
       style={{ left, top }}
       onMouseDown={(event) => event.stopPropagation()}
     >
@@ -53,11 +53,14 @@ export function ContextMenuItem({
   label,
   onClick,
   danger = false,
+  icon,
 }: {
   label: string
   onClick: () => void
   danger?: boolean
+  icon?: string
 }) {
+  const mark = icon || (danger ? 'trash-2' : '')
   return (
     <button
       type="button"
@@ -67,7 +70,7 @@ export function ContextMenuItem({
       ].join(' ')}
       onClick={onClick}
     >
-      {danger ? <AppIcon id="trash-2" size={14} /> : null}
+      {mark ? <AppIcon id={mark} size={14} /> : null}
       <span>{label}</span>
     </button>
   )

@@ -323,28 +323,28 @@ input[type='range'].slider::-moz-range-thumb {
   background: color-mix(in srgb, var(--color-accent) 28%, var(--color-line));
 }
 
-.yaml-d0 { --yaml-tint: var(--color-red); }
-.yaml-d1 { --yaml-tint: var(--color-orange); }
-.yaml-d2 { --yaml-tint: var(--color-yellow); }
-.yaml-d3 { --yaml-tint: var(--color-green); }
-.yaml-d4 { --yaml-tint: var(--color-cyan); }
-.yaml-d5 { --yaml-tint: var(--color-blue); }
-.yaml-d6 { --yaml-tint: var(--color-purple); }
-.yaml-d7 { --yaml-tint: var(--color-pink); }
-.yaml-d8 { --yaml-tint: var(--color-red); }
-.yaml-d9 { --yaml-tint: var(--color-orange); }
+.yaml-d0 { --yaml-tint: color-mix(in srgb, var(--color-blue) 28%, var(--color-muted)); }
+.yaml-d1 { --yaml-tint: color-mix(in srgb, var(--color-cyan) 26%, var(--color-muted)); }
+.yaml-d2 { --yaml-tint: color-mix(in srgb, var(--color-green) 24%, var(--color-muted)); }
+.yaml-d3 { --yaml-tint: color-mix(in srgb, var(--color-purple) 26%, var(--color-muted)); }
+.yaml-d4 { --yaml-tint: color-mix(in srgb, var(--color-label) 50%, var(--color-muted)); }
+.yaml-d5 { --yaml-tint: color-mix(in srgb, var(--color-blue-bright) 22%, var(--color-muted)); }
+.yaml-d6 { --yaml-tint: color-mix(in srgb, var(--color-cyan-bright) 20%, var(--color-muted)); }
+.yaml-d7 { --yaml-tint: color-mix(in srgb, var(--color-green-bright) 18%, var(--color-muted)); }
+.yaml-d8 { --yaml-tint: color-mix(in srgb, var(--color-purple-bright) 22%, var(--color-muted)); }
+.yaml-d9 { --yaml-tint: var(--color-muted); }
 
 .yaml-kids {
   margin-left: 2rem;
   padding-left: 0.75rem;
-  border-left: 2px solid color-mix(in srgb, var(--color-line) 35%, var(--yaml-tint) 65%);
+  border-left: 2px solid color-mix(in srgb, var(--yaml-tint) 70%, var(--color-line));
 }
 
 .yaml-card {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--color-line) 45%, var(--yaml-tint) 55%);
+  border: 1px solid color-mix(in srgb, var(--yaml-tint) 45%, var(--color-line));
   border-radius: 0.375rem;
-  background: color-mix(in srgb, var(--color-panel) 94%, var(--yaml-tint) 6%);
+  background: color-mix(in srgb, var(--color-panel) 90%, var(--yaml-tint) 10%);
   padding: 0.625rem;
 }
 
@@ -354,29 +354,28 @@ input[type='range'].slider::-moz-range-thumb {
   height: 2rem;
   align-items: center;
   justify-content: center;
-  border: 1px solid color-mix(in srgb, var(--color-line) 45%, var(--yaml-tint) 55%);
+  border: 1px solid color-mix(in srgb, var(--yaml-tint) 40%, var(--color-line));
   border-radius: 0.25rem;
-  background: color-mix(in srgb, var(--color-field) 94%, var(--yaml-tint) 6%);
+  background: color-mix(in srgb, var(--color-field) 88%, var(--yaml-tint) 12%);
   line-height: 1;
+  color: color-mix(in srgb, var(--color-label) 55%, var(--yaml-tint) 45%);
 }
 
 .yaml-add {
   flex-shrink: 0;
   width: 2rem;
   font-size: 0.875rem;
-  color: var(--color-muted);
 }
 
 .yaml-add-section {
   flex-shrink: 0;
   padding: 0 0.625rem;
   font-size: 0.75rem;
-  color: var(--color-muted);
 }
 
 .yaml-add:hover,
 .yaml-add-section:hover {
-  background: color-mix(in srgb, var(--color-field) 88%, var(--yaml-tint) 12%);
+  background: color-mix(in srgb, var(--color-field) 78%, var(--yaml-tint) 22%);
   color: var(--color-ink);
 }
 
@@ -410,5 +409,5 @@ input[type='range'].slider::-moz-range-thumb {
   top: 0;
   bottom: 0;
   width: 2px;
-  background: color-mix(in srgb, var(--color-line) 35%, var(--yaml-tint) 65%);
+  background: color-mix(in srgb, var(--yaml-tint) 70%, var(--color-line));
 }

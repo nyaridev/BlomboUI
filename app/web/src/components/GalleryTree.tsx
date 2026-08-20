@@ -36,6 +36,7 @@ export function GalleryTree({
   onReveal,
   onRemove,
   onAdd,
+  onOpenManager,
 }: {
   roots: GalleryNode[]
   query: string
@@ -52,6 +53,7 @@ export function GalleryTree({
   onReveal: (path: string) => void
   onRemove: (path: string) => void
   onAdd: (folder: string) => void
+  onOpenManager?: (path: string, kind: 'dir' | 'file') => void
 }) {
   const [drag, setDrag] = useState<string | null>(null)
   const [drop, setDrop] = useState<string | null>(null)
@@ -261,6 +263,16 @@ export function GalleryTree({
               onReveal(menu.path)
             }}
           />
+          {onOpenManager ? (
+            <ContextMenuItem
+              icon="file-pen"
+              label="Open in Wildcard Manager"
+              onClick={() => {
+                setMenu(null)
+                onOpenManager(menu.path, menu.kind)
+              }}
+            />
+          ) : null}
           {menu.root ? null : (
             <ContextMenuItem
               label="Remove"

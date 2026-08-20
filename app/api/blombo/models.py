@@ -61,6 +61,7 @@ def list_kind(kind: str) -> list[dict[str, Any]]:
         item["notes"] = str(row.get("notes") or "")
         item["strength"] = float(row["strength"]) if "strength" in row else 1.0
         item["slider"] = bool(row.get("slider"))
+        item["types"] = list(row.get("types") or [])
     items.sort(key=lambda item: str(item.get("tag") or item["path"]).lower())
     return items
 

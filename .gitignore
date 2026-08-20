@@ -34,7 +34,11 @@ user/output/*
 user/gallery/*
 !user/gallery/.gitkeep
 user/gallery_thumbs/
-user/removed/
+user/removed/*
+!user/removed/.gitkeep
+
+user/autocompletion/*
+!user/autocompletion/.gitkeep
 
 user/wildcards/*
 !user/wildcards/.gitkeep

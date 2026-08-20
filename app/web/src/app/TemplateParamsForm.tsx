@@ -4,7 +4,7 @@ import { SelectField } from '@/components/SelectField.tsx'
 import { CheckpointField } from '@/components/CheckpointField.tsx'
 import { usePromptWeightKey } from '@/lib/promptWeight.ts'
 import { type TemplateParams, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
-import { ASPECTS, SAMPLERS, SCHEDULERS, listedChoices } from '@/screens/generate/resolutions.ts'
+import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, snapToSet } from '@/screens/generate/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 
 function Label({ children }: { children: string }) {
@@ -28,6 +28,7 @@ function off(apply: string[], id: string) {
 export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFormProps) {
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
+  const setResolutions = useSettingsStore((s) => s.setResolutions)
   const onPromptKey = usePromptWeightKey((prompt) => onChange({ ...value, prompt }))
   const onNegativeKey = usePromptWeightKey((negativePrompt) => onChange({ ...value, negativePrompt }))
   function set<K extends keyof TemplateParams>(key: K, next: TemplateParams[K]) {
@@ -116,10 +117,20 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
           </button>
           <button
             type="button"
-            className={['rounded-r px-2 py-1', value.resMode === 'scaler' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
+            className={['px-2 py-1', value.resMode === 'scaler' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
             onClick={() => set('resMode', 'scaler')}
           >
             Scaler
+          </button>
+          <button
+            type="button"
+            className={['rounded-r px-2 py-1', value.resMode === 'set' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
+            onClick={() => {
+              const size = snapToSet(value.width, value.height, setResolutions)
+              onChange({ ...value, resMode: 'set', width: size.w, height: size.h })
+            }}
+          >
+            Set
           </button>
         </div>
         {value.resMode === 'raw' ? (
@@ -132,6 +143,63 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
               <Label>Height</Label>
               <NumberField value={value.height} onChange={(height) => set('height', height)} min={64} max={4096} step={8} />
             </label>
+          </div>
+        ) : value.resMode === 'set' ? (
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex min-w-0 flex-col gap-1">
+              <Label>Resolution</Label>
+              <SelectField
+                value={formatSize({ w: Math.max(value.width, value.height), h: Math.min(value.width, value.height) })}
+                onChange={(key) => {
+                  const size = parseSize(key)
+                  if (!size) {
+                    return
+                  }
+                  const next = orientSize(size, value.height > value.width)
+                  onChange({ ...value, width: next.w, height: next.h })
+                }}
+                options={[
+                  ...new Set([
+                    formatSize({ w: Math.max(value.width, value.height), h: Math.min(value.width, value.height) }),
+                    ...setResolutions,
+                  ]),
+                ].map((key) => {
+                  const size = parseSize(key)
+                  return {
+                    value: key,
+                    label: size ? formatSize(orientSize(size, value.height > value.width)) : key,
+                  }
+                })}
+              />
+            </div>
+            <div className="inline-flex self-start rounded border border-line text-xs">
+              <button
+                type="button"
+                className={[
+                  'rounded-l px-2 py-1',
+                  value.height <= value.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                ].join(' ')}
+                onClick={() => {
+                  const size = orientSize({ w: value.width, h: value.height }, false)
+                  onChange({ ...value, width: size.w, height: size.h })
+                }}
+              >
+                Horizontal
+              </button>
+              <button
+                type="button"
+                className={[
+                  'rounded-r px-2 py-1',
+                  value.height > value.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                ].join(' ')}
+                onClick={() => {
+                  const size = orientSize({ w: value.width, h: value.height }, true)
+                  onChange({ ...value, width: size.w, height: size.h })
+                }}
+              >
+                Vertical
+              </button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2">

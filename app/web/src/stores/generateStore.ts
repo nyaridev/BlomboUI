@@ -1,4 +1,5 @@
 import { parseModelTileStyle, type ModelTileStyle } from '@/screens/generate/modelLayouts.ts'
+import { isResMode, type ResMode } from '@/screens/generate/resolutions.ts'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -29,7 +30,7 @@ export const DEFAULTS = {
   batchCount: 1,
   sampler: 'euler',
   scheduler: 'sgm_uniform',
-  resMode: 'raw' as const,
+  resMode: 'raw' as ResMode,
   aspect: '2:3',
   megapixels: 1,
   workflow: 'txt2img',
@@ -76,7 +77,7 @@ export type TemplateParams = {
   batchCount: number
   sampler: string
   scheduler: string
-  resMode: 'raw' | 'scaler'
+  resMode: ResMode
   aspect: string
   megapixels: number
 }
@@ -116,7 +117,7 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
   for (const key of PARAM_KEYS) {
     const value = raw[key]
     if (value !== undefined && value !== null) {
-      if (key === 'resMode' && value !== 'raw' && value !== 'scaler') {
+      if (key === 'resMode' && !isResMode(value)) {
         continue
       }
       if (key === 'seedAfter' && !SEED_AFTER.some((item) => item.value === value)) {
@@ -241,7 +242,7 @@ type GenerateState = {
   batchCount: number
   sampler: string
   scheduler: string
-  resMode: 'raw' | 'scaler'
+  resMode: ResMode
   aspect: string
   megapixels: number
   workflow: string
@@ -275,7 +276,7 @@ type GenerateState = {
   setBatchCount: (value: number) => void
   setSampler: (value: string) => void
   setScheduler: (value: string) => void
-  setResMode: (value: 'raw' | 'scaler') => void
+  setResMode: (value: ResMode) => void
   setAspect: (value: string) => void
   setMegapixels: (value: number) => void
   setWorkflow: (value: string) => void

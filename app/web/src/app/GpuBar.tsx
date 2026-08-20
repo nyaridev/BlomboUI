@@ -1,45 +1,22 @@
 import { freeComfy, getComfyStats, type ComfyStats } from '@/lib/api.ts'
 import { toast } from '@/stores/toastStore.ts'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { useEffect, useState } from 'react'
 
 function gb(bytes: number) {
   return bytes / (1024 * 1024 * 1024)
 }
 
+const HEAT = ['green', 'yellow', 'orange', 'red'] as const
+
 function tempColor(c: number) {
-  const t = Math.min(1, Math.max(0, (c - 40) / 45))
-  return `hsl(${130 - t * 130} 72% 58%)`
-}
-
-function UnloadIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="2" y="8.5" width="10" height="3.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path
-        d="M7 2.2v5.2M4.6 5.2 7 7.6 9.4 5.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function CacheIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M3.2 11.2c1.6-1.2 2.2-3.2 2.2-5.2V3.2h3.2V6c0 2 0.6 4 2.2 5.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-      <path d="M4.4 11.2h5.2" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )
+  const t = Math.min(1, Math.max(0, (c - 50) / 45))
+  const x = t * (HEAT.length - 1)
+  const i = Math.min(HEAT.length - 2, Math.floor(x))
+  const f = x - i
+  const from = `var(--color-${HEAT[i]}-bright)`
+  const to = `var(--color-${HEAT[i + 1]}-bright)`
+  return `color-mix(in srgb, ${from} ${(1 - f) * 100}%, ${to})`
 }
 
 function sameStats(a: ComfyStats | null, b: ComfyStats) {
@@ -96,8 +73,8 @@ export function GpuBar() {
       await freeComfy(unloadModels, freeMemory)
       setStats(await getComfyStats())
       toast(unloadModels ? 'VRAM cleared' : 'Node cache cleared', 'info')
-    } catch {
-      /* keep last stats */
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not free ComfyUI', 'error')
     } finally {
       setBusy(false)
     }
@@ -116,7 +93,7 @@ export function GpuBar() {
         <span className="flex items-center bg-line px-2 text-[10px] font-medium tracking-wide text-muted">VRAM</span>
         <div className="relative w-28 bg-field">
           <div
-            className="absolute inset-0 origin-left bg-accent/70 transition-transform duration-1000 ease-out"
+            className="absolute inset-0 origin-left bg-blue transition-transform duration-1000 ease-out"
             style={{ transform: `scaleX(${usedPct / 100})` }}
           />
           <span className="relative z-10 flex h-full items-center justify-center px-2 text-xs tabular-nums text-ink">
@@ -137,23 +114,23 @@ export function GpuBar() {
       ) : null}
       <button
         type="button"
-        className="icon-btn"
+        className="icon-btn text-ink"
         aria-label="Unload models"
         title="Unload models"
-        disabled={!live || busy}
+        disabled={busy}
         onClick={() => void run(true, false)}
       >
-        <UnloadIcon />
+        <AppIcon id="download" />
       </button>
       <button
         type="button"
-        className="icon-btn"
+        className="icon-btn text-ink"
         aria-label="Free model and node cache"
         title="Free model and node cache"
-        disabled={!live || busy}
+        disabled={busy}
         onClick={() => void run(false, true)}
       >
-        <CacheIcon />
+        <AppIcon id="database" />
       </button>
     </div>
   )

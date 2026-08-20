@@ -8,12 +8,16 @@ export type Toast = {
   text: string
   tone: ToastTone
   dead?: boolean
+  progress?: number | null
+  onCancel?: () => void
 }
 
 const ISSUE_LABEL: Record<string, string> = {
   duplicate_name: 'Duplicate name',
   duplicate_tag: 'Duplicate header',
   invalid_file: 'Invalid file',
+  duplicate_dir: 'Duplicate directory',
+  missing_dir: 'Missing directory',
 }
 
 let seq = 0
@@ -21,6 +25,9 @@ let seq = 0
 type ToastState = {
   items: Toast[]
   push: (text: string, tone?: ToastTone) => void
+  pushSticky: (text: string, tone?: ToastTone, opts?: { onCancel?: () => void }) => number
+  update: (id: number, patch: { text?: string; progress?: number | null; tone?: ToastTone }) => void
+  finish: (id: number, text: string, tone?: ToastTone) => void
   dismiss: (id: number) => void
 }
 
@@ -29,6 +36,32 @@ export const useToastStore = create<ToastState>((set, get) => ({
   push: (text, tone = 'info') => {
     const id = ++seq
     set({ items: [{ id, text, tone }, ...get().items] })
+    window.setTimeout(() => get().dismiss(id), 3000)
+  },
+  pushSticky: (text, tone = 'info', opts) => {
+    const id = ++seq
+    set({ items: [{ id, text, tone, progress: 0, onCancel: opts?.onCancel }, ...get().items] })
+    return id
+  },
+  update: (id, patch) => {
+    const row = get().items.find((item) => item.id === id)
+    if (!row || row.dead) {
+      return
+    }
+    set({
+      items: get().items.map((item) => (item.id === id ? { ...item, ...patch } : item)),
+    })
+  },
+  finish: (id, text, tone = 'info') => {
+    const row = get().items.find((item) => item.id === id)
+    if (!row || row.dead) {
+      return
+    }
+    set({
+      items: get().items.map((item) =>
+        item.id === id ? { id, text, tone, progress: null, onCancel: undefined } : item,
+      ),
+    })
     window.setTimeout(() => get().dismiss(id), 3000)
   },
   dismiss: (id) => {

@@ -16,15 +16,17 @@ const VIEWS: { kind: GalleryViewKind; title: string; terms: string }[] = [
 ]
 
 export const GALLERY_QUERY =
-  'gallery view tiles sort name date created modified path ascending descending scale size base model lora wildcards'
+  'gallery view tiles sort name date created modified path ascending descending scale size base model lora wildcards tree folder parent unselect'
 
 export function GalleryPanel({ query = '' }: { query?: string }) {
   const gallerySortKey = useSettingsStore((s) => s.gallerySortKey)
   const gallerySortDir = useSettingsStore((s) => s.gallerySortDir)
   const galleryTileScale = useSettingsStore((s) => s.galleryTileScale)
+  const galleryParentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
   const setGallerySortKey = useSettingsStore((s) => s.setGallerySortKey)
   const setGallerySortDir = useSettingsStore((s) => s.setGallerySortDir)
   const setGalleryTileScale = useSettingsStore((s) => s.setGalleryTileScale)
+  const setGalleryParentOnUnselect = useSettingsStore((s) => s.setGalleryParentOnUnselect)
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
@@ -56,6 +58,20 @@ export function GalleryPanel({ query = '' }: { query?: string }) {
       <SettingsCard query={query} title="Tiles" terms="tile scale size zoom">
         <SliderField value={galleryTileScale} onChange={setGalleryTileScale} min={0.5} max={2} step={0.1} />
         <p className="text-xs text-muted">1 is the current tile size.</p>
+      </SettingsCard>
+      <SettingsCard query={query} title="Tree" terms="folder directory parent unselect search">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="check"
+            checked={galleryParentOnUnselect}
+            onChange={(event) => setGalleryParentOnUnselect(event.target.checked)}
+          />
+          Select parent when unselecting a folder
+        </label>
+        <p className="text-xs text-muted">
+          Clicking the selected folder in the gallery tree selects its parent. Off clears the search instead.
+        </p>
       </SettingsCard>
     </div>
   )

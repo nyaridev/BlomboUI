@@ -8,6 +8,7 @@ import time
 from collections import deque
 from pathlib import Path
 
+from blombo import dirs
 from blombo.paths import RUNTIME, models_root
 
 _CACHE = RUNTIME / "data" / "model-hashes.json"
@@ -224,16 +225,28 @@ def _find_checkpoint(name: str) -> Path | None:
     rel = str(name or "").replace("\\", "/").strip().lstrip("/")
     if not rel or rel in {".", ".."}:
         return None
-    root = models_root() / "checkpoints"
-    direct = root / rel
-    if direct.is_file():
-        return direct
+    extras = dirs.extra_named("modelDirs")
+    first, _, rest = rel.partition("/")
+    extra = extras.get(first)
+    if extra is not None and rest:
+        path = extra / "checkpoints" / rest
+        if path.is_file():
+            return path
+    roots = [models_root() / "checkpoints"]
+    roots.extend(folder / "checkpoints" for folder in extras.values())
+    for root in roots:
+        direct = root / rel
+        if direct.is_file():
+            return direct
     base = Path(rel).name
     if not base or base in {".", ".."}:
         return None
-    for path in root.rglob(base):
-        if path.is_file():
-            return path
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob(base):
+            if path.is_file():
+                return path
     return None
 
 

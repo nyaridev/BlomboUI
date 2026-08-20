@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { SettingsCard } from './SettingsBlock.tsx'
 
 export const SHORTCUTS_QUERY =
-  'shortcuts keys keyboard hotkey reload models generate cancel interrupt enter ctrl shift alt escape fullscreen tabs'
+  'shortcuts keys keyboard hotkey reload models generate cancel interrupt enter ctrl shift alt escape fullscreen tabs prompt weight attention lora arrow indent wildcard raw'
 
 type Shortcut = { keys: string[]; action: string }
 
@@ -17,6 +17,22 @@ const SHORTCUT_SECTIONS: { title: string; items: Shortcut[] }[] = [
     ],
   },
   {
+    title: 'Prompt',
+    items: [
+      { keys: ['Ctrl', 'Up'], action: 'Increase weight of the selected prompt text, or LoRA strength' },
+      { keys: ['Ctrl', 'Down'], action: 'Decrease weight of the selected prompt text, or LoRA strength' },
+    ],
+  },
+  {
+    title: 'Wildcard raw editor',
+    items: [
+      { keys: ['Tab'], action: 'Indent the current or selected lines' },
+      { keys: ['Shift', 'Tab'], action: 'Unindent the current or selected lines' },
+      { keys: ['Alt', 'Up'], action: 'Move the current or selected lines up' },
+      { keys: ['Alt', 'Down'], action: 'Move the current or selected lines down' },
+    ],
+  },
+  {
     title: 'View',
     items: [{ keys: ['F'], action: 'Toggle fullscreen image' }],
   },
@@ -24,7 +40,7 @@ const SHORTCUT_SECTIONS: { title: string; items: Shortcut[] }[] = [
     title: 'Navigation',
     items: [
       { keys: ['Alt', '1…4'], action: 'Generate tabs. Follows order and exclusions if that setting is on' },
-      { keys: ['Ctrl', '1…6'], action: 'App tabs. Follows order and exclusions if that setting is on' },
+      { keys: ['Ctrl', '1…7'], action: 'App tabs. Follows order and exclusions if that setting is on' },
     ],
   },
   {

@@ -1,4 +1,4 @@
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { LightboxView } from '@/components/LightboxView.tsx'
 import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
 import { middleOpen } from '@/lib/openImage.ts'
@@ -16,7 +16,7 @@ function Nav({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
       aria-label={dir === 'left' ? 'Previous image' : 'Next image'}
       onClick={onClick}
     >
-      <Chevron dir={dir} size={14} />
+      <AppIcon id={dir === 'left' ? 'chevron-left' : 'chevron-right'} size={14} />
     </button>
   )
 }

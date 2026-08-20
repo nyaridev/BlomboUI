@@ -1,7 +1,4 @@
-import { Chevron } from '@/components/Chevron.tsx'
-import { CloseIcon } from '@/components/CloseIcon.tsx'
-import { DownloadIcon } from '@/components/DownloadIcon.tsx'
-import { InfoIcon } from '@/components/InfoIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ChipSelect, type ChipSection } from '@/components/ChipSelect.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
 import {
@@ -9,6 +6,9 @@ import {
   loraRange,
   modelFileName,
 } from '@/components/modelInfoLayouts.ts'
+import { usePromptWeightKey } from '@/lib/promptWeight.ts'
+import { formatUnix } from '@/lib/timeDisplay.ts'
+import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 
 function formatSize(bytes: number) {
@@ -22,20 +22,6 @@ function formatSize(bytes: number) {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`
-}
-
-function formatDate(unix: number) {
-  if (!unix) {
-    return '—'
-  }
-  return new Date(unix * 1000).toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'numeric',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  })
 }
 
 function fileName(path: string) {
@@ -60,7 +46,18 @@ function Field({ label, value }: { label: string; value: string }) {
   )
 }
 
-function Area({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function Area({
+  label,
+  value,
+  onChange,
+  weight,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  weight?: boolean
+}) {
+  const onKeyDown = usePromptWeightKey(onChange)
   return (
     <div className="flex w-full min-w-0 flex-col gap-0.5">
       <span className="text-xs text-muted">{label}</span>
@@ -68,6 +65,7 @@ function Area({ label, value, onChange }: { label: string; value: string; onChan
         className="min-h-16 w-full resize-y rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink outline-none focus:border-accent"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={weight ? onKeyDown : undefined}
         spellCheck={false}
       />
     </div>
@@ -112,7 +110,7 @@ export function ModelInfoHeader({
       {showCivitai ? (
         <>
           <button type="button" className={ICON_BTN} aria-label="File info" title="File info" onClick={onFileInfo}>
-            <InfoIcon />
+            <AppIcon id="info" />
           </button>
           <button
             type="button"
@@ -122,12 +120,12 @@ export function ModelInfoHeader({
             disabled={!canDownload || pulling}
             onClick={onCivitai}
           >
-            <DownloadIcon />
+            <AppIcon id="download" />
           </button>
         </>
       ) : null}
       <button type="button" className={ICON_BTN} aria-label="Close" onClick={onClose}>
-        <CloseIcon />
+        <AppIcon id="x" />
       </button>
     </div>
   )
@@ -178,7 +176,7 @@ export function ModelInfoActions({
           onClick={onTogglePreview}
         >
           Replace Preview
-          <Chevron dir={previewOpen ? 'up' : 'down'} />
+          <AppIcon id={previewOpen ? 'chevron-up' : 'chevron-down'} size={12} />
         </button>
         {previewOpen ? (
           <ul className="select-menu bottom-[calc(100%+0.25rem)] !top-auto">
@@ -266,13 +264,14 @@ type ViewProps = {
 }
 
 function FileFacts({ path, size, edited }: { path: string; size: number; edited: number }) {
+  const timeDisplay = useSettingsStore((s) => s.timeDisplay)
   return (
     <>
       <Field label="Path" value={path} />
       <Field label="Filename" value={fileName(path)} />
       <div className="grid grid-cols-2 gap-2">
         <Field label="Size" value={size ? formatSize(size) : '—'} />
-        <Field label="Modified" value={formatDate(edited)} />
+        <Field label="Modified" value={formatUnix(edited, timeDisplay) || '—'} />
       </div>
     </>
   )
@@ -341,7 +340,7 @@ function EditBlock(props: ViewProps) {
       <ChipSelect options={props.pickerOptions} value={props.types} onChange={props.onTypes} placeholder="Assign types…" />
       {props.lora ? (
         <>
-          <Area label="Trigger words" value={props.prompt} onChange={props.onPrompt} />
+          <Area label="Trigger words" value={props.prompt} onChange={props.onPrompt} weight />
           <StrengthCard {...props} />
         </>
       ) : null}

@@ -1,4 +1,4 @@
-import { RefreshIcon } from '@/components/RefreshIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useEffect, useMemo } from 'react'
@@ -46,7 +46,7 @@ export function CheckpointField({ value, onChange, refresh = false }: Checkpoint
           disabled={busy}
           onClick={() => void refreshModels()}
         >
-          <RefreshIcon />
+          <AppIcon id="refresh-cw" />
         </button>
       ) : null}
     </div>

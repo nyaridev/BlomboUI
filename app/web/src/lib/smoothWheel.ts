@@ -1,8 +1,15 @@
-const EASE = 0.12
-const SPEED = 0.45
+const DURATION = 250
+const SPEED = 0.9
 const LINE = 16
 
-type Anim = { x: number; y: number; raf: number }
+type Anim = {
+  fromX: number
+  fromY: number
+  toX: number
+  toY: number
+  startedAt: number
+  raf: number
+}
 
 function canScroll(el: HTMLElement, axis: 'x' | 'y') {
   const style = getComputedStyle(el)
@@ -68,6 +75,10 @@ function setScroll(el: HTMLElement, left: number, top: number) {
   el.scrollTop = top
 }
 
+function easeOutQuint(t: number) {
+  return 1 - (1 - t) ** 5
+}
+
 export function bindSmoothWheel() {
   const anims = new Map<HTMLElement, Anim>()
 
@@ -76,14 +87,17 @@ export function bindSmoothWheel() {
     if (!anim) {
       return
     }
-    const dx = anim.x - el.scrollLeft
-    const dy = anim.y - el.scrollTop
-    if (Math.abs(dx * EASE) < 1 && Math.abs(dy * EASE) < 1) {
-      setScroll(el, anim.x, anim.y)
+    const progress = Math.min(1, (performance.now() - anim.startedAt) / DURATION)
+    const eased = easeOutQuint(progress)
+    setScroll(
+      el,
+      anim.fromX + (anim.toX - anim.fromX) * eased,
+      anim.fromY + (anim.toY - anim.fromY) * eased,
+    )
+    if (progress >= 1) {
       anims.delete(el)
       return
     }
-    setScroll(el, el.scrollLeft + dx * EASE, el.scrollTop + dy * EASE)
     anim.raf = requestAnimationFrame(() => tick(el))
   }
 
@@ -113,16 +127,27 @@ export function bindSmoothWheel() {
       }
       return
     }
+    const now = performance.now()
     let anim = anims.get(el)
     if (!anim) {
-      anim = { x: el.scrollLeft, y: el.scrollTop, raf: 0 }
+      anim = {
+        fromX: el.scrollLeft,
+        fromY: el.scrollTop,
+        toX: el.scrollLeft,
+        toY: el.scrollTop,
+        startedAt: now,
+        raf: 0,
+      }
       anims.set(el, anim)
     }
+    anim.fromX = el.scrollLeft
+    anim.fromY = el.scrollTop
+    anim.startedAt = now
     if (axis === 'x') {
-      anim.x = clamp(anim.x + mapped, 0, maxX)
+      anim.toX = clamp(anim.toX + mapped, 0, maxX)
     } else {
-      anim.x = clamp(anim.x + delta.x, 0, maxX)
-      anim.y = clamp(anim.y + delta.y, 0, maxY)
+      anim.toX = clamp(anim.toX + delta.x, 0, maxX)
+      anim.toY = clamp(anim.toY + delta.y, 0, maxY)
     }
     if (!anim.raf) {
       anim.raf = requestAnimationFrame(() => tick(el))

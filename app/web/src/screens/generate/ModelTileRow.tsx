@@ -1,4 +1,4 @@
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { modelThumbUrl, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt } from '@/lib/loraTags.ts'
 import { parseWildcardTags, removeWildcardAt, wildcardMatches } from '@/lib/wildcardTags.ts'
@@ -144,7 +144,7 @@ export function ModelTileRow({
             title={style === 'text' ? 'Show thumbnails' : 'Text row'}
             onClick={() => setModelTileStyle(style === 'text' ? 'tall' : 'text')}
           >
-            <ListIcon />
+            <AppIcon id="list" size={10} />
           </button>
           {style === 'text' ? null : (
             <button
@@ -160,7 +160,7 @@ export function ModelTileRow({
                   style === 'compact' ? 'rotate-180' : '',
                 ].join(' ')}
               >
-                <Chevron dir="up" size={10} />
+                <AppIcon id="chevron-up" size={10} />
               </span>
             </button>
           )}
@@ -216,20 +216,6 @@ export function ModelTileRow({
         />
       </div>
     </div>
-  )
-}
-
-function ListIcon() {
-  return (
-    <svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true">
-      <path
-        d="M1 2.5h8M1 5h8M1 7.5h8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
   )
 }
 
@@ -362,13 +348,9 @@ function fileName(path: string) {
   return base.replace(/\.[^/.]+$/, '')
 }
 
-function entryFile(item: ModelEntry) {
-  return item.source || item.path.split('#')[0] || item.path
-}
-
 function thumbSrc(kind: keyof ModelLists, item: ModelEntry | null) {
   if (!item?.thumb) {
     return null
   }
-  return modelThumbUrl(kind, entryFile(item), item.thumb)
+  return modelThumbUrl(kind, item.path, item.thumb)
 }

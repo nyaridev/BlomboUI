@@ -5,7 +5,7 @@ import { middleOpen } from '@/lib/openImage.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { GenerationInfo } from './GenerationInfo.tsx'
 import { ThumbStrip, type ThumbItem } from './ThumbStrip.tsx'
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
 
@@ -38,8 +38,7 @@ export function ImageStage({
   const [lightbox, setLightbox] = useState(false)
   const [failed, setFailed] = useState<Set<string>>(() => new Set())
   const [previewFailed, setPreviewFailed] = useState(false)
-  const [ready, setReady] = useState(false)
-  const imgRef = useRef<HTMLImageElement>(null)
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
   const location = useLocation()
   const generate = location.pathname === '/'
   const setViewedImageUrl = useGenerateStore((s) => s.setViewedImageUrl)
@@ -55,6 +54,7 @@ export function ImageStage({
   const genInfo = generations.find((item) => item.id === genId) ?? null
   const many = items.length > 1
   const showPreview = busy && Boolean(previewUrl) && !previewFailed
+  const ready = Boolean(current?.src && loadedSrc === current.src)
 
   function markFailed(key: string) {
     setFailed((prev) => {
@@ -74,11 +74,6 @@ export function ImageStage({
   useEffect(() => {
     setPreviewFailed(false)
   }, [previewUrl])
-
-  useLayoutEffect(() => {
-    const img = imgRef.current
-    setReady(Boolean(img?.complete && img.naturalWidth > 0))
-  }, [current?.src])
 
   useEffect(() => {
     if (wasBusy.current && !busy) {
@@ -134,11 +129,11 @@ export function ImageStage({
             onMouseDown={(event) => middleOpen(event, current.src)}
           >
             <img
-              ref={imgRef}
+              key={current.key}
               src={current.src}
               alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
               className={['h-full w-full object-contain', ready ? '' : 'invisible'].join(' ')}
-              onLoad={() => setReady(true)}
+              onLoad={() => setLoadedSrc(current.src)}
               onError={() => markFailed(current.key)}
             />
           </button>

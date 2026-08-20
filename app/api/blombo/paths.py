@@ -36,10 +36,24 @@ def launcher_env() -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _is_user_leaf(path: Path, name: str) -> bool:
+    parts = path.parts
+    return len(parts) >= 2 and parts[-1].lower() == name.lower() and parts[-2].lower() == "user"
+
+
+def _follow_install(raw: object, name: str) -> Path:
+    default = USER / name
+    if not raw:
+        return default
+    path = Path(str(raw))
+    if _is_user_leaf(path, name):
+        return default
+    return path
+
+
 def outputs_root() -> Path:
     env = launcher_env()
-    raw = env.get("outputs.root")
-    path = Path(raw) if raw else USER / "output"
+    path = _follow_install(env.get("outputs.root"), "output")
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -52,14 +66,12 @@ def comfy_output_root() -> Path:
 
 def models_root() -> Path:
     env = launcher_env()
-    raw = env.get("models.root")
-    return Path(raw) if raw else USER / "models"
+    return _follow_install(env.get("models.root"), "models")
 
 
 def wildcards_root() -> Path:
     env = launcher_env()
-    raw = env.get("wildcards.root")
-    return Path(raw) if raw else USER / "wildcards"
+    return _follow_install(env.get("wildcards.root"), "wildcards")
 
 
 def comfy_base() -> str:

@@ -66,7 +66,7 @@ export function GridsPanel({ query = '' }: { query?: string }) {
           Include interrupted images in the grid
         </label>
         <p className="text-xs text-muted">
-          On by default. Skip and cancel still put the unfinished preview into the contact sheet when it is saved.
+          Off by default. Skip and cancel still put the unfinished preview into the contact sheet when it is saved.
         </p>
       </SettingsCard>
       <SettingsCard query={query} title="Layout" terms="max images sheet jpeg quality row count empty gaps fill">
@@ -81,7 +81,7 @@ export function GridsPanel({ query = '' }: { query?: string }) {
         </SettingsBlock>
         <SettingsBlock query={query} title="Grid row count" terms="layout 25x25 auto">
           <SliderField value={batchGridRows} onChange={setBatchGridRows} min={0} max={25} />
-          <p className="text-xs text-muted">0 picks a near-square layout from the image size.</p>
+          <p className="text-xs text-muted">0 picks a square of cells if it fits, otherwise a wider grid.</p>
         </SettingsBlock>
         <SettingsBlock query={query} title="Empty gaps" terms="prevent fill long line">
           <label className="flex items-center gap-2 text-sm text-ink">

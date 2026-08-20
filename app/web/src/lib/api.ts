@@ -1,5 +1,11 @@
 import type { Glyph } from '@/components/glyph.ts'
 
+const API = '/api'
+
+function api(path: string) {
+  return `${API}${path}`
+}
+
 export type Health = {
   ok: boolean
   api: string
@@ -122,7 +128,7 @@ export type WorkflowInfo = {
 }
 
 export async function getWorkflows(): Promise<WorkflowInfo[]> {
-  const res = await fetch('/workflows')
+  const res = await fetch(api('/workflows'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -139,7 +145,7 @@ export type TemplateInfo = {
 }
 
 export async function getTemplates(workflow: string): Promise<{ templates: TemplateInfo[]; apply: string[] }> {
-  const res = await fetch(`/templates/${encodeURIComponent(workflow)}`)
+  const res = await fetch(api(`/templates/${encodeURIComponent(workflow)}`))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -148,7 +154,7 @@ export async function getTemplates(workflow: string): Promise<{ templates: Templ
 }
 
 export async function setTemplateApply(workflow: string, apply: string[]): Promise<string[]> {
-  const res = await fetch(`/templates/${encodeURIComponent(workflow)}`, {
+  const res = await fetch(api(`/templates/${encodeURIComponent(workflow)}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ apply }),
@@ -165,7 +171,7 @@ export async function createTemplate(
   name: string,
   params: Record<string, unknown>,
 ): Promise<TemplateInfo> {
-  const res = await fetch(`/templates/${encodeURIComponent(workflow)}`, {
+  const res = await fetch(api(`/templates/${encodeURIComponent(workflow)}`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, params }),
@@ -184,7 +190,7 @@ export async function updateTemplate(
   name?: string,
   icon?: Glyph,
 ): Promise<TemplateInfo> {
-  const res = await fetch(`/templates/${encodeURIComponent(workflow)}/${encodeURIComponent(id)}`, {
+  const res = await fetch(api(`/templates/${encodeURIComponent(workflow)}/${encodeURIComponent(id)}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ params, name, icon }),
@@ -197,7 +203,7 @@ export async function updateTemplate(
 }
 
 export async function getKSamplerChoices(): Promise<KSamplerChoices> {
-  const res = await fetch('/comfy/ksampler')
+  const res = await fetch(api('/comfy/ksampler'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -265,7 +271,7 @@ export type GuiIssue = {
 }
 
 export async function getIssues(): Promise<GuiIssue[]> {
-  const res = await fetch('/issues')
+  const res = await fetch(api('/issues'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -274,7 +280,7 @@ export async function getIssues(): Promise<GuiIssue[]> {
 }
 
 export async function getModels(): Promise<ModelLists> {
-  const res = await fetch('/user-models')
+  const res = await fetch(api('/user-models'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -282,7 +288,7 @@ export async function getModels(): Promise<ModelLists> {
 }
 
 export async function getModelInfo(kind: keyof ModelLists, path: string): Promise<ModelInfo> {
-  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`)
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -290,7 +296,7 @@ export async function getModelInfo(kind: keyof ModelLists, path: string): Promis
 }
 
 export async function getModelSafetensors(kind: keyof ModelLists, path: string): Promise<Record<string, unknown>> {
-  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/safetensors?path=${encodeURIComponent(path)}`)
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/safetensors?path=${encodeURIComponent(path)}`))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -304,7 +310,7 @@ export async function saveModelInfo(
   types: string[],
   extra?: { prompt?: string; negative_prompt?: string; notes?: string; strength?: number; slider?: boolean },
 ): Promise<string[]> {
-  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`, {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -324,11 +330,11 @@ export async function saveModelInfo(
 }
 
 export function modelThumbUrl(kind: keyof ModelLists, path: string, tick = 0): string {
-  return `/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}&t=${tick}`
+  return api(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}&t=${tick}`)
 }
 
 export async function saveModelThumb(kind: keyof ModelLists, path: string, file: File): Promise<number> {
-  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`, {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`), {
     method: 'PUT',
     headers: { 'Content-Type': file.type || 'application/octet-stream' },
     body: file,
@@ -341,7 +347,7 @@ export async function saveModelThumb(kind: keyof ModelLists, path: string, file:
 }
 
 export async function deleteModelThumb(kind: keyof ModelLists, path: string): Promise<number> {
-  const res = await fetch(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`, {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/thumb?path=${encodeURIComponent(path)}`), {
     method: 'DELETE',
   })
   if (!res.ok) {
@@ -353,11 +359,86 @@ export async function deleteModelThumb(kind: keyof ModelLists, path: string): Pr
 
 export async function refreshModels(kind?: keyof ModelLists): Promise<Partial<ModelLists>> {
   const qs = kind ? `?kind=${encodeURIComponent(kind)}` : ''
-  const res = await fetch(`/user-models/refresh${qs}`, { method: 'POST' })
+  const res = await fetch(api(`/user-models/refresh${qs}`), { method: 'POST' })
   if (!res.ok) {
     throw new Error(await readError(res))
   }
   return (await res.json()) as Partial<ModelLists>
+}
+
+export type ModelTreeNode = {
+  name: string
+  path: string
+  kind: 'dir' | 'file'
+  children?: ModelTreeNode[]
+}
+
+export async function getModelTree(kind: keyof ModelLists): Promise<ModelTreeNode[]> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/tree`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { roots?: ModelTreeNode[] }
+  return Array.isArray(data.roots) ? data.roots : []
+}
+
+export async function createModelFolder(
+  kind: keyof ModelLists,
+  folder: string,
+  name: string,
+): Promise<{ path: string; kind: 'dir' }> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/folder`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, name }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: 'dir' }
+}
+
+export async function revealModelFile(kind: keyof ModelLists, path: string): Promise<void> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/open`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function moveModelEntry(
+  kind: keyof ModelLists,
+  path: string,
+  folder: string,
+): Promise<{ path: string; kind: 'dir' | 'file' }> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/move`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, folder }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: 'dir' | 'file' }
+}
+
+export async function renameModelEntry(
+  kind: keyof ModelLists,
+  path: string,
+  name: string,
+): Promise<{ path: string; kind: 'dir' | 'file' }> {
+  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/rename`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, name }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: 'dir' | 'file' }
 }
 
 export type PngInfoResult = {
@@ -366,7 +447,7 @@ export type PngInfoResult = {
 }
 
 export async function readPngInfo(file: File): Promise<PngInfoResult> {
-  const res = await fetch('/pnginfo', {
+  const res = await fetch(api('/pnginfo'), {
     method: 'POST',
     headers: { 'X-Filename': file.name },
     body: file,
@@ -412,7 +493,7 @@ export type CivitaiVersion = {
 }
 
 export async function getCivitaiByHash(hash: string): Promise<CivitaiVersion | null> {
-  const res = await fetch(`/civitai/by-hash/${encodeURIComponent(hash)}`)
+  const res = await fetch(api(`/civitai/by-hash/${encodeURIComponent(hash)}`))
   if (res.status === 404) {
     return null
   }
@@ -423,7 +504,7 @@ export async function getCivitaiByHash(hash: string): Promise<CivitaiVersion | n
 }
 
 export async function fetchCivitaiImage(url: string): Promise<File> {
-  const res = await fetch(`/civitai/image?url=${encodeURIComponent(url)}`)
+  const res = await fetch(api(`/civitai/image?url=${encodeURIComponent(url)}`))
   if (!res.ok) {
     throw new Error(`civitai image ${res.status}`)
   }
@@ -434,7 +515,7 @@ export async function fetchCivitaiImage(url: string): Promise<File> {
 }
 
 export async function getHealth(): Promise<Health> {
-  const res = await fetch('/health')
+  const res = await fetch(api('/health'))
   if (!res.ok) {
     throw new Error(`health ${res.status}`)
   }
@@ -442,7 +523,7 @@ export async function getHealth(): Promise<Health> {
 }
 
 export async function getComfyStats(): Promise<ComfyStats> {
-  const res = await fetch('/comfy/stats')
+  const res = await fetch(api('/comfy/stats'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -450,7 +531,7 @@ export async function getComfyStats(): Promise<ComfyStats> {
 }
 
 export async function freeComfy(unloadModels: boolean, freeMemory: boolean): Promise<void> {
-  const res = await fetch('/comfy/free', {
+  const res = await fetch(api('/comfy/free'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ unload_models: unloadModels, free_memory: freeMemory }),
@@ -458,6 +539,12 @@ export async function freeComfy(unloadModels: boolean, freeMemory: boolean): Pro
   if (!res.ok) {
     throw new Error(await readError(res))
   }
+}
+
+export type FolderDir = {
+  id: string
+  name: string
+  path: string
 }
 
 export type UserSettings = {
@@ -469,6 +556,7 @@ export type UserSettings = {
   batchGridOnCancel?: boolean
   saveInterrupted?: boolean
   interruptedInGrid?: boolean
+  galleryHideInterrupted?: boolean
   hiddenGenerateTabs?: string[]
   hiddenMainTabs?: string[]
   mainTabOrder?: string[]
@@ -480,6 +568,7 @@ export type UserSettings = {
   hiddenSchedulers?: string[]
   theme?: string
   civitaiSite?: string
+  timeDisplay?: string
   wildcardYamlByFilename?: boolean
   imagePath?: string
   gridPath?: string
@@ -493,14 +582,277 @@ export type UserSettings = {
   gallerySortKey?: Record<string, string> | string
   gallerySortDir?: Record<string, string> | string
   galleryTileScale?: number
+  galleryParentOnUnselect?: boolean
+  promptWeightStep?: number
   loraStrengthMin?: number
   loraStrengthMax?: number
   loraSliderMin?: number
   loraSliderMax?: number
+  modelDirs?: FolderDir[]
+  wildcardDirs?: FolderDir[]
+  galleryDirs?: FolderDir[]
+  forceDownloadModelsLocal?: boolean
+  forceDownloadWildcardsLocal?: boolean
+  removedAfterHours?: number
+  removedMaxGb?: number
+}
+
+export async function pickFolder(): Promise<string | null> {
+  const res = await fetch(api('/pick-folder'), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { path?: string | null }
+  return data.path || null
+}
+
+export type WildcardTreeNode = {
+  name: string
+  path: string
+  kind: 'dir' | 'file'
+  children?: WildcardTreeNode[]
+}
+
+export type YamlNode = { [key: string]: YamlNode } | string[]
+
+export type WildcardFile = {
+  path: string
+  format: 'txt' | 'yaml'
+  lines?: string[]
+  tree?: Record<string, YamlNode>
+  error?: string
+  text?: string
+}
+
+export async function getWildcardTree(): Promise<WildcardTreeNode[]> {
+  const res = await fetch(api('/user-wildcards/tree'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { roots?: WildcardTreeNode[] }
+  return Array.isArray(data.roots) ? data.roots : []
+}
+
+export async function getWildcardFile(path: string): Promise<WildcardFile> {
+  const res = await fetch(api(`/user-wildcards/file?path=${encodeURIComponent(path)}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as WildcardFile
+}
+
+export async function saveWildcardFile(
+  path: string,
+  body: { lines?: string[]; tree?: Record<string, YamlNode>; text?: string },
+): Promise<WildcardFile> {
+  const res = await fetch(api(`/user-wildcards/file?path=${encodeURIComponent(path)}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as WildcardFile
+}
+
+export async function createWildcardFile(folder: string, name: string): Promise<WildcardFile> {
+  const res = await fetch(api('/user-wildcards/file'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, name }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as WildcardFile
+}
+
+export async function createWildcardFolder(folder: string, name: string): Promise<{ path: string; kind: 'dir' }> {
+  const res = await fetch(api('/user-wildcards/folder'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ folder, name }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: 'dir' }
+}
+
+export async function revealWildcardFile(path: string): Promise<void> {
+  const res = await fetch(api('/user-wildcards/open'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function moveWildcardEntry(path: string, folder: string): Promise<{ path: string; kind: 'dir' | 'file' }> {
+  const res = await fetch(api('/user-wildcards/move'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, folder }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: 'dir' | 'file' }
+}
+
+export async function renameWildcardEntry(path: string, name: string): Promise<{ path: string; kind: 'dir' | 'file' }> {
+  const res = await fetch(api('/user-wildcards/rename'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, name }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: 'dir' | 'file' }
+}
+
+export type RemovedItem = {
+  id: string
+  kind: string
+  name: string
+  ident: string
+  removed_at: number
+  size: number
+  thumb: boolean
+}
+
+export async function listRemoved(): Promise<RemovedItem[]> {
+  const res = await fetch(api('/user-removed'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { items?: RemovedItem[] }
+  return Array.isArray(data.items) ? data.items : []
+}
+
+export async function removeEntry(kind: keyof ModelLists, path: string): Promise<{ ids: string[]; count: number }> {
+  const res = await fetch(api('/user-removed'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ kind, path }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { ids: string[]; count: number }
+}
+
+export async function restoreRemoved(id: string): Promise<{ path: string; kind: string }> {
+  const res = await fetch(api(`/user-removed/${encodeURIComponent(id)}/restore`), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { path: string; kind: string }
+}
+
+export async function deleteRemoved(id: string): Promise<void> {
+  const res = await fetch(api(`/user-removed/${encodeURIComponent(id)}`), { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function deleteAllRemoved(): Promise<void> {
+  const res = await fetch(api('/user-removed'), { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function revealRemoved(id: string): Promise<void> {
+  const res = await fetch(api(`/user-removed/${encodeURIComponent(id)}/open`), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export function removedThumbUrl(id: string, tick = 0) {
+  return api(`/user-removed/${encodeURIComponent(id)}/thumb?t=${tick}`)
+}
+
+export async function formatWildcardYaml(body: {
+  tree?: Record<string, YamlNode>
+  text?: string
+}): Promise<{ tree?: Record<string, YamlNode>; text?: string; error?: string }> {
+  const res = await fetch(api('/user-wildcards/format'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { tree?: Record<string, YamlNode>; text?: string; error?: string }
+}
+
+export type AppPaths = {
+  models: string
+  wildcards: string
+  output: string
+}
+
+export async function getAppPaths(): Promise<AppPaths> {
+  const res = await fetch(api('/paths'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as AppPaths
+}
+
+export async function checkFolderPaths(paths: string[]): Promise<Record<string, boolean>> {
+  const res = await fetch(api('/paths/check'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { exists?: Record<string, boolean> }
+  return data.exists && typeof data.exists === 'object' ? data.exists : {}
+}
+
+export async function openFolder(path: string): Promise<void> {
+  const res = await fetch(api('/paths/open'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function setOutputPath(path: string): Promise<AppPaths> {
+  const res = await fetch(api('/paths/output'), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as AppPaths
+}
+
+export async function syncModelPaths(): Promise<void> {
+  const res = await fetch(api('/paths/models/sync'), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
 }
 
 export async function getSettings(): Promise<UserSettings> {
-  const res = await fetch('/user-settings')
+  const res = await fetch(api('/user-settings'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -509,7 +861,7 @@ export async function getSettings(): Promise<UserSettings> {
 }
 
 export async function saveSettings(settings: UserSettings): Promise<UserSettings> {
-  const res = await fetch('/user-settings', {
+  const res = await fetch(api('/user-settings'), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(settings),
@@ -523,14 +875,14 @@ export async function saveSettings(settings: UserSettings): Promise<UserSettings
 
 export async function reloadApp(): Promise<void> {
   try {
-    await fetch('/reload', { method: 'POST' })
+    await fetch(api('/reload'), { method: 'POST' })
   } catch {
     return
   }
 }
 
 export async function createJob(body: JobRequest): Promise<Job> {
-  const res = await fetch('/jobs', {
+  const res = await fetch(api('/jobs'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -543,7 +895,7 @@ export async function createJob(body: JobRequest): Promise<Job> {
 }
 
 export async function interruptJob(id: string, mode: 'skip' | 'cancel'): Promise<Job> {
-  const res = await fetch(`/jobs/${id}/interrupt`, {
+  const res = await fetch(api(`/jobs/${id}/interrupt`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ mode }),
@@ -556,7 +908,7 @@ export async function interruptJob(id: string, mode: 'skip' | 'cancel'): Promise
 }
 
 export async function getJob(id: string): Promise<Job> {
-  const res = await fetch(`/jobs/${id}`)
+  const res = await fetch(api(`/jobs/${id}`))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -565,7 +917,7 @@ export async function getJob(id: string): Promise<Job> {
 }
 
 export async function getLatestJob(): Promise<Job | null> {
-  const res = await fetch('/jobs/latest')
+  const res = await fetch(api('/jobs/latest'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -573,8 +925,17 @@ export async function getLatestJob(): Promise<Job | null> {
   return data.job
 }
 
+export async function listGenerations(): Promise<{ id: string; created_at: string }[]> {
+  const res = await fetch(api('/generations'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { generations?: { id: string; created_at: string }[] }
+  return data.generations ?? []
+}
+
 export async function getLatestGeneration(): Promise<Generation | null> {
-  const res = await fetch('/generations/latest')
+  const res = await fetch(api('/generations/latest'))
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -583,17 +944,27 @@ export async function getLatestGeneration(): Promise<Generation | null> {
 }
 
 export function generationImageUrl(id: string): string {
-  return `/generations/${id}/image`
+  if (id.startsWith('disk:')) {
+    return api(`/gallery/disk/${id.slice(5)}/image`)
+  }
+  return api(`/generations/${id}/image`)
+}
+
+export function generationThumbUrl(id: string): string {
+  if (id.startsWith('disk:')) {
+    return api(`/gallery/disk/${id.slice(5)}/thumb`)
+  }
+  return api(`/generations/${id}/thumb`)
 }
 
 export function jobGridUrl(jobId: string, index = 0): string {
-  return `/jobs/${jobId}/grid/${index}`
+  return api(`/jobs/${jobId}/grid/${index}`)
 }
 
 export function jobPreviewUrl(jobId: string, tick: number): string {
-  return `/jobs/${jobId}/preview?t=${tick}`
+  return api(`/jobs/${jobId}/preview?t=${tick}`)
 }
 
 export function jobStepPreviewUrl(jobId: string, step: number): string {
-  return `/jobs/${jobId}/previews/${step}`
+  return api(`/jobs/${jobId}/previews/${step}`)
 }

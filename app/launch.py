@@ -99,9 +99,9 @@ def ensure_dirs() -> None:
 def resolve() -> dict[str, str | None]:
     comfy = _env_path("COMFYUI_PATH") or COMFY_BUNDLED
     models = _env_path("MODELS_ROOT") or (USER / "models")
-    outputs = _env_path("OUTPUTS_ROOT") or (USER / "output")
-    gallery = _env_path("GALLERY_ROOT") or (USER / "gallery")
     wildcards = _env_path("WILDCARDS_ROOT") or (USER / "wildcards")
+    gallery = _env_path("GALLERY_ROOT") or (USER / "gallery")
+    outputs = _env_path("OUTPUTS_ROOT") or _kept_output() or (USER / "output")
     py = comfy_python(comfy)
 
     if (comfy / "main.py").is_file():
@@ -128,25 +128,81 @@ def write_launcher_env(settings: dict[str, str | None]) -> Path:
     return path
 
 
+def _kept_output() -> Path | None:
+    path = RUNTIME / "data" / "launcher-env.json"
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    raw = str(data.get("outputs.root") or "").strip()
+    if not raw:
+        return None
+    folder = Path(raw)
+    parts = folder.parts
+    if len(parts) >= 2 and parts[-1].lower() == "output" and parts[-2].lower() == "user":
+        return None
+    return folder
+
+
 def write_extra_model_paths(models_root: Path) -> Path:
     path = RUNTIME / "data" / "extra_model_paths.yaml"
-    models = str(models_root.resolve()).replace("\\", "/")
-    path.write_text(
-        "\n".join(
-            [
-                "blomboui:",
-                f"    base_path: '{models}'",
-                "    checkpoints: checkpoints",
-                "    loras: loras",
-                "    vae: vae",
-                "    controlnet: controlnet",
-                "    embeddings: embeddings",
-                "",
-            ]
-        ),
-        encoding="utf-8",
-    )
+    blocks = [_yaml_model_block("blomboui", models_root)]
+    for name, folder in _user_model_dirs():
+        blocks.append(_yaml_model_block(name, folder))
+    path.write_text("\n".join(blocks) + "\n", encoding="utf-8")
     return path
+
+
+def _yaml_model_block(ident: str, root: Path) -> str:
+    models = str(root.resolve()).replace("\\", "/")
+    ident = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in ident).strip("._-") or "extra"
+    return "\n".join(
+        [
+            f"{ident}:",
+            f"    base_path: '{models}'",
+            "    checkpoints: checkpoints",
+            "    loras: loras",
+            "    vae: vae",
+            "    controlnet: controlnet",
+            "    embeddings: embeddings",
+            "",
+        ]
+    )
+
+
+def _user_model_dirs() -> list[tuple[str, Path]]:
+    file = USER / "user_settings.json"
+    if not file.is_file():
+        return []
+    try:
+        data = json.loads(file.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return []
+    raw = data.get("modelDirs") if isinstance(data, dict) else None
+    if not isinstance(raw, list):
+        return []
+    out: list[tuple[str, Path]] = []
+    seen_names: set[str] = set()
+    seen_paths: set[str] = {str((USER / "models").resolve()).replace("\\", "/").rstrip("/").casefold()}
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        ident = str(item.get("id") or "").strip().lower()
+        name = str(item.get("name") or "").strip()
+        folder = Path(str(item.get("path") or "").strip())
+        if ident == "local" or not name or name.lower() in seen_names or not folder.is_dir():
+            continue
+        resolved = str(folder.resolve()).replace("\\", "/").rstrip("/").casefold()
+        if resolved in seen_paths:
+            continue
+        seen_names.add(name.lower())
+        seen_paths.add(resolved)
+        out.append((name, folder))
+    return out
 
 
 def _enable_ansi() -> None:
@@ -339,7 +395,7 @@ def run_servers(settings: dict[str, str | None]) -> int:
         api_proc = spawn(_api_cmd(), cwd=API, env=env)
         web_proc = spawn(_vite_cmd(), cwd=WEB)
 
-        api_ok = wait_ready(f"{api_url}/health", api_proc, API_PORT)
+        api_ok = wait_ready(f"{api_url}/api/health", api_proc, API_PORT)
         web_ok = wait_ready(web_url, web_proc, WEB_PORT)
         if not api_ok or not web_ok:
             print(f"    {_c('38;5;203', 'ERROR')}  Server failed to start.")
@@ -351,7 +407,7 @@ def run_servers(settings: dict[str, str | None]) -> int:
 
         print()
         _row("app", f"BlomboUI {VERSION}")
-        _row("api", f"{api_url}/health")
+        _row("api", f"{api_url}/api/health")
         _row("ui", web_url)
         if reachable(f"{_comfy_url()}/system_stats"):
             _row("comfy", f"{_comfy_url()}  backend")
@@ -374,7 +430,7 @@ def run_servers(settings: dict[str, str | None]) -> int:
                 free_port(WEB_PORT)
                 api_proc = spawn(_api_cmd(), cwd=API, env=env)
                 web_proc = spawn(_vite_cmd(), cwd=WEB)
-                api_ok = wait_ready(f"{api_url}/health", api_proc, API_PORT)
+                api_ok = wait_ready(f"{api_url}/api/health", api_proc, API_PORT)
                 web_ok = wait_ready(web_url, web_proc, WEB_PORT)
                 if not api_ok or not web_ok:
                     print(f"    {_c('38;5;203', 'ERROR')}  Reload failed.")
@@ -386,7 +442,7 @@ def run_servers(settings: dict[str, str | None]) -> int:
                 stop(api_proc)
                 free_port(API_PORT)
                 api_proc = spawn(_api_cmd(), cwd=API, env=env)
-                if not wait_ready(f"{api_url}/health", api_proc, API_PORT):
+                if not wait_ready(f"{api_url}/api/health", api_proc, API_PORT):
                     print(f"    {_c('38;5;203', 'ERROR')}  API failed to restart.")
                     return 1
                 print(f"    {_c('38;5;114', 'OK')}     API restarted")

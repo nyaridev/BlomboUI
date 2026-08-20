@@ -77,7 +77,10 @@ function addTag(prompt: string, tag: string) {
   if (!trimmed) {
     return tag
   }
-  return `${trimmed} ${tag}`
+  if (trimmed.endsWith(',')) {
+    return `${trimmed} ${tag}`
+  }
+  return `${trimmed}, ${tag}`
 }
 
 function removeTag(prompt: string, tag: string) {

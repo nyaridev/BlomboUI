@@ -1,4 +1,4 @@
-import { RefreshIcon } from '@/components/RefreshIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useEffect, useMemo } from 'react'
@@ -7,12 +7,16 @@ const KIND_LABEL: Record<string, string> = {
   loras: 'LoRAs',
   wildcards: 'Wildcards',
   checkpoints: 'Checkpoints',
+  models: 'Models',
+  gallery: 'Gallery',
 }
 
 const CODE_LABEL: Record<string, string> = {
   duplicate_name: 'Duplicate name',
   duplicate_tag: 'Duplicate header',
   invalid_file: 'Invalid file',
+  duplicate_dir: 'Duplicate directory',
+  missing_dir: 'Missing directory',
 }
 
 export function ErrorsScreen() {
@@ -54,7 +58,7 @@ export function ErrorsScreen() {
           disabled={scanning}
           onClick={() => void refreshModels()}
         >
-          <RefreshIcon />
+          <AppIcon id="refresh-cw" />
         </button>
       </div>
       {items.length === 0 ? (
@@ -68,10 +72,10 @@ export function ErrorsScreen() {
             <div className="flex flex-col gap-2">
               {group.items.map((item) => (
                 <article
-                  key={`${item.code}:${item.kind}:${item.name}`}
+                  key={`${item.code}:${item.kind}:${item.name}:${item.paths.join("|")}`}
                   className="overflow-hidden rounded-md border border-line bg-panel"
                 >
-                  <div className="bg-rose-500/30 px-3 py-2 text-sm font-semibold text-ink">
+                  <div className="bg-red/30 px-3 py-2 text-sm font-semibold text-ink">
                     {CODE_LABEL[item.code] || item.code}
                   </div>
                   <dl className="divide-y divide-line text-sm">

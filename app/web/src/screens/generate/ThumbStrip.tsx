@@ -1,3 +1,4 @@
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { useEffect, useRef } from 'react'
 import { middleOpen } from '@/lib/openImage.ts'
 
@@ -14,18 +15,7 @@ type ThumbStripProps = {
 }
 
 function StripArrow({ dir }: { dir: 'left' | 'right' }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 18 18" aria-hidden="true">
-      <path
-        d={dir === 'left' ? 'M11 4 6 9l5 5' : 'M7 4l5 5-5 5'}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+  return <AppIcon id={dir === 'left' ? 'chevron-left' : 'chevron-right'} />
 }
 
 export function ThumbStrip({ items, index, onSelect, onError }: ThumbStripProps) {

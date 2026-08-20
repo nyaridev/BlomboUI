@@ -246,7 +246,9 @@ def _txt_lines(path: Path) -> list[str]:
 
 
 def _yaml_tree(path: Path) -> dict[str, YamlNode]:
-    data, _err = load_yaml(path)
+    data, err = load_yaml(path)
+    if err or mixed_sections(data):
+        return {}
     if not isinstance(data, dict):
         return {}
     out: dict[str, YamlNode] = {}
@@ -259,16 +261,22 @@ def _yaml_tree(path: Path) -> dict[str, YamlNode]:
 
 def load_yaml(path: Path) -> tuple[object | None, str | None]:
     try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return None, str(exc)
+    return load_yaml_text(text)
+
+
+def load_yaml_text(text: str) -> tuple[object | None, str | None]:
+    try:
         import yaml
     except ImportError:
         return None, "PyYAML is not installed"
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8"))
-    except OSError as exc:
-        return None, str(exc)
+        data = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        text = str(exc).strip() or "invalid YAML"
-        return None, text.replace('in "<unicode string>", ', "in ")
+        msg = str(exc).strip() or "invalid YAML"
+        return None, msg.replace('in "<unicode string>", ', "in ")
     return data, None
 
 
@@ -288,6 +296,20 @@ def file_error(path: Path) -> str | None:
         return None
     if not isinstance(data, dict):
         return "root value must be a mapping of tag names"
+    return mixed_sections(data)
+
+
+def mixed_sections(data: object, name: str = "root") -> str | None:
+    if isinstance(data, list):
+        if any(isinstance(item, (dict, list)) for item in data):
+            return f"{name} mixes entries and nested sections"
+        return None
+    if isinstance(data, dict):
+        for key, value in data.items():
+            err = mixed_sections(value, str(key))
+            if err:
+                return err
+        return None
     return None
 
 

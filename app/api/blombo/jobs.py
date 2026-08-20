@@ -292,6 +292,36 @@ def latest_generation() -> dict[str, Any] | None:
     return dict(row)
 
 
+def list_generations(limit: int = 200, hide_interrupted: bool = False) -> list[dict[str, Any]]:
+    cap = max(1, min(200, int(limit)))
+    fetch = min(800, cap * 4) if hide_interrupted else cap
+    rows = db.query(
+        "SELECT id, created_at, path, params_json FROM generations ORDER BY created_at DESC LIMIT ?",
+        (fetch,),
+    )
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        if not Path(row["path"]).is_file():
+            continue
+        if hide_interrupted and _is_interrupted(row["path"], row["params_json"]):
+            continue
+        out.append({"id": row["id"], "created_at": row["created_at"]})
+        if len(out) >= cap:
+            break
+    return out
+
+
+def _is_interrupted(path: str, params_json: str | None = None) -> bool:
+    if params_json:
+        try:
+            packed = json.loads(params_json)
+        except (TypeError, json.JSONDecodeError):
+            packed = None
+        if isinstance(packed, dict) and packed.get("interrupted"):
+            return True
+    return any(part.lower() == "interrupted" for part in Path(path).parts)
+
+
 def create_job(body: dict[str, Any]) -> dict[str, Any]:
     if not comfy.reachable():
         raise comfy.ComfyError(
@@ -312,7 +342,7 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values["batch_grid_fill"] = bool(values.get("batch_grid_fill", False))
     values["batch_grid_on_cancel"] = bool(values.get("batch_grid_on_cancel", True))
     values["save_interrupted"] = bool(values.get("save_interrupted", True))
-    values["interrupted_in_grid"] = bool(values.get("interrupted_in_grid", True))
+    values["interrupted_in_grid"] = bool(values.get("interrupted_in_grid", False))
     values["template"] = _template_name(values)
     values["prompt"] = str(body.get("prompt") or "")
     values["negative_prompt"] = str(body.get("negative_prompt") or "")
@@ -412,7 +442,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 path = generation_path(gen_id)
                 if path:
                     had_image = True
-                    if values.get("interrupted_in_grid", True):
+                    if values.get("interrupted_in_grid", False):
                         saved.append(path)
             if canceled:
                 break
@@ -732,14 +762,17 @@ def _import_bytes(
     job_id: str, values: dict[str, Any], raw: bytes, graph: dict[str, Any] | None, kind: str
 ) -> str:
     fmt, quality, sidecar, max_kb = _image_save_opts()
-    data = pnginfo.embed(raw, values, graph, fmt=fmt, quality=quality)
+    packed = dict(values)
+    if kind == "interrupted":
+        packed["interrupted"] = True
+    data = pnginfo.embed(raw, packed, graph, fmt=fmt, quality=quality)
     root = outputs_root()
     folder = _output_dir(values, kind)
     gen_id = str(uuid.uuid4())
-    dest = _save_image(folder, data, fmt, values, kind)
+    dest = _save_image(folder, data, fmt, packed, kind)
     if sidecar and fmt != "jpg" and dest.stat().st_size > max_kb * 1024:
         try:
-            jpeg = pnginfo.embed(raw, values, graph, fmt="jpg", quality=quality)
+            jpeg = pnginfo.embed(raw, packed, graph, fmt="jpg", quality=quality)
             with _save_lock:
                 dest.with_suffix(".jpg").write_bytes(jpeg)
         except Exception:
@@ -756,13 +789,13 @@ def _import_bytes(
             job_id,
             str(dest),
             str(root),
-            int(values["width"]),
-            int(values["height"]),
-            int(values["seed"]),
-            str(values["checkpoint"]),
-            str(values.get("prompt") or ""),
-            str(values.get("negative_prompt") or ""),
-            json.dumps(values),
+            int(packed["width"]),
+            int(packed["height"]),
+            int(packed["seed"]),
+            str(packed["checkpoint"]),
+            str(packed.get("prompt") or ""),
+            str(packed.get("negative_prompt") or ""),
+            json.dumps(packed),
             _now(),
         ),
     )
@@ -790,6 +823,7 @@ def _grid_values(first: Path, job_values: dict[str, Any]) -> dict[str, Any]:
     data["negative_prompt"] = str(job_values.get("negative_prompt") or "")
     data.pop("prompt_expanded", None)
     data.pop("negative_prompt_expanded", None)
+    data.pop("interrupted", None)
     return data
 
 
@@ -827,7 +861,7 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
             if len(chunk) < 2:
                 continue
             with _save_lock:
-                dest = _alloc_named(folder, "jpg", values, "grids", start=_file_index(chunk[0]))
+                dest = _alloc_named(folder, "png", values, "grids", start=_file_index(chunk[0]))
                 save_contact_sheet(
                     chunk,
                     dest,

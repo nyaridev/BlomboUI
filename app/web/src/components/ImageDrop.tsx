@@ -1,4 +1,4 @@
-import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { useEffect, useRef, useState } from 'react'
 
 function isImage(file: File) {
@@ -110,20 +110,7 @@ export function ImageDrop({
         }}
       />
       {src || label ? null : (
-        <svg
-          className="pointer-events-none absolute size-16 text-muted opacity-20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
-        >
-          <path d="M12 16V4" />
-          <path d="m8 8 4-4 4 4" />
-          <rect x="4" y="16" width="16" height="5" rx="1" />
-        </svg>
+        <AppIcon id="upload" size={64} className="pointer-events-none absolute text-muted opacity-20" />
       )}
       {src || label ? (
         <>
@@ -140,7 +127,7 @@ export function ImageDrop({
               take(null)
             }}
           >
-            <CloseIcon />
+            <AppIcon id="x" />
           </button>
         </>
       ) : (

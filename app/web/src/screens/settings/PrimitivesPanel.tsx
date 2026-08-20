@@ -1,12 +1,12 @@
 import { ChipInput } from '@/components/ChipInput.tsx'
 import { ChipSelect } from '@/components/ChipSelect.tsx'
-import { CloseIcon } from '@/components/CloseIcon.tsx'
-import { ShuffleIcon, SwapIcon, UndoIcon } from '@/components/ControlIcons.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ExpandSection } from '@/components/ExpandSection.tsx'
+import { FolderField } from '@/components/FolderField.tsx'
+import { FolderList, type FolderEntry } from '@/components/FolderList.tsx'
 import { ImageDrop } from '@/components/ImageDrop.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
-import { RefreshIcon } from '@/components/RefreshIcon.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
@@ -26,18 +26,23 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
   const [hires, setHires] = useState(true)
   const [picks, setPicks] = useState<string[]>(['euler'])
   const [tags, setTags] = useState<string[]>(['1girl'])
+  const [folder, setFolder] = useState('A:\\Projects\\models')
+  const [folders, setFolders] = useState<FolderEntry[]>([
+    { id: 'local', name: 'Local', path: '' },
+    { id: 'demo-1', name: 'Models_001', path: 'D:\\Extra\\models' },
+  ])
   const eta = Math.max(0, Math.round((100 - pct) * 0.45))
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
       <SettingsCard query={query} title="Buttons" terms="generate interrupt disabled icon">
         <div className="flex flex-wrap gap-2">
-          <button type="button" className="rounded bg-accent px-3 py-2 text-sm font-semibold text-ink">
+          <button type="button" className="rounded bg-blue px-3 py-2 text-sm font-semibold text-ink">
             Generate
           </button>
           <button
             type="button"
-            className="rounded bg-accent px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40"
+            className="rounded bg-blue px-3 py-2 text-sm font-semibold text-ink disabled:opacity-40"
             disabled
           >
             Disabled
@@ -45,22 +50,22 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button type="button" className="icon-btn" aria-label="Random seed">
-            <ShuffleIcon />
+            <AppIcon id="shuffle" />
           </button>
           <button type="button" className="icon-btn" aria-label="Restore last seed">
-            <UndoIcon />
+            <AppIcon id="rotate-ccw" />
           </button>
           <button type="button" className="icon-btn" aria-label="Swap width and height">
-            <SwapIcon />
+            <AppIcon id="arrow-up-down" />
           </button>
           <button type="button" className="icon-btn" aria-label="Refresh">
-            <RefreshIcon />
+            <AppIcon id="refresh-cw" />
           </button>
           <button type="button" className="icon-btn" aria-label="Close">
-            <CloseIcon />
+            <AppIcon id="x" />
           </button>
           <button type="button" className="icon-btn" aria-label="Disabled" disabled>
-            <ShuffleIcon />
+            <AppIcon id="shuffle" />
           </button>
         </div>
       </SettingsCard>
@@ -78,6 +83,18 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
             value={area}
             onChange={(e) => setArea(e.target.value)}
             spellCheck={false}
+          />
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Folder" terms="browse path directory" className="flex flex-col gap-2">
+          <FolderField value={folder} onChange={setFolder} placeholder="Folder path" />
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Folder list" terms="extra roots grip" className="flex flex-col gap-2">
+          <FolderList
+            items={folders}
+            onChange={setFolders}
+            prefix="Models"
+            lockedId="local"
+            livePaths={{ local: 'A:\\Projects\\_\\BlomboUI\\BlomboUI\\user\\models' }}
           />
         </SettingsBlock>
       </SettingsCard>

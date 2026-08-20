@@ -100,6 +100,13 @@ def _ident(rel: str) -> str | None:
     return ident
 
 
+def _file_ident(rel: str) -> str | None:
+    ident = _ident(rel)
+    if not ident:
+        return None
+    return ident.split("#", 1)[0]
+
+
 def _migrate() -> None:
     global _migrated
     if _migrated:
@@ -272,7 +279,7 @@ def get_types(kind: str, rel: str) -> list[str]:
 
 
 def get_info(kind: str, rel: str) -> dict[str, object]:
-    ident = _ident(rel)
+    ident = _file_ident(rel)
     if not ident:
         return _info_out({})
     return _info_out(_load(kind).get(ident) or {})
@@ -283,7 +290,7 @@ def all_info(kind: str) -> dict[str, dict]:
 
 
 def user_mtime(kind: str, rel: str) -> int:
-    ident = _ident(rel)
+    ident = _file_ident(rel)
     if not ident:
         return 0
     row = _load(kind).get(ident) or {}
@@ -298,7 +305,7 @@ def user_stamps(kind: str) -> dict[str, int]:
 
 
 def touch(kind: str, rel: str) -> int:
-    ident = _ident(rel)
+    ident = _file_ident(rel)
     if not ident:
         return 0
     now = int(time.time())
@@ -324,7 +331,7 @@ def set_info(
     strength: float | None = None,
     slider: bool | None = None,
 ) -> dict[str, object]:
-    ident = _ident(rel)
+    ident = _file_ident(rel)
     if not ident:
         return _info_out({})
     data = _load(kind)
@@ -419,12 +426,120 @@ def _move_thumb(kind: str, old: str, new: str) -> None:
     _prune_empty(src.parent, THUMBS / kind)
 
 
+def remap_ident(kind: str, old: str, new: str) -> None:
+    src = _ident(old)
+    dest = _ident(new)
+    if not src or not dest or src == dest:
+        return
+
+    def mapped(key: str) -> str | None:
+        if key == src:
+            return dest
+        for sep in ("/", "#"):
+            if key.startswith(src + sep):
+                return dest + key[len(src) :]
+        return None
+
+    for ident in list(_iter_thumb_idents(kind)):
+        nxt = mapped(ident)
+        if nxt:
+            _move_thumb(kind, ident, nxt)
+
+    data = _load(kind)
+    out: dict[str, dict] = {}
+    changed = False
+    for key, row in data.items():
+        nxt = mapped(key)
+        if not nxt:
+            out[key] = row
+            continue
+        changed = True
+        if nxt not in data and nxt not in out:
+            out[nxt] = dict(row)
+    if changed:
+        _write(kind, out)
+
+
+def _key_matches(key: str, ident: str) -> bool:
+    return key == ident or key.startswith(ident + "#")
+
+
+def take_bundle(kind: str, ident: str, dest: Path) -> dict[str, dict]:
+    src = _file_ident(ident) or _ident(ident)
+    if not src:
+        return {}
+    dest.mkdir(parents=True, exist_ok=True)
+    data = _load(kind)
+    taken: dict[str, dict] = {}
+    keep: dict[str, dict] = {}
+    for key, row in data.items():
+        if _key_matches(key, src):
+            taken[key] = dict(row)
+        else:
+            keep[key] = row
+    if taken:
+        _write(kind, keep)
+    root = THUMBS / kind
+    for thumb_ident in list(_iter_thumb_idents(kind)):
+        if not _key_matches(thumb_ident, src):
+            continue
+        file = _thumb_at(kind, thumb_ident)
+        if not file:
+            continue
+        try:
+            rel = file.relative_to(root)
+        except ValueError:
+            rel = Path(file.name)
+        out = dest / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        if out.exists():
+            file.unlink(missing_ok=True)
+        else:
+            try:
+                file.rename(out)
+            except OSError:
+                out.write_bytes(file.read_bytes())
+                file.unlink(missing_ok=True)
+        _prune_empty(file.parent, root)
+    return taken
+
+
+def put_bundle(kind: str, rows: dict[str, dict], thumbs: Path) -> None:
+    if rows:
+        data = _load(kind)
+        changed = False
+        for key, row in rows.items():
+            ident = _ident(str(key))
+            if not ident or ident in data:
+                continue
+            data[ident] = dict(row)
+            changed = True
+        if changed:
+            _write(kind, data)
+    if not thumbs.is_dir():
+        return
+    root = THUMBS / kind
+    root.mkdir(parents=True, exist_ok=True)
+    for file in thumbs.rglob("*"):
+        if not file.is_file():
+            continue
+        dest = root / file.relative_to(thumbs)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            continue
+        try:
+            file.rename(dest)
+        except OSError:
+            dest.write_bytes(file.read_bytes())
+            file.unlink(missing_ok=True)
+
+
 def reconcile(kind: str, present: list[str]) -> None:
     here = {item.replace("\\", "/").strip().lstrip("/") for item in present}
     here.discard("")
     data = _load(kind)
-    stale_thumbs = [ident for ident in _iter_thumb_idents(kind) if ident not in here]
-    stale_meta = [key for key in data if key not in here]
+    stale_thumbs = [ident for ident in _iter_thumb_idents(kind) if (_file_ident(ident) or ident) not in here]
+    stale_meta = [key for key in data if (_file_ident(key) or key) not in here]
     unique = {name for name in {_name(item) for item in here} if len(_hits(sorted(here), name)) == 1}
     if not unique or (not stale_thumbs and not stale_meta):
         return

@@ -1,21 +1,8 @@
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { type PointerEvent } from 'react'
 
 function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
-}
-
-function GripIcon() {
-  return (
-    <svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
-      <path
-        d="M10 1 1 10M10 5 5 10M10 8 8 10"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
 }
 
 export function ResizeGrip({
@@ -69,7 +56,7 @@ export function ResizeGrip({
       type="button"
       aria-label="Resize"
       title="Drag to resize. Double-click to reset."
-      className="absolute right-0 bottom-0 z-10 flex h-5 w-5 cursor-ns-resize items-end justify-end p-0.5 text-muted hover:text-ink"
+      className="absolute right-0 bottom-0 z-10 flex h-5 w-5 cursor-ns-resize items-end justify-end bg-field p-0.5 text-muted hover:text-ink"
       onPointerDown={onDown}
       onDoubleClick={(event) => {
         event.preventDefault()
@@ -77,7 +64,7 @@ export function ResizeGrip({
         onReset()
       }}
     >
-      <GripIcon />
+      <AppIcon id="grip-horizontal" size={11} />
     </button>
   )
 }

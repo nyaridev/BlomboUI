@@ -1,4 +1,4 @@
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ConfirmDialog, Dialog } from '@/components/Dialog.tsx'
 import { GlyphMark } from '@/components/GlyphMark.tsx'
 import { glyphOf } from '@/components/glyph.ts'
@@ -16,43 +16,6 @@ import {
 } from '@/stores/generateStore.ts'
 import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-
-function SaveIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M2.5 2.5h7.2L11.5 4.3V11.5H2.5Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path d="M4.5 2.5v3h5v-3M4.5 11.5v-4h5v4" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function RestoreIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M11.2 7A4.2 4.2 0 1 1 7 2.8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M7 1.2 8.8 2.8 7 4.4"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
 
 type CreateState = {
   params: TemplateParams
@@ -153,13 +116,13 @@ export function TemplateBar() {
         className="flex items-center gap-1.5 rounded-l px-2 py-1 text-sm text-ink hover:bg-line"
         onClick={() => setOpen(true)}
       >
-        <span className="flex items-center text-muted">
-          <GlyphMark value={glyphOf(active ?? { builtin: true })} size={16} />
+        <span className="flex items-center">
+          <GlyphMark value={glyphOf(active ?? { builtin: true })} size={16} muted />
         </span>
         <span className="max-w-[9rem] truncate">{active?.name ?? 'Default'}</span>
         {dirty ? '*' : ''}
         <span className="text-muted">
-          <Chevron dir={open ? 'up' : 'down'} />
+          <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
         </span>
       </button>
       <button
@@ -169,7 +132,7 @@ export function TemplateBar() {
         title="Save"
         onClick={() => void saveCurrent()}
       >
-        <SaveIcon />
+        <AppIcon id="save" />
       </button>
       <button
         type="button"
@@ -178,7 +141,7 @@ export function TemplateBar() {
         title="Restore"
         onClick={() => setRestore(true)}
       >
-        <RestoreIcon />
+        <AppIcon id="undo-2" />
       </button>
       {open ? (
         <TemplatePicker

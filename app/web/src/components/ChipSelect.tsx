@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ChipList } from '@/components/ChipList.tsx'
 
 export type ChipSection = { title: string; options: string[] }
@@ -165,7 +165,7 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
             }
           }}
         >
-          <Chevron dir={open ? 'up' : 'down'} />
+          <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
         </button>
       </div>
       {open ? (

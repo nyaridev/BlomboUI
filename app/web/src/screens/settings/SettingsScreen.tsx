@@ -1,15 +1,20 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
 import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
 import { ModelsPanel, MODELS_QUERY } from './ModelsPanel.tsx'
+import { CivitaiPanel, CIVITAI_QUERY } from './CivitaiPanel.tsx'
 import { PrimitivesPanel } from './PrimitivesPanel.tsx'
+import { DirectoriesPanel, DIRECTORIES_QUERY } from './DirectoriesPanel.tsx'
 import { SavingPanel, SAVING_QUERY } from './SavingPanel.tsx'
+import { OutputGalleryPanel, OUTPUT_GALLERY_QUERY } from './OutputGalleryPanel.tsx'
 import { ShortcutsPanel, SHORTCUTS_QUERY } from './ShortcutsPanel.tsx'
 import { TabsPanel, TABS_QUERY } from './TabsPanel.tsx'
 import { WildcardsPanel, WILDCARDS_QUERY } from './WildcardsPanel.tsx'
+import { RemovedPanel, REMOVED_QUERY } from './RemovedPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
 import { SettingsNav } from './SettingsNav.tsx'
 
@@ -23,17 +28,31 @@ const GROUPS = [
       { id: 'General', terms: GENERAL_QUERY, Panel: GeneralPanel },
       { id: 'Tabs', terms: TABS_QUERY, Panel: TabsPanel },
       { id: 'Grids', terms: GRIDS_QUERY, Panel: GridsPanel },
+      { id: 'Gallery', terms: OUTPUT_GALLERY_QUERY, Panel: OutputGalleryPanel },
       { id: 'Gallery View', terms: GALLERY_QUERY, Panel: GalleryPanel },
     ],
   },
-  { title: 'Models', pages: [{ id: 'Models', terms: MODELS_QUERY, Panel: ModelsPanel }] },
+  {
+    title: 'Output',
+    pages: [
+      { id: 'Directories', terms: DIRECTORIES_QUERY, Panel: DirectoriesPanel },
+      { id: 'Output', terms: SAVING_QUERY, Panel: SavingPanel },
+    ],
+  },
+  {
+    title: 'Models',
+    pages: [
+      { id: 'Models', terms: MODELS_QUERY, Panel: ModelsPanel },
+      { id: 'Metadata', terms: CIVITAI_QUERY, Panel: CivitaiPanel },
+    ],
+  },
   { title: 'Wildcards', pages: [{ id: 'Wildcards', terms: WILDCARDS_QUERY, Panel: WildcardsPanel }] },
-  { title: 'Saving', pages: [{ id: 'Saving', terms: SAVING_QUERY, Panel: SavingPanel }] },
   {
     title: 'Other',
     pages: [
       { id: 'Shortcuts', terms: SHORTCUTS_QUERY, Panel: ShortcutsPanel },
       { id: 'Primitives', terms: '', search: false, Panel: PrimitivesPanel },
+      { id: 'Trash', terms: REMOVED_QUERY, Panel: RemovedPanel, danger: true, icon: 'trash-2' },
     ],
   },
 ] as const
@@ -42,15 +61,6 @@ type PageId = (typeof GROUPS)[number]['pages'][number]['id']
 
 function remPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-}
-
-function SearchIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-      <circle cx="5" cy="5" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M7.4 7.4 10.2 10.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
 }
 
 export function SettingsScreen() {
@@ -91,11 +101,11 @@ export function SettingsScreen() {
       return
     }
     setQuery('')
-    setPage('Saving')
+    setPage('Output')
   }, [highlightPlaceholders])
 
   useLayoutEffect(() => {
-    if (!highlightPlaceholders || page !== 'Saving' || searching) {
+    if (!highlightPlaceholders || page !== 'Output' || searching) {
       return
     }
     const run = () => {
@@ -144,7 +154,7 @@ export function SettingsScreen() {
       <aside className="flex min-h-0 shrink-0 flex-col gap-3 pr-3" style={{ width: navWidth }}>
         <div className="relative h-8 shrink-0">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
-            <SearchIcon />
+            <AppIcon id="search" size={12} />
           </span>
           <input
             className="h-full w-full rounded border border-line bg-field py-0 pr-2 pl-7 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"

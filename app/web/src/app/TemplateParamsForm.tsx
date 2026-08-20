@@ -2,6 +2,7 @@ import { OutputPathOverride } from '@/screens/generate/OutputPathOverride.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { CheckpointField } from '@/components/CheckpointField.tsx'
+import { usePromptWeightKey } from '@/lib/promptWeight.ts'
 import { type TemplateParams, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { ASPECTS, SAMPLERS, SCHEDULERS, listedChoices } from '@/screens/generate/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
@@ -27,6 +28,8 @@ function off(apply: string[], id: string) {
 export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFormProps) {
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
+  const onPromptKey = usePromptWeightKey((prompt) => onChange({ ...value, prompt }))
+  const onNegativeKey = usePromptWeightKey((negativePrompt) => onChange({ ...value, negativePrompt }))
   function set<K extends keyof TemplateParams>(key: K, next: TemplateParams[K]) {
     onChange({ ...value, [key]: next })
   }
@@ -38,7 +41,13 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
       </div>
       <label className={['flex flex-col gap-1', off(apply, 'prompt')].join(' ')}>
         <Label>Prompt</Label>
-        <textarea className={fieldClass()} rows={3} value={value.prompt} onChange={(e) => set('prompt', e.target.value)} />
+        <textarea
+          className={fieldClass()}
+          rows={3}
+          value={value.prompt}
+          onChange={(e) => set('prompt', e.target.value)}
+          onKeyDown={onPromptKey}
+        />
       </label>
       <label className={['flex flex-col gap-1', off(apply, 'negativePrompt')].join(' ')}>
         <Label>Negative</Label>
@@ -47,6 +56,7 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
           rows={2}
           value={value.negativePrompt}
           onChange={(e) => set('negativePrompt', e.target.value)}
+          onKeyDown={onNegativeKey}
           disabled={value.cfg <= 1}
         />
       </label>

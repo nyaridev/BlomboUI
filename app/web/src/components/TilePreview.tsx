@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useVisible } from '@/lib/visible.ts'
 
 export const TILE_GRAD = 'bg-gradient-to-tr from-field via-line to-muted/45'
 export const TILE_PATTERN =
@@ -7,6 +8,8 @@ export const TILE_PATTERN =
 export function TilePreview({
   src,
   mark = '?',
+  markClass = 'text-2xl',
+  markAlign = 'center',
   label,
   badge,
   warn = false,
@@ -14,12 +17,15 @@ export function TilePreview({
 }: {
   src?: string | null
   mark?: string
+  markClass?: string
+  markAlign?: 'center' | 'start'
   label?: string
   badge?: string
   warn?: boolean
   className?: string
 }) {
   const [broken, setBroken] = useState(false)
+  const [ref, visible] = useVisible<HTMLSpanElement>()
 
   useEffect(() => {
     setBroken(false)
@@ -29,13 +35,16 @@ export function TilePreview({
 
   return (
     <span
+      ref={ref}
       className={[
-        'relative flex aspect-[2/3] items-center justify-center overflow-hidden rounded text-2xl text-muted',
+        'relative flex aspect-[2/3] items-center overflow-hidden rounded text-muted',
+        markAlign === 'start' ? 'justify-start pl-px' : 'justify-center',
+        markClass,
         TILE_GRAD,
         className,
       ].join(' ')}
     >
-      {showImg ? (
+      {showImg && visible ? (
         <img
           src={src || ''}
           alt=""
@@ -47,10 +56,10 @@ export function TilePreview({
       ) : (
         <>
           <span aria-hidden="true" className={['pointer-events-none absolute inset-0', TILE_PATTERN].join(' ')} />
-          <span className="relative z-10">{mark}</span>
+          <span className={['relative z-10', markAlign === 'start' ? '-ml-0.5' : ''].join(' ')}>{mark}</span>
         </>
       )}
-      {warn ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-red-700/40" /> : null}
+      {warn ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-red/40" /> : null}
       {label ? (
         <span className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] text-ink">
           {label}

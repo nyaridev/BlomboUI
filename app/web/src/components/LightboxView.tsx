@@ -1,4 +1,4 @@
-import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { middleOpen } from '@/lib/openImage.ts'
 import { useEffect, useRef, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
@@ -27,7 +27,7 @@ function CloseButton({ onClick }: { onClick: () => void }) {
         onClick()
       }}
     >
-      <CloseIcon />
+      <AppIcon id="x" />
     </button>
   )
 }
@@ -46,16 +46,7 @@ function Arrow({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void })
         onClick()
       }}
     >
-      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-        <path
-          d={dir === 'left' ? 'M11 4 6 9l5 5' : 'M7 4l5 5-5 5'}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <AppIcon id={dir === 'left' ? 'chevron-left' : 'chevron-right'} size={18} />
     </button>
   )
 }

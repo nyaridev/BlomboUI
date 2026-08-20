@@ -113,7 +113,7 @@ export function OutputPathOverride({
           folder={gridPath}
           namePlaceholder={settingsGridName}
           folderPlaceholder={settingsGridPath}
-          nameExample={`${previewPath(gridName.trim() || settingsGridName)}.jpg`}
+          nameExample={`${previewPath(gridName.trim() || settingsGridName)}.png`}
           folderExample={previewPath(gridPath.trim() || settingsGridPath)}
           onName={onGridName}
           onFolder={onGridPath}

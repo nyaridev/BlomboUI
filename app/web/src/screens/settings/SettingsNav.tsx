@@ -1,6 +1,8 @@
+import { AppIcon } from '@/components/AppIcon.tsx'
+
 export type SettingsNavGroup = {
   title: string
-  pages: { id: string }[]
+  pages: { id: string; danger?: boolean; icon?: string }[]
 }
 
 export function SettingsNav({
@@ -21,9 +23,16 @@ export function SettingsNav({
             <button
               key={item.id}
               type="button"
-              className={['settings-nav-item', page === item.id ? 'is-active' : ''].filter(Boolean).join(' ')}
+              className={[
+                'settings-nav-item',
+                item.danger ? 'is-danger' : '',
+                page === item.id ? 'is-active' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               onClick={() => onOpen(item.id)}
             >
+              {item.icon ? <AppIcon id={item.icon} size={14} /> : null}
               {item.id}
             </button>
           ))}

@@ -1,6 +1,6 @@
 import { OutputPathOverride } from './OutputPathOverride.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
-import { SwapIcon } from '@/components/ControlIcons.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { getKSamplerChoices } from '@/lib/api.ts'
@@ -178,7 +178,7 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
           )}
         </div>
         <button type="button" className="icon-btn" aria-label="Swap width and height" onClick={swapSize}>
-          <SwapIcon />
+          <AppIcon id="arrow-up-down" />
         </button>
         <div className="flex min-w-0 flex-col gap-2">
           <SliderField label="Batch count" value={batchCount} onChange={setBatchCount} min={1} max={100} />

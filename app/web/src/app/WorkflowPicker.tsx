@@ -1,5 +1,4 @@
-import { Chevron } from '@/components/Chevron.tsx'
-import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { Dialog } from '@/components/Dialog.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
 import { getWorkflows, type WorkflowInfo } from '@/lib/api.ts'
@@ -7,81 +6,15 @@ import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useEffect, useState } from 'react'
 
 const CATS = [
-  { id: 'all', label: 'All' },
-  { id: 'image', label: 'Image' },
-  { id: 'video', label: 'Video' },
-  { id: 'utility', label: 'Utility' },
+  { id: 'all', label: 'All', icon: 'layers' },
+  { id: 'image', label: 'Image', icon: 'image' },
+  { id: 'video', label: 'Video', icon: 'clapperboard' },
+  { id: 'utility', label: 'Utility', icon: 'wrench' },
 ] as const
 
-function WorkflowIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="5" height="4" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="7.5" y="8.5" width="5" height="4" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M4 5.5v2.2h5.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function AllIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="1.5" y="1.5" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="8" y="1.5" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="1.5" y="8" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="8" y="8" width="4.5" height="4.5" rx="0.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function ImageIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="1.5" y="2.5" width="11" height="9" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="4.5" cy="5.5" r="1" fill="currentColor" />
-      <path d="M2.5 10.2 5.8 7.2 8 9.2 10 7.5 12.2 10.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function VideoIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="1.5" y="3" width="11" height="8" rx="1" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M6 5.5 9 7 6 8.5Z" fill="currentColor" />
-    </svg>
-  )
-}
-
-function SearchIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-      <circle cx="5" cy="5" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M7.4 7.4 10.2 10.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function UtilityIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M8.8 2.4 11.6 5.2 6.2 10.6 3.4 11.6 4.4 8.8Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path d="M7.4 3.8 10.2 6.6" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-const CAT_ICON = {
-  all: AllIcon,
-  image: ImageIcon,
-  video: VideoIcon,
-  utility: UtilityIcon,
+function catIcon(category?: string) {
+  const id = category === 'video' || category === 'utility' ? category : 'image'
+  return CATS.find((item) => item.id === id)?.icon ?? 'image'
 }
 
 const ICON_BTN = 'flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink'
@@ -93,6 +26,13 @@ export function WorkflowPicker() {
   const [items, setItems] = useState<WorkflowInfo[]>([])
   const [query, setQuery] = useState('')
   const [cat, setCat] = useState<(typeof CATS)[number]['id']>('all')
+  const current = items.find((item) => item.id === workflow)
+
+  useEffect(() => {
+    void getWorkflows()
+      .then(setItems)
+      .catch(() => setItems([]))
+  }, [])
 
   useEffect(() => {
     if (!open) {
@@ -142,11 +82,11 @@ export function WorkflowPicker() {
         onClick={() => setOpen(true)}
       >
         <span className="text-muted">
-          <WorkflowIcon />
+          <AppIcon id={catIcon(current?.category)} />
         </span>
         {workflow}
         <span className="text-muted">
-          <Chevron dir="down" />
+          <AppIcon id="chevron-down" size={12} />
         </span>
       </button>
       {open ? (
@@ -157,14 +97,13 @@ export function WorkflowPicker() {
           <div className="-mx-3 -mt-3 flex items-center gap-2 border-b border-line px-3 py-2">
             <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">Workflows</span>
             <button type="button" className={ICON_BTN} aria-label="Close" onClick={() => setOpen(false)}>
-              <CloseIcon />
+              <AppIcon id="x" />
             </button>
           </div>
           <div className="flex min-h-0 flex-1 gap-4">
             <aside className="flex w-44 shrink-0 flex-col">
               <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
                 {CATS.map((item, index) => {
-                  const Icon = CAT_ICON[item.id]
                   const on = cat === item.id
                   return (
                     <div key={item.id} className="shrink-0">
@@ -178,7 +117,7 @@ export function WorkflowPicker() {
                         onClick={() => setCat(item.id)}
                       >
                         <span className="shrink-0">
-                          <Icon />
+                          <AppIcon id={item.icon} />
                         </span>
                         {item.label}
                       </button>
@@ -190,7 +129,7 @@ export function WorkflowPicker() {
             <div className="flex min-w-0 flex-1 flex-col gap-2">
               <div className="relative shrink-0">
                 <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
-                  <SearchIcon />
+                  <AppIcon id="search" size={12} />
                 </span>
                 <input
                   className="w-full rounded border border-line bg-field py-1 pr-2 pl-7 text-xs text-ink outline-none placeholder:text-muted focus:border-accent"

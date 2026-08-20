@@ -48,8 +48,8 @@ export type CivitaiLayoutData = {
 }
 
 const PILL =
-  'rounded-full border border-[#7c5cbf]/40 bg-[#7c5cbf]/25 px-2.5 py-1 text-sm text-[#c9b6f0] hover:bg-[#7c5cbf]/40'
-const PILL_ON = 'bg-[#7c5cbf]/50'
+  'rounded-full border border-purple/40 bg-purple/25 px-2.5 py-1 text-sm text-purple-bright hover:bg-purple/40'
+const PILL_ON = 'bg-purple/50'
 
 function Link({ href, className, children }: { href: string; className: string; children: ReactNode }) {
   if (!href) {

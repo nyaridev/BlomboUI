@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 
 type SelectOption = { value: string; label: string }
 
@@ -121,7 +121,7 @@ export function SelectField({ value, onChange, options }: SelectFieldProps) {
             }
           }}
         >
-          <Chevron dir={open ? 'up' : 'down'} />
+          <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
         </button>
       </div>
       {open ? (

@@ -87,3 +87,112 @@ export function dirExists(items: string[], dirPath: string): boolean {
   const prefix = dirPath.endsWith('/') ? dirPath : `${dirPath}/`
   return items.some((item) => item.startsWith(prefix))
 }
+
+export const LOCAL_DIR = 'Local'
+
+export function treeDisplayPath(
+  item: { tag?: string; path: string; source?: string },
+  extraNames: string[],
+): string {
+  const file = (item.source || item.path.split('#')[0] || item.path).replace(/\\/g, '/')
+  const display = (item.tag || item.path).replace(/\\/g, '/')
+  const first = file.split('/')[0]
+  if (extraNames.includes(first)) {
+    if (display === first || display.startsWith(`${first}/`)) {
+      return display
+    }
+    return `${first}/${display}`
+  }
+  if (display === LOCAL_DIR || display.startsWith(`${LOCAL_DIR}/`)) {
+    return display
+  }
+  return `${LOCAL_DIR}/${display}`
+}
+
+export function identToDisplay(ident: string, extraNames: string[]): string {
+  const name = ident.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  if (!name) {
+    return LOCAL_DIR
+  }
+  const first = name.split('/')[0]
+  if (extraNames.includes(first) || name === LOCAL_DIR || name.startsWith(`${LOCAL_DIR}/`)) {
+    return name
+  }
+  return `${LOCAL_DIR}/${name}`
+}
+
+export function displayToIdent(display: string): string {
+  const name = display.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  if (!name || name === LOCAL_DIR) {
+    return ''
+  }
+  if (name.startsWith(`${LOCAL_DIR}/`)) {
+    return name.slice(LOCAL_DIR.length + 1)
+  }
+  return name
+}
+
+export function scopeRoot(path: string, extraNames: string[]): string {
+  const ident = displayToIdent(path)
+  if (!ident) {
+    return LOCAL_DIR
+  }
+  const first = ident.split('/')[0]
+  return extraNames.includes(first) ? first : LOCAL_DIR
+}
+
+export function parentIdent(ident: string): string {
+  const name = ident.replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  const cut = name.lastIndexOf('/')
+  return cut > 0 ? name.slice(0, cut) : ''
+}
+
+export function collectDirPaths(nodes: GalleryNode[]): Set<string> {
+  const out = new Set<string>()
+  function walk(list: GalleryNode[]) {
+    for (const node of list) {
+      if (node.kind !== 'dir') {
+        continue
+      }
+      out.add(node.path)
+      walk(node.children)
+    }
+  }
+  walk(nodes)
+  return out
+}
+
+export function siblingNames(nodes: GalleryNode[], folder: string): string[] | null {
+  for (const node of nodes) {
+    if (node.kind !== 'dir') {
+      continue
+    }
+    if (node.path === folder) {
+      return node.children.map((child) => child.name)
+    }
+    const inner = siblingNames(node.children, folder)
+    if (inner) {
+      return inner
+    }
+  }
+  return null
+}
+
+export function toDisplayRoots(
+  roots: { name: string; path: string; kind: 'dir' | 'file'; children?: unknown[] }[],
+  extraNames: string[],
+): GalleryNode[] {
+  function mapNode(node: { name: string; path: string; kind: 'dir' | 'file'; children?: unknown[] }): GalleryNode {
+    const children = Array.isArray(node.children)
+      ? node.children.map((child) => mapNode(child as { name: string; path: string; kind: 'dir' | 'file'; children?: unknown[] }))
+      : []
+    return {
+      name: node.name,
+      path: identToDisplay(node.path, extraNames),
+      kind: node.kind,
+      children,
+    }
+  }
+  return roots.map(mapNode)
+}
+

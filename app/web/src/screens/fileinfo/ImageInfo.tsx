@@ -1,3 +1,4 @@
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ExpandSection } from '@/components/ExpandSection.tsx'
 import { MetaCard } from '@/components/MetaCard.tsx'
 import type { CivitaiVersion } from '@/lib/api.ts'
@@ -20,45 +21,6 @@ function pretty(value: string) {
   } catch {
     return value
   }
-}
-
-function CopyIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect
-        x="4.5"
-        y="4.5"
-        width="7"
-        height="8"
-        rx="1"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-      />
-      <path
-        d="M9.5 4.5V3.5A1 1 0 0 0 8.5 2.5H3.5A1 1 0 0 0 2.5 3.5v7A1 1 0 0 0 3.5 11.5H4.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-      />
-    </svg>
-  )
-}
-
-function CheckIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M3 7.5 6 10.5 11 3.5"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
 }
 
 function CopyCard({
@@ -96,7 +58,7 @@ function CopyCard({
         title={copied ? 'Copied' : 'Copy'}
         onClick={() => void copy()}
       >
-        {copied ? <CheckIcon /> : <CopyIcon />}
+        {copied ? <AppIcon id="check" /> : <AppIcon id="copy" />}
       </button>
     </div>
   )
@@ -207,6 +169,7 @@ function infoRows(parsed: PngInfoParams, civitai: CivitaiVersion | null, href: s
     { label: 'Model hash', value: parsed.modelHash || '' },
     { label: 'Batch size', value: parsed.batchSize != null ? String(parsed.batchSize) : '' },
     { label: 'Batch count', value: parsed.batchCount != null ? String(parsed.batchCount) : '' },
+    { label: 'Interrupted', value: parsed.interrupted ? 'True' : '' },
     { label: 'AutoV1', value: parsed.autov1 || '' },
     { label: 'AutoV3', value: parsed.autov3 || '' },
     { label: 'SHA256', value: parsed.sha256 || '' },

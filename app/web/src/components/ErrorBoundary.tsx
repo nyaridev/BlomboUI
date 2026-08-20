@@ -20,7 +20,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return this.props.children
     }
     return (
-      <pre className="m-4 whitespace-pre-wrap text-sm" style={{ color: '#f44' }}>
+      <pre className="m-4 whitespace-pre-wrap text-sm text-red">
         {error.stack || error.message}
       </pre>
     )

@@ -1,7 +1,0 @@
-red
-blue
-green
-gold
-silver
-black
-white

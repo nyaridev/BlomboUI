@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { GalleryScreen } from '../screens/gallery/GalleryScreen.tsx'
 import { GenerateScreen } from '../screens/generate/GenerateScreen.tsx'
 import { ModelsScreen } from '../screens/models/ModelsScreen.tsx'
+import { WildcardManagerScreen } from '../screens/wildcards/WildcardManagerScreen.tsx'
 import { FileInfoScreen } from '../screens/fileinfo/FileInfoScreen.tsx'
 import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
 import { ErrorsScreen } from '../screens/errors/ErrorsScreen.tsx'
@@ -52,6 +53,7 @@ export function App() {
   const generate = location.pathname === '/'
   const gallery = location.pathname === '/gallery'
   const models = location.pathname === '/models'
+  const wildcards = location.pathname === '/wildcards'
   const errors = location.pathname === '/errors'
   const issueCount = useIssuesStore((s) => s.items.length)
   const health = useHealthStore((s) => s.health)
@@ -107,9 +109,9 @@ export function App() {
         return
       }
       const digit = digitKey(event)
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 6) {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 7) {
         event.preventDefault()
-        const fixed = ['/', '/file-info', '/gallery', '/models', '/errors', '/settings']
+        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/errors', '/settings']
         const routes = mainTabKeysFollowLayout
           ? visibleMainTabIds(mainTabOrder, hiddenMainTabs).map((id) => mainTab(id)?.to ?? '/')
           : fixed
@@ -201,7 +203,7 @@ export function App() {
               <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center')}>
                 Errors
                 {issueCount > 0 ? (
-                  <span className="ml-1.5 rounded-full bg-red-800 px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
+                  <span className="ml-1.5 rounded-full bg-red px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
                 ) : null}
               </NavLink>
             ) : null}
@@ -215,10 +217,10 @@ export function App() {
         ref={mainRef}
         className={[
           'min-h-0 flex-1 [overflow-anchor:none]',
-          settings || fileInfo ? 'overflow-hidden' : 'overflow-y-auto',
+          settings || fileInfo || wildcards ? 'overflow-hidden' : 'overflow-y-auto',
         ].join(' ')}
       >
-        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo ? '' : 'px-10 py-4'].join(' ')}>
+        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards ? '' : 'px-10 py-4'].join(' ')}>
           {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
           <div className={pane(generate)}>
             <GenerateScreen />
@@ -231,6 +233,9 @@ export function App() {
           </div>
           <div className={pane(models)}>
             <ModelsScreen />
+          </div>
+          <div className={pane(wildcards, true)}>
+            <WildcardManagerScreen />
           </div>
           <div className={pane(settings, true)}>
             <SettingsScreen />

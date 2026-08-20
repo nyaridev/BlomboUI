@@ -1,5 +1,5 @@
 import { type ReactNode, useRef, useState } from 'react'
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ResizeGrip } from '@/components/ResizeGrip.tsx'
 
 function remPx() {
@@ -43,7 +43,7 @@ export function ExpandSection({ title, children, enabled = true, onEnabled, fit 
         >
           <span>{title}</span>
           <span className="text-muted">
-            <Chevron dir={open ? 'up' : 'down'} />
+            <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
           </span>
         </button>
       </div>

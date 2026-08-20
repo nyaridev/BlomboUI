@@ -2,6 +2,12 @@ styles:
   casual:
     - t-shirt, jeans
     - hoodie, sneakers
+    - skirt
   formal:
     - suit, tie
     - evening dress
+  section:
+    a:
+      - d
+    b:
+      - d

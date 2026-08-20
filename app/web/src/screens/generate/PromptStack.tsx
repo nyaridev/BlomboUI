@@ -1,4 +1,5 @@
 import { ResizeGrip } from '@/components/ResizeGrip.tsx'
+import { usePromptWeightKey } from '@/lib/promptWeight.ts'
 import { useLayoutEffect, useRef, useState } from 'react'
 
 function remPx() {
@@ -34,6 +35,8 @@ export function PromptStack({
   const rem = remPx()
   const minH = 2.5 * rem
   const maxH = 20 * rem
+  const onPromptKey = usePromptWeightKey(onPrompt)
+  const onNegativeKey = usePromptWeightKey(onNegative)
   const stackRef = useRef<HTMLDivElement>(null)
   const ready = useRef(false)
   const [defaults, setDefaults] = useState({ prompt: Math.round(minH * 2.4), negative: minH })
@@ -65,6 +68,7 @@ export function PromptStack({
           className={fieldClass(false)}
           value={prompt}
           onChange={(e) => onPrompt(e.target.value)}
+          onKeyDown={onPromptKey}
           placeholder="Positive"
           spellCheck={false}
         />
@@ -81,6 +85,7 @@ export function PromptStack({
           className={fieldClass(negativeDisabled)}
           value={negativePrompt}
           onChange={(e) => onNegative(e.target.value)}
+          onKeyDown={onNegativeKey}
           placeholder="Negative"
           spellCheck={false}
           disabled={negativeDisabled}

@@ -166,6 +166,7 @@ export function GenerateScreen() {
   const [imageIds, setImageIds] = useState<string[]>([])
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<GenerateTab>('Generation')
+  const [starting, setStarting] = useState(false)
   const genRowRef = useRef<HTMLDivElement>(null)
   const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
@@ -178,7 +179,7 @@ export function GenerateScreen() {
       setTab(incoming.tab)
     }
   }, [location.key])
-  const busy = job?.status === 'queued' || job?.status === 'running'
+  const busy = starting || job?.status === 'queued' || job?.status === 'running'
   const jobId = job?.id
 
   useEffect(() => {
@@ -191,27 +192,34 @@ export function GenerateScreen() {
   }, [])
 
   useEffect(() => {
-    if (!jobId) {
+    if (!jobId || starting) {
       return
+    }
+    let gone = false
+    function apply(next: Job) {
+      if (gone) {
+        return
+      }
+      setJob(next)
+      setImageIds(idsFromJob(next))
+      if (next.status === 'failed') {
+        setError(next.error || 'Generate failed')
+      }
     }
     if (!busy) {
-      void getJob(jobId).then((next) => {
-        setJob(next)
-        setImageIds(idsFromJob(next))
-      })
-      return
+      void getJob(jobId).then(apply)
+      return () => {
+        gone = true
+      }
     }
     const timer = window.setInterval(() => {
-      void getJob(jobId).then((next) => {
-        setJob(next)
-        setImageIds(idsFromJob(next))
-        if (next.status === 'failed') {
-          setError(next.error || 'Generate failed')
-        }
-      })
+      void getJob(jobId).then(apply)
     }, 500)
-    return () => window.clearInterval(timer)
-  }, [jobId, busy])
+    return () => {
+      gone = true
+      window.clearInterval(timer)
+    }
+  }, [jobId, busy, starting])
 
   const toastedMissing = useRef('')
   useEffect(() => {
@@ -239,8 +247,11 @@ export function GenerateScreen() {
       return
     }
     setError(null)
+    setStarting(true)
+    setImageIds([])
     const used = usedSeed(seed, seedAfter)
     const previous = seed
+    const previousIds = job ? idsFromJob(job) : []
     const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
     setSeed(nextSeed(used, seedAfter, count))
     try {
@@ -277,7 +288,10 @@ export function GenerateScreen() {
       setImageIds([])
     } catch (err) {
       setSeed(previous)
+      setImageIds(previousIds)
       setError(err instanceof Error ? err.message : 'Generate failed')
+    } finally {
+      setStarting(false)
     }
   }
 
@@ -453,7 +467,7 @@ export function GenerateScreen() {
               </button>
               <button
                 type="button"
-                className="flex-1 rounded bg-red-800 px-3 py-2.5 text-sm font-semibold text-ink hover:bg-red-700 disabled:opacity-40 disabled:hover:bg-red-800"
+                className="flex-1 rounded bg-red px-3 py-2.5 text-sm font-semibold text-ink hover:brightness-110 disabled:opacity-40 disabled:hover:brightness-100"
                 disabled={!busy}
                 title="Cancel remaining jobs"
                 onClick={() => void interrupt('cancel')}
@@ -513,15 +527,15 @@ export function GenerateScreen() {
             />
             <ImageStage
               key={jobId || 'empty'}
-              images={imageIds}
+              images={starting ? [] : imageIds}
               gridUrls={
-                jobId && (job?.grid_count || (job?.has_grid ? 1 : 0))
+                !starting && jobId && (job?.grid_count || (job?.has_grid ? 1 : 0))
                   ? Array.from({ length: job.grid_count || 1 }, (_, i) => jobGridUrl(jobId, i))
                   : []
               }
-              generations={job?.generations ?? []}
+              generations={starting ? [] : (job?.generations ?? [])}
               busy={busy}
-              previewUrl={busy && job?.has_preview && jobId ? jobPreviewUrl(jobId, progressValue) : null}
+              previewUrl={!starting && busy && job?.has_preview && jobId ? jobPreviewUrl(jobId, progressValue) : null}
               progressPct={progressPct}
               progressLabel={currentLabel}
               jobProgressPct={jobPct}

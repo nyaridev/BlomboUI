@@ -17,8 +17,8 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9._\[\]-]+$")
 _GALLERY_SORTS = ("name", "added", "edited", "path")
 _GALLERY_DIRS = ("asc", "desc")
 _GALLERY_VIEWS = ("checkpoints", "loras", "wildcards")
-_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models")
-_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Errors")
+_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager")
+_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Errors")
 _GENERATE_TABS = ("Generation", "Base Model", "Lora", "Wildcards")
 _IMAGE_FORMATS = ("png", "jpg", "webp")
 _KEYS = (
@@ -30,6 +30,7 @@ _KEYS = (
     "batchGridOnCancel",
     "saveInterrupted",
     "interruptedInGrid",
+    "galleryHideInterrupted",
     "hiddenGenerateTabs",
     "hiddenMainTabs",
     "mainTabOrder",
@@ -41,6 +42,7 @@ _KEYS = (
     "hiddenSchedulers",
     "theme",
     "civitaiSite",
+    "timeDisplay",
     "wildcardYamlByFilename",
     "imagePath",
     "imageName",
@@ -54,10 +56,19 @@ _KEYS = (
     "gallerySortKey",
     "gallerySortDir",
     "galleryTileScale",
+    "galleryParentOnUnselect",
+    "promptWeightStep",
     "loraStrengthMin",
     "loraStrengthMax",
     "loraSliderMin",
     "loraSliderMax",
+    "modelDirs",
+    "wildcardDirs",
+    "galleryDirs",
+    "forceDownloadModelsLocal",
+    "forceDownloadWildcardsLocal",
+    "removedAfterHours",
+    "removedMaxGb",
 )
 
 
@@ -90,6 +101,8 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["saveInterrupted"] = bool(raw["saveInterrupted"])
     if "interruptedInGrid" in raw:
         out["interruptedInGrid"] = bool(raw["interruptedInGrid"])
+    if "galleryHideInterrupted" in raw:
+        out["galleryHideInterrupted"] = bool(raw["galleryHideInterrupted"])
     if "hiddenGenerateTabs" in raw and isinstance(raw["hiddenGenerateTabs"], list):
         tabs: list[str] = []
         for item in raw["hiddenGenerateTabs"]:
@@ -132,6 +145,10 @@ def _clean(raw: Any) -> dict[str, Any]:
         name = str(raw["civitaiSite"])
         if name in ("red", "civitai"):
             out["civitaiSite"] = name
+    if "timeDisplay" in raw:
+        name = str(raw["timeDisplay"])
+        if name in ("full", "ampm"):
+            out["timeDisplay"] = name
     if "wildcardYamlByFilename" in raw:
         out["wildcardYamlByFilename"] = bool(raw["wildcardYamlByFilename"])
     image_path = _path_template(raw.get("imagePath"), IMAGE_PATH_DEFAULT) if "imagePath" in raw else None
@@ -182,13 +199,62 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["galleryTileScale"] = round(min(2.0, max(0.5, float(raw["galleryTileScale"]))), 1)
         except (TypeError, ValueError):
             pass
+    if "galleryParentOnUnselect" in raw:
+        out["galleryParentOnUnselect"] = bool(raw["galleryParentOnUnselect"])
+    if "promptWeightStep" in raw:
+        try:
+            step = float(raw["promptWeightStep"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if step == step and step not in (float("inf"), float("-inf")):
+                out["promptWeightStep"] = round(min(1.0, max(0.01, step)), 2)
     for key in ("loraStrengthMin", "loraStrengthMax", "loraSliderMin", "loraSliderMax"):
         if key not in raw:
             continue
         bound = _lora_bound(raw[key])
         if bound is not None:
             out[key] = bound
+    for key in ("modelDirs", "wildcardDirs", "galleryDirs"):
+        if key in raw:
+            rows = _dir_list(raw[key])
+            if rows is not None:
+                out[key] = rows
+    if "forceDownloadModelsLocal" in raw:
+        out["forceDownloadModelsLocal"] = bool(raw["forceDownloadModelsLocal"])
+    if "forceDownloadWildcardsLocal" in raw:
+        out["forceDownloadWildcardsLocal"] = bool(raw["forceDownloadWildcardsLocal"])
+    if "removedAfterHours" in raw:
+        try:
+            out["removedAfterHours"] = max(1, min(8760, int(raw["removedAfterHours"])))
+        except (TypeError, ValueError):
+            pass
+    if "removedMaxGb" in raw:
+        try:
+            out["removedMaxGb"] = max(1, min(10000, int(raw["removedMaxGb"])))
+        except (TypeError, ValueError):
+            pass
     return {key: out[key] for key in _KEYS if key in out}
+
+
+def _dir_list(raw: Any) -> list[dict[str, str]] | None:
+    if not isinstance(raw, list):
+        return None
+    out: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        ident = str(item.get("id") or "").strip()[:80]
+        name = str(item.get("name") or "").strip()[:40]
+        path = str(item.get("path") or "").strip()[:500]
+        if not ident or not name or ident in seen:
+            continue
+        if any(ch in name for ch in '/\\'):
+            continue
+        seen.add(ident)
+        out.append({"id": ident, "name": name, "path": path})
+    return out
 
 
 def _lora_bound(raw: Any) -> float | None:

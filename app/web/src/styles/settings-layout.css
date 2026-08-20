@@ -25,7 +25,10 @@
 }
 
 .settings-nav-item {
+  display: flex;
   width: 100%;
+  align-items: center;
+  gap: 0.4rem;
   border: 0;
   border-radius: 0.25rem;
   background: transparent;
@@ -43,6 +46,20 @@
 
 .settings-nav-item.is-active {
   background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+.settings-nav-item.is-danger {
+  color: var(--color-red-bright);
+}
+
+.settings-nav-item.is-danger:hover {
+  background: color-mix(in srgb, var(--color-red) 22%, transparent);
+  color: var(--color-red-bright);
+}
+
+.settings-nav-item.is-danger.is-active {
+  background: var(--color-red);
   color: var(--color-ink);
 }
 

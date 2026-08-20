@@ -1,3 +1,4 @@
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { Fragment, type ReactNode, useState } from 'react'
 
 type ChipListProps = {
@@ -91,7 +92,7 @@ export function ChipList({ value, onChange, onChipClick, children, removable = t
                   remove(item)
                 }}
               >
-                ×
+                <AppIcon id="x" size={12} />
               </button>
             ) : null}
           </span>

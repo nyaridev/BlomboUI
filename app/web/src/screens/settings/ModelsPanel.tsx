@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
 
 export const MODELS_QUERY =
-  'models hidden types picker chips sampling samplers schedulers ksampler generate lora strength slider min max'
+  'models hidden types picker chips sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention'
 
 export function ModelsPanel({ query = '' }: { query?: string }) {
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes) ?? []
@@ -25,6 +25,8 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
   const setLoraStrengthMax = useSettingsStore((s) => s.setLoraStrengthMax)
   const setLoraSliderMin = useSettingsStore((s) => s.setLoraSliderMin)
   const setLoraSliderMax = useSettingsStore((s) => s.setLoraSliderMax)
+  const promptWeightStep = useSettingsStore((s) => s.promptWeightStep)
+  const setPromptWeightStep = useSettingsStore((s) => s.setPromptWeightStep)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
 
@@ -102,6 +104,16 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
           </div>
           <p className="text-xs text-muted">Used when Slider LoRA is on. Default is -5 to 5.</p>
         </SettingsBlock>
+      </SettingsCard>
+      <SettingsCard query={query} title="Prompt weight" terms="prompt weight attention lora strength step arrow">
+        <label className="flex min-w-0 max-w-40 flex-col gap-1">
+          <span className="text-xs text-muted">Step</span>
+          <NumberField value={promptWeightStep} onChange={setPromptWeightStep} min={0.01} max={1} step={0.01} />
+        </label>
+        <p className="text-xs text-muted">
+          Ctrl+Up / Ctrl+Down on selected text wraps it as (text:1.1). At 1.0 the wrap is removed. Selecting a LoRA tag
+          changes its strength instead.
+        </p>
       </SettingsCard>
     </div>
   )

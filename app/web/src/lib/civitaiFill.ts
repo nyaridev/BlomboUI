@@ -47,8 +47,11 @@ export async function lookupCivitai(hashes: string[]) {
   return null
 }
 
-export async function waitModelInfo(kind: keyof ModelLists, path: string) {
+export async function waitModelInfo(kind: keyof ModelLists, path: string, signal?: AbortSignal) {
   for (;;) {
+    if (signal?.aborted) {
+      throw new DOMException('Aborted', 'AbortError')
+    }
     const info = await getModelInfo(kind, path)
     const hashes = civitaiHashes(info)
     if (hashes.length && (!info.hashing || info.hashes?.autov2 || info.hash)) {

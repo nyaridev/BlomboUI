@@ -109,6 +109,7 @@ def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:
         sha256,
         autov1,
         values.get("loras"),
+        values.get("interrupted"),
     )
 
 
@@ -312,6 +313,7 @@ def _lines(
     sha256: Any = None,
     autov1: Any = None,
     loras: Any = None,
+    interrupted: Any = None,
 ) -> str:
     parts = [str(prompt or "").strip()]
     if str(negative or "").strip():
@@ -339,6 +341,8 @@ def _lines(
         bits.append(f"SHA256: {sha256}")
     if model:
         bits.append(f"Model: {model}")
+    if interrupted:
+        bits.append("Interrupted: True")
     if bits:
         parts.append(", ".join(bits))
     parts.extend(_lora_lines(loras))

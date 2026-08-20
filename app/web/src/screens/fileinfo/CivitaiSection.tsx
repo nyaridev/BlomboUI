@@ -18,7 +18,7 @@ function OpenLink({ href, label, tone }: { href: string; label: string; tone?: '
       rel="noreferrer"
       className={[
         BTN,
-        tone === 'red' ? 'border-red-800 bg-red-800 hover:border-red-700 hover:bg-red-700' : 'border-accent bg-accent hover:brightness-110',
+        tone === 'red' ? 'border-red bg-red hover:brightness-110' : 'border-accent bg-accent hover:brightness-110',
       ].join(' ')}
     >
       {label}
@@ -31,7 +31,7 @@ function Stage({ fail, children }: { fail?: boolean; children: ReactNode }) {
     <div
       className={[
         'relative h-[34rem] w-full overflow-hidden',
-        fail ? 'rounded-2xl border border-red-700 bg-red-950/40' : '',
+        fail ? 'rounded-2xl border border-red bg-red/15' : '',
       ].join(' ')}
     >
       {children}

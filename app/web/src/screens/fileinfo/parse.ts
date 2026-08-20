@@ -13,6 +13,7 @@ export type PngInfoParams = Partial<TemplateParams> & {
   autov3?: string
   sha256?: string
   loras?: PngLora[]
+  interrupted?: boolean
 }
 
 const HEX_HASH = /^[0-9a-f]{8,64}$/i
@@ -127,6 +128,9 @@ function applySettings(out: PngInfoParams, line: string) {
   const batchCount = intIn(fields['batch count'], 1, 100)
   if (batchCount != null) {
     out.batchCount = batchCount
+  }
+  if (/^(true|yes|1)$/i.test(fields.interrupted || '')) {
+    out.interrupted = true
   }
 }
 

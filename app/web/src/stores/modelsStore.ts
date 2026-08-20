@@ -15,6 +15,7 @@ const EMPTY: ModelLists = {
 type ModelsState = ModelLists & {
   busy: boolean
   load: () => Promise<void>
+  pull: () => Promise<void>
   refresh: () => Promise<void>
   refreshKind: (kind: keyof ModelLists) => Promise<void>
   setThumb: (kind: keyof ModelLists, path: string, thumb: number) => void
@@ -95,6 +96,13 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       void notifyIssues()
     }
   },
+  pull: async () => {
+    try {
+      set(apply(await getModels()))
+    } catch {
+      /* keep current */
+    }
+  },
   refresh: async () => {
     if (get().busy) {
       return
@@ -141,7 +149,7 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     const now = Math.floor(Date.now() / 1000)
     set((state) => ({
       [kind]: state[kind].map((item) =>
-        item.path === path || item.source === path
+        item.path === path
           ? { ...item, thumb, edited: Math.max(item.edited, thumb || 0, now) }
           : item,
       ),
@@ -149,9 +157,12 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
   },
   setMeta: (kind, path, meta) => {
     const now = Math.floor(Date.now() / 1000)
+    const file = path.split('#')[0]
     set((state) => ({
       [kind]: state[kind].map((item) =>
-        item.path === path || item.source === path ? { ...item, ...meta, edited: Math.max(item.edited, now) } : item,
+        item.path === path || item.source === path || (item.source || item.path.split('#')[0]) === file
+          ? { ...item, ...meta, edited: Math.max(item.edited, now) }
+          : item,
       ),
     }))
   },

@@ -6,19 +6,19 @@ export const GLYPH_COLORS = [
   { id: 'ink', css: 'var(--color-ink)' },
   { id: 'muted', css: 'var(--color-muted)' },
   { id: 'accent', css: 'var(--color-accent)' },
-  { id: 'red', css: '#e5484d' },
-  { id: 'orange', css: '#f76b15' },
-  { id: 'yellow', css: '#f5d90a' },
-  { id: 'green', css: '#46a758' },
-  { id: 'cyan', css: '#12a594' },
-  { id: 'blue', css: '#3b82f6' },
-  { id: 'purple', css: '#8b5cf6' },
-  { id: 'pink', css: '#e54666' },
+  { id: 'red', css: 'var(--color-red-bright)' },
+  { id: 'orange', css: 'var(--color-orange-bright)' },
+  { id: 'yellow', css: 'var(--color-yellow-bright)' },
+  { id: 'green', css: 'var(--color-green-bright)' },
+  { id: 'cyan', css: 'var(--color-cyan-bright)' },
+  { id: 'blue', css: 'var(--color-blue-bright)' },
+  { id: 'purple', css: 'var(--color-purple-bright)' },
+  { id: 'pink', css: 'var(--color-pink-bright)' },
 ] as const
 
 export type GlyphColorId = (typeof GLYPH_COLORS)[number]['id']
 
-export const BUILTIN_GLYPH: Glyph = { kind: 'icon', id: 'layout-template', color: 'accent' }
+export const BUILTIN_GLYPH: Glyph = { kind: 'icon', id: 'layout-template', color: 'muted' }
 export const CUSTOM_GLYPH: Glyph = { kind: 'icon', id: 'bookmark', color: 'ink' }
 
 const ICON_ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
@@ -26,6 +26,10 @@ const COLOR_IDS = new Set<string>(GLYPH_COLORS.map((item) => item.id))
 
 export function glyphColor(id: string) {
   return GLYPH_COLORS.find((item) => item.id === id)?.css ?? GLYPH_COLORS[0].css
+}
+
+export function glyphColorMuted(id: string) {
+  return `color-mix(in srgb, ${glyphColor(id)} 60%, var(--color-muted))`
 }
 
 export function parseGlyph(raw: unknown): Glyph {

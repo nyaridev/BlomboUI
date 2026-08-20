@@ -3,12 +3,13 @@ export const MAIN_TABS = [
   { id: 'File Info', to: '/file-info', label: 'File Info' },
   { id: 'Gallery', to: '/gallery', label: 'Gallery' },
   { id: 'Models', to: '/models', label: 'Models' },
+  { id: 'Wildcard Manager', to: '/wildcards', label: 'Wildcard Manager' },
   { id: 'Errors', to: '/errors', label: 'Errors' },
   { id: 'Settings', to: '/settings', label: 'Settings' },
 ] as const
 
-export const ORDERABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Models'] as const
-export const HIDEABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Models', 'Errors'] as const
+export const ORDERABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Models', 'Wildcard Manager'] as const
+export const HIDEABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Models', 'Wildcard Manager', 'Errors'] as const
 
 export type MainTabId = (typeof MAIN_TABS)[number]['id']
 export type OrderableMainTab = (typeof ORDERABLE_MAIN_TABS)[number]

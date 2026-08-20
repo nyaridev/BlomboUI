@@ -15,6 +15,7 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
 from blombo.paths import COMFY_HOST, COMFY_PORT, WORKFLOWS, comfy_base
+from blombo import dirs
 from blombo import loras as lora_tags
 
 TIMEOUT = 30
@@ -240,8 +241,11 @@ def load_workflow(name: str) -> dict[str, Any]:
 
 
 def comfy_filename(name: str) -> str:
-    parts = str(name or "").replace("\\", "/").split("/")
-    return os.sep.join(part for part in parts if part and part not in {".", ".."})
+    parts = [part for part in str(name or "").replace("\\", "/").split("/") if part and part not in {".", ".."}]
+    extras = dirs.extra_named("modelDirs")
+    if parts and parts[0] in extras:
+        parts = parts[1:]
+    return os.sep.join(parts)
 
 
 def _fill_power_loras(inputs: dict[str, Any], values: dict[str, Any]) -> None:

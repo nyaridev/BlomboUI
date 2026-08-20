@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from blombo import comfy, hashes, model_meta
+from blombo import comfy, dirs, hashes, model_meta
 from blombo import wildcards as wildcard_meta
 from blombo.paths import models_root, wildcards_root
 
@@ -21,16 +21,48 @@ HASH_KINDS = ("checkpoints", "loras")
 
 
 def list_models() -> dict[str, list[dict[str, Any]]]:
-    root = models_root()
-    data = {kind: _scan(kind, root / kind, exts) for kind, exts in KINDS.items()}
-    data["wildcards"] = _scan("wildcards", wildcards_root(), WILDCARD_EXTS)
+    data = {kind: list_kind(kind) for kind in KINDS}
+    data["wildcards"] = list_kind("wildcards")
     return data
 
 
 def list_kind(kind: str) -> list[dict[str, Any]]:
+    items: list[dict[str, Any]] = []
+    files: list[str] = []
     if kind == "wildcards":
-        return _scan("wildcards", wildcards_root(), WILDCARD_EXTS)
-    return _scan(kind, models_root() / kind, KINDS[kind])
+        local, local_files = _scan_folder(kind, wildcards_root(), WILDCARD_EXTS, "")
+        items.extend(local)
+        files.extend(local_files)
+        for name, folder in dirs.extra_named("wildcardDirs").items():
+            extra, extra_files = _scan_folder(kind, folder, WILDCARD_EXTS, name)
+            items.extend(extra)
+            files.extend(extra_files)
+    else:
+        exts = KINDS[kind]
+        local, local_files = _scan_folder(kind, models_root() / kind, exts, "")
+        items.extend(local)
+        files.extend(local_files)
+        for name, folder in dirs.extra_named("modelDirs").items():
+            extra, extra_files = _scan_folder(kind, folder / kind, exts, name)
+            items.extend(extra)
+            files.extend(extra_files)
+    model_meta.reconcile(kind, files)
+    stamps = model_meta.user_stamps(kind)
+    info = model_meta.all_info(kind)
+    for item in items:
+        tile = str(item["path"])
+        rel = str(item.get("source") or tile).split("#", 1)[0]
+        thumb = model_meta.thumb_mtime(kind, tile)
+        item["thumb"] = thumb
+        item["edited"] = max(int(item["edited"]), thumb, stamps.get(rel, 0))
+        row = info.get(rel) or {}
+        item["prompt"] = str(row.get("prompt") or "")
+        item["negative_prompt"] = str(row.get("negative_prompt") or "")
+        item["notes"] = str(row.get("notes") or "")
+        item["strength"] = float(row["strength"]) if "strength" in row else 1.0
+        item["slider"] = bool(row.get("slider"))
+    items.sort(key=lambda item: str(item.get("tag") or item["path"]).lower())
+    return items
 
 
 def refresh_models(kind: str | None = None) -> dict[str, list[dict[str, Any]]]:
@@ -41,10 +73,11 @@ def refresh_models(kind: str | None = None) -> dict[str, list[dict[str, Any]]]:
 
 
 def hash_files() -> list[Path]:
-    root = models_root()
     items: list[Path] = []
     for kind in HASH_KINDS:
-        items.extend(_iter_files(root / kind, KINDS[kind]))
+        items.extend(_iter_files(models_root() / kind, KINDS[kind]))
+        for folder in dirs.extra_named("modelDirs").values():
+            items.extend(_iter_files(folder / kind, KINDS[kind]))
     return items
 
 
@@ -53,7 +86,11 @@ def all_files() -> list[Path]:
     root = models_root()
     for kind, exts in KINDS.items():
         items.extend(_iter_files(root / kind, exts))
+        for folder in dirs.extra_named("modelDirs").values():
+            items.extend(_iter_files(folder / kind, exts))
     items.extend(_iter_files(wildcards_root(), WILDCARD_EXTS))
+    for folder in dirs.extra_named("wildcardDirs").values():
+        items.extend(_iter_files(folder, WILDCARD_EXTS))
     return items
 
 
@@ -78,13 +115,17 @@ def _iter_files(folder: Path, exts: tuple[str, ...]) -> list[Path]:
     return items
 
 
-def _scan(kind: str, folder: Path, exts: tuple[str, ...]) -> list[dict[str, Any]]:
+def _scan_folder(kind: str, folder: Path, exts: tuple[str, ...], prefix: str) -> tuple[list[dict[str, Any]], list[str]]:
     items: list[dict[str, Any]] = []
     files: list[str] = []
     claimed: dict[str, str] = {}
     paths = _iter_files(folder, exts)
     if kind == "wildcards":
         paths.sort(key=lambda path: (path.relative_to(folder).as_posix().count("/"), path.relative_to(folder).as_posix().lower()))
+
+    def tagged(posix: str) -> str:
+        return f"{prefix}/{posix}" if prefix else posix
+
     for path in paths:
         try:
             added, edited = _times(path)
@@ -92,17 +133,18 @@ def _scan(kind: str, folder: Path, exts: tuple[str, ...]) -> list[dict[str, Any]
         except OSError:
             continue
         posix = path.relative_to(folder).as_posix()
-        files.append(posix)
+        rel = tagged(posix)
+        files.append(rel)
         if kind == "wildcards":
             txt = path.suffix.lower() == ".txt"
             for tile in wildcard_meta.iter_tiles(path, posix, claimed):
                 tag = str(tile.get("tag") or "")
                 if not tag:
                     continue
-                source = str(tile.get("source") or posix)
+                source = tagged(str(tile.get("source") or posix))
                 items.append(
                     {
-                        "path": posix if txt else f"{posix}#{tag}",
+                        "path": rel if txt else f"{rel}#{tag}",
                         "added": added,
                         "edited": edited,
                         "size": size,
@@ -115,28 +157,13 @@ def _scan(kind: str, folder: Path, exts: tuple[str, ...]) -> list[dict[str, Any]
             continue
         items.append(
             {
-                "path": posix,
+                "path": rel,
                 "added": added,
                 "edited": edited,
                 "size": size,
             }
         )
-    model_meta.reconcile(kind, files)
-    stamps = model_meta.user_stamps(kind)
-    info = model_meta.all_info(kind)
-    for item in items:
-        rel = str(item.get("source") or item["path"])
-        thumb = model_meta.thumb_mtime(kind, rel)
-        item["thumb"] = thumb
-        item["edited"] = max(int(item["edited"]), thumb, stamps.get(rel, 0))
-        row = info.get(rel) or {}
-        item["prompt"] = str(row.get("prompt") or "")
-        item["negative_prompt"] = str(row.get("negative_prompt") or "")
-        item["notes"] = str(row.get("notes") or "")
-        item["strength"] = float(row["strength"]) if "strength" in row else 1.0
-        item["slider"] = bool(row.get("slider"))
-    items.sort(key=lambda item: str(item.get("tag") or item["path"]).lower())
-    return items
+    return items, files
 
 
 def kind_root(kind: str) -> Path:
@@ -146,9 +173,15 @@ def kind_root(kind: str) -> Path:
 
 
 def model_file(kind: str, rel: str) -> Path | None:
-    name = str(rel or "").replace("\\", "/").strip().lstrip("/")
+    name = str(rel or "").replace("\\", "/").strip().lstrip("/").split("#", 1)[0]
     if not name or ".." in Path(name).parts:
         return None
+    first, _, rest = name.partition("/")
+    extras = dirs.extra_named("wildcardDirs" if kind == "wildcards" else "modelDirs")
+    extra = extras.get(first)
+    if extra is not None:
+        path = extra / rest if kind == "wildcards" else extra / kind / rest
+        return path if path.is_file() else None
     path = kind_root(kind) / name
     return path if path.is_file() else None
 

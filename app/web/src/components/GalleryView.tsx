@@ -1,17 +1,47 @@
-import { Chevron } from '@/components/Chevron.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ConfirmDialog } from '@/components/Dialog.tsx'
-import { DownloadIcon } from '@/components/DownloadIcon.tsx'
-import { buildGalleryTree, dirExists, type GalleryNode } from '@/lib/galleryTree.ts'
-import { InfoIcon } from '@/components/InfoIcon.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
+import { LOCAL_ID } from '@/components/FolderList.tsx'
+import { GalleryCreateFolderDialog, GalleryRenameDialog } from '@/components/GalleryDialogs.tsx'
+import { GalleryTree } from '@/components/GalleryTree.tsx'
+import {
+  buildGalleryTree,
+  collectDirPaths,
+  dirExists,
+  displayToIdent,
+  identToDisplay,
+  LOCAL_DIR,
+  parentIdent,
+  scopeRoot,
+  siblingNames,
+  toDisplayRoots,
+  treeDisplayPath,
+} from '@/lib/galleryTree.ts'
 import { ModelInfoDialog } from '@/components/ModelInfoDialog.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
-import { RefreshIcon } from '@/components/RefreshIcon.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { modelThumbUrl, type CivitaiVersion, type ModelEntry, type ModelLists } from '@/lib/api.ts'
+import { toast } from '@/stores/toastStore.ts'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  createModelFolder,
+  createWildcardFolder,
+  getModelTree,
+  getWildcardTree,
+  modelThumbUrl,
+  moveModelEntry,
+  moveWildcardEntry,
+  renameModelEntry,
+  renameWildcardEntry,
+  removeEntry as trashEntry,
+  revealModelFile,
+  revealWildcardFile,
+  type CivitaiVersion,
+  type ModelEntry,
+  type ModelLists,
+} from '@/lib/api.ts'
 import { applyCivitaiMeta, civitaiHashes, hasCivitaiLocalData, lookupCivitai, waitModelInfo } from '@/lib/civitaiFill.ts'
 import { storedLoraStrengthLabel } from '@/lib/loraTags.ts'
 
@@ -62,142 +92,62 @@ function remPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
 }
 
-function SearchIcon() {
-  return (
-    <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-      <circle cx="5" cy="5" r="3.2" fill="none" stroke="currentColor" strokeWidth="1.3" />
-      <path d="M7.4 7.4 10.2 10.2" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function FolderIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M1.5 3.5h4l1 1.5h6v6.5h-11z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
-}
-
-function FileIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M4 1.5h4.5L11.5 5v7.5H4Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path d="M8.5 1.5V5H11.5" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function TreeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <rect x="5" y="1.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M7 4.5v2M4 8.5V6.5h6v2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="1.5" y="8.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <rect x="8.5" y="8.5" width="4" height="3" rx="0.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function EyeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M1.6 7s2.1-3.6 5.4-3.6S12.4 7 12.4 7s-2.1 3.6-5.4 3.6S1.6 7 1.6 7Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <circle cx="7" cy="7" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
-
-function EyeOffIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M1.6 7s2.1-3.6 5.4-3.6S12.4 7 12.4 7s-2.1 3.6-5.4 3.6S1.6 7 1.6 7Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <circle cx="7" cy="7" r="1.5" fill="none" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M2.4 2.4 11.6 11.6" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-    </svg>
-  )
-}
-
-function SortDirIcon({ dir }: { dir: SortDir }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M4 6.2 7 3.2 10 6.2"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={dir === 'asc' ? 1 : 0.35}
-      />
-      <path
-        d="M4 7.8 7 10.8 10 7.8"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        opacity={dir === 'desc' ? 1 : 0.35}
-      />
-    </svg>
-  )
-}
-
-function rowClass(on: boolean) {
-  return [
-    'flex w-full min-w-0 items-center gap-2 rounded px-2 py-1.5 text-left text-sm',
-    on ? 'bg-line text-ink' : 'text-muted hover:bg-field hover:text-ink',
-  ].join(' ')
+function remapPrefix(path: string, from: string, to: string) {
+  if (path === from) {
+    return to
+  }
+  if (from && path.startsWith(`${from}/`)) {
+    return to + path.slice(from.length)
+  }
+  return path
 }
 
 function fileName(path: string) {
   return modelLabel(path.split(/[\\/]/).pop() || path)
 }
 
-function treePath(item: ModelEntry) {
-  return (item.tag || item.path).replace(/\\/g, '/')
-}
-
 function filePath(item: ModelEntry) {
   return item.source || item.path.split('#')[0] || item.path
+}
+
+function isFileTile(item: ModelEntry) {
+  const ident = item.path.replace(/\\/g, '/')
+  const hash = ident.indexOf('#')
+  if (hash < 0) {
+    return true
+  }
+  const tag = ident.slice(hash + 1)
+  const source = (item.source || ident.slice(0, hash)).replace(/\\/g, '/')
+  const cut = source.lastIndexOf('/')
+  const folder = cut >= 0 ? source.slice(0, cut + 1) : ''
+  const rest = folder && tag.startsWith(folder) ? tag.slice(folder.length) : tag
+  return Boolean(rest) && !rest.includes('/')
+}
+
+function coversPath(path: string, ident: string) {
+  return path === ident || path.startsWith(`${ident}/`) || path.startsWith(`${ident}#`)
 }
 
 function tileName(item: ModelEntry) {
   return item.label || item.tag || fileName(item.path)
 }
 
-function matchesQuery(item: ModelEntry, query: string) {
+function matchesQuery(item: ModelEntry, query: string, extraNames: string[]) {
   const q = query.trim().toLowerCase()
   if (!q) {
     return true
   }
-  const tag = treePath(item).toLowerCase()
+  const tag = treeDisplayPath(item, extraNames).toLowerCase()
   const path = item.path.replace(/\\/g, '/').toLowerCase()
-  if (tag === q || tag.startsWith(`${q}/`) || path === q || path.startsWith(`${q}/`)) {
+  const source = identToDisplay(filePath(item), extraNames).toLowerCase()
+  if (
+    tag === q ||
+    tag.startsWith(`${q}/`) ||
+    path === q ||
+    path.startsWith(`${q}/`) ||
+    source === q ||
+    source.startsWith(`${q}/`)
+  ) {
     return true
   }
   return (
@@ -206,6 +156,10 @@ function matchesQuery(item: ModelEntry, query: string) {
     fileName(item.path).toLowerCase().includes(q) ||
     (item.label || '').toLowerCase().includes(q)
   )
+}
+
+function sortName(item: ModelEntry) {
+  return fileName(filePath(item))
 }
 
 function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
@@ -217,9 +171,13 @@ function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
         return delta
       }
     }
-    const av = key === 'path' ? a.path : tileName(a)
-    const bv = key === 'path' ? b.path : tileName(b)
-    return av.localeCompare(bv, undefined, { sensitivity: 'base' })
+    const av = key === 'path' ? a.path : sortName(a)
+    const bv = key === 'path' ? b.path : sortName(b)
+    const byName = av.localeCompare(bv, undefined, { sensitivity: 'base' })
+    if (byName !== 0) {
+      return byName
+    }
+    return a.path.localeCompare(b.path, undefined, { sensitivity: 'base' })
   })
   if (dir === 'desc') {
     next.reverse()
@@ -233,11 +191,31 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[sortKind])
   const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[sortKind])
   const tileScale = useSettingsStore((s) => s.galleryTileScale)
+  const parentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
+  const modelDirs = useSettingsStore((s) => s.modelDirs)
+  const wildcardDirs = useSettingsStore((s) => s.wildcardDirs)
+  const extraNames = useMemo(() => {
+    const rows = kind === 'wildcards' ? wildcardDirs : modelDirs
+    const names: string[] = []
+    const seen = new Set<string>()
+    for (const item of rows) {
+      const name = item.name.trim()
+      const key = name.toLowerCase()
+      if (!name || item.id === LOCAL_ID || key === 'local' || key === 'output' || seen.has(key)) {
+        continue
+      }
+      seen.add(key)
+      names.push(name)
+    }
+    return names
+  }, [kind, modelDirs, wildcardDirs])
   const rowRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<HTMLDivElement>(null)
   const tilesRef = useRef<HTMLDivElement>(null)
   const [treeWidth, setTreeWidth] = useState(() => saved?.treeWidth ?? TREE_REM * 16)
-  const [openDirs, setOpenDirs] = useState<Set<string>>(() => new Set(saved?.openDirs))
+  const [openDirs, setOpenDirs] = useState<Set<string>>(
+    () => new Set(saved?.openDirs?.length ? saved.openDirs : [LOCAL_DIR]),
+  )
   const [showTree, setShowTree] = useState(() => saved?.showTree ?? true)
   const [pinSelected, setPinSelected] = useState(() => saved?.pinSelected ?? true)
   const [query, setQuery] = useState(() => saved?.query ?? '')
@@ -246,10 +224,19 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const [infoItem, setInfoItem] = useState<ModelEntry | null>(null)
   const [fillConfirm, setFillConfirm] = useState<{ path: string; hit: CivitaiVersion } | null>(null)
   const [filling, setFilling] = useState<string | null>(null)
+  const [fsRoots, setFsRoots] = useState<ReturnType<typeof toDisplayRoots>>([])
+  const [dragIdent, setDragIdent] = useState<string | null>(null)
+  const [fileBusy, setFileBusy] = useState(false)
+  const [creating, setCreating] = useState<{ folder: string; name: string } | null>(null)
+  const [renaming, setRenaming] = useState<{ path: string; name: string } | null>(null)
+  const [pendingMove, setPendingMove] = useState<{ path: string; folder: string; from: string; to: string } | null>(null)
+  const [tileMenu, setTileMenu] = useState<{ x: number; y: number; path: string; name: string; fileTile: boolean } | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<string | null>(null)
   const shownSortKey = sortKey ?? gallerySortKey
   const shownSortDir = sortDir ?? gallerySortDir
   const tileW = TILE_COL_REM * tileScale
   const tileH = TILE_ROW_REM * tileScale
+  const fileOps = true
   const snap = useRef({
     query,
     sortKey: sortKey ?? undefined,
@@ -273,17 +260,47 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   }
   const busy = useModelsStore((s) => s.busy)
   const refreshKind = useModelsStore((s) => s.refreshKind)
+  const pull = useModelsStore((s) => s.pull)
   const setThumb = useModelsStore((s) => s.setThumb)
   const setMeta = useModelsStore((s) => s.setMeta)
-  const paths = useMemo(() => items.map(treePath).filter(Boolean), [items])
-  const byTree = useMemo(() => new Map(items.map((item) => [treePath(item), item])), [items])
-  const tree = useMemo(() => buildGalleryTree(paths), [paths])
+  const paths = useMemo(() => items.map((item) => treeDisplayPath(item, extraNames)).filter(Boolean), [extraNames, items])
+  const byTree = useMemo(
+    () => new Map(items.map((item) => [treeDisplayPath(item, extraNames), item])),
+    [extraNames, items],
+  )
+  const loadTree = useCallback(async () => {
+    try {
+      const roots = kind === 'wildcards' ? await getWildcardTree() : await getModelTree(kind)
+      setFsRoots(toDisplayRoots(roots, extraNames))
+    } catch {
+      /* keep current */
+    }
+  }, [extraNames, kind])
+  const tree = useMemo(
+    () => (fileOps && fsRoots.length ? fsRoots : buildGalleryTree(paths)),
+    [fileOps, fsRoots, paths],
+  )
+  const treeDirs = useMemo(() => collectDirPaths(tree), [tree])
+  const layoutToken = [
+    query,
+    shownSortKey,
+    shownSortDir,
+    pinSelected ? '1' : '0',
+    extraNames.join('\n'),
+    items.map((item) => item.path).join('\n'),
+  ].join('\0')
+  const pinRef = useRef({ token: layoutToken, selected, value })
+  if (pinRef.current.token !== layoutToken) {
+    pinRef.current = { token: layoutToken, selected, value }
+  }
+  const pinnedSelected = pinRef.current.selected
+  const pinnedValue = pinRef.current.value
   const tiles = useMemo(() => {
-    const isSelected = (item: ModelEntry) =>
-      selected ? selected.includes(item.path) : Boolean(value) && value === item.path
+    const isPinned = (item: ModelEntry) =>
+      pinnedSelected ? pinnedSelected.includes(item.path) : Boolean(pinnedValue) && pinnedValue === item.path
     if (!pinSelected) {
       return sortItems(
-        items.filter((item) => modelPath(item) && matchesQuery(item, query)),
+        items.filter((item) => modelPath(item) && matchesQuery(item, query, extraNames)),
         shownSortKey,
         shownSortDir,
       )
@@ -294,23 +311,79 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
       if (!modelPath(item)) {
         continue
       }
-      if (isSelected(item)) {
+      if (isPinned(item)) {
         pinned.push(item)
-      } else if (matchesQuery(item, query)) {
+      } else if (matchesQuery(item, query, extraNames)) {
         rest.push(item)
       }
     }
-    const orderedPinned = selected?.length
-      ? selected.flatMap((path) => pinned.filter((item) => item.path === path))
+    const orderedPinned = pinnedSelected?.length
+      ? pinnedSelected.flatMap((path) => pinned.filter((item) => item.path === path))
       : sortItems(pinned, shownSortKey, shownSortDir)
     return [...orderedPinned, ...sortItems(rest, shownSortKey, shownSortDir)]
-  }, [items, query, shownSortKey, shownSortDir, pinSelected, selected, value])
+  }, [extraNames, items, pinnedSelected, pinnedValue, pinSelected, query, shownSortDir, shownSortKey])
 
   function isOn(path: string) {
     if (selected) {
       return selected.includes(path)
     }
     return Boolean(onSelect) && value === path
+  }
+
+  function folderExists(path: string) {
+    return treeDirs.has(path) || dirExists(paths, path)
+  }
+
+  function applyRelocate(fromIdent: string, toIdent: string, entryKind: 'dir' | 'file') {
+    const fromDisplay = identToDisplay(fromIdent, extraNames)
+    const toDisplay = identToDisplay(toIdent, extraNames)
+    if (onSelect && value) {
+      const next = remapPrefix(value, fromIdent, toIdent)
+      if (next !== value) {
+        onSelect(next)
+      }
+    }
+    setQuery((current) => remapPrefix(current, fromDisplay, toDisplay))
+    setOpenDirs((current) => {
+      const next = new Set<string>()
+      for (const path of current) {
+        next.add(remapPrefix(path, fromDisplay, toDisplay))
+      }
+      const parent = identToDisplay(parentIdent(toIdent), extraNames)
+      if (parent) {
+        next.add(parent)
+      }
+      if (entryKind === 'dir') {
+        next.add(toDisplay)
+      }
+      return next
+    })
+  }
+
+  async function runMove(path: string, folder: string) {
+    setFileBusy(true)
+    try {
+      const next =
+        kind === 'wildcards' ? await moveWildcardEntry(path, folder) : await moveModelEntry(kind, path, folder)
+      applyRelocate(path, next.path, next.kind)
+      await pull()
+      await loadTree()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not move', 'error')
+    } finally {
+      setFileBusy(false)
+      setPendingMove(null)
+    }
+  }
+
+  function requestMove(path: string, folder: string) {
+    const from = scopeRoot(path, extraNames)
+    const to = scopeRoot(folder, extraNames)
+    if (from !== to) {
+      setPendingMove({ path, folder, from, to })
+      return
+    }
+    void runMove(path, folder)
   }
 
   async function saveCivitai(path: string, hit: CivitaiVersion) {
@@ -346,6 +419,10 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
       setFilling(null)
     }
   }
+
+  useEffect(() => {
+    void loadTree()
+  }, [loadTree])
 
   useEffect(() => {
     if (saved?.treeWidth) {
@@ -397,16 +474,25 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   }, [kind])
 
   useEffect(() => {
+    if (treeDirs.size === 0 && paths.length === 0) {
+      return
+    }
     setOpenDirs((current) => {
       const next = new Set<string>()
       for (const path of current) {
-        if (dirExists(paths, path)) {
+        if (folderExists(path)) {
           next.add(path)
         }
       }
-      return next.size === current.size ? current : next
+      if (next.size === 0 && folderExists(LOCAL_DIR)) {
+        next.add(LOCAL_DIR)
+      }
+      if (next.size === current.size && [...next].every((path) => current.has(path))) {
+        return current
+      }
+      return next
     })
-  }, [paths])
+  }, [paths, treeDirs])
 
   function clickDir(path: string) {
     const open = openDirs.has(path)
@@ -422,59 +508,123 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
         next.delete(path)
         return next
       })
-      setQuery('')
+      if (parentOnUnselect) {
+        const cut = path.lastIndexOf('/')
+        const parent = cut > 0 ? path.slice(0, cut) : ''
+        setQuery(parent && folderExists(parent) ? parent : '')
+      } else {
+        setQuery('')
+      }
       return
     }
     setQuery(path)
   }
 
-  function renderNode(node: GalleryNode) {
-    if (node.kind === 'file') {
-      const item = byTree.get(node.path)
-      const selected = isOn(item?.path || node.path)
-      const label = item ? tileName(item) : node.name
-      return (
-        <div key={node.path} title={node.path} className={rowClass(selected)}>
-          <span className="w-4 shrink-0" />
-          <span className="shrink-0 text-muted">
-            <FileIcon />
-          </span>
-          <span className="truncate">{label}</span>
-        </div>
-      )
+  function clickFile(path: string) {
+    const same = query.trim() === path
+    if (same) {
+      const cut = path.lastIndexOf('/')
+      const parent = cut > 0 ? path.slice(0, cut) : ''
+      if (parentOnUnselect) {
+        setQuery(parent && folderExists(parent) ? parent : '')
+      } else {
+        setQuery('')
+      }
+      return
     }
-    const open = openDirs.has(node.path)
-    const on = query.trim() === node.path
-    return (
-      <div
-        key={node.path}
-        className={[
-          'shrink-0 rounded-md border',
-          on ? 'border-accent' : 'border-line',
-          open ? 'bg-field' : 'bg-transparent',
-        ].join(' ')}
-      >
-        <button
-          type="button"
-          title={node.path}
-          className={rowClass(on)}
-          onClick={() => clickDir(node.path)}
-        >
-          <span className="flex h-4 w-4 shrink-0 items-center justify-center">
-            <Chevron dir={open ? 'down' : 'right'} size={10} />
-          </span>
-          <span className="shrink-0">
-            <FolderIcon />
-          </span>
-          <span className="truncate font-medium">{node.name}</span>
-        </button>
-        {open ? (
-          <div className="flex flex-col gap-1 border-t border-line p-1.5 pl-3">
-            {node.children.map((child) => renderNode(child))}
-          </div>
-        ) : null}
-      </div>
-    )
+    setQuery(path)
+  }
+
+  async function createFolder() {
+    if (!creating || fileBusy) {
+      return
+    }
+    const name = creating.name.trim()
+    if (!name) {
+      return
+    }
+    setFileBusy(true)
+    try {
+      const next =
+        kind === 'wildcards'
+          ? await createWildcardFolder(creating.folder, name)
+          : await createModelFolder(kind, creating.folder, name)
+      const display = identToDisplay(next.path, extraNames)
+      setOpenDirs((current) => new Set(current).add(identToDisplay(creating.folder, extraNames)).add(display))
+      setQuery(display)
+      setCreating(null)
+      await loadTree()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not create folder', 'error')
+    } finally {
+      setFileBusy(false)
+    }
+  }
+
+  async function renameEntry() {
+    if (!renaming || fileBusy) {
+      return
+    }
+    const name = renaming.name.trim()
+    if (!name) {
+      return
+    }
+    setFileBusy(true)
+    try {
+      const next =
+        kind === 'wildcards'
+          ? await renameWildcardEntry(renaming.path, name)
+          : await renameModelEntry(kind, renaming.path, name)
+      applyRelocate(renaming.path, next.path, next.kind)
+      setRenaming(null)
+      await pull()
+      await loadTree()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not rename', 'error')
+    } finally {
+      setFileBusy(false)
+    }
+  }
+
+  async function revealEntry(path: string) {
+    try {
+      if (kind === 'wildcards') {
+        await revealWildcardFile(path)
+      } else {
+        await revealModelFile(kind, path)
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not open folder', 'error')
+    }
+  }
+
+  function applyRemove(ident: string) {
+    if (onSelect && value && coversPath(value, ident)) {
+      onSelect('')
+    }
+    const display = identToDisplay(ident, extraNames)
+    setQuery((current) => {
+      if (current === display || current.startsWith(`${display}/`)) {
+        const parent = identToDisplay(parentIdent(ident), extraNames)
+        return parent
+      }
+      return current
+    })
+  }
+
+  async function runRemove(ident: string) {
+    setFileBusy(true)
+    try {
+      await trashEntry(kind, ident)
+      applyRemove(ident)
+      setPendingRemove(null)
+      await pull()
+      await loadTree()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not remove', 'error')
+    } finally {
+      setFileBusy(false)
+    }
   }
 
   return (
@@ -482,7 +632,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
       <div className="flex h-8 shrink-0 items-stretch gap-1">
         <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
-            <SearchIcon />
+            <AppIcon id="search" size={12} />
           </span>
           <input
             className="h-full w-full rounded border border-line bg-field py-0 pr-2 pl-7 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
@@ -511,7 +661,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
             setSortDir(shownSortDir === 'asc' ? 'desc' : 'asc')
           }}
         >
-          <SortDirIcon dir={shownSortDir} />
+          <AppIcon id={shownSortDir === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-narrow-wide'} />
         </button>
         <button
           type="button"
@@ -521,7 +671,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
           title={showTree ? 'Hide tree' : 'Show tree'}
           onClick={() => setShowTree((on) => !on)}
         >
-          <TreeIcon />
+          <AppIcon id="folder-tree" />
         </button>
         <button
           type="button"
@@ -531,7 +681,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
           title={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
           onClick={() => setPinSelected((on) => !on)}
         >
-          {pinSelected ? <EyeIcon /> : <EyeOffIcon />}
+          {pinSelected ? <AppIcon id="eye" /> : <AppIcon id="eye-off" />}
         </button>
         <button
           type="button"
@@ -539,9 +689,9 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
           aria-label="Refresh models"
           title="Refresh models (R)"
           disabled={busy}
-          onClick={() => void refreshKind(kind)}
+          onClick={() => void refreshKind(kind).then(() => loadTree())}
         >
-          <RefreshIcon />
+          <AppIcon id="refresh-cw" />
         </button>
       </div>
       <div
@@ -559,7 +709,32 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                 snap.current.treeScroll = event.currentTarget.scrollTop
               }}
             >
-              {tree.map((node) => renderNode(node))}
+              <GalleryTree
+                roots={tree}
+                query={query}
+                openDirs={openDirs}
+                extraNames={extraNames}
+                fileOps={fileOps}
+                externalDrag={dragIdent}
+                fileOn={(path) => {
+                  if (query.trim() === path) {
+                    return true
+                  }
+                  const ident = displayToIdent(path)
+                  return items.some((item) => isOn(item.path) && filePath(item) === ident)
+                }}
+                fileLabel={(path, name) => {
+                  const item = byTree.get(path)
+                  return item ? tileName(item) : name
+                }}
+                onClickDir={clickDir}
+                onClickFile={clickFile}
+                onMove={requestMove}
+                onRename={(path, name) => setRenaming({ path: displayToIdent(path), name })}
+                onReveal={(path) => void revealEntry(displayToIdent(path))}
+                onRemove={(path) => setPendingRemove(displayToIdent(path))}
+                onAdd={(folder) => setCreating({ folder: displayToIdent(folder), name: '' })}
+              />
             </div>
             <PaneSplitter
               value={treeWidth}
@@ -590,7 +765,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                 const preview = (
                   <TilePreview
                     className="w-full"
-                    src={item.thumb ? modelThumbUrl(kind, filePath(item), item.thumb) : null}
+                    src={item.thumb ? modelThumbUrl(kind, item.path, item.thumb) : null}
                     mark="?"
                     label={tileName(item)}
                     badge={strength || undefined}
@@ -607,13 +782,64 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                         <button
                           type="button"
                           title={item.path}
+                          draggable={fileOps}
                           className={['w-full rounded', selected ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : ''].join(' ')}
                           onClick={() => onSelect(item.path)}
+                          onContextMenu={(event) => {
+                            if (!fileOps) {
+                              return
+                            }
+                            event.preventDefault()
+                            setTileMenu({
+                              x: event.clientX,
+                              y: event.clientY,
+                              path: filePath(item),
+                              name: fileName(filePath(item)),
+                              fileTile: isFileTile(item),
+                            })
+                          }}
+                          onDragStart={(event) => {
+                            if (!fileOps) {
+                              event.preventDefault()
+                              return
+                            }
+                            event.dataTransfer.effectAllowed = 'move'
+                            event.dataTransfer.setData('text/plain', filePath(item))
+                            setDragIdent(filePath(item))
+                          }}
+                          onDragEnd={() => setDragIdent(null)}
                         >
                           {preview}
                         </button>
                       ) : (
-                        <div title={item.path} className="w-full rounded">
+                        <div
+                          title={item.path}
+                          draggable={fileOps}
+                          className="w-full rounded"
+                          onContextMenu={(event) => {
+                            if (!fileOps) {
+                              return
+                            }
+                            event.preventDefault()
+                            setTileMenu({
+                              x: event.clientX,
+                              y: event.clientY,
+                              path: filePath(item),
+                              name: fileName(filePath(item)),
+                              fileTile: isFileTile(item),
+                            })
+                          }}
+                          onDragStart={(event) => {
+                            if (!fileOps) {
+                              event.preventDefault()
+                              return
+                            }
+                            event.dataTransfer.effectAllowed = 'move'
+                            event.dataTransfer.setData('text/plain', filePath(item))
+                            setDragIdent(filePath(item))
+                          }}
+                          onDragEnd={() => setDragIdent(null)}
+                        >
                           {preview}
                         </div>
                       )}
@@ -627,7 +853,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                           disabled={filling === filePath(item)}
                           onClick={() => void downloadCivitai(filePath(item))}
                         >
-                          <DownloadIcon />
+                          <AppIcon id="download" />
                         </button>
                       ) : null}
                       <button
@@ -635,9 +861,9 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                         className="icon-btn"
                         aria-label="Model settings"
                         title="Model settings"
-                        onClick={() => setInfoItem({ ...item, path: filePath(item) })}
+                        onClick={() => setInfoItem(item)}
                       >
-                        <InfoIcon />
+                        <AppIcon id="info" />
                       </button>
                     </div>
                     </div>
@@ -682,6 +908,88 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
             },
           ]}
         />
+      ) : null}
+      {creating ? (
+        <GalleryCreateFolderDialog
+          folder={identToDisplay(creating.folder, extraNames)}
+          name={creating.name}
+          taken={siblingNames(tree, identToDisplay(creating.folder, extraNames)) ?? []}
+          busy={fileBusy}
+          onName={(name) => setCreating({ ...creating, name })}
+          onClose={() => setCreating(null)}
+          onCreate={() => void createFolder()}
+        />
+      ) : null}
+      {renaming ? (
+        <GalleryRenameDialog
+          name={renaming.name}
+          taken={siblingNames(tree, identToDisplay(parentIdent(renaming.path), extraNames)) ?? []}
+          busy={fileBusy}
+          onName={(name) => setRenaming({ ...renaming, name })}
+          onClose={() => setRenaming(null)}
+          onRename={() => void renameEntry()}
+        />
+      ) : null}
+      {pendingMove ? (
+        <ConfirmDialog
+          title="Move to another directory?"
+          body={`This moves the item from ${pendingMove.from} to ${pendingMove.to}.`}
+          onClose={() => setPendingMove(null)}
+          actions={[
+            { label: 'Cancel', onClick: () => setPendingMove(null) },
+            {
+              label: 'Move',
+              kind: 'primary',
+              onClick: () => void runMove(pendingMove.path, pendingMove.folder),
+            },
+          ]}
+        />
+      ) : null}
+      {pendingRemove ? (
+        <ConfirmDialog
+          title="Move to Trash?"
+          body="This can be restored from Settings → Trash."
+          onClose={() => setPendingRemove(null)}
+          actions={[
+            { label: 'Cancel', onClick: () => setPendingRemove(null) },
+            {
+              label: 'Remove',
+              kind: 'primary',
+              danger: true,
+              onClick: () => void runRemove(pendingRemove),
+            },
+          ]}
+        />
+      ) : null}
+      {tileMenu ? (
+        <ContextMenu x={tileMenu.x} y={tileMenu.y} onClose={() => setTileMenu(null)}>
+          {tileMenu.fileTile ? (
+            <ContextMenuItem
+              label="Rename"
+              onClick={() => {
+                setRenaming({ path: tileMenu.path, name: tileMenu.name })
+                setTileMenu(null)
+              }}
+            />
+          ) : null}
+          <ContextMenuItem
+            label="Show in Explorer"
+            onClick={() => {
+              void revealEntry(tileMenu.path)
+              setTileMenu(null)
+            }}
+          />
+          {tileMenu.fileTile ? (
+            <ContextMenuItem
+              label="Remove"
+              danger
+              onClick={() => {
+                setPendingRemove(tileMenu.path)
+                setTileMenu(null)
+              }}
+            />
+          ) : null}
+        </ContextMenu>
       ) : null}
     </div>
   )

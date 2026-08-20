@@ -1,4 +1,4 @@
-import { CloseIcon } from '@/components/CloseIcon.tsx'
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { ConfirmDialog, Dialog } from '@/components/Dialog.tsx'
 import { GlyphMark } from '@/components/GlyphMark.tsx'
 import { IconPicker } from '@/components/IconPicker.tsx'
@@ -14,21 +14,6 @@ import {
 import { useEffect, useState } from 'react'
 
 type Pending = { type: 'load' } | { type: 'switch'; id: string } | { type: 'close' }
-
-function PencilIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 14 14" aria-hidden="true">
-      <path
-        d="M8.2 2.5 11.5 5.8 5 12.3H1.7v-3.3Z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.2"
-        strokeLinejoin="round"
-      />
-      <path d="M6.8 3.9 10.1 7.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
-    </svg>
-  )
-}
 
 const ICON_BTN = 'flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink'
 
@@ -261,7 +246,7 @@ export function TemplatePicker({
         <div className="-mx-3 -mt-3 flex items-center gap-2 border-b border-line px-3 py-2">
           <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">Templates</span>
           <button type="button" className={ICON_BTN} aria-label="Close" onClick={requestClose}>
-            <CloseIcon />
+            <AppIcon id="x" />
           </button>
         </div>
         <div className="flex min-h-0 flex-1 gap-4">
@@ -326,7 +311,7 @@ export function TemplatePicker({
                     autoFocus
                   />
                   <button type="submit" className={ICON_BTN} aria-label="Save name" title="Save name">
-                    <PencilIcon />
+                    <AppIcon id="pencil" />
                   </button>
                 </form>
               ) : (
@@ -344,7 +329,7 @@ export function TemplatePicker({
                       title="Rename"
                       onClick={() => setRename(selected?.name ?? '')}
                     >
-                      <PencilIcon />
+                      <AppIcon id="pencil" />
                     </button>
                   )}
                 </>

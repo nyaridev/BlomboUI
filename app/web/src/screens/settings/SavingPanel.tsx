@@ -157,7 +157,7 @@ export function SavingPanel({ query = '' }: { query?: string }) {
             onChange={(e) => setGridName(e.target.value)}
             spellCheck={false}
           />
-          <p className="text-xs text-muted">Example: {previewPath(gridName)}.jpg</p>
+          <p className="text-xs text-muted">Example: {previewPath(gridName)}.png</p>
         </SettingsBlock>
         <SettingsBlock query={query} title="Folder" terms="grids folder jpg contact sheet output path">
           <input

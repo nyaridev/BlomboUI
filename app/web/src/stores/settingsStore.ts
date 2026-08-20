@@ -1,5 +1,6 @@
 import { create } from 'zustand'
-import { getSettings, saveSettings, type UserSettings } from '@/lib/api.ts'
+import { getSettings, saveSettings, type FolderDir, type UserSettings } from '@/lib/api.ts'
+import { LOCAL_ID, OUTPUT_ID } from '@/components/FolderList.tsx'
 import { defaultHiddenModelTypes, MODEL_TYPES } from '@/lib/modelTypes.ts'
 import { GENERATE_TABS, generateTabOrderList, type GenerateTab } from '@/screens/generate/tabs.ts'
 import {
@@ -9,6 +10,7 @@ import {
   type HideableMainTab,
   type OrderableMainTab,
 } from '@/app/appTabs.ts'
+import { type TimeDisplay } from '@/lib/timeDisplay.ts'
 
 export const THEMES = [
   { value: 'darker', label: 'Default' },
@@ -29,6 +31,13 @@ export const CIVITAI_SITES = [
 ] as const
 
 export type CivitaiSite = (typeof CIVITAI_SITES)[number]['value']
+
+export const TIME_DISPLAYS = [
+  { value: 'full', label: 'Full time' },
+  { value: 'ampm', label: 'AM/PM' },
+] as const
+
+export type { TimeDisplay }
 
 export function civitaiHost(site: CivitaiSite) {
   return site === 'civitai' ? 'civitai.com' : 'civitai.red'
@@ -60,7 +69,8 @@ export const SETTINGS_DEFAULTS = {
   batchGridFill: false,
   batchGridOnCancel: true,
   saveInterrupted: true,
-  interruptedInGrid: true,
+  interruptedInGrid: false,
+  galleryHideInterrupted: true,
   hiddenGenerateTabs: [] as GenerateTab[],
   hiddenMainTabs: [] as HideableMainTab[],
   mainTabOrder: [...ORDERABLE_MAIN_TABS] as OrderableMainTab[],
@@ -72,6 +82,7 @@ export const SETTINGS_DEFAULTS = {
   hiddenSchedulers: [] as string[],
   theme: 'darker' as Theme,
   civitaiSite: 'red' as CivitaiSite,
+  timeDisplay: 'full' as TimeDisplay,
   wildcardYamlByFilename: false,
   imagePath: '[workflow]/images/[date]',
   gridPath: '[workflow]/grids/[date]',
@@ -93,10 +104,19 @@ export const SETTINGS_DEFAULTS = {
     wildcards: 'asc',
   } as Record<GalleryViewKind, GallerySortDir>,
   galleryTileScale: 1,
+  galleryParentOnUnselect: true,
+  promptWeightStep: 0.1,
   loraStrengthMin: 0,
   loraStrengthMax: 1,
   loraSliderMin: -5,
   loraSliderMax: 5,
+  modelDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
+  wildcardDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
+  galleryDirs: [] as FolderDir[],
+  forceDownloadModelsLocal: true,
+  forceDownloadWildcardsLocal: true,
+  removedAfterHours: 48,
+  removedMaxGb: 100,
 }
 
 type SettingsState = typeof SETTINGS_DEFAULTS & {
@@ -110,6 +130,7 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setBatchGridOnCancel: (value: boolean) => void
   setSaveInterrupted: (value: boolean) => void
   setInterruptedInGrid: (value: boolean) => void
+  setGalleryHideInterrupted: (value: boolean) => void
   setHiddenGenerateTabs: (value: GenerateTab[]) => void
   setHiddenMainTabs: (value: HideableMainTab[]) => void
   setMainTabOrder: (value: OrderableMainTab[]) => void
@@ -121,6 +142,7 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setHiddenSchedulers: (value: string[]) => void
   setTheme: (value: Theme) => void
   setCivitaiSite: (value: CivitaiSite) => void
+  setTimeDisplay: (value: TimeDisplay) => void
   setWildcardYamlByFilename: (value: boolean) => void
   setImagePath: (value: string) => void
   setGridPath: (value: string) => void
@@ -134,10 +156,19 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setGallerySortKey: (kind: GalleryViewKind, value: GallerySortKey) => void
   setGallerySortDir: (kind: GalleryViewKind, value: GallerySortDir) => void
   setGalleryTileScale: (value: number) => void
+  setGalleryParentOnUnselect: (value: boolean) => void
+  setPromptWeightStep: (value: number) => void
   setLoraStrengthMin: (value: number) => void
   setLoraStrengthMax: (value: number) => void
   setLoraSliderMin: (value: number) => void
   setLoraSliderMax: (value: number) => void
+  setModelDirs: (value: FolderDir[]) => void
+  setWildcardDirs: (value: FolderDir[]) => void
+  setGalleryDirs: (value: FolderDir[]) => void
+  setForceDownloadModelsLocal: (value: boolean) => void
+  setForceDownloadWildcardsLocal: (value: boolean) => void
+  setRemovedAfterHours: (value: number) => void
+  setRemovedMaxGb: (value: number) => void
 }
 
 const KEYS = [
@@ -149,6 +180,7 @@ const KEYS = [
   'batchGridOnCancel',
   'saveInterrupted',
   'interruptedInGrid',
+  'galleryHideInterrupted',
   'hiddenGenerateTabs',
   'hiddenMainTabs',
   'mainTabOrder',
@@ -160,6 +192,7 @@ const KEYS = [
   'hiddenSchedulers',
   'theme',
   'civitaiSite',
+  'timeDisplay',
   'wildcardYamlByFilename',
   'imagePath',
   'gridPath',
@@ -173,10 +206,19 @@ const KEYS = [
   'gallerySortKey',
   'gallerySortDir',
   'galleryTileScale',
+  'galleryParentOnUnselect',
+  'promptWeightStep',
   'loraStrengthMin',
   'loraStrengthMax',
   'loraSliderMin',
   'loraSliderMax',
+  'modelDirs',
+  'wildcardDirs',
+  'galleryDirs',
+  'forceDownloadModelsLocal',
+  'forceDownloadWildcardsLocal',
+  'removedAfterHours',
+  'removedMaxGb',
 ] as const
 
 function same(a: unknown, b: unknown) {
@@ -261,6 +303,22 @@ function cleanLargeJpegMaxKb(raw: unknown) {
   return Math.max(256, Math.min(65536, Math.round(n)))
 }
 
+function cleanRemovedHours(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.removedAfterHours
+  }
+  return Math.max(1, Math.min(8760, Math.round(n)))
+}
+
+function cleanRemovedMaxGb(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.removedMaxGb
+  }
+  return Math.max(1, Math.min(10000, Math.round(n)))
+}
+
 function cleanTypes(raw: unknown): string[] {
   if (!Array.isArray(raw)) {
     return SETTINGS_DEFAULTS.hiddenModelTypes
@@ -283,6 +341,10 @@ function cleanTheme(raw: unknown): Theme {
 
 function cleanCivitaiSite(raw: unknown): CivitaiSite {
   return raw === 'civitai' ? 'civitai' : SETTINGS_DEFAULTS.civitaiSite
+}
+
+function cleanTimeDisplay(raw: unknown): TimeDisplay {
+  return raw === 'ampm' ? 'ampm' : SETTINGS_DEFAULTS.timeDisplay
 }
 
 function cleanPath(raw: unknown, fallback: string) {
@@ -357,12 +419,56 @@ function cleanTileScale(raw: unknown) {
   return Math.round(Math.min(2, Math.max(0.5, n)) * 10) / 10
 }
 
+function cleanPromptWeightStep(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.promptWeightStep
+  }
+  return Math.round(Math.min(1, Math.max(0.01, n)) * 100) / 100
+}
+
 function cleanLoraBound(raw: unknown, fallback: number) {
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(n)) {
     return fallback
   }
   return Math.round(Math.min(20, Math.max(-20, n)) * 100) / 100
+}
+
+function cleanDirs(raw: unknown): FolderDir[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const out: FolderDir[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') {
+      continue
+    }
+    const row = item as FolderDir
+    const id = String(row.id || '').trim().slice(0, 80)
+    const name = String(row.name || '').trim().slice(0, 40)
+    const path = String(row.path || '').trim().slice(0, 500)
+    if (!id || !name || seen.has(id)) {
+      continue
+    }
+    if (name.includes('/') || name.includes('\\')) {
+      continue
+    }
+    seen.add(id)
+    out.push({ id, name: id === LOCAL_ID ? 'Local' : name, path: id === LOCAL_ID ? '' : path })
+  }
+  return out
+}
+
+function ensureLocal(items: FolderDir[]): FolderDir[] {
+  const extras = items.filter((item) => item.id !== LOCAL_ID)
+  const index = items.findIndex((item) => item.id === LOCAL_ID)
+  const local: FolderDir = { id: LOCAL_ID, name: 'Local', path: '' }
+  if (index < 0) {
+    return [local, ...extras]
+  }
+  return items.map((item, i) => (i === index ? local : item))
 }
 
 function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
@@ -375,6 +481,10 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     batchGridOnCancel: typeof patch.batchGridOnCancel === 'boolean' ? patch.batchGridOnCancel : SETTINGS_DEFAULTS.batchGridOnCancel,
     saveInterrupted: typeof patch.saveInterrupted === 'boolean' ? patch.saveInterrupted : SETTINGS_DEFAULTS.saveInterrupted,
     interruptedInGrid: typeof patch.interruptedInGrid === 'boolean' ? patch.interruptedInGrid : SETTINGS_DEFAULTS.interruptedInGrid,
+    galleryHideInterrupted:
+      typeof patch.galleryHideInterrupted === 'boolean'
+        ? patch.galleryHideInterrupted
+        : SETTINGS_DEFAULTS.galleryHideInterrupted,
     hiddenGenerateTabs: patch.hiddenGenerateTabs ? cleanTabs(patch.hiddenGenerateTabs) : SETTINGS_DEFAULTS.hiddenGenerateTabs,
     hiddenMainTabs: patch.hiddenMainTabs ? cleanHiddenMainTabs(patch.hiddenMainTabs) : SETTINGS_DEFAULTS.hiddenMainTabs,
     mainTabOrder: patch.mainTabOrder ? cleanMainTabOrder(patch.mainTabOrder) : SETTINGS_DEFAULTS.mainTabOrder,
@@ -394,6 +504,7 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     hiddenSchedulers: patch.hiddenSchedulers ? cleanNames(patch.hiddenSchedulers) : SETTINGS_DEFAULTS.hiddenSchedulers,
     theme: patch.theme ? cleanTheme(patch.theme) : SETTINGS_DEFAULTS.theme,
     civitaiSite: patch.civitaiSite ? cleanCivitaiSite(patch.civitaiSite) : SETTINGS_DEFAULTS.civitaiSite,
+    timeDisplay: patch.timeDisplay ? cleanTimeDisplay(patch.timeDisplay) : SETTINGS_DEFAULTS.timeDisplay,
     wildcardYamlByFilename:
       typeof patch.wildcardYamlByFilename === 'boolean'
         ? patch.wildcardYamlByFilename
@@ -412,6 +523,14 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     gallerySortDir: patch.gallerySortDir ? cleanSortDirMap(patch.gallerySortDir) : SETTINGS_DEFAULTS.gallerySortDir,
     galleryTileScale:
       typeof patch.galleryTileScale === 'number' ? cleanTileScale(patch.galleryTileScale) : SETTINGS_DEFAULTS.galleryTileScale,
+    galleryParentOnUnselect:
+      typeof patch.galleryParentOnUnselect === 'boolean'
+        ? patch.galleryParentOnUnselect
+        : SETTINGS_DEFAULTS.galleryParentOnUnselect,
+    promptWeightStep:
+      typeof patch.promptWeightStep === 'number'
+        ? cleanPromptWeightStep(patch.promptWeightStep)
+        : SETTINGS_DEFAULTS.promptWeightStep,
     loraStrengthMin:
       typeof patch.loraStrengthMin === 'number'
         ? cleanLoraBound(patch.loraStrengthMin, SETTINGS_DEFAULTS.loraStrengthMin)
@@ -428,6 +547,29 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       typeof patch.loraSliderMax === 'number'
         ? cleanLoraBound(patch.loraSliderMax, SETTINGS_DEFAULTS.loraSliderMax)
         : SETTINGS_DEFAULTS.loraSliderMax,
+    modelDirs: Array.isArray(patch.modelDirs)
+      ? ensureLocal(cleanDirs(patch.modelDirs))
+      : SETTINGS_DEFAULTS.modelDirs,
+    wildcardDirs: Array.isArray(patch.wildcardDirs)
+      ? ensureLocal(cleanDirs(patch.wildcardDirs))
+      : SETTINGS_DEFAULTS.wildcardDirs,
+    galleryDirs: Array.isArray(patch.galleryDirs)
+      ? cleanDirs(patch.galleryDirs).filter((item) => item.id !== LOCAL_ID && item.id !== OUTPUT_ID)
+      : SETTINGS_DEFAULTS.galleryDirs,
+    forceDownloadModelsLocal:
+      typeof patch.forceDownloadModelsLocal === 'boolean'
+        ? patch.forceDownloadModelsLocal
+        : SETTINGS_DEFAULTS.forceDownloadModelsLocal,
+    forceDownloadWildcardsLocal:
+      typeof patch.forceDownloadWildcardsLocal === 'boolean'
+        ? patch.forceDownloadWildcardsLocal
+        : SETTINGS_DEFAULTS.forceDownloadWildcardsLocal,
+    removedAfterHours:
+      typeof patch.removedAfterHours === 'number'
+        ? cleanRemovedHours(patch.removedAfterHours)
+        : SETTINGS_DEFAULTS.removedAfterHours,
+    removedMaxGb:
+      typeof patch.removedMaxGb === 'number' ? cleanRemovedMaxGb(patch.removedMaxGb) : SETTINGS_DEFAULTS.removedMaxGb,
   }
 }
 
@@ -472,6 +614,9 @@ function pickLegacy(raw: unknown): UserSettings {
   if (typeof state.interruptedInGrid === 'boolean') {
     patch.interruptedInGrid = state.interruptedInGrid
   }
+  if (typeof state.galleryHideInterrupted === 'boolean') {
+    patch.galleryHideInterrupted = state.galleryHideInterrupted
+  }
   if (Array.isArray(state.hiddenGenerateTabs)) {
     patch.hiddenGenerateTabs = state.hiddenGenerateTabs as string[]
   }
@@ -504,6 +649,9 @@ function pickLegacy(raw: unknown): UserSettings {
   }
   if (typeof state.civitaiSite === 'string') {
     patch.civitaiSite = state.civitaiSite
+  }
+  if (typeof state.timeDisplay === 'string') {
+    patch.timeDisplay = state.timeDisplay
   }
   if (typeof state.wildcardYamlByFilename === 'boolean') {
     patch.wildcardYamlByFilename = state.wildcardYamlByFilename
@@ -544,6 +692,18 @@ function pickLegacy(raw: unknown): UserSettings {
   if (typeof state.galleryTileScale === 'number') {
     patch.galleryTileScale = state.galleryTileScale
   }
+  if (typeof state.galleryParentOnUnselect === 'boolean') {
+    patch.galleryParentOnUnselect = state.galleryParentOnUnselect
+  }
+  if (typeof state.promptWeightStep === 'number') {
+    patch.promptWeightStep = state.promptWeightStep
+  }
+  if (typeof state.removedAfterHours === 'number') {
+    patch.removedAfterHours = state.removedAfterHours
+  }
+  if (typeof state.removedMaxGb === 'number') {
+    patch.removedMaxGb = state.removedMaxGb
+  }
   return patch
 }
 
@@ -552,14 +712,16 @@ let timer = 0
 function flush() {
   const state = useSettingsStore.getState()
   if (!state.loaded) {
-    return
+    return Promise.resolve()
   }
-  void saveSettings(diff(state)).catch(() => {})
+  return saveSettings(diff(state)).then(() => undefined).catch(() => {})
 }
 
 function persist() {
   window.clearTimeout(timer)
-  timer = window.setTimeout(flush, 200)
+  timer = window.setTimeout(() => {
+    void flush()
+  }, 200)
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({
@@ -621,6 +783,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ interruptedInGrid })
     persist()
   },
+  setGalleryHideInterrupted: (galleryHideInterrupted) => {
+    set({ galleryHideInterrupted })
+    persist()
+  },
   setHiddenGenerateTabs: (hiddenGenerateTabs) => {
     set({ hiddenGenerateTabs: hiddenGenerateTabs.filter((item) => item !== 'Generation') })
     persist()
@@ -663,6 +829,10 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setCivitaiSite: (civitaiSite) => {
     set({ civitaiSite: cleanCivitaiSite(civitaiSite) })
+    persist()
+  },
+  setTimeDisplay: (timeDisplay) => {
+    set({ timeDisplay: cleanTimeDisplay(timeDisplay) })
     persist()
   },
   setWildcardYamlByFilename: (wildcardYamlByFilename) => {
@@ -721,6 +891,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ galleryTileScale: cleanTileScale(galleryTileScale) })
     persist()
   },
+  setGalleryParentOnUnselect: (galleryParentOnUnselect) => {
+    set({ galleryParentOnUnselect })
+    persist()
+  },
+  setPromptWeightStep: (promptWeightStep) => {
+    set({ promptWeightStep: cleanPromptWeightStep(promptWeightStep) })
+    persist()
+  },
   setLoraStrengthMin: (loraStrengthMin) => {
     set({ loraStrengthMin: cleanLoraBound(loraStrengthMin, SETTINGS_DEFAULTS.loraStrengthMin) })
     persist()
@@ -735,6 +913,34 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setLoraSliderMax: (loraSliderMax) => {
     set({ loraSliderMax: cleanLoraBound(loraSliderMax, SETTINGS_DEFAULTS.loraSliderMax) })
+    persist()
+  },
+  setModelDirs: (modelDirs) => {
+    set({ modelDirs: ensureLocal(cleanDirs(modelDirs)) })
+    persist()
+  },
+  setWildcardDirs: (wildcardDirs) => {
+    set({ wildcardDirs: ensureLocal(cleanDirs(wildcardDirs)) })
+    persist()
+  },
+  setGalleryDirs: (galleryDirs) => {
+    set({ galleryDirs: cleanDirs(galleryDirs).filter((item) => item.id !== LOCAL_ID && item.id !== OUTPUT_ID) })
+    persist()
+  },
+  setForceDownloadModelsLocal: (forceDownloadModelsLocal) => {
+    set({ forceDownloadModelsLocal })
+    persist()
+  },
+  setForceDownloadWildcardsLocal: (forceDownloadWildcardsLocal) => {
+    set({ forceDownloadWildcardsLocal })
+    persist()
+  },
+  setRemovedAfterHours: (removedAfterHours) => {
+    set({ removedAfterHours: cleanRemovedHours(removedAfterHours) })
+    persist()
+  },
+  setRemovedMaxGb: (removedMaxGb) => {
+    set({ removedMaxGb: cleanRemovedMaxGb(removedMaxGb) })
     persist()
   },
 }))

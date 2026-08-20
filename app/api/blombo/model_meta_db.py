@@ -33,16 +33,6 @@ CREATE TABLE IF NOT EXISTS thumbnail_index (
     tags_json TEXT NOT NULL DEFAULT '[]',
     PRIMARY KEY (kind, ident, context)
 );
-CREATE TABLE IF NOT EXISTS thumb_scopes (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    group_name TEXT NOT NULL DEFAULT '',
-    required_json TEXT NOT NULL,
-    optional_json TEXT NOT NULL,
-    any_groups_json TEXT NOT NULL,
-    exclude_json TEXT NOT NULL,
-    priority INTEGER NOT NULL DEFAULT 0
-);
 CREATE TABLE IF NOT EXISTS meta_state (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
@@ -210,15 +200,3 @@ def replace_thumb_index(data: dict[str, Any]) -> None:
                     )
 
     transaction(write)
-
-
-def load_scopes() -> list[sqlite3.Row]:
-    return query(
-        "SELECT id, name, group_name, required_json, optional_json, "
-        "any_groups_json, exclude_json, priority FROM thumb_scopes ORDER BY rowid"
-    )
-
-
-def scope_count() -> int:
-    row = query_one("SELECT COUNT(*) AS count FROM thumb_scopes")
-    return int(row["count"]) if row else 0

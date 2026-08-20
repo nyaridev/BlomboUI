@@ -186,12 +186,14 @@ export function GenerateScreen() {
   const jobId = job?.id
 
   useEffect(() => {
-    void getLatestJob().then((latest) => {
-      if (latest) {
-        setJob(latest)
-        setImageIds(idsFromJob(latest))
-      }
-    })
+    void getLatestJob()
+      .then((latest) => {
+        if (latest) {
+          setJob(latest)
+          setImageIds(idsFromJob(latest))
+        }
+      })
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -210,13 +212,13 @@ export function GenerateScreen() {
       }
     }
     if (!busy) {
-      void getJob(jobId).then(apply)
+      void getJob(jobId).then(apply).catch(() => {})
       return () => {
         gone = true
       }
     }
     const timer = window.setInterval(() => {
-      void getJob(jobId).then(apply)
+      void getJob(jobId).then(apply).catch(() => {})
     }, 500)
     return () => {
       gone = true
@@ -531,7 +533,6 @@ export function GenerateScreen() {
               maxRatio={PARAMS_MAX_RATIO}
             />
             <ImageStage
-              key={jobId || 'empty'}
               images={starting ? [] : imageIds}
               gridUrls={
                 !starting && jobId && (job?.grid_count || (job?.has_grid ? 1 : 0))

@@ -1,5 +1,5 @@
 import { Navigate, NavLink, useLocation, useNavigate } from 'react-router-dom'
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { GalleryScreen } from '../screens/gallery/GalleryScreen.tsx'
 import { GenerateScreen } from '../screens/generate/GenerateScreen.tsx'
 import { ModelsScreen } from '../screens/models/ModelsScreen.tsx'
@@ -46,8 +46,27 @@ function pane(on: boolean, fill = false) {
   return fill ? 'flex h-full min-h-0 flex-col' : 'flex min-h-full flex-col'
 }
 
+async function waitForHealth(up: boolean, tries: number) {
+  for (let i = 0; i < tries; i++) {
+    if (i) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250))
+    }
+    try {
+      await getHealth()
+      if (up) {
+        return
+      }
+    } catch {
+      if (!up) {
+        return
+      }
+    }
+  }
+}
+
 export function App() {
-  const reloading = useRef(false)
+  const reloadLock = useRef(false)
+  const [reloading, setReloading] = useState(false)
   const mainRef = useRef<HTMLElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
@@ -170,21 +189,15 @@ export function App() {
   }, [hiddenMainTabs, mainTabKeysFollowLayout, mainTabOrder, navigate, refreshModels])
 
   async function onReload() {
-    if (reloading.current) {
+    if (reloadLock.current) {
       return
     }
-    reloading.current = true
+    reloadLock.current = true
+    setReloading(true)
     await reloadApp()
-    for (let i = 0; i < 80; i++) {
-      await new Promise((resolve) => window.setTimeout(resolve, 250))
-      try {
-        await getHealth()
-        window.location.reload()
-        return
-      } catch {
-        continue
-      }
-    }
+    await waitForHealth(false, 24)
+    await waitForHealth(true, 80)
+    await new Promise((resolve) => window.setTimeout(resolve, 400))
     window.location.reload()
   }
 
@@ -275,6 +288,17 @@ export function App() {
         <FooterLinks comfyUrl={health?.comfy.url || 'http://127.0.0.1:8188'} />
       </footer>
       <ToastStack />
+      {reloading ? (
+        <div
+          className="reload-veil fixed inset-0 z-[80] flex items-center justify-center bg-black/55"
+          data-overlay
+        >
+          <span
+            className="h-10 w-10 animate-spin rounded-full border-2 border-white/25 border-t-white"
+            aria-label="Reloading"
+          />
+        </div>
+      ) : null}
     </div>
   )
 }

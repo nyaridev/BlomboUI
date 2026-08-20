@@ -78,6 +78,27 @@ def _error_json(exc: ApiError | comfy.ComfyError | templates.TemplateError) -> J
     return JSONResponse(status_code=exc.status, content={"code": exc.code, "message": str(exc)})
 
 
+_CACHE_LONG = {"Cache-Control": "public, max-age=31536000, immutable"}
+_CACHE_SHORT = {"Cache-Control": "private, max-age=120"}
+
+
+def _file_response(path: Path, media: str, *, immutable: bool = False) -> FileResponse:
+    return FileResponse(path, media_type=media, headers=_CACHE_LONG if immutable else _CACHE_SHORT)
+
+
+def _image_response(path: Path) -> FileResponse:
+    if not path:
+        raise ApiError("not_found", "image not found")
+    suffix = path.suffix.lower()
+    if suffix in {".jpg", ".jpeg"}:
+        media = "image/jpeg"
+    elif suffix == ".webp":
+        media = "image/webp"
+    else:
+        media = "image/png"
+    return _file_response(path, media)
+
+
 @app.exception_handler(ApiError)
 async def api_error(_request: Any, exc: ApiError) -> JSONResponse:
     return _error_json(exc)
@@ -429,7 +450,7 @@ def get_user_removed_thumb(item_id: str, context: str = "", mode: str = "exact",
         raise _removed_error(exc) from exc
     if not path:
         raise ApiError("not_found", "thumb not found")
-    return FileResponse(path, media_type=model_meta.thumb_media(path))
+    return _file_response(path, model_meta.thumb_media(path), immutable=True)
 
 
 @api.get("/user-removed/{item_id}/thumb-meta")
@@ -502,7 +523,7 @@ def get_model_thumb(kind: str, path: str, context: str = "", mode: str = "exact"
     file = model_thumbs.resolved_file(kind, path, key, view, use_global)
     if not file:
         raise ApiError("not_found", "thumb not found")
-    return FileResponse(file, media_type=model_meta.thumb_media(file))
+    return _file_response(file, model_meta.thumb_media(file), immutable=True)
 
 
 @api.get("/user-models/{kind}/thumb-meta")
@@ -775,7 +796,7 @@ def job_grid(job_id: str) -> FileResponse:
     path = jobs.grid_path(job_id, 0)
     if not path:
         raise ApiError("not_found", "grid not found")
-    return FileResponse(path, media_type="image/png" if path.suffix.lower() == ".png" else "image/jpeg")
+    return _file_response(path, "image/png" if path.suffix.lower() == ".png" else "image/jpeg")
 
 
 @api.get("/jobs/{job_id}/grid/{index}")
@@ -783,7 +804,7 @@ def job_grid_at(job_id: str, index: int) -> FileResponse:
     path = jobs.grid_path(job_id, index)
     if not path:
         raise ApiError("not_found", "grid not found")
-    return FileResponse(path, media_type="image/png" if path.suffix.lower() == ".png" else "image/jpeg")
+    return _file_response(path, "image/png" if path.suffix.lower() == ".png" else "image/jpeg")
 
 
 def _preview_response(data: bytes | None) -> Response:
@@ -810,19 +831,6 @@ def job_preview_step(job_id: str, step: int) -> Response:
     return _preview_response(jobs.preview_bytes(job_id, step))
 
 
-def _image_response(path: Path) -> FileResponse:
-    if not path:
-        raise ApiError("not_found", "image not found")
-    suffix = path.suffix.lower()
-    if suffix in {".jpg", ".jpeg"}:
-        media = "image/jpeg"
-    elif suffix == ".webp":
-        media = "image/webp"
-    else:
-        media = "image/png"
-    return FileResponse(path, media_type=media)
-
-
 @api.get("/gallery/items")
 def list_gallery_items() -> dict:
     return {"items": gallery.list_items()}
@@ -838,7 +846,7 @@ def gallery_item_thumb(ident: str) -> FileResponse:
     path = gallery.item_thumb(ident)
     if not path:
         raise ApiError("not_found", "image not found")
-    return FileResponse(path, media_type="image/jpeg")
+    return _file_response(path, "image/jpeg")
 
 
 @api.get("/gallery/items/{ident}/image")
@@ -865,7 +873,7 @@ def gallery_disk_thumb(ident: str) -> FileResponse:
     path = gallery.disk_thumb(ident)
     if not path:
         raise ApiError("not_found", "image not found")
-    return FileResponse(path, media_type="image/jpeg")
+    return _file_response(path, "image/jpeg")
 
 
 @api.get("/gallery/disk/{ident}/image")
@@ -881,7 +889,7 @@ def generation_thumb(gen_id: str) -> FileResponse:
     path = gallery.generation_thumb(gen_id)
     if not path:
         raise ApiError("not_found", "image not found")
-    return FileResponse(path, media_type="image/jpeg")
+    return _file_response(path, "image/jpeg")
 
 
 @api.get("/generations/{gen_id}/image")

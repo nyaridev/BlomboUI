@@ -124,6 +124,13 @@ async function readError(res: Response): Promise<string> {
   }
 }
 
+export function isUnreachable(err: unknown) {
+  if (!(err instanceof Error)) {
+    return false
+  }
+  return /failed to fetch|networkerror|load failed/i.test(err.message)
+}
+
 export type KSamplerChoices = {
   samplers: string[]
   schedulers: string[]

@@ -108,6 +108,7 @@ class ScopeTests(unittest.TestCase):
         self.assertFalse(source.exists())
         self.assertTrue((self.tmp / "blombo.sqlite").is_file())
         self.assertEqual(thumbnail_scopes.get_scope("aaaaaaaaaaaa")["priority"], 2)
+        self.assertFalse((self.tmp / "model_meta.sqlite").is_file())
 
     def test_scopes_use_one_sqlite_table(self) -> None:
         thumbnail_scopes.create_scope(
@@ -120,13 +121,59 @@ class ScopeTests(unittest.TestCase):
 
         tables = {
             str(row["name"])
-            for row in model_meta_db.query("SELECT name FROM sqlite_master WHERE type = 'table'")
+            for row in db.query("SELECT name FROM sqlite_master WHERE type = 'table'")
         }
 
         self.assertIn("thumb_scopes", tables)
         self.assertNotIn("scopes", tables)
         self.assertNotIn("scope_tags", tables)
         self.assertNotIn("scope_any_tags", tables)
+        self.assertFalse((self.tmp / "model_meta.sqlite").is_file())
+
+    def test_legacy_model_meta_scopes_move_to_main(self) -> None:
+        model_meta_db.connect()
+        model_meta_db.execute(
+            """
+            CREATE TABLE thumb_scopes (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                group_name TEXT NOT NULL DEFAULT '',
+                required_json TEXT NOT NULL,
+                optional_json TEXT NOT NULL,
+                any_groups_json TEXT NOT NULL,
+                exclude_json TEXT NOT NULL,
+                priority INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        model_meta_db.execute(
+            """
+            INSERT INTO thumb_scopes (
+                id, name, group_name, required_json, optional_json,
+                any_groups_json, exclude_json, priority
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                "aaaaaaaaaaaa",
+                "Ruby",
+                "Character",
+                json.dumps(["ruby rose"]),
+                "[]",
+                "[]",
+                "[]",
+                2,
+            ),
+        )
+
+        self.assertEqual(thumbnail_scopes.list_scopes()[1]["name"], "Ruby")
+        tables = {
+            str(row["name"])
+            for row in model_meta_db.query("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+        self.assertNotIn("thumb_scopes", tables)
+        row = db.query_one("SELECT name, priority FROM thumb_scopes WHERE id = ?", ("aaaaaaaaaaaa",))
+        self.assertEqual(row["name"], "Ruby")
+        self.assertEqual(row["priority"], 2)
 
     def test_rank_tags_optional_then_required(self) -> None:
         query = {"required": ["ruby rose"], "optional": ["skirt"], "anyGroups": [], "exclude": []}

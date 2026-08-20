@@ -48,19 +48,22 @@ def disk_thumb(ident: str) -> Path | None:
 def _thumb(src: Path, ident: str) -> Path | None:
     safe_ident = "".join(char if char.isalnum() or char in "._-" else "_" for char in ident)
     dest = THUMBS / f"{safe_ident}.jpg"
-    src_mtime = src.stat().st_mtime
-    if dest.is_file() and dest.stat().st_mtime >= src_mtime:
-        return dest
-    from PIL import Image
+    try:
+        src_mtime = src.stat().st_mtime
+        if dest.is_file() and dest.stat().st_mtime >= src_mtime:
+            return dest
+        from PIL import Image
 
-    THUMBS.mkdir(parents=True, exist_ok=True)
-    with Image.open(src) as image:
-        image.load()
-        if max(image.size) > THUMB_MAX:
-            image.thumbnail((THUMB_MAX, THUMB_MAX))
-        if image.mode != "RGB":
-            image = image.convert("RGB")
-        tmp = dest.with_suffix(".tmp")
-        image.save(tmp, "JPEG", quality=80, optimize=True)
-    tmp.replace(dest)
-    return dest
+        THUMBS.mkdir(parents=True, exist_ok=True)
+        with Image.open(src) as image:
+            image.load()
+            if max(image.size) > THUMB_MAX:
+                image.thumbnail((THUMB_MAX, THUMB_MAX))
+            if image.mode != "RGB":
+                image = image.convert("RGB")
+            tmp = dest.with_suffix(".tmp")
+            image.save(tmp, "JPEG", quality=80, optimize=True)
+        tmp.replace(dest)
+        return dest
+    except (OSError, ValueError, SyntaxError):
+        return None

@@ -87,6 +87,7 @@ export function ModelTile({
           label={spec.overlay && !empty ? name : undefined}
           badge={!empty && badge ? badge : undefined}
           warn={warn}
+          eager
           className={[
             spec.width,
             'transition-[width] duration-300 ease-out motion-reduce:transition-none',
@@ -94,12 +95,7 @@ export function ModelTile({
           ].join(' ')}
         />
         {empty ? (
-          <span
-            className={[
-              'pointer-events-none absolute inset-0 z-10 flex items-center text-muted',
-              style === 'compact' ? 'justify-start pl-px' : 'justify-center',
-            ].join(' ')}
-          >
+          <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-muted">
             <AppIcon id="plus" size={style === 'compact' ? 14 : 18} />
           </span>
         ) : null}

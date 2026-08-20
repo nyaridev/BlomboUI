@@ -13,6 +13,7 @@ import {
   renameWildcardEntry,
   revealWildcardFile,
   saveWildcardFile,
+  isUnreachable,
   removeEntry as trashEntry,
   type WildcardFile,
   type WildcardTreeNode,
@@ -148,8 +149,16 @@ export function WildcardManagerScreen() {
   }, [])
 
   useEffect(() => {
-    void loadTree().catch((err) => toast(err instanceof Error ? err.message : 'Could not load wildcards', 'error'))
-  }, [loadTree, wildcardFiles])
+    if (!active) {
+      return
+    }
+    void loadTree().catch((err) => {
+      if (isUnreachable(err)) {
+        return
+      }
+      toast(err instanceof Error ? err.message : 'Could not load wildcards', 'error')
+    })
+  }, [active, loadTree, wildcardFiles])
 
   const openFile = useCallback(async (path: string) => {
     const file = await getWildcardFile(path)

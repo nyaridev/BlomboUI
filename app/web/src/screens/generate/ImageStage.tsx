@@ -1,6 +1,6 @@
 import { LightboxView } from '@/components/LightboxView.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
-import { galleryItemImageUrl, type JobGalleryItem } from '@/lib/api.ts'
+import { galleryItemImageUrl, galleryItemThumbUrl, type JobGalleryItem } from '@/lib/api.ts'
 import { middleOpen } from '@/lib/openImage.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { GenerationInfo } from './GenerationInfo.tsx'
@@ -38,6 +38,7 @@ export function ImageStage({
   const [lightbox, setLightbox] = useState(false)
   const [failed, setFailed] = useState<Set<string>>(() => new Set())
   const [previewFailed, setPreviewFailed] = useState(false)
+  const [thumbFailed, setThumbFailed] = useState(false)
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
   const location = useLocation()
   const generate = location.pathname === '/'
@@ -46,7 +47,11 @@ export function ImageStage({
   const sourceKey = `${gridUrls.join('\n')}\n${images.join('\n')}`
   const items: ThumbItem[] = [
     ...gridUrls.map((src, i) => ({ key: `grid-${i}`, src })),
-    ...images.map((id) => ({ key: id, src: galleryItemImageUrl(id) })),
+    ...images.map((id) => ({
+      key: id,
+      src: galleryItemImageUrl(id),
+      thumb: galleryItemThumbUrl(id),
+    })),
   ].filter((item) => !failed.has(item.key))
   const current = items[index]
   const viewingGrid = Boolean(current?.key.startsWith('grid-'))
@@ -74,6 +79,10 @@ export function ImageStage({
   useEffect(() => {
     setPreviewFailed(false)
   }, [previewUrl])
+
+  useEffect(() => {
+    setThumbFailed(false)
+  }, [current?.thumb])
 
   useEffect(() => {
     if (wasBusy.current && !busy) {
@@ -128,14 +137,27 @@ export function ImageStage({
             onClick={() => setLightbox(true)}
             onMouseDown={(event) => middleOpen(event, current.src)}
           >
-            <img
-              key={current.key}
-              src={current.src}
-              alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
-              className={['h-full w-full object-contain', ready ? '' : 'invisible'].join(' ')}
-              onLoad={() => setLoadedSrc(current.src)}
-              onError={() => markFailed(current.key)}
-            />
+            <span className="relative block h-full w-full">
+              {current.thumb && !thumbFailed ? (
+                <img
+                  src={current.thumb}
+                  alt=""
+                  className={['absolute inset-0 h-full w-full object-contain', ready ? 'invisible' : ''].join(' ')}
+                  decoding="async"
+                  onError={() => setThumbFailed(true)}
+                />
+              ) : null}
+              <img
+                key={current.key}
+                src={current.src}
+                alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
+                className={['h-full w-full object-contain', ready ? '' : 'invisible'].join(' ')}
+                fetchPriority="high"
+                decoding="async"
+                onLoad={() => setLoadedSrc(current.src)}
+                onError={() => markFailed(current.key)}
+              />
+            </span>
           </button>
         ) : (
           <div className="flex h-full items-center justify-center text-sm text-muted">No image yet</div>

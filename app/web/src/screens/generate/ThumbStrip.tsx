@@ -5,6 +5,7 @@ import { middleOpen } from '@/lib/openImage.ts'
 export type ThumbItem = {
   key: string
   src: string
+  thumb?: string
 }
 
 type ThumbStripProps = {
@@ -71,10 +72,9 @@ export function ThumbStrip({ items, index, onSelect, onError }: ThumbStripProps)
             >
               <span className="block h-full w-full overflow-hidden rounded">
                 <img
-                  src={item.src}
+                  src={item.thumb || item.src}
                   alt=""
                   className="h-full w-full object-cover"
-                  loading="lazy"
                   decoding="async"
                   onError={() => onError?.(item.key)}
                 />

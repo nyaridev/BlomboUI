@@ -284,9 +284,6 @@ def _row_job(row: Any) -> dict[str, Any]:
         "payload": payload,
         "comfy_prompt_id": row["comfy_prompt_id"],
         "error": row["error"],
-        "generation_id": public[-1]["id"] if public else None,
-        "generation_ids": [item["id"] for item in public],
-        "generations": public,
         "gallery_id": public[-1]["id"] if public else None,
         "gallery_ids": [item["id"] for item in public],
         "gallery": public,
@@ -334,13 +331,6 @@ def latest_generation() -> dict[str, Any] | None:
     if not row:
         return None
     return dict(row)
-
-
-def list_generations(limit: int = 200, hide_interrupted: bool = False) -> list[dict[str, Any]]:
-    return [
-        {"id": row["id"], "created_at": row["created_at"]}
-        for row in gallery_cache.list_rows(limit, hide_interrupted)
-    ]
 
 
 def _is_interrupted(path: str, params_json: str | None = None) -> bool:

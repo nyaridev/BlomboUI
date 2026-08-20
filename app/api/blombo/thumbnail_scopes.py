@@ -4,16 +4,11 @@ import json
 import re
 import secrets
 from typing import Any
-from pathlib import Path
 
-from blombo import db, model_meta_db
-from blombo.paths import USER, USER_DATA
+from blombo import db
 
 GLOBAL_ID = "global"
 GLOBAL_NAME = "Global"
-FILE = USER / "model_meta" / "data" / "scopes.json"
-LEGACY = (USER_DATA / "scopes.json", USER / "model_meta" / "scopes.json")
-_READY_DB: str | None = None
 _ID = re.compile(r"^[a-f0-9]{12}$")
 _KEY = re.compile(r"^[a-f0-9]{12}(?:\+[a-f0-9]{12})*$")
 _WEIGHT = re.compile(r"^\((.*?)(?::\s*[-+]?\d+(?:\.\d+)?)?\)$")
@@ -292,98 +287,7 @@ def _load() -> list[dict[str, Any]]:
 
 
 def _ensure_db() -> None:
-    global _READY_DB
-    path = str(db.db_path())
     db.connect()
-    if _READY_DB == path:
-        return
-    _migrate_json()
-    _READY_DB = path
-
-
-def _scope_count() -> int:
-    row = db.query_one("SELECT COUNT(*) AS count FROM thumb_scopes")
-    return int(row["count"]) if row else 0
-
-
-def _migrate_json() -> None:
-    _migrate_model_meta_scopes()
-    if _scope_count() > 0:
-        _file().unlink(missing_ok=True)
-        return
-    path = _file()
-    if not path.is_file():
-        return
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return
-    raw_rows = data.get("scopes") if isinstance(data, dict) else data
-    if not isinstance(raw_rows, list):
-        return
-
-    rows: list[dict[str, Any]] = []
-    seen: set[str] = set()
-    for item in raw_rows:
-        if not isinstance(item, dict):
-            continue
-        ident = str(item.get("id") or "").strip().lower()
-        if ident == GLOBAL_ID or ident in seen:
-            continue
-        if not _ID.fullmatch(ident):
-            ident = secrets.token_hex(6)
-        row = _row(item, ident)
-        if not row["name"]:
-            continue
-        seen.add(ident)
-        rows.append(row)
-
-    def migrate(conn) -> None:
-        for item in rows:
-            _write_scope(conn, item)
-
-    db.transaction(migrate)
-    path.unlink(missing_ok=True)
-
-
-def _migrate_model_meta_scopes() -> None:
-    if not model_meta_db.db_path().is_file():
-        return
-    exists = model_meta_db.query_one(
-        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'thumb_scopes'"
-    )
-    if not exists:
-        return
-    rows = model_meta_db.query(
-        "SELECT id, name, group_name, required_json, optional_json, "
-        "any_groups_json, exclude_json, priority FROM thumb_scopes ORDER BY rowid"
-    )
-    if rows:
-
-        def migrate(conn) -> None:
-            conn.execute("DELETE FROM thumb_scopes")
-            for item in rows:
-                conn.execute(
-                    """
-                    INSERT INTO thumb_scopes (
-                        id, name, group_name, required_json, optional_json,
-                        any_groups_json, exclude_json, priority
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        item["id"],
-                        item["name"],
-                        item["group_name"],
-                        item["required_json"],
-                        item["optional_json"],
-                        item["any_groups_json"],
-                        item["exclude_json"],
-                        item["priority"],
-                    ),
-                )
-
-        db.transaction(migrate)
-    model_meta_db.execute("DROP TABLE IF EXISTS thumb_scopes")
 
 
 def _store(row: dict[str, Any], replace: bool = False) -> None:
@@ -432,12 +336,3 @@ def _json_value(raw: Any) -> Any:
         return json.loads(raw)
     except (TypeError, json.JSONDecodeError):
         return None
-
-
-def _file() -> Path:
-    if FILE.is_file():
-        return FILE
-    for path in LEGACY:
-        if path.is_file():
-            return path
-    return FILE

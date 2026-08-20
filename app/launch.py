@@ -176,8 +176,6 @@ def _yaml_model_block(ident: str, root: Path) -> str:
 def _user_model_dirs() -> list[tuple[str, Path]]:
     file = USER / "user_data" / "user_settings.json"
     if not file.is_file():
-        file = USER / "user_settings.json"
-    if not file.is_file():
         return []
     try:
         data = json.loads(file.read_text(encoding="utf-8"))

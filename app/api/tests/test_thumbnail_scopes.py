@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from blombo import db, model_meta_db, model_thumbs, removed, thumbnail_embed, thumbnail_scopes
+from blombo import db, model_thumbs, removed, thumbnail_embed, thumbnail_scopes
 
 
 def _png(color=(12, 80, 160)) -> bytes:
@@ -24,18 +24,12 @@ def _png(color=(12, 80, 160)) -> bytes:
 class ScopeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
-        meta = self.tmp / "model_meta"
-        thumbs = meta / "thumbnails"
+        thumbs = self.tmp / "model_thumbs"
         trash = self.tmp / "removed"
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
-            patch.object(model_meta_db, "_CONN", None),
-            patch.object(model_meta_db, "db_path", return_value=self.tmp / "model_meta.sqlite"),
-            patch.object(thumbnail_scopes, "FILE", meta / "scopes.json"),
-            patch.object(model_thumbs, "ROOT", meta),
             patch.object(model_thumbs, "THUMBS", thumbs),
-            patch.object(model_thumbs, "INDEX", meta / "data" / "thumbs.json"),
             patch.object(removed, "REMOVED", trash),
         ]
         for item in self.patches:
@@ -45,9 +39,6 @@ class ScopeTests(unittest.TestCase):
         if db._CONN is not None:
             db._CONN.close()
             db._CONN = None
-        if model_meta_db._CONN is not None:
-            model_meta_db._CONN.close()
-            model_meta_db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -81,35 +72,6 @@ class ScopeTests(unittest.TestCase):
         self.assertNotIn(ruby["id"], ids)
         self.assertIn(skirt["id"], ids)
 
-    def test_migrate_json_to_sqlite(self) -> None:
-        source = thumbnail_scopes.FILE
-        source.parent.mkdir(parents=True)
-        source.write_text(
-            json.dumps(
-                {
-                    "scopes": [
-                        {
-                            "id": "aaaaaaaaaaaa",
-                            "name": "Ruby",
-                            "group": "Character",
-                            "required": ["ruby rose"],
-                            "optional": [],
-                            "anyGroups": [["smile", "happy"]],
-                            "exclude": ["outdoors"],
-                            "priority": 2,
-                        }
-                    ]
-                }
-            ),
-            encoding="utf-8",
-        )
-
-        self.assertEqual(thumbnail_scopes.list_scopes()[1]["id"], "aaaaaaaaaaaa")
-        self.assertFalse(source.exists())
-        self.assertTrue((self.tmp / "blombo.sqlite").is_file())
-        self.assertEqual(thumbnail_scopes.get_scope("aaaaaaaaaaaa")["priority"], 2)
-        self.assertFalse((self.tmp / "model_meta.sqlite").is_file())
-
     def test_scopes_use_one_sqlite_table(self) -> None:
         thumbnail_scopes.create_scope(
             {
@@ -130,51 +92,6 @@ class ScopeTests(unittest.TestCase):
         self.assertNotIn("scope_any_tags", tables)
         self.assertFalse((self.tmp / "model_meta.sqlite").is_file())
 
-    def test_legacy_model_meta_scopes_move_to_main(self) -> None:
-        model_meta_db.connect()
-        model_meta_db.execute(
-            """
-            CREATE TABLE thumb_scopes (
-                id TEXT PRIMARY KEY,
-                name TEXT NOT NULL,
-                group_name TEXT NOT NULL DEFAULT '',
-                required_json TEXT NOT NULL,
-                optional_json TEXT NOT NULL,
-                any_groups_json TEXT NOT NULL,
-                exclude_json TEXT NOT NULL,
-                priority INTEGER NOT NULL DEFAULT 0
-            )
-            """
-        )
-        model_meta_db.execute(
-            """
-            INSERT INTO thumb_scopes (
-                id, name, group_name, required_json, optional_json,
-                any_groups_json, exclude_json, priority
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                "aaaaaaaaaaaa",
-                "Ruby",
-                "Character",
-                json.dumps(["ruby rose"]),
-                "[]",
-                "[]",
-                "[]",
-                2,
-            ),
-        )
-
-        self.assertEqual(thumbnail_scopes.list_scopes()[1]["name"], "Ruby")
-        tables = {
-            str(row["name"])
-            for row in model_meta_db.query("SELECT name FROM sqlite_master WHERE type = 'table'")
-        }
-        self.assertNotIn("thumb_scopes", tables)
-        row = db.query_one("SELECT name, priority FROM thumb_scopes WHERE id = ?", ("aaaaaaaaaaaa",))
-        self.assertEqual(row["name"], "Ruby")
-        self.assertEqual(row["priority"], 2)
-
     def test_rank_tags_optional_then_required(self) -> None:
         query = {"required": ["ruby rose"], "optional": ["skirt"], "anyGroups": [], "exclude": []}
         full = thumbnail_scopes.rank_tags(query, ["ruby rose", "skirt"])
@@ -190,15 +107,6 @@ class ScopeTests(unittest.TestCase):
             thumbnail_scopes.update_scope("global", {"name": "Nope"})
         with self.assertRaisesRegex(ValueError, "cannot delete"):
             thumbnail_scopes.delete_scope("global")
-
-    def test_migrate_unscoped_to_global(self) -> None:
-        dest = model_thumbs.THUMBS / "loras"
-        dest.mkdir(parents=True)
-        (dest / "foo.png").write_bytes(_png())
-        model_thumbs.migrate()
-        self.assertFalse((dest / "foo.png").exists())
-        self.assertTrue((dest / "foo" / "global.png").is_file())
-        self.assertGreater(model_thumbs.thumb_mtime("loras", "foo"), 0)
 
     def test_scoped_save_delete_and_exact_vs_likely(self) -> None:
         ruby = thumbnail_scopes.create_scope({"name": "Ruby", "required": ["ruby rose"]})

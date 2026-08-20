@@ -4,10 +4,9 @@ import json
 import re
 from typing import Any
 
-from blombo.paths import USER, USER_DATA
+from blombo.paths import USER_DATA
 
 FILE = USER_DATA / "user_settings.json"
-LEGACY = USER / "user_settings.json"
 IMAGE_PATH_DEFAULT = "[workflow]/images/[date]"
 GRID_PATH_DEFAULT = "[workflow]/grids/[date]"
 INTERRUPTED_PATH_DEFAULT = "[workflow]/interrupted/[date]"
@@ -475,7 +474,6 @@ def _name_template(raw: Any, default: str) -> str | None:
 
 
 def load() -> dict[str, Any]:
-    _migrate()
     if not FILE.is_file():
         _write({})
         return {}
@@ -491,13 +489,6 @@ def save(raw: Any) -> dict[str, Any]:
     data = _clean(raw)
     _write(data)
     return data
-
-
-def _migrate() -> None:
-    if FILE.is_file() or FILE != USER_DATA / "user_settings.json" or not LEGACY.is_file():
-        return
-    USER_DATA.mkdir(parents=True, exist_ok=True)
-    LEGACY.replace(FILE)
 
 
 def _write(data: dict[str, Any]) -> None:

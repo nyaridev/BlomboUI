@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import time
 from io import BytesIO
 from pathlib import Path
@@ -12,8 +11,6 @@ from blombo import thumbnail_embed, thumbnail_scopes
 
 ROOT = USER / "model_thumbs"
 THUMBS = ROOT
-LEGACY_ROOT = USER / "model_meta" / "thumbnails"
-INDEX = USER / "model_meta" / "data" / "thumbs.json"
 THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp")
 THUMB_MAX = 512
 _FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}
@@ -31,7 +28,6 @@ def thumb_paths(kind: str, ident: str, context: str = GLOBAL) -> list[Path]:
 
 
 def thumb_at(kind: str, ident: str, context: str = GLOBAL) -> Path | None:
-    migrate()
     for path in thumb_paths(kind, ident, context):
         if path.is_file():
             return path
@@ -66,7 +62,6 @@ def resolved_file(
     if not ident:
         return None
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
-    migrate()
     exact = thumb_at(kind, ident, key)
     if mode != "likely":
         if exact:
@@ -106,7 +101,6 @@ def save_thumb(kind: str, rel: str, data: bytes, context: str = GLOBAL, meta: di
     if not ident:
         raise ValueError("invalid path")
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
-    migrate()
     from PIL import Image
 
     try:
@@ -150,7 +144,6 @@ def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: 
     ident = _ident(rel)
     if not ident:
         raise ValueError("invalid path")
-    migrate()
     if all_contexts:
         folder = thumb_dir(kind, ident)
         if folder.is_dir():
@@ -172,7 +165,6 @@ def drop_scope(scope_id: str) -> None:
     name = str(scope_id or "").strip().lower()
     if not name or name == GLOBAL:
         return
-    migrate()
     data = _load_index()
     changed = False
     for kind, rows in list(data.items()):
@@ -201,7 +193,6 @@ def drop_scope(scope_id: str) -> None:
 
 
 def iter_idents(kind: str) -> list[str]:
-    migrate()
     folder = THUMBS / kind
     if not folder.is_dir():
         return []
@@ -220,7 +211,6 @@ def move_thumbs(kind: str, old: str, new: str) -> None:
     dest_ident = _ident(new)
     if not src_ident or not dest_ident or src_ident == dest_ident:
         return
-    migrate()
 
     def mapped(key: str) -> str | None:
         if key == src_ident:
@@ -257,7 +247,6 @@ def take(kind: str, ident: str, dest: Path) -> None:
     src = _ident(ident)
     if not src:
         return
-    migrate()
     dest.mkdir(parents=True, exist_ok=True)
     root = THUMBS / kind
     for thumb_ident in list(iter_idents(kind)):
@@ -283,7 +272,6 @@ def take(kind: str, ident: str, dest: Path) -> None:
 def put(kind: str, thumbs: Path) -> None:
     if not thumbs.is_dir():
         return
-    migrate()
     root = THUMBS / kind
     root.mkdir(parents=True, exist_ok=True)
     for file in thumbs.rglob("*"):
@@ -306,66 +294,7 @@ def contexts(kind: str, rel: str) -> dict[str, dict[str, Any]]:
     ident = _ident(rel)
     if not ident:
         return {}
-    migrate()
     return _ident_index(kind, ident)
-
-
-def migrate() -> None:
-    THUMBS.mkdir(parents=True, exist_ok=True)
-    if not THUMBS.is_dir():
-        return
-    _move_legacy_root()
-    _migrate_index()
-    for kind_dir in list(THUMBS.iterdir()):
-        if not kind_dir.is_dir():
-            continue
-        for path in list(kind_dir.rglob("*")):
-            if not path.is_file():
-                continue
-            if _context_of(path):
-                continue
-            ext = _thumb_ext(path.name)
-            if not ext:
-                continue
-            ident = path.relative_to(kind_dir).as_posix()[: -len(ext)]
-            ident = _ident(ident)
-            if not ident:
-                continue
-            dest = Path(str(thumb_dir(kind_dir.name, ident) / GLOBAL) + ext)
-            _relocate(path, dest)
-            _prune_empty(path.parent, kind_dir)
-    rebuild_index()
-
-
-def _move_legacy_root() -> None:
-    if not LEGACY_ROOT.is_dir():
-        return
-    for path in list(LEGACY_ROOT.rglob("*")):
-        if not path.is_file() or path.suffix.lower() not in THUMB_EXTS:
-            continue
-        try:
-            rel = path.relative_to(LEGACY_ROOT)
-        except ValueError:
-            continue
-        _relocate(path, THUMBS / rel)
-    _prune_empty(LEGACY_ROOT, LEGACY_ROOT.parent)
-
-
-def _migrate_index() -> None:
-    if model_meta_db.state("thumb_index_json_migrated") == "1":
-        return
-    data: dict[str, Any] = {}
-    if INDEX.is_file():
-        try:
-            raw = json.loads(INDEX.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            raw = {}
-        if isinstance(raw, dict):
-            data = raw
-        INDEX.unlink(missing_ok=True)
-    if data:
-        _write_index(data)
-    model_meta_db.set_state("thumb_index_json_migrated")
 
 
 def rebuild_index() -> None:

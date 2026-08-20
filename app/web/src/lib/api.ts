@@ -35,8 +35,6 @@ export type Job = {
   gallery_id: string | null
   gallery_ids: string[]
   gallery?: JobGalleryItem[]
-  generation_id: string | null
-  generation_ids: string[]
   has_grid: boolean
   grid_count: number
   created_at: string
@@ -46,8 +44,6 @@ export type Job = {
   job_progress: { value: number; max: number } | null
   has_preview: boolean
   preview_steps: number[]
-  generations?: JobGalleryItem[]
-  legacy_generations?: JobGalleryItem[]
 }
 
 export type JobLora = {

@@ -118,7 +118,7 @@ def thumb_file(
             return exact
         if fallback and key != model_thumbs.GLOBAL:
             return _trash_thumb(thumbs, ident, model_thumbs.GLOBAL)
-        return _legacy_thumb(thumbs, ident) if key == model_thumbs.GLOBAL else None
+        return None
     if exact:
         return exact
     query = thumbnail_scopes.query_for(thumbnail_scopes.parse_context(key))
@@ -134,7 +134,7 @@ def thumb_file(
     if best:
         return best[1]
     if fallback:
-        return _trash_thumb(thumbs, ident, model_thumbs.GLOBAL) or _legacy_thumb(thumbs, ident)
+        return _trash_thumb(thumbs, ident, model_thumbs.GLOBAL)
     return None
 
 
@@ -411,29 +411,12 @@ def _trash_thumb(thumbs: Path, ident: str, context: str) -> Path | None:
             path = Path(str(thumbs / ident / context) + ext)
             if path.is_file():
                 return path
-    if context == model_thumbs.GLOBAL:
-        return _legacy_thumb(thumbs, ident)
-    return None
-
-
-def _legacy_thumb(thumbs: Path, ident: str) -> Path | None:
-    if ident:
-        for ext in model_meta.THUMB_EXTS:
-            path = Path(str(thumbs / ident) + ext)
-            if path.is_file():
-                return path
-    if not thumbs.is_dir():
-        return None
-    for path in thumbs.rglob("*"):
-        if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS:
-            return path
     return None
 
 
 def _trash_thumbs(thumbs: Path, ident: str) -> list[Path]:
     if not thumbs.is_dir():
-        found = _legacy_thumb(thumbs, ident)
-        return [found] if found else []
+        return []
     out: list[Path] = []
     for folder in thumbs.iterdir():
         if not folder.is_dir():
@@ -443,8 +426,7 @@ def _trash_thumbs(thumbs: Path, ident: str) -> list[Path]:
         out.extend(path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS)
     if out:
         return out
-    found = _legacy_thumb(thumbs, ident)
-    return [found] if found else []
+    return []
 
 
 def _hours() -> int:

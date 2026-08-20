@@ -33,10 +33,6 @@ CREATE TABLE IF NOT EXISTS thumbnail_index (
     tags_json TEXT NOT NULL DEFAULT '[]',
     PRIMARY KEY (kind, ident, context)
 );
-CREATE TABLE IF NOT EXISTS meta_state (
-    key TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
 """
 
 
@@ -85,19 +81,6 @@ def transaction(callback: Callable[[sqlite3.Connection], T]) -> T:
         except Exception:
             conn.rollback()
             raise
-
-
-def state(key: str) -> str | None:
-    row = query_one("SELECT value FROM meta_state WHERE key = ?", (key,))
-    return str(row["value"]) if row else None
-
-
-def set_state(key: str, value: str = "1") -> None:
-    execute(
-        "INSERT INTO meta_state (key, value) VALUES (?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-        (key, value),
-    )
 
 
 def load_info(kind: str) -> dict[str, dict[str, Any]]:

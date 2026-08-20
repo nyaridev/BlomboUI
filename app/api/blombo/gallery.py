@@ -29,14 +29,6 @@ def item_thumb(ident: str) -> Path | None:
     return _thumb(src, ident)
 
 
-def generation_thumb(gen_id: str) -> Path | None:
-    return item_thumb(gen_id)
-
-
-def generation_image(gen_id: str) -> Path | None:
-    return item_image(gen_id)
-
-
 def disk_image(ident: str) -> Path | None:
     return item_image(ident)
 

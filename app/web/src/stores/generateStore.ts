@@ -345,8 +345,7 @@ export const useGenerateStore = create<GenerateState>()(
       name: 'blombo-generate',
       partialize: ({ viewedImageUrl: _viewed, ...rest }) => rest,
       merge: (persisted, current) => {
-        const incoming = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
-        const { modelLayout: _layout, ...rest } = incoming
+        const rest = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
         return {
           ...current,
           ...rest,

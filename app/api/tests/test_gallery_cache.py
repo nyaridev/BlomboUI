@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import shutil
-import sqlite3
 import tempfile
 import unittest
 from io import BytesIO
@@ -27,7 +26,6 @@ class GalleryCacheTests(unittest.TestCase):
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
-            patch.object(db, "_migrate_legacy_db"),
         ]
         for item in self.patches:
             item.start()
@@ -39,83 +37,6 @@ class GalleryCacheTests(unittest.TestCase):
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
-
-    def test_migrate_generations_to_gallery_and_job_outputs(self) -> None:
-        path = self.tmp / "image.png"
-        path.write_bytes(_png())
-        legacy = self.tmp / "blombo.sqlite"
-        conn = sqlite3.connect(legacy)
-        conn.executescript(
-            """
-            CREATE TABLE schema_version (version INTEGER NOT NULL);
-            INSERT INTO schema_version VALUES (5);
-            CREATE TABLE jobs (
-                id TEXT PRIMARY KEY,
-                status TEXT NOT NULL,
-                mode TEXT NOT NULL,
-                payload_json TEXT NOT NULL,
-                comfy_prompt_id TEXT,
-                error TEXT,
-                created_at TEXT NOT NULL,
-                started_at TEXT,
-                finished_at TEXT
-            );
-            CREATE TABLE generations (
-                id TEXT PRIMARY KEY,
-                job_id TEXT NOT NULL,
-                path TEXT NOT NULL,
-                root TEXT NOT NULL,
-                width INTEGER,
-                height INTEGER,
-                seed INTEGER,
-                checkpoint_name TEXT,
-                prompt TEXT,
-                negative_prompt TEXT,
-                params_json TEXT,
-                created_at TEXT NOT NULL,
-                favorite INTEGER NOT NULL DEFAULT 0
-            );
-            """
-        )
-        conn.execute(
-            "INSERT INTO jobs VALUES (?, 'completed', 'txt2img', ?, NULL, NULL, ?, NULL, ?)",
-            ("job-1", "{}", "2026-01-01T00:00:00Z", "2026-01-01T00:00:01Z"),
-        )
-        conn.execute(
-            "INSERT INTO generations VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (
-                "legacy-1",
-                "job-1",
-                str(path),
-                str(self.tmp),
-                16,
-                16,
-                42,
-                "model.safetensors",
-                "prompt",
-                "negative",
-                json.dumps({"prompt": "prompt", "seed": 42}),
-                "2026-01-01T00:00:01Z",
-                0,
-            ),
-        )
-        conn.commit()
-        conn.close()
-
-        db.connect()
-        row = db.query_one("SELECT * FROM gallery_items WHERE id = ?", ("legacy-1",))
-        self.assertIsNotNone(row)
-        self.assertEqual(row["path"], str(path))
-        columns = {
-            str(item["name"])
-            for item in db.query("PRAGMA table_info(gallery_items)")
-        }
-        self.assertNotIn("legacy_id", columns)
-        job = db.query_one("SELECT payload_json FROM jobs WHERE id = ?", ("job-1",))
-        self.assertIsNotNone(job)
-        outputs = json.loads(job["payload_json"])["outputs"]
-        self.assertEqual(outputs[0]["id"], "legacy-1")
-        self.assertFalse(db.query("SELECT name FROM sqlite_master WHERE name = 'generations'"))
 
     def test_retention_keeps_active_and_500_terminal_jobs(self) -> None:
         db.connect()

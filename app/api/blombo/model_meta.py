@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-import json
 import math
 import time
 from pathlib import Path
 
 from blombo import model_meta_db, model_thumbs
-from blombo.paths import USER
 
 OPTIONS = (
     "Anima",
@@ -82,13 +80,8 @@ OPTIONS = (
     "SD3",
 )
 
-ROOT = USER / "model_meta"
-DATA = ROOT / "data"
-THUMBS = model_thumbs.THUMBS
 THUMB_EXTS = model_thumbs.THUMB_EXTS
-THUMB_MAX = model_thumbs.THUMB_MAX
 _ALLOWED = frozenset(OPTIONS)
-_migrated = False
 
 
 def _ident(rel: str) -> str | None:
@@ -103,58 +96,6 @@ def _file_ident(rel: str) -> str | None:
     if not ident:
         return None
     return ident.split("#", 1)[0]
-
-
-def _migrate() -> None:
-    global _migrated
-    if _migrated:
-        return
-    model_meta_db.connect()
-    model_thumbs.migrate()
-    if model_meta_db.state("info_json_migrated") != "1":
-        for kind in ("checkpoints", "loras", "vae", "controlnet", "embeddings", "wildcards"):
-            if model_meta_db.query_one("SELECT 1 FROM model_info WHERE kind = ? LIMIT 1", (kind,)):
-                continue
-            source = next((path for path in (*_info_file_candidates(kind),) if path.is_file()), None)
-            if not source:
-                continue
-            try:
-                raw = json.loads(source.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError):
-                continue
-            if not isinstance(raw, dict):
-                continue
-            data: dict[str, dict] = {}
-            for key, value in raw.items():
-                ident = _ident(str(key))
-                if ident:
-                    row = _row(value)
-                    if row != _blank_row():
-                        data[ident] = row
-            model_meta_db.replace_info(kind, data)
-            source.unlink(missing_ok=True)
-        model_meta_db.set_state("info_json_migrated")
-    _migrated = True
-
-
-def migrate() -> None:
-    _migrate()
-
-
-def _info_file(kind: str) -> Path:
-    return DATA / f"{kind}.json"
-
-
-def _info_file_candidates(kind: str) -> tuple[Path, ...]:
-    return (
-        _info_file(kind),
-        ROOT / f"{kind}.json",
-        USER / "model_types" / f"{kind}.json",
-    )
-
-
-def _legacy_info_files(kind: str) -> tuple[Path, Path]:
-    return ROOT / f"{kind}.json", USER / "model_types" / f"{kind}.json"
 
 
 def _clean_types(raw: object) -> list[str]:
@@ -200,33 +141,11 @@ def _info_out(row: dict) -> dict[str, object]:
     }
 
 
-def _row(raw: object) -> dict:
-    if isinstance(raw, list):
-        return {**_blank_row(), "types": _clean_types(raw)}
-    if isinstance(raw, dict):
-        try:
-            stamp = int(raw.get("modified") or 0)
-        except (TypeError, ValueError):
-            stamp = 0
-        return {
-            "types": _clean_types(raw.get("types")),
-            "modified": max(0, stamp),
-            "prompt": str(raw.get("prompt") or ""),
-            "negative_prompt": str(raw.get("negative_prompt") or ""),
-            "notes": str(raw.get("notes") or ""),
-            "strength": _strength(raw["strength"]) if "strength" in raw else 1.0,
-            "slider": bool(raw.get("slider")),
-        }
-    return _blank_row()
-
-
 def _load(kind: str) -> dict[str, dict]:
-    _migrate()
     return model_meta_db.load_info(kind)
 
 
 def _write(kind: str, data: dict[str, dict]) -> None:
-    _migrate()
     model_meta_db.replace_info(kind, data)
 
 
@@ -319,7 +238,6 @@ def set_info(
 
 
 def thumb_file(kind: str, rel: str, context: str = model_thumbs.GLOBAL) -> Path | None:
-    _migrate()
     return model_thumbs.thumb_file(kind, rel, context)
 
 
@@ -426,7 +344,6 @@ def reconcile(kind: str, present: list[str]) -> None:
 
 
 def thumb_mtime(kind: str, rel: str, context: str = model_thumbs.GLOBAL) -> int:
-    _migrate()
     return model_thumbs.thumb_mtime(kind, rel, context)
 
 
@@ -435,13 +352,11 @@ def thumb_media(path: Path) -> str:
 
 
 def save_thumb(kind: str, rel: str, data: bytes, context: str = model_thumbs.GLOBAL, meta: dict | None = None) -> int:
-    _migrate()
     stamp = model_thumbs.save_thumb(kind, rel, data, context, meta)
     touch(kind, rel)
     return stamp
 
 
 def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: bool = False) -> None:
-    _migrate()
     model_thumbs.delete_thumb(kind, rel, context, all_contexts)
     touch(kind, rel)

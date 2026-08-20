@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from blombo import autocomplete, civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, model_thumbs, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, thumbnail_embed, thumbnail_scopes, wildcard_files
+from blombo import autocomplete, civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, model_meta_db, model_thumbs, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, thumbnail_embed, thumbnail_scopes, wildcard_files
 from blombo.paths import RUNTIME, VERSION, launcher_env
 
 
@@ -23,7 +23,7 @@ class ApiError(Exception):
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.connect()
-    model_meta.migrate()
+    model_meta_db.connect()
     thumbnail_scopes.list_scopes()
     tag_complete.schedule_rebuild()
     hashes.start()
@@ -857,17 +857,6 @@ def gallery_item_image(ident: str) -> FileResponse:
     return _image_response(path)
 
 
-@api.get("/generations")
-def list_generations() -> dict:
-    return {"generations": gallery.list_items()}
-
-
-@api.get("/generations/latest")
-def latest_generation() -> dict:
-    row = jobs.latest_generation()
-    return {"generation": row}
-
-
 @api.get("/gallery/disk/{ident}/thumb")
 def gallery_disk_thumb(ident: str) -> FileResponse:
     path = gallery.disk_thumb(ident)
@@ -879,22 +868,6 @@ def gallery_disk_thumb(ident: str) -> FileResponse:
 @api.get("/gallery/disk/{ident}/image")
 def gallery_disk_image(ident: str) -> FileResponse:
     path = gallery.disk_image(ident)
-    if not path:
-        raise ApiError("not_found", "image not found")
-    return _image_response(path)
-
-
-@api.get("/generations/{gen_id}/thumb")
-def generation_thumb(gen_id: str) -> FileResponse:
-    path = gallery.generation_thumb(gen_id)
-    if not path:
-        raise ApiError("not_found", "image not found")
-    return _file_response(path, "image/jpeg")
-
-
-@api.get("/generations/{gen_id}/image")
-def generation_image(gen_id: str) -> FileResponse:
-    path = gallery.generation_image(gen_id)
     if not path:
         raise ApiError("not_found", "image not found")
     return _image_response(path)

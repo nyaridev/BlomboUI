@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from blombo import db
-from blombo.paths import USER, WORKFLOWS
+from blombo.paths import WORKFLOWS
 
 DEFAULT_ID = "default"
 _SAFE_WORKFLOW = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -27,7 +27,6 @@ _ICON_COLORS = (
 )
 BUILTIN_ICON = {"kind": "icon", "id": "layout-template", "color": "accent"}
 CUSTOM_ICON = {"kind": "icon", "id": "bookmark", "color": "ink"}
-_READY_DB: str | None = None
 
 _KEYS = {
     "prompt": str,
@@ -205,82 +204,7 @@ def _save(workflow: str, items: list[dict[str, Any]], apply: list[str]) -> None:
 
 
 def _ensure_db() -> None:
-    global _READY_DB
-    path = str(db.db_path())
     db.connect()
-    if _READY_DB == path:
-        return
-    _READY_DB = path
-    try:
-        _migrate_json()
-    except Exception:
-        _READY_DB = None
-        raise
-
-
-def _migrate_json() -> None:
-    root = USER / "workflow_templates"
-    if not root.is_dir():
-        return
-    pending: list[tuple[Path, str, list[dict[str, Any]], list[str]]] = []
-    for path in sorted(root.glob("*.json")):
-        try:
-            ident = _workflow_id(path.stem)
-        except TemplateError:
-            continue
-        existing = db.query_one(
-            "SELECT 1 FROM workflow_templates WHERE workflow = ? "
-            "UNION ALL SELECT 1 FROM workflow_template_state WHERE workflow = ? LIMIT 1",
-            (ident, ident),
-        )
-        if existing:
-            continue
-        parsed = _read_json(path, ident)
-        if parsed is None:
-            continue
-        items, apply = parsed
-        pending.append((path, ident, items, apply))
-
-    def migrate(conn) -> None:
-        for _path, ident, items, apply in pending:
-            _write_workflow(conn, ident, items, apply)
-
-    db.transaction(migrate)
-    for path, _ident, _items, _apply in pending:
-        path.unlink(missing_ok=True)
-
-
-def _read_json(path: Path, workflow: str) -> tuple[list[dict[str, Any]], list[str]] | None:
-    defaults = default_apply(workflow)
-    try:
-        data = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return None
-    raw_items = data.get("templates") if isinstance(data, dict) else None
-    items: list[dict[str, Any]] = []
-    seen_ids: set[str] = set()
-    migrated: list[str] | None = None
-    if isinstance(raw_items, list):
-        for item in raw_items:
-            if not isinstance(item, dict):
-                continue
-            item_id = str(item.get("id") or "").strip()
-            name = str(item.get("name") or item_id).strip()
-            if not item_id or item_id.lower() == DEFAULT_ID or item_id in seen_ids:
-                continue
-            if migrated is None and "apply" in item:
-                migrated = _clean_apply(item.get("apply"), defaults)
-            entry = {"id": item_id, "name": name or item_id, "params": _clean_params(item.get("params"))}
-            icon = _clean_icon(item.get("icon"))
-            if icon:
-                entry["icon"] = icon
-            seen_ids.add(item_id)
-            items.append(entry)
-    if isinstance(data, dict) and "apply" in data:
-        apply = _clean_apply(data.get("apply"), defaults)
-    else:
-        apply = migrated if migrated is not None else defaults
-    return items, apply
 
 
 def _write_workflow(conn, workflow: str, items: list[dict[str, Any]], apply: list[str]) -> None:

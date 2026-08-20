@@ -17,13 +17,6 @@ UA = "BlomboUI"
 def csv_root() -> Path:
     path = USER / "autocompletion"
     path.mkdir(parents=True, exist_ok=True)
-    old = path / "csv"
-    if old.is_dir():
-        for item in old.iterdir():
-            if item.is_file() and NAME_RE.fullmatch(item.name):
-                dest = path / item.name
-                if not dest.exists():
-                    item.replace(dest)
     return path
 
 

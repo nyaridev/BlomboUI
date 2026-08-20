@@ -33,7 +33,8 @@ user/output/*
 
 user/gallery/*
 !user/gallery/.gitkeep
-user/gallery_thumbs/
+user/gallery_thumbs/*
+!user/gallery_thumbs/.gitkeep
 user/removed/*
 !user/removed/.gitkeep
 

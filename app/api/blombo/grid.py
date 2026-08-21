@@ -38,8 +38,10 @@ def save_contact_sheet(
     rows: int = 0,
     fill: bool = False,
     comment: str = "",
+    fmt: str = "jpg",
 ) -> None:
     from PIL import Image
+    from blombo import pnginfo
 
     images = [Image.open(path).convert("RGBA") for path in paths]
     cell_w, cell_h = max(images, key=lambda image: image.size[0] * image.size[1]).size
@@ -53,11 +55,23 @@ def save_contact_sheet(
     if sheet.width > max_edge or sheet.height > max_edge:
         sheet.thumbnail((max_edge, max_edge))
     dest.parent.mkdir(parents=True, exist_ok=True)
-    extra: dict = {}
-    if comment:
-        from PIL.PngImagePlugin import PngInfo
+    fmt = "jpg" if fmt in {"jpg", "jpeg"} else fmt
+    if fmt not in {"png", "jpg", "webp"}:
+        fmt = "jpg"
+    q = max(1, min(100, int(quality)))
+    if fmt == "png":
+        extra: dict = {}
+        if comment:
+            from PIL.PngImagePlugin import PngInfo
 
-        info = PngInfo()
-        info.add_text("parameters", comment)
-        extra["pnginfo"] = info
-    sheet.save(dest, "PNG", optimize=True, **extra)
+            info = PngInfo()
+            info.add_text("parameters", comment)
+            extra["pnginfo"] = info
+        sheet.save(dest, "PNG", **extra)
+        return
+    rgb = pnginfo._rgb(sheet)
+    opts: dict = {"quality": q}
+    exif = pnginfo.jpeg_exif(comment) if comment else None
+    if exif is not None:
+        opts["exif"] = exif
+    rgb.save(dest, "WEBP" if fmt == "webp" else "JPEG", **opts)

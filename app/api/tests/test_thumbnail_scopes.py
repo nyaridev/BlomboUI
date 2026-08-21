@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from blombo import db, model_thumbs, removed, thumbnail_embed, thumbnail_scopes
+from blombo import db, issues, model_meta_db, model_thumbs, removed, thumbnail_embed, thumbnail_scopes
 
 
 def _png(color=(12, 80, 160)) -> bytes:
@@ -29,6 +29,8 @@ class ScopeTests(unittest.TestCase):
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
+            patch.object(model_meta_db, "_CONN", None),
+            patch.object(model_meta_db, "db_path", return_value=self.tmp / "model_meta.sqlite"),
             patch.object(model_thumbs, "THUMBS", thumbs),
             patch.object(removed, "REMOVED", trash),
         ]
@@ -39,6 +41,9 @@ class ScopeTests(unittest.TestCase):
         if db._CONN is not None:
             db._CONN.close()
             db._CONN = None
+        if model_meta_db._CONN is not None:
+            model_meta_db._CONN.close()
+            model_meta_db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -55,17 +60,20 @@ class ScopeTests(unittest.TestCase):
         b = "bbbbbbbbbbbb"
         self.assertEqual(thumbnail_scopes.context_key([b, a]), f"{a}+{b}")
         self.assertEqual(thumbnail_scopes.parse_context(f"{a}+{b}"), [a, b])
+        self.assertEqual(thumbnail_scopes.ordered_ids([b, a, b, "global"]), [b, a])
 
     def test_match_and_auto_ids(self) -> None:
-        ruby = thumbnail_scopes.create_scope({"name": "Ruby Rose", "group": "Character", "required": ["ruby rose"]})
-        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "group": "Clothing", "required": ["skirt"]})
+        ruby = thumbnail_scopes.create_scope(
+            {"name": "Ruby Rose", "group": "Character", "anyGroups": [["ruby rose"]]}
+        )
+        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "group": "Clothing", "anyGroups": [["skirt"]]})
         knees = thumbnail_scopes.create_scope({"name": "On Knees", "anyGroups": [["on knees", "kneeling"]]})
         ids = thumbnail_scopes.auto_ids("ruby rose, skirt, kneeling, outdoors")
         self.assertIn(ruby["id"], ids)
         self.assertIn(skirt["id"], ids)
         self.assertIn(knees["id"], ids)
         marin = thumbnail_scopes.create_scope(
-            {"name": "Marin", "group": "Character", "required": ["marin kitagawa"], "priority": 2}
+            {"name": "Marin", "group": "Character", "anyGroups": [["marin kitagawa"]], "priority": 2}
         )
         ids = thumbnail_scopes.auto_ids("marin kitagawa, ruby rose, skirt")
         self.assertIn(marin["id"], ids)
@@ -76,8 +84,7 @@ class ScopeTests(unittest.TestCase):
         thumbnail_scopes.create_scope(
             {
                 "name": "Ruby",
-                "required": ["ruby rose"],
-                "anyGroups": [["smile", "happy"]],
+                "anyGroups": [["ruby rose"], ["smile", "happy"]],
             }
         )
 
@@ -92,15 +99,51 @@ class ScopeTests(unittest.TestCase):
         self.assertNotIn("scope_any_tags", tables)
         self.assertFalse((self.tmp / "model_meta.sqlite").is_file())
 
-    def test_rank_tags_optional_then_required(self) -> None:
-        query = {"required": ["ruby rose"], "optional": ["skirt"], "anyGroups": [], "exclude": []}
-        full = thumbnail_scopes.rank_tags(query, ["ruby rose", "skirt"])
-        required = thumbnail_scopes.rank_tags(query, ["ruby rose"])
-        missing = thumbnail_scopes.rank_tags(query, ["skirt"])
-        excluded = thumbnail_scopes.rank_tags({**query, "exclude": ["outdoors"]}, ["ruby rose", "skirt", "outdoors"])
-        self.assertTrue(full and required and full > required)
-        self.assertIsNone(missing)
-        self.assertIsNone(excluded)
+    def test_rank_thumb_optional_chips(self) -> None:
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})
+        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "anyGroups": [["skirt"]]})
+        ruby_key = thumbnail_scopes.context_key([ruby["id"]])
+        skirt_key = thumbnail_scopes.context_key([skirt["id"]])
+        pair = thumbnail_scopes.context_key([ruby["id"], skirt["id"]])
+        ids = thumbnail_scopes.parse_context(pair)
+        full = thumbnail_scopes.rank_thumb(ids, pair, ["ruby rose", "skirt"], [skirt["id"]])
+        only_ruby = thumbnail_scopes.rank_thumb(ids, ruby_key, ["ruby rose"], [skirt["id"]])
+        only_skirt = thumbnail_scopes.rank_thumb(ids, skirt_key, ["skirt"], [skirt["id"]])
+        both_required = thumbnail_scopes.rank_thumb(ids, ruby_key, ["ruby rose"], [])
+        self.assertTrue(full and only_ruby and full > only_ruby)
+        self.assertIsNone(only_skirt)
+        self.assertIsNone(both_required)
+
+    def test_likely_optional_scope_falls_back_to_required(self) -> None:
+        fern = thumbnail_scopes.create_scope({"name": "Fern", "anyGroups": [["fern"]]})
+        skirt = thumbnail_scopes.create_scope({"name": "Pleated Skirt", "anyGroups": [["pleated skirt"]]})
+        mini = thumbnail_scopes.create_scope({"name": "Miniskirt", "anyGroups": [["miniskirt"]]})
+        fern_key = thumbnail_scopes.context_key([fern["id"]])
+        mixed = thumbnail_scopes.context_key([fern["id"], mini["id"]])
+        skirt_key = thumbnail_scopes.context_key([skirt["id"]])
+        query = thumbnail_scopes.context_key([fern["id"], skirt["id"]])
+        model_thumbs.save_thumb(
+            "loras", "char.safetensors", _png((10, 200, 10)), mixed, {"tags": ["miniskirt"]}
+        )
+        model_thumbs.save_thumb(
+            "loras",
+            "char.safetensors",
+            _png((200, 10, 10)),
+            fern_key,
+            {"tags": ["fern (sousou no frieren)"]},
+        )
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((10, 10, 200)), "global", {"tags": []})
+        model_thumbs.save_thumb(
+            "loras", "char.safetensors", _png((9, 9, 9)), skirt_key, {"tags": ["pleated skirt"]}
+        )
+        self.assertIsNone(model_thumbs.resolved_file("loras", "char.safetensors", query, "likely", False))
+        likely = model_thumbs.resolved_file("loras", "char.safetensors", query, "likely", False, [skirt["id"]])
+        self.assertTrue(likely and likely.stem == fern_key)
+        model_thumbs.delete_thumb("loras", "char.safetensors", fern_key)
+        model_thumbs.delete_thumb("loras", "char.safetensors", mixed)
+        self.assertIsNone(model_thumbs.resolved_file("loras", "char.safetensors", query, "likely", False, [skirt["id"]]))
+        fallback = model_thumbs.resolved_file("loras", "char.safetensors", query, "likely", True, [skirt["id"]])
+        self.assertTrue(fallback and fallback.stem == "global")
 
     def test_global_protected(self) -> None:
         with self.assertRaisesRegex(ValueError, "cannot edit"):
@@ -109,9 +152,9 @@ class ScopeTests(unittest.TestCase):
             thumbnail_scopes.delete_scope("global")
 
     def test_scoped_save_delete_and_exact_vs_likely(self) -> None:
-        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "required": ["ruby rose"]})
-        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "required": ["skirt"]})
-        outdoor = thumbnail_scopes.create_scope({"name": "Outdoors", "required": ["outdoors"]})
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})
+        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "anyGroups": [["skirt"]]})
+        outdoor = thumbnail_scopes.create_scope({"name": "Outdoors", "anyGroups": [["outdoors"]]})
         pair = thumbnail_scopes.context_key([ruby["id"], skirt["id"]])
         triple = thumbnail_scopes.context_key([ruby["id"], skirt["id"], outdoor["id"]])
         model_thumbs.save_thumb("loras", "char.safetensors", _png((200, 10, 10)), pair, {"tags": ["ruby rose", "skirt"]})
@@ -142,7 +185,7 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(payload.get("context"), triple)
 
     def test_manual_save_keeps_selected_context(self) -> None:
-        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "required": ["ruby rose"]})
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})
         key = thumbnail_scopes.context_key([ruby["id"]])
         model_thumbs.save_thumb("loras", "x.safetensors", _png(), key, {"tags": [], "origin": "fileinfo"})
         path = model_thumbs.thumb_at("loras", "x.safetensors", key)
@@ -152,7 +195,7 @@ class ScopeTests(unittest.TestCase):
         self.assertEqual(payload.get("tags"), [])
 
     def test_wildcard_tag_move_and_drop_scope(self) -> None:
-        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "required": ["ruby rose"]})
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})
         key = thumbnail_scopes.context_key([ruby["id"]])
         ident = "chars.yaml#ruby rose"
         model_thumbs.save_thumb("wildcards", ident, _png(), key, {"tags": ["ruby rose"]})
@@ -166,7 +209,7 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(model_thumbs.thumb_at("wildcards", "people.yaml#ruby rose", "global"))
 
     def test_take_put_roundtrip(self) -> None:
-        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "required": ["ruby rose"]})
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})
         key = thumbnail_scopes.context_key([ruby["id"]])
         model_thumbs.save_thumb("loras", "held.safetensors", _png(), key, {"tags": ["ruby rose"]})
         model_thumbs.save_thumb("loras", "held.safetensors", _png((1, 2, 3)), "global", {"tags": []})
@@ -178,8 +221,8 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(model_thumbs.thumb_at("loras", "held.safetensors", "global"))
 
     def test_trash_preview_modes(self) -> None:
-        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "required": ["ruby rose"]})
-        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "required": ["skirt"]})
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})
+        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "anyGroups": [["skirt"]]})
         pair = thumbnail_scopes.context_key([ruby["id"], skirt["id"]])
         uid = str(uuid.uuid4())
         folder = removed.REMOVED / uid
@@ -206,6 +249,47 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(fallback and fallback.name.startswith("global"))
         likely = removed.thumb_file(uid, pair, "likely", False)
         self.assertTrue(likely and likely.name.startswith(pair))
+
+    def test_duplicate_scope_names_are_issues(self) -> None:
+        thumbnail_scopes.create_scope({"name": "Fern", "anyGroups": [["fern"]]})
+        thumbnail_scopes.create_scope({"name": "fern", "anyGroups": [["plant"]]})
+        rows = issues._duplicate_scope_names()
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["code"], "duplicate_name")
+        self.assertEqual(rows[0]["kind"], "scopes")
+        self.assertEqual(len(rows[0]["paths"]), 2)
+
+    def test_list_saved_thumbs(self) -> None:
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby"]]})
+        key = thumbnail_scopes.context_key([ruby["id"]])
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((20, 80, 20)), key, {"tags": ["ruby"]})
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((20, 20, 80)), "global", {"tags": []})
+        rows = model_thumbs.list_saved()
+        self.assertTrue(any(item["context"] == key and item["kind"] == "loras" for item in rows))
+        self.assertTrue(any(item["context"] == "global" and item["scopes"] == [] for item in rows))
+
+    def test_gif_and_mp4_thumbnails(self) -> None:
+        gif = BytesIO()
+        Image.new("P", (8, 8), 2).save(gif, format="GIF")
+        model_thumbs.save_thumb("loras", "animated.safetensors", gif.getvalue(), media="image/gif")
+        mp4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
+        model_thumbs.save_thumb("loras", "video.safetensors", mp4, media="video/mp4")
+
+        gif_path = model_thumbs.thumb_at("loras", "animated.safetensors")
+        mp4_path = model_thumbs.thumb_at("loras", "video.safetensors")
+        self.assertTrue(gif_path and gif_path.suffix == ".gif")
+        self.assertTrue(mp4_path and mp4_path.suffix == ".mp4")
+        self.assertEqual(model_thumbs.thumb_media(gif_path), "image/gif")
+        self.assertEqual(model_thumbs.thumb_media(mp4_path), "video/mp4")
+
+    def test_delete_thumb_when_model_missing(self) -> None:
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby"]]})
+        key = thumbnail_scopes.context_key([ruby["id"]])
+        model_thumbs.save_thumb("loras", "gone.safetensors", _png((20, 80, 20)), key, {"tags": ["ruby"]})
+        shutil.rmtree(model_thumbs.thumb_dir("loras", "gone.safetensors"))
+        self.assertTrue(any(item["path"] == "gone.safetensors" for item in model_thumbs.list_saved()))
+        model_thumbs.delete_thumb("loras", "gone.safetensors", key)
+        self.assertFalse(any(item["path"] == "gone.safetensors" for item in model_thumbs.list_saved()))
 
 
 if __name__ == "__main__":

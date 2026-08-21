@@ -4,6 +4,9 @@ import { useVisible } from '@/lib/visible.ts'
 export const TILE_GRAD = 'bg-gradient-to-tr from-field via-line to-muted/45'
 export const TILE_PATTERN =
   'bg-[linear-gradient(45deg,rgb(255_255_255_/_0.08)_25%,transparent_25%_75%,rgb(255_255_255_/_0.08)_75%),linear-gradient(45deg,rgb(255_255_255_/_0.08)_25%,transparent_25%_75%,rgb(255_255_255_/_0.08)_75%)] bg-size-[18px_18px] bg-position-[0_0,9px_9px]'
+export const TILE_GLOW = 'shadow-[0_0_10px_rgb(255_255_255_/_0.45)]'
+export const TILE_GLOW_IN = 'shadow-[inset_0_0_14px_2px_rgb(255_255_255_/_0.75)]'
+export const TILE_ON = `ring-2 ring-inset ring-white ${TILE_GLOW_IN}`
 
 export function TilePreview({
   src,
@@ -14,6 +17,11 @@ export function TilePreview({
   badge,
   warn = false,
   eager = false,
+  glow = false,
+  selected = false,
+  media = '',
+  onLoad,
+  onError,
   className = '',
 }: {
   src?: string | null
@@ -24,6 +32,11 @@ export function TilePreview({
   badge?: string
   warn?: boolean
   eager?: boolean
+  glow?: boolean
+  selected?: boolean
+  media?: string
+  onLoad?: () => void
+  onError?: () => void
   className?: string
 }) {
   const [broken, setBroken] = useState(false)
@@ -31,37 +44,72 @@ export function TilePreview({
 
   useEffect(() => {
     setBroken(false)
-  }, [src])
+  }, [media, src])
 
-  const showImg = Boolean(src) && !broken
+  const showMedia = Boolean(src) && !broken
+  const mediaType = media || mediaFromUrl(src)
+  const isVideo = mediaType.toLowerCase().startsWith('video/')
 
   return (
     <span
       ref={ref}
       className={[
-        'relative flex aspect-[2/3] items-center overflow-hidden rounded text-muted',
-        markAlign === 'start' ? 'justify-start pl-px' : 'justify-center',
+        'relative block aspect-[2/3] overflow-hidden rounded text-muted',
         markClass,
         TILE_GRAD,
         className,
       ].join(' ')}
     >
-      {showImg && (eager || visible) ? (
-        <img
-          src={src || ''}
-          alt=""
-          className="absolute inset-0 h-full w-full object-cover"
-          loading="lazy"
-          decoding="async"
-          onError={() => setBroken(true)}
-        />
+      {showMedia && (eager || visible) ? (
+        isVideo ? (
+          <video
+            src={src || ''}
+            className="absolute inset-0 h-full w-full max-h-none max-w-none object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            onLoadedData={onLoad}
+            onError={() => {
+              setBroken(true)
+              onError?.()
+            }}
+          />
+        ) : (
+          <img
+            src={src || ''}
+            alt=""
+            className="absolute inset-0 h-full w-full max-h-none max-w-none object-cover"
+            loading="lazy"
+            decoding="async"
+            onLoad={onLoad}
+            onError={() => {
+              setBroken(true)
+              onError?.()
+            }}
+          />
+        )
       ) : (
         <>
           <span aria-hidden="true" className={['pointer-events-none absolute inset-0', TILE_PATTERN].join(' ')} />
-          <span className={['relative z-10', markAlign === 'start' ? '-ml-0.5' : ''].join(' ')}>{mark}</span>
+          <span
+            className={[
+              'absolute inset-0 z-10 flex items-center',
+              markAlign === 'start' ? 'justify-start pl-px' : 'justify-center',
+            ].join(' ')}
+          >
+            <span className={markAlign === 'start' ? '-ml-0.5' : ''}>{mark}</span>
+          </span>
         </>
       )}
       {warn ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-red/40" /> : null}
+      {selected || glow ? (
+        <span
+          aria-hidden="true"
+          className={['pointer-events-none absolute inset-0 z-20 rounded', selected ? TILE_ON : TILE_GLOW_IN].join(' ')}
+        />
+      ) : null}
       {label ? (
         <span className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] text-ink">
           {label}
@@ -74,4 +122,20 @@ export function TilePreview({
       ) : null}
     </span>
   )
+}
+
+function mediaFromUrl(src?: string | null) {
+  if (!src) {
+    return ''
+  }
+  try {
+    const url = new URL(src, window.location.href)
+    const declared = url.searchParams.get('media')
+    if (declared) {
+      return declared
+    }
+    return url.pathname.toLowerCase().endsWith('.mp4') ? 'video/mp4' : ''
+  } catch {
+    return ''
+  }
 }

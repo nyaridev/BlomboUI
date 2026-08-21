@@ -310,7 +310,7 @@ export function FileInfoScreen() {
       })
       setThumb(library.kind, library.path, tick)
       await useModelsStore.getState().pull()
-      navigate('/', { state: { tab: library.kind === 'loras' ? 'Lora' : 'Base Model' } })
+      navigate('/', { state: { tab: library.kind === 'loras' ? 'LoRa' : 'Base Model' } })
     } catch {
       /* keep current preview */
     } finally {

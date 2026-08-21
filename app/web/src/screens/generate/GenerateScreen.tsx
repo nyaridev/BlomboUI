@@ -15,10 +15,10 @@ import {
   jobGridUrl,
   type Job,
 } from '@/lib/api.ts'
-import { loraNameMatches, parseLoraHits, toggleLoraPrompts } from '@/lib/loraTags.ts'
-import { parseWildcardTags, toggleWildcard, wildcardMatches } from '@/lib/wildcardTags.ts'
+import { loraNameMatches, parseLoraHits, replaceLoraAt, toggleLoraPrompts } from '@/lib/loraTags.ts'
+import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/wildcardTags.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { nextSeed, usedSeed, useGenerateStore } from '@/stores/generateStore.ts'
+import { nextSeed, usedSeed, useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
@@ -114,6 +114,19 @@ function progressLabel(pct: number, eta: number | null): string {
   return `${Math.round(pct)}% ETA: ${eta}s`
 }
 
+function tabForSwap(swap: ModelSwap | null) {
+  if (!swap) {
+    return null
+  }
+  if (swap.slot === 'lora') {
+    return 'LoRa'
+  }
+  if (swap.slot === 'wildcard') {
+    return 'Wildcards'
+  }
+  return 'Base Model'
+}
+
 export function GenerateScreen() {
   const prompt = useGenerateStore((s) => s.prompt)
   const negativePrompt = useGenerateStore((s) => s.negativePrompt)
@@ -139,9 +152,16 @@ export function GenerateScreen() {
   const setPrompt = useGenerateStore((s) => s.setPrompt)
   const setNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const setCheckpoint = useGenerateStore((s) => s.setCheckpoint)
+  const vae = useGenerateStore((s) => s.vae)
+  const textEncoder = useGenerateStore((s) => s.textEncoder)
+  const setVae = useGenerateStore((s) => s.setVae)
+  const setTextEncoder = useGenerateStore((s) => s.setTextEncoder)
+  const swapTarget = useGenerateStore((s) => s.swapTarget)
+  const setSwapTarget = useGenerateStore((s) => s.setSwapTarget)
   const batchGrid = useSettingsStore((s) => s.batchGrid)
   const batchGridMax = useSettingsStore((s) => s.batchGridMax)
   const batchGridQuality = useSettingsStore((s) => s.batchGridQuality)
+  const gridFormat = useSettingsStore((s) => s.gridFormat)
   const batchGridRows = useSettingsStore((s) => s.batchGridRows)
   const batchGridFill = useSettingsStore((s) => s.batchGridFill)
   const batchGridOnCancel = useSettingsStore((s) => s.batchGridOnCancel)
@@ -153,6 +173,7 @@ export function GenerateScreen() {
   const checkpoints = useModelsStore((s) => s.checkpoints)
   const loraItems = useModelsStore((s) => s.loras)
   const wildcardItems = useModelsStore((s) => s.wildcards)
+  const vaeItems = useModelsStore((s) => s.vae)
 
   const health = useHealthStore((s) => s.health)
 
@@ -168,9 +189,12 @@ export function GenerateScreen() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    const incoming = location.state as { tab?: GenerateTab } | null
-    if (incoming?.tab && GENERATE_TABS.includes(incoming.tab)) {
-      setTab(incoming.tab)
+    const incoming = location.state as { tab?: string } | null
+    if (incoming?.tab) {
+      const next = (incoming.tab === 'Lora' ? 'LoRa' : incoming.tab) as GenerateTab
+      if (GENERATE_TABS.includes(next)) {
+        setTab(next)
+      }
     }
   }, [location.key])
   const busy = starting || job?.status === 'queued' || job?.status === 'running'
@@ -266,6 +290,7 @@ export function GenerateScreen() {
         batch_grid: batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
+        batch_grid_format: gridFormat,
         batch_grid_rows: batchGridRows,
         batch_grid_fill: batchGridFill,
         batch_grid_on_cancel: batchGridOnCancel,
@@ -351,6 +376,9 @@ export function GenerateScreen() {
         }
         navigate('/')
         setTab(id)
+        if (tabForSwap(swapTarget) && tabForSwap(swapTarget) !== id) {
+          setSwapTarget(null)
+        }
         return
       }
       if (overlayOpen()) {
@@ -381,7 +409,7 @@ export function GenerateScreen() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, restart])
+  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, restart, swapTarget])
 
   const comfyOk = health?.comfy.reachable === true
   const canGenerate = comfyOk && Boolean(checkpoint.trim())
@@ -420,6 +448,21 @@ export function GenerateScreen() {
         : formatDuration(seconds)
   const visibleTabs = orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
+  const swapTab = tabForSwap(swapTarget)
+  const loraHits = parseLoraHits(prompt)
+  const wildHits = parseWildcardTags(prompt)
+  const loraFocus =
+    swapTarget?.slot === 'lora' && swapTarget.index >= 0
+      ? loraItems.find((row) => loraNameMatches(loraHits[swapTarget.index]?.name ?? '', row.path))?.path
+      : undefined
+  const wildFocus =
+    swapTarget?.slot === 'wildcard' && swapTarget.index >= 0
+      ? wildcardItems.find((row) => wildcardMatches(row, wildHits[swapTarget.index]?.name ?? ''))?.path
+      : undefined
+  const baseKind = swapTarget?.slot === 'vae' ? 'vae' : 'checkpoints'
+  const baseItems = swapTarget?.slot === 'vae' ? vaeItems : checkpoints
+  const baseValue =
+    swapTarget?.slot === 'textEncoder' ? textEncoder : swapTarget?.slot === 'vae' ? vae : checkpoint
 
   return (
     <div
@@ -489,7 +532,12 @@ export function GenerateScreen() {
                   ? 'border-line border-b-panel bg-panel text-ink'
                   : 'border-transparent text-muted hover:text-ink',
               ].join(' ')}
-              onClick={() => setTab(item)}
+              onClick={() => {
+                setTab(item)
+                if (swapTab && swapTab !== item) {
+                  setSwapTarget(null)
+                }
+              }}
             >
               {item}
             </button>
@@ -532,7 +580,11 @@ export function GenerateScreen() {
               }
               gallery={starting ? [] : (job?.gallery ?? [])}
               busy={busy}
-              previewUrl={!starting && busy && job?.has_preview && jobId ? jobPreviewUrl(jobId, progressValue) : null}
+              previewUrl={
+                !starting && busy && job?.has_preview && jobId
+                  ? jobPreviewUrl(jobId, job.preview_rev ?? job.preview_steps.at(-1) ?? 0)
+                  : null
+              }
               progressPct={progressPct}
               progressLabel={currentLabel}
               jobProgressPct={jobPct}
@@ -543,24 +595,63 @@ export function GenerateScreen() {
           {shownTab === 'Base Model' ? (
             <div className="flex-1">
               <GalleryView
-                kind="checkpoints"
-                items={checkpoints}
-                value={checkpoint}
-                onSelect={setCheckpoint}
+                kind={baseKind}
+                items={baseItems}
+                value={baseValue}
+                onSelect={(path) => {
+                  if (swapTarget?.slot === 'textEncoder') {
+                    setTextEncoder(path)
+                  } else if (swapTarget?.slot === 'vae') {
+                    setVae(path)
+                  } else {
+                    setCheckpoint(path)
+                  }
+                  setSwapTarget(null)
+                }}
               />
             </div>
           ) : null}
-          {shownTab === 'Lora' ? (
+          {shownTab === 'LoRa' ? (
             <div className="flex-1">
               <GalleryView
                 kind="loras"
                 items={loraItems}
                 selected={selectedLoraPaths(prompt, loraItems)}
+                focus={loraFocus}
                 onSelect={(path) => {
                   const item = loraItems.find((row) => row.path === path)
-                  const next = toggleLoraPrompts(prompt, negativePrompt, path, item?.prompt || '', '', item?.strength ?? 1)
+                  if (swapTarget?.slot === 'lora' && swapTarget.index >= 0) {
+                    const hit = loraHits[swapTarget.index]
+                    const old = hit
+                      ? loraItems.find((row) => loraNameMatches(hit.name, row.path))
+                      : null
+                    const next = replaceLoraAt(
+                      prompt,
+                      negativePrompt,
+                      swapTarget.index,
+                      path,
+                      item?.prompt || '',
+                      item?.negative_prompt || '',
+                      hit?.strength ?? item?.strength ?? 1,
+                      old?.prompt || '',
+                      old?.negative_prompt || '',
+                    )
+                    setPrompt(next.prompt)
+                    setNegativePrompt(next.negativePrompt)
+                    setSwapTarget(null)
+                    return
+                  }
+                  const next = toggleLoraPrompts(
+                    prompt,
+                    negativePrompt,
+                    path,
+                    item?.prompt || '',
+                    item?.negative_prompt || '',
+                    item?.strength ?? 1,
+                  )
                   setPrompt(next.prompt)
                   setNegativePrompt(next.negativePrompt)
+                  setSwapTarget(null)
                 }}
               />
             </div>
@@ -571,11 +662,19 @@ export function GenerateScreen() {
                 kind="wildcards"
                 items={wildcardItems}
                 selected={selectedWildcardPaths(prompt, wildcardItems)}
+                focus={wildFocus}
                 onSelect={(path) => {
                   const item = wildcardItems.find((row) => row.path === path)
-                  if (item) {
-                    setPrompt(toggleWildcard(prompt, item))
+                  if (!item) {
+                    return
                   }
+                  if (swapTarget?.slot === 'wildcard' && swapTarget.index >= 0) {
+                    setPrompt(replaceWildcardAt(prompt, swapTarget.index, item))
+                    setSwapTarget(null)
+                    return
+                  }
+                  setPrompt(toggleWildcard(prompt, item))
+                  setSwapTarget(null)
                 }}
               />
             </div>

@@ -147,6 +147,39 @@ function removeLoraBlock(prompt: string, name: string, extraPositive: string) {
   return cutLoraHit(prompt, hit, extraPositive)
 }
 
+export function replaceLoraAt(
+  prompt: string,
+  negative: string,
+  index: number,
+  path: string,
+  extraPositive = '',
+  extraNegative = '',
+  strength?: number,
+  oldExtraPositive = '',
+  oldExtraNegative = '',
+) {
+  const hit = parseLoraHits(prompt)[index]
+  if (!hit) {
+    return toggleLoraPrompts(prompt, negative, path, extraPositive, extraNegative, strength ?? 1)
+  }
+  if (loraNameMatches(hit.name, path)) {
+    return { prompt, negativePrompt: negative }
+  }
+  const name = loraStem(path)
+  const used = strength ?? hit.strength
+  const tag = `<lora:${name}:${formatLoraStrength(used)}>`
+  const chunk = extraPositive.trim() ? `${tag}, ${extraPositive.trim()}` : tag
+  const cleaned = cutLoraHit(prompt, hit, oldExtraPositive)
+  const insertAt = Math.min(hit.start, cleaned.length)
+  const before = cleaned.slice(0, insertAt).replace(/[ \t,]+$/, '')
+  const after = cleaned.slice(insertAt).replace(/^[ \t,]+/, '')
+  const parts = [before, chunk, after].filter((part) => part.trim())
+  return {
+    prompt: tidyPrompt(parts.join(', ')),
+    negativePrompt: appendPromptChunk(removeTrailingTags(negative, oldExtraNegative), extraNegative),
+  }
+}
+
 export function removeLoraAt(prompt: string, negative: string, index: number, extraPositive = '', extraNegative = '') {
   const hit = parseLoraHits(prompt)[index]
   if (!hit) {

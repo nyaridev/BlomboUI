@@ -44,6 +44,15 @@ export function ImageStage({
   const generate = location.pathname === '/'
   const setViewedImageUrl = useGenerateStore((s) => s.setViewedImageUrl)
   const wasBusy = useRef(busy)
+  const heldPreview = useRef<string | null>(null)
+  const coverWithPreview = useRef(false)
+  const heldFinal = useRef<{ src: string; thumb?: string } | null>(null)
+  const heldInfo = useRef<JobGalleryItem | null>(null)
+  const [previewReady, setPreviewReady] = useState(false)
+  if (!wasBusy.current && busy) {
+    heldPreview.current = null
+    coverWithPreview.current = false
+  }
   const sourceKey = `${gridUrls.join('\n')}\n${images.join('\n')}`
   const items: ThumbItem[] = [
     ...gridUrls.map((src, i) => ({ key: `grid-${i}`, src })),
@@ -57,9 +66,31 @@ export function ImageStage({
   const viewingGrid = Boolean(current?.key.startsWith('grid-'))
   const genId = viewingGrid ? images[0] : current?.key
   const genInfo = gallery.find((item) => item.id === genId) ?? null
+  if (genInfo) {
+    heldInfo.current = genInfo
+  }
   const many = items.length > 1
-  const showPreview = busy && Boolean(previewUrl) && !previewFailed
   const ready = Boolean(current?.src && loadedSrc === current.src)
+  if (previewUrl) {
+    heldPreview.current = previewUrl
+    if (busy) {
+      coverWithPreview.current = true
+    }
+  }
+  if (ready && !busy) {
+    coverWithPreview.current = false
+  }
+  if (current && ready && !coverWithPreview.current) {
+    heldFinal.current = { src: current.src, thumb: current.thumb }
+  }
+  const previewSrc = previewFailed ? null : previewUrl || (coverWithPreview.current ? heldPreview.current : null)
+  const showPreview = Boolean(previewSrc)
+  const lastFinal = heldFinal.current
+  const previewCovering = showPreview && previewReady
+  const hideResults = busy && (showPreview || coverWithPreview.current)
+  const showCurrent = Boolean(current) && !hideResults
+  const showLastFinal = Boolean(lastFinal) && !showCurrent && !previewCovering
+  const coverWithLast = Boolean(lastFinal) && showCurrent && !ready && !previewCovering
 
   function markFailed(key: string) {
     setFailed((prev) => {
@@ -85,6 +116,10 @@ export function ImageStage({
   }, [current?.thumb])
 
   useEffect(() => {
+    if (!wasBusy.current && busy) {
+      setPreviewReady(false)
+      setPreviewFailed(false)
+    }
     if (wasBusy.current && !busy) {
       setIndex(0)
       setLightbox(false)
@@ -99,6 +134,13 @@ export function ImageStage({
   }, [index, items.length])
 
   useEffect(() => {
+    if (!busy || hideResults || items.length === 0) {
+      return
+    }
+    setIndex(items.length - 1)
+  }, [busy, hideResults, items.length])
+
+  useEffect(() => {
     setViewedImageUrl(current?.src ?? null)
   }, [current?.src, setViewedImageUrl])
 
@@ -110,7 +152,7 @@ export function ImageStage({
       if (event.key.toLowerCase() !== 'f' || event.repeat || event.ctrlKey || event.altKey || event.metaKey) {
         return
       }
-      if (isTyping(event) || overlayOpen() || !current) {
+      if (isTyping(event) || overlayOpen() || !current || hideResults) {
         return
       }
       event.preventDefault()
@@ -118,19 +160,12 @@ export function ImageStage({
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [current, generate])
+  }, [current, generate, hideResults])
 
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
-        {showPreview ? (
-          <img
-            src={previewUrl || undefined}
-            alt="Sampling preview"
-            className="h-full w-full object-contain"
-            onError={() => setPreviewFailed(true)}
-          />
-        ) : current ? (
+        {showCurrent && current ? (
           <button
             type="button"
             className="h-full w-full"
@@ -159,23 +194,59 @@ export function ImageStage({
               />
             </span>
           </button>
-        ) : (
+        ) : showLastFinal && lastFinal ? (
+          <button
+            type="button"
+            className="h-full w-full"
+            onMouseDown={(event) => middleOpen(event, lastFinal.src)}
+          >
+            <img src={lastFinal.src} alt="Generated" className="h-full w-full object-contain" />
+          </button>
+        ) : showPreview ? null : (
           <div className="flex h-full items-center justify-center text-sm text-muted">No image yet</div>
         )}
+        {hideResults && current ? (
+          <img
+            src={current.src}
+            alt=""
+            className="hidden"
+            onLoad={() => setLoadedSrc(current.src)}
+            onError={() => markFailed(current.key)}
+          />
+        ) : null}
+        {coverWithLast && lastFinal ? (
+          <img
+            src={lastFinal.src}
+            alt=""
+            className="pointer-events-none absolute inset-0 z-10 h-full w-full object-contain"
+          />
+        ) : null}
+        {showPreview ? (
+          <img
+            src={previewSrc || undefined}
+            alt="Sampling preview"
+            className={[
+              'pointer-events-none absolute inset-0 z-10 h-full w-full object-contain',
+              previewReady ? '' : 'invisible',
+            ].join(' ')}
+            onLoad={() => setPreviewReady(true)}
+            onError={() => setPreviewFailed(true)}
+          />
+        ) : null}
         {busy ? (
-          <div className="absolute inset-x-0 top-0 flex flex-col">
+          <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
             {jobProgressLabel ? <ProgressBar pct={jobProgressPct} label={jobProgressLabel} /> : null}
             <ProgressBar pct={progressPct} label={progressLabel} />
           </div>
         ) : timing ? (
-          <div className="pointer-events-none absolute bottom-2 left-2">
+          <div className="pointer-events-none absolute bottom-2 left-2 z-20">
             <span className="rounded bg-bg/80 px-2 py-1 text-xs text-ink">{timing}</span>
           </div>
         ) : null}
       </div>
-      {many ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
-      {!showPreview ? <GenerationInfo info={genInfo} /> : null}
-      {lightbox && current ? (
+      {many && !hideResults ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
+      <GenerationInfo info={genInfo ?? heldInfo.current} />
+      {lightbox && current && !hideResults ? (
         <LightboxView
           src={current.src}
           alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}

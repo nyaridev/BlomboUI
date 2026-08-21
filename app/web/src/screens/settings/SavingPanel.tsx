@@ -77,6 +77,7 @@ export function SavingPanel({ query = '' }: { query?: string }) {
   const gridName = useSettingsStore((s) => s.gridName)
   const saveInterrupted = useSettingsStore((s) => s.saveInterrupted)
   const imageFormat = useSettingsStore((s) => s.imageFormat)
+  const gridFormat = useSettingsStore((s) => s.gridFormat)
   const imageQuality = useSettingsStore((s) => s.imageQuality)
   const saveLargeAsJpeg = useSettingsStore((s) => s.saveLargeAsJpeg)
   const largeJpegMaxKb = useSettingsStore((s) => s.largeJpegMaxKb)
@@ -87,6 +88,7 @@ export function SavingPanel({ query = '' }: { query?: string }) {
   const setGridName = useSettingsStore((s) => s.setGridName)
   const setSaveInterrupted = useSettingsStore((s) => s.setSaveInterrupted)
   const setImageFormat = useSettingsStore((s) => s.setImageFormat)
+  const setGridFormat = useSettingsStore((s) => s.setGridFormat)
   const setImageQuality = useSettingsStore((s) => s.setImageQuality)
   const setSaveLargeAsJpeg = useSettingsStore((s) => s.setSaveLargeAsJpeg)
   const setLargeJpegMaxKb = useSettingsStore((s) => s.setLargeJpegMaxKb)
@@ -94,11 +96,18 @@ export function SavingPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-2xl flex-col gap-3">
-      <SettingsCard query={query} title="File format" terms="png jpg jpeg webp extension quality sidecar 4mb threshold">
+        <SettingsCard query={query} title="File format" terms="png jpg jpeg webp extension quality sidecar 4mb threshold">
         <SettingsBlock query={query} title="Image format" terms="png jpg jpeg webp extension">
           <SelectField
             value={imageFormat}
             onChange={(value) => setImageFormat(value as ImageFormat)}
+            options={[...IMAGE_FORMATS]}
+          />
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Grid format" terms="png jpg jpeg webp extension contact sheet grid">
+          <SelectField
+            value={gridFormat}
+            onChange={(value) => setGridFormat(value as ImageFormat)}
             options={[...IMAGE_FORMATS]}
           />
         </SettingsBlock>
@@ -157,7 +166,7 @@ export function SavingPanel({ query = '' }: { query?: string }) {
             onChange={(e) => setGridName(e.target.value)}
             spellCheck={false}
           />
-          <p className="text-xs text-muted">Example: {previewPath(gridName)}.png</p>
+          <p className="text-xs text-muted">Example: {previewPath(gridName)}.{gridFormat}</p>
         </SettingsBlock>
         <SettingsBlock query={query} title="Folder" terms="grids folder jpg contact sheet output path">
           <input

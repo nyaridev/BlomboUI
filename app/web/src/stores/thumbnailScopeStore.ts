@@ -8,6 +8,7 @@ import {
 } from '@/lib/api.ts'
 import { contextKey, galleryThumbView, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/thumbView.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
+import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { create } from 'zustand'
@@ -28,11 +29,16 @@ type ScopeState = {
   replaceGroup: (id: string) => void
   setAuto: (value: boolean) => void
   setMode: (value: 'likely' | 'exact') => void
+  toggleOptional: (id: string) => void
   refreshAuto: (prompt?: string) => Promise<void>
 }
 
 function refreshModels() {
   void useModelsStore.getState().pull()
+}
+
+function notifyIssues() {
+  void useIssuesStore.getState().load()
 }
 
 function pinManual(ids?: string[]) {
@@ -61,20 +67,33 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
   create: async (body) => {
     const row = await createThumbScope(body)
     set((state) => ({ items: [...state.items.filter((item) => item.id !== row.id), row] }))
+    const settings = useSettingsStore.getState()
+    if (!settings.scopeOrder.includes(row.id)) {
+      settings.setScopeOrder([...settings.scopeOrder, row.id])
+    }
+    notifyIssues()
     return row
   },
   update: async (id, body) => {
     const row = await updateThumbScope(id, body)
     set((state) => ({ items: state.items.map((item) => (item.id === id ? row : item)) }))
+    notifyIssues()
     return row
   },
   remove: async (id) => {
     await deleteThumbScope(id)
     set((state) => ({ items: state.items.filter((item) => item.id !== id) }))
     const ids = selectedScopeIds().filter((item) => item !== id)
-    useSettingsStore.getState().setThumbScopeIds(ids)
+    const settings = useSettingsStore.getState()
+    settings.setThumbScopeIds(ids)
+    settings.setThumbScopeOptionalIds(settings.thumbScopeOptionalIds.filter((item) => item !== id))
+    settings.setScopeOrder(settings.scopeOrder.filter((item) => item !== id))
+    settings.setLookupScopeIds(settings.lookupScopeIds.filter((item) => item !== id))
+    settings.setLookupScopeOptionalIds(settings.lookupScopeOptionalIds.filter((item) => item !== id))
+    settings.dropGalleryLocalScopeId(id)
     await get().refreshAuto()
     refreshModels()
+    notifyIssues()
   },
   setIds: (ids) => {
     pinManual(ids.filter((id) => id && id !== GLOBAL_SCOPE))
@@ -124,6 +143,16 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
     useSettingsStore.getState().setThumbDisplayMode(value)
     refreshModels()
   },
+  toggleOptional: (id) => {
+    if (!id || id === GLOBAL_SCOPE) {
+      return
+    }
+    const settings = useSettingsStore.getState()
+    const current = settings.thumbScopeOptionalIds
+    const next = current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    settings.setThumbScopeOptionalIds(next)
+    refreshModels()
+  },
   refreshAuto: async (prompt) => {
     const text = prompt ?? useGenerateStore.getState().prompt
     try {
@@ -134,7 +163,10 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
       setAutoScopeIds([])
       set({ autoKey: '' })
     }
-    if (useSettingsStore.getState().thumbScopeAuto) {
+    if (
+      useSettingsStore.getState().thumbScopeAuto ||
+      Object.values(useSettingsStore.getState().galleryLocalScopes).some((pack) => pack.auto)
+    ) {
       refreshModels()
     }
   },
@@ -148,15 +180,21 @@ export function currentContextKey() {
   return contextKey()
 }
 
-export function useThumbView(kind?: string) {
+export function useThumbView(kind?: string, scopeKey = 'global') {
   const ids = useSettingsStore((s) => s.thumbScopeIds.join('+'))
+  const optional = useSettingsStore((s) => s.thumbScopeOptionalIds.join('+'))
   const auto = useSettingsStore((s) => s.thumbScopeAuto)
   const mode = useSettingsStore((s) => s.thumbDisplayMode)
   const gallery = useSettingsStore((s) => s.galleryThumbFallback)
   const trash = useSettingsStore((s) => s.trashThumbFallback)
+  const local = useSettingsStore((s) =>
+    scopeKey && scopeKey !== 'global'
+      ? s.galleryLocalScopes[scopeKey]
+      : null,
+  )
   const autoKey = useThumbnailScopeStore((s) => s.autoKey)
   return useMemo(
-    () => (kind ? galleryThumbView(kind) : thumbView()),
-    [kind, ids, auto, mode, gallery, trash, autoKey],
+    () => (kind ? galleryThumbView(kind, scopeKey) : thumbView()),
+    [kind, scopeKey, ids, optional, auto, mode, gallery, trash, local, autoKey],
   )
 }

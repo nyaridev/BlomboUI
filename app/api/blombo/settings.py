@@ -21,7 +21,7 @@ _GALLERY_DIRS = ("asc", "desc")
 _GALLERY_VIEWS = ("checkpoints", "loras", "wildcards")
 _ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes")
 _HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes", "Errors")
-_GENERATE_TABS = ("Generation", "Base Model", "Lora", "Wildcards")
+_GENERATE_TABS = ("Generation", "Base Model", "LoRa", "Wildcards")
 _IMAGE_FORMATS = ("png", "jpg", "webp")
 _KEYS = (
     "batchGrid",
@@ -31,6 +31,11 @@ _KEYS = (
     "batchGridFill",
     "batchGridOnCancel",
     "saveInterrupted",
+    "genPreview",
+    "genPreviewEvery",
+    "genPreviewAfter",
+    "genPreviewAfterFirst",
+    "genPreviewLast",
     "interruptedInGrid",
     "galleryHideInterrupted",
     "hiddenGenerateTabs",
@@ -44,6 +49,7 @@ _KEYS = (
     "hiddenSchedulers",
     "theme",
     "civitaiSite",
+    "civitaiApiKey",
     "timeDisplay",
     "setResolutions",
     "imagePath",
@@ -52,6 +58,7 @@ _KEYS = (
     "gridName",
     "interruptedPath",
     "imageFormat",
+    "gridFormat",
     "imageQuality",
     "saveLargeAsJpeg",
     "largeJpegMaxKb",
@@ -86,8 +93,28 @@ _KEYS = (
     "thumbSaveTo",
     "thumbDisplayMode",
     "thumbScopeIds",
+    "thumbScopeOptionalIds",
     "thumbScopeAuto",
     "trashThumbFallback",
+    "scopeGroups",
+    "scopeOrder",
+    "lookupScopeIds",
+    "lookupScopeOptionalIds",
+    "lookupKinds",
+    "lookupModels",
+    "scopeSearch",
+    "modelsTab",
+    "modelsKind",
+    "civitaiBrowse",
+    "civitaiTabs",
+    "civitaiTabId",
+    "galleryTypes",
+    "galleryQuery",
+    "galleryLocalScopes",
+    "galleryScopeMode",
+    "galleryFilterMode",
+    "galleryFilterShareModels",
+    "galleryPinSelected",
 )
 
 
@@ -118,6 +145,22 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["batchGridOnCancel"] = bool(raw["batchGridOnCancel"])
     if "saveInterrupted" in raw:
         out["saveInterrupted"] = bool(raw["saveInterrupted"])
+    if "genPreview" in raw:
+        out["genPreview"] = bool(raw["genPreview"])
+    if "genPreviewEvery" in raw:
+        try:
+            out["genPreviewEvery"] = max(1, min(150, int(raw["genPreviewEvery"])))
+        except (TypeError, ValueError):
+            pass
+    if "genPreviewAfter" in raw:
+        try:
+            out["genPreviewAfter"] = max(1, min(150, int(raw["genPreviewAfter"])))
+        except (TypeError, ValueError):
+            pass
+    if "genPreviewAfterFirst" in raw:
+        out["genPreviewAfterFirst"] = bool(raw["genPreviewAfterFirst"])
+    if "genPreviewLast" in raw:
+        out["genPreviewLast"] = bool(raw["genPreviewLast"])
     if "interruptedInGrid" in raw:
         out["interruptedInGrid"] = bool(raw["interruptedInGrid"])
     if "galleryHideInterrupted" in raw:
@@ -125,7 +168,7 @@ def _clean(raw: Any) -> dict[str, Any]:
     if "hiddenGenerateTabs" in raw and isinstance(raw["hiddenGenerateTabs"], list):
         tabs: list[str] = []
         for item in raw["hiddenGenerateTabs"]:
-            name = "Base Model" if item == "Checkpoints" else str(item)
+            name = "Base Model" if item == "Checkpoints" else "LoRa" if item == "Lora" else str(item)
             if name and name != "Generation" and name not in tabs:
                 tabs.append(name)
         out["hiddenGenerateTabs"] = tabs
@@ -136,7 +179,7 @@ def _clean(raw: Any) -> dict[str, Any]:
         if ordered:
             out["mainTabOrder"] = ordered
     if "generateTabOrder" in raw:
-        ordered = _order_list(raw["generateTabOrder"], _GENERATE_TABS, rename={"Checkpoints": "Base Model"})
+        ordered = _order_list(raw["generateTabOrder"], _GENERATE_TABS, rename={"Checkpoints": "Base Model", "Lora": "LoRa"})
         if ordered:
             out["generateTabOrder"] = ordered
     if "mainTabKeysFollowLayout" in raw:
@@ -164,6 +207,8 @@ def _clean(raw: Any) -> dict[str, Any]:
         name = str(raw["civitaiSite"])
         if name in ("red", "civitai"):
             out["civitaiSite"] = name
+    if "civitaiApiKey" in raw and isinstance(raw["civitaiApiKey"], str):
+        out["civitaiApiKey"] = raw["civitaiApiKey"].strip()
     if "timeDisplay" in raw:
         name = str(raw["timeDisplay"])
         if name in ("full", "ampm"):
@@ -195,6 +240,12 @@ def _clean(raw: Any) -> dict[str, Any]:
             name = "jpg"
         if name in _IMAGE_FORMATS:
             out["imageFormat"] = name
+    if "gridFormat" in raw:
+        name = str(raw["gridFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["gridFormat"] = name
     if "imageQuality" in raw:
         try:
             out["imageQuality"] = max(1, min(100, int(raw["imageQuality"])))
@@ -284,9 +335,7 @@ def _clean(raw: Any) -> dict[str, Any]:
         if lists is not None:
             out["autocompleteLists"] = lists
     if "galleryThumbFallback" in raw:
-        mapped = _bool_gallery_map(raw["galleryThumbFallback"], False)
-        if mapped:
-            out["galleryThumbFallback"] = mapped
+        out["galleryThumbFallback"] = _gallery_fallback(raw["galleryThumbFallback"])
     if "thumbSaveTo" in raw:
         name = str(raw["thumbSaveTo"])
         out["thumbSaveTo"] = name if name in ("active", "global") else "global"
@@ -294,14 +343,310 @@ def _clean(raw: Any) -> dict[str, Any]:
         name = str(raw["thumbDisplayMode"])
         out["thumbDisplayMode"] = name if name in ("likely", "exact") else "likely"
     if "thumbScopeIds" in raw and isinstance(raw["thumbScopeIds"], list):
-        from blombo.thumbnail_scopes import context_key, parse_context
+        from blombo.thumbnail_scopes import ordered_ids
 
-        out["thumbScopeIds"] = [item for item in parse_context(context_key(raw["thumbScopeIds"])) if item != "global"]
+        out["thumbScopeIds"] = ordered_ids(raw["thumbScopeIds"])
+    if "thumbScopeOptionalIds" in raw and isinstance(raw["thumbScopeOptionalIds"], list):
+        from blombo.thumbnail_scopes import ordered_ids
+
+        out["thumbScopeOptionalIds"] = ordered_ids(raw["thumbScopeOptionalIds"])
     if "thumbScopeAuto" in raw:
         out["thumbScopeAuto"] = bool(raw["thumbScopeAuto"])
     if "trashThumbFallback" in raw:
         out["trashThumbFallback"] = bool(raw["trashThumbFallback"])
+    if "scopeGroups" in raw and isinstance(raw["scopeGroups"], list):
+        out["scopeGroups"] = _unique_names(raw["scopeGroups"])
+    if "scopeOrder" in raw and isinstance(raw["scopeOrder"], list):
+        from blombo.thumbnail_scopes import ordered_ids
+
+        out["scopeOrder"] = ordered_ids(raw["scopeOrder"])
+    if "lookupScopeIds" in raw and isinstance(raw["lookupScopeIds"], list):
+        out["lookupScopeIds"] = _lookup_scope_ids(raw["lookupScopeIds"])
+    if "lookupScopeOptionalIds" in raw and isinstance(raw["lookupScopeOptionalIds"], list):
+        from blombo.thumbnail_scopes import ordered_ids
+
+        out["lookupScopeOptionalIds"] = ordered_ids(raw["lookupScopeOptionalIds"])
+    if "lookupKinds" in raw and isinstance(raw["lookupKinds"], list):
+        out["lookupKinds"] = _lookup_kinds(raw["lookupKinds"])
+    if "lookupModels" in raw and isinstance(raw["lookupModels"], list):
+        out["lookupModels"] = _lookup_models(raw["lookupModels"])
+    if "scopeSearch" in raw and isinstance(raw["scopeSearch"], str):
+        out["scopeSearch"] = raw["scopeSearch"][:200]
+    if "modelsTab" in raw and raw["modelsTab"] in ("Local", "Download", "CivitAI"):
+        out["modelsTab"] = raw["modelsTab"]
+    if "modelsKind" in raw and raw["modelsKind"] in ("all", "checkpoints", "loras", "wildcards"):
+        out["modelsKind"] = raw["modelsKind"]
+    if "civitaiBrowse" in raw and isinstance(raw["civitaiBrowse"], dict):
+        out["civitaiBrowse"] = _civitai_browse(raw["civitaiBrowse"])
+    if "civitaiTabs" in raw:
+        out["civitaiTabs"] = _civitai_tabs(raw["civitaiTabs"])
+    if "civitaiTabId" in raw:
+        out["civitaiTabId"] = _civitai_tab_id(raw["civitaiTabId"], out.get("civitaiTabs"))
+    if "galleryTypes" in raw and isinstance(raw["galleryTypes"], dict):
+        out["galleryTypes"] = _gallery_types(raw["galleryTypes"])
+    if "galleryQuery" in raw and isinstance(raw["galleryQuery"], dict):
+        out["galleryQuery"] = _gallery_query(raw["galleryQuery"])
+    if "galleryLocalScopes" in raw and isinstance(raw["galleryLocalScopes"], dict):
+        out["galleryLocalScopes"] = _gallery_local_scopes(raw["galleryLocalScopes"])
+    if "galleryScopeMode" in raw and isinstance(raw["galleryScopeMode"], dict):
+        out["galleryScopeMode"] = _gallery_mode_map(raw["galleryScopeMode"])
+    if "galleryFilterMode" in raw and isinstance(raw["galleryFilterMode"], dict):
+        out["galleryFilterMode"] = _gallery_mode_map(raw["galleryFilterMode"])
+    if "galleryFilterShareModels" in raw:
+        out["galleryFilterShareModels"] = bool(raw["galleryFilterShareModels"])
+    if "galleryPinSelected" in raw and isinstance(raw["galleryPinSelected"], dict):
+        out["galleryPinSelected"] = _gallery_pin_selected(raw["galleryPinSelected"])
+    ids = out.get("lookupScopeIds")
+    optional = out.get("lookupScopeOptionalIds")
+    if isinstance(ids, list) and isinstance(optional, list):
+        out["lookupScopeOptionalIds"] = [item for item in optional if item in ids]
     return {key: out[key] for key in _KEYS if key in out}
+
+
+def _lookup_scope_ids(raw: Any) -> list[str]:
+    from blombo.thumbnail_scopes import GLOBAL_ID, ordered_ids
+
+    if any(str(item).strip().lower() == GLOBAL_ID for item in raw):
+        return [GLOBAL_ID]
+    return ordered_ids(raw)
+
+
+_LOOKUP_KINDS = ("checkpoints", "loras", "wildcards")
+
+
+def _lookup_kinds(raw: Any) -> list[str]:
+    out: list[str] = []
+    for item in raw:
+        name = str(item)
+        if name in _LOOKUP_KINDS and name not in out:
+            out.append(name)
+    return out
+
+
+def _lookup_models(raw: Any) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for item in raw:
+        name = str(item).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        out.append(name)
+    return out
+
+
+_CIVITAI_SORTS = (
+    "Highest Rated",
+    "Most Downloaded",
+    "Most Liked",
+    "Most Discussed",
+    "Most Collected",
+    "Most Images",
+    "Newest",
+    "Oldest",
+)
+_CIVITAI_PERIODS = ("Day", "Week", "Month", "Year", "AllTime")
+_CIVITAI_TAGS = ("", "character", "style", "concept", "clothing", "poses")
+_CIVITAI_TYPES = (
+    "Checkpoint",
+    "TextualInversion",
+    "Hypernetwork",
+    "AestheticGradient",
+    "LORA",
+    "LoCon",
+    "DoRA",
+    "Controlnet",
+    "Upscaler",
+    "MotionModule",
+    "VAE",
+    "Poses",
+    "Wildcards",
+    "Workflows",
+    "Other",
+)
+_CIVITAI_TRI = ("off", "include", "exclude")
+
+
+def _civitai_names(raw: Any, allowed: tuple[str, ...] | None = None) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    known = set(allowed) if allowed is not None else None
+    out: list[str] = []
+    for item in raw:
+        name = str(item).strip()[:80]
+        if not name or name in out:
+            continue
+        if known is not None and name not in known:
+            continue
+        out.append(name)
+        if len(out) >= 40:
+            break
+    return out
+
+
+def _civitai_browse(raw: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    if isinstance(raw.get("query"), str):
+        out["query"] = raw["query"][:200]
+    if raw.get("sort") in _CIVITAI_SORTS:
+        out["sort"] = raw["sort"]
+    if raw.get("period") in _CIVITAI_PERIODS:
+        out["period"] = raw["period"]
+    if "types" in raw:
+        out["types"] = _civitai_names(raw["types"], _CIVITAI_TYPES)
+    if "baseModels" in raw:
+        out["baseModels"] = _civitai_names(raw["baseModels"])
+    if raw.get("tag") in _CIVITAI_TAGS:
+        out["tag"] = raw["tag"]
+    if isinstance(raw.get("nsfw"), bool):
+        out["nsfw"] = raw["nsfw"]
+    for key in ("earlyAccess", "supportsGeneration", "fromPlatform"):
+        if raw.get(key) in _CIVITAI_TRI:
+            out[key] = raw[key]
+    return out
+
+
+def _civitai_tabs(raw: Any) -> list[dict[str, Any]]:
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[int] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        try:
+            model_id = int(item.get("id"))
+        except (TypeError, ValueError):
+            continue
+        if model_id <= 0 or model_id in seen:
+            continue
+        seen.add(model_id)
+        name = str(item.get("name") or "").strip()[:200] or f"Model {model_id}"
+        tab = {"id": model_id, "name": name}
+        for source, target in (("initialVersionId", "initialVersionId"), ("versionId", "versionId")):
+            try:
+                version_id = int(item.get(source))
+            except (TypeError, ValueError):
+                continue
+            if version_id > 0:
+                tab[target] = version_id
+        out.append(tab)
+    return out
+
+
+def _civitai_tab_id(raw: Any, tabs: object) -> int | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        tab_id = int(raw)
+    except (TypeError, ValueError):
+        return None
+    if isinstance(tabs, list):
+        ids = {item.get("id") for item in tabs if isinstance(item, dict)}
+        return tab_id if tab_id in ids else None
+    return tab_id
+
+
+def _gallery_types(raw: Any) -> dict[str, list[str]]:
+    out: dict[str, list[str]] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()[:80]
+        if not name or not isinstance(value, list):
+            continue
+        types: list[str] = []
+        seen: set[str] = set()
+        for item in value:
+            label = str(item).strip()
+            if not label or label in seen:
+                continue
+            seen.add(label)
+            types.append(label)
+        out[name] = types
+    return out
+
+
+_GALLERY_MODE_KEYS = ("checkpoints", "loras", "wildcards", "models")
+_GALLERY_MODE_DEFAULTS = {
+    "checkpoints": "global",
+    "loras": "global",
+    "wildcards": "global",
+    "models": "local",
+}
+_GALLERY_LOCAL_KEYS = (
+    "checkpoints",
+    "loras",
+    "wildcards",
+    "models",
+    "models-all",
+    "models-checkpoints",
+    "models-loras",
+    "models-wildcards",
+)
+
+
+def _gallery_mode_map(raw: Any) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()
+        if name not in _GALLERY_MODE_KEYS or value not in ("global", "local"):
+            continue
+        if value != _GALLERY_MODE_DEFAULTS[name]:
+            out[name] = value
+    return out
+
+
+def _gallery_query(raw: Any) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()[:80]
+        if not name or not isinstance(value, str):
+            continue
+        text = value[:200]
+        if text:
+            out[name] = text
+    return out
+
+
+def _gallery_pin_selected(raw: Any) -> dict[str, bool]:
+    out: dict[str, bool] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()
+        if (name != "global" and name not in _GALLERY_LOCAL_KEYS) or value is not False:
+            continue
+        out[name] = False
+    return out
+
+
+def _gallery_local_scopes(raw: Any) -> dict[str, dict[str, Any]]:
+    from blombo.thumbnail_scopes import ordered_ids
+
+    out: dict[str, dict[str, Any]] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, item in raw.items():
+        name = str(key).strip()
+        if name not in _GALLERY_LOCAL_KEYS or not isinstance(item, dict):
+            continue
+        ids = ordered_ids(item.get("ids") or [])
+        optional = ordered_ids(item.get("optionalIds") or [])
+        pack = {
+            "ids": ids,
+            "optionalIds": optional,
+            "auto": bool(item.get("auto")),
+            "mode": "exact" if item.get("mode") == "exact" else "likely",
+            "fallback": bool(item.get("fallback")),
+        }
+        if pack["ids"] or pack["optionalIds"] or pack["auto"] or pack["mode"] != "likely" or pack["fallback"]:
+            out[name] = pack
+    return out
 
 
 def _dir_list(raw: Any) -> list[dict[str, str]] | None:
@@ -419,14 +764,30 @@ def _order_list(raw: Any, allowed: tuple[str, ...], rename: dict[str, str] | Non
 def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, str] | None:
     if isinstance(raw, str):
         value = raw if raw in allowed else default
+        if value == default:
+            return {}
         return {kind: value for kind in _GALLERY_VIEWS}
     if not isinstance(raw, dict):
         return None
     out: dict[str, str] = {}
-    for kind in _GALLERY_VIEWS:
-        name = str(raw[kind]) if kind in raw else default
-        out[kind] = name if name in allowed else default
+    for key, item in raw.items():
+        name = str(key).strip()[:80]
+        if not name:
+            continue
+        value = str(item) if item is not None else default
+        picked = value if value in allowed else default
+        if picked != default:
+            out[name] = picked
     return out
+
+
+def _gallery_fallback(raw: Any) -> bool:
+    if isinstance(raw, bool):
+        return raw
+    mapped = _bool_gallery_map(raw, False)
+    if not mapped:
+        return False
+    return any(mapped.values())
 
 
 def _bool_gallery_map(raw: Any, default: bool) -> dict[str, bool] | None:

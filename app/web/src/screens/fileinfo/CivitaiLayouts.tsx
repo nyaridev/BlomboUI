@@ -87,7 +87,7 @@ export function Meta({ data, className }: { data: CivitaiLayoutData; className?:
   return (
     <div className={['flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm', className].filter(Boolean).join(' ')}>
       {data.creator ? (
-        <Link href={data.creatorHref} className="text-accent hover:underline">
+        <Link href={data.creatorHref} className="text-purple-bright hover:underline">
           {data.creator}
         </Link>
       ) : null}
@@ -104,7 +104,7 @@ export function Base({ data }: { data: CivitaiLayoutData }) {
   return (
     <p className="text-sm">
       <span className="text-muted">Base </span>
-      <Link href={data.baseHref} className="text-accent hover:underline">
+      <Link href={data.baseHref} className="text-purple-bright hover:underline">
         {data.base}
       </Link>
     </p>
@@ -115,7 +115,7 @@ export function Name({ data, className }: { data: CivitaiLayoutData; className?:
   return (
     <Link
       href={data.modelHref}
-      className={['font-semibold leading-tight text-ink hover:text-accent', className || 'text-2xl'].join(' ')}
+      className={['font-semibold leading-tight text-purple-bright hover:underline', className || 'text-2xl'].join(' ')}
     >
       {data.name}
     </Link>

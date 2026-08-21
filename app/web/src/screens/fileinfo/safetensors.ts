@@ -89,7 +89,7 @@ const TRAINING_GROUPS: { title: string; wide?: boolean; keys: { key: string; lab
     title: 'Network',
     keys: [
       { key: 'ss_network_module', label: 'Module' },
-      { key: 'ss_network_dim', label: 'Dim' },
+      { key: 'ss_network_dim', label: 'Dim / Rank' },
       { key: 'ss_network_alpha', label: 'Alpha' },
     ],
   },
@@ -107,15 +107,12 @@ const TRAINING_GROUPS: { title: string; wide?: boolean; keys: { key: string; lab
     title: 'Run',
     wide: true,
     keys: [
-      { key: 'ss_max_train_epochs', label: 'Max epochs' },
-      { key: 'ss_num_epochs', label: 'Epochs' },
       { key: 'ss_epoch', label: 'Epoch' },
-      { key: 'ss_max_train_steps', label: 'Max steps' },
-      { key: 'ss_num_train_steps', label: 'Train steps' },
       { key: 'ss_steps', label: 'Steps' },
       { key: 'ss_num_train_images', label: 'Train images' },
       { key: 'ss_num_batches_per_epoch', label: 'Batches / epoch' },
       { key: 'ss_batch_size_per_device', label: 'Batch size' },
+      { key: 'ss_batch_size', label: 'Batch size' },
       { key: 'ss_resolution', label: 'Resolution' },
     ],
   },
@@ -140,17 +137,121 @@ function cellValue(value: unknown): string {
   return JSON.stringify(value)
 }
 
+function scalar(value: unknown): string {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value)
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return value.trim()
+  }
+  return ''
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : null
+}
+
+function ofField(label: string, current: string, max: string): TrainingField | null {
+  if (current && max) {
+    return { label, current, max }
+  }
+  const value = current || max
+  return value ? { label, value } : null
+}
+
+export type TrainingField = {
+  label: string
+  value?: string
+  current?: string
+  max?: string
+}
+
 export type TrainingGroup = {
   title: string
   wide?: boolean
-  fields: { label: string; value: string }[]
+  fields: TrainingField[]
+}
+
+export type TagCount = { tag: string; count: number }
+
+export function tagFrequency(meta: SafetensorsMeta, limit = 5): TagCount[] {
+  const raw = meta.ss_tag_frequency ?? meta.tag_frequency
+  const counts = new Map<string, number>()
+  function walk(node: unknown) {
+    const row = asRecord(node)
+    if (!row) {
+      return
+    }
+    for (const [key, value] of Object.entries(row)) {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        counts.set(key, (counts.get(key) || 0) + value)
+      } else {
+        walk(value)
+      }
+    }
+  }
+  walk(raw)
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, limit)
+    .map(([tag, count]) => ({ tag, count }))
+}
+
+function dimRank(meta: SafetensorsMeta): TrainingField | null {
+  const dim = scalar(meta.ss_network_dim)
+  const rank = scalar(meta.ss_network_rank) || dim
+  if (dim && rank) {
+    return { label: 'Dim / Rank', value: `${dim}/${rank}` }
+  }
+  if (dim) {
+    return { label: 'Dim', value: dim }
+  }
+  if (rank) {
+    return { label: 'Rank', value: rank }
+  }
+  return null
+}
+
+function epochField(meta: SafetensorsMeta): TrainingField | null {
+  return ofField('Epoch', scalar(meta.ss_epoch), scalar(meta.ss_num_epochs) || scalar(meta.ss_max_train_epochs))
+}
+
+function stepsField(meta: SafetensorsMeta): TrainingField | null {
+  const info = asRecord(meta.training_info) || {}
+  const current = scalar(info.step) || scalar(meta.ss_num_train_steps)
+  const max = scalar(meta.ss_max_train_steps) || scalar(meta.ss_steps)
+  return ofField('Steps', current, max)
 }
 
 export function trainingGroups(meta: SafetensorsMeta): TrainingGroup[] {
   const out: TrainingGroup[] = []
   for (const group of TRAINING_GROUPS) {
-    const fields: TrainingGroup['fields'] = []
+    const fields: TrainingField[] = []
     for (const { key, label } of group.keys) {
+      if (key === 'ss_network_dim') {
+        const field = dimRank(meta)
+        if (field) {
+          fields.push(field)
+        }
+        continue
+      }
+      if (key === 'ss_epoch') {
+        const field = epochField(meta)
+        if (field) {
+          fields.push(field)
+        }
+        continue
+      }
+      if (key === 'ss_steps') {
+        const field = stepsField(meta)
+        if (field) {
+          fields.push(field)
+        }
+        continue
+      }
+      if (key === 'ss_batch_size' && fields.some((item) => item.label === 'Batch size')) {
+        continue
+      }
       const value = cellValue(meta[key])
       if (value) {
         fields.push({ label, value })

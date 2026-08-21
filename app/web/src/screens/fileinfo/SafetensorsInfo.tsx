@@ -2,7 +2,7 @@ import { ExpandSection } from '@/components/ExpandSection.tsx'
 import type { CivitaiVersion } from '@/lib/api.ts'
 import { useCivitaiData } from './CivitaiLayouts.tsx'
 import { SafetensorsDashboard } from './SafetensorsLayouts.tsx'
-import { trainingGroups, type SafetensorsMeta } from './safetensors.ts'
+import { trainingGroups, tagFrequency, type SafetensorsMeta } from './safetensors.ts'
 
 type SafetensorsInfoProps = {
   metadata: SafetensorsMeta | null
@@ -21,11 +21,12 @@ export function SafetensorsInfo({ metadata, error, busy, civitai, civitaiStatus 
     return <p className="text-sm text-ink">{error}</p>
   }
   const groups = metadata ? trainingGroups(metadata) : []
+  const tags = metadata ? tagFrequency(metadata) : []
   const raw = metadata && Object.keys(metadata).length ? JSON.stringify(metadata, null, 2) : ''
 
   return (
     <div className="flex flex-col gap-4">
-      <SafetensorsDashboard data={data} groups={groups} raw={raw} />
+      <SafetensorsDashboard data={data} groups={groups} tags={tags} raw={raw} />
       {raw ? (
         <ExpandSection title="Raw metadata">
           <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{raw}</pre>

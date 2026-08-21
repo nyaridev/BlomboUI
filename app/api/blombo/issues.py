@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from blombo import models
+from blombo import thumbnail_scopes
 from blombo import wildcards as wildcard_meta
 
 
@@ -14,6 +15,7 @@ def list_issues() -> list[dict[str, Any]]:
         *_wildcard_invalid(),
         *_duplicate_headers(),
         *_directory_issues(),
+        *_duplicate_scope_names(),
     ]
     items.sort(key=lambda row: (str(row["kind"]), str(row["code"]), str(row["name"])))
     return items
@@ -41,6 +43,34 @@ def _duplicate_names(kind: str) -> list[dict[str, Any]]:
                 stem,
                 f"Prompt tags like <lora:{stem}> pick the first match.",
                 paths,
+            )
+        )
+    return out
+
+
+def _duplicate_scope_names() -> list[dict[str, Any]]:
+    groups: dict[str, list[str]] = {}
+    labels: dict[str, str] = {}
+    for item in thumbnail_scopes.list_scopes():
+        ident = str(item.get("id") or "")
+        name = str(item.get("name") or "").strip()
+        key = name.lower()
+        if not ident or not key:
+            continue
+        groups.setdefault(key, []).append(ident)
+        labels.setdefault(key, name)
+    out: list[dict[str, Any]] = []
+    for key, ids in groups.items():
+        if len(ids) < 2:
+            continue
+        name = labels[key]
+        out.append(
+            _issue(
+                "duplicate_name",
+                "scopes",
+                name,
+                f"Scope name '{name}' is used more than once.",
+                ids,
             )
         )
     return out

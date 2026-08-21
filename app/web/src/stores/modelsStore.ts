@@ -40,8 +40,21 @@ function asEntry(item: unknown): ModelEntry | null {
         edited: Number(row.edited) || 0,
         size: Number(row.size) || 0,
         thumb: Number(row.thumb) || 0,
+        thumb_media: typeof row.thumb_media === 'string' ? row.thumb_media : '',
         thumb_global: Number(row.thumb_global) || 0,
+        thumb_global_media: typeof row.thumb_global_media === 'string' ? row.thumb_global_media : '',
         thumb_exact: Number(row.thumb_exact) || 0,
+        thumb_exact_media: typeof row.thumb_exact_media === 'string' ? row.thumb_exact_media : '',
+        hashes:
+          row.hashes && typeof row.hashes === 'object'
+            ? {
+                sha256: typeof row.hashes.sha256 === 'string' ? row.hashes.sha256 : '',
+                autov1: typeof row.hashes.autov1 === 'string' ? row.hashes.autov1 : '',
+                autov2: typeof row.hashes.autov2 === 'string' ? row.hashes.autov2 : '',
+                autov3: typeof row.hashes.autov3 === 'string' ? row.hashes.autov3 : '',
+              }
+            : undefined,
+        hashing: Boolean(row.hashing),
         prompt: typeof row.prompt === 'string' ? row.prompt : '',
         negative_prompt: typeof row.negative_prompt === 'string' ? row.negative_prompt : '',
         notes: typeof row.notes === 'string' ? row.notes : '',

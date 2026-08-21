@@ -1,5 +1,5 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
+import { TilePreview, TILE_GLOW } from '@/components/TilePreview.tsx'
 import { modelTileSpec, type ModelTileStyle } from './modelLayouts.ts'
 
 export function ModelTile({
@@ -13,6 +13,7 @@ export function ModelTile({
   warn = false,
   onOpen,
   onClear,
+  active = false,
 }: {
   style: ModelTileStyle
   role: string
@@ -24,6 +25,7 @@ export function ModelTile({
   warn?: boolean
   onOpen: () => void
   onClear?: () => void
+  active?: boolean
 }) {
   const spec = modelTileSpec(style)
   const title = empty ? `Add ${role}` : name
@@ -33,7 +35,7 @@ export function ModelTile({
       <div
         className={[
           'group flex h-5 overflow-hidden rounded border',
-          warn ? 'border-red bg-red/15' : 'border-line bg-field',
+          warn ? 'border-red bg-red/15' : active ? `border-line bg-field ${TILE_GLOW}` : 'border-line bg-field',
         ].join(' ')}
       >
         <button
@@ -77,7 +79,7 @@ export function ModelTile({
     <div className="group relative shrink-0">
       <button
         type="button"
-        className="block transition duration-150 ease-out group-hover:brightness-110"
+        className={['relative block transition duration-150 ease-out group-hover:brightness-110', active ? TILE_GLOW : ''].join(' ')}
         title={title}
         onClick={onOpen}
       >
@@ -88,6 +90,7 @@ export function ModelTile({
           badge={!empty && badge ? badge : undefined}
           warn={warn}
           eager
+          glow={active}
           className={[
             spec.width,
             'transition-[width] duration-300 ease-out motion-reduce:transition-none',

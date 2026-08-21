@@ -106,6 +106,7 @@ def thumb_file(
     context: str = model_thumbs.GLOBAL,
     mode: str = "exact",
     fallback: bool = False,
+    optional: list[str] | None = None,
 ) -> Path | None:
     folder = _item_dir(item_id)
     man = _manifest(folder)
@@ -121,12 +122,15 @@ def thumb_file(
         return None
     if exact:
         return exact
-    query = thumbnail_scopes.query_for(thumbnail_scopes.parse_context(key))
+    ids = thumbnail_scopes.parse_context(key)
     best: tuple[tuple[int, int, int], Path] | None = None
     for path in _trash_thumbs(thumbs, ident):
         payload = thumbnail_embed.read_file(path)
+        ctx = str(payload.get("context") or "") or model_thumbs._context_of(path)
+        if not ctx or ctx == key or ctx == model_thumbs.GLOBAL:
+            continue
         tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
-        rank = thumbnail_scopes.rank_tags(query, tags)
+        rank = thumbnail_scopes.rank_thumb(ids, ctx, tags, optional)
         if not rank:
             continue
         if best is None or rank > best[0]:
@@ -143,8 +147,9 @@ def thumb_meta(
     context: str = model_thumbs.GLOBAL,
     mode: str = "exact",
     fallback: bool = False,
+    optional: list[str] | None = None,
 ) -> dict[str, Any]:
-    path = thumb_file(item_id, context, mode, fallback)
+    path = thumb_file(item_id, context, mode, fallback, optional)
     return thumbnail_embed.read_file(path) if path else {}
 
 

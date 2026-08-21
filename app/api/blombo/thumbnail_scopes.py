@@ -38,7 +38,7 @@ def parse_tags(raw: str) -> list[str]:
     return out
 
 
-def context_key(ids: list[str] | None) -> str:
+def ordered_ids(ids: list[str] | None) -> list[str]:
     unique: list[str] = []
     seen: set[str] = set()
     for item in ids or []:
@@ -49,6 +49,11 @@ def context_key(ids: list[str] | None) -> str:
             continue
         seen.add(name)
         unique.append(name)
+    return unique
+
+
+def context_key(ids: list[str] | None) -> str:
+    unique = ordered_ids(ids)
     if not unique:
         return GLOBAL_ID
     unique.sort()
@@ -74,8 +79,6 @@ def global_scope() -> dict[str, Any]:
         "id": GLOBAL_ID,
         "name": GLOBAL_NAME,
         "group": "",
-        "required": [],
-        "optional": [],
         "anyGroups": [],
         "exclude": [],
         "priority": 0,
@@ -134,8 +137,6 @@ def delete_scope(ident: str) -> None:
 
 
 def query_for(ids: list[str] | None) -> dict[str, Any]:
-    required: list[str] = []
-    optional: list[str] = []
     exclude: list[str] = []
     groups: list[list[str]] = []
     priority = 0
@@ -143,14 +144,10 @@ def query_for(ids: list[str] | None) -> dict[str, Any]:
         row = get_scope(ident)
         if not row or row["id"] == GLOBAL_ID:
             continue
-        required.extend(row["required"])
-        optional.extend(row["optional"])
         exclude.extend(row["exclude"])
         groups.extend(row["anyGroups"])
         priority = max(priority, int(row.get("priority") or 0))
     return {
-        "required": _unique(required),
-        "optional": _unique(optional),
         "exclude": _unique(exclude),
         "anyGroups": groups,
         "priority": priority,
@@ -162,9 +159,10 @@ def match_scope(row: dict[str, Any], tags: set[str]) -> bool:
         return False
     if any(item in tags for item in row["exclude"]):
         return False
-    if any(item not in tags for item in row["required"]):
+    groups = list(row.get("anyGroups") or [])
+    if not groups:
         return False
-    for group in row["anyGroups"]:
+    for group in groups:
         if not any(item in tags for item in group):
             return False
     return True
@@ -181,7 +179,7 @@ def auto_ids(prompt: str) -> list[str]:
         group = str(item.get("group") or "").strip().lower()
         if group and group in groups:
             continue
-        keys = set(item["required"]) | {tag for group in item["anyGroups"] for tag in group}
+        keys = {tag for group in item["anyGroups"] for tag in group}
         if keys and keys <= covered:
             continue
         chosen.append(item)
@@ -193,26 +191,43 @@ def auto_ids(prompt: str) -> list[str]:
     return [item["id"] for item in chosen]
 
 
-def rank_tags(query: dict[str, Any], source: list[str] | None) -> tuple[int, int, int] | None:
+def rank_thumb(
+    ids: list[str] | None,
+    candidate: str,
+    source: list[str] | None,
+    optional: list[str] | None = None,
+) -> tuple[int, int, int] | None:
+    selected = [item for item in parse_context(context_key(ids)) if item != GLOBAL_ID]
+    cand = [item for item in parse_context(candidate) if item != GLOBAL_ID]
+    if not selected:
+        return None
     tags = {normalize_tag(item) for item in source or [] if normalize_tag(item)}
+    query = query_for(selected)
     if any(item in tags for item in query.get("exclude") or []):
         return None
-    required = list(query.get("required") or [])
-    groups = list(query.get("anyGroups") or [])
-    optional = list(query.get("optional") or [])
-    if required and any(item not in tags for item in required):
+    optional_ids = [item for item in parse_context(context_key(optional)) if item in selected]
+    required_ids = [ident for ident in selected if ident not in optional_ids]
+    if any(not _covers(ident, cand, tags) for ident in required_ids):
         return None
-    if any(not any(item in tags for item in group) for group in groups):
+    if not required_ids and not any(_covers(ident, cand, tags) for ident in optional_ids):
         return None
-    if not required and not groups and optional and not any(item in tags for item in optional):
-        return None
-    opt = sum(1 for item in optional if item in tags)
-    spec = len(required) + len(groups) + opt
-    return (1 if required or groups or opt else 0, opt, spec)
+    opt = sum(1 for ident in optional_ids if _covers(ident, cand, tags))
+    overlap = sum(1 for ident in selected if ident in cand)
+    extra = sum(1 for ident in cand if ident not in selected)
+    return (opt, overlap, -extra)
+
+
+def _covers(ident: str, cand: list[str], tags: set[str]) -> bool:
+    if ident in cand:
+        return True
+    row = get_scope(ident)
+    if not row or not row["anyGroups"]:
+        return False
+    return match_scope(row, tags)
 
 
 def _specificity(row: dict[str, Any]) -> int:
-    return len(row.get("required") or []) + len(row.get("anyGroups") or []) + len(row.get("optional") or [])
+    return len(row.get("anyGroups") or [])
 
 
 def _row(raw: dict[str, Any], ident: str) -> dict[str, Any]:
@@ -224,8 +239,6 @@ def _row(raw: dict[str, Any], ident: str) -> dict[str, Any]:
         "id": ident,
         "name": str(raw.get("name") or "").strip()[:80],
         "group": str(raw.get("group") or "").strip()[:40],
-        "required": _unique(raw.get("required")),
-        "optional": _unique(raw.get("optional")),
         "anyGroups": _groups(raw.get("anyGroups")),
         "exclude": _unique(raw.get("exclude")),
         "priority": max(-1000, min(1000, priority)),
@@ -264,8 +277,8 @@ def _groups(raw: Any) -> list[list[str]]:
 def _load() -> list[dict[str, Any]]:
     _ensure_db()
     rows = db.query(
-        "SELECT id, name, group_name, required_json, optional_json, "
-        "any_groups_json, exclude_json, priority FROM thumb_scopes ORDER BY rowid"
+        "SELECT id, name, group_name, any_groups_json, exclude_json, priority "
+        "FROM thumb_scopes ORDER BY rowid"
     )
     out: list[dict[str, Any]] = []
     for item in rows:
@@ -274,8 +287,6 @@ def _load() -> list[dict[str, Any]]:
                 {
                     "name": item["name"],
                     "group": item["group_name"],
-                    "required": _json_value(item["required_json"]),
-                    "optional": _json_value(item["optional_json"]),
                     "anyGroups": _json_value(item["any_groups_json"]),
                     "exclude": _json_value(item["exclude_json"]),
                     "priority": item["priority"],
@@ -303,8 +314,8 @@ def _write_scope(conn, row: dict[str, Any], replace: bool = False) -> None:
     values = (
         row["name"],
         row["group"],
-        json.dumps(row["required"]),
-        json.dumps(row["optional"]),
+        "[]",
+        "[]",
         json.dumps(row["anyGroups"]),
         json.dumps(row["exclude"]),
         row["priority"],

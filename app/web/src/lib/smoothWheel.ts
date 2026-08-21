@@ -1,6 +1,7 @@
 const DURATION = 250
 const SPEED = 0.9
 const LINE = 16
+const OWNER_MOVE_RADIUS = 100
 
 type Anim = {
   fromX: number
@@ -9,6 +10,13 @@ type Anim = {
   toY: number
   startedAt: number
   raf: number
+}
+
+type WheelOwner = {
+  el: HTMLElement
+  axis: 'x' | 'y'
+  x: number
+  y: number
 }
 
 function canScroll(el: HTMLElement, axis: 'x' | 'y') {
@@ -81,6 +89,7 @@ function easeOutQuint(t: number) {
 
 export function bindSmoothWheel() {
   const anims = new Map<HTMLElement, Anim>()
+  let owner: WheelOwner | null = null
 
   function tick(el: HTMLElement) {
     const anim = anims.get(el)
@@ -105,14 +114,19 @@ export function bindSmoothWheel() {
     if (event.defaultPrevented || event.ctrlKey) {
       return
     }
-    const hit = wheelTarget(event)
+    if (owner && !owner.el.isConnected) {
+      owner = null
+    }
+    const hit = owner && canScroll(owner.el, owner.axis) ? owner : wheelTarget(event)
     if (!hit) {
+      owner = null
       return
     }
     const mouseLike = event.deltaMode !== 0 || Math.abs(event.deltaX) >= 50 || Math.abs(event.deltaY) >= 50
     if (hit.axis === 'y' && !mouseLike) {
       return
     }
+    owner = { ...hit, x: event.clientX, y: event.clientY }
     event.preventDefault()
     const { el, axis } = hit
     const maxX = Math.max(0, el.scrollWidth - el.clientWidth)
@@ -154,9 +168,22 @@ export function bindSmoothWheel() {
     }
   }
 
+  function onMouseMove(event: MouseEvent) {
+    if (!owner) {
+      return
+    }
+    const dx = event.clientX - owner.x
+    const dy = event.clientY - owner.y
+    if (dx * dx + dy * dy >= OWNER_MOVE_RADIUS * OWNER_MOVE_RADIUS) {
+      owner = null
+    }
+  }
+
   document.addEventListener('wheel', onWheel, { passive: false })
+  document.addEventListener('mousemove', onMouseMove, { passive: true })
   return () => {
     document.removeEventListener('wheel', onWheel)
+    document.removeEventListener('mousemove', onMouseMove)
     for (const anim of anims.values()) {
       cancelAnimationFrame(anim.raf)
     }

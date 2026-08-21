@@ -1,5 +1,6 @@
 import { ChipSelect } from '@/components/ChipSelect.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
+import { SliderField } from '@/components/SliderField.tsx'
 import { getKSamplerChoices } from '@/lib/api.ts'
 import { MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { SAMPLERS, SCHEDULERS } from '@/screens/generate/resolutions.ts'
@@ -8,7 +9,7 @@ import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
 
 export const MODELS_QUERY =
-  'models hidden types picker chips sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention'
+  'models hidden types picker chips sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention preview every last batch first'
 
 export function ModelsPanel({ query = '' }: { query?: string }) {
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes) ?? []
@@ -27,6 +28,16 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
   const setLoraSliderMax = useSettingsStore((s) => s.setLoraSliderMax)
   const promptWeightStep = useSettingsStore((s) => s.promptWeightStep)
   const setPromptWeightStep = useSettingsStore((s) => s.setPromptWeightStep)
+  const genPreview = useSettingsStore((s) => s.genPreview)
+  const genPreviewEvery = useSettingsStore((s) => s.genPreviewEvery)
+  const genPreviewAfter = useSettingsStore((s) => s.genPreviewAfter)
+  const genPreviewLast = useSettingsStore((s) => s.genPreviewLast)
+  const genPreviewAfterFirst = useSettingsStore((s) => s.genPreviewAfterFirst)
+  const setGenPreview = useSettingsStore((s) => s.setGenPreview)
+  const setGenPreviewEvery = useSettingsStore((s) => s.setGenPreviewEvery)
+  const setGenPreviewAfter = useSettingsStore((s) => s.setGenPreviewAfter)
+  const setGenPreviewLast = useSettingsStore((s) => s.setGenPreviewLast)
+  const setGenPreviewAfterFirst = useSettingsStore((s) => s.setGenPreviewAfterFirst)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
 
@@ -45,6 +56,50 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
+      <SettingsCard query={query} title="Preview" terms="generation preview every step last sampling">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="check"
+            checked={genPreview}
+            onChange={(e) => setGenPreview(e.target.checked)}
+          />
+          Show preview during generation
+        </label>
+        <div className={genPreview ? 'flex flex-col gap-3' : 'pointer-events-none flex flex-col gap-3 opacity-40'}>
+          <SettingsBlock query={query} title="Show preview every step" terms="every interval">
+            <SliderField value={genPreviewEvery} onChange={setGenPreviewEvery} min={1} max={50} />
+          </SettingsBlock>
+          <SettingsBlock query={query} title="Show first preview after" terms="first after delay steps">
+            <SliderField value={genPreviewAfter} onChange={setGenPreviewAfter} min={1} max={50} />
+            <p className="text-xs text-muted">
+              First preview is the next multiple of the interval that is at least this many steps. Every 4 after 8 shows
+              at 8; every 4 after 10 shows at 12.
+            </p>
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                className="check"
+                checked={genPreviewAfterFirst}
+                onChange={(e) => setGenPreviewAfterFirst(e.target.checked)}
+              />
+              Only wait on the first image in a batch
+            </label>
+            <p className="text-xs text-muted">
+              Later images start on the every-step interval instead of waiting again.
+            </p>
+          </SettingsBlock>
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              className="check"
+              checked={genPreviewLast}
+              onChange={(e) => setGenPreviewLast(e.target.checked)}
+            />
+            Include last step in preview
+          </label>
+        </div>
+      </SettingsCard>
       <SettingsCard query={query} title="Sampling" terms="hidden samplers schedulers ksampler hide chips">
         <SettingsBlock query={query} title="Hidden samplers" terms="ksampler hide chips">
           <ChipSelect
@@ -65,7 +120,7 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
           <p className="text-xs text-muted">Selected schedulers are removed from the generate picker.</p>
         </SettingsBlock>
       </SettingsCard>
-      <SettingsCard query={query} title="Model types" terms="hidden picker chips">
+      <SettingsCard query={query} title="Hidden model types" terms="hidden picker chips types">
         <ChipSelect
           options={MODEL_TYPE_SECTIONS}
           value={hiddenModelTypes}

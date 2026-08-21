@@ -1,14 +1,16 @@
+import { AppIcon } from '@/components/AppIcon.tsx'
 import { FolderField } from '@/components/FolderField.tsx'
 import { FolderList, LOCAL_ID, OUTPUT_ID } from '@/components/FolderList.tsx'
-import { getAppPaths, setOutputPath, type AppPaths } from '@/lib/api.ts'
+import { getAppPaths, reloadComfy, setOutputPath, type AppPaths } from '@/lib/api.ts'
+import { useHealthStore } from '@/stores/healthStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { flushSettings, useSettingsStore } from '@/stores/settingsStore.ts'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 export const DIRECTORIES_QUERY =
-  'directories folders models wildcards output gallery extra roots local path browse download'
+  'directories folders models wildcards output gallery extra roots local path browse download reload comfyui restart'
 
 export function DirectoriesPanel({ query = '' }: { query?: string }) {
   const modelDirs = useSettingsStore((s) => s.modelDirs)
@@ -16,6 +18,7 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
   const galleryDirs = useSettingsStore((s) => s.galleryDirs)
   const forceDownloadModelsLocal = useSettingsStore((s) => s.forceDownloadModelsLocal)
   const forceDownloadWildcardsLocal = useSettingsStore((s) => s.forceDownloadWildcardsLocal)
+  const loaded = useSettingsStore((s) => s.loaded)
   const setModelDirs = useSettingsStore((s) => s.setModelDirs)
   const setWildcardDirs = useSettingsStore((s) => s.setWildcardDirs)
   const setGalleryDirs = useSettingsStore((s) => s.setGalleryDirs)
@@ -23,11 +26,21 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
   const setForceDownloadWildcardsLocal = useSettingsStore((s) => s.setForceDownloadWildcardsLocal)
   const [paths, setPaths] = useState<AppPaths | null>(null)
   const [outputError, setOutputError] = useState<string | null>(null)
+  const [reloadError, setReloadError] = useState<string | null>(null)
+  const [reloadingComfy, setReloadingComfy] = useState(false)
   const skipReload = useRef(true)
+  const savedModelDirs = useRef<string | null>(null)
+  const modelDirsKey = useMemo(() => JSON.stringify(modelDirs), [modelDirs])
   const galleryItems = useMemo(
     () => [{ id: OUTPUT_ID, name: 'Output', path: '' }, ...galleryDirs.filter((item) => item.id !== OUTPUT_ID)],
     [galleryDirs],
   )
+
+  useEffect(() => {
+    if (loaded && savedModelDirs.current === null) {
+      savedModelDirs.current = modelDirsKey
+    }
+  }, [loaded, modelDirsKey])
 
   useEffect(() => {
     void getAppPaths()
@@ -57,6 +70,25 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
     }
   }
 
+  async function commitModelPaths() {
+    setReloadError(null)
+    setReloadingComfy(true)
+    try {
+      await flushSettings()
+      const requestedModelDirs = JSON.stringify(useSettingsStore.getState().modelDirs)
+      await reloadComfy()
+      savedModelDirs.current = requestedModelDirs
+      void useHealthStore.getState().refresh()
+    } catch (err) {
+      setReloadError(err instanceof Error ? err.message : 'Could not reload ComfyUI')
+    } finally {
+      setReloadingComfy(false)
+    }
+  }
+
+  const modelPathsChanged =
+    loaded && savedModelDirs.current !== null && savedModelDirs.current !== modelDirsKey
+
   return (
     <div className="flex max-w-3xl flex-col gap-3">
       <SettingsCard query={query} title="Models" terms="models extra folders checkpoints loras local download">
@@ -67,6 +99,25 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
           lockedId={LOCAL_ID}
           livePaths={{ [LOCAL_ID]: paths?.models || '' }}
         />
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className={[
+              'flex items-center gap-1.5 rounded border px-3 py-1.5 text-sm font-semibold',
+              modelPathsChanged
+                ? 'border-accent bg-accent text-ink'
+                : 'border-line bg-field text-muted',
+              'disabled:cursor-not-allowed disabled:opacity-60',
+            ].join(' ')}
+            disabled={!modelPathsChanged || reloadingComfy}
+            title={modelPathsChanged ? 'Write extra model paths and restart ComfyUI' : 'Edit a model path to enable'}
+            onClick={() => void commitModelPaths()}
+          >
+            <AppIcon id="refresh-cw" size={14} />
+            {reloadingComfy ? 'Reloading ComfyUI…' : 'Reload ComfyUI'}
+          </button>
+          {reloadError ? <span className="text-xs text-accent">{reloadError}</span> : null}
+        </div>
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"
@@ -78,8 +129,8 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
         </label>
         <p className="text-xs text-muted">
           Extra folders use the same layout as user/models (checkpoints/, loras/, vae/, controlnet/, embeddings/).
-          The folder at the top is the download target unless Force download to the Local folder is on.
-          ComfyUI may need a restart to load extra checkpoints.
+          The folder at the top is the download target unless Force download to the Local folder is on. Change a
+          model path, then reload ComfyUI to make the extra model paths available there.
         </p>
       </SettingsCard>
       <SettingsCard query={query} title="Wildcards" terms="wildcards extra folders txt yaml local download">

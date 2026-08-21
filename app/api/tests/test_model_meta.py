@@ -49,6 +49,24 @@ class ModelMetaTests(unittest.TestCase):
         self.assertTrue((dest / "src.png").is_file())
         self.assertGreater((dest / "src.png").stat().st_size, 0)
 
+    def test_relocate_missing_source_is_ignored(self) -> None:
+        dest = self.tmp / "dest.png"
+        model_thumbs._relocate(self.tmp / "gone.png", dest)
+        self.assertFalse(dest.exists())
+
+    def test_move_thumbs_merges_when_dest_folder_already_exists(self) -> None:
+        old = "Models_001/Illustrious/Style/LuL1ZS/l1zs_life_is_pi.safetensors"
+        new = "External/Illustrious/Style/LuL1ZS/l1zs_life_is_pi.safetensors"
+        src = self.new_thumbs / "loras" / Path(old)
+        src.mkdir(parents=True)
+        (src / "global.jpg").write_bytes(_png())
+        dest = self.new_thumbs / "loras" / Path(new)
+        dest.mkdir(parents=True)
+        model_thumbs.move_thumbs("loras", old, new)
+        self.assertFalse(src.exists())
+        self.assertTrue((dest / "global.jpg").is_file())
+        self.assertFalse((dest / Path(old).name).exists())
+
     def test_rebuild_index_drops_missing_files(self) -> None:
         model_meta_db.replace_thumb_index(
             {"loras": {"gone.safetensors": {"global": {"mtime": 1, "tags": ["x"]}}}}

@@ -229,6 +229,23 @@ export function paramsEqualApply(a: TemplateParams, b: TemplateParams, apply: st
   return true
 }
 
+export type ModelSwap =
+  | { slot: 'checkpoint' }
+  | { slot: 'textEncoder' }
+  | { slot: 'vae' }
+  | { slot: 'lora'; index: number }
+  | { slot: 'wildcard'; index: number }
+
+export function sameModelSwap(a: ModelSwap | null, b: ModelSwap | null) {
+  if (!a || !b || a.slot !== b.slot) {
+    return false
+  }
+  if ((a.slot === 'lora' || a.slot === 'wildcard') && (b.slot === 'lora' || b.slot === 'wildcard')) {
+    return a.index === b.index
+  }
+  return true
+}
+
 type GenerateState = {
   prompt: string
   negativePrompt: string
@@ -256,6 +273,7 @@ type GenerateState = {
   modelTileStyle: ModelTileStyle
   vae: string
   textEncoder: string
+  swapTarget: ModelSwap | null
   setPrompt: (value: string) => void
   setNegativePrompt: (value: string) => void
   setCheckpoint: (value: string) => void
@@ -272,6 +290,7 @@ type GenerateState = {
   setModelTileStyle: (value: ModelTileStyle) => void
   setVae: (value: string) => void
   setTextEncoder: (value: string) => void
+  setSwapTarget: (value: ModelSwap | null) => void
   setBatchSize: (value: number) => void
   setBatchCount: (value: number) => void
   setSampler: (value: string) => void
@@ -296,6 +315,7 @@ export const useGenerateStore = create<GenerateState>()(
       modelTileStyle: 'tall',
       vae: '',
       textEncoder: '',
+      swapTarget: null,
       setPrompt: (prompt) => set({ prompt }),
       setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
       setCheckpoint: (checkpoint) => set({ checkpoint }),
@@ -321,6 +341,7 @@ export const useGenerateStore = create<GenerateState>()(
       setModelTileStyle: (modelTileStyle) => set({ modelTileStyle: parseModelTileStyle(modelTileStyle) }),
       setVae: (vae) => set({ vae }),
       setTextEncoder: (textEncoder) => set({ textEncoder }),
+      setSwapTarget: (swapTarget) => set({ swapTarget }),
       setBatchSize: (batchSize) => set({ batchSize }),
       setBatchCount: (batchCount) => set({ batchCount }),
       setSampler: (sampler) => set({ sampler }),
@@ -343,7 +364,7 @@ export const useGenerateStore = create<GenerateState>()(
     }),
     {
       name: 'blombo-generate',
-      partialize: ({ viewedImageUrl: _viewed, ...rest }) => rest,
+      partialize: ({ viewedImageUrl: _viewed, swapTarget: _swap, ...rest }) => rest,
       merge: (persisted, current) => {
         const rest = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
         return {

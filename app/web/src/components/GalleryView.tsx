@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
 import { ConfirmDialog } from '@/components/Dialog.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
+import { ChipSelect } from '@/components/ChipSelect.tsx'
 import { LOCAL_ID } from '@/components/FolderList.tsx'
 import { GalleryCreateFolderDialog, GalleryRenameDialog } from '@/components/GalleryDialogs.tsx'
 import { GalleryTree } from '@/components/GalleryTree.tsx'
@@ -21,10 +22,11 @@ import { ModelInfoDialog } from '@/components/ModelInfoDialog.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { ThumbnailScopePicker } from '@/components/ThumbnailScopePicker.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
+import { TilePreview, TILE_GLOW } from '@/components/TilePreview.tsx'
+import { filterTypeSections, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { civitaiSaveThumbView, modelThumbSrc } from '@/lib/thumbView.ts'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
-import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
+import { useSettingsStore, galleryFilterKey, galleryScopeKey, type GalleryViewKind } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
@@ -55,6 +57,15 @@ const TILE_ROW_REM = 24
 const GALLERY_ROWS = 2
 const TILE_GAP_REM = 1
 const TILE_PAD_REM = 1
+const TILE_CELL_PAD_REM = 0.75
+
+function galleryBodyRem(tileH: number) {
+  return (
+    TILE_PAD_REM +
+    GALLERY_ROWS * (tileH + TILE_CELL_PAD_REM) +
+    (GALLERY_ROWS - 1) * TILE_GAP_REM
+  )
+}
 
 export const GALLERY_SORTS = [
   { value: 'name', label: 'Name' },
@@ -71,10 +82,7 @@ type SortDir = GallerySortDir
 
 type GalleryChrome = {
   query: string
-  sortKey?: SortKey
-  sortDir?: SortDir
   showTree: boolean
-  pinSelected: boolean
   treeWidth: number
   openDirs: string[]
   treeScroll: number
@@ -88,7 +96,12 @@ type GalleryViewProps = {
   items: ModelEntry[]
   value?: string
   selected?: string[]
+  focus?: string
   onSelect?: (id: string) => void
+  chromeKey?: string
+  fill?: boolean
+  fileOps?: boolean
+  itemKind?: (item: ModelEntry) => keyof ModelLists
 }
 
 function remPx() {
@@ -188,18 +201,58 @@ function sortItems(items: ModelEntry[], key: SortKey, dir: SortDir) {
   return next
 }
 
-export function GalleryView({ kind, items, value, selected, onSelect }: GalleryViewProps) {
+function matchesTypes(item: ModelEntry, types: string[]) {
+  if (!types.length) {
+    return true
+  }
+  return (item.types || []).some((type) => types.includes(type))
+}
+
+const EMPTY_TYPES: string[] = []
+
+export function GalleryView({
+  kind,
+  items,
+  value,
+  selected,
+  focus,
+  onSelect,
+  chromeKey,
+  fill = false,
+  fileOps = true,
+  itemKind,
+}: GalleryViewProps) {
   const navigate = useNavigate()
-  const saved = chrome.get(kind)
+  const viewKey = chromeKey || kind
+  const filterKey = useSettingsStore((s) => galleryFilterKey(viewKey, s))
+  const scopeKey = useSettingsStore((s) => galleryScopeKey(viewKey, s))
+  const saved = chrome.get(viewKey)
   const sortKind: GalleryViewKind = kind === 'loras' || kind === 'wildcards' ? kind : 'checkpoints'
-  const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[sortKind])
-  const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[sortKind])
+  const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[filterKey] ?? 'name')
+  const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[filterKey] ?? 'asc')
+  const setGallerySortKey = useSettingsStore((s) => s.setGallerySortKey)
+  const setGallerySortDir = useSettingsStore((s) => s.setGallerySortDir)
+  const pinSelected = useSettingsStore((s) => s.galleryPinSelected[filterKey] ?? true)
+  const setGalleryPinSelected = useSettingsStore((s) => s.setGalleryPinSelected)
   const tileScale = useSettingsStore((s) => s.galleryTileScale)
   const parentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
   const modelDirs = useSettingsStore((s) => s.modelDirs)
   const wildcardDirs = useSettingsStore((s) => s.wildcardDirs)
+  const typeFilter = useSettingsStore((s) => s.galleryTypes[filterKey] ?? EMPTY_TYPES)
+  const setGalleryTypes = useSettingsStore((s) => s.setGalleryTypes)
+  const query = useSettingsStore((s) => s.galleryQuery[filterKey] ?? '')
+  const setGalleryQuery = useSettingsStore((s) => s.setGalleryQuery)
+  const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes) ?? []
+  const typeOptions = useMemo(
+    () => filterTypeSections(MODEL_TYPE_SECTIONS, (item) => !hiddenModelTypes.includes(item)),
+    [hiddenModelTypes],
+  )
+  const visibleTypeFilter = useMemo(
+    () => typeFilter.filter((item) => !hiddenModelTypes.includes(item)),
+    [hiddenModelTypes, typeFilter],
+  )
   const extraNames = useMemo(() => {
-    const rows = kind === 'wildcards' ? wildcardDirs : modelDirs
+    const rows = itemKind ? [...modelDirs, ...wildcardDirs] : kind === 'wildcards' ? wildcardDirs : modelDirs
     const names: string[] = []
     const seen = new Set<string>()
     for (const item of rows) {
@@ -212,7 +265,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
       names.push(name)
     }
     return names
-  }, [kind, modelDirs, wildcardDirs])
+  }, [itemKind, kind, modelDirs, wildcardDirs])
   const rowRef = useRef<HTMLDivElement>(null)
   const treeRef = useRef<HTMLDivElement>(null)
   const tilesRef = useRef<HTMLDivElement>(null)
@@ -221,12 +274,13 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     () => new Set(saved?.openDirs?.length ? saved.openDirs : [LOCAL_DIR]),
   )
   const [showTree, setShowTree] = useState(() => saved?.showTree ?? true)
-  const [pinSelected, setPinSelected] = useState(() => saved?.pinSelected ?? true)
-  const [query, setQuery] = useState(() => saved?.query ?? '')
-  const [sortKey, setSortKey] = useState<SortKey | null>(saved?.sortKey ?? null)
-  const [sortDir, setSortDir] = useState<SortDir | null>(saved?.sortDir ?? null)
+  function setQuery(update: string | ((current: string) => string)) {
+    const current = useSettingsStore.getState().galleryQuery[filterKey] ?? ''
+    const next = typeof update === 'function' ? update(current) : update
+    setGalleryQuery(filterKey, next)
+  }
   const [infoItem, setInfoItem] = useState<ModelEntry | null>(null)
-  const [fillConfirm, setFillConfirm] = useState<{ path: string; hit: CivitaiVersion } | null>(null)
+  const [fillConfirm, setFillConfirm] = useState<{ path: string; hit: CivitaiVersion; kind: keyof ModelLists } | null>(null)
   const [filling, setFilling] = useState<string | null>(null)
   const [fsRoots, setFsRoots] = useState<ReturnType<typeof toDisplayRoots>>([])
   const [dragIdent, setDragIdent] = useState<string | null>(null)
@@ -236,18 +290,17 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const [pendingMove, setPendingMove] = useState<{ path: string; folder: string; from: string; to: string } | null>(null)
   const [tileMenu, setTileMenu] = useState<{ x: number; y: number; path: string; name: string; fileTile: boolean } | null>(null)
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
-  const thumbView = useThumbView(sortKind)
-  const shownSortKey = sortKey ?? gallerySortKey
-  const shownSortDir = sortDir ?? gallerySortDir
+  const thumbView = useThumbView(sortKind, scopeKey)
+  const shownSortKey = gallerySortKey
+  const shownSortDir = gallerySortDir
   const tileW = TILE_COL_REM * tileScale
   const tileH = TILE_ROW_REM * tileScale
-  const fileOps = true
+  const tileCellW = tileW + TILE_CELL_PAD_REM
+  const tileCellH = tileH + TILE_CELL_PAD_REM
+  const bodyRem = galleryBodyRem(tileH)
   const snap = useRef({
     query,
-    sortKey: sortKey ?? undefined,
-    sortDir: sortDir ?? undefined,
     showTree,
-    pinSelected,
     treeWidth,
     openDirs,
     treeScroll: saved?.treeScroll ?? 0,
@@ -256,31 +309,36 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   snap.current = {
     ...snap.current,
     query,
-    sortKey: sortKey ?? undefined,
-    sortDir: sortDir ?? undefined,
     showTree,
-    pinSelected,
     treeWidth,
     openDirs,
   }
   const busy = useModelsStore((s) => s.busy)
   const refreshKind = useModelsStore((s) => s.refreshKind)
+  const refreshAll = useModelsStore((s) => s.refresh)
   const pull = useModelsStore((s) => s.pull)
   const setThumb = useModelsStore((s) => s.setThumb)
   const setMeta = useModelsStore((s) => s.setMeta)
+  function kindOf(item: ModelEntry) {
+    return itemKind ? itemKind(item) : kind
+  }
   const paths = useMemo(() => items.map((item) => treeDisplayPath(item, extraNames)).filter(Boolean), [extraNames, items])
   const byTree = useMemo(
     () => new Map(items.map((item) => [treeDisplayPath(item, extraNames), item])),
     [extraNames, items],
   )
   const loadTree = useCallback(async () => {
+    if (itemKind) {
+      setFsRoots([])
+      return
+    }
     try {
       const roots = kind === 'wildcards' ? await getWildcardTree() : await getModelTree(kind)
       setFsRoots(toDisplayRoots(roots, extraNames))
     } catch {
       /* keep current */
     }
-  }, [extraNames, kind])
+  }, [extraNames, itemKind, kind])
   const tree = useMemo(
     () => (fileOps && fsRoots.length ? fsRoots : buildGalleryTree(paths)),
     [fileOps, fsRoots, paths],
@@ -292,6 +350,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     shownSortDir,
     pinSelected ? '1' : '0',
     extraNames.join('\n'),
+    visibleTypeFilter.join('\n'),
     items.map((item) => item.path).join('\n'),
   ].join('\0')
   const pinRef = useRef({ token: layoutToken, selected, value })
@@ -303,9 +362,12 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   const tiles = useMemo(() => {
     const isPinned = (item: ModelEntry) =>
       pinnedSelected ? pinnedSelected.includes(item.path) : Boolean(pinnedValue) && pinnedValue === item.path
+    function keep(item: ModelEntry, pinned: boolean) {
+      return Boolean(modelPath(item)) && (pinned || matchesQuery(item, query, extraNames)) && matchesTypes(item, visibleTypeFilter)
+    }
     if (!pinSelected) {
       return sortItems(
-        items.filter((item) => modelPath(item) && matchesQuery(item, query, extraNames)),
+        items.filter((item) => keep(item, false)),
         shownSortKey,
         shownSortDir,
       )
@@ -313,12 +375,11 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     const pinned: ModelEntry[] = []
     const rest: ModelEntry[] = []
     for (const item of items) {
-      if (!modelPath(item)) {
-        continue
-      }
       if (isPinned(item)) {
-        pinned.push(item)
-      } else if (matchesQuery(item, query, extraNames)) {
+        if (keep(item, true)) {
+          pinned.push(item)
+        }
+      } else if (keep(item, false)) {
         rest.push(item)
       }
     }
@@ -326,7 +387,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
       ? pinnedSelected.flatMap((path) => pinned.filter((item) => item.path === path))
       : sortItems(pinned, shownSortKey, shownSortDir)
     return [...orderedPinned, ...sortItems(rest, shownSortKey, shownSortDir)]
-  }, [extraNames, items, pinnedSelected, pinnedValue, pinSelected, query, shownSortDir, shownSortKey])
+  }, [extraNames, items, pinnedSelected, pinnedValue, pinSelected, query, shownSortDir, shownSortKey, visibleTypeFilter])
 
   function isOn(path: string) {
     if (selected) {
@@ -391,33 +452,33 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
     void runMove(path, folder)
   }
 
-  async function saveCivitai(path: string, hit: CivitaiVersion) {
-    const info = await waitModelInfo(kind, path, undefined, civitaiSaveThumbView())
-    const next = await applyCivitaiMeta(kind, path, hit, { types: info.types || [], prompt: info.prompt || '' })
+  async function saveCivitai(path: string, hit: CivitaiVersion, itemKindName: keyof ModelLists = kind) {
+    const info = await waitModelInfo(itemKindName, path, undefined, civitaiSaveThumbView())
+    const next = await applyCivitaiMeta(itemKindName, path, hit, { types: info.types || [], prompt: info.prompt || '' })
     if (next.thumb) {
-      setThumb(kind, path, next.thumb)
+      setThumb(itemKindName, path, next.thumb)
     }
-    if (kind === 'loras') {
-      setMeta(kind, path, { prompt: next.prompt })
+    if (itemKindName === 'loras') {
+      setMeta(itemKindName, path, { prompt: next.prompt })
     }
   }
 
-  async function downloadCivitai(path: string) {
+  async function downloadCivitai(path: string, itemKindName: keyof ModelLists = kind) {
     if (filling) {
       return
     }
     setFilling(path)
     try {
-      const info = await waitModelInfo(kind, path, undefined, civitaiSaveThumbView())
+      const info = await waitModelInfo(itemKindName, path, undefined, civitaiSaveThumbView())
       const hit = await lookupCivitai(civitaiHashes(info))
       if (!hit) {
         return
       }
-      if (hasCivitaiLocalData(info, kind === 'loras')) {
-        setFillConfirm({ path, hit })
+      if (hasCivitaiLocalData(info, itemKindName === 'loras')) {
+        setFillConfirm({ path, hit, kind: itemKindName })
         return
       }
-      await saveCivitai(path, hit)
+      await saveCivitai(path, hit, itemKindName)
     } catch {
       /* keep current */
     } finally {
@@ -464,19 +525,16 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   useLayoutEffect(() => {
     return () => {
       const now = snap.current
-      chrome.set(kind, {
+      chrome.set(viewKey, {
         query: now.query,
-        sortKey: now.sortKey,
-        sortDir: now.sortDir,
         showTree: now.showTree,
-        pinSelected: now.pinSelected,
         treeWidth: now.treeWidth,
         openDirs: [...now.openDirs],
         treeScroll: treeRef.current?.scrollTop ?? now.treeScroll,
         tileScroll: tilesRef.current?.scrollTop ?? now.tileScroll,
       })
     }
-  }, [kind])
+  }, [viewKey])
 
   useEffect(() => {
     if (treeDirs.size === 0 && paths.length === 0) {
@@ -637,9 +695,9 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'flex flex-col gap-2'}>
       <div className="flex h-8 shrink-0 items-stretch gap-1">
-        <ThumbnailScopePicker fallbackKind={sortKind} />
+        <ThumbnailScopePicker fallbackKind={sortKind} scopeKey={scopeKey} />
       </div>
       <div className="flex h-8 shrink-0 items-stretch gap-1">
         <div className="relative min-w-0 flex-1">
@@ -653,13 +711,19 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
             placeholder="Search…"
           />
         </div>
+        <div className="h-full w-44 shrink-0">
+          <ChipSelect
+            compact
+            options={typeOptions}
+            value={visibleTypeFilter}
+            onChange={(value) => setGalleryTypes(filterKey, value)}
+            placeholder="Types…"
+          />
+        </div>
         <div className="flex h-full w-40 shrink-0 [&>div]:h-full [&>div]:w-full [&_.field-select]:h-full [&_.field-select]:py-0">
           <SelectField
             value={shownSortKey}
-            onChange={(value) => {
-              setSortKey(value as SortKey)
-              setSortDir(shownSortDir)
-            }}
+            onChange={(value) => setGallerySortKey(filterKey, value as SortKey)}
             options={[...GALLERY_SORTS]}
           />
         </div>
@@ -668,10 +732,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
           className="icon-btn"
           aria-label={shownSortDir === 'asc' ? 'Ascending' : 'Descending'}
           title={shownSortDir === 'asc' ? 'Ascending' : 'Descending'}
-          onClick={() => {
-            setSortKey(shownSortKey)
-            setSortDir(shownSortDir === 'asc' ? 'desc' : 'asc')
-          }}
+          onClick={() => setGallerySortDir(filterKey, shownSortDir === 'asc' ? 'desc' : 'asc')}
         >
           <AppIcon id={shownSortDir === 'asc' ? 'arrow-up-narrow-wide' : 'arrow-down-narrow-wide'} />
         </button>
@@ -685,37 +746,39 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
         >
           <AppIcon id="folder-tree" />
         </button>
-        <button
-          type="button"
-          className={['icon-btn', pinSelected ? 'bg-line' : ''].join(' ')}
-          aria-label={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
-          aria-pressed={pinSelected}
-          title={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
-          onClick={() => setPinSelected((on) => !on)}
-        >
-          {pinSelected ? <AppIcon id="eye" /> : <AppIcon id="eye-off" />}
-        </button>
+        {onSelect ? (
+          <button
+            type="button"
+            className={['icon-btn', pinSelected ? 'bg-line' : ''].join(' ')}
+            aria-label={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
+            aria-pressed={pinSelected}
+            title={pinSelected ? 'Unpin selected from top' : 'Pin selected to top'}
+            onClick={() => setGalleryPinSelected(filterKey, !pinSelected)}
+          >
+            {pinSelected ? <AppIcon id="eye" /> : <AppIcon id="eye-off" />}
+          </button>
+        ) : null}
         <button
           type="button"
           className="icon-btn"
           aria-label="Refresh models"
           title="Refresh models (R)"
           disabled={busy}
-          onClick={() => void refreshKind(kind).then(() => loadTree())}
+          onClick={() => void (itemKind ? refreshAll() : refreshKind(kind)).then(() => loadTree())}
         >
           <AppIcon id="refresh-cw" />
         </button>
       </div>
       <div
         ref={rowRef}
-        className="flex min-h-0 flex-1 select-none"
-        style={{ minHeight: `${GALLERY_ROWS * tileH + TILE_GAP_REM + TILE_PAD_REM}rem` }}
+        className={fill ? 'flex min-h-0 flex-1 overflow-hidden select-none' : 'flex min-h-0 overflow-hidden select-none'}
+        style={fill ? undefined : { height: `${bodyRem}rem` }}
       >
         {showTree ? (
           <>
             <div
               ref={treeRef}
-              className="flex min-h-0 shrink-0 flex-col gap-1.5 overflow-y-auto pr-1"
+              className="h-full min-h-0 shrink-0 overflow-y-auto pr-1"
               style={{ width: treeWidth }}
               onScroll={(event) => {
                 snap.current.treeScroll = event.currentTarget.scrollTop
@@ -764,7 +827,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
         ) : null}
         <div
           ref={tilesRef}
-          className="min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
+          className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
           onScroll={(event) => {
             snap.current.tileScroll = event.currentTarget.scrollTop
           }}
@@ -773,26 +836,32 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
             <p className="text-xs text-muted">No items.</p>
           ) : (
             <div
-              className="grid gap-4"
-              style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${tileW}rem, 1fr))` }}
+              className="grid"
+              style={{
+                gap: `${TILE_GAP_REM}rem`,
+                gridAutoRows: `${tileCellH}rem`,
+                gridTemplateColumns: `repeat(auto-fill, minmax(${tileCellW}rem, ${tileCellW}rem))`,
+              }}
             >
               {tiles.map((item) => {
-                const selected = isOn(item.path)
-                const strength = kind === 'loras' ? storedLoraStrengthLabel(item.strength, item.slider) : ''
+                const selected = isOn(item.path) || focus === item.path
+                const itemType = kindOf(item)
+                const strength = itemType === 'loras' ? storedLoraStrengthLabel(item.strength, item.slider) : ''
                 const preview = (
                   <TilePreview
                     className="w-full"
-                    src={modelThumbSrc(kind, item, thumbView)}
+                    src={modelThumbSrc(itemType, item, thumbView)}
                     mark="?"
                     label={tileName(item)}
                     badge={strength || undefined}
+                    selected={selected}
                   />
                 )
                 return (
                   <div
-                    key={item.path}
+                    key={`${itemType}:${item.path}`}
                     className="min-w-0 p-1.5 [content-visibility:auto]"
-                    style={{ containIntrinsicSize: `${tileW}rem ${tileH}rem` }}
+                    style={{ containIntrinsicSize: `${tileCellW}rem ${tileCellH}rem` }}
                   >
                     <div className="group relative">
                       {onSelect ? (
@@ -800,7 +869,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                           type="button"
                           title={item.path}
                           draggable={fileOps}
-                          className={['w-full rounded', selected ? 'ring-2 ring-ink ring-offset-2 ring-offset-panel' : ''].join(' ')}
+                          className={['block w-full rounded', selected ? TILE_GLOW : ''].join(' ')}
                           onClick={() => onSelect(item.path)}
                           onContextMenu={(event) => {
                             if (!fileOps) {
@@ -832,7 +901,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                         <div
                           title={item.path}
                           draggable={fileOps}
-                          className="w-full rounded"
+                          className="block w-full overflow-hidden rounded"
                           onContextMenu={(event) => {
                             if (!fileOps) {
                               return
@@ -861,14 +930,14 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                         </div>
                       )}
                       <div className="absolute top-2 right-2 z-20 flex gap-1 opacity-0 group-hover:opacity-100">
-                      {kind !== 'wildcards' && filePath(item).toLowerCase().endsWith('.safetensors') ? (
+                      {itemType !== 'wildcards' && filePath(item).toLowerCase().endsWith('.safetensors') ? (
                         <button
                           type="button"
                           className="icon-btn"
                           aria-label="Download from Civitai"
                           title="Download from Civitai"
                           disabled={filling === filePath(item)}
-                          onClick={() => void downloadCivitai(filePath(item))}
+                          onClick={() => void downloadCivitai(filePath(item), itemType)}
                         >
                           <AppIcon id="download" />
                         </button>
@@ -893,11 +962,12 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
       </div>
       {infoItem ? (
         <ModelInfoDialog
-          kind={kind}
+          kind={kindOf(infoItem)}
           item={infoItem}
+          scopeKey={scopeKey}
           onClose={() => setInfoItem(null)}
           onSaved={(thumb) => {
-            setThumb(kind, infoItem.path, thumb)
+            setThumb(kindOf(infoItem), infoItem.path, thumb)
             setInfoItem({ ...infoItem, thumb })
           }}
         />
@@ -906,7 +976,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
         <ConfirmDialog
           title="Replace existing data?"
           body={
-            kind === 'loras'
+            fillConfirm.kind === 'loras'
               ? 'Thumbnail, model type, or trigger words are already set. Download from Civitai anyway?'
               : 'Thumbnail or model type is already set. Download from Civitai anyway?'
           }
@@ -920,7 +990,7 @@ export function GalleryView({ kind, items, value, selected, onSelect }: GalleryV
                 const next = fillConfirm
                 setFillConfirm(null)
                 setFilling(next.path)
-                void saveCivitai(next.path, next.hit).finally(() => setFilling(null))
+                void saveCivitai(next.path, next.hit, next.kind).finally(() => setFilling(null))
               },
             },
           ]}

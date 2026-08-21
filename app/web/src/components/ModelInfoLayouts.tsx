@@ -213,7 +213,7 @@ export function ModelInfoActions({
       <input
         ref={pickerRef}
         type="file"
-        accept="image/png,image/jpeg,image/webp"
+        accept="image/png,image/jpeg,image/webp,image/gif,video/mp4"
         className="hidden"
         onChange={(event) => {
           const file = event.target.files?.[0]

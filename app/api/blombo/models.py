@@ -20,9 +20,14 @@ ALL_KINDS = frozenset((*KINDS, "wildcards"))
 HASH_KINDS = ("checkpoints", "loras")
 
 
-def list_models(context: str = model_thumbs.GLOBAL, mode: str = "exact", fallback: bool = False) -> dict[str, list[dict[str, Any]]]:
-    data = {kind: list_kind(kind, context, mode, fallback) for kind in KINDS}
-    data["wildcards"] = list_kind("wildcards", context, mode, fallback)
+def list_models(
+    context: str = model_thumbs.GLOBAL,
+    mode: str = "exact",
+    fallback: bool = False,
+    optional: list[str] | None = None,
+) -> dict[str, list[dict[str, Any]]]:
+    data = {kind: list_kind(kind, context, mode, fallback, optional) for kind in KINDS}
+    data["wildcards"] = list_kind("wildcards", context, mode, fallback, optional)
     return data
 
 
@@ -31,6 +36,7 @@ def list_kind(
     context: str = model_thumbs.GLOBAL,
     mode: str = "exact",
     fallback: bool = False,
+    optional: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
     files: list[str] = []
@@ -57,10 +63,19 @@ def list_kind(
     for item in items:
         tile = str(item["path"])
         rel = str(item.get("source") or tile).split("#", 1)[0]
-        thumb = model_thumbs.resolved_mtime(kind, tile, context, mode, fallback)
+        file_path = model_file(kind, tile)
+        thumb_path = model_thumbs.resolved_file(kind, tile, context, mode, fallback, optional)
+        thumb = model_thumbs.resolved_mtime(kind, tile, context, mode, fallback, optional)
+        global_path = model_thumbs.thumb_at(kind, tile, model_thumbs.GLOBAL)
+        exact_path = model_thumbs.thumb_at(kind, tile, context)
         item["thumb"] = thumb
+        item["thumb_media"] = model_thumbs.thumb_media(thumb_path) if thumb_path else ""
         item["thumb_global"] = model_thumbs.thumb_mtime(kind, tile, model_thumbs.GLOBAL)
+        item["thumb_global_media"] = model_thumbs.thumb_media(global_path) if global_path else ""
         item["thumb_exact"] = model_thumbs.thumb_mtime(kind, tile, context)
+        item["thumb_exact_media"] = model_thumbs.thumb_media(exact_path) if exact_path else ""
+        if file_path is not None and kind != "wildcards":
+            item["hashes"] = hashes.entry(file_path) or {}
         item["edited"] = max(int(item["edited"]), thumb, item["thumb_global"], stamps.get(rel, 0))
         row = info.get(rel) or {}
         item["prompt"] = str(row.get("prompt") or "")
@@ -78,9 +93,10 @@ def refresh_models(
     context: str = model_thumbs.GLOBAL,
     mode: str = "exact",
     fallback: bool = False,
+    optional: list[str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     comfy.warmup_model_lists(kind)
-    data = {kind: list_kind(kind, context, mode, fallback)} if kind else list_models(context, mode, fallback)
+    data = {kind: list_kind(kind, context, mode, fallback, optional)} if kind else list_models(context, mode, fallback, optional)
     hashes.warm(hash_files())
     return data
 
@@ -205,6 +221,7 @@ def model_info(
     context: str = model_thumbs.GLOBAL,
     mode: str = "exact",
     fallback: bool = False,
+    optional: list[str] | None = None,
 ) -> dict | None:
     path = model_file(kind, rel)
     if not path:
@@ -234,7 +251,22 @@ def model_info(
         "strength": info["strength"],
         "slider": info["slider"],
         "type_options": list(model_meta.OPTIONS),
-        "thumb": model_thumbs.resolved_mtime(kind, posix, context, mode, fallback),
+        "thumb": model_thumbs.resolved_mtime(kind, posix, context, mode, fallback, optional),
+        "thumb_media": _thumb_media(kind, posix, context, mode, fallback, optional),
         "thumb_global": model_thumbs.thumb_mtime(kind, posix, model_thumbs.GLOBAL),
+        "thumb_global_media": _thumb_media(kind, posix, model_thumbs.GLOBAL),
         "thumb_exact": model_thumbs.thumb_mtime(kind, posix, context),
+        "thumb_exact_media": _thumb_media(kind, posix, context),
     }
+
+
+def _thumb_media(
+    kind: str,
+    path: str,
+    context: str,
+    mode: str = "exact",
+    fallback: bool = False,
+    optional: list[str] | None = None,
+) -> str:
+    file = model_thumbs.resolved_file(kind, path, context, mode, fallback, optional)
+    return model_thumbs.thumb_media(file) if file else ""

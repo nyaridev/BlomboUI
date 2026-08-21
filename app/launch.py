@@ -33,6 +33,7 @@ COMFY_BUNDLED = RUNTIME / "comfy" / "ComfyUI"
 WEB = APP / "web"
 API = APP / "api"
 RESTART_FLAG = RUNTIME / "tmp" / "restart"
+COMFY_RESTART_FLAG = RUNTIME / "tmp" / "comfy-restart"
 
 API_HOST = "127.0.0.1"
 API_PORT = 4173
@@ -297,6 +298,13 @@ def _consume_restart() -> bool:
     return True
 
 
+def _clear_comfy_restart() -> None:
+    try:
+        COMFY_RESTART_FLAG.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
 def _comfy_url() -> str:
     return f"http://{COMFY_HOST}:{COMFY_PORT}"
 
@@ -388,6 +396,7 @@ def run_servers(settings: dict[str, str | None]) -> int:
     web_url = f"http://{WEB_HOST}:{WEB_PORT}"
     api_url = f"http://{API_HOST}:{API_PORT}"
     comfy_ready = False
+    comfy_restarting = False
 
     try:
         comfy_proc = start_comfy(settings)
@@ -435,6 +444,36 @@ def run_servers(settings: dict[str, str | None]) -> int:
                     return 1
                 print(f"    {_c('38;5;114', 'OK')}     Reloaded")
                 continue
+            if COMFY_RESTART_FLAG.is_file() and not comfy_restarting:
+                print(f"    {_c('38;5;245', 'reload')} ComfyUI")
+                comfy_restarting = True
+                comfy_ready = False
+                stop(comfy_proc)
+                comfy_proc = None
+                free_port(COMFY_PORT)
+                stats = f"{_comfy_url()}/system_stats"
+                for _ in range(25):
+                    if not reachable(stats) and not pids_listening(COMFY_PORT):
+                        break
+                    free_port(COMFY_PORT)
+                    time.sleep(0.2)
+                comfy_proc = start_comfy(settings)
+                if comfy_proc is None and not reachable(f"{_comfy_url()}/system_stats"):
+                    _clear_comfy_restart()
+                    comfy_restarting = False
+                    print(f"    {_c('38;5;203', 'ERROR')}  ComfyUI failed to reload")
+                continue
+            if comfy_restarting:
+                if reachable(f"{_comfy_url()}/system_stats"):
+                    _clear_comfy_restart()
+                    comfy_restarting = False
+                    comfy_ready = True
+                    print(f"    {_c('38;5;114', 'OK')}     ComfyUI reloaded")
+                elif comfy_proc is not None and comfy_proc.poll() is not None:
+                    _clear_comfy_restart()
+                    comfy_restarting = False
+                    comfy_proc = None
+                    print(f"    {_c('38;5;203', 'ERROR')}  ComfyUI failed to reload")
             if api_proc.poll() is not None:
                 print(f"    {_c('38;5;221', 'WARN')}   API exited ({api_proc.returncode}); restarting")
                 stop(api_proc)

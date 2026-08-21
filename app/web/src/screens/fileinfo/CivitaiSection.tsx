@@ -30,8 +30,8 @@ function Stage({ fail, children }: { fail?: boolean; children: ReactNode }) {
   return (
     <div
       className={[
-        'relative h-[34rem] w-full overflow-hidden',
-        fail ? 'rounded-2xl border border-red bg-red/15' : '',
+        'relative w-full overflow-hidden',
+        fail ? 'h-11 rounded-md border border-red bg-red/15' : 'h-[34rem]',
       ].join(' ')}
     >
       {children}

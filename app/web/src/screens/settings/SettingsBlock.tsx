@@ -1,8 +1,12 @@
 import type { ReactNode } from 'react'
 
 export function matchesSetting(query: string, ...parts: string[]) {
-  const q = query.trim().toLowerCase()
-  return !q || parts.join(' ').toLowerCase().includes(q)
+  const tokens = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (!tokens.length) {
+    return true
+  }
+  const hay = parts.join(' ').toLowerCase()
+  return tokens.every((token) => hay.includes(token))
 }
 
 export function SettingsCard({
@@ -18,11 +22,16 @@ export function SettingsCard({
   id?: string
   children: ReactNode
 }) {
-  if (!matchesSetting(query, title, terms)) {
-    return null
-  }
+  const hit = matchesSetting(query, title, terms)
+  const searching = query.trim().length > 0
   return (
-    <section id={id} className="settings-card flex flex-col gap-3 rounded-md border border-line bg-panel p-2">
+    <section
+      id={id}
+      className={[
+        'settings-card flex-col gap-3 rounded-md border border-line bg-panel p-2',
+        searching && !hit ? 'hidden has-[.settings-block]:flex' : 'flex',
+      ].join(' ')}
+    >
       <h2 className="text-xs text-label">{title}</h2>
       {children}
     </section>

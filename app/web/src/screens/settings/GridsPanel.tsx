@@ -1,14 +1,16 @@
+import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
+import { IMAGE_FORMATS, useSettingsStore, type ImageFormat } from '@/stores/settingsStore.ts'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
 
 export const GRIDS_QUERY =
-  'grids batch grid contact sheet jpg jpeg quality max images row count empty gaps fill cancel cancelled interrupted skip unfinished'
+  'grids batch grid contact sheet png jpg jpeg webp format quality max images row count empty gaps fill cancel cancelled interrupted skip unfinished'
 
 export function GridsPanel({ query = '' }: { query?: string }) {
   const batchGrid = useSettingsStore((s) => s.batchGrid)
   const batchGridMax = useSettingsStore((s) => s.batchGridMax)
   const batchGridQuality = useSettingsStore((s) => s.batchGridQuality)
+  const gridFormat = useSettingsStore((s) => s.gridFormat)
   const batchGridRows = useSettingsStore((s) => s.batchGridRows)
   const batchGridFill = useSettingsStore((s) => s.batchGridFill)
   const batchGridOnCancel = useSettingsStore((s) => s.batchGridOnCancel)
@@ -17,6 +19,7 @@ export function GridsPanel({ query = '' }: { query?: string }) {
   const setBatchGrid = useSettingsStore((s) => s.setBatchGrid)
   const setBatchGridMax = useSettingsStore((s) => s.setBatchGridMax)
   const setBatchGridQuality = useSettingsStore((s) => s.setBatchGridQuality)
+  const setGridFormat = useSettingsStore((s) => s.setGridFormat)
   const setBatchGridRows = useSettingsStore((s) => s.setBatchGridRows)
   const setBatchGridFill = useSettingsStore((s) => s.setBatchGridFill)
   const setBatchGridOnCancel = useSettingsStore((s) => s.setBatchGridOnCancel)
@@ -69,15 +72,25 @@ export function GridsPanel({ query = '' }: { query?: string }) {
           Off by default. Skip and cancel still put the unfinished preview into the contact sheet when it is saved.
         </p>
       </SettingsCard>
-      <SettingsCard query={query} title="Layout" terms="max images sheet jpeg quality row count empty gaps fill">
+      <SettingsCard query={query} title="Layout" terms="grid max images sheet png jpg jpeg webp format quality row count empty gaps fill">
         <SettingsBlock query={query} title="Max images in sheet" terms="grid size split extra">
           <SliderField value={batchGridMax} onChange={setBatchGridMax} min={2} max={100} />
           <p className="text-xs text-muted">
             Extra images start another sheet — 16 shots with a max of 12 become two grids.
           </p>
         </SettingsBlock>
-        <SettingsBlock query={query} title="JPEG quality" terms="grid jpg">
-          <SliderField value={batchGridQuality} onChange={setBatchGridQuality} min={40} max={95} />
+        <SettingsBlock query={query} title="Grid format" terms="png jpg jpeg webp extension">
+          <SelectField
+            value={gridFormat}
+            onChange={(value) => setGridFormat(value as ImageFormat)}
+            options={[...IMAGE_FORMATS]}
+          />
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Quality" terms="grid jpg jpeg webp quality">
+          <div className={gridFormat === 'png' ? 'pointer-events-none opacity-40' : ''}>
+            <SliderField value={batchGridQuality} onChange={setBatchGridQuality} min={40} max={95} />
+          </div>
+          <p className="text-xs text-muted">Used for JPEG and WebP grids.</p>
         </SettingsBlock>
         <SettingsBlock query={query} title="Grid row count" terms="layout 25x25 auto">
           <SliderField value={batchGridRows} onChange={setBatchGridRows} min={0} max={25} />

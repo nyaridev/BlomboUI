@@ -3,7 +3,7 @@ import { modelThumbSrc } from '@/lib/thumbView.ts'
 import { type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt } from '@/lib/loraTags.ts'
 import { parseWildcardTags, removeWildcardAt, wildcardMatches } from '@/lib/wildcardTags.ts'
-import { useGenerateStore } from '@/stores/generateStore.ts'
+import { useGenerateStore, sameModelSwap, type ModelSwap } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
@@ -30,6 +30,8 @@ export function ModelTileRow({
   const setTextEncoder = useGenerateStore((s) => s.setTextEncoder)
   const vae = useGenerateStore((s) => s.vae)
   const setVae = useGenerateStore((s) => s.setVae)
+  const swapTarget = useGenerateStore((s) => s.swapTarget)
+  const setSwapTarget = useGenerateStore((s) => s.setSwapTarget)
   const setModelTileStyle = useGenerateStore((s) => s.setModelTileStyle)
   const checkpoints = useModelsStore((s) => s.checkpoints)
   const vaes = useModelsStore((s) => s.vae)
@@ -53,41 +55,49 @@ export function ModelTileRow({
   const wildHits = parseWildcardTags(prompt)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [fade, setFade] = useState({ left: false, right: false })
+  function focus(swap: ModelSwap, tab: GenerateTab) {
+    setSwapTarget(sameModelSwap(swapTarget, swap) ? null : swap)
+    onOpenTab(tab)
+  }
   const groups: Group[] = [
     {
       id: 'models',
       tab: 'Base Model',
       labelEach: true,
       tiles: [
-        slotTile('Checkpoint', checkpoint, checkpoints, 'checkpoints', setCheckpoint),
-        slotTile('Text encoder', textEncoder, checkpoints, 'checkpoints', setTextEncoder),
-        slotTile('VAE', vae, vaes, 'vae', setVae),
+        slotTile('Checkpoint', checkpoint, checkpoints, 'checkpoints', setCheckpoint, { slot: 'checkpoint' }),
+        slotTile('Text encoder', textEncoder, checkpoints, 'checkpoints', setTextEncoder, { slot: 'textEncoder' }),
+        slotTile('VAE', vae, vaes, 'vae', setVae, { slot: 'vae' }),
       ],
     },
     {
       id: 'loras',
-      tab: 'Lora',
-      label: 'Lora',
+      tab: 'LoRa',
+      label: 'LoRa',
       tiles: [
         ...loraHits.map((hit, index) => {
           const item = loras.find((row) => loraNameMatches(hit.name, row.path)) ?? null
           return promptTile(
-            'Lora',
+            'LoRa',
             hit.name,
             item,
             'loras',
             index,
+            { slot: 'lora', index },
             () => {
               const extra = item?.prompt || ''
               const next = removeLoraAt(prompt, negativePrompt, index, extra)
               setPrompt(next.prompt)
               setNegativePrompt(next.negativePrompt)
+              if (swapTarget?.slot === 'lora' && swapTarget.index === index) {
+                setSwapTarget(null)
+              }
             },
             hit.invalid ? hit.raw.trim() || '?' : formatLoraStrength(hit.strength),
             hit.invalid,
           )
         }),
-        emptyTile('Lora'),
+        emptyTile('LoRa', { slot: 'lora', index: -1 }),
       ],
     },
     {
@@ -97,11 +107,14 @@ export function ModelTileRow({
       tiles: [
         ...wildHits.map((hit, index) => {
           const item = wildcards.find((row) => wildcardMatches(row, hit.name)) ?? null
-          return promptTile('Wildcard', hit.name, item, 'wildcards', index, () => {
+          return promptTile('Wildcard', hit.name, item, 'wildcards', index, { slot: 'wildcard', index }, () => {
             setPrompt(removeWildcardAt(prompt, index))
+            if (swapTarget?.slot === 'wildcard' && swapTarget.index === index) {
+              setSwapTarget(null)
+            }
           })
         }),
-        emptyTile('Wildcard'),
+        emptyTile('Wildcard', { slot: 'wildcard', index: -1 }),
       ],
     },
   ]
@@ -170,7 +183,7 @@ export function ModelTileRow({
         </div>
       </div>
       <div className="relative min-w-0 flex-1">
-        <div ref={scrollerRef} className="min-w-0 overflow-x-auto">
+        <div ref={scrollerRef} className="min-w-0 overflow-x-auto py-1.5">
           <div className={['flex w-max items-end transition-[gap] duration-300 ease-out motion-reduce:transition-none', spec.gap].join(' ')}>
             {groups.map((group, index) => (
               <div key={group.id} className="contents">
@@ -181,7 +194,12 @@ export function ModelTileRow({
                       <RowLabel show={spec.overlay} width={spec.width} title={tile.role}>
                         {tile.role}
                       </RowLabel>
-                      <Tile style={style} tile={tile} onOpen={() => onOpenTab(group.tab)} />
+                      <Tile
+                        style={style}
+                        tile={tile}
+                        active={sameModelSwap(swapTarget, tile.swap)}
+                        onOpen={() => focus(tile.swap, group.tab)}
+                      />
                     </div>
                   ))
                 ) : (
@@ -194,7 +212,13 @@ export function ModelTileRow({
                       ].join(' ')}
                     >
                       {group.tiles.map((tile) => (
-                        <Tile key={tile.key} style={style} tile={tile} onOpen={() => onOpenTab(group.tab)} />
+                        <Tile
+                          key={tile.key}
+                          style={style}
+                          tile={tile}
+                          active={sameModelSwap(swapTarget, tile.swap)}
+                          onOpen={() => focus(tile.swap, group.tab)}
+                        />
                       ))}
                     </div>
                   </div>
@@ -251,10 +275,12 @@ function Tile({
   style,
   tile,
   onOpen,
+  active,
 }: {
   style: ModelTileStyle
   tile: TileSpec
   onOpen: () => void
+  active: boolean
 }) {
   return (
     <ModelTile
@@ -268,6 +294,7 @@ function Tile({
       warn={tile.warn}
       onOpen={onOpen}
       onClear={tile.onClear}
+      active={active}
     />
   )
 }
@@ -284,6 +311,7 @@ type TileSpec = {
   key: string
   role: string
   name: string
+  swap: ModelSwap
   src?: string | null
   empty?: boolean
   unresolved?: boolean
@@ -298,9 +326,10 @@ function slotTile(
   items: ModelEntry[],
   kind: keyof ModelLists,
   onClear: (value: string) => void,
+  swap: ModelSwap,
 ): TileSpec {
   if (!value.trim()) {
-    return { key: `${role}-empty`, role, name: role, empty: true }
+    return { key: `${role}-empty`, role, name: role, empty: true, swap }
   }
   const item = items.find((row) => modelPath(row) === value) ?? null
   return {
@@ -310,6 +339,7 @@ function slotTile(
     src: thumbSrc(kind, item),
     unresolved: !item,
     onClear: () => onClear(''),
+    swap,
   }
 }
 
@@ -319,6 +349,7 @@ function promptTile(
   item: ModelEntry | null,
   kind: keyof ModelLists,
   index: number,
+  swap: ModelSwap,
   onClear: () => void,
   badge?: string,
   warn?: boolean,
@@ -332,11 +363,12 @@ function promptTile(
     badge,
     warn,
     onClear,
+    swap,
   }
 }
 
-function emptyTile(role: string): TileSpec {
-  return { key: `${role}-add`, role, name: role, empty: true }
+function emptyTile(role: string, swap: ModelSwap): TileSpec {
+  return { key: `${role}-add`, role, name: role, empty: true, swap }
 }
 
 function displayName(item: ModelEntry | null, fallback: string) {

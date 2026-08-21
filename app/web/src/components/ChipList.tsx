@@ -1,17 +1,34 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
-import { Fragment, type ReactNode, useState } from 'react'
+import { Fragment, type ReactNode, useRef, useState } from 'react'
 
 type ChipListProps = {
   value: string[]
   onChange: (value: string[]) => void
-  onChipClick?: () => void
+  onChipClick?: (item: string) => void
   children?: ReactNode
   removable?: boolean
+  className?: string
+  chipClassName?: (item: string) => string
+  chipTitle?: (item: string) => string
+  chipLabel?: (item: string) => string
+  renderChip?: (item: string) => ReactNode
 }
 
-export function ChipList({ value, onChange, onChipClick, children, removable = true }: ChipListProps) {
+export function ChipList({
+  value,
+  onChange,
+  onChipClick,
+  children,
+  removable = true,
+  className = 'flex min-h-6 min-w-0 flex-1 flex-wrap gap-1',
+  chipClassName,
+  chipTitle,
+  chipLabel,
+  renderChip,
+}: ChipListProps) {
   const [drag, setDrag] = useState<number | null>(null)
   const [slot, setSlot] = useState<number | null>(null)
+  const dragged = useRef(false)
 
   function remove(item: string) {
     onChange(value.filter((entry) => entry !== item))
@@ -38,7 +55,7 @@ export function ChipList({ value, onChange, onChipClick, children, removable = t
 
   return (
     <div
-      className="flex min-h-6 min-w-0 flex-1 flex-wrap gap-1"
+      className={className}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault()
@@ -52,19 +69,29 @@ export function ChipList({ value, onChange, onChipClick, children, removable = t
           ) : null}
           <span
             draggable
+            title={chipTitle?.(item)}
             className={[
-              'inline-flex cursor-grab items-center gap-1 rounded bg-bg px-1.5 py-0.5 text-xs text-ink active:cursor-grabbing',
+              'inline-flex shrink-0 cursor-grab items-center gap-1 rounded px-1.5 py-0.5 text-xs active:cursor-grabbing',
+              chipClassName?.(item) || 'bg-bg text-ink',
               drag === index ? 'opacity-20' : '',
             ].join(' ')}
             onClick={(event) => {
               event.stopPropagation()
-              onChipClick?.()
+              if (dragged.current) {
+                return
+              }
+              onChipClick?.(item)
             }}
             onDragStart={(event) => {
+              event.stopPropagation()
               event.dataTransfer.effectAllowed = 'move'
               event.dataTransfer.setData('text/plain', item)
+              dragged.current = false
               setDrag(index)
               setSlot(index)
+            }}
+            onDrag={() => {
+              dragged.current = true
             }}
             onDragOver={(event) => {
               event.preventDefault()
@@ -81,12 +108,12 @@ export function ChipList({ value, onChange, onChipClick, children, removable = t
             }}
             onDragEnd={clearDrag}
           >
-            {item}
+            {renderChip ? renderChip(item) : item}
             {removable ? (
               <button
                 type="button"
                 className="px-0.5 text-sm leading-none text-muted hover:text-ink"
-                aria-label={`Remove ${item}`}
+                aria-label={`Remove ${chipLabel?.(item) || item}`}
                 onClick={(event) => {
                   event.stopPropagation()
                   remove(item)

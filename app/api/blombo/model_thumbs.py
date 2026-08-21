@@ -11,10 +11,17 @@ from blombo import thumbnail_embed, thumbnail_scopes
 
 ROOT = USER / "model_thumbs"
 THUMBS = ROOT
-THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp")
+THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4")
 THUMB_MAX = 512
 _FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}
-_MEDIA = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".webp": "image/webp"}
+_MEDIA = {
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".mp4": "video/mp4",
+}
 GLOBAL = thumbnail_scopes.GLOBAL_ID
 
 
@@ -57,6 +64,7 @@ def resolved_file(
     context: str = GLOBAL,
     mode: str = "exact",
     fallback: bool = False,
+    optional: list[str] | None = None,
 ) -> Path | None:
     ident = _ident(rel)
     if not ident:
@@ -71,15 +79,17 @@ def resolved_file(
         return None
     if exact:
         return exact
-    query = thumbnail_scopes.query_for(thumbnail_scopes.parse_context(key))
+    ids = thumbnail_scopes.parse_context(key)
     best: tuple[tuple[int, int, int], int, Path] | None = None
     for ctx, row in _ident_index(kind, ident).items():
-        if ctx == key:
+        if ctx == key or ctx == GLOBAL:
             continue
         path = thumb_at(kind, ident, ctx)
         if not path:
             continue
-        rank = thumbnail_scopes.rank_tags(query, row.get("tags") if isinstance(row, dict) else None)
+        rank = thumbnail_scopes.rank_thumb(
+            ids, ctx, row.get("tags") if isinstance(row, dict) else None, optional
+        )
         if not rank:
             continue
         score = (rank, _mtime(path), path)
@@ -92,22 +102,63 @@ def resolved_file(
     return None
 
 
-def resolved_mtime(kind: str, rel: str, context: str, mode: str, fallback: bool) -> int:
-    return _mtime(resolved_file(kind, rel, context, mode, fallback))
+def resolved_mtime(
+    kind: str,
+    rel: str,
+    context: str,
+    mode: str,
+    fallback: bool,
+    optional: list[str] | None = None,
+) -> int:
+    return _mtime(resolved_file(kind, rel, context, mode, fallback, optional))
 
 
-def save_thumb(kind: str, rel: str, data: bytes, context: str = GLOBAL, meta: dict[str, Any] | None = None) -> int:
+def save_thumb(
+    kind: str,
+    rel: str,
+    data: bytes,
+    context: str = GLOBAL,
+    meta: dict[str, Any] | None = None,
+    media: str = "",
+) -> int:
     ident = _ident(rel)
     if not ident:
         raise ValueError("invalid path")
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
     from PIL import Image
 
-    try:
-        image = Image.open(BytesIO(data))
-        image.load()
-    except Exception as exc:
-        raise ValueError("could not read image") from exc
+    ext = _media_ext(data, media)
+    image = None
+    if ext == ".gif":
+        try:
+            image = Image.open(BytesIO(data))
+            image.verify()
+        except Exception as exc:
+            raise ValueError("could not read gif") from exc
+    elif ext == ".mp4":
+        if not _is_mp4(data):
+            raise ValueError("could not read mp4")
+    else:
+        try:
+            image = Image.open(BytesIO(data))
+            image.load()
+        except Exception as exc:
+            raise ValueError("could not read image") from exc
+    if ext in (".gif", ".mp4"):
+        source = thumbnail_embed.extract_source(data) if image is not None else {}
+        if meta:
+            _apply_meta(source, meta)
+        payload = thumbnail_embed.pack(key, source)
+        dest = Path(str(thumb_dir(kind, ident) / key) + ext)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        for old in thumb_paths(kind, ident, key):
+            if old != dest and old.is_file():
+                old.unlink()
+        dest.write_bytes(data)
+        stamp = int(dest.stat().st_mtime)
+        _set_index(kind, ident, key, stamp, payload.get("tags") if isinstance(payload.get("tags"), list) else [])
+        return stamp
+    assert image is not None
     fmt = (image.format or "").upper()
     ext = _FORMATS.get(fmt)
     if not ext:
@@ -116,18 +167,7 @@ def save_thumb(kind: str, rel: str, data: bytes, context: str = GLOBAL, meta: di
         image.thumbnail((THUMB_MAX, THUMB_MAX))
     source = thumbnail_embed.extract_source(data)
     if meta:
-        if meta.get("tags") is not None:
-            source["tags"] = meta.get("tags")
-        if meta.get("prompt"):
-            source["prompt"] = str(meta["prompt"])
-        if meta.get("parameters"):
-            source["parameters"] = str(meta["parameters"])
-        if isinstance(meta.get("raw"), dict):
-            source["raw"] = meta["raw"]
-        if meta.get("origin"):
-            source["origin"] = str(meta["origin"])
-        if isinstance(meta.get("civitai"), dict):
-            source["civitai"] = meta["civitai"]
+        _apply_meta(source, meta)
     payload = thumbnail_embed.pack(key, source)
     dest = Path(str(thumb_dir(kind, ident) / key) + ext)
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -220,7 +260,9 @@ def move_thumbs(kind: str, old: str, new: str) -> None:
                 return dest_ident + key[len(src_ident) :]
         return None
 
-    for ident in list(iter_idents(kind)):
+    idents = [ident for ident in iter_idents(kind) if mapped(ident)]
+    idents.sort(key=len, reverse=True)
+    for ident in idents:
         nxt = mapped(ident)
         if nxt:
             _move_ident(kind, ident, nxt)
@@ -297,6 +339,41 @@ def contexts(kind: str, rel: str) -> dict[str, dict[str, Any]]:
     return _ident_index(kind, ident)
 
 
+LOOKUP_KINDS = ("checkpoints", "loras", "wildcards")
+
+
+def list_saved() -> list[dict[str, Any]]:
+    data = _load_index()
+    out: list[dict[str, Any]] = []
+    for kind in LOOKUP_KINDS:
+        rows = data.get(kind)
+        if not isinstance(rows, dict):
+            continue
+        for ident, contexts in rows.items():
+            if not isinstance(contexts, dict):
+                continue
+            path = str(ident)
+            for ctx, meta in contexts.items():
+                key = str(ctx)
+                if not thumbnail_scopes.is_context_key(key):
+                    continue
+                ids = thumbnail_scopes.parse_context(key)
+                file = thumb_at(kind, str(ident), key)
+                stamp = int(meta.get("mtime") or 0) if isinstance(meta, dict) else 0
+                out.append(
+                    {
+                        "kind": kind,
+                        "path": path,
+                        "context": key,
+                        "scopes": [item for item in ids if item != GLOBAL],
+                        "mtime": stamp,
+                        "media": thumb_media(file) if file else "",
+                    }
+                )
+    out.sort(key=lambda row: (-int(row["mtime"]), str(row["kind"]), str(row["path"])))
+    return out
+
+
 def rebuild_index() -> None:
     data: dict[str, dict[str, dict[str, Any]]] = {}
     if THUMBS.is_dir():
@@ -325,6 +402,34 @@ def _ident(rel: str) -> str | None:
     if not ident or ".." in Path(ident).parts:
         return None
     return ident
+
+
+def _media_ext(data: bytes, media: str) -> str:
+    mime = str(media or "").split(";", 1)[0].strip().lower()
+    if mime == "image/gif" or data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if mime == "video/mp4" or _is_mp4(data):
+        return ".mp4"
+    return ""
+
+
+def _is_mp4(data: bytes) -> bool:
+    return len(data) >= 12 and data[4:8] == b"ftyp"
+
+
+def _apply_meta(source: dict[str, Any], meta: dict[str, Any]) -> None:
+    if meta.get("tags") is not None:
+        source["tags"] = meta.get("tags")
+    if meta.get("prompt"):
+        source["prompt"] = str(meta["prompt"])
+    if meta.get("parameters"):
+        source["parameters"] = str(meta["parameters"])
+    if isinstance(meta.get("raw"), dict):
+        source["raw"] = meta["raw"]
+    if meta.get("origin"):
+        source["origin"] = str(meta["origin"])
+    if isinstance(meta.get("civitai"), dict):
+        source["civitai"] = meta["civitai"]
 
 
 def _thumb_ext(name: str) -> str:
@@ -361,12 +466,36 @@ def _mtime(path: Path | None) -> int:
 
 
 def _relocate(src: Path, dest: Path) -> None:
+    if not src.exists():
+        return
     dest.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if dest.resolve() == src.resolve():
+        if dest.exists() and dest.resolve() == src.resolve():
             return
     except OSError:
         pass
+    if src.is_dir():
+        if dest.is_file():
+            dest.unlink(missing_ok=True)
+        if dest.is_dir():
+            for child in list(src.iterdir()):
+                _relocate(child, dest / child.name)
+            try:
+                src.rmdir()
+            except OSError:
+                pass
+            return
+        try:
+            src.rename(dest)
+        except OSError:
+            dest.mkdir(parents=True, exist_ok=True)
+            for child in list(src.iterdir()):
+                _relocate(child, dest / child.name)
+            try:
+                src.rmdir()
+            except OSError:
+                pass
+        return
     if dest.is_dir():
         dest = dest / src.name
         dest.parent.mkdir(parents=True, exist_ok=True)
@@ -376,19 +505,22 @@ def _relocate(src: Path, dest: Path) -> None:
     try:
         src.rename(dest)
     except OSError:
+        if not src.is_file():
+            return
         dest.write_bytes(src.read_bytes())
         src.unlink(missing_ok=True)
 
 
 def _move_ident(kind: str, old: str, new: str) -> None:
     src = thumb_dir(kind, old)
-    if not src.is_dir():
+    if not src.exists():
         return
     dest = thumb_dir(kind, new)
-    if dest.exists():
-        for file in list(src.iterdir()):
-            if file.is_file():
-                _relocate(file, dest / file.name)
+    if dest.is_file():
+        dest.unlink(missing_ok=True)
+    if dest.is_dir():
+        for child in list(src.iterdir()):
+            _relocate(child, dest / child.name)
         _prune_empty(src, THUMBS / kind)
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -446,15 +578,21 @@ def _drop_context(kind: str, ident: str, context: str) -> None:
     rows = data.get(kind)
     if not isinstance(rows, dict):
         return
-    item = rows.get(ident)
-    if not isinstance(item, dict) or context not in item:
-        return
-    item.pop(context, None)
-    if not item:
-        rows.pop(ident, None)
+    changed = False
+    for stored in list(rows):
+        if stored != ident and _ident(str(stored)) != ident:
+            continue
+        item = rows.get(stored)
+        if not isinstance(item, dict) or context not in item:
+            continue
+        item.pop(context, None)
+        changed = True
+        if not item:
+            rows.pop(stored, None)
     if not rows:
         data.pop(kind, None)
-    _write_index(data)
+    if changed:
+        _write_index(data)
 
 
 def _drop_ident(kind: str, ident: str) -> None:

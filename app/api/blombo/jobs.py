@@ -32,6 +32,7 @@ DEFAULTS = {
 }
 
 PREVIEW_EVERY = 4
+PREVIEW_AFTER = 8
 MAX_STORED_JOBS = 500
 _SEED_AFTER = {"randomize", "fixed", "increment", "decrement"}
 
@@ -66,9 +67,14 @@ class LiveJob:
         self.batch_i = 0
         self.batch_count = max(1, batch_count)
         self.preview: bytes | None = None
+        self.latest: bytes | None = None
         self.snapshots: dict[int, bytes] = {}
+        self.preview_rev = 0
         self.skip = False
         self.cancel = False
+        self.preview_enabled, self.preview_every, self.preview_after, self.preview_last, self.preview_after_first = (
+            _preview_opts()
+        )
 
 
 _live: dict[str, LiveJob] = {}
@@ -113,12 +119,52 @@ def _record_output(job_id: str, values: dict[str, Any], ident: str, path: Path, 
     db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
 
 
-def _keep_snapshot(step: int, total: int) -> bool:
+def _preview_first(every: int, after: int) -> int:
+    every = max(1, every)
+    after = max(1, after)
+    extra = after % every
+    return after if extra == 0 else after + (every - extra)
+
+
+def _preview_opts() -> tuple[bool, int, int, bool, bool]:
+    data = settings.load()
+    enabled = True if "genPreview" not in data else bool(data.get("genPreview"))
+    try:
+        every = max(1, min(150, int(data.get("genPreviewEvery") or PREVIEW_EVERY)))
+    except (TypeError, ValueError):
+        every = PREVIEW_EVERY
+    try:
+        after = max(1, min(150, int(data.get("genPreviewAfter") or PREVIEW_AFTER)))
+    except (TypeError, ValueError):
+        after = PREVIEW_AFTER
+    last = True if "genPreviewLast" not in data else bool(data.get("genPreviewLast"))
+    after_first = True if "genPreviewAfterFirst" not in data else bool(data.get("genPreviewAfterFirst"))
+    return enabled, every, after, last, after_first
+
+
+def _clear_preview(live: LiveJob) -> None:
+    live.preview = None
+    live.latest = None
+    live.snapshots.clear()
+
+
+def _show_preview(live: LiveJob, data: bytes, step: int) -> None:
+    live.preview = data
+    live.snapshots[step] = data
+    live.preview_rev += 1
+
+
+def _keep_snapshot(live: LiveJob, step: int) -> bool:
     if step <= 0:
         return False
-    if total and step == total:
+    if not live.preview_enabled:
+        return False
+    if live.preview_last and live.max and step == live.max:
         return True
-    return step % PREVIEW_EVERY == 0
+    after = live.preview_every if live.preview_after_first and live.batch_i > 0 else live.preview_after
+    if step < _preview_first(live.preview_every, after):
+        return False
+    return step % live.preview_every == 0
 
 
 def _on_live(job_id: str, event: dict[str, Any]) -> None:
@@ -134,23 +180,32 @@ def _on_live(job_id: str, event: dict[str, Any]) -> None:
             live.batch_i = int(event["batch_i"])
         if event.get("batch_count") is not None:
             live.batch_count = max(1, int(event["batch_count"]))
-        if event.get("value") is not None:
-            live.value = int(event["value"])
         if event.get("max") is not None:
             live.max = int(event["max"])
+        if event.get("value") is not None:
+            live.value = int(event["value"])
+            if live.latest and _keep_snapshot(live, live.value):
+                _show_preview(live, live.latest, live.value)
         preview = event.get("preview")
         if isinstance(preview, (bytes, bytearray)) and preview:
             data = bytes(preview)
-            live.preview = data
-            if _keep_snapshot(live.value, live.max):
-                live.snapshots[live.value] = data
+            live.latest = data
+            if _keep_snapshot(live, live.value):
+                _show_preview(live, data, live.value)
 
 
 def _live_fields(job_id: str) -> dict[str, Any]:
     with _live_lock:
         live = _live.get(job_id)
         if not live:
-            return {"progress": None, "job_progress": None, "has_preview": False, "preview_steps": []}
+            return {
+                "progress": None,
+                "job_progress": None,
+                "has_preview": False,
+                "preview_steps": [],
+                "preview_batch": 0,
+                "preview_rev": 0,
+            }
         current_max = live.max or 0
         overall_max = live.batch_count * current_max
         overall_value = live.batch_i * current_max + live.value
@@ -159,6 +214,8 @@ def _live_fields(job_id: str) -> dict[str, Any]:
             "job_progress": {"value": overall_value, "max": overall_max},
             "has_preview": live.preview is not None,
             "preview_steps": sorted(live.snapshots),
+            "preview_batch": live.batch_i,
+            "preview_rev": live.preview_rev,
         }
 
 
@@ -362,6 +419,7 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values["batch_grid"] = bool(values.get("batch_grid", True))
     values["batch_grid_max"] = max(2, min(100, int(values.get("batch_grid_max") or 16)))
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
+    values["batch_grid_format"] = _grid_fmt(values.get("batch_grid_format"))
     values["batch_grid_rows"] = max(0, min(25, int(values.get("batch_grid_rows") or 0)))
     values["batch_grid_fill"] = bool(values.get("batch_grid_fill", False))
     values["batch_grid_on_cancel"] = bool(values.get("batch_grid_on_cancel", True))
@@ -461,7 +519,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 skip = bool(live and live.skip)
                 preview = b""
                 if live:
-                    if live.preview:
+                    if live.latest:
+                        preview = bytes(live.latest)
+                    elif live.preview:
                         preview = bytes(live.preview)
                     elif live.snapshots:
                         preview = bytes(live.snapshots[max(live.snapshots)])
@@ -469,8 +529,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                     canceled = True
                 if live and (skip or canceled):
                     live.skip = False
-                    live.preview = None
-                    live.snapshots.clear()
+                    _clear_preview(live)
             if (skip or canceled) and preview and values.get("save_interrupted", True):
                 gen_id, path = await asyncio.to_thread(_import_preview, job_id, run_values, preview, graph)
                 _record_output(job_id, values, gen_id, path, "interrupted")
@@ -907,6 +966,18 @@ def _forget_comfy_file(info: dict[str, str]) -> None:
         pass
 
 
+def _grid_fmt(raw: Any) -> str:
+    name = str(raw or "").lower()
+    if name == "jpeg":
+        name = "jpg"
+    if name in {"png", "jpg", "webp"}:
+        return name
+    name = str(settings.load().get("gridFormat") or "jpg").lower()
+    if name == "jpeg":
+        name = "jpg"
+    return name if name in {"png", "jpg", "webp"} else "jpg"
+
+
 def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
     if not values.get("batch_grid", True):
         return
@@ -916,6 +987,7 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
     quality = int(values.get("batch_grid_quality") or 85)
     rows = int(values.get("batch_grid_rows") or 0)
     fill = bool(values.get("batch_grid_fill", False))
+    fmt = _grid_fmt(values.get("batch_grid_format"))
     dests: list[str] = []
     folder = _output_dir(values, "grids")
     try:
@@ -926,7 +998,7 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
             if len(chunk) < 2:
                 continue
             with _save_lock:
-                dest = _alloc_named(folder, "png", values, "grids", start=_file_index(chunk[0]))
+                dest = _alloc_named(folder, fmt, values, "grids", start=_file_index(chunk[0]))
                 save_contact_sheet(
                     chunk,
                     dest,
@@ -934,6 +1006,7 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
                     rows,
                     fill,
                     pnginfo.parameters_text(_grid_values(chunk[0], values), raw=True),
+                    fmt,
                 )
             dests.append(str(dest))
     except Exception:

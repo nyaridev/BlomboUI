@@ -46,18 +46,32 @@ export function wildcardMatches(item: Pick<ModelEntry, 'path' | 'label' | 'tag'>
   return wildcardTag(item).toLowerCase() === wrap(tagName).toLowerCase()
 }
 
+export function replaceWildcardAt(prompt: string, index: number, item: Pick<ModelEntry, 'path' | 'label' | 'tag'>) {
+  const hit = parseWildcardTags(prompt)[index]
+  const tag = wildcardTag(item)
+  if (!hit) {
+    return toggleWildcard(prompt, item)
+  }
+  if (hit.tag.toLowerCase() === tag.toLowerCase()) {
+    return prompt
+  }
+  return tidyPrompt(prompt.slice(0, hit.start) + tag + prompt.slice(hit.end))
+}
+
+function tidyPrompt(text: string) {
+  return text
+    .replace(/,\s*,+/g, ',')
+    .replace(/[ \t]{2,}/g, ' ')
+    .replace(/^[ \t,]+/, '')
+    .replace(/[ \t,]+$/, '')
+}
+
 export function removeWildcardAt(prompt: string, index: number) {
   const hit = parseWildcardTags(prompt)[index]
   if (!hit) {
     return prompt
   }
-  return prompt
-    .slice(0, hit.start)
-    .concat(prompt.slice(hit.end))
-    .replace(/,\s*,+/g, ',')
-    .replace(/[ \t]{2,}/g, ' ')
-    .replace(/^[ \t,]+/, '')
-    .replace(/[ \t,]+$/, '')
+  return tidyPrompt(prompt.slice(0, hit.start) + prompt.slice(hit.end))
 }
 
 function hasTag(prompt: string, tag: string) {

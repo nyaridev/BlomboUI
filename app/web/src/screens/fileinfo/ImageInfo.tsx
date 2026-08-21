@@ -113,7 +113,7 @@ export function GenMetaPanel({
                   href={row.href}
                   target="_blank"
                   rel="noreferrer"
-                  className="break-all text-ink hover:text-accent"
+                  className="break-all text-purple-bright hover:underline"
                 >
                   {row.value}
                 </a>
@@ -136,7 +136,7 @@ export function GenMetaPanel({
                   <span key={i}>
                     {i > 0 ? ' · ' : null}
                     {i === 0 && href ? (
-                      <a href={href} target="_blank" rel="noreferrer" className="text-ink hover:text-accent">
+                      <a href={href} target="_blank" rel="noreferrer" className="text-purple-bright hover:underline">
                         {bit}
                       </a>
                     ) : (

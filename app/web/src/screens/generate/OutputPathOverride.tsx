@@ -88,6 +88,7 @@ export function OutputPathOverride({
   const settingsImageName = useSettingsStore((s) => s.imageName)
   const settingsGridName = useSettingsStore((s) => s.gridName)
   const imageFormat = useSettingsStore((s) => s.imageFormat)
+  const gridFormat = useSettingsStore((s) => s.gridFormat)
 
   return (
     <ExpandSection title="Output path" fit>
@@ -113,14 +114,14 @@ export function OutputPathOverride({
           folder={gridPath}
           namePlaceholder={settingsGridName}
           folderPlaceholder={settingsGridPath}
-          nameExample={`${previewPath(gridName.trim() || settingsGridName)}.png`}
+          nameExample={`${previewPath(gridName.trim() || settingsGridName)}.${gridFormat}`}
           folderExample={previewPath(gridPath.trim() || settingsGridPath)}
           onName={onGridName}
           onFolder={onGridPath}
         />
         <p className="text-xs text-muted">
           Overwrites the Saving folders and names for this generate. Uses the same{' '}
-          <Link to="/settings#placeholders" className="text-accent underline decoration-accent/50 hover:decoration-accent">
+          <Link to="/settings#placeholders" className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright">
             placeholders
           </Link>
           . <span className="font-mono">[number]</span> is the next free index in that folder.

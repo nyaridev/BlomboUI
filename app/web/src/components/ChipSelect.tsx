@@ -10,6 +10,8 @@ type ChipSelectProps = {
   onChange: (value: string[]) => void
   placeholder?: string
   mode?: 'select' | 'order'
+  chipLabel?: (item: string) => string
+  compact?: boolean
 }
 
 function asSections(options: string[] | ChipSection[]): ChipSection[] {
@@ -19,13 +21,33 @@ function asSections(options: string[] | ChipSection[]): ChipSection[] {
   return [{ title: '', options: options as string[] }]
 }
 
-function matches(item: string, query: string) {
-  return !query || item.toLowerCase().includes(query.toLowerCase())
+function matches(item: string, query: string, label?: (item: string) => string) {
+  if (!query) {
+    return true
+  }
+  const q = query.toLowerCase()
+  return item.toLowerCase().includes(q) || (label?.(item) || '').toLowerCase().includes(q)
 }
 
-export function ChipSelect({ options, value, onChange, placeholder = 'Select…', mode = 'select' }: ChipSelectProps) {
+function wrap(index: number, count: number, delta: number) {
+  if (count <= 0) {
+    return 0
+  }
+  return (index + delta + count) % count
+}
+
+export function ChipSelect({
+  options,
+  value,
+  onChange,
+  placeholder = 'Select…',
+  mode = 'select',
+  chipLabel,
+  compact = false,
+}: ChipSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [active, setActive] = useState(0)
   const [tall, setTall] = useState(false)
   const root = useRef<HTMLDivElement>(null)
   const field = useRef<HTMLDivElement>(null)
@@ -36,24 +58,30 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
     return sections
       .map((section) => {
         const left = section.options.filter((item) => !value.includes(item))
-        const items = matches(section.title, query) ? left : left.filter((item) => matches(item, query))
+        const items = matches(section.title, query) ? left : left.filter((item) => matches(item, query, chipLabel))
         return { title: section.title, options: items }
       })
       .filter((section) => section.options.length > 0)
-  }, [sections, value, query])
-  const first = shown[0]?.options[0]
+  }, [sections, value, query, chipLabel])
+  const flat = useMemo(() => shown.flatMap((section) => section.options), [shown])
   const leftCount = sections.reduce((sum, section) => sum + section.options.filter((item) => !value.includes(item)).length, 0)
 
   function close() {
     setOpen(false)
     setQuery('')
+    setActive(0)
   }
 
   function add(item: string) {
     onChange([...value, item])
     setQuery('')
+    setActive(0)
     input.current?.focus()
   }
+
+  useEffect(() => {
+    setActive(0)
+  }, [query, open])
 
   useEffect(() => {
     function onDoc(event: MouseEvent) {
@@ -92,6 +120,14 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
   }, [open])
 
   useEffect(() => {
+    if (!open) {
+      return
+    }
+    const el = menu.current?.querySelector('[data-active="true"]')
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [active, open, flat])
+
+  useEffect(() => {
     const el = field.current
     if (!el) {
       return
@@ -109,28 +145,47 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
   if (mode === 'order') {
     return (
       <div className="flex min-h-9 items-center rounded border border-line bg-field px-2 py-1.5">
-        <ChipList value={value} onChange={onChange} removable={false} />
+        <ChipList value={value} onChange={onChange} removable={false} chipLabel={chipLabel} />
       </div>
     )
   }
 
+  let optionIndex = 0
+
   return (
-    <div ref={root} className="relative min-w-0">
+    <div ref={root} className={['relative min-w-0', compact ? 'h-full' : ''].filter(Boolean).join(' ')}>
       <div
         ref={field}
         className={[
-          'flex min-h-9 cursor-text gap-1 rounded border border-line bg-field px-2 py-1.5 focus-within:border-accent',
-          tall ? 'items-start' : 'items-center',
+          'flex cursor-text gap-1 rounded border border-line bg-field focus-within:border-accent',
+          compact
+            ? 'h-full min-h-0 items-center overflow-hidden px-1.5 py-0'
+            : tall
+              ? 'min-h-9 items-start px-2 py-1.5'
+              : 'min-h-9 items-center px-2 py-1.5',
         ].join(' ')}
         onClick={() => {
           input.current?.focus()
           setOpen(true)
         }}
       >
-        <ChipList value={value} onChange={onChange} onChipClick={() => input.current?.focus()}>
+        <ChipList
+          value={value}
+          onChange={onChange}
+          onChipClick={() => input.current?.focus()}
+          chipLabel={chipLabel}
+          className={
+            compact
+              ? 'flex min-h-0 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto'
+              : undefined
+          }
+        >
           <input
             ref={input}
-            className="min-w-16 flex-1 bg-transparent py-0.5 text-sm text-ink outline-none"
+            className={[
+              'min-w-16 flex-1 bg-transparent py-0.5 text-ink outline-none',
+              compact ? 'text-xs' : 'text-sm',
+            ].join(' ')}
             value={query}
             placeholder={value.length === 0 ? placeholder : ''}
             spellCheck={false}
@@ -142,9 +197,21 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
             }}
             onFocus={() => setOpen(true)}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && open && first) {
+              if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
                 event.preventDefault()
-                add(first)
+                if (!open) {
+                  setOpen(true)
+                  return
+                }
+                setActive((index) => wrap(index, flat.length, event.key === 'ArrowDown' ? 1 : -1))
+                return
+              }
+              if (event.key === 'Enter' && open) {
+                const hit = flat[active] ?? flat[0]
+                if (hit) {
+                  event.preventDefault()
+                  add(hit)
+                }
                 return
               }
               if (event.key === 'Backspace' && !query && value.length) {
@@ -158,7 +225,7 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
         <button
           type="button"
           tabIndex={-1}
-          className={tall ? 'mt-1 text-muted' : 'text-muted'}
+          className={compact ? 'text-muted' : tall ? 'mt-1 text-muted' : 'text-muted'}
           aria-label={open ? 'Close' : 'Open'}
           onMouseDown={(event) => {
             event.preventDefault()
@@ -182,13 +249,24 @@ export function ChipSelect({ options, value, onChange, placeholder = 'Select…'
               <li key={section.title || 'options'} className="select-menu-group">
                 {section.title ? <div className="select-menu-section">{section.title}</div> : null}
                 <ul>
-                  {section.options.map((item) => (
-                    <li key={item}>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => add(item)}>
-                        {item}
-                      </button>
-                    </li>
-                  ))}
+                  {section.options.map((item) => {
+                    const index = optionIndex
+                    optionIndex += 1
+                    return (
+                      <li key={item}>
+                        <button
+                          type="button"
+                          data-active={index === active ? 'true' : undefined}
+                          className={index === active ? 'is-selected' : undefined}
+                          onMouseEnter={() => setActive(index)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => add(item)}
+                        >
+                          {chipLabel ? chipLabel(item) : item}
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
               </li>
             ))

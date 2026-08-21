@@ -135,6 +135,10 @@ def _norm_key(raw: str) -> str:
     return text.lstrip("([")
 
 
+def _key_matches(key: str, prefix: str, compact: str) -> bool:
+    return key.startswith(prefix) or (bool(compact) and key.replace("_", "").startswith(compact))
+
+
 def _like_prefix(prefix: str) -> str:
     return _LIKE_ESC.sub(r"\\\1", prefix) + "%"
 
@@ -276,12 +280,13 @@ def _applicable(checkpoint: str) -> list[_FileIndex]:
 
 
 def _catalog_hits(files: list[_FileIndex], prefix: str) -> dict[str, tuple[int, str | None]]:
+    compact = prefix.replace("_", "")
     first = prefix[0]
     out: dict[str, tuple[int, str | None]] = {}
     for index in files:
         seen: set[str] = set()
         for key, canonical, alias in index.buckets.get(first, ()):
-            if not key.startswith(prefix):
+            if not _key_matches(key, prefix, compact):
                 continue
             posts = index.posts.get(canonical, 0)
             if canonical in seen:
@@ -296,16 +301,22 @@ def _catalog_hits(files: list[_FileIndex], prefix: str) -> dict[str, tuple[int, 
             else:
                 out[canonical] = (posts, alias)
     for tag, (posts, alias) in list(out.items()):
-        if alias and _norm_key(tag).startswith(prefix):
+        if alias and _key_matches(_norm_key(tag), prefix, compact):
             out[tag] = (posts, None)
     return out
 
 
 def _freq_hits(prefix: str) -> dict[str, int]:
+    compact = prefix.replace("_", "")
     try:
         rows = db.query(
-            "SELECT tag, count FROM prompt_tags WHERE tag LIKE ? ESCAPE '\\' ORDER BY count DESC LIMIT ?",
-            (_like_prefix(prefix), LIMIT),
+            """
+            SELECT tag, count FROM prompt_tags
+            WHERE tag LIKE ? ESCAPE '\\'
+               OR REPLACE(tag, '_', '') LIKE ? ESCAPE '\\'
+            ORDER BY count DESC LIMIT ?
+            """,
+            (_like_prefix(prefix), _like_prefix(compact), LIMIT),
         )
     except sqlite3.Error:
         return {}
@@ -354,7 +365,7 @@ def _global_applies(checkpoint: str, cfg: dict[str, Any]) -> bool:
 
 def suggest(q: str, checkpoint: str) -> list[dict[str, Any]]:
     prefix = _norm_key(q)
-    if len(prefix) < 1:
+    if len(prefix.replace("_", "")) < 1:
         return []
     cfg = settings.load()
     if not isinstance(cfg, dict):

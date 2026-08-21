@@ -9,6 +9,7 @@ const KIND_LABEL: Record<string, string> = {
   checkpoints: 'Checkpoints',
   models: 'Models',
   gallery: 'Gallery',
+  scopes: 'Scopes',
 }
 
 const CODE_LABEL: Record<string, string> = {
@@ -91,7 +92,7 @@ export function ErrorsScreen() {
                     ) : null}
                     {item.paths.length ? (
                       <div className="grid grid-cols-[6rem_minmax(0,1fr)] gap-2 px-3 py-1.5">
-                        <dt className="text-muted">Files</dt>
+                        <dt className="text-muted">{item.kind === 'scopes' ? 'Scopes' : 'Files'}</dt>
                         <dd className="font-mono text-xs text-ink">
                           <ul className="flex flex-col gap-0.5">
                             {item.paths.map((path) => (

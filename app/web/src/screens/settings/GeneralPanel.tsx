@@ -6,27 +6,31 @@ import {
   THEMES,
   CIVITAI_SITES,
   TIME_DISPLAYS,
+  civitaiHost,
   type Theme,
   type CivitaiSite,
   type TimeDisplay,
 } from '@/stores/settingsStore.ts'
 
-export const GENERAL_QUERY = 'general theme civitai site red appearance time display am pm hour resolution set custom width height'
+export const GENERAL_QUERY =
+  'general theme civitai site red com api key account appearance time display am pm hour resolution set custom width height'
 
 export function GeneralPanel({ query = '' }: { query?: string }) {
   const theme = useSettingsStore((s) => s.theme)
   const civitaiSite = useSettingsStore((s) => s.civitaiSite)
+  const civitaiApiKey = useSettingsStore((s) => s.civitaiApiKey)
   const timeDisplay = useSettingsStore((s) => s.timeDisplay)
   const setResolutions = useSettingsStore((s) => s.setResolutions)
   const setTheme = useSettingsStore((s) => s.setTheme)
   const setCivitaiSite = useSettingsStore((s) => s.setCivitaiSite)
+  const setCivitaiApiKey = useSettingsStore((s) => s.setCivitaiApiKey)
   const setTimeDisplay = useSettingsStore((s) => s.setTimeDisplay)
   const setSetResolutions = useSettingsStore((s) => s.setSetResolutions)
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
       <SettingsCard query={query} title="Appearance" terms="theme appearance dark">
-        <SelectField value={theme} onChange={(value) => setTheme(value as Theme)} options={THEMES} />
+        <SelectField value={theme} onChange={(value) => setTheme(value as Theme)} options={[...THEMES]} />
       </SettingsCard>
       <SettingsCard query={query} title="Time display" terms="time clock hour am pm 24 full">
         <SelectField
@@ -44,13 +48,35 @@ export function GeneralPanel({ query = '' }: { query?: string }) {
         />
         <p className="text-xs text-muted">Landscape sizes for the Set picker. Portrait is the swapped pair.</p>
       </SettingsCard>
-      <SettingsCard query={query} title="Civitai" terms="preferred civitai site red com links">
+      <SettingsCard query={query} title="Civitai" terms="preferred civitai site red com links api key account">
         <SelectField
           value={civitaiSite}
           onChange={(value) => setCivitaiSite(value as CivitaiSite)}
-          options={CIVITAI_SITES}
+          options={[...CIVITAI_SITES]}
         />
-        <p className="text-xs text-muted">Used for creator, base model, and model links on File Info.</p>
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          <span className="text-xs text-muted">API key</span>
+          <input
+            type="password"
+            className="w-full rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+            value={civitaiApiKey}
+            onChange={(event) => setCivitaiApiKey(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Optional"
+          />
+        </label>
+        <p className="text-xs text-muted">
+          Used for the CivitAI browser on Models → CivitAI.{' '}
+          <a
+            href={`https://${civitaiHost(civitaiSite)}/user/account`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright"
+          >
+            Manage API key
+          </a>
+        </p>
       </SettingsCard>
     </div>
   )

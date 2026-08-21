@@ -7,6 +7,10 @@ type SelectFieldProps = {
   value: string
   onChange: (value: string) => void
   options: string[] | SelectOption[]
+  allowCustom?: boolean
+  placeholder?: string
+  icon?: string
+  className?: string
 }
 
 function toOptions(options: string[] | SelectOption[]): SelectOption[] {
@@ -21,9 +25,30 @@ function matches(item: SelectOption, query: string) {
   return item.label.toLowerCase().includes(q) || item.value.toLowerCase().includes(q)
 }
 
-export function SelectField({ value, onChange, options }: SelectFieldProps) {
+function wrap(index: number, count: number, delta: number) {
+  if (count <= 0) {
+    return 0
+  }
+  return (index + delta + count) % count
+}
+
+function sameOption(item: SelectOption, text: string) {
+  const q = text.toLowerCase()
+  return item.label.toLowerCase() === q || item.value.toLowerCase() === q
+}
+
+export function SelectField({
+  value,
+  onChange,
+  options,
+  allowCustom = false,
+  placeholder,
+  icon,
+  className = '',
+}: SelectFieldProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  const [active, setActive] = useState(0)
   const root = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const menu = useRef<HTMLUListElement>(null)
@@ -31,26 +56,48 @@ export function SelectField({ value, onChange, options }: SelectFieldProps) {
   const current = items.find((item) => item.value === value)?.label ?? value
   const shown = useMemo(() => items.filter((item) => matches(item, query)), [items, query])
 
-  function close() {
+  function dismiss() {
     setOpen(false)
     setQuery('')
+    setActive(0)
     input.current?.blur()
   }
 
   function pick(next: string) {
     onChange(next)
-    close()
+    dismiss()
+  }
+
+  function applyTyped(text: string) {
+    const hit = items.find((item) => sameOption(item, text))
+    onChange(hit ? hit.value : text)
+    dismiss()
+  }
+
+  const onOutside = useRef(() => {})
+  onOutside.current = () => {
+    const text = query.trim()
+    if (allowCustom && text) {
+      applyTyped(text)
+      return
+    }
+    dismiss()
   }
 
   useEffect(() => {
+    setActive(0)
+  }, [query, open])
+
+  useEffect(() => {
     function onDoc(event: MouseEvent) {
-      if (!root.current?.contains(event.target as Node)) {
-        close()
+      if (root.current?.contains(event.target as Node)) {
+        return
       }
+      onOutside.current()
     }
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') {
-        close()
+        dismiss()
       }
     }
     document.addEventListener('mousedown', onDoc)
@@ -81,12 +128,22 @@ export function SelectField({ value, onChange, options }: SelectFieldProps) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [open])
 
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const el = menu.current?.querySelector('[data-active="true"]')
+    el?.scrollIntoView({ block: 'nearest' })
+  }, [active, open, shown])
+
   return (
-    <div ref={root} className="relative min-w-0">
+    <div ref={root} className={['relative min-w-0', className].filter(Boolean).join(' ')}>
       <div className="field-select">
+        {icon ? <AppIcon id={icon} size={14} className="text-muted" /> : null}
         <input
           ref={input}
           value={open ? query : current}
+          placeholder={placeholder}
           spellCheck={false}
           autoComplete="off"
           aria-expanded={open}
@@ -95,14 +152,33 @@ export function SelectField({ value, onChange, options }: SelectFieldProps) {
             setOpen(true)
           }}
           onChange={(event) => {
-            setQuery(event.target.value)
+            const next = event.target.value
+            setQuery(next)
             setOpen(true)
+            if (allowCustom) {
+              onChange(next)
+            }
           }}
           onKeyDown={(event) => {
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              if (!open) {
+                setOpen(true)
+                return
+              }
+              setActive((index) => wrap(index, shown.length, event.key === 'ArrowDown' ? 1 : -1))
+              return
+            }
             if (event.key === 'Enter' && open) {
               event.preventDefault()
-              if (shown[0]) {
-                pick(shown[0].value)
+              const hit = shown[active] ?? shown[0]
+              if (hit) {
+                pick(hit.value)
+                return
+              }
+              const text = query.trim()
+              if (allowCustom && text) {
+                applyTyped(text)
               }
             }
           }}
@@ -115,10 +191,12 @@ export function SelectField({ value, onChange, options }: SelectFieldProps) {
           onMouseDown={(event) => {
             event.preventDefault()
             if (open) {
-              close()
-            } else {
-              input.current?.focus()
+              dismiss()
+              return
             }
+            setQuery('')
+            setOpen(true)
+            input.current?.focus()
           }}
         >
           <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
@@ -126,11 +204,13 @@ export function SelectField({ value, onChange, options }: SelectFieldProps) {
       </div>
       {open ? (
         <ul ref={menu} className="select-menu">
-          {shown.map((item) => (
-            <li key={item.value}>
+          {shown.map((item, index) => (
+            <li key={`${item.value}:${item.label}`}>
               <button
                 type="button"
-                className={item.value === value ? 'is-selected' : undefined}
+                data-active={index === active ? 'true' : undefined}
+                className={index === active ? 'is-selected' : undefined}
+                onMouseEnter={() => setActive(index)}
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => pick(item.value)}
               >

@@ -328,7 +328,10 @@ def reconcile(kind: str, present: list[str]) -> None:
         old_thumbs = _hits(stale_thumbs, name)
         old_meta = _hits(stale_meta, name)
         if len(old_thumbs) == 1:
-            model_thumbs.move_thumbs(kind, old_thumbs[0], new)
+            try:
+                model_thumbs.move_thumbs(kind, old_thumbs[0], new)
+            except OSError:
+                pass
         if len(old_meta) != 1:
             continue
         old = old_meta[0]
@@ -351,8 +354,15 @@ def thumb_media(path: Path) -> str:
     return model_thumbs.thumb_media(path)
 
 
-def save_thumb(kind: str, rel: str, data: bytes, context: str = model_thumbs.GLOBAL, meta: dict | None = None) -> int:
-    stamp = model_thumbs.save_thumb(kind, rel, data, context, meta)
+def save_thumb(
+    kind: str,
+    rel: str,
+    data: bytes,
+    context: str = model_thumbs.GLOBAL,
+    meta: dict | None = None,
+    media: str = "",
+) -> int:
+    stamp = model_thumbs.save_thumb(kind, rel, data, context, meta, media)
     touch(kind, rel)
     return stamp
 

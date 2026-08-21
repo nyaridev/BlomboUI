@@ -45,19 +45,25 @@ input[type='number'].number-field::-webkit-outer-spin-button {
 }
 
 .field-select-chevron {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-shrink: 0;
   align-items: center;
   border: 0;
   background: transparent;
-  padding: 0;
+  padding: 0.125rem;
   color: var(--color-muted);
   cursor: pointer;
 }
 
+.field-select-chevron svg {
+  pointer-events: none;
+}
+
 .select-menu {
   position: absolute;
-  z-index: 30;
+  z-index: 50;
   top: calc(100% + 0.25rem);
   left: 0;
   right: 0;

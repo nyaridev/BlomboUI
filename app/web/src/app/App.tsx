@@ -17,6 +17,7 @@ import { useModelsStore } from '../stores/modelsStore.ts'
 import { useSettingsStore } from '../stores/settingsStore.ts'
 import { useThumbnailScopeStore } from '../stores/thumbnailScopeStore.ts'
 import { useGenerateStore } from '../stores/generateStore.ts'
+import { ComfyStatus } from './ComfyStatus.tsx'
 import { FooterLinks } from './FooterLinks.tsx'
 import { GpuBar } from './GpuBar.tsx'
 import { TemplateBar } from './TemplateBar.tsx'
@@ -87,12 +88,14 @@ export function App() {
   const theme = useSettingsStore((s) => s.theme)
   const loaded = useSettingsStore((s) => s.loaded)
   const thumbScopeAuto = useSettingsStore((s) => s.thumbScopeAuto)
+  const localThumbAuto = useSettingsStore((s) => Object.values(s.galleryLocalScopes).some((pack) => pack.auto))
   const prompt = useGenerateStore((s) => s.prompt)
   const hiddenMainTabs = useSettingsStore((s) => s.hiddenMainTabs)
   const mainTabOrder = useSettingsStore((s) => s.mainTabOrder)
   const mainTabKeysFollowLayout = useSettingsStore((s) => s.mainTabKeysFollowLayout)
   const comfyOk = health?.comfy.reachable === true
   const comfyMissing = health?.comfy.mode === 'missing'
+  const comfyRestarting = health?.comfy.restarting === true
   const leftTabs = visibleLeftTabIds(mainTabOrder, hiddenMainTabs)
   const showErrors = !hiddenMainTabs.includes('Errors')
 
@@ -129,6 +132,16 @@ export function App() {
   }, [loadModels, loadSettings, refreshHealth])
 
   useEffect(() => {
+    if (!comfyRestarting) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      void refreshHealth()
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [comfyRestarting, refreshHealth])
+
+  useEffect(() => {
     if (!loaded) {
       return
     }
@@ -136,14 +149,14 @@ export function App() {
   }, [loaded])
 
   useEffect(() => {
-    if (!loaded || !thumbScopeAuto) {
+    if (!loaded || (!thumbScopeAuto && !localThumbAuto)) {
       return
     }
     const timer = window.setTimeout(() => {
       void useThumbnailScopeStore.getState().refreshAuto(prompt)
     }, 350)
     return () => window.clearTimeout(timer)
-  }, [loaded, prompt, thumbScopeAuto])
+  }, [loaded, localThumbAuto, prompt, thumbScopeAuto])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -215,6 +228,7 @@ export function App() {
             ) : (
               <GpuBar />
             )}
+            <ComfyStatus />
           </div>
         </div>
         <nav className="flex gap-1 border-b border-line px-2">
@@ -253,10 +267,10 @@ export function App() {
         ref={mainRef}
         className={[
           'min-h-0 flex-1 [overflow-anchor:none]',
-          settings || fileInfo || wildcards || scopes ? 'overflow-hidden' : 'overflow-y-auto',
+          settings || fileInfo || wildcards || scopes || models ? 'overflow-hidden' : 'overflow-y-auto',
         ].join(' ')}
       >
-        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes ? '' : 'px-10 py-4'].join(' ')}>
+        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes || models ? '' : 'px-10 py-4'].join(' ')}>
           {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
           <div className={pane(generate)}>
             <GenerateScreen />
@@ -267,7 +281,7 @@ export function App() {
           <div className={pane(gallery)}>
             <GalleryScreen />
           </div>
-          <div className={pane(models)}>
+          <div className={pane(models, true)}>
             <ModelsScreen />
           </div>
           <div className={pane(wildcards, true)}>
@@ -285,7 +299,7 @@ export function App() {
         </div>
       </main>
       <footer className="flex h-8 items-center border-t border-line bg-panel px-4">
-        <FooterLinks comfyUrl={health?.comfy.url || 'http://127.0.0.1:8188'} />
+        <FooterLinks />
       </footer>
       <ToastStack />
       {reloading ? (

@@ -12,6 +12,7 @@ export type Health = {
   version: string
   comfy: {
     reachable: boolean
+    restarting?: boolean
     mode: string | null
     path: string | null
     url?: string
@@ -44,6 +45,8 @@ export type Job = {
   job_progress: { value: number; max: number } | null
   has_preview: boolean
   preview_steps: number[]
+  preview_batch?: number
+  preview_rev?: number
 }
 
 export type JobLora = {
@@ -96,6 +99,7 @@ export type JobRequest = {
   batch_grid: boolean
   batch_grid_max: number
   batch_grid_quality: number
+  batch_grid_format?: string
   batch_grid_rows: number
   batch_grid_fill: boolean
   batch_grid_on_cancel: boolean
@@ -228,8 +232,13 @@ export type ModelEntry = {
   edited: number
   size: number
   thumb?: number
+  thumb_media?: string
   thumb_global?: number
+  thumb_global_media?: string
   thumb_exact?: number
+  thumb_exact_media?: string
+  hashes?: ModelHashes
+  hashing?: boolean
   prompt?: string
   negative_prompt?: string
   notes?: string
@@ -266,8 +275,11 @@ export type ModelInfo = {
   slider?: boolean
   type_options?: string[]
   thumb?: number
+  thumb_media?: string
   thumb_global?: number
+  thumb_global_media?: string
   thumb_exact?: number
+  thumb_exact_media?: string
 }
 
 export type ModelLists = {
@@ -300,6 +312,7 @@ export type ThumbView = {
   context?: string
   mode?: 'exact' | 'likely'
   fallback?: boolean
+  optional?: string
 }
 
 function thumbQs(view?: ThumbView, extra: Record<string, string> = {}) {
@@ -312,6 +325,9 @@ function thumbQs(view?: ThumbView, extra: Record<string, string> = {}) {
   }
   if (view?.fallback) {
     qs.set('fallback', 'true')
+  }
+  if (view?.optional) {
+    qs.set('optional', view.optional)
   }
   const text = qs.toString()
   return text ? `?${text}` : ''
@@ -379,8 +395,15 @@ export type ThumbMeta = {
   captured_at?: number
 }
 
-export function modelThumbUrl(kind: keyof ModelLists, path: string, tick = 0, view?: ThumbView): string {
-  return api(`/user-models/${encodeURIComponent(kind)}/thumb${thumbQs(view, { path, t: String(tick) })}`)
+export function modelThumbUrl(
+  kind: keyof ModelLists,
+  path: string,
+  tick = 0,
+  view?: ThumbView,
+  media = "",
+): string {
+  const extra = { path, t: String(tick), ...(media ? { media } : {}) }
+  return api(`/user-models/${encodeURIComponent(kind)}/thumb${thumbQs(view, extra)}`)
 }
 
 export async function getModelThumbMeta(kind: keyof ModelLists, path: string, view?: ThumbView): Promise<ThumbMeta> {
@@ -572,6 +595,66 @@ export type CivitaiVersion = {
   model?: { name?: string; type?: string; description?: string; creator?: { username?: string } }
 }
 
+export type CivitaiModel = {
+  id: number
+  name: string
+  type: string
+  creator: string
+  nsfw: boolean
+  baseModel: string
+  baseModels?: string[]
+  versions?: { id: number; baseModel: string }[]
+  preview: string
+  downloadNames?: string[]
+  downloadHashes?: string[]
+  paid?: boolean
+  buzz?: number
+}
+
+export type CivitaiModelImage = {
+  url: string
+  nsfw: boolean
+}
+
+export type CivitaiModelVersionDetail = {
+  id: number
+  name: string
+  baseModel: string
+  description: string
+  trainedWords: string[]
+  paid: boolean
+  buzz: number
+  images: CivitaiModelImage[]
+}
+
+export type CivitaiModelDetail = {
+  id: number
+  name: string
+  type: string
+  creator: string
+  nsfw: boolean
+  description: string
+  stats: {
+    downloadCount?: number
+    favoriteCount?: number
+    thumbsUpCount?: number
+    rating?: number
+  }
+  versions: CivitaiModelVersionDetail[]
+}
+
+export type CivitaiSort =
+  | 'Highest Rated'
+  | 'Most Downloaded'
+  | 'Most Liked'
+  | 'Most Discussed'
+  | 'Most Collected'
+  | 'Most Images'
+  | 'Newest'
+  | 'Oldest'
+
+export type CivitaiPeriod = 'AllTime' | 'Year' | 'Month' | 'Week' | 'Day'
+
 export async function getCivitaiByHash(hash: string): Promise<CivitaiVersion | null> {
   const res = await fetch(api(`/civitai/by-hash/${encodeURIComponent(hash)}`))
   if (res.status === 404) {
@@ -581,6 +664,63 @@ export async function getCivitaiByHash(hash: string): Promise<CivitaiVersion | n
     return null
   }
   return (await res.json()) as CivitaiVersion
+}
+
+export async function listCivitaiModels(params: {
+  query: string
+  types: string[]
+  baseModels: string[]
+  sort: CivitaiSort
+  period: CivitaiPeriod
+  page: number
+  cursor?: string
+  earlyAccess?: boolean
+  supportsGeneration?: boolean
+  fromPlatform?: boolean
+  nsfw?: boolean
+  tag?: string
+}): Promise<{ items: CivitaiModel[]; page: number; hasNext: boolean; nextCursor?: string }> {
+  const query = new URLSearchParams({
+    query: params.query,
+    sort: params.sort,
+    period: params.period,
+    page: String(params.page),
+    nsfw: String(params.nsfw ?? true),
+  })
+  for (const type of params.types) {
+    query.append('types', type)
+  }
+  for (const baseModel of params.baseModels) {
+    query.append('baseModels', baseModel)
+  }
+  if (params.cursor) {
+    query.set('cursor', params.cursor)
+  }
+  if (params.earlyAccess !== undefined) {
+    query.set('earlyAccess', String(params.earlyAccess))
+  }
+  if (params.supportsGeneration !== undefined) {
+    query.set('supportsGeneration', String(params.supportsGeneration))
+  }
+  if (params.fromPlatform !== undefined) {
+    query.set('fromPlatform', String(params.fromPlatform))
+  }
+  if (params.tag) {
+    query.set('tag', params.tag)
+  }
+  const res = await fetch(api(`/civitai/models?${query.toString()}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { items: CivitaiModel[]; page: number; hasNext: boolean; nextCursor?: string }
+}
+
+export async function getCivitaiModel(id: number): Promise<CivitaiModelDetail> {
+  const res = await fetch(api(`/civitai/models/${id}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as CivitaiModelDetail
 }
 
 export async function fetchCivitaiImage(url: string): Promise<File> {
@@ -635,6 +775,11 @@ export type UserSettings = {
   batchGridFill?: boolean
   batchGridOnCancel?: boolean
   saveInterrupted?: boolean
+  genPreview?: boolean
+  genPreviewEvery?: number
+  genPreviewAfter?: number
+  genPreviewAfterFirst?: boolean
+  genPreviewLast?: boolean
   interruptedInGrid?: boolean
   galleryHideInterrupted?: boolean
   hiddenGenerateTabs?: string[]
@@ -648,6 +793,7 @@ export type UserSettings = {
   hiddenSchedulers?: string[]
   theme?: string
   civitaiSite?: string
+  civitaiApiKey?: string
   timeDisplay?: string
   setResolutions?: string[]
   imagePath?: string
@@ -656,6 +802,7 @@ export type UserSettings = {
   imageName?: string
   gridName?: string
   imageFormat?: string
+  gridFormat?: string
   imageQuality?: number
   saveLargeAsJpeg?: boolean
   largeJpegMaxKb?: number
@@ -686,6 +833,44 @@ export type UserSettings = {
   autocompleteThumbScale?: number
   frequentTagsEnabled?: boolean
   autocompleteLists?: Record<string, { enabled?: boolean; mode?: string; types?: string[] }>
+  galleryPinSelected?: Record<string, boolean>
+  scopeGroups?: string[]
+  scopeOrder?: string[]
+  lookupScopeIds?: string[]
+  lookupScopeOptionalIds?: string[]
+  lookupKinds?: string[]
+  lookupModels?: string[]
+  scopeSearch?: string
+  modelsTab?: string
+  modelsKind?: string
+  civitaiBrowse?: {
+    query?: string
+    sort?: string
+    period?: string
+    types?: string[]
+    baseModels?: string[]
+    tag?: string
+    nsfw?: boolean
+    earlyAccess?: string
+    supportsGeneration?: string
+    fromPlatform?: string
+  }
+  civitaiTabs?: {
+    id?: number
+    name?: string
+    initialVersionId?: number
+    versionId?: number
+  }[]
+  civitaiTabId?: number | null
+  galleryTypes?: Record<string, string[]>
+  galleryQuery?: Record<string, string>
+  galleryLocalScopes?: Record<
+    string,
+    { ids?: string[]; optionalIds?: string[]; auto?: boolean; mode?: string; fallback?: boolean }
+  >
+  galleryScopeMode?: Record<string, string>
+  galleryFilterMode?: Record<string, string>
+  galleryFilterShareModels?: boolean
 }
 
 export async function pickFolder(): Promise<string | null> {
@@ -962,11 +1147,27 @@ export type ThumbScope = {
   id: string
   name: string
   group: string
-  required: string[]
-  optional: string[]
   anyGroups: string[][]
   exclude: string[]
   priority: number
+}
+
+export type ScopeThumb = {
+  kind: keyof ModelLists
+  path: string
+  context: string
+  scopes: string[]
+  mtime: number
+  media?: string
+}
+
+export async function getScopeThumbs(): Promise<ScopeThumb[]> {
+  const res = await fetch(api('/user-thumbs'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { thumbs?: ScopeThumb[] }
+  return Array.isArray(data.thumbs) ? data.thumbs : []
 }
 
 export async function getThumbScopes(): Promise<ThumbScope[]> {
@@ -1087,6 +1288,13 @@ export async function setOutputPath(path: string): Promise<AppPaths> {
 
 export async function syncModelPaths(): Promise<void> {
   const res = await fetch(api('/paths/models/sync'), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function reloadComfy(): Promise<void> {
+  const res = await fetch(api('/paths/models/reload'), { method: 'POST' })
   if (!res.ok) {
     throw new Error(await readError(res))
   }

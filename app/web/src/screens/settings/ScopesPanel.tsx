@@ -39,7 +39,9 @@ export function ScopesPanel({ query = '' }: { query?: string }) {
           />
           Use Global thumbnails in trash and other model views
         </label>
-        <p className="text-xs text-muted">VAE, ControlNet, embeddings, and trash. Gallery fallbacks are under Gallery View.</p>
+          <p className="text-xs text-muted">
+            VAE, ControlNet, embeddings, and trash. Gallery views use the Global Fallback button on the thumbnail bar.
+          </p>
       </SettingsCard>
     </div>
   )

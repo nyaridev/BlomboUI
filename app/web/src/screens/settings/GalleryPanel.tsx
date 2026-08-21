@@ -1,72 +1,116 @@
-import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
-import { GALLERY_SORTS, type GallerySortDir, type GallerySortKey } from '@/components/GalleryView.tsx'
 import { SettingsCard } from './SettingsBlock.tsx'
-import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
-
-const DIRS = [
-  { value: 'asc', label: 'Ascending' },
-  { value: 'desc', label: 'Descending' },
-] as const
-
-const VIEWS: { kind: GalleryViewKind; title: string; terms: string }[] = [
-  { kind: 'checkpoints', title: 'Base Model', terms: 'checkpoint' },
-  { kind: 'loras', title: 'LoRA', terms: 'lora' },
-  { kind: 'wildcards', title: 'Wildcards', terms: 'wildcard yaml' },
-]
+import {
+  GENERATE_FILTER_VIEWS,
+  galleryModeValue,
+  useSettingsStore,
+  type GalleryFilterScope,
+  type GalleryModeKey,
+} from '@/stores/settingsStore.ts'
 
 export const GALLERY_QUERY =
-  'gallery view tiles sort name date created modified path ascending descending scale size base model lora wildcards tree folder parent unselect thumbnail global fallback scope'
+  'gallery view tiles scale size base model lora wildcards tree folder parent unselect thumbnail scope filter share local generate models types'
+
+function ScopeSwitch({
+  value,
+  onChange,
+}: {
+  value: GalleryFilterScope
+  onChange: (value: GalleryFilterScope) => void
+}) {
+  return (
+    <div className="flex gap-1">
+      {(['global', 'local'] as const).map((item) => (
+        <button
+          key={item}
+          type="button"
+          className={[
+            'rounded border px-2 py-1 text-xs',
+            value === item ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted hover:text-ink',
+          ].join(' ')}
+          onClick={() => onChange(item)}
+        >
+          {item === 'global' ? 'Global' : 'Local'}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function ModeRow({
+  title,
+  value,
+  onChange,
+}: {
+  title: string
+  value: GalleryFilterScope
+  onChange: (value: GalleryFilterScope) => void
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-sm text-ink">{title}</span>
+      <ScopeSwitch value={value} onChange={onChange} />
+    </div>
+  )
+}
 
 export function GalleryPanel({ query = '' }: { query?: string }) {
-  const gallerySortKey = useSettingsStore((s) => s.gallerySortKey)
-  const gallerySortDir = useSettingsStore((s) => s.gallerySortDir)
   const galleryTileScale = useSettingsStore((s) => s.galleryTileScale)
   const galleryParentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
-  const galleryThumbFallback = useSettingsStore((s) => s.galleryThumbFallback)
-  const setGallerySortKey = useSettingsStore((s) => s.setGallerySortKey)
-  const setGallerySortDir = useSettingsStore((s) => s.setGallerySortDir)
   const setGalleryTileScale = useSettingsStore((s) => s.setGalleryTileScale)
   const setGalleryParentOnUnselect = useSettingsStore((s) => s.setGalleryParentOnUnselect)
-  const setGalleryThumbFallback = useSettingsStore((s) => s.setGalleryThumbFallback)
+  const shareModels = useSettingsStore((s) => s.galleryFilterShareModels)
+  const scopeMode = useSettingsStore((s) => s.galleryScopeMode)
+  const filterMode = useSettingsStore((s) => s.galleryFilterMode)
+  const setShareModels = useSettingsStore((s) => s.setGalleryFilterShareModels)
+  const setScopeMode = useSettingsStore((s) => s.setGalleryScopeMode)
+  const setFilterMode = useSettingsStore((s) => s.setGalleryFilterMode)
+  const modelsScope = galleryModeValue(scopeMode, 'models')
+  const modelsFilter = galleryModeValue(filterMode, 'models')
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
-      {VIEWS.map((view) => (
-        <SettingsCard key={view.kind} query={query} title={view.title} terms={`sort by order ${view.terms}`}>
-          <div className="flex gap-2">
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-xs text-muted">Sort by</span>
-              <SelectField
-                value={gallerySortKey[view.kind]}
-                onChange={(value) => setGallerySortKey(view.kind, value as GallerySortKey)}
-                options={[...GALLERY_SORTS]}
-              />
-            </div>
-            <div className="flex min-w-0 flex-1 flex-col gap-1">
-              <span className="text-xs text-muted">Order</span>
-              <SelectField
-                value={gallerySortDir[view.kind]}
-                onChange={(value) => setGallerySortDir(view.kind, value as GallerySortDir)}
-                options={[...DIRS]}
-              />
-            </div>
-          </div>
-          <p className="text-xs text-muted">
-            Used after launch or a UI reload. Changing sort in this gallery is only for that session.
-          </p>
+      {GENERATE_FILTER_VIEWS.map((view) => {
+        const key = view.key as GalleryModeKey
+        return (
+          <SettingsCard
+            key={view.key}
+            query={query}
+            title={view.label}
+            terms={`${view.label} generate scopes filters global local`}
+          >
+            <ModeRow
+              title="Scopes"
+              value={galleryModeValue(scopeMode, key)}
+              onChange={(value) => setScopeMode(key, value)}
+            />
+            <ModeRow
+              title="Filters"
+              value={galleryModeValue(filterMode, key)}
+              onChange={(value) => setFilterMode(key, value)}
+            />
+          </SettingsCard>
+        )
+      })}
+      <SettingsCard
+        query={query}
+        title="Models"
+        terms="models scopes filters global local share categories all base model lora wildcards"
+      >
+        <ModeRow title="Scopes" value={modelsScope} onChange={(value) => setScopeMode('models', value)} />
+        <ModeRow title="Filters" value={modelsFilter} onChange={(value) => setFilterMode('models', value)} />
+        {modelsScope === 'local' || modelsFilter === 'local' ? (
           <label className="flex items-center gap-2 text-sm text-ink">
             <input
               type="checkbox"
               className="check"
-              checked={galleryThumbFallback[view.kind]}
-              onChange={(event) => setGalleryThumbFallback(view.kind, event.target.checked)}
+              checked={shareModels}
+              onChange={(event) => setShareModels(event.target.checked)}
             />
-            Use Global thumbnails in scoped view
+            Share across model categories
           </label>
-          <p className="text-xs text-muted">Off shows the default tile when this scope has no thumbnail.</p>
-        </SettingsCard>
-      ))}
+        ) : null}
+      </SettingsCard>
       <SettingsCard query={query} title="Tiles" terms="tile scale size zoom">
         <SliderField value={galleryTileScale} onChange={setGalleryTileScale} min={0.5} max={2} step={0.1} />
         <p className="text-xs text-muted">1 is the current tile size.</p>

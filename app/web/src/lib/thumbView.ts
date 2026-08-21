@@ -1,4 +1,4 @@
-import { useSettingsStore, type GalleryViewKind } from '@/stores/settingsStore.ts'
+import { useSettingsStore, LOCAL_SCOPE_DEFAULT, type GalleryLocalScope, type GalleryViewKind } from '@/stores/settingsStore.ts'
 import { modelThumbUrl, type ModelEntry, type ModelLists, type ThumbView } from '@/lib/api.ts'
 
 export const GLOBAL_SCOPE = 'global'
@@ -13,10 +13,29 @@ export function autoScopeIds() {
   return autoIds
 }
 
-export function selectedScopeIds() {
+export function readScopePack(scopeKey = GLOBAL_SCOPE): GalleryLocalScope {
   const settings = useSettingsStore.getState()
-  const ids = settings.thumbScopeAuto ? autoIds : settings.thumbScopeIds
+  if (!scopeKey || scopeKey === GLOBAL_SCOPE) {
+    return {
+      ids: settings.thumbScopeIds,
+      optionalIds: settings.thumbScopeOptionalIds,
+      auto: settings.thumbScopeAuto,
+      mode: settings.thumbDisplayMode,
+      fallback: settings.galleryThumbFallback,
+    }
+  }
+  return settings.galleryLocalScopes[scopeKey] ?? LOCAL_SCOPE_DEFAULT
+}
+
+export function selectedScopeIds(scopeKey = GLOBAL_SCOPE) {
+  const pack = readScopePack(scopeKey)
+  const ids = pack.auto ? autoIds : pack.ids
   return ids.filter((id) => id && id !== GLOBAL_SCOPE)
+}
+
+export function optionalScopeIds(ids?: string[], scopeKey = GLOBAL_SCOPE) {
+  const optional = new Set(readScopePack(scopeKey).optionalIds)
+  return (ids ?? selectedScopeIds(scopeKey)).filter((id) => optional.has(id))
 }
 
 export function contextKey(ids: string[] = selectedScopeIds()) {
@@ -36,22 +55,23 @@ export function civitaiSaveContext() {
   return contextKey()
 }
 
-export function thumbView(fallback = false): ThumbView {
-  const settings = useSettingsStore.getState()
+export function thumbView(fallback = false, scopeKey = GLOBAL_SCOPE): ThumbView {
+  const pack = readScopePack(scopeKey)
+  const ids = selectedScopeIds(scopeKey)
+  const optional = optionalScopeIds(ids, scopeKey)
   return {
-    context: contextKey(),
-    mode: settings.thumbDisplayMode,
+    context: contextKey(ids),
+    mode: pack.mode,
     fallback,
+    optional: optional.length ? optional.join('+') : undefined,
   }
 }
 
-export function galleryThumbView(kind: GalleryViewKind | string): ThumbView {
-  const settings = useSettingsStore.getState()
-  const fallback =
-    kind === 'checkpoints' || kind === 'loras' || kind === 'wildcards'
-      ? Boolean(settings.galleryThumbFallback[kind])
-      : Boolean(settings.trashThumbFallback)
-  return thumbView(fallback)
+export function galleryThumbView(kind: GalleryViewKind | string, scopeKey = GLOBAL_SCOPE): ThumbView {
+  if (kind === 'trash') {
+    return thumbView(useSettingsStore.getState().trashThumbFallback, GLOBAL_SCOPE)
+  }
+  return thumbView(readScopePack(scopeKey).fallback, scopeKey)
 }
 
 export function trashThumbView(): ThumbView {
@@ -68,7 +88,7 @@ export function civitaiSaveThumbView(): ThumbView {
 
 export function modelThumbSrc(
   kind: keyof ModelLists,
-  item: Pick<ModelEntry, 'path' | 'thumb' | 'thumb_global'> | null,
+  item: Pick<ModelEntry, 'path' | 'thumb' | 'thumb_media' | 'thumb_global' | 'thumb_global_media'> | null,
   view?: ThumbView,
 ) {
   if (!item?.path) {
@@ -79,5 +99,6 @@ export function modelThumbSrc(
   if (!tick) {
     return null
   }
-  return modelThumbUrl(kind, item.path, tick, next)
+  const media = item.thumb ? item.thumb_media : next.fallback ? item.thumb_global_media : ''
+  return modelThumbUrl(kind, item.path, tick, next, media)
 }

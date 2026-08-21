@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
@@ -55,6 +55,7 @@ class JobIn(BaseModel):
     batch_grid: bool | None = None
     batch_grid_max: int | None = Field(default=None, ge=2, le=100)
     batch_grid_quality: int | None = Field(default=None, ge=40, le=95)
+    batch_grid_format: str | None = None
     batch_grid_rows: int | None = Field(default=None, ge=0, le=25)
     batch_grid_fill: bool | None = None
     batch_grid_on_cancel: bool | None = None
@@ -207,18 +208,21 @@ class AutocompleteCsvIn(BaseModel):
 class ScopeIn(BaseModel):
     name: str = ""
     group: str = ""
-    required: list[str] = Field(default_factory=list)
-    optional: list[str] = Field(default_factory=list)
     anyGroups: list[list[str]] = Field(default_factory=list)
     exclude: list[str] = Field(default_factory=list)
     priority: int = 0
 
 
-def _view(context: str = "", mode: str = "exact", fallback: bool = False) -> tuple[str, str, bool]:
+def _view(
+    context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> tuple[str, str, bool, list[str]]:
     parts = [part.strip() for part in context.replace(",", "+").split("+") if part.strip()]
     key = thumbnail_scopes.context_key(parts)
     view = "likely" if mode == "likely" else "exact"
-    return key, view, bool(fallback)
+    selected = {item for item in thumbnail_scopes.parse_context(key) if item != thumbnail_scopes.GLOBAL_ID}
+    opt_parts = [part.strip() for part in optional.replace(",", "+").split("+") if part.strip()]
+    opt = [item for item in thumbnail_scopes.parse_context(thumbnail_scopes.context_key(opt_parts)) if item in selected]
+    return key, view, bool(fallback), opt
 
 
 def _thumb_meta(request: Request) -> dict[str, Any]:
@@ -264,9 +268,9 @@ def comfy_ksampler() -> dict:
 
 
 @api.get("/user-models")
-def get_models(context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
-    key, view, use_global = _view(context, mode, fallback)
-    return models.list_models(key, view, use_global)
+def get_models(context: str = "", mode: str = "exact", fallback: bool = False, optional: str = "") -> dict:
+    key, view, use_global, opt = _view(context, mode, fallback, optional)
+    return models.list_models(key, view, use_global, opt)
 
 
 @api.get("/issues")
@@ -275,11 +279,13 @@ def get_issues() -> dict:
 
 
 @api.post("/user-models/refresh")
-def post_models_refresh(kind: str | None = None, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+def post_models_refresh(
+    kind: str | None = None, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> dict:
     if kind and kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    key, view, use_global = _view(context, mode, fallback)
-    return models.refresh_models(kind, key, view, use_global)
+    key, view, use_global, opt = _view(context, mode, fallback, optional)
+    return models.refresh_models(kind, key, view, use_global, opt)
 
 
 @api.get("/user-wildcards/tree")
@@ -442,10 +448,12 @@ def open_user_removed(item_id: str) -> dict:
 
 
 @api.get("/user-removed/{item_id}/thumb")
-def get_user_removed_thumb(item_id: str, context: str = "", mode: str = "exact", fallback: bool = False) -> FileResponse:
+def get_user_removed_thumb(
+    item_id: str, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> FileResponse:
     try:
-        key, view, use_global = _view(context, mode, fallback)
-        path = removed.thumb_file(item_id, key, view, use_global)
+        key, view, use_global, opt = _view(context, mode, fallback, optional)
+        path = removed.thumb_file(item_id, key, view, use_global, opt)
     except removed.RemovedError as exc:
         raise _removed_error(exc) from exc
     if not path:
@@ -454,20 +462,24 @@ def get_user_removed_thumb(item_id: str, context: str = "", mode: str = "exact",
 
 
 @api.get("/user-removed/{item_id}/thumb-meta")
-def get_user_removed_thumb_meta(item_id: str, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+def get_user_removed_thumb_meta(
+    item_id: str, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> dict:
     try:
-        key, view, use_global = _view(context, mode, fallback)
-        return removed.thumb_meta(item_id, key, view, use_global)
+        key, view, use_global, opt = _view(context, mode, fallback, optional)
+        return removed.thumb_meta(item_id, key, view, use_global, opt)
     except removed.RemovedError as exc:
         raise _removed_error(exc) from exc
 
 
 @api.get("/user-models/{kind}/info")
-def get_model_info(kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+def get_model_info(
+    kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> dict:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    key, view, use_global = _view(context, mode, fallback)
-    info = models.model_info(kind, path, key, view, use_global)
+    key, view, use_global, opt = _view(context, mode, fallback, optional)
+    info = models.model_info(kind, path, key, view, use_global, opt)
     if not info:
         raise ApiError("not_found", "model not found")
     return info
@@ -516,22 +528,26 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
 
 
 @api.get("/user-models/{kind}/thumb")
-def get_model_thumb(kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False) -> FileResponse:
+def get_model_thumb(
+    kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> FileResponse:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    key, view, use_global = _view(context, mode, fallback)
-    file = model_thumbs.resolved_file(kind, path, key, view, use_global)
+    key, view, use_global, opt = _view(context, mode, fallback, optional)
+    file = model_thumbs.resolved_file(kind, path, key, view, use_global, opt)
     if not file:
         raise ApiError("not_found", "thumb not found")
     return _file_response(file, model_meta.thumb_media(file), immutable=True)
 
 
 @api.get("/user-models/{kind}/thumb-meta")
-def get_model_thumb_meta(kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False) -> dict:
+def get_model_thumb_meta(
+    kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+) -> dict:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    key, view, use_global = _view(context, mode, fallback)
-    file = model_thumbs.resolved_file(kind, path, key, view, use_global)
+    key, view, use_global, opt = _view(context, mode, fallback, optional)
+    file = model_thumbs.resolved_file(kind, path, key, view, use_global, opt)
     return thumbnail_embed.read_file(file) if file else {}
 
 
@@ -541,9 +557,16 @@ async def put_model_thumb(kind: str, path: str, request: Request, context: str =
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     if not models.model_file(kind, path):
         raise ApiError("not_found", "model not found")
-    key, _, _ = _view(context)
+    key, _, _, _ = _view(context)
     try:
-        thumb = model_meta.save_thumb(kind, path, await request.body(), key, _thumb_meta(request))
+        thumb = model_meta.save_thumb(
+            kind,
+            path,
+            await request.body(),
+            key,
+            _thumb_meta(request),
+            request.headers.get("content-type", ""),
+        )
     except ValueError as exc:
         raise ApiError("bad_request", str(exc), 400) from exc
     return {"thumb": thumb}
@@ -553,9 +576,7 @@ async def put_model_thumb(kind: str, path: str, request: Request, context: str =
 def delete_model_thumb(kind: str, path: str, context: str = "", all_contexts: bool = False) -> dict:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
-    if not models.model_file(kind, path):
-        raise ApiError("not_found", "model not found")
-    key, _, _ = _view(context)
+    key, _, _, _ = _view(context)
     try:
         model_meta.delete_thumb(kind, path, key, all_contexts)
     except ValueError as exc:
@@ -579,6 +600,148 @@ def civitai_by_hash(hash: str) -> dict:
     return data
 
 
+@api.get("/civitai/models")
+def civitai_models(
+    query: str = "",
+    type: Literal["all", "Checkpoint", "LORA"] = "all",
+    types: list[str] | None = Query(default=None),
+    base_models: list[str] | None = Query(default=None, alias="baseModels"),
+    sort: Literal[
+        "Highest Rated",
+        "Most Downloaded",
+        "Most Liked",
+        "Most Discussed",
+        "Most Collected",
+        "Most Images",
+        "Newest",
+        "Oldest",
+    ] = "Newest",
+    period: Literal["AllTime", "Year", "Month", "Week", "Day"] = "AllTime",
+    page: int = 1,
+    cursor: str = "",
+    early_access: bool | None = Query(default=None, alias="earlyAccess"),
+    supports_generation: bool | None = Query(default=None, alias="supportsGeneration"),
+    from_platform: bool | None = Query(default=None, alias="fromPlatform"),
+    nsfw: bool = True,
+    tag: str = "",
+) -> dict:
+    try:
+        payload = civitai.list_models(
+            query=query,
+            types=types if types else ([] if type == "all" else [type]),
+            base_models=base_models,
+            sort=sort,
+            period=period,
+            page=max(1, page),
+            limit=20,
+            cursor=cursor,
+            early_access=early_access,
+            supports_generation=supports_generation,
+            from_platform=from_platform,
+            nsfw=nsfw,
+            tag=tag,
+        )
+    except civitai.CivitaiRequestError as exc:
+        status = 400 if "Set a CivitAI API key" in str(exc) else 502
+        raise ApiError("civitai_error", str(exc), status) from exc
+    raw_items = payload.get("items")
+    items: list[dict[str, Any]] = []
+    if isinstance(raw_items, list):
+        for raw in raw_items:
+            if not isinstance(raw, dict):
+                continue
+            try:
+                model_id = int(raw["id"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            creator = raw.get("creator")
+            creator_name = creator.get("username") if isinstance(creator, dict) else str(creator or "")
+            versions = raw.get("modelVersions")
+            version = versions[0] if isinstance(versions, list) and versions and isinstance(versions[0], dict) else {}
+            base_models: list[str] = []
+            version_refs: list[dict[str, Any]] = []
+            download_hashes: list[str] = []
+            download_names: list[str] = [str(raw.get("name") or "").strip()]
+            if isinstance(versions, list):
+                for candidate in versions:
+                    if not isinstance(candidate, dict):
+                        continue
+                    base_model = str(candidate.get("baseModel") or "").strip()
+                    if base_model and base_model not in base_models:
+                        base_models.append(base_model)
+                    version_name = str(candidate.get("name") or "").strip()
+                    if version_name and version_name not in download_names:
+                        download_names.append(version_name)
+                    try:
+                        version_id = int(candidate["id"])
+                    except (KeyError, TypeError, ValueError):
+                        version_id = 0
+                    if version_id:
+                        version_refs.append({"id": version_id, "baseModel": base_model})
+                    files = candidate.get("files")
+                    if isinstance(files, list):
+                        for file in files:
+                            if not isinstance(file, dict):
+                                continue
+                            file_name = str(file.get("name") or "").strip()
+                            if file_name and file_name not in download_names:
+                                download_names.append(file_name)
+                            file_hashes = file.get("hashes")
+                            if isinstance(file_hashes, dict):
+                                for value in file_hashes.values():
+                                    digest = str(value or "").strip().lower()
+                                    if digest and digest not in download_hashes:
+                                        download_hashes.append(digest)
+            images = version.get("images")
+            preview = ""
+            preview_nsfw = False
+            if isinstance(images, list):
+                for image in images:
+                    if not isinstance(image, dict) or not image.get("url"):
+                        continue
+                    preview = str(image.get("url"))
+                    preview_nsfw = bool(image.get("nsfw"))
+                    try:
+                        preview_nsfw = preview_nsfw or int(image.get("nsfwLevel") or 0) >= 4
+                    except (TypeError, ValueError):
+                        pass
+                    break
+            paid, buzz = civitai.download_cost(versions)
+            items.append(
+                {
+                    "id": model_id,
+                    "name": str(raw.get("name") or ""),
+                    "type": str(raw.get("type") or ""),
+                    "creator": str(creator_name),
+                    "nsfw": bool(raw.get("nsfw")) or preview_nsfw,
+                    "baseModel": base_models[0] if base_models else "",
+                    "baseModels": base_models,
+                    "versions": version_refs,
+                    "preview": preview,
+                    "downloadNames": download_names,
+                    "downloadHashes": download_hashes,
+                    "paid": paid,
+                    "buzz": buzz,
+                }
+            )
+    metadata = payload.get("metadata")
+    next_cursor = metadata.get("nextCursor") if isinstance(metadata, dict) else None
+    has_next = bool(next_cursor or (metadata.get("nextPage") if isinstance(metadata, dict) else None))
+    return {"items": items, "page": max(1, page), "hasNext": has_next, "nextCursor": next_cursor or ""}
+
+
+@api.get("/civitai/models/{model_id}")
+def civitai_model(model_id: int) -> dict:
+    try:
+        return civitai.get_model(model_id)
+    except civitai.CivitaiRequestError as exc:
+        message = str(exc)
+        if "not found" in message:
+            raise ApiError("not_found", message, 404) from exc
+        status = 400 if "Set a CivitAI API key" in message else 502
+        raise ApiError("civitai_error", message, status) from exc
+
+
 @api.get("/civitai/image")
 def civitai_image(url: str) -> Response:
     hit = civitai.fetch_image(url)
@@ -586,6 +749,11 @@ def civitai_image(url: str) -> Response:
         raise ApiError("not_found", "image not found")
     data, media = hit
     return Response(content=data, media_type=media)
+
+
+@api.get("/user-thumbs")
+def get_saved_thumbs() -> dict:
+    return {"thumbs": model_thumbs.list_saved()}
 
 
 @api.get("/user-scopes")
@@ -637,6 +805,7 @@ def health() -> dict:
         "version": VERSION,
         "comfy": {
             "reachable": comfy.reachable(),
+            "restarting": (RUNTIME / "tmp" / "comfy-restart").is_file(),
             "mode": env.get("comfyui.mode"),
             "path": env.get("comfyui.path"),
             "url": comfy.comfy_base(),
@@ -755,6 +924,15 @@ def sync_model_paths() -> dict:
     return {"ok": True}
 
 
+@api.post("/paths/models/reload")
+def reload_model_paths() -> dict:
+    dirs.write_extra_model_paths()
+    flag = RUNTIME / "tmp" / "comfy-restart"
+    flag.parent.mkdir(parents=True, exist_ok=True)
+    flag.touch()
+    return {"ok": True}
+
+
 @api.post("/reload")
 def reload_app() -> dict:
     flag = RUNTIME / "tmp" / "restart"
@@ -796,7 +974,7 @@ def job_grid(job_id: str) -> FileResponse:
     path = jobs.grid_path(job_id, 0)
     if not path:
         raise ApiError("not_found", "grid not found")
-    return _file_response(path, "image/png" if path.suffix.lower() == ".png" else "image/jpeg")
+    return _image_response(path)
 
 
 @api.get("/jobs/{job_id}/grid/{index}")
@@ -804,7 +982,7 @@ def job_grid_at(job_id: str, index: int) -> FileResponse:
     path = jobs.grid_path(job_id, index)
     if not path:
         raise ApiError("not_found", "grid not found")
-    return _file_response(path, "image/png" if path.suffix.lower() == ".png" else "image/jpeg")
+    return _image_response(path)
 
 
 def _preview_response(data: bytes | None) -> Response:

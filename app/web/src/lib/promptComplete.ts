@@ -94,9 +94,11 @@ export function formatInsertTag(tag: string) {
 }
 
 export function completeInsert(text: string, start: number, end: number, insert: string, trailing = true) {
-  const chunk = trailing && !insert.endsWith(', ') ? `${insert}, ` : insert
+  const rest = text.slice(end)
+  const hasSep = rest.startsWith(',') || rest.startsWith('\n')
+  const chunk = trailing && !hasSep && !insert.endsWith(', ') ? `${insert}, ` : insert
   return {
-    text: `${text.slice(0, start)}${chunk}${text.slice(end)}`,
+    text: `${text.slice(0, start)}${chunk}${rest}`,
     caret: start + chunk.length,
   }
 }

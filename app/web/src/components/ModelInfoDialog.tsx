@@ -28,11 +28,13 @@ export function ModelInfoDialog({
   item,
   onClose,
   onSaved,
+  scopeKey,
 }: {
   kind: keyof ModelLists
   item: ModelEntry
   onClose: () => void
   onSaved?: (thumb: number) => void
+  scopeKey?: string
 }) {
   const navigate = useNavigate()
   const picker = useRef<HTMLInputElement>(null)
@@ -60,7 +62,7 @@ export function ModelInfoDialog({
   const strengthMax = useSettingsStore((s) => s.loraStrengthMax)
   const sliderMin = useSettingsStore((s) => s.loraSliderMin)
   const sliderMax = useSettingsStore((s) => s.loraSliderMax)
-  const view = useThumbView(kind)
+  const view = useThumbView(kind, scopeKey)
   const pickerOptions = useMemo(
     () =>
       filterTypeSections(
@@ -351,7 +353,8 @@ export function ModelInfoDialog({
           <TilePreview
             className="h-full w-full"
             eager
-            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { path: item.path, thumb, thumb_global: item.thumb_global }, view)}
+            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { ...item, thumb }, view)}
+            media={pending && pending !== 'clear' ? pending.type : item.thumb_media}
           />
         }
       />

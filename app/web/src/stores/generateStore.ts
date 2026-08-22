@@ -233,17 +233,64 @@ export type ModelSwap =
   | { slot: 'checkpoint' }
   | { slot: 'textEncoder' }
   | { slot: 'vae' }
-  | { slot: 'lora'; index: number }
+  | { slot: 'lora'; index: number; path?: string; auto?: boolean }
   | { slot: 'wildcard'; index: number }
 
 export function sameModelSwap(a: ModelSwap | null, b: ModelSwap | null) {
   if (!a || !b || a.slot !== b.slot) {
     return false
   }
-  if ((a.slot === 'lora' || a.slot === 'wildcard') && (b.slot === 'lora' || b.slot === 'wildcard')) {
+  if (a.slot !== b.slot) {
+    return false
+  }
+  if (a.slot === 'lora' && b.slot === 'lora') {
+    return a.index === b.index && a.path === b.path && a.auto === b.auto
+  }
+  if (a.slot === 'wildcard' && b.slot === 'wildcard') {
     return a.index === b.index
   }
   return true
+}
+
+export function autoLoraId(path: string) {
+  return `auto:${path}`
+}
+
+export function promptLoraId(path: string, index: number) {
+  return `prompt:${path}:${index}`
+}
+
+function cleanActiveLoraOrder(raw: unknown): string[] {
+  return Array.isArray(raw)
+    ? [...new Set(raw.filter((item): item is string => typeof item === 'string' && Boolean(item)))]
+    : []
+}
+
+function cleanActiveLoraStrengths(raw: unknown): Record<string, number> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      ([path, value]) => Boolean(path) && typeof value === 'number' && Number.isFinite(value),
+    ),
+  )
+}
+
+export function reorderActiveLoras(order: string[], draggedId: string, targetId: string, before = true): string[] | null {
+  const from = order.indexOf(draggedId)
+  const target = order.indexOf(targetId)
+  if (from < 0 || target < 0 || from === target) {
+    return null
+  }
+  const next = [...order]
+  const [moved] = next.splice(from, 1)
+  const insertAt = next.indexOf(targetId) + (before ? 0 : 1)
+  if (insertAt === from) {
+    return null
+  }
+  next.splice(insertAt, 0, moved)
+  return next
 }
 
 type GenerateState = {
@@ -274,6 +321,8 @@ type GenerateState = {
   vae: string
   textEncoder: string
   swapTarget: ModelSwap | null
+  activeLoraOrder: string[]
+  activeLoraStrengths: Record<string, number>
   setPrompt: (value: string) => void
   setNegativePrompt: (value: string) => void
   setCheckpoint: (value: string) => void
@@ -291,6 +340,9 @@ type GenerateState = {
   setVae: (value: string) => void
   setTextEncoder: (value: string) => void
   setSwapTarget: (value: ModelSwap | null) => void
+  setActiveLoraOrder: (value: string[]) => void
+  setActiveLoraStrength: (path: string, value: number) => void
+  toggleAutoLora: (path: string) => void
   setBatchSize: (value: number) => void
   setBatchCount: (value: number) => void
   setSampler: (value: string) => void
@@ -316,6 +368,8 @@ export const useGenerateStore = create<GenerateState>()(
       vae: '',
       textEncoder: '',
       swapTarget: null,
+      activeLoraOrder: [],
+      activeLoraStrengths: {},
       setPrompt: (prompt) => set({ prompt }),
       setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
       setCheckpoint: (checkpoint) => set({ checkpoint }),
@@ -342,6 +396,22 @@ export const useGenerateStore = create<GenerateState>()(
       setVae: (vae) => set({ vae }),
       setTextEncoder: (textEncoder) => set({ textEncoder }),
       setSwapTarget: (swapTarget) => set({ swapTarget }),
+      setActiveLoraOrder: (activeLoraOrder) =>
+        set({ activeLoraOrder: cleanActiveLoraOrder(activeLoraOrder) }),
+      setActiveLoraStrength: (path, value) =>
+        set((state) => (
+          path && Number.isFinite(value)
+            ? { activeLoraStrengths: { ...state.activeLoraStrengths, [path]: value } }
+            : state
+        )),
+      toggleAutoLora: (path) =>
+        set((state) => {
+          const id = autoLoraId(path)
+          const order = state.activeLoraOrder
+          return order.includes(id)
+            ? { activeLoraOrder: order.filter((item) => item !== id) }
+            : { activeLoraOrder: [...order, id] }
+        }),
       setBatchSize: (batchSize) => set({ batchSize }),
       setBatchCount: (batchCount) => set({ batchCount }),
       setSampler: (sampler) => set({ sampler }),
@@ -371,6 +441,8 @@ export const useGenerateStore = create<GenerateState>()(
           ...current,
           ...rest,
           modelTileStyle: parseModelTileStyle(rest.modelTileStyle),
+          activeLoraOrder: cleanActiveLoraOrder(rest.activeLoraOrder),
+          activeLoraStrengths: cleanActiveLoraStrengths(rest.activeLoraStrengths),
         }
       },
     },

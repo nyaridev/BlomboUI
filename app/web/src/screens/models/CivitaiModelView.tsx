@@ -1,12 +1,12 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
 import type { CivitaiModelDetail } from '@/lib/api.ts'
 import { sanitizeCivitaiHtml } from '@/lib/civitaiHtml.ts'
-import { loadCivitaiPage, peekCivitaiPage, setCachedVersion } from '@/lib/civitaiPageCache.ts'
+import { dropCivitaiPage, loadCivitaiPage, peekCivitaiPage, setCachedVersion } from '@/lib/civitaiPageCache.ts'
 import { civitaiModelHref, pickVersionId } from '@/lib/civitaiVersion.ts'
 import { creatorUrl } from '@/screens/fileinfo/CivitaiLayouts.tsx'
 import { CivitaiPreviewStrip } from './CivitaiPreviewStrip.tsx'
+import { CivitaiErrorState } from './CivitaiErrorState.tsx'
 import { civitaiHost, useSettingsStore } from '@/stores/settingsStore.ts'
-import { toast } from '@/stores/toastStore.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 function chipClass(active: boolean, initial: boolean) {
@@ -51,9 +51,11 @@ const DESCRIPTION_CLASS = [
 export function CivitaiModelView({
   modelId,
   preferredBases,
+  onDownload,
 }: {
   modelId: number
   preferredBases: string[]
+  onDownload?: (versionId: number) => void
 }) {
   const site = useSettingsStore((state) => state.civitaiSite)
   const nsfw = useSettingsStore((state) => state.civitaiBrowse.nsfw)
@@ -66,6 +68,7 @@ export function CivitaiModelView({
   const [busy, setBusy] = useState(!cached?.model && !cached?.error)
   const [error, setError] = useState(cached?.error || '')
   const [copied, setCopied] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
   const basesRef = useRef(preferredBases)
   basesRef.current = preferredBases
 
@@ -92,7 +95,7 @@ export function CivitaiModelView({
     return () => {
       alive = false
     }
-  }, [modelId])
+  }, [modelId, retryCount])
 
   useEffect(() => {
     setCachedVersion(modelId, versionId)
@@ -143,11 +146,19 @@ export function CivitaiModelView({
   const initialVersionId = tab?.initialVersionId
   const selectionChanged = initialVersionId !== undefined && version !== undefined && version.id !== initialVersionId
 
+  function retry() {
+    dropCivitaiPage(modelId)
+    setModel(null)
+    setError('')
+    setBusy(true)
+    setRetryCount((value) => value + 1)
+  }
+
   if (busy) {
     return <p className="text-sm text-muted">Loading model…</p>
   }
   if (error) {
-    return <p className="text-sm text-red-bright">{error}</p>
+    return <CivitaiErrorState message={error} onRetry={retry} busy={busy} />
   }
   if (!model || !version) {
     return <p className="text-sm text-muted">No model details.</p>
@@ -192,7 +203,7 @@ export function CivitaiModelView({
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded border border-accent bg-accent px-3 py-1.5 text-sm text-ink hover:brightness-110"
-              onClick={() => toast("Download isn't implemented yet")}
+              onClick={() => onDownload?.(version.id)}
             >
               <AppIcon id="download" size={14} />
               Download

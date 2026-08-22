@@ -83,6 +83,8 @@ def list_kind(
         item["notes"] = str(row.get("notes") or "")
         item["strength"] = float(row["strength"]) if "strength" in row else 1.0
         item["slider"] = bool(row.get("slider"))
+        item["auto_apply"] = row.get("auto_apply") if isinstance(row.get("auto_apply"), bool) else None
+        item["apply_at"] = row.get("apply_at") if row.get("apply_at") in {"start", "end"} else None
         item["types"] = list(row.get("types") or [])
     items.sort(key=lambda item: str(item.get("tag") or item["path"]).lower())
     return items
@@ -250,6 +252,8 @@ def model_info(
         "notes": info["notes"],
         "strength": info["strength"],
         "slider": info["slider"],
+        "auto_apply": info["auto_apply"],
+        "apply_at": info["apply_at"],
         "type_options": list(model_meta.OPTIONS),
         "thumb": model_thumbs.resolved_mtime(kind, posix, context, mode, fallback, optional),
         "thumb_media": _thumb_media(kind, posix, context, mode, fallback, optional),

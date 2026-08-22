@@ -84,6 +84,14 @@ export type GalleryItem = {
 export type JobGeneration = JobGalleryItem
 export type Generation = GalleryItem
 
+export type PromptMatrixRequest = {
+  lines: string
+  save_grid: boolean
+  use_batch: boolean
+}
+
+export type AutoLoraRequest = string | { path: string; strength: number }
+
 export type JobRequest = {
   prompt: string
   negative_prompt: string
@@ -113,6 +121,8 @@ export type JobRequest = {
   output_grid_path?: string
   output_image_name?: string
   output_grid_name?: string
+  auto_loras?: AutoLoraRequest[]
+  prompt_matrix?: PromptMatrixRequest
 }
 
 async function readError(res: Response): Promise<string> {
@@ -250,6 +260,8 @@ export type ModelEntry = {
   dir?: boolean
   entries?: string[]
   types?: string[]
+  auto_apply?: boolean | null
+  apply_at?: 'start' | 'end' | null
 }
 
 export type ModelHashes = {
@@ -280,6 +292,8 @@ export type ModelInfo = {
   thumb_global_media?: string
   thumb_exact?: number
   thumb_exact_media?: string
+  auto_apply?: boolean | null
+  apply_at?: 'start' | 'end' | null
 }
 
 export type ModelLists = {
@@ -362,8 +376,16 @@ export async function saveModelInfo(
   kind: keyof ModelLists,
   path: string,
   types: string[],
-  extra?: { prompt?: string; negative_prompt?: string; notes?: string; strength?: number; slider?: boolean },
-): Promise<string[]> {
+  extra?: {
+    prompt?: string
+    negative_prompt?: string
+    notes?: string
+    strength?: number
+    slider?: boolean
+    auto_apply?: boolean | null
+    apply_at?: 'start' | 'end' | null
+  },
+): Promise<ModelInfo> {
   const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/info?path=${encodeURIComponent(path)}`), {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -374,13 +396,14 @@ export async function saveModelInfo(
       notes: extra?.notes,
       strength: extra?.strength,
       slider: extra?.slider,
+      auto_apply: extra?.auto_apply,
+      apply_at: extra?.apply_at,
     }),
   })
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  const data = (await res.json()) as { types: string[] }
-  return data.types
+  return (await res.json()) as ModelInfo
 }
 
 export type ThumbMeta = {
@@ -625,6 +648,18 @@ export type CivitaiModelVersionDetail = {
   paid: boolean
   buzz: number
   images: CivitaiModelImage[]
+  downloadUrl: string
+  files: CivitaiModelFile[]
+}
+
+export type CivitaiModelFile = {
+  id: number
+  name: string
+  downloadUrl: string
+  primary: boolean
+  sizeBytes: number
+  hashes: Record<string, string>
+  metadata?: Record<string, string>
 }
 
 export type CivitaiModelDetail = {
@@ -634,6 +669,7 @@ export type CivitaiModelDetail = {
   creator: string
   nsfw: boolean
   description: string
+  tags: string[]
   stats: {
     downloadCount?: number
     favoriteCount?: number
@@ -679,6 +715,7 @@ export async function listCivitaiModels(params: {
   fromPlatform?: boolean
   nsfw?: boolean
   tag?: string
+  signal?: AbortSignal
 }): Promise<{ items: CivitaiModel[]; page: number; hasNext: boolean; nextCursor?: string }> {
   const query = new URLSearchParams({
     query: params.query,
@@ -708,7 +745,7 @@ export async function listCivitaiModels(params: {
   if (params.tag) {
     query.set('tag', params.tag)
   }
-  const res = await fetch(api(`/civitai/models?${query.toString()}`))
+  const res = await fetch(api(`/civitai/models?${query.toString()}`), { signal: params.signal })
   if (!res.ok) {
     throw new Error(await readError(res))
   }
@@ -721,6 +758,32 @@ export async function getCivitaiModel(id: number): Promise<CivitaiModelDetail> {
     throw new Error(await readError(res))
   }
   return (await res.json()) as CivitaiModelDetail
+}
+
+export async function downloadCivitaiModel(params: {
+  modelId: number
+  versionId: number
+  fileId?: number
+  customNaming: boolean
+  modelName?: string
+  creatorAlias?: string
+}): Promise<{ modelId: number; versionId: number; kind: string; paths: string[]; creator: string; creatorAlias: string }> {
+  const res = await fetch(api('/civitai/download'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(params),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as {
+    modelId: number
+    versionId: number
+    kind: string
+    paths: string[]
+    creator: string
+    creatorAlias: string
+  }
 }
 
 export async function fetchCivitaiImage(url: string): Promise<File> {
@@ -794,6 +857,8 @@ export type UserSettings = {
   theme?: string
   civitaiSite?: string
   civitaiApiKey?: string
+  civitaiAutoRetry?: boolean
+  civitaiAutoRetryCount?: number
   timeDisplay?: string
   setResolutions?: string[]
   imagePath?: string
@@ -809,17 +874,37 @@ export type UserSettings = {
   gallerySortKey?: Record<string, string> | string
   gallerySortDir?: Record<string, string> | string
   galleryTileScale?: number
+  galleryThumbFallback?: boolean | Record<string, boolean>
+  thumbSaveTo?: 'active' | 'global'
+  thumbDisplayMode?: 'likely' | 'exact'
+  thumbScopeIds?: string[]
+  thumbScopeOptionalIds?: string[]
+  thumbScopeAuto?: boolean
+  trashThumbFallback?: boolean
   galleryParentOnUnselect?: boolean
   promptWeightStep?: number
   loraStrengthMin?: number
   loraStrengthMax?: number
   loraSliderMin?: number
   loraSliderMax?: number
+  loraAutoApply?: boolean
+  loraApplyAt?: 'start' | 'end'
   modelDirs?: FolderDir[]
   wildcardDirs?: FolderDir[]
   galleryDirs?: FolderDir[]
-  forceDownloadModelsLocal?: boolean
-  forceDownloadWildcardsLocal?: boolean
+  civitaiDownload?: {
+    modelDirId?: string
+    wildcardDirId?: string
+    modelIntelligent?: boolean
+    modelSortBaseModel?: boolean
+    modelSortCategory?: boolean
+    modelSortCreator?: boolean
+    modelNaming?: string
+    wildcardIntelligent?: boolean
+    wildcardUnpack?: boolean
+    updateModelInfo?: boolean
+    authorAliases?: Record<string, string>
+  }
   removedAfterHours?: number
   removedMaxGb?: number
   autocompleteEnabled?: boolean
@@ -1240,6 +1325,7 @@ export type AppPaths = {
   models: string
   wildcards: string
   output: string
+  userName: string
 }
 
 export async function getAppPaths(): Promise<AppPaths> {

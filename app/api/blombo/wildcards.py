@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from blombo import dirs as app_dirs
 from blombo.paths import wildcards_root
 
 # Tags are `__name__` tokens. Surrounding commas are optional.
@@ -125,33 +126,34 @@ def _choice(lines: list[str], rng: random.Random) -> str:
 
 
 def _index() -> dict[str, Any]:
-    root = wildcards_root()
     txt: dict[str, Path] = {}
     yaml_nodes: dict[str, YamlNode] = {}
     dirs: dict[str, list[Path]] = {}
     empty: dict[str, Any] = {"txt": txt, "yaml": yaml_nodes, "dirs": dirs}
-    if not root.is_dir():
-        return empty
     claimed: dict[str, str] = {}
-    for path, rel in iter_sources(root):
-        suffix = path.suffix.lower()
-        stem = rel[: -len(path.suffix)] if path.suffix else rel
-        parent = stem.rpartition("/")[0]
-        if parent:
-            dirs.setdefault(parent.lower(), []).append(path)
-        if suffix == TXT_EXT:
-            txt[stem.lower()] = path
+    roots = [wildcards_root(), *app_dirs.extra_named("wildcardDirs").values()]
+    for root in roots:
+        if not root.is_dir():
             continue
-        tree = _yaml_tree(path)
-        if not tree:
-            continue
-        for name, node in tree.items():
-            key = name.lower()
-            owner = claimed.get(key)
-            if owner and owner != rel:
+        for path, rel in iter_sources(root):
+            suffix = path.suffix.lower()
+            stem = rel[: -len(path.suffix)] if path.suffix else rel
+            parent = stem.rpartition("/")[0]
+            if parent:
+                dirs.setdefault(parent.lower(), []).append(path)
+            if suffix == TXT_EXT:
+                txt.setdefault(stem.lower(), path)
                 continue
-            claimed[key] = rel
-            _index_yaml(yaml_nodes, name, node, parent)
+            tree = _yaml_tree(path)
+            if not tree:
+                continue
+            for name, node in tree.items():
+                key = name.lower()
+                owner = claimed.get(key)
+                if owner and owner != rel:
+                    continue
+                claimed[key] = rel
+                _index_yaml(yaml_nodes, name, node, parent)
     return empty
 
 

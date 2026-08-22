@@ -56,7 +56,7 @@ export function ResizeGrip({
       type="button"
       aria-label="Resize"
       title="Drag to resize. Double-click to reset."
-      className="absolute right-0 bottom-0 z-10 flex h-5 w-5 cursor-ns-resize items-end justify-end bg-field p-0.5 text-muted hover:text-ink"
+      className="absolute right-0 bottom-0 z-10 flex h-5 w-5 cursor-ns-resize items-end justify-end bg-transparent p-0.5 text-muted hover:text-ink"
       onPointerDown={onDown}
       onDoubleClick={(event) => {
         event.preventDefault()

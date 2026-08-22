@@ -13,7 +13,25 @@ def strip_tags(text: str) -> str:
     return cleaned.strip(" \t,")
 
 
-def apply(values: dict[str, Any]) -> None:
+def inject_triggers(text: str, automatic: list[dict[str, Any]] | None, field: str = "prompt") -> str:
+    trim = " \t,\r\n"
+    starts: list[str] = []
+    ends: list[str] = []
+    for item in automatic or []:
+        if not isinstance(item, dict):
+            continue
+        trigger = str(item.get(field) or "").strip(trim)
+        if not trigger:
+            continue
+        if item.get("apply_at") == "end":
+            ends.append(trigger)
+        else:
+            starts.append(trigger)
+    parts = [*starts, text.strip(trim), *ends]
+    return ", ".join(part for part in parts if part)
+
+
+def apply(values: dict[str, Any], automatic: list[dict[str, Any]] | None = None) -> None:
     prompt = str(values.get("prompt") or "")
     files = _lora_files()
     found: list[dict[str, Any]] = []
@@ -32,6 +50,33 @@ def apply(values: dict[str, Any]) -> None:
             continue
         seen.add(key)
         found.append({"lora": path, "strength": strength})
+    automatic = values.get("auto_loras_resolved") if automatic is None else automatic
+    for item in automatic if isinstance(automatic, list) else []:
+        if isinstance(item, str):
+            name = item
+            strength = 1.0
+        elif isinstance(item, dict):
+            name = str(item.get("lora") or item.get("path") or "").strip()
+            try:
+                raw_strength = item.get("strength", 1)
+                strength = float(raw_strength if raw_strength is not None else 1)
+            except (TypeError, ValueError):
+                strength = 1.0
+        else:
+            continue
+        path = resolve(name, files)
+        if not path:
+            if name and name not in missing:
+                missing.append(name)
+            continue
+        key = path.replace("\\", "/").lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        found.append({"lora": path, "strength": strength})
+    for name in values.get("auto_lora_missing") or []:
+        if isinstance(name, str) and name and name not in missing:
+            missing.append(name)
     values["loras"] = found
     values["lora_missing"] = missing
 

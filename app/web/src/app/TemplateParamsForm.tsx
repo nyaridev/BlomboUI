@@ -1,5 +1,6 @@
 import { OutputPathOverride } from '@/screens/generate/OutputPathOverride.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
+import { ResizableTextarea } from '@/components/ResizableTextarea.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { CheckpointField } from '@/components/CheckpointField.tsx'
 import { usePromptWeightKey } from '@/lib/promptWeight.ts'
@@ -42,7 +43,7 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
       </div>
       <label className={['flex flex-col gap-1', off(apply, 'prompt')].join(' ')}>
         <Label>Prompt</Label>
-        <textarea
+        <ResizableTextarea
           className={fieldClass()}
           rows={3}
           value={value.prompt}
@@ -52,7 +53,7 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
       </label>
       <label className={['flex flex-col gap-1', off(apply, 'negativePrompt')].join(' ')}>
         <Label>Negative</Label>
-        <textarea
+        <ResizableTextarea
           className={`${fieldClass()} disabled:cursor-not-allowed`}
           rows={2}
           value={value.negativePrompt}

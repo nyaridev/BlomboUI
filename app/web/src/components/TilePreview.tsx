@@ -20,6 +20,7 @@ export function TilePreview({
   glow = false,
   selected = false,
   media = '',
+  preventMediaDrag = false,
   onLoad,
   onError,
   className = '',
@@ -35,6 +36,7 @@ export function TilePreview({
   glow?: boolean
   selected?: boolean
   media?: string
+  preventMediaDrag?: boolean
   onLoad?: () => void
   onError?: () => void
   className?: string
@@ -70,6 +72,7 @@ export function TilePreview({
             muted
             playsInline
             preload="metadata"
+            draggable={preventMediaDrag ? false : undefined}
             onLoadedData={onLoad}
             onError={() => {
               setBroken(true)
@@ -83,6 +86,7 @@ export function TilePreview({
             className="absolute inset-0 h-full w-full max-h-none max-w-none object-cover"
             loading="lazy"
             decoding="async"
+            draggable={preventMediaDrag ? false : undefined}
             onLoad={onLoad}
             onError={() => {
               setBroken(true)
@@ -103,7 +107,7 @@ export function TilePreview({
           </span>
         </>
       )}
-      {warn ? <span aria-hidden="true" className="pointer-events-none absolute inset-0 bg-red/40" /> : null}
+      {warn ? <span aria-hidden="true" className="prompt-invalid-overlay pointer-events-none absolute inset-0" /> : null}
       {selected || glow ? (
         <span
           aria-hidden="true"
@@ -111,7 +115,12 @@ export function TilePreview({
         />
       ) : null}
       {label ? (
-        <span className="absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px] text-ink">
+        <span
+          className={[
+            'absolute bottom-1.5 left-1.5 z-10 max-w-[calc(100%-0.75rem)] truncate rounded bg-bg/70 px-1.5 py-0.5 text-left text-[11px]',
+            warn ? 'text-red' : 'text-ink',
+          ].join(' ')}
+        >
           {label}
         </span>
       ) : null}

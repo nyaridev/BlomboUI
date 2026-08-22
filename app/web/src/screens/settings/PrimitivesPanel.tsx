@@ -6,6 +6,7 @@ import { FolderField } from '@/components/FolderField.tsx'
 import { FolderList, type FolderEntry } from '@/components/FolderList.tsx'
 import { ImageDrop } from '@/components/ImageDrop.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
+import { ResizableTextarea } from '@/components/ResizableTextarea.tsx'
 import { ProgressBar } from '@/components/ProgressBar.tsx'
 import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
@@ -78,8 +79,8 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
           <NumberField value={number} onChange={setNumber} />
         </SettingsBlock>
         <SettingsBlock query={query} title="Textarea" className="flex flex-col gap-2">
-          <textarea
-            className={`${fieldClass()} min-h-20 resize-y font-mono`}
+          <ResizableTextarea
+            className={`${fieldClass()} min-h-20 font-mono`}
             value={area}
             onChange={(e) => setArea(e.target.value)}
             spellCheck={false}

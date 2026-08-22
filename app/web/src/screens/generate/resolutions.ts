@@ -126,7 +126,7 @@ export function sizeFromScaler(aspectId: string, megapixels: number) {
 
 export function inferScaler(width: number, height: number) {
   const ratio = width / height
-  let best = ASPECTS[0]
+  let best: (typeof ASPECTS)[number] = ASPECTS[0]
   let score = Infinity
   for (const aspect of ASPECTS) {
     const next = Math.abs(aspect.w / aspect.h - ratio)

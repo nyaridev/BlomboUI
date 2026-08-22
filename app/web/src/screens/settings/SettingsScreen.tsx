@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom'
 import { AppIcon } from '@/components/AppIcon.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
+import { DownloadPanel, DOWNLOAD_QUERY } from './DownloadPanel.tsx'
 import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
 import { ModelsPanel, MODELS_QUERY } from './ModelsPanel.tsx'
@@ -28,6 +29,7 @@ const GROUPS = [
     title: 'General',
     pages: [
       { id: 'General', terms: GENERAL_QUERY, Panel: GeneralPanel },
+      { id: 'Download', terms: DOWNLOAD_QUERY, Panel: DownloadPanel },
       { id: 'Tabs', terms: TABS_QUERY, Panel: TabsPanel },
       { id: 'Grids', terms: GRIDS_QUERY, Panel: GridsPanel },
       { id: 'Gallery', terms: OUTPUT_GALLERY_QUERY, Panel: OutputGalleryPanel },

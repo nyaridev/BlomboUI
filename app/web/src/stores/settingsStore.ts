@@ -14,6 +14,11 @@ import { type TimeDisplay } from '@/lib/timeDisplay.ts'
 import { cleanSetResolutions, DEFAULT_SET_RESOLUTIONS } from '@/screens/generate/resolutions.ts'
 import { CIVITAI_BROWSE_DEFAULT, cleanCivitaiBrowse, type CivitaiBrowse } from '@/lib/civitaiBrowse.ts'
 import { cleanCivitaiTabId, cleanCivitaiTabs, type CivitaiTab } from '@/lib/civitaiVersion.ts'
+import {
+  CIVITAI_DOWNLOAD_DEFAULT,
+  cleanCivitaiDownload,
+  type CivitaiDownloadSettings,
+} from '@/lib/civitaiDownload.ts'
 
 export const THEMES = [
   { value: 'darker', label: 'Default' },
@@ -197,7 +202,7 @@ export function autocompleteApplies(mode: AutocompleteMode, types: string[], mod
 
 export const SETTINGS_DEFAULTS = {
   batchGrid: true,
-  batchGridMax: 16,
+  batchGridMax: 36,
   batchGridQuality: 85,
   batchGridRows: 0,
   batchGridFill: false,
@@ -222,6 +227,8 @@ export const SETTINGS_DEFAULTS = {
   theme: 'darker' as Theme,
   civitaiSite: 'red' as CivitaiSite,
   civitaiApiKey: '',
+  civitaiAutoRetry: true,
+  civitaiAutoRetryCount: 20,
   timeDisplay: 'full' as TimeDisplay,
   setResolutions: [...DEFAULT_SET_RESOLUTIONS],
   imagePath: '[workflow]/images/[date]',
@@ -243,11 +250,12 @@ export const SETTINGS_DEFAULTS = {
   loraStrengthMax: 1,
   loraSliderMin: -5,
   loraSliderMax: 5,
+  loraAutoApply: true,
+  loraApplyAt: 'start' as 'start' | 'end',
   modelDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
   wildcardDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
   galleryDirs: [] as FolderDir[],
-  forceDownloadModelsLocal: true,
-  forceDownloadWildcardsLocal: true,
+  civitaiDownload: { ...CIVITAI_DOWNLOAD_DEFAULT },
   removedAfterHours: 48,
   removedMaxGb: 100,
   autocompleteEnabled: true,
@@ -318,6 +326,8 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setTheme: (value: Theme) => void
   setCivitaiSite: (value: CivitaiSite) => void
   setCivitaiApiKey: (value: string) => void
+  setCivitaiAutoRetry: (value: boolean) => void
+  setCivitaiAutoRetryCount: (value: number) => void
   setTimeDisplay: (value: TimeDisplay) => void
   setSetResolutions: (value: string[]) => void
   setImagePath: (value: string) => void
@@ -339,11 +349,12 @@ type SettingsState = typeof SETTINGS_DEFAULTS & {
   setLoraStrengthMax: (value: number) => void
   setLoraSliderMin: (value: number) => void
   setLoraSliderMax: (value: number) => void
+  setLoraAutoApply: (value: boolean) => void
+  setLoraApplyAt: (value: 'start' | 'end') => void
   setModelDirs: (value: FolderDir[]) => void
   setWildcardDirs: (value: FolderDir[]) => void
   setGalleryDirs: (value: FolderDir[]) => void
-  setForceDownloadModelsLocal: (value: boolean) => void
-  setForceDownloadWildcardsLocal: (value: boolean) => void
+  setCivitaiDownload: (value: Partial<CivitaiDownloadSettings>) => void
   setRemovedAfterHours: (value: number) => void
   setRemovedMaxGb: (value: number) => void
   setAutocompleteEnabled: (value: boolean) => void
@@ -413,6 +424,8 @@ const KEYS = [
   'theme',
   'civitaiSite',
   'civitaiApiKey',
+  'civitaiAutoRetry',
+  'civitaiAutoRetryCount',
   'timeDisplay',
   'setResolutions',
   'imagePath',
@@ -434,11 +447,12 @@ const KEYS = [
   'loraStrengthMax',
   'loraSliderMin',
   'loraSliderMax',
+  'loraAutoApply',
+  'loraApplyAt',
   'modelDirs',
   'wildcardDirs',
   'galleryDirs',
-  'forceDownloadModelsLocal',
-  'forceDownloadWildcardsLocal',
+  'civitaiDownload',
   'removedAfterHours',
   'removedMaxGb',
   'autocompleteEnabled',
@@ -1005,6 +1019,16 @@ function ensureLocal(items: FolderDir[]): FolderDir[] {
 }
 
 function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
+  const modelDirs = Array.isArray(patch.modelDirs)
+    ? ensureLocal(cleanDirs(patch.modelDirs))
+    : SETTINGS_DEFAULTS.modelDirs
+  const wildcardDirs = Array.isArray(patch.wildcardDirs)
+    ? ensureLocal(cleanDirs(patch.wildcardDirs))
+    : SETTINGS_DEFAULTS.wildcardDirs
+  const galleryDirs = Array.isArray(patch.galleryDirs)
+    ? cleanDirs(patch.galleryDirs).filter((item) => item.id !== LOCAL_ID && item.id !== OUTPUT_ID)
+    : SETTINGS_DEFAULTS.galleryDirs
+  const civitaiDownload = cleanCivitaiDownload(patch.civitaiDownload, modelDirs, wildcardDirs)
   return {
     batchGrid: typeof patch.batchGrid === 'boolean' ? patch.batchGrid : SETTINGS_DEFAULTS.batchGrid,
     batchGridMax: typeof patch.batchGridMax === 'number' ? patch.batchGridMax : SETTINGS_DEFAULTS.batchGridMax,
@@ -1052,6 +1076,12 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     theme: patch.theme ? cleanTheme(patch.theme) : SETTINGS_DEFAULTS.theme,
     civitaiSite: patch.civitaiSite ? cleanCivitaiSite(patch.civitaiSite) : SETTINGS_DEFAULTS.civitaiSite,
     civitaiApiKey: typeof patch.civitaiApiKey === 'string' ? patch.civitaiApiKey.trim() : SETTINGS_DEFAULTS.civitaiApiKey,
+    civitaiAutoRetry:
+      typeof patch.civitaiAutoRetry === 'boolean' ? patch.civitaiAutoRetry : SETTINGS_DEFAULTS.civitaiAutoRetry,
+    civitaiAutoRetryCount:
+      typeof patch.civitaiAutoRetryCount === 'number'
+        ? cleanPreviewCount(patch.civitaiAutoRetryCount, SETTINGS_DEFAULTS.civitaiAutoRetryCount)
+        : SETTINGS_DEFAULTS.civitaiAutoRetryCount,
     timeDisplay: patch.timeDisplay ? cleanTimeDisplay(patch.timeDisplay) : SETTINGS_DEFAULTS.timeDisplay,
     setResolutions: Array.isArray(patch.setResolutions)
       ? cleanSetResolutions(patch.setResolutions)
@@ -1095,23 +1125,13 @@ function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       typeof patch.loraSliderMax === 'number'
         ? cleanLoraBound(patch.loraSliderMax, SETTINGS_DEFAULTS.loraSliderMax)
         : SETTINGS_DEFAULTS.loraSliderMax,
-    modelDirs: Array.isArray(patch.modelDirs)
-      ? ensureLocal(cleanDirs(patch.modelDirs))
-      : SETTINGS_DEFAULTS.modelDirs,
-    wildcardDirs: Array.isArray(patch.wildcardDirs)
-      ? ensureLocal(cleanDirs(patch.wildcardDirs))
-      : SETTINGS_DEFAULTS.wildcardDirs,
-    galleryDirs: Array.isArray(patch.galleryDirs)
-      ? cleanDirs(patch.galleryDirs).filter((item) => item.id !== LOCAL_ID && item.id !== OUTPUT_ID)
-      : SETTINGS_DEFAULTS.galleryDirs,
-    forceDownloadModelsLocal:
-      typeof patch.forceDownloadModelsLocal === 'boolean'
-        ? patch.forceDownloadModelsLocal
-        : SETTINGS_DEFAULTS.forceDownloadModelsLocal,
-    forceDownloadWildcardsLocal:
-      typeof patch.forceDownloadWildcardsLocal === 'boolean'
-        ? patch.forceDownloadWildcardsLocal
-        : SETTINGS_DEFAULTS.forceDownloadWildcardsLocal,
+    loraAutoApply:
+      typeof patch.loraAutoApply === 'boolean' ? patch.loraAutoApply : SETTINGS_DEFAULTS.loraAutoApply,
+    loraApplyAt: patch.loraApplyAt === 'end' ? 'end' : SETTINGS_DEFAULTS.loraApplyAt,
+    modelDirs,
+    wildcardDirs,
+    galleryDirs,
+    civitaiDownload,
     removedAfterHours:
       typeof patch.removedAfterHours === 'number'
         ? cleanRemovedHours(patch.removedAfterHours)
@@ -1367,6 +1387,14 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ civitaiApiKey: civitaiApiKey.trim() })
     persist()
   },
+  setCivitaiAutoRetry: (civitaiAutoRetry) => {
+    set({ civitaiAutoRetry })
+    persist()
+  },
+  setCivitaiAutoRetryCount: (civitaiAutoRetryCount) => {
+    set({ civitaiAutoRetryCount: cleanPreviewCount(civitaiAutoRetryCount, SETTINGS_DEFAULTS.civitaiAutoRetryCount) })
+    persist()
+  },
   setTimeDisplay: (timeDisplay) => {
     set({ timeDisplay: cleanTimeDisplay(timeDisplay) })
     persist()
@@ -1477,24 +1505,46 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set({ loraSliderMax: cleanLoraBound(loraSliderMax, SETTINGS_DEFAULTS.loraSliderMax) })
     persist()
   },
+  setLoraAutoApply: (loraAutoApply) => {
+    set({ loraAutoApply })
+    persist()
+  },
+  setLoraApplyAt: (loraApplyAt) => {
+    set({ loraApplyAt: loraApplyAt === 'end' ? 'end' : 'start' })
+    persist()
+  },
   setModelDirs: (modelDirs) => {
-    set({ modelDirs: ensureLocal(cleanDirs(modelDirs)) })
+    set((state) => {
+      const nextDirs = ensureLocal(cleanDirs(modelDirs))
+      return {
+        modelDirs: nextDirs,
+        civitaiDownload: cleanCivitaiDownload(state.civitaiDownload, nextDirs, state.wildcardDirs),
+      }
+    })
     persist()
   },
   setWildcardDirs: (wildcardDirs) => {
-    set({ wildcardDirs: ensureLocal(cleanDirs(wildcardDirs)) })
+    set((state) => {
+      const nextDirs = ensureLocal(cleanDirs(wildcardDirs))
+      return {
+        wildcardDirs: nextDirs,
+        civitaiDownload: cleanCivitaiDownload(state.civitaiDownload, state.modelDirs, nextDirs),
+      }
+    })
     persist()
   },
   setGalleryDirs: (galleryDirs) => {
     set({ galleryDirs: cleanDirs(galleryDirs).filter((item) => item.id !== LOCAL_ID && item.id !== OUTPUT_ID) })
     persist()
   },
-  setForceDownloadModelsLocal: (forceDownloadModelsLocal) => {
-    set({ forceDownloadModelsLocal })
-    persist()
-  },
-  setForceDownloadWildcardsLocal: (forceDownloadWildcardsLocal) => {
-    set({ forceDownloadWildcardsLocal })
+  setCivitaiDownload: (patch) => {
+    set((state) => ({
+      civitaiDownload: cleanCivitaiDownload(
+        { ...state.civitaiDownload, ...patch },
+        state.modelDirs,
+        state.wildcardDirs,
+      ),
+    }))
     persist()
   },
   setRemovedAfterHours: (removedAfterHours) => {

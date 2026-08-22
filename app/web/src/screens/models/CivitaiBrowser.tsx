@@ -15,11 +15,12 @@ import { isCivitaiModelDownloaded } from '@/lib/civitaiDownloaded.ts'
 import { pickVersionId } from '@/lib/civitaiVersion.ts'
 import { filterTypeSections, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { CivitaiModelView } from './CivitaiModelView.tsx'
+import { CivitaiDownloadDialog } from './CivitaiDownloadDialog.tsx'
+import { CivitaiErrorState } from './CivitaiErrorState.tsx'
 import { CivitaiNavBar } from './CivitaiNavBar.tsx'
 import { CivitaiTile } from './CivitaiTile.tsx'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import { toast } from '@/stores/toastStore.ts'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -37,6 +38,8 @@ const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
   { key: 'supportsGeneration', label: 'On-site Generation' },
   { key: 'fromPlatform', label: 'Made On-site' },
 ]
+
+const CIVITAI_RETRY_DELAY = 2000
 
 function chipClass(active: boolean) {
   return [
@@ -63,6 +66,37 @@ function statusClass(value: CivitaiTriState) {
   return 'border-line bg-field text-muted hover:text-ink'
 }
 
+type CivitaiFilterDraft = Pick<
+  CivitaiBrowse,
+  'period' | 'tag' | 'types' | 'baseModels' | 'earlyAccess' | 'supportsGeneration' | 'fromPlatform'
+>
+
+function filterDraftOf(browse: CivitaiBrowse): CivitaiFilterDraft {
+  return {
+    period: browse.period,
+    tag: browse.tag,
+    types: browse.types,
+    baseModels: browse.baseModels,
+    earlyAccess: browse.earlyAccess,
+    supportsGeneration: browse.supportsGeneration,
+    fromPlatform: browse.fromPlatform,
+  }
+}
+
+function filterDraftEqual(left: CivitaiFilterDraft, right: CivitaiFilterDraft) {
+  return (
+    left.period === right.period &&
+    left.tag === right.tag &&
+    left.earlyAccess === right.earlyAccess &&
+    left.supportsGeneration === right.supportsGeneration &&
+    left.fromPlatform === right.fromPlatform &&
+    left.types.length === right.types.length &&
+    left.types.every((value) => right.types.includes(value)) &&
+    left.baseModels.length === right.baseModels.length &&
+    left.baseModels.every((value) => right.baseModels.includes(value))
+  )
+}
+
 function LoadingCircle({ label }: { label: string }) {
   return (
     <div className="flex min-h-24 items-center justify-center gap-2 text-sm text-muted" role="status">
@@ -75,6 +109,8 @@ function LoadingCircle({ label }: { label: string }) {
 export function CivitaiBrowser() {
   const loaded = useSettingsStore((state) => state.loaded)
   const apiKey = useSettingsStore((state) => state.civitaiApiKey)
+  const autoRetry = useSettingsStore((state) => state.civitaiAutoRetry)
+  const autoRetryCount = useSettingsStore((state) => state.civitaiAutoRetryCount)
   const site = useSettingsStore((state) => state.civitaiSite)
   const hiddenModelTypes = useSettingsStore((state) => state.hiddenModelTypes) ?? []
   const browse = useSettingsStore((state) => state.civitaiBrowse)
@@ -94,6 +130,7 @@ export function CivitaiBrowser() {
     [checkpoints, controlnet, embeddings, loras, vae, wildcards],
   )
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [filterDraft, setFilterDraft] = useState<CivitaiFilterDraft>(() => filterDraftOf(browse))
   const [page, setPage] = useState(1)
   const [cursor, setCursor] = useState<string | undefined>()
   const [cursorHistory, setCursorHistory] = useState<string[]>([])
@@ -102,7 +139,16 @@ export function CivitaiBrowser() {
   const [hasNext, setHasNext] = useState(false)
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
+  const [autoRetrying, setAutoRetrying] = useState(false)
+  const [retryAttempt, setRetryAttempt] = useState(0)
+  const [retryMessage, setRetryMessage] = useState('')
+  const [downloadRequest, setDownloadRequest] = useState<{ modelId: number; versionId?: number } | null>(null)
+  const [downloadingIds, setDownloadingIds] = useState<Set<number>>(() => new Set())
+  const [sessionDownloadedIds, setSessionDownloadedIds] = useState<Set<number>>(() => new Set())
   const request = useRef(0)
+  const retryTimer = useRef<number | null>(null)
+  const retryAbort = useRef<AbortController | null>(null)
   const filtersRef = useRef<HTMLDivElement>(null)
   const baseModelOptions = filterTypeSections(
     MODEL_TYPE_SECTIONS,
@@ -121,8 +167,26 @@ export function CivitaiBrowser() {
     resetPage()
   }
 
+  function clearRetryTimer() {
+    if (retryTimer.current !== null) {
+      window.clearTimeout(retryTimer.current)
+      retryTimer.current = null
+    }
+  }
+
+  function cancelAutoRetry() {
+    request.current += 1
+    clearRetryTimer()
+    retryAbort.current?.abort()
+    retryAbort.current = null
+    setAutoRetrying(false)
+    setRetryAttempt(0)
+    setBusy(false)
+    setError(retryMessage || 'CivitAI search retry cancelled.')
+  }
+
   function setStatus(key: StatusKey) {
-    updateBrowse({ [key]: nextTriState(browse[key]) })
+    setFilterDraft((current) => ({ ...current, [key]: nextTriState(current[key]) }))
   }
 
   function openTab(item: CivitaiModel, focus: boolean) {
@@ -148,6 +212,17 @@ export function CivitaiBrowser() {
     }
   }
 
+  function openDownload(item: CivitaiModel) {
+    if (downloadingIds.has(item.id)) {
+      return
+    }
+    const store = useSettingsStore.getState()
+    setDownloadRequest({
+      modelId: item.id,
+      versionId: pickVersionId(item.versions || [], store.civitaiBrowse.baseModels),
+    })
+  }
+
   function closeTab(id: number) {
     const store = useSettingsStore.getState()
     const next = store.civitaiTabs.filter((tab) => tab.id !== id)
@@ -163,22 +238,40 @@ export function CivitaiBrowser() {
     ([browse.earlyAccess, browse.supportsGeneration, browse.fromPlatform] as CivitaiTriState[]).filter(
       (value) => value !== 'off',
     ).length
+  const filtersChanged = !filterDraftEqual(filterDraft, filterDraftOf(browse))
+
+  useEffect(() => {
+    if (loaded) {
+      setFilterDraft(filterDraftOf(useSettingsStore.getState().civitaiBrowse))
+    }
+  }, [loaded])
 
   useEffect(() => {
     if (!loaded) {
       return
     }
+    setAutoRetrying(false)
+    setRetryAttempt(0)
+    setRetryMessage('')
     if (!apiKey.trim()) {
       setItems([])
       setHasNext(false)
       setNextCursor(undefined)
       setError('')
+      setBusy(false)
       return
     }
     const id = ++request.current
-    const timer = window.setTimeout(() => {
-      setBusy(true)
-      setError('')
+    const abort = new AbortController()
+    retryAbort.current = abort
+    let stopped = false
+
+    function run(attempt: number) {
+      if (stopped || id !== request.current) {
+        return
+      }
+      retryTimer.current = null
+      let retryScheduled = false
       void listCivitaiModels({
         query: browse.query,
         types: browse.types,
@@ -192,31 +285,69 @@ export function CivitaiBrowser() {
         fromPlatform: triStateValue(browse.fromPlatform),
         nsfw: true,
         tag: browse.tag,
+        signal: abort.signal,
       })
         .then((result) => {
-          if (id !== request.current) {
+          if (stopped || id !== request.current) {
             return
           }
           setItems(result.items)
           setHasNext(result.hasNext)
           setNextCursor(result.nextCursor || undefined)
+          setError('')
+          setAutoRetrying(false)
+          setRetryAttempt(0)
+          setRetryMessage('')
         })
         .catch((err) => {
-          if (id === request.current) {
-            setItems([])
-            setHasNext(false)
-            setError(err instanceof Error ? err.message : 'Could not load CivitAI models')
+          if (stopped || id !== request.current) {
+            return
           }
+          const message = err instanceof Error ? err.message : 'Could not load CivitAI models'
+          if (autoRetry && attempt < autoRetryCount) {
+            retryScheduled = true
+            setAutoRetrying(true)
+            setRetryAttempt(attempt + 1)
+            setRetryMessage(message)
+            retryTimer.current = window.setTimeout(() => run(attempt + 1), CIVITAI_RETRY_DELAY)
+            return
+          }
+          setItems([])
+          setHasNext(false)
+          setError(message)
+          setAutoRetrying(false)
+          setRetryAttempt(0)
         })
         .finally(() => {
-          if (id === request.current) {
+          if (!stopped && id === request.current && !retryScheduled) {
             setBusy(false)
           }
         })
+    }
+
+    const timer = window.setTimeout(() => {
+      if (!stopped && id === request.current) {
+        setBusy(true)
+        setError('')
+        run(0)
+      }
     }, 250)
-    return () => window.clearTimeout(timer)
+    return () => {
+      stopped = true
+      window.clearTimeout(timer)
+      abort.abort()
+      if (retryAbort.current === abort) {
+        retryAbort.current = null
+      }
+      if (retryTimer.current !== null) {
+        window.clearTimeout(retryTimer.current)
+        retryTimer.current = null
+      }
+    }
   }, [
     apiKey,
+    autoRetry,
+    autoRetryCount,
     browse.baseModels,
     browse.earlyAccess,
     browse.fromPlatform,
@@ -229,6 +360,7 @@ export function CivitaiBrowser() {
     cursor,
     loaded,
     page,
+    retryCount,
   ])
 
   useEffect(() => {
@@ -289,16 +421,36 @@ export function CivitaiBrowser() {
           setCivitaiTabId(null)
         }}
       />
+      {autoRetrying ? (
+        <div className="flex shrink-0 items-center justify-between gap-3 rounded border border-orange/50 bg-orange/10 px-2.5 py-2 text-xs">
+          <div className="min-w-0">
+            <p className="text-orange-bright" role="status">
+              Retrying CivitAI search ({retryAttempt}/{autoRetryCount})…
+            </p>
+            {retryMessage ? <p className="truncate text-muted">{retryMessage}</p> : null}
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded border border-line bg-field px-2 py-1 text-ink hover:bg-line"
+            onClick={cancelAutoRetry}
+          >
+            Cancel auto-retry
+          </button>
+        </div>
+      ) : null}
       {activeId === null ? (
       <div className="flex shrink-0 flex-col gap-2">
         <div className="flex min-w-0 items-stretch gap-2">
-          <input
-            className="min-w-48 flex-1 rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
-            value={browse.query}
-            onChange={(event) => updateBrowse({ query: event.target.value })}
-            placeholder="Search CivitAI models…"
-            aria-label="Search CivitAI models"
-          />
+          <div className="relative min-w-48 flex-1">
+            <AppIcon id="search" size={14} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
+            <input
+              className="w-full rounded border border-line bg-field py-1.5 pl-8 pr-2 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
+              value={browse.query}
+              onChange={(event) => updateBrowse({ query: event.target.value })}
+              placeholder="Search CivitAI models…"
+              aria-label="Search CivitAI models"
+            />
+          </div>
           <SelectField
             className="w-44 shrink-0"
             icon="arrow-up-down"
@@ -333,8 +485,8 @@ export function CivitaiBrowser() {
                         <button
                           key={item.value}
                           type="button"
-                          className={chipClass(browse.period === item.value)}
-                          onClick={() => updateBrowse({ period: item.value })}
+                          className={chipClass(filterDraft.period === item.value)}
+                          onClick={() => setFilterDraft((current) => ({ ...current, period: item.value }))}
                         >
                           {item.label}
                         </button>
@@ -345,7 +497,7 @@ export function CivitaiBrowser() {
                     <p className="mb-1.5 text-xs text-muted">Model status</p>
                     <div className="flex flex-wrap gap-1.5">
                       {STATUS_FILTERS.map((item) => {
-                        const value = browse[item.key]
+                        const value = filterDraft[item.key]
                         return (
                           <button
                             key={item.key}
@@ -386,8 +538,8 @@ export function CivitaiBrowser() {
               <button
                 key={item.label}
                 type="button"
-                className={chipClass(browse.tag === item.value)}
-                onClick={() => updateBrowse({ tag: item.value })}
+                className={chipClass(filterDraft.tag === item.value)}
+                onClick={() => setFilterDraft((current) => ({ ...current, tag: item.value }))}
               >
                 {item.label}
               </button>
@@ -397,8 +549,8 @@ export function CivitaiBrowser() {
             <div className="w-56 min-w-0">
               <ChipSelect
                 options={CIVITAI_TYPES}
-                value={browse.types}
-                onChange={(value) => updateBrowse({ types: value })}
+                value={filterDraft.types}
+                onChange={(value) => setFilterDraft((current) => ({ ...current, types: value }))}
                 placeholder="Model types"
                 chipLabel={(value) => TYPE_LABELS[value] || value}
               />
@@ -406,11 +558,25 @@ export function CivitaiBrowser() {
             <div className="w-56 min-w-0">
               <ChipSelect
                 options={baseModelOptions}
-                value={browse.baseModels}
-                onChange={(value) => updateBrowse({ baseModels: value })}
+                value={filterDraft.baseModels}
+                onChange={(value) => setFilterDraft((current) => ({ ...current, baseModels: value }))}
                 placeholder="Base model"
               />
             </div>
+            <button
+              type="button"
+              className={[
+                'inline-flex shrink-0 items-center gap-1 rounded border px-2.5 text-sm',
+                filtersChanged ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted',
+              ].join(' ')}
+              disabled={!filtersChanged}
+              onClick={() => {
+                setCivitaiBrowse(filterDraft)
+                resetPage()
+              }}
+            >
+              Apply filters
+            </button>
           </div>
         </div>
       </div>
@@ -420,62 +586,110 @@ export function CivitaiBrowser() {
           key={tab.id}
           className={tab.id === activeId ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}
         >
-          <CivitaiModelView modelId={tab.id} preferredBases={browse.baseModels} />
+          <CivitaiModelView
+            modelId={tab.id}
+            preferredBases={browse.baseModels}
+            onDownload={(versionId) => setDownloadRequest({ modelId: tab.id, versionId })}
+          />
         </div>
       ))}
       {activeId === null ? (
         <>
-          {error ? <p className="text-sm text-red-bright">{error}</p> : null}
-          {busy && !items.length ? <LoadingCircle label="Loading CivitAI models…" /> : null}
-          {!busy && !error && !items.length ? <p className="text-sm text-muted">No models found.</p> : null}
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-              {items.map((item) => (
-                <CivitaiTile
-                  key={item.id}
-                  item={item}
-                  nsfw={browse.nsfw}
-                  downloaded={isCivitaiModelDownloaded(item, localModels)}
-                  site={site}
-                  preferredBases={browse.baseModels}
-                  onOpen={() => openTab(item, true)}
-                  onOpenBackground={() => openTab(item, false)}
-                  onDownload={() => toast("Download isn't implemented yet")}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center justify-center gap-2">
-            <button
-              type="button"
-              className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
-              disabled={page <= 1 || busy}
-              onClick={() => {
-                if (cursorHistory.length) {
-                  const previous = cursorHistory[cursorHistory.length - 1] || undefined
-                  setCursorHistory((current) => current.slice(0, -1))
-                  setCursor(previous)
-                }
-                setPage((current) => Math.max(1, current - 1))
+          {error ? (
+            <CivitaiErrorState
+              message={error}
+              busy={busy}
+              onRetry={() => {
+                setError('')
+                setBusy(true)
+                setRetryCount((value) => value + 1)
               }}
-            >
-              Previous
-            </button>
-            <span className="text-xs tabular-nums text-muted">Page {page}</span>
-            <button
-              type="button"
-              className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
-              disabled={!hasNext || busy}
-              onClick={() => {
-                setCursorHistory((current) => [...current, cursor || ''])
-                setCursor(nextCursor)
-                setPage((current) => current + 1)
-              }}
-            >
-              Next
-            </button>
-          </div>
+            />
+          ) : (
+            <>
+              {busy && !items.length ? <LoadingCircle label="Loading CivitAI models…" /> : null}
+              {!busy && !items.length ? <p className="text-sm text-muted">No models found.</p> : null}
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
+                  {items.map((item) => (
+                    <CivitaiTile
+                      key={item.id}
+                      item={item}
+                      nsfw={browse.nsfw}
+                      downloaded={sessionDownloadedIds.has(item.id) || isCivitaiModelDownloaded(item, localModels)}
+                      downloading={downloadingIds.has(item.id)}
+                      site={site}
+                      preferredBases={browse.baseModels}
+                      onOpen={() => openTab(item, true)}
+                      onOpenBackground={() => openTab(item, false)}
+                      onDownload={() => openDownload(item)}
+                    />
+                  ))}
+                </div>
+              </div>
+              <div className="flex shrink-0 items-center justify-center gap-2">
+                <button
+                  type="button"
+                  className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
+                  disabled={page <= 1 || busy}
+                  onClick={() => {
+                    if (cursorHistory.length) {
+                      const previous = cursorHistory[cursorHistory.length - 1] || undefined
+                      setCursorHistory((current) => current.slice(0, -1))
+                      setCursor(previous)
+                    }
+                    setPage((current) => Math.max(1, current - 1))
+                  }}
+                >
+                  Previous
+                </button>
+                <span className="text-xs tabular-nums text-muted">Page {page}</span>
+                <button
+                  type="button"
+                  className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
+                  disabled={!hasNext || busy}
+                  onClick={() => {
+                    setCursorHistory((current) => [...current, cursor || ''])
+                    setCursor(nextCursor)
+                    setPage((current) => current + 1)
+                  }}
+                >
+                  Next
+                </button>
+              </div>
+            </>
+          )}
         </>
+      ) : null}
+      {downloadRequest ? (
+        <CivitaiDownloadDialog
+          modelId={downloadRequest.modelId}
+          preferredVersionId={downloadRequest.versionId}
+          onClose={() => setDownloadRequest(null)}
+          onDownloaded={() => void useModelsStore.getState().pull()}
+          onDownloadStart={() =>
+            setDownloadingIds((current) => {
+              const next = new Set(current)
+              next.add(downloadRequest.modelId)
+              return next
+            })
+          }
+          onDownloadFinished={(success) => {
+            const modelId = downloadRequest.modelId
+            setDownloadingIds((current) => {
+              const next = new Set(current)
+              next.delete(modelId)
+              return next
+            })
+            if (success) {
+              setSessionDownloadedIds((current) => {
+                const next = new Set(current)
+                next.add(modelId)
+                return next
+              })
+            }
+          }}
+        />
       ) : null}
     </div>
   )

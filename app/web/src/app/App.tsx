@@ -17,6 +17,7 @@ import { useModelsStore } from '../stores/modelsStore.ts'
 import { useSettingsStore } from '../stores/settingsStore.ts'
 import { useThumbnailScopeStore } from '../stores/thumbnailScopeStore.ts'
 import { useGenerateStore } from '../stores/generateStore.ts'
+import { AppIcon } from '../components/AppIcon.tsx'
 import { ComfyStatus } from './ComfyStatus.tsx'
 import { FooterLinks } from './FooterLinks.tsx'
 import { GpuBar } from './GpuBar.tsx'
@@ -250,15 +251,17 @@ export function App() {
           })}
           <div className="ml-auto flex gap-1">
             {showErrors ? (
-              <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center')}>
-                Errors
+              <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center gap-1.5')}>
+                <AppIcon id="triangle-alert" size={14} />
+                <span>Errors</span>
                 {issueCount > 0 ? (
                   <span className="ml-1.5 rounded-full bg-red px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
                 ) : null}
               </NavLink>
             ) : null}
-            <NavLink to="/settings" className={({ isActive }) => tabClass(isActive)}>
-              Settings
+            <NavLink to="/settings" className={({ isActive }) => tabClass(isActive, 'flex items-center gap-1.5')}>
+              <AppIcon id="settings" size={14} />
+              <span>Settings</span>
             </NavLink>
           </div>
         </nav>

@@ -261,7 +261,8 @@ def _fill_power_loras(inputs: dict[str, Any], values: dict[str, Any]) -> None:
         elif isinstance(item, dict):
             name = str(item.get("lora") or item.get("path") or "")
             try:
-                strength = float(item.get("strength") or 1)
+                raw_strength = item.get("strength", 1)
+                strength = float(raw_strength if raw_strength is not None else 1)
             except (TypeError, ValueError):
                 strength = 1.0
         else:

@@ -50,6 +50,8 @@ _KEYS = (
     "theme",
     "civitaiSite",
     "civitaiApiKey",
+    "civitaiAutoRetry",
+    "civitaiAutoRetryCount",
     "timeDisplay",
     "setResolutions",
     "imagePath",
@@ -71,11 +73,12 @@ _KEYS = (
     "loraStrengthMax",
     "loraSliderMin",
     "loraSliderMax",
+    "loraAutoApply",
+    "loraApplyAt",
     "modelDirs",
     "wildcardDirs",
     "galleryDirs",
-    "forceDownloadModelsLocal",
-    "forceDownloadWildcardsLocal",
+    "civitaiDownload",
     "removedAfterHours",
     "removedMaxGb",
     "autocompleteEnabled",
@@ -209,6 +212,13 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["civitaiSite"] = name
     if "civitaiApiKey" in raw and isinstance(raw["civitaiApiKey"], str):
         out["civitaiApiKey"] = raw["civitaiApiKey"].strip()
+    if "civitaiAutoRetry" in raw and isinstance(raw["civitaiAutoRetry"], bool):
+        out["civitaiAutoRetry"] = raw["civitaiAutoRetry"]
+    if "civitaiAutoRetryCount" in raw:
+        try:
+            out["civitaiAutoRetryCount"] = max(1, min(100, int(raw["civitaiAutoRetryCount"])))
+        except (TypeError, ValueError):
+            pass
     if "timeDisplay" in raw:
         name = str(raw["timeDisplay"])
         if name in ("full", "ampm"):
@@ -287,15 +297,19 @@ def _clean(raw: Any) -> dict[str, Any]:
         bound = _lora_bound(raw[key])
         if bound is not None:
             out[key] = bound
+    if "loraAutoApply" in raw and isinstance(raw["loraAutoApply"], bool):
+        out["loraAutoApply"] = raw["loraAutoApply"]
+    if "loraApplyAt" in raw:
+        value = str(raw["loraApplyAt"]).lower()
+        if value in {"start", "end"}:
+            out["loraApplyAt"] = value
     for key in ("modelDirs", "wildcardDirs", "galleryDirs"):
         if key in raw:
             rows = _dir_list(raw[key])
             if rows is not None:
                 out[key] = rows
-    if "forceDownloadModelsLocal" in raw:
-        out["forceDownloadModelsLocal"] = bool(raw["forceDownloadModelsLocal"])
-    if "forceDownloadWildcardsLocal" in raw:
-        out["forceDownloadWildcardsLocal"] = bool(raw["forceDownloadWildcardsLocal"])
+    if "civitaiDownload" in raw and isinstance(raw["civitaiDownload"], dict):
+        out["civitaiDownload"] = _civitai_download(raw["civitaiDownload"])
     if "removedAfterHours" in raw:
         try:
             out["removedAfterHours"] = max(1, min(8760, int(raw["removedAfterHours"])))
@@ -503,6 +517,41 @@ def _civitai_browse(raw: dict[str, Any]) -> dict[str, Any]:
     for key in ("earlyAccess", "supportsGeneration", "fromPlatform"):
         if raw.get(key) in _CIVITAI_TRI:
             out[key] = raw[key]
+    return out
+
+
+def _civitai_download(raw: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key in ("modelDirId", "wildcardDirId"):
+        value = str(raw.get(key) or "").strip()[:80]
+        if value and "/" not in value and "\\" not in value:
+            out[key] = value
+    for key in (
+        "modelIntelligent",
+        "modelSortBaseModel",
+        "modelSortCategory",
+        "modelSortCreator",
+        "wildcardIntelligent",
+        "wildcardUnpack",
+        "updateModelInfo",
+    ):
+        if isinstance(raw.get(key), bool):
+            out[key] = raw[key]
+    if raw.get("modelNaming") in ("normal", "custom"):
+        out["modelNaming"] = raw["modelNaming"]
+    aliases = raw.get("authorAliases")
+    if isinstance(aliases, dict):
+        clean: dict[str, str] = {}
+        used: set[str] = set()
+        for raw_author, raw_alias in aliases.items():
+            author = str(raw_author).strip()[:200]
+            alias = str(raw_alias or "").strip()[:80]
+            alias_key = alias.lower()
+            if not author or not _SAFE_NAME.fullmatch(alias) or alias_key in used:
+                continue
+            used.add(alias_key)
+            clean[author] = alias
+        out["authorAliases"] = clean
     return out
 
 

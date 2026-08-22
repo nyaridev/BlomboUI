@@ -23,7 +23,15 @@ type ModelsState = ModelLists & {
   setMeta: (
     kind: keyof ModelLists,
     path: string,
-    meta: { prompt?: string; negative_prompt?: string; notes?: string; strength?: number; slider?: boolean },
+    meta: {
+      prompt?: string
+      negative_prompt?: string
+      notes?: string
+      strength?: number
+      slider?: boolean
+      auto_apply?: boolean | null
+      apply_at?: 'start' | 'end' | null
+    },
   ) => void
 }
 
@@ -70,6 +78,8 @@ function asEntry(item: unknown): ModelEntry | null {
         types: Array.isArray(row.types)
           ? row.types.filter((item): item is string => typeof item === 'string' && Boolean(item))
           : [],
+        auto_apply: typeof row.auto_apply === 'boolean' ? row.auto_apply : null,
+        apply_at: row.apply_at === 'start' || row.apply_at === 'end' ? row.apply_at : null,
       }
     }
   }

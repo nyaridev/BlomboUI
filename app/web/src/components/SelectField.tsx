@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { AppIcon } from '@/components/AppIcon.tsx'
 
-type SelectOption = { value: string; label: string }
+type SelectOption = { value: string; label: string; badge?: string }
 
 type SelectFieldProps = {
   value: string
@@ -10,6 +10,9 @@ type SelectFieldProps = {
   allowCustom?: boolean
   placeholder?: string
   icon?: string
+  chevron?: 'dropdown' | 'expand'
+  expanded?: boolean
+  onExpand?: () => void
   className?: string
 }
 
@@ -44,6 +47,9 @@ export function SelectField({
   allowCustom = false,
   placeholder,
   icon,
+  chevron = 'dropdown',
+  expanded = false,
+  onExpand,
   className = '',
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false)
@@ -53,7 +59,8 @@ export function SelectField({
   const input = useRef<HTMLInputElement>(null)
   const menu = useRef<HTMLUListElement>(null)
   const items = toOptions(options)
-  const current = items.find((item) => item.value === value)?.label ?? value
+  const currentOption = items.find((item) => item.value === value)
+  const current = currentOption?.label ?? value
   const shown = useMemo(() => items.filter((item) => matches(item, query)), [items, query])
 
   function dismiss() {
@@ -148,8 +155,13 @@ export function SelectField({
           autoComplete="off"
           aria-expanded={open}
           onFocus={() => {
-            setQuery('')
+            if (!open) {
+              setQuery('')
+            }
+          }}
+          onMouseDown={() => {
             setOpen(true)
+            setQuery('')
           }}
           onChange={(event) => {
             const next = event.target.value
@@ -183,13 +195,25 @@ export function SelectField({
             }
           }}
         />
+        {!open && currentOption?.badge ? (
+          <span className="shrink-0 rounded-full border border-green/70 bg-green/25 px-1.5 py-0.5 text-[0.625rem] leading-none text-green-bright">
+            {currentOption.badge}
+          </span>
+        ) : null}
         <button
           type="button"
           tabIndex={-1}
           className="field-select-chevron"
-          aria-label={open ? 'Close' : 'Open'}
+          aria-label={chevron === 'expand' ? (expanded ? 'Collapse' : 'Expand') : open ? 'Close' : 'Open'}
           onMouseDown={(event) => {
             event.preventDefault()
+            if (chevron === 'expand') {
+              if (open) {
+                dismiss()
+              }
+              onExpand?.()
+              return
+            }
             if (open) {
               dismiss()
               return
@@ -199,7 +223,7 @@ export function SelectField({
             input.current?.focus()
           }}
         >
-          <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
+          <AppIcon id={chevron === 'expand' ? (expanded ? 'chevron-up' : 'chevron-down') : open ? 'chevron-up' : 'chevron-down'} size={12} />
         </button>
       </div>
       {open ? (
@@ -214,7 +238,14 @@ export function SelectField({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => pick(item.value)}
               >
-                {item.label}
+                <span className="flex min-w-0 items-center justify-between gap-2">
+                  <span className="min-w-0 truncate">{item.label}</span>
+                  {item.badge ? (
+                    <span className="shrink-0 rounded-full border border-green/70 bg-green/25 px-1.5 py-0.5 text-[0.625rem] leading-none text-green-bright">
+                      {item.badge}
+                    </span>
+                  ) : null}
+                </span>
               </button>
             </li>
           ))}

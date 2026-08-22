@@ -45,6 +45,14 @@ function trimRange(text: string, start: number, end: number) {
   return { start: a, end: b }
 }
 
+function tokenRangeAt(text: string, caret: number) {
+  const left = Math.max(text.lastIndexOf(',', Math.max(0, caret - 1)), text.lastIndexOf('\n', Math.max(0, caret - 1))) + 1
+  const comma = text.indexOf(',', caret)
+  const newline = text.indexOf('\n', caret)
+  const right = [comma, newline].filter((value) => value >= 0).sort((a, b) => a - b)[0] ?? text.length
+  return trimRange(text, left, right)
+}
+
 function weightGroups(text: string) {
   const out: WeightGroup[] = []
   const re = /:([+-]?(?:\d+\.?\d*|\.\d+))\)/g
@@ -166,7 +174,17 @@ export function nudgePromptWeight(text: string, start: number, end: number, dir:
   }
 
   if (a === b) {
-    return null
+    const token = tokenRangeAt(text, a)
+    if (token.start === token.end) {
+      return null
+    }
+    const inner = text.slice(token.start, token.end)
+    const weight = roundStep(1 + dir * delta, delta)
+    if (nearOne(weight, delta)) {
+      return null
+    }
+    const wrap = `(${inner}:${formatWeight(weight, delta)})`
+    return replaceRange(text, token.start, token.end, wrap, token.start + 1, token.start + 1 + inner.length)
   }
   const trimmed = trimRange(text, a, b)
   a = trimmed.start

@@ -1,4 +1,5 @@
 import { ConfirmDialog } from '@/components/Dialog.tsx'
+import { NumberField } from '@/components/NumberField.tsx'
 import {
   civitaiJobBusy,
   clearCivitai,
@@ -10,10 +11,11 @@ import {
 } from '@/lib/civitaiScrape.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
 import { useToastStore } from '@/stores/toastStore.ts'
+import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useState } from 'react'
 
 export const CIVITAI_QUERY =
-  'civitai scrape fill missing overwrite force full thumbnail type trigger words checkpoint lora wildcards metadata clear'
+  'civitai scrape fill missing overwrite force full thumbnail type trigger words checkpoint lora wildcards metadata clear auto retry attempts'
 
 const PHRASE = 'I Understand'
 const FILL = 'rounded bg-accent px-3 py-2 text-sm font-semibold text-ink enabled:hover:brightness-110 disabled:opacity-40'
@@ -22,8 +24,10 @@ const FULL = 'rounded bg-red px-3 py-2 text-sm font-semibold text-ink enabled:ho
 const DANGER = 'rounded border border-line px-3 py-2 text-sm text-ink enabled:hover:bg-line disabled:opacity-40'
 
 type Pending =
-  | { kind: ScrapeKind; action: 'force' | 'full' }
-  | { kind: ClearKind; action: 'thumbs' | 'meta' }
+  | { kind: ScrapeKind; action: 'force' }
+  | { kind: ScrapeKind; action: 'full' }
+  | { kind: ClearKind; action: 'thumbs' }
+  | { kind: ClearKind; action: 'meta' }
 
 function kindLabel(kind: ScrapeKind | ClearKind) {
   if (kind === 'loras') {
@@ -36,6 +40,10 @@ function kindLabel(kind: ScrapeKind | ClearKind) {
 }
 
 export function CivitaiPanel({ query = '' }: { query?: string }) {
+  const autoRetry = useSettingsStore((state) => state.civitaiAutoRetry)
+  const autoRetryCount = useSettingsStore((state) => state.civitaiAutoRetryCount)
+  const setAutoRetry = useSettingsStore((state) => state.setCivitaiAutoRetry)
+  const setAutoRetryCount = useSettingsStore((state) => state.setCivitaiAutoRetryCount)
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<Pending | null>(null)
 
@@ -102,6 +110,25 @@ export function CivitaiPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
+      <SettingsCard query={query} title="Automatic retry" terms="civitai request search error retry attempts">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="check"
+            checked={autoRetry}
+            onChange={(event) => setAutoRetry(event.target.checked)}
+          />
+          Automatically retry failed CivitAI searches
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          <span className="text-xs text-muted">Maximum retry attempts</span>
+          <NumberField value={autoRetryCount} min={1} max={100} onChange={setAutoRetryCount} />
+        </label>
+        <p className="text-xs text-muted">
+          Failed searches retry automatically up to this many times. The default is 20; you can cancel an active retry
+          from the CivitAI screen.
+        </p>
+      </SettingsCard>
       <SettingsCard query={query} title="Fill missing" terms="scrape fill missing thumbnail type trigger">
         <p className="text-xs text-muted">Skip models that already have a thumbnail, type, or LoRA trigger words.</p>
         <div className="grid grid-cols-2 gap-2">

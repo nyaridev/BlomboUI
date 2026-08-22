@@ -11,7 +11,7 @@ type IconPickerProps = {
   value: Glyph
   onChange: (value: Glyph) => void
   disabled?: boolean
-  colors?: { id: string; css: string }[]
+  colors?: readonly { id: string; css: string }[]
   className?: string
   size?: number
 }

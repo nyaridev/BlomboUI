@@ -108,6 +108,9 @@ export function ChipSelect({
       return
     }
     function onWheel(event: WheelEvent) {
+      if (!el) {
+        return
+      }
       event.stopPropagation()
       const atTop = el.scrollTop <= 0 && event.deltaY < 0
       const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1 && event.deltaY > 0
@@ -133,6 +136,9 @@ export function ChipSelect({
       return
     }
     function measure() {
+      if (!el) {
+        return
+      }
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
       setTall(el.clientHeight > rem * 4.5)
     }

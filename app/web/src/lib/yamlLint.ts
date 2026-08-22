@@ -55,7 +55,7 @@ export function yamlErrorLines(text: string, serverError?: string) {
   }
 
   const mark = serverError?.match(/line (\d+)/i)
-  if (mark) {
+  if (mark && serverError) {
     const index = Math.max(0, Number(mark[1]) - 1)
     if (!messages.has(index)) {
       messages.set(index, serverError.replace(/\n/g, ' ').trim())

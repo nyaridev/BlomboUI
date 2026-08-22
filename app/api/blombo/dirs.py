@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import getpass
 import os
 import subprocess
 import sys
@@ -133,6 +134,7 @@ def resolved() -> dict[str, str]:
         "models": str(models_root().resolve()),
         "wildcards": str(wildcards_root().resolve()),
         "output": str(outputs_root().resolve()),
+        "userName": getpass.getuser() or "User",
     }
 
 

@@ -82,6 +82,7 @@ OPTIONS = (
 
 THUMB_EXTS = model_thumbs.THUMB_EXTS
 _ALLOWED = frozenset(OPTIONS)
+_UNSET = object()
 
 
 def _ident(rel: str) -> str | None:
@@ -117,6 +118,8 @@ def _blank_row() -> dict:
         "notes": "",
         "strength": 1.0,
         "slider": False,
+        "auto_apply": None,
+        "apply_at": None,
     }
 
 
@@ -138,6 +141,8 @@ def _info_out(row: dict) -> dict[str, object]:
         "notes": str(row.get("notes") or ""),
         "strength": _strength(row["strength"]) if "strength" in row else 1.0,
         "slider": bool(row.get("slider")),
+        "auto_apply": row.get("auto_apply") if isinstance(row.get("auto_apply"), bool) else None,
+        "apply_at": row.get("apply_at") if row.get("apply_at") in {"start", "end"} else None,
     }
 
 
@@ -214,6 +219,8 @@ def set_info(
     notes: str | None = None,
     strength: float | None = None,
     slider: bool | None = None,
+    auto_apply: object = _UNSET,
+    apply_at: object = _UNSET,
 ) -> dict[str, object]:
     ident = _file_ident(rel)
     if not ident:
@@ -231,6 +238,10 @@ def set_info(
         row["strength"] = _strength(strength)
     if slider is not None:
         row["slider"] = bool(slider)
+    if auto_apply is not _UNSET:
+        row["auto_apply"] = auto_apply if isinstance(auto_apply, bool) else None
+    if apply_at is not _UNSET:
+        row["apply_at"] = apply_at if apply_at in {"start", "end"} else None
     row["modified"] = int(time.time())
     data[ident] = row
     _write(kind, data)

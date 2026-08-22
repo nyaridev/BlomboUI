@@ -111,6 +111,9 @@ export function LightboxView({ src, alt, resetKey, many, onClose, onPrev, onNext
     }
 
     function onWheel(event: WheelEvent) {
+      if (!el) {
+        return
+      }
       event.preventDefault()
       const nav = navRef.current
       const view = viewRef.current

@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS model_info (
     notes TEXT NOT NULL DEFAULT '',
     strength REAL NOT NULL DEFAULT 1.0,
     slider INTEGER NOT NULL DEFAULT 0,
+    auto_apply INTEGER,
+    apply_at TEXT,
     PRIMARY KEY (kind, ident)
 );
 CREATE TABLE IF NOT EXISTS thumbnail_index (
@@ -50,6 +52,11 @@ def connect() -> sqlite3.Connection:
             _CONN.execute("PRAGMA foreign_keys = ON")
             _CONN.execute("PRAGMA journal_mode=WAL")
             _CONN.executescript(SCHEMA)
+            columns = {str(row["name"]) for row in _CONN.execute("PRAGMA table_info(model_info)")}
+            if "auto_apply" not in columns:
+                _CONN.execute("ALTER TABLE model_info ADD COLUMN auto_apply INTEGER")
+            if "apply_at" not in columns:
+                _CONN.execute("ALTER TABLE model_info ADD COLUMN apply_at TEXT")
             _CONN.commit()
         return _CONN
 
@@ -87,7 +94,7 @@ def load_info(kind: str) -> dict[str, dict[str, Any]]:
     rows = query(
         """
         SELECT ident, types_json, modified, prompt, negative_prompt,
-               notes, strength, slider
+               notes, strength, slider, auto_apply, apply_at
         FROM model_info WHERE kind = ? ORDER BY rowid
         """,
         (kind,),
@@ -106,6 +113,8 @@ def load_info(kind: str) -> dict[str, dict[str, Any]]:
             "notes": str(row["notes"] or ""),
             "strength": float(row["strength"] if row["strength"] is not None else 1.0),
             "slider": bool(row["slider"]),
+            "auto_apply": None if row["auto_apply"] is None else bool(row["auto_apply"]),
+            "apply_at": str(row["apply_at"]) if row["apply_at"] in {"start", "end"} else None,
         }
     return out
 
@@ -118,8 +127,8 @@ def replace_info(kind: str, data: dict[str, dict[str, Any]]) -> None:
                 """
                 INSERT INTO model_info (
                     kind, ident, types_json, modified, prompt,
-                    negative_prompt, notes, strength, slider
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    negative_prompt, notes, strength, slider, auto_apply, apply_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     kind,
@@ -131,6 +140,8 @@ def replace_info(kind: str, data: dict[str, dict[str, Any]]) -> None:
                     str(row.get("notes") or ""),
                     float(row.get("strength") if row.get("strength") is not None else 1.0),
                     int(bool(row.get("slider"))),
+                    None if row.get("auto_apply") is None else int(bool(row.get("auto_apply"))),
+                    row.get("apply_at") if row.get("apply_at") in {"start", "end"} else None,
                 ),
             )
 

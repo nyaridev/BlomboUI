@@ -1,5 +1,5 @@
 import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
-import { DownloadedBadge } from '@/components/CivitaiDownloadedBadge.tsx'
+import { DownloadedBadge, DownloadingBadge } from '@/components/CivitaiDownloadedBadge.tsx'
 import { TilePreview } from '@/components/TilePreview.tsx'
 import type { CivitaiModel } from '@/lib/api.ts'
 import { modelMarks } from '@/lib/civitaiMarks.ts'
@@ -57,6 +57,7 @@ export function CivitaiTile({
   item,
   nsfw,
   downloaded,
+  downloading,
   site,
   preferredBases,
   onOpen,
@@ -66,6 +67,7 @@ export function CivitaiTile({
   item: CivitaiModel
   nsfw: boolean
   downloaded: boolean
+  downloading: boolean
   site: CivitaiSite
   preferredBases: string[]
   onOpen: () => void
@@ -89,8 +91,11 @@ export function CivitaiTile({
       <div
         role="button"
         tabIndex={0}
-        className="group relative aspect-[2/3] min-w-0 cursor-pointer overflow-hidden rounded-md border border-line bg-bg transition hover:border-accent hover:shadow-[0_0_12px_rgb(255_255_255_/_0.12)]"
-        title={downloaded ? `${item.name} · Already downloaded` : item.name}
+        className={[
+          'group relative aspect-[2/3] min-w-0 cursor-pointer overflow-hidden rounded-md border border-line bg-bg transition hover:border-accent hover:shadow-[0_0_12px_rgb(255_255_255_/_0.12)]',
+          downloading ? 'cursor-wait' : '',
+        ].join(' ')}
+        title={downloading ? `${item.name} · Downloading` : downloaded ? `${item.name} · Already downloaded` : item.name}
         onClick={(event) => {
           if (event.button !== 0 || event.detail > 1) {
             return
@@ -101,7 +106,9 @@ export function CivitaiTile({
         onDoubleClick={(event) => {
           event.preventDefault()
           window.clearTimeout(clickTimer.current)
-          onDownload()
+          if (!downloading) {
+            onDownload()
+          }
         }}
         onMouseDown={(event) => {
           if (event.button === 1) {
@@ -163,8 +170,9 @@ export function CivitaiTile({
             <BaseMarks item={item} />
           </span>
         </div>
-        {downloaded || item.paid ? (
+        {downloaded || downloading || item.paid ? (
           <div className="pointer-events-none absolute top-2 right-2 z-30 flex items-center gap-1">
+            {downloading ? <DownloadingBadge /> : null}
             {downloaded ? <DownloadedBadge /> : null}
             {item.paid ? (
               <span

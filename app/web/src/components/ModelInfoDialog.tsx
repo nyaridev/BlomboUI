@@ -55,6 +55,10 @@ export function ModelInfoDialog({
   const [savedStrength, setSavedStrength] = useState(1)
   const [slider, setSlider] = useState(false)
   const [savedSlider, setSavedSlider] = useState(false)
+  const [autoApplyOverride, setAutoApplyOverride] = useState<boolean | null>(null)
+  const [savedAutoApplyOverride, setSavedAutoApplyOverride] = useState<boolean | null>(null)
+  const [applyAtOverride, setApplyAtOverride] = useState<'start' | 'end' | null>(null)
+  const [savedApplyAtOverride, setSavedApplyAtOverride] = useState<'start' | 'end' | null>(null)
   const setMeta = useModelsStore((s) => s.setMeta)
   const lora = kind === 'loras'
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes) ?? []
@@ -62,6 +66,8 @@ export function ModelInfoDialog({
   const strengthMax = useSettingsStore((s) => s.loraStrengthMax)
   const sliderMin = useSettingsStore((s) => s.loraSliderMin)
   const sliderMax = useSettingsStore((s) => s.loraSliderMax)
+  const loraAutoApplyDefault = useSettingsStore((s) => s.loraAutoApply)
+  const loraApplyAtDefault = useSettingsStore((s) => s.loraApplyAt)
   const view = useThumbView(kind, scopeKey)
   const pickerOptions = useMemo(
     () =>
@@ -82,7 +88,12 @@ export function ModelInfoDialog({
     types.join('\0') !== savedTypes.join('\0') ||
     pending != null ||
     notes !== savedNotes ||
-    (lora && (posPrompt !== savedPos || strength !== savedStrength || slider !== savedSlider))
+    (lora &&
+      (posPrompt !== savedPos ||
+        strength !== savedStrength ||
+        slider !== savedSlider ||
+        autoApplyOverride !== savedAutoApplyOverride ||
+        applyAtOverride !== savedApplyAtOverride))
 
   useEffect(() => {
     let alive = true
@@ -112,6 +123,12 @@ export function ModelInfoDialog({
         setSavedSlider(sliderOn)
         setStrength(next)
         setSavedStrength(next)
+        const savedAutoApply = info.auto_apply ?? null
+        const savedApplyAt = info.apply_at ?? null
+        setAutoApplyOverride(savedAutoApply)
+        setSavedAutoApplyOverride(savedAutoApply)
+        setApplyAtOverride(savedApplyAt)
+        setSavedApplyAtOverride(savedApplyAt)
         setThumb(info.thumb || 0)
       }
       if (info.hashing) {
@@ -219,10 +236,19 @@ export function ModelInfoDialog({
       const text = notes.trim()
       const next = await saveModelInfo(kind, item.path, types, {
         notes: text,
-        ...(lora ? { prompt: pos, strength, slider } : {}),
+        ...(lora
+          ? {
+              prompt: pos,
+              strength,
+              slider,
+              auto_apply: autoApplyOverride,
+              apply_at: applyAtOverride,
+            }
+          : {}),
       })
-      setTypes(next)
-      setSavedTypes(next)
+      const nextTypes = next.types ?? []
+      setTypes(nextTypes)
+      setSavedTypes(nextTypes)
       setNotes(text)
       setSavedNotes(text)
       if (lora) {
@@ -230,10 +256,22 @@ export function ModelInfoDialog({
         setSavedPos(pos)
         setSavedStrength(strength)
         setSavedSlider(slider)
+        setAutoApplyOverride(next.auto_apply ?? null)
+        setSavedAutoApplyOverride(next.auto_apply ?? null)
+        setApplyAtOverride(next.apply_at ?? null)
+        setSavedApplyAtOverride(next.apply_at ?? null)
       }
       setMeta(kind, item.path, {
         notes: text,
-        ...(lora ? { prompt: pos, strength, slider } : {}),
+        ...(lora
+          ? {
+              prompt: pos,
+              strength,
+              slider,
+              auto_apply: next.auto_apply ?? null,
+              apply_at: next.apply_at ?? null,
+            }
+          : {}),
       })
       if (pending === 'clear') {
         const tick = await deleteModelThumb(kind, item.path, saveThumbView())
@@ -262,7 +300,12 @@ export function ModelInfoDialog({
 
   function hasLocalData() {
     const hasThumb = pending === 'clear' ? false : Boolean(pending || thumb)
-    return types.length > 0 || hasThumb || Boolean(notes.trim()) || (lora && Boolean(posPrompt.trim()))
+    return (
+      types.length > 0 ||
+      hasThumb ||
+      Boolean(notes.trim()) ||
+      (lora && (Boolean(posPrompt.trim()) || autoApplyOverride !== null || applyAtOverride !== null))
+    )
   }
 
   async function applyCivitai(info: CivitaiVersion) {
@@ -349,6 +392,14 @@ export function ModelInfoDialog({
         strengthMax={strengthMax}
         sliderMin={sliderMin}
         sliderMax={sliderMax}
+        autoApply={autoApplyOverride ?? loraAutoApplyDefault}
+        autoApplyOverride={autoApplyOverride}
+        onAutoApply={setAutoApplyOverride}
+        onAutoApplyInherit={() => setAutoApplyOverride(null)}
+        applyAt={applyAtOverride ?? loraApplyAtDefault}
+        applyAtOverride={applyAtOverride}
+        onApplyAt={(value) => setApplyAtOverride(value)}
+        onApplyAtInherit={() => setApplyAtOverride(null)}
         preview={
           <TilePreview
             className="h-full w-full"

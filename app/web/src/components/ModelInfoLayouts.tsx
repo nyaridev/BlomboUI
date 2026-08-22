@@ -1,5 +1,7 @@
 import { AppIcon } from '@/components/AppIcon.tsx'
 import { ChipSelect, type ChipSection } from '@/components/ChipSelect.tsx'
+import { ResizableTextarea } from '@/components/ResizableTextarea.tsx'
+import { SelectField } from '@/components/SelectField.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
 import {
   clampLora,
@@ -61,8 +63,8 @@ function Area({
   return (
     <div className="flex w-full min-w-0 flex-col gap-0.5">
       <span className="text-xs text-muted">{label}</span>
-      <textarea
-        className="min-h-16 w-full resize-y rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink outline-none focus:border-accent"
+      <ResizableTextarea
+        className="min-h-16 w-full rounded border border-line bg-bg px-2 py-1 font-mono text-sm text-ink outline-none focus:border-accent"
         value={value}
         onChange={(event) => onChange(event.target.value)}
         onKeyDown={weight ? onKeyDown : undefined}
@@ -260,6 +262,14 @@ type ViewProps = {
   strengthMax: number
   sliderMin: number
   sliderMax: number
+  autoApply: boolean
+  autoApplyOverride: boolean | null
+  onAutoApply: (value: boolean) => void
+  onAutoApplyInherit: () => void
+  applyAt: 'start' | 'end'
+  applyAtOverride: 'start' | 'end' | null
+  onApplyAt: (value: 'start' | 'end') => void
+  onApplyAtInherit: () => void
   preview: ReactNode
 }
 
@@ -336,6 +346,66 @@ function StrengthCard(props: ViewProps) {
   )
 }
 
+function AutoApplyCard(props: ViewProps) {
+  return (
+    <Card>
+      <div className="flex flex-col gap-2">
+        <h3 className="border-b border-line pb-1 text-xs font-medium text-ink">Automatic LoRA</h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <input
+              type="checkbox"
+              className="check"
+              checked={props.autoApply}
+              onChange={(event) => props.onAutoApply(event.target.checked)}
+            />
+            Instant LoRA
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted">
+              {props.autoApplyOverride === null ? 'Global default' : 'Custom'}
+            </span>
+            <button
+              type="button"
+              className="rounded border border-line px-2 py-1 text-xs text-muted hover:bg-line disabled:cursor-default disabled:opacity-40"
+              disabled={props.autoApplyOverride === null}
+              onClick={props.onAutoApplyInherit}
+            >
+              Use global
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex min-w-40 flex-1 flex-col gap-0.5">
+            <span className="text-xs text-muted">Apply triggers at</span>
+            <SelectField
+              value={props.applyAt}
+              options={[
+                { value: 'start', label: 'Start' },
+                { value: 'end', label: 'End' },
+              ]}
+              onChange={(value) => props.onApplyAt(value === 'end' ? 'end' : 'start')}
+            />
+          </div>
+          <div className="flex items-center gap-2 pt-4">
+            <span className="text-xs text-muted">
+              {props.applyAtOverride === null ? 'Global default' : 'Custom'}
+            </span>
+            <button
+              type="button"
+              className="rounded border border-line px-2 py-1 text-xs text-muted hover:bg-line disabled:cursor-default disabled:opacity-40"
+              disabled={props.applyAtOverride === null}
+              onClick={props.onApplyAtInherit}
+            >
+              Use global
+            </button>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 function EditBlock(props: ViewProps) {
   return (
     <Section title="Model">
@@ -344,6 +414,7 @@ function EditBlock(props: ViewProps) {
         <>
           <Area label="Trigger words" value={props.prompt} onChange={props.onPrompt} weight />
           <StrengthCard {...props} />
+          <AutoApplyCard {...props} />
         </>
       ) : null}
       <Area label="Notes" value={props.notes} onChange={props.onNotes} />

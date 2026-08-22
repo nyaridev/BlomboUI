@@ -2,6 +2,7 @@ import { GalleryView } from '@/components/GalleryView.tsx'
 import { PaneSplitter } from '@/components/PaneSplitter.tsx'
 import { ImageStage } from './ImageStage.tsx'
 import { GenerationParams } from './GenerationParams.tsx'
+import type { PromptMatrixSettings } from './GenerationScripts.tsx'
 import { GenerateModels } from './GenerateModels.tsx'
 import { PromptStack } from './PromptStack.tsx'
 import { useEffect, useRef, useState } from 'react'
@@ -15,10 +16,10 @@ import {
   jobGridUrl,
   type Job,
 } from '@/lib/api.ts'
-import { loraNameMatches, parseLoraHits, replaceLoraAt, toggleLoraPrompts } from '@/lib/loraTags.ts'
+import { loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, toggleLoraPrompts } from '@/lib/loraTags.ts'
 import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/wildcardTags.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { nextSeed, usedSeed, useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
+import { autoLoraId, nextSeed, usedSeed, useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
@@ -29,7 +30,12 @@ function idsFromJob(job: Job): string[] {
   return job.gallery_ids
 }
 
-function selectedLoraPaths(prompt: string, items: { path: string }[]) {
+function selectedLoraPaths(
+  prompt: string,
+  items: { path: string; auto_apply?: boolean | null }[],
+  activeOrder: string[],
+  autoDefault: boolean,
+) {
   const out: string[] = []
   const seen = new Set<string>()
   for (const hit of parseLoraHits(prompt)) {
@@ -37,6 +43,17 @@ function selectedLoraPaths(prompt: string, items: { path: string }[]) {
     if (item && !seen.has(item.path)) {
       seen.add(item.path)
       out.push(item.path)
+    }
+  }
+  for (const id of activeOrder) {
+    if (!id.startsWith(autoLoraId(''))) {
+      continue
+    }
+    const path = id.slice(autoLoraId('').length)
+    const item = items.find((row) => row.path === path)
+    if (path && (!item || Boolean(item.auto_apply ?? autoDefault)) && !seen.has(path)) {
+      seen.add(path)
+      out.push(path)
     }
   }
   return out
@@ -53,6 +70,13 @@ function selectedWildcardPaths(prompt: string, items: { path: string }[]) {
     }
   }
   return out
+}
+
+function promptMatrixLines(raw: unknown): string[] {
+  const values = typeof raw === 'string' ? raw.split(/\r?\n/) : Array.isArray(raw) ? raw : []
+  return values
+    .map((value) => String(value).trim().replace(/,+$/, '').trim())
+    .filter(Boolean)
 }
 
 function etaSeconds(startedAt: string | null, value: number, max: number): number | null {
@@ -149,6 +173,9 @@ export function GenerateScreen() {
   const outputImageName = useGenerateStore((s) => s.outputImageName)
   const outputGridName = useGenerateStore((s) => s.outputGridName)
   const modelTileStyle = useGenerateStore((s) => s.modelTileStyle)
+  const activeLoraOrder = useGenerateStore((s) => s.activeLoraOrder)
+  const activeLoraStrengths = useGenerateStore((s) => s.activeLoraStrengths)
+  const toggleAutoLora = useGenerateStore((s) => s.toggleAutoLora)
   const setPrompt = useGenerateStore((s) => s.setPrompt)
   const setNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const setCheckpoint = useGenerateStore((s) => s.setCheckpoint)
@@ -170,6 +197,7 @@ export function GenerateScreen() {
   const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs)
   const generateTabOrder = useSettingsStore((s) => s.generateTabOrder)
   const generateTabKeysFollowLayout = useSettingsStore((s) => s.generateTabKeysFollowLayout)
+  const loraAutoApplyDefault = useSettingsStore((s) => s.loraAutoApply)
   const checkpoints = useModelsStore((s) => s.checkpoints)
   const loraItems = useModelsStore((s) => s.loras)
   const wildcardItems = useModelsStore((s) => s.wildcards)
@@ -182,6 +210,7 @@ export function GenerateScreen() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<GenerateTab>('Generation')
   const [starting, setStarting] = useState(false)
+  const [promptMatrix, setPromptMatrix] = useState<PromptMatrixSettings | null>(null)
   const genRowRef = useRef<HTMLDivElement>(null)
   const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
@@ -273,7 +302,14 @@ export function GenerateScreen() {
     const previous = seed
     const previousIds = job ? idsFromJob(job) : []
     const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
-    setSeed(nextSeed(used, seedAfter, count))
+    const activeLines = promptMatrixLines(promptMatrix?.lines)
+    const activePromptMatrix = promptMatrix && activeLines.length ? promptMatrix : null
+    const seedSteps = activePromptMatrix
+      ? activePromptMatrix.useBatch
+        ? activeLines.length * count
+        : activeLines.length
+      : count
+    setSeed(nextSeed(used, seedAfter, seedSteps))
     try {
       const next = await createJob({
         prompt,
@@ -287,7 +323,7 @@ export function GenerateScreen() {
         seed_after: seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
-        batch_grid: batchGrid,
+        batch_grid: activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
         batch_grid_format: gridFormat,
@@ -304,6 +340,27 @@ export function GenerateScreen() {
         output_grid_path: outputGridPath.trim() || undefined,
         output_image_name: outputImageName.trim() || undefined,
         output_grid_name: outputGridName.trim() || undefined,
+        prompt_matrix: activePromptMatrix
+          ? {
+              lines: activePromptMatrix.lines,
+              save_grid: activePromptMatrix.saveGrid,
+              use_batch: activePromptMatrix.useBatch,
+            }
+          : undefined,
+        auto_loras: activeLoraOrder
+          .filter((id) => id.startsWith(autoLoraId('')))
+          .map((id) => id.slice(autoLoraId('').length))
+          .filter((path) => {
+            if (!path) {
+              return false
+            }
+            const item = loraItems.find((row) => row.path === path)
+            return !item || Boolean(item.auto_apply ?? loraAutoApplyDefault)
+          })
+          .map((path) => ({
+            path,
+            strength: activeLoraStrengths[path] ?? loraItems.find((row) => row.path === path)?.strength ?? 1,
+          })),
       })
       setJob(next)
       setImageIds([])
@@ -419,8 +476,18 @@ export function GenerateScreen() {
     : []
   const loraWarning = missingLoras.length ? `Missing LoRA: ${missingLoras.join(', ')}` : null
   const warning = loraWarning
-  const batchTotal =
+  const baseBatchTotal =
     Math.max(1, Number(payload.batch_size) || 1) * Math.max(1, Number(payload.batch_count) || 1)
+  const matrixPayload =
+    payload.prompt_matrix && typeof payload.prompt_matrix === 'object' && !Array.isArray(payload.prompt_matrix)
+      ? (payload.prompt_matrix as { lines?: unknown; use_batch?: unknown })
+      : null
+  const matrixPayloadLines = promptMatrixLines(matrixPayload?.lines)
+  const batchTotal = matrixPayloadLines.length
+    ? matrixPayload?.use_batch === false
+      ? matrixPayloadLines.length
+      : baseBatchTotal * matrixPayloadLines.length
+    : baseBatchTotal
   const batched = batchTotal > 1
   const progress = job?.progress
   const progressMax = progress?.max || 0
@@ -454,7 +521,9 @@ export function GenerateScreen() {
   const loraFocus =
     swapTarget?.slot === 'lora' && swapTarget.index >= 0
       ? loraItems.find((row) => loraNameMatches(loraHits[swapTarget.index]?.name ?? '', row.path))?.path
-      : undefined
+      : swapTarget?.slot === 'lora' && swapTarget.auto
+        ? swapTarget.path
+        : undefined
   const wildFocus =
     swapTarget?.slot === 'wildcard' && swapTarget.index >= 0
       ? wildcardItems.find((row) => wildcardMatches(row, wildHits[swapTarget.index]?.name ?? ''))?.path
@@ -561,6 +630,7 @@ export function GenerateScreen() {
                     .find((item) => typeof item.seed === 'number')?.seed ??
                   (typeof payload.seed === 'number' ? payload.seed : null)
                 }
+                onPromptMatrix={setPromptMatrix}
               />
             </div>
             <PaneSplitter
@@ -616,15 +686,51 @@ export function GenerateScreen() {
               <GalleryView
                 kind="loras"
                 items={loraItems}
-                selected={selectedLoraPaths(prompt, loraItems)}
+                selected={selectedLoraPaths(prompt, loraItems, activeLoraOrder, loraAutoApplyDefault)}
                 focus={loraFocus}
                 onSelect={(path) => {
                   const item = loraItems.find((row) => row.path === path)
+                  const instant = Boolean(item?.auto_apply ?? loraAutoApplyDefault)
+                  if (swapTarget?.slot === 'lora' && swapTarget.auto) {
+                    const oldPath = swapTarget.path
+                    if (oldPath === path) {
+                      toggleAutoLora(path)
+                      setSwapTarget(null)
+                      return
+                    }
+                    if (oldPath) {
+                      toggleAutoLora(oldPath)
+                    }
+                    if (instant) {
+                      toggleAutoLora(path)
+                    } else {
+                      const next = toggleLoraPrompts(
+                        prompt,
+                        negativePrompt,
+                        path,
+                        item?.prompt || '',
+                        item?.negative_prompt || '',
+                        item?.strength ?? 1,
+                      )
+                      setPrompt(next.prompt)
+                      setNegativePrompt(next.negativePrompt)
+                    }
+                    setSwapTarget(null)
+                    return
+                  }
                   if (swapTarget?.slot === 'lora' && swapTarget.index >= 0) {
                     const hit = loraHits[swapTarget.index]
                     const old = hit
                       ? loraItems.find((row) => loraNameMatches(hit.name, row.path))
                       : null
+                    if (instant) {
+                      const next = removeLoraAt(prompt, negativePrompt, swapTarget.index, old?.prompt || '')
+                      setPrompt(next.prompt)
+                      setNegativePrompt(next.negativePrompt)
+                      toggleAutoLora(path)
+                      setSwapTarget(null)
+                      return
+                    }
                     const next = replaceLoraAt(
                       prompt,
                       negativePrompt,
@@ -638,6 +744,11 @@ export function GenerateScreen() {
                     )
                     setPrompt(next.prompt)
                     setNegativePrompt(next.negativePrompt)
+                    setSwapTarget(null)
+                    return
+                  }
+                  if (instant) {
+                    toggleAutoLora(path)
                     setSwapTarget(null)
                     return
                   }

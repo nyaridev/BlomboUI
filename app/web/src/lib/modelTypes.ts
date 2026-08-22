@@ -120,3 +120,15 @@ export function matchModelType(value: string) {
   }
   return MODEL_TYPES.find((item) => item.toLowerCase() === want) || TYPE_ALIASES[want] || ''
 }
+
+export function modelTypesMatch(left: readonly string[], right: readonly string[]) {
+  if (!left.length || !right.length) {
+    return false
+  }
+  const normalized = new Set(
+    left
+      .map((value) => matchModelType(value) || value.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  return right.some((value) => normalized.has(matchModelType(value) || value.trim().toLowerCase()))
+}

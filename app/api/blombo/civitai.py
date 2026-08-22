@@ -160,9 +160,22 @@ def list_models(
     except HTTPError as exc:
         if exc.code in {401, 403}:
             raise CivitaiRequestError("CivitAI rejected the API key.") from exc
-        raise CivitaiRequestError("CivitAI model search failed.") from exc
-    except (URLError, TimeoutError, OSError, json.JSONDecodeError) as exc:
-        raise CivitaiRequestError("CivitAI model search failed.") from exc
+        if exc.code == 429:
+            raise CivitaiRequestError("CivitAI rate limit reached while searching. Try again later.") from exc
+        reason = str(exc.reason or "").strip()
+        detail = f"HTTP {exc.code}: {reason}" if reason else f"HTTP {exc.code}"
+        raise CivitaiRequestError(f"CivitAI model search failed ({detail}).") from exc
+    except TimeoutError as exc:
+        raise CivitaiRequestError("CivitAI model search timed out. Check your connection and try again.") from exc
+    except json.JSONDecodeError as exc:
+        raise CivitaiRequestError("CivitAI returned an invalid response while searching.") from exc
+    except URLError as exc:
+        reason = str(exc.reason or "").strip()
+        detail = reason.rstrip(".") if reason else "network error"
+        raise CivitaiRequestError(f"CivitAI model search failed: {detail}.") from exc
+    except OSError as exc:
+        detail = str(exc).strip().rstrip(".") or "network error"
+        raise CivitaiRequestError(f"CivitAI model search failed: {detail}.") from exc
     if not isinstance(data, dict):
         raise CivitaiRequestError("CivitAI returned an invalid model list.")
     return data
@@ -193,6 +206,51 @@ def _trim_images(raw: object) -> list[dict[str, Any]]:
     return images
 
 
+def _trim_file(raw: object, fallback_url: str = "") -> dict[str, Any] | None:
+    if not isinstance(raw, dict):
+        return None
+    try:
+        file_id = int(raw["id"])
+    except (KeyError, TypeError, ValueError):
+        file_id = 0
+    name = str(raw.get("name") or "").strip()
+    url = str(raw.get("downloadUrl") or fallback_url).strip()
+    if not name or not url:
+        return None
+    hashes: dict[str, str] = {}
+    raw_hashes = raw.get("hashes")
+    if isinstance(raw_hashes, dict):
+        for key, value in raw_hashes.items():
+            digest = str(value or "").strip()
+            if digest:
+                hashes[str(key)] = digest
+    try:
+        size_bytes = int(raw.get("sizeBytes") or 0)
+    except (TypeError, ValueError):
+        size_bytes = 0
+    if not size_bytes:
+        try:
+            size_bytes = int(float(raw.get("sizeKB") or 0) * 1024)
+        except (TypeError, ValueError):
+            size_bytes = 0
+    metadata: dict[str, str] = {}
+    raw_metadata = raw.get("metadata")
+    if isinstance(raw_metadata, dict):
+        for key, value in raw_metadata.items():
+            text = str(value or "").strip()
+            if text:
+                metadata[str(key)] = text
+    return {
+        "id": file_id,
+        "name": name,
+        "downloadUrl": url,
+        "primary": bool(raw.get("primary")),
+        "sizeBytes": max(0, size_bytes),
+        "hashes": hashes,
+        "metadata": metadata,
+    }
+
+
 def _trim_version(raw: dict[str, Any]) -> dict[str, Any] | None:
     try:
         version_id = int(raw["id"])
@@ -201,6 +259,14 @@ def _trim_version(raw: dict[str, Any]) -> dict[str, Any] | None:
     words = raw.get("trainedWords")
     trained = [str(word).strip() for word in words] if isinstance(words, list) else []
     paid, buzz = download_cost([raw])
+    download_url = str(raw.get("downloadUrl") or "").strip()
+    files: list[dict[str, Any]] = []
+    raw_files = raw.get("files")
+    if isinstance(raw_files, list):
+        for candidate in raw_files:
+            file = _trim_file(candidate, download_url)
+            if file:
+                files.append(file)
     return {
         "id": version_id,
         "name": str(raw.get("name") or "").strip(),
@@ -210,6 +276,8 @@ def _trim_version(raw: dict[str, Any]) -> dict[str, Any] | None:
         "paid": paid,
         "buzz": buzz,
         "images": _trim_images(raw.get("images")),
+        "downloadUrl": download_url,
+        "files": files,
     }
 
 
@@ -238,6 +306,8 @@ def trim_model(raw: dict[str, Any]) -> dict[str, Any] | None:
         return None
     creator = raw.get("creator")
     creator_name = creator.get("username") if isinstance(creator, dict) else str(creator or "")
+    raw_tags = raw.get("tags")
+    tags = [str(tag).strip() for tag in raw_tags if str(tag).strip()] if isinstance(raw_tags, list) else []
     versions: list[dict[str, Any]] = []
     raw_versions = raw.get("modelVersions")
     if isinstance(raw_versions, list):
@@ -254,6 +324,7 @@ def trim_model(raw: dict[str, Any]) -> dict[str, Any] | None:
         "creator": str(creator_name or ""),
         "nsfw": bool(raw.get("nsfw")),
         "description": str(raw.get("description") or ""),
+        "tags": tags,
         "stats": _trim_stats(raw.get("stats")),
         "versions": versions,
     }

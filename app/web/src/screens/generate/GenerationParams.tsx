@@ -1,4 +1,5 @@
 import { OutputPathOverride } from './OutputPathOverride.tsx'
+import { GenerationScripts, type PromptMatrixSettings } from './GenerationScripts.tsx'
 import { SliderField } from '@/components/SliderField.tsx'
 import { AppIcon } from '@/components/AppIcon.tsx'
 import { NumberField } from '@/components/NumberField.tsx'
@@ -18,9 +19,16 @@ type GenerationParamsProps = {
   warning?: string | null
   comfyOk: boolean
   lastSeed: number | null
+  onPromptMatrix: (value: PromptMatrixSettings | null) => void
 }
 
-export function GenerationParams({ error, warning, comfyOk, lastSeed }: GenerationParamsProps) {
+export function GenerationParams({
+  error,
+  warning,
+  comfyOk,
+  lastSeed,
+  onPromptMatrix,
+}: GenerationParamsProps) {
   const width = useGenerateStore((s) => s.width)
   const height = useGenerateStore((s) => s.height)
   const steps = useGenerateStore((s) => s.steps)
@@ -285,6 +293,7 @@ export function GenerationParams({ error, warning, comfyOk, lastSeed }: Generati
         onImageName={setOutputImageName}
         onGridName={setOutputGridName}
       />
+      <GenerationScripts onPromptMatrix={onPromptMatrix} />
       {error ? <p className="text-xs text-accent">{error}</p> : null}
       {warning ? <p className="text-xs text-muted">{warning}</p> : null}
     </aside>

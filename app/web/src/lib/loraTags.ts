@@ -50,6 +50,16 @@ export function formatLoraStrength(value: number) {
   return String(Number(value.toFixed(2)))
 }
 
+export function setLoraStrengthAt(prompt: string, index: number, strength: number) {
+  const hit = parseLoraHits(prompt)[index]
+  if (!hit) {
+    return prompt
+  }
+  const value = Number.isFinite(strength) ? strength : hit.strength
+  const tag = `<lora:${hit.name}:${formatLoraStrength(value)}>`
+  return prompt.slice(0, hit.start) + tag + prompt.slice(hit.end)
+}
+
 export function storedLoraStrengthLabel(strength?: number, slider?: boolean) {
   const n = Number.isFinite(Number(strength)) ? Number(strength) : 1
   if (!slider && Math.abs(n - 1) < 1e-6) {

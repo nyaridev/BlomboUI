@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 type DialogProps = {
@@ -8,11 +8,21 @@ type DialogProps = {
 }
 
 export function Dialog({ onClose, children, className = 'w-[min(92vw,22rem)]' }: DialogProps) {
+  const downTarget = useRef<EventTarget | null>(null)
+
   return createPortal(
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-bg/80 p-4"
       data-overlay
-      onClick={onClose}
+      onMouseDown={(event) => {
+        downTarget.current = event.target
+      }}
+      onClick={(event) => {
+        if (event.target !== event.currentTarget || downTarget.current !== event.currentTarget) {
+          return
+        }
+        onClose()
+      }}
     >
       <div
         className={['rounded-md border border-line bg-panel p-3', className].join(' ')}

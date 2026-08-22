@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from urllib.error import HTTPError, URLError
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlsplit
 
 from blombo import civitai
+from blombo import civitai_downloads
 
 try:
     from blombo import main
@@ -55,6 +59,22 @@ class CivitaiRequestTests(unittest.TestCase):
         self.assertEqual(query["tag"], ["character"])
         self.assertNotIn("fromPlatform", query)
         self.assertEqual(captured["headers"], {"Authorization": "Bearer secret"})
+
+    def test_list_models_explains_common_request_failures(self) -> None:
+        failures = (
+            (HTTPError("url", 500, "Server Error", {}, None), "HTTP 500: Server Error"),
+            (HTTPError("url", 429, "Too Many Requests", {}, None), "rate limit"),
+            (TimeoutError(), "timed out"),
+            (URLError("DNS lookup failed"), "DNS lookup failed"),
+        )
+        for failure, expected in failures:
+            with self.subTest(expected=expected):
+                with (
+                    patch.object(civitai.settings, "load", return_value={"civitaiApiKey": "secret"}),
+                    patch.object(civitai, "_get_json", side_effect=failure),
+                ):
+                    with self.assertRaisesRegex(civitai.CivitaiRequestError, expected):
+                        civitai.list_models()
 
     def test_download_cost_from_early_access(self) -> None:
         paid, buzz = civitai.download_cost(
@@ -201,6 +221,220 @@ class CivitaiRequestTests(unittest.TestCase):
         self.assertEqual(model["versions"][1]["baseModel"], "Illustrious")
         self.assertTrue(model["versions"][1]["paid"])
         self.assertEqual(model["versions"][1]["buzz"], 200)
+
+    def test_trim_model_retains_tags_and_primary_file(self) -> None:
+        model = civitai.trim_model(
+            {
+                "id": 99,
+                "name": "Example",
+                "type": "LORA",
+                "tags": ["style", "anime"],
+                "modelVersions": [
+                    {
+                        "id": 7,
+                        "name": "fp8",
+                        "baseModel": "Anima",
+                        "downloadUrl": "https://civitai.com/api/download/models/7",
+                        "files": [
+                            {
+                                "id": 8,
+                                "name": "example.safetensors",
+                                "primary": True,
+                                "sizeKB": 2,
+                                "downloadUrl": "https://download/example",
+                                "hashes": {"SHA256": "abc"},
+                                "metadata": {"fp": "fp8"},
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+        assert model is not None
+        self.assertEqual(model["tags"], ["style", "anime"])
+        self.assertEqual(model["versions"][0]["files"][0]["metadata"], {"fp": "fp8"})
+        self.assertEqual(model["versions"][0]["files"][0]["sizeBytes"], 2048)
+
+    def test_primary_file_uses_requested_variant_and_falls_back(self) -> None:
+        version = {
+            "files": [
+                {"id": 10, "name": "primary.safetensors", "primary": True, "downloadUrl": "primary"},
+                {"id": 11, "name": "fp8.safetensors", "primary": False, "downloadUrl": "fp8"},
+            ]
+        }
+
+        self.assertEqual(civitai_downloads._primary_file(version, 11)["name"], "fp8.safetensors")
+        self.assertEqual(civitai_downloads._primary_file(version, 999)["name"], "primary.safetensors")
+
+    def test_download_uses_intelligent_model_path_and_alias(self) -> None:
+        model = {
+            "id": 99,
+            "name": "Model Name",
+            "type": "LORA",
+            "creator": "THEANTLERS",
+            "tags": ["style"],
+            "versions": [
+                {
+                    "id": 7,
+                    "baseModel": "Anima",
+                    "paid": False,
+                    "files": [
+                        {
+                            "name": "source.safetensors",
+                            "primary": True,
+                            "downloadUrl": "https://download/example",
+                            "hashes": {},
+                        }
+                    ],
+                }
+            ],
+        }
+
+        def fake_write(_url: str, target: Path) -> None:
+            target.write_bytes(b"model")
+
+        with TemporaryDirectory() as root:
+            with (
+            patch.object(civitai_downloads.civitai, "get_model", return_value=model),
+            patch.object(
+                civitai_downloads.dirs,
+                "listed_dirs",
+                return_value=[{"id": "local", "name": "Local", "path": root}],
+            ),
+            patch.object(
+                civitai_downloads.settings,
+                "load",
+                return_value={
+                    "civitaiApiKey": "secret",
+                    "civitaiDownload": {
+                        "modelDirId": "local",
+                        "modelIntelligent": True,
+                        "modelSortBaseModel": True,
+                        "modelSortCategory": True,
+                        "modelSortCreator": True,
+                        "updateModelInfo": False,
+                        "authorAliases": {},
+                    },
+                },
+            ),
+            patch.object(civitai_downloads, "_write_download", side_effect=fake_write),
+            ):
+                result = civitai_downloads.download(
+                    {
+                        "modelId": 99,
+                        "versionId": 7,
+                        "customNaming": True,
+                        "modelName": "Model Name",
+                        "creatorAlias": "ta",
+                    }
+                )
+            path = Path(result["paths"][0])
+            self.assertEqual(path.relative_to(root).as_posix(), "loras/Anima/Style/THEANTLERS/ta_Model_Name.safetensors")
+            self.assertEqual(path.read_bytes(), b"model")
+
+    def test_download_updates_civitai_model_info_when_enabled(self) -> None:
+        model = {
+            "id": 99,
+            "name": "Model Name",
+            "type": "LORA",
+            "creator": "maker",
+            "versions": [
+                {
+                    "id": 7,
+                    "baseModel": "Pony",
+                    "trainedWords": ["trigger", "second"],
+                    "images": [{"url": "https://image.civitai.com/preview.jpg"}],
+                    "paid": False,
+                    "files": [
+                        {
+                            "id": 10,
+                            "name": "source.safetensors",
+                            "primary": True,
+                            "downloadUrl": "https://download/example",
+                            "hashes": {},
+                        }
+                    ],
+                }
+            ],
+        }
+
+        def fake_write(_url: str, target: Path) -> None:
+            target.write_bytes(b"model")
+
+        with TemporaryDirectory() as root:
+            with (
+                patch.object(civitai_downloads.civitai, "get_model", return_value=model),
+                patch.object(
+                    civitai_downloads.dirs,
+                    "listed_dirs",
+                    return_value=[{"id": "local", "name": "Local", "path": root}],
+                ),
+                patch.object(
+                    civitai_downloads.settings,
+                    "load",
+                    return_value={
+                        "civitaiApiKey": "secret",
+                        "civitaiDownload": {
+                            "modelDirId": "local",
+                            "modelIntelligent": False,
+                            "updateModelInfo": True,
+                        },
+                    },
+                ),
+                patch.object(civitai_downloads, "_write_download", side_effect=fake_write),
+                patch.object(
+                    civitai_downloads.civitai,
+                    "fetch_image",
+                    return_value=(b"thumb", "image/jpeg"),
+                ),
+                patch.object(
+                    civitai_downloads.model_meta,
+                    "get_info",
+                    return_value={"types": [], "prompt": ""},
+                ),
+                patch.object(civitai_downloads.model_meta, "set_info") as set_info,
+                patch.object(civitai_downloads.model_meta, "save_thumb") as save_thumb,
+            ):
+                result = civitai_downloads.download(
+                    {
+                        "modelId": 99,
+                        "versionId": 7,
+                        "fileId": 10,
+                        "modelName": "Model Name",
+                    }
+                )
+                downloaded = Path(result["paths"][0]).read_bytes()
+
+        self.assertEqual(downloaded, b"model")
+        set_info.assert_called_once_with(
+            "loras",
+            "Model_Name.safetensors",
+            ["Pony"],
+            prompt="trigger, second",
+        )
+        save_thumb.assert_called_once()
+        thumb_args = save_thumb.call_args.args
+        self.assertEqual(thumb_args[:4], ("loras", "Model_Name.safetensors", b"thumb", "global"))
+        self.assertEqual(thumb_args[5], "image/jpeg")
+        self.assertEqual(thumb_args[4]["origin"], "civitai")
+        self.assertEqual(thumb_args[4]["civitai"]["trainedWords"], ["trigger", "second"])
+
+    def test_archive_extraction_skips_unsafe_and_unsupported_members(self) -> None:
+        import zipfile
+
+        with TemporaryDirectory() as root:
+            root_path = Path(root)
+            archive = root_path / "wildcards.zip"
+            with zipfile.ZipFile(archive, "w") as output:
+                output.writestr("../escape.txt", "bad")
+                output.writestr("nested/good.txt", "ok")
+                output.writestr("image.png", "skip")
+
+            extracted = civitai_downloads._extract_archive(archive, root_path / "out")
+
+            self.assertEqual([item.name for item in extracted], ["good.txt"])
+            self.assertEqual(extracted[0].read_text(), "ok")
+            self.assertFalse((root_path / "escape.txt").exists())
 
     @unittest.skipIf(main is None, "FastAPI is not installed in this test environment")
     def test_model_route_returns_trimmed_payload(self) -> None:

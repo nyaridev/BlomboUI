@@ -27,6 +27,10 @@
   --color-purple-bright: #b070ff;
   --color-pink: #e02080;
   --color-pink-bright: #ff60c0;
+  --color-prompt-lora: #c4b5fd;
+  --color-prompt-wildcard: #a5f3fc;
+  --color-prompt-weight: #fde68a;
+  --color-prompt-invalid: #8f263b;
 }
 
 [data-theme='slate'] {

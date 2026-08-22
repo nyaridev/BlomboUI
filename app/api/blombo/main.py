@@ -9,7 +9,7 @@ from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 
-from blombo import autocomplete, civitai, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, model_meta_db, model_thumbs, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, thumbnail_embed, thumbnail_scopes, wildcard_files
+from blombo import autocomplete, civitai, civitai_downloads, comfy, db, dirs, gallery, hashes, issues, jobs, model_files, model_meta, model_meta_db, model_thumbs, models, pnginfo, removed, safetensors_meta, settings, tag_complete, templates, thumbnail_embed, thumbnail_scopes, wildcard_files
 from blombo.paths import RUNTIME, VERSION, launcher_env
 
 
@@ -38,6 +38,17 @@ async def lifespan(_app: FastAPI):
 
 app = FastAPI(title="BlomboUI", lifespan=lifespan)
 api = APIRouter()
+
+
+class PromptMatrixIn(BaseModel):
+    lines: str = ""
+    save_grid: bool = True
+    use_batch: bool = True
+
+
+class AutoLoraIn(BaseModel):
+    path: str
+    strength: float = 1.0
 
 
 class JobIn(BaseModel):
@@ -69,10 +80,21 @@ class JobIn(BaseModel):
     output_grid_path: str | None = None
     output_image_name: str | None = None
     output_grid_name: str | None = None
+    auto_loras: list[str | AutoLoraIn] = Field(default_factory=list)
+    prompt_matrix: PromptMatrixIn | None = None
 
 
 class InterruptIn(BaseModel):
     mode: Literal["skip", "cancel"] = "skip"
+
+
+class CivitaiDownloadIn(BaseModel):
+    modelId: int = Field(gt=0)
+    versionId: int = Field(gt=0)
+    fileId: int | None = Field(default=None, gt=0)
+    customNaming: bool = False
+    modelName: str = ""
+    creatorAlias: str = ""
 
 
 def _error_json(exc: ApiError | comfy.ComfyError | templates.TemplateError) -> JSONResponse:
@@ -137,6 +159,8 @@ class ModelInfoUpdate(BaseModel):
     notes: str | None = None
     strength: float | None = None
     slider: bool | None = None
+    auto_apply: bool | None = None
+    apply_at: Literal["start", "end"] | None = None
 
 
 class ComfyFreeIn(BaseModel):
@@ -506,6 +530,11 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     if not models.model_file(kind, path):
         raise ApiError("not_found", "model not found")
+    updates: dict[str, object] = {}
+    if "auto_apply" in body.model_fields_set:
+        updates["auto_apply"] = body.auto_apply
+    if "apply_at" in body.model_fields_set:
+        updates["apply_at"] = body.apply_at
     info = model_meta.set_info(
         kind,
         path,
@@ -515,6 +544,7 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
         body.notes,
         body.strength,
         body.slider,
+        **updates,
     )
     return {
         "types": info["types"],
@@ -523,6 +553,8 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
         "notes": info["notes"],
         "strength": info["strength"],
         "slider": info["slider"],
+        "auto_apply": info["auto_apply"],
+        "apply_at": info["apply_at"],
         "thumb": model_meta.thumb_mtime(kind, path),
     }
 
@@ -740,6 +772,19 @@ def civitai_model(model_id: int) -> dict:
             raise ApiError("not_found", message, 404) from exc
         status = 400 if "Set a CivitAI API key" in message else 502
         raise ApiError("civitai_error", message, status) from exc
+
+
+@api.post("/civitai/download")
+def civitai_download(body: CivitaiDownloadIn) -> dict:
+    try:
+        result = civitai_downloads.download(body.model_dump())
+    except civitai_downloads.CivitaiDownloadError as exc:
+        raise ApiError("civitai_download_error", str(exc), 400) from exc
+    try:
+        models.refresh_models(result["kind"])
+    except Exception:
+        pass
+    return result
 
 
 @api.get("/civitai/image")

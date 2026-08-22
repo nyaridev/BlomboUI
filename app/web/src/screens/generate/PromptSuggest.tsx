@@ -20,6 +20,7 @@ import { useGenerateStore } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { autocompleteApplies, useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
+import { PromptHighlight } from './PromptHighlight.tsx'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
 
 const WINDOW = 10
@@ -91,6 +92,7 @@ export function PromptField({
   const tagAllowed = autocompleteEnabled && autocompleteApplies(autocompleteMode, autocompleteTypes, modelTypes)
   const onWeightKey = usePromptWeightKey(onChange)
   const area = useRef<HTMLTextAreaElement>(null)
+  const highlight = useRef<HTMLDivElement>(null)
   const cache = useRef<{ key: string; tags: SuggestHit[] } | null>(null)
   const usage = useRef<{ prefix: string; tags: FrequentPromptTag[]; at: number } | null>(null)
   const pending = useRef<{ el: HTMLTextAreaElement; start: number; end: number } | null>(null)
@@ -129,6 +131,10 @@ export function PromptField({
       if (document.contains(next.el)) {
         next.el.setSelectionRange(next.start, next.end)
       }
+    }
+    if (area.current && highlight.current) {
+      highlight.current.scrollTop = area.current.scrollTop
+      highlight.current.scrollLeft = area.current.scrollLeft
     }
     if (!resync.current) {
       return
@@ -377,26 +383,35 @@ export function PromptField({
 
   return (
     <>
-      <textarea
-        ref={area}
-        className={fieldClass(disabled)}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={onKeyDown}
-        onKeyUp={sync}
-        onClick={sync}
-        onSelect={sync}
-        onInput={sync}
-        onScroll={sync}
-        onFocus={() => {
-          setFocused(true)
-          sync()
-        }}
-        onBlur={() => setFocused(false)}
-        placeholder={placeholder}
-        spellCheck={false}
-        disabled={disabled}
-      />
+      <div className="relative h-full min-w-0 rounded bg-field">
+        <PromptHighlight ref={highlight} text={value} loras={loras} side={side} />
+        <textarea
+          ref={area}
+          className={[fieldClass(disabled), 'prompt-editor relative z-10 selection:bg-accent/30'].join(' ')}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={onKeyDown}
+          onKeyUp={sync}
+          onClick={sync}
+          onSelect={sync}
+          onInput={sync}
+          onScroll={(event) => {
+            if (highlight.current) {
+              highlight.current.scrollTop = event.currentTarget.scrollTop
+              highlight.current.scrollLeft = event.currentTarget.scrollLeft
+            }
+            sync()
+          }}
+          onFocus={() => {
+            setFocused(true)
+            sync()
+          }}
+          onBlur={() => setFocused(false)}
+          placeholder={placeholder}
+          spellCheck={false}
+          disabled={disabled}
+        />
+      </div>
       {open && pos ? (
         <div
           className="fixed z-[70]"

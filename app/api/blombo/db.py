@@ -5,47 +5,18 @@ import threading
 from pathlib import Path
 from typing import Callable, TypeVar
 
-from blombo.paths import USER_DATA
+from blombo.paths import user_db_path
 
 _LOCK = threading.RLock()
 _CONN: sqlite3.Connection | None = None
 T = TypeVar("T")
 
 SCHEMA = """
-CREATE TABLE IF NOT EXISTS jobs (
-    id TEXT PRIMARY KEY,
-    status TEXT NOT NULL,
-    mode TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    comfy_prompt_id TEXT,
-    error TEXT,
-    created_at TEXT NOT NULL,
-    started_at TEXT,
-    finished_at TEXT
+CREATE TABLE IF NOT EXISTS app_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    data_json TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS gallery_items (
-    id TEXT PRIMARY KEY,
-    path TEXT NOT NULL UNIQUE,
-    root TEXT NOT NULL,
-    asset_kind TEXT NOT NULL DEFAULT 'image',
-    size INTEGER NOT NULL DEFAULT 0,
-    mtime_ns INTEGER NOT NULL DEFAULT 0,
-    width INTEGER,
-    height INTEGER,
-    seed INTEGER,
-    checkpoint_name TEXT,
-    prompt TEXT,
-    negative_prompt TEXT,
-    params_json TEXT NOT NULL DEFAULT '{}',
-    created_at TEXT NOT NULL,
-    favorite INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE INDEX IF NOT EXISTS gallery_items_created
-    ON gallery_items (created_at DESC);
-CREATE INDEX IF NOT EXISTS gallery_items_kind_created
-    ON gallery_items (asset_kind, created_at DESC);
+INSERT OR IGNORE INTO app_settings (id, data_json) VALUES (1, '{}');
 
 CREATE TABLE IF NOT EXISTS prompt_tags (
     tag TEXT PRIMARY KEY,
@@ -86,11 +57,34 @@ CREATE TABLE IF NOT EXISTS thumb_scopes (
     exclude_json TEXT NOT NULL,
     priority INTEGER NOT NULL DEFAULT 0
 );
+
+CREATE TABLE IF NOT EXISTS model_info (
+    kind TEXT NOT NULL,
+    ident TEXT NOT NULL,
+    types_json TEXT NOT NULL DEFAULT '[]',
+    modified INTEGER NOT NULL DEFAULT 0,
+    prompt TEXT NOT NULL DEFAULT '',
+    negative_prompt TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    strength REAL NOT NULL DEFAULT 1.0,
+    slider INTEGER NOT NULL DEFAULT 0,
+    auto_apply INTEGER,
+    apply_at TEXT,
+    PRIMARY KEY (kind, ident)
+);
+CREATE TABLE IF NOT EXISTS thumbnail_index (
+    kind TEXT NOT NULL,
+    ident TEXT NOT NULL,
+    context TEXT NOT NULL,
+    mtime INTEGER NOT NULL DEFAULT 0,
+    tags_json TEXT NOT NULL DEFAULT '[]',
+    PRIMARY KEY (kind, ident, context)
+);
 """
 
+
 def db_path() -> Path:
-    USER_DATA.mkdir(parents=True, exist_ok=True)
-    return USER_DATA / "blombo.sqlite"
+    return user_db_path()
 
 
 def connect() -> sqlite3.Connection:

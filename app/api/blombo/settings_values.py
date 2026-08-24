@@ -2,9 +2,6 @@ from __future__ import annotations
 
 import re
 
-from blombo.paths import USER_DATA
-
-FILE = USER_DATA / "user_settings.json"
 IMAGE_PATH_DEFAULT = "[workflow]/images/[date]"
 GRID_PATH_DEFAULT = "[workflow]/grids/[date]"
 INTERRUPTED_PATH_DEFAULT = "[workflow]/interrupted/[date]"

@@ -11,10 +11,10 @@ from fastapi.responses import JSONResponse
 if os.environ.get("BLOMBO_API_PINGS") != "1":
     logging.getLogger("uvicorn.access").disabled = True
 
-from blombo import db
+from blombo import cache_db, db
 from blombo.generate import comfy, templates
 from blombo.gallery import removed
-from blombo.models import hashes, model_meta_db, models, thumbnail_scopes
+from blombo.models import hashes, models, thumbnail_scopes
 from blombo.complete import tag_complete
 from blombo.paths import RUNTIME
 from blombo.routes.common import ApiError, error_json
@@ -24,7 +24,7 @@ from blombo.routes import civitai, complete, core, gallery, generate, models as 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     db.connect()
-    model_meta_db.connect()
+    cache_db.connect()
     thumbnail_scopes.list_scopes()
     tag_complete.schedule_rebuild()
     hashes.start()

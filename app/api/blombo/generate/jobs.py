@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from blombo import db, settings
+from blombo import cache_db, settings
 from blombo.complete import tag_complete
 from blombo.gallery import cache as gallery_cache
 from blombo.generate import comfy
@@ -75,7 +75,7 @@ def _now() -> str:
 
 
 def _prune_jobs() -> None:
-    rows = db.query(
+    rows = cache_db.query(
         "SELECT id FROM jobs WHERE status IN ('completed', 'failed', 'canceled') "
         "ORDER BY COALESCE(finished_at, created_at) DESC LIMIT ?",
         (MAX_STORED_JOBS,),
@@ -84,7 +84,7 @@ def _prune_jobs() -> None:
     if not keep:
         return
     marks = ",".join("?" for _ in keep)
-    db.execute(
+    cache_db.execute(
         "DELETE FROM jobs WHERE status IN ('completed', 'failed', 'canceled') "
         f"AND id NOT IN ({marks})",
         tuple(keep),
@@ -97,7 +97,7 @@ def _record_output(job_id: str, values: dict[str, Any], ident: str, path: Path, 
         outputs = []
         values["outputs"] = outputs
     outputs.append({"id": ident, "path": str(path), "kind": kind, "created_at": _now()})
-    db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
+    cache_db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
 
 
 def _preview_first(every: int, after: int) -> int:
@@ -150,7 +150,7 @@ def _keep_snapshot(live: LiveJob, step: int) -> bool:
 
 def _on_live(job_id: str, event: dict[str, Any]) -> None:
     if event.get("prompt_id"):
-        db.execute(
+        cache_db.execute(
             "UPDATE jobs SET status = 'running', comfy_prompt_id = ?, started_at = COALESCE(started_at, ?) WHERE id = ?",
             (str(event["prompt_id"]), _now(), job_id),
         )
@@ -292,7 +292,7 @@ def _row_job(row: Any) -> dict[str, Any]:
 
 
 def get_job(job_id: str) -> dict[str, Any] | None:
-    row = db.query_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
+    row = cache_db.query_one("SELECT * FROM jobs WHERE id = ?", (job_id,))
     return _row_job(row) if row else None
 
 
@@ -318,7 +318,7 @@ def interrupt_job(job_id: str, mode: str) -> dict[str, Any] | None:
 
 def latest_generation() -> dict[str, Any] | None:
     gallery_cache.sync()
-    row = db.query_one(
+    row = cache_db.query_one(
         "SELECT * FROM gallery_items WHERE asset_kind != 'grid' "
         "ORDER BY created_at DESC LIMIT 1"
     )
@@ -372,7 +372,7 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values["negative_prompt"] = str(body.get("negative_prompt") or "")
     values["outputs"] = []
     job_id = str(uuid.uuid4())
-    db.execute(
+    cache_db.execute(
         """
         INSERT INTO jobs (id, status, mode, payload_json, created_at)
         VALUES (?, 'queued', 'txt2img', ?, ?)
@@ -458,7 +458,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 if grew:
                     values["wildcard_missing"] = missing_wildcards
                     values["lora_missing"] = missing_loras
-                    db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
+                    cache_db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
 
                 def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
                     _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
@@ -471,7 +471,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                     f"{job_id}-{run_i}",
                     on_event,
                 )
-                db.execute(
+                cache_db.execute(
                     "UPDATE jobs SET status = 'running', comfy_prompt_id = ?, started_at = COALESCE(started_at, ?) WHERE id = ?",
                     (prompt_id, _now(), job_id),
                 )
@@ -512,33 +512,33 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         if canceled:
             if saved and values.get("batch_grid_on_cancel", True):
                 _maybe_grid(job_id, values, saved)
-            db.execute(
+            cache_db.execute(
                 "UPDATE jobs SET status = 'canceled', finished_at = ?, payload_json = ? WHERE id = ?",
                 (_now(), json.dumps(values), job_id),
             )
             _prune_jobs()
             return
         if not had_image:
-            db.execute(
+            cache_db.execute(
                 "UPDATE jobs SET status = 'canceled', finished_at = ?, payload_json = ? WHERE id = ?",
                 (_now(), json.dumps(values), job_id),
             )
             _prune_jobs()
             return
         _maybe_grid(job_id, values, saved)
-        db.execute(
+        cache_db.execute(
             "UPDATE jobs SET status = 'completed', finished_at = ?, payload_json = ? WHERE id = ?",
             (_now(), json.dumps(values), job_id),
         )
         _prune_jobs()
     except comfy.ComfyError as exc:
-        db.execute(
+        cache_db.execute(
             "UPDATE jobs SET status = 'failed', error = ?, finished_at = ? WHERE id = ?",
             (str(exc), _now(), job_id),
         )
         _prune_jobs()
     except Exception as exc:
-        db.execute(
+        cache_db.execute(
             "UPDATE jobs SET status = 'failed', error = ?, finished_at = ? WHERE id = ?",
             (str(exc), _now(), job_id),
         )
@@ -547,12 +547,12 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
 
 
 def latest_job() -> dict[str, Any] | None:
-    row = db.query_one("SELECT * FROM jobs WHERE status = 'completed' ORDER BY finished_at DESC LIMIT 1")
+    row = cache_db.query_one("SELECT * FROM jobs WHERE status = 'completed' ORDER BY finished_at DESC LIMIT 1")
     return _row_job(row) if row else None
 
 
 def grid_paths(job_id: str) -> list[Path]:
-    row = db.query_one("SELECT payload_json FROM jobs WHERE id = ?", (job_id,))
+    row = cache_db.query_one("SELECT payload_json FROM jobs WHERE id = ?", (job_id,))
     if not row:
         return []
     payload = json.loads(row["payload_json"])

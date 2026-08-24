@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import shutil
-import sqlite3
 import tempfile
 import unittest
 from io import BytesIO
@@ -10,6 +9,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from blombo import db
 from blombo.models import model_meta, model_meta_db, model_thumb_storage, model_thumbs
 
 
@@ -25,17 +25,17 @@ class ModelMetaTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         self.new_thumbs = self.tmp / "model_thumbs"
         self.patches = [
-            patch.object(model_meta_db, "_CONN", None),
-            patch.object(model_meta_db, "db_path", return_value=self.tmp / "model_meta.sqlite"),
+            patch.object(db, "_CONN", None),
+            patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
             patch.object(model_thumbs, "THUMBS", self.new_thumbs),
         ]
         for item in self.patches:
             item.start()
 
     def tearDown(self) -> None:
-        if model_meta_db._CONN is not None:
-            model_meta_db._CONN.close()
-            model_meta_db._CONN = None
+        if db._CONN is not None:
+            db._CONN.close()
+            db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -92,31 +92,6 @@ class ModelMetaTests(unittest.TestCase):
         info = model_meta.get_info("loras", "style.safetensors")
         self.assertIsNone(info["auto_apply"])
         self.assertEqual(info["apply_at"], "end")
-
-    def test_old_database_gets_auto_lora_columns(self) -> None:
-        conn = sqlite3.connect(self.tmp / "model_meta.sqlite")
-        conn.execute(
-            """
-            CREATE TABLE model_info (
-                kind TEXT NOT NULL,
-                ident TEXT NOT NULL,
-                types_json TEXT NOT NULL DEFAULT '[]',
-                modified INTEGER NOT NULL DEFAULT 0,
-                prompt TEXT NOT NULL DEFAULT '',
-                negative_prompt TEXT NOT NULL DEFAULT '',
-                notes TEXT NOT NULL DEFAULT '',
-                strength REAL NOT NULL DEFAULT 1.0,
-                slider INTEGER NOT NULL DEFAULT 0,
-                PRIMARY KEY (kind, ident)
-            )
-            """
-        )
-        conn.commit()
-        conn.close()
-
-        migrated = model_meta_db.connect()
-        columns = {row["name"] for row in migrated.execute("PRAGMA table_info(model_info)")}
-        self.assertTrue({"auto_apply", "apply_at"} <= columns)
 
 
 if __name__ == "__main__":

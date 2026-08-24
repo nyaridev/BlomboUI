@@ -79,12 +79,8 @@ BlomboUI/
 │   ├── windows/             Git, uv venv, ComfyUI, Torch
 │   └── linux/
 ├── app/                     API, web UI, workflows
-├── runtime/                 .venv, ComfyUI, sqlite, logs
-└── user/
-    ├── models/
-    ├── output/
-    ├── user_data/
-    └── wildcards/
+├── runtime/                 .venv, ComfyUI, launcher cache, logs
+└── user/                    created on first launch (models, output, data, wildcards)
 ```
 
 ---

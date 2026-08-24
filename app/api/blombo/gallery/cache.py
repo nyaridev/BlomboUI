@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from blombo import db, dirs
+from blombo import cache_db, dirs
 from blombo.generate import pnginfo
 from blombo.paths import outputs_root
 
@@ -268,7 +268,7 @@ def sync() -> None:
         else:
             conn.execute("DELETE FROM gallery_items")
 
-    db.transaction(write)
+    cache_db.transaction(write)
 
 
 def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
@@ -277,7 +277,7 @@ def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
     clauses = ["asset_kind != 'grid'"]
     if hide_interrupted:
         clauses.append("asset_kind != 'interrupted'")
-    return db.query(
+    return cache_db.query(
         f"SELECT * FROM gallery_items WHERE {' AND '.join(clauses)} "
         "ORDER BY created_at DESC LIMIT ?",
         (cap,),
@@ -286,11 +286,11 @@ def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
 
 def row(ident: str) -> Any | None:
     lookup = f"gallery:{ident[5:]}" if ident.startswith("disk:") else ident
-    return db.query_one("SELECT * FROM gallery_items WHERE id = ?", (lookup,))
+    return cache_db.query_one("SELECT * FROM gallery_items WHERE id = ?", (lookup,))
 
 
 def row_for_path(path: str) -> Any | None:
-    return db.query_one("SELECT * FROM gallery_items WHERE path = ?", (str(path),))
+    return cache_db.query_one("SELECT * FROM gallery_items WHERE path = ?", (str(path),))
 
 
 def output_row(output: dict[str, Any]) -> dict[str, Any] | None:

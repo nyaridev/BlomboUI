@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from blombo import db
+from blombo import cache_db
 from blombo.gallery import cache as gallery_cache, gallery
 from blombo.generate import jobs, pnginfo
 
@@ -26,24 +26,24 @@ class GalleryCacheTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
         self.patches = [
-            patch.object(db, "_CONN", None),
-            patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
+            patch.object(cache_db, "_CONN", None),
+            patch.object(cache_db, "db_path", return_value=self.tmp / "cache.sqlite"),
         ]
         for item in self.patches:
             item.start()
 
     def tearDown(self) -> None:
-        if db._CONN is not None:
-            db._CONN.close()
-            db._CONN = None
+        if cache_db._CONN is not None:
+            cache_db._CONN.close()
+            cache_db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_retention_keeps_active_and_500_terminal_jobs(self) -> None:
-        db.connect()
+        cache_db.connect()
         for index in range(505):
-            db.execute(
+            cache_db.execute(
                 """
                 INSERT INTO jobs (id, status, mode, payload_json, created_at, finished_at)
                 VALUES (?, 'completed', 'txt2img', '{}', ?, ?)
@@ -54,15 +54,15 @@ class GalleryCacheTests(unittest.TestCase):
                     f"2026-01-01T00:{index // 60:02d}:{index % 60:02d}Z",
                 ),
             )
-        db.execute(
+        cache_db.execute(
             """
             INSERT INTO jobs (id, status, mode, payload_json, created_at)
             VALUES ('active', 'running', 'txt2img', '{}', '2026-01-02T00:00:00Z')
             """
         )
         jobs._prune_jobs()
-        self.assertEqual(db.query_one("SELECT COUNT(*) AS n FROM jobs WHERE status = 'completed'")["n"], 500)
-        self.assertIsNotNone(db.query_one("SELECT id FROM jobs WHERE id = 'active'"))
+        self.assertEqual(cache_db.query_one("SELECT COUNT(*) AS n FROM jobs WHERE status = 'completed'")["n"], 500)
+        self.assertIsNotNone(cache_db.query_one("SELECT id FROM jobs WHERE id = 'active'"))
 
     def test_gallery_scan_rebuilds_and_excludes_grids_from_listing(self) -> None:
         root = self.tmp / "gallery"
@@ -78,7 +78,7 @@ class GalleryCacheTests(unittest.TestCase):
             gallery_cache.sync()
             rows = gallery_cache.list_rows(hide_interrupted=False)
         self.assertEqual([row["path"] for row in rows], [str(image_path.resolve())])
-        all_rows = db.query("SELECT path, asset_kind FROM gallery_items ORDER BY path")
+        all_rows = cache_db.query("SELECT path, asset_kind FROM gallery_items ORDER BY path")
         self.assertEqual([(row["path"], row["asset_kind"]) for row in all_rows], [
             (str(grid_path.resolve()), "grid"),
             (str(image_path.resolve()), "image"),
@@ -92,10 +92,10 @@ class GalleryCacheTests(unittest.TestCase):
         with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
             gallery_cache.sync()
             self.assertEqual(len(gallery_cache.list_rows()), 1)
-            db.execute("DROP TABLE gallery_items")
-            db._CONN.close()
-            db._CONN = None
-            db.connect()
+            cache_db.execute("DROP TABLE gallery_items")
+            cache_db._CONN.close()
+            cache_db._CONN = None
+            cache_db.connect()
             self.assertEqual(len(gallery_cache.list_rows()), 1)
             image_path.unlink()
             gallery_cache.sync()
@@ -147,7 +147,7 @@ class GalleryCacheTests(unittest.TestCase):
             )
         )
         ident = gallery_cache.item_id(path)
-        db.execute(
+        cache_db.execute(
             """
             INSERT INTO jobs (id, status, mode, payload_json, created_at)
             VALUES (?, 'completed', 'txt2img', ?, '2026-01-01T00:00:00Z')

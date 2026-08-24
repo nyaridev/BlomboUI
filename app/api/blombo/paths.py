@@ -8,7 +8,7 @@ APP = Path(__file__).resolve().parents[2]
 ROOT = APP.parent
 RUNTIME = ROOT / "runtime"
 USER = ROOT / "user"
-USER_DATA = USER / "user_data"
+DATA = USER / "data"
 WORKFLOWS = APP / "workflows"
 
 COMFY_HOST = os.environ.get("COMFYUI_HOST", "").strip() or "127.0.0.1"
@@ -28,6 +28,18 @@ def get_version() -> str:
 
 
 VERSION = get_version()
+
+
+def user_db_path() -> Path:
+    folder = DATA / "sqlite"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / "blombo.sqlite"
+
+
+def cache_db_path() -> Path:
+    folder = RUNTIME / "data" / "sqlite"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / "cache.sqlite"
 
 
 def launcher_env() -> dict:

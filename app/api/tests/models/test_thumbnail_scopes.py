@@ -13,7 +13,7 @@ from PIL import Image
 
 from blombo import db, issues
 from blombo.gallery import removed
-from blombo.models import model_meta_db, model_thumbs, thumbnail_embed, thumbnail_scopes
+from blombo.models import model_thumbs, thumbnail_embed, thumbnail_scopes
 
 
 def _png(color=(12, 80, 160)) -> bytes:
@@ -31,8 +31,6 @@ class ScopeTests(unittest.TestCase):
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
-            patch.object(model_meta_db, "_CONN", None),
-            patch.object(model_meta_db, "db_path", return_value=self.tmp / "model_meta.sqlite"),
             patch.object(model_thumbs, "THUMBS", thumbs),
             patch.object(removed, "REMOVED", trash),
         ]
@@ -43,9 +41,6 @@ class ScopeTests(unittest.TestCase):
         if db._CONN is not None:
             db._CONN.close()
             db._CONN = None
-        if model_meta_db._CONN is not None:
-            model_meta_db._CONN.close()
-            model_meta_db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -99,7 +94,8 @@ class ScopeTests(unittest.TestCase):
         self.assertNotIn("scopes", tables)
         self.assertNotIn("scope_tags", tables)
         self.assertNotIn("scope_any_tags", tables)
-        self.assertFalse((self.tmp / "model_meta.sqlite").is_file())
+        self.assertNotIn("jobs", tables)
+        self.assertNotIn("gallery_items", tables)
 
     def test_rank_thumb_optional_chips(self) -> None:
         ruby = thumbnail_scopes.create_scope({"name": "Ruby", "anyGroups": [["ruby rose"]]})

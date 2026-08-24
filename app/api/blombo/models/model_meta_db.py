@@ -1,97 +1,13 @@
 from __future__ import annotations
 
 import json
-import sqlite3
-import threading
-from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any
 
-from blombo.paths import USER_DATA
-
-_LOCK = threading.RLock()
-_CONN: sqlite3.Connection | None = None
-T = TypeVar("T")
-
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS model_info (
-    kind TEXT NOT NULL,
-    ident TEXT NOT NULL,
-    types_json TEXT NOT NULL DEFAULT '[]',
-    modified INTEGER NOT NULL DEFAULT 0,
-    prompt TEXT NOT NULL DEFAULT '',
-    negative_prompt TEXT NOT NULL DEFAULT '',
-    notes TEXT NOT NULL DEFAULT '',
-    strength REAL NOT NULL DEFAULT 1.0,
-    slider INTEGER NOT NULL DEFAULT 0,
-    auto_apply INTEGER,
-    apply_at TEXT,
-    PRIMARY KEY (kind, ident)
-);
-CREATE TABLE IF NOT EXISTS thumbnail_index (
-    kind TEXT NOT NULL,
-    ident TEXT NOT NULL,
-    context TEXT NOT NULL,
-    mtime INTEGER NOT NULL DEFAULT 0,
-    tags_json TEXT NOT NULL DEFAULT '[]',
-    PRIMARY KEY (kind, ident, context)
-);
-"""
-
-
-def db_path() -> Path:
-    USER_DATA.mkdir(parents=True, exist_ok=True)
-    return USER_DATA / "model_meta.sqlite"
-
-
-def connect() -> sqlite3.Connection:
-    global _CONN
-    with _LOCK:
-        if _CONN is None:
-            _CONN = sqlite3.connect(db_path(), check_same_thread=False)
-            _CONN.row_factory = sqlite3.Row
-            _CONN.execute("PRAGMA foreign_keys = ON")
-            _CONN.execute("PRAGMA journal_mode=WAL")
-            _CONN.executescript(SCHEMA)
-            columns = {str(row["name"]) for row in _CONN.execute("PRAGMA table_info(model_info)")}
-            if "auto_apply" not in columns:
-                _CONN.execute("ALTER TABLE model_info ADD COLUMN auto_apply INTEGER")
-            if "apply_at" not in columns:
-                _CONN.execute("ALTER TABLE model_info ADD COLUMN apply_at TEXT")
-            _CONN.commit()
-        return _CONN
-
-
-def execute(sql: str, params: tuple | list = ()) -> sqlite3.Cursor:
-    with _LOCK:
-        cursor = connect().execute(sql, params)
-        connect().commit()
-        return cursor
-
-
-def query(sql: str, params: tuple | list = ()) -> list[sqlite3.Row]:
-    with _LOCK:
-        return connect().execute(sql, params).fetchall()
-
-
-def query_one(sql: str, params: tuple | list = ()) -> sqlite3.Row | None:
-    with _LOCK:
-        return connect().execute(sql, params).fetchone()
-
-
-def transaction(callback: Callable[[sqlite3.Connection], T]) -> T:
-    with _LOCK:
-        conn = connect()
-        try:
-            result = callback(conn)
-            conn.commit()
-            return result
-        except Exception:
-            conn.rollback()
-            raise
+from blombo import db
 
 
 def load_info(kind: str) -> dict[str, dict[str, Any]]:
-    rows = query(
+    rows = db.query(
         """
         SELECT ident, types_json, modified, prompt, negative_prompt,
                notes, strength, slider, auto_apply, apply_at
@@ -120,7 +36,7 @@ def load_info(kind: str) -> dict[str, dict[str, Any]]:
 
 
 def replace_info(kind: str, data: dict[str, dict[str, Any]]) -> None:
-    def write(conn: sqlite3.Connection) -> None:
+    def write(conn) -> None:
         conn.execute("DELETE FROM model_info WHERE kind = ?", (kind,))
         for ident, row in data.items():
             conn.execute(
@@ -145,12 +61,12 @@ def replace_info(kind: str, data: dict[str, dict[str, Any]]) -> None:
                 ),
             )
 
-    transaction(write)
+    db.transaction(write)
 
 
 def load_thumb_index() -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
     out: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
-    for row in query(
+    for row in db.query(
         "SELECT kind, ident, context, mtime, tags_json FROM thumbnail_index ORDER BY rowid"
     ):
         try:
@@ -167,7 +83,7 @@ def load_thumb_index() -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
 
 
 def replace_thumb_index(data: dict[str, Any]) -> None:
-    def write(conn: sqlite3.Connection) -> None:
+    def write(conn) -> None:
         conn.execute("DELETE FROM thumbnail_index")
         for kind, idents in data.items():
             if not isinstance(idents, dict):
@@ -193,4 +109,4 @@ def replace_thumb_index(data: dict[str, Any]) -> None:
                         ),
                     )
 
-    transaction(write)
+    db.transaction(write)

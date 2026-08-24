@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import sqlite3
 import sys
 from pathlib import Path
 
@@ -68,9 +69,13 @@ def ensure_dirs() -> None:
     for sub in MODEL_SUBDIRS:
         (models / sub).mkdir(exist_ok=True)
     (USER / "output").mkdir(exist_ok=True)
-    (USER / "user_data").mkdir(exist_ok=True)
+    (USER / "data" / "sqlite").mkdir(parents=True, exist_ok=True)
+    (RUNTIME / "data" / "sqlite").mkdir(parents=True, exist_ok=True)
     (USER / "wildcards").mkdir(exist_ok=True)
     (USER / "autocompletion").mkdir(exist_ok=True)
+    (USER / "gallery_thumbs").mkdir(exist_ok=True)
+    (USER / "model_thumbs").mkdir(exist_ok=True)
+    (USER / "removed").mkdir(exist_ok=True)
 
 
 def resolve() -> dict[str, str | None]:
@@ -154,12 +159,22 @@ def _yaml_model_block(ident: str, root: Path) -> str:
 
 
 def user_model_dirs() -> list[tuple[str, Path]]:
-    file = USER / "user_data" / "user_settings.json"
-    if not file.is_file():
+    path = USER / "data" / "sqlite" / "blombo.sqlite"
+    if not path.is_file():
         return []
     try:
-        data = json.loads(file.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        try:
+            row = conn.execute("SELECT data_json FROM app_settings WHERE id = 1").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return []
+    if not row:
+        return []
+    try:
+        data = json.loads(row[0])
+    except (TypeError, json.JSONDecodeError):
         return []
     raw = data.get("modelDirs") if isinstance(data, dict) else None
     if not isinstance(raw, list):

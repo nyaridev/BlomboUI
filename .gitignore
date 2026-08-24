@@ -15,40 +15,8 @@ node_modules/
 dist/
 .vite/
 
-# user models
-user/models/checkpoints/*
-!user/models/checkpoints/.gitkeep
-user/models/loras/*
-!user/models/loras/.gitkeep
-user/models/vae/*
-!user/models/vae/.gitkeep
-user/models/controlnet/*
-!user/models/controlnet/.gitkeep
-user/models/embeddings/*
-!user/models/embeddings/.gitkeep
-
-# user output, wildcards
-user/output/*
-!user/output/.gitkeep
-
-user/gallery_thumbs/*
-!user/gallery_thumbs/.gitkeep
-user/model_thumbs/*
-!user/model_thumbs/.gitkeep
-user/removed/*
-!user/removed/.gitkeep
-
-user/autocompletion/*
-!user/autocompletion/.gitkeep
-
-user/wildcards/*
-!user/wildcards/.gitkeep
-!user/wildcards/colors.txt
-!user/wildcards/styles.yaml
-
-# user data
-user/user_data/*
-!user/user_data/.gitkeep
+# user
+user/
 
 # logs and editor
 *.log

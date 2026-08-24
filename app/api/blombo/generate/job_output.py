@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from blombo import db, settings
+from blombo import cache_db, settings
 from blombo.gallery import cache as gallery_cache
 from blombo.generate import comfy, pnginfo, templates
 from blombo.paths import comfy_output_root, outputs_root
@@ -458,4 +458,4 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
         return
     values["grid_path"] = dests[0]
     values["grid_paths"] = dests
-    db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))
+    cache_db.execute("UPDATE jobs SET payload_json = ? WHERE id = ?", (json.dumps(values), job_id))

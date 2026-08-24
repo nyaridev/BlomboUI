@@ -1,17 +1,15 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import struct
 import threading
 import time
 from collections import deque
 from pathlib import Path
 
-from blombo import dirs
-from blombo.paths import RUNTIME, models_root
+from blombo import cache_db, dirs
+from blombo.paths import models_root
 
-_CACHE = RUNTIME / "data" / "model-hashes.json"
 _CHUNK = 1024 * 1024
 _MAX_HEADER = 32 * 1024 * 1024
 _V1_START = 0x100000
@@ -247,13 +245,41 @@ def _find_checkpoint(name: str) -> Path | None:
 
 
 def _load() -> dict:
-    try:
-        data = json.loads(_CACHE.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return data if isinstance(data, dict) else {}
+    out: dict = {}
+    for row in cache_db.query(
+        "SELECT path, mtime, size, sha256, autov1, autov2, autov3 FROM model_hashes"
+    ):
+        out[str(row["path"])] = {
+            "mtime": int(row["mtime"]),
+            "size": int(row["size"]),
+            "sha256": str(row["sha256"]),
+            "autov1": str(row["autov1"] or ""),
+            "autov2": str(row["autov2"] or ""),
+            "autov3": str(row["autov3"] or ""),
+        }
+    return out
 
 
 def _save(cache: dict) -> None:
-    _CACHE.parent.mkdir(parents=True, exist_ok=True)
-    _CACHE.write_text(json.dumps(cache), encoding="utf-8")
+    def write(conn) -> None:
+        conn.execute("DELETE FROM model_hashes")
+        for key, raw in cache.items():
+            if not isinstance(raw, dict):
+                continue
+            conn.execute(
+                """
+                INSERT INTO model_hashes (path, mtime, size, sha256, autov1, autov2, autov3)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    str(key),
+                    int(raw.get("mtime") or 0),
+                    int(raw.get("size") or 0),
+                    str(raw.get("sha256") or ""),
+                    str(raw.get("autov1") or ""),
+                    str(raw.get("autov2") or ""),
+                    str(raw.get("autov3") or ""),
+                ),
+            )
+
+    cache_db.transaction(write)

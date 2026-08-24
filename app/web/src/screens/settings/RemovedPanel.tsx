@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { ConfirmDialog } from '@/components/Dialog.tsx'
-import { NumberField } from '@/components/NumberField.tsx'
-import { ThumbnailScopePicker } from '@/components/ThumbnailScopePicker.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { ConfirmDialog } from '@/components/primitives/Dialog.tsx'
+import { NumberField } from '@/components/primitives/NumberField.tsx'
+import { ThumbnailScopePicker } from '@/components/models/ThumbnailScopePicker.tsx'
+import { TilePreview } from '@/components/models/TilePreview.tsx'
 import {
   deleteAllRemoved,
   deleteRemoved,
@@ -13,7 +13,7 @@ import {
   revealRemoved,
   type RemovedItem,
 } from '@/lib/api.ts'
-import { trashThumbView } from '@/lib/thumbView.ts'
+import { trashThumbView } from '@/lib/gallery/thumbView.ts'
 import { formatUnix } from '@/lib/timeDisplay.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'

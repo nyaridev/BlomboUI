@@ -1,9 +1,6 @@
-import { GalleryView } from '@/components/GalleryView.tsx'
-import { PaneSplitter } from '@/components/PaneSplitter.tsx'
-import { ImageStage } from './ImageStage.tsx'
-import { GenerationParams } from './GenerationParams.tsx'
 import type { PromptMatrixSettings } from './GenerationScripts.tsx'
 import { GenerateModels } from './GenerateModels.tsx'
+import { GenerateTabs } from './GenerateTabs.tsx'
 import { PromptStack } from './PromptStack.tsx'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -12,144 +9,24 @@ import {
   getJob,
   getLatestJob,
   interruptJob,
-  jobPreviewUrl,
-  jobGridUrl,
   type Job,
 } from '@/lib/api.ts'
-import { loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, toggleLoraPrompts } from '@/lib/loraTags.ts'
-import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/wildcardTags.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { autoLoraId, nextSeed, usedSeed, useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
+import { autoLoraId, nextSeed, usedSeed, useGenerateStore } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { GENERATE_TABS, orderedGenerateTabs, type GenerateTab } from './tabs.ts'
-
-function idsFromJob(job: Job): string[] {
-  return job.gallery_ids
-}
-
-function selectedLoraPaths(
-  prompt: string,
-  items: { path: string; auto_apply?: boolean | null }[],
-  activeOrder: string[],
-  autoDefault: boolean,
-) {
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const hit of parseLoraHits(prompt)) {
-    const item = items.find((row) => loraNameMatches(hit.name, row.path))
-    if (item && !seen.has(item.path)) {
-      seen.add(item.path)
-      out.push(item.path)
-    }
-  }
-  for (const id of activeOrder) {
-    if (!id.startsWith(autoLoraId(''))) {
-      continue
-    }
-    const path = id.slice(autoLoraId('').length)
-    const item = items.find((row) => row.path === path)
-    if (path && (!item || Boolean(item.auto_apply ?? autoDefault)) && !seen.has(path)) {
-      seen.add(path)
-      out.push(path)
-    }
-  }
-  return out
-}
-
-function selectedWildcardPaths(prompt: string, items: { path: string }[]) {
-  const out: string[] = []
-  const seen = new Set<string>()
-  for (const hit of parseWildcardTags(prompt)) {
-    const item = items.find((row) => wildcardMatches(row, hit.name))
-    if (item && !seen.has(item.path)) {
-      seen.add(item.path)
-      out.push(item.path)
-    }
-  }
-  return out
-}
-
-function promptMatrixLines(raw: unknown): string[] {
-  const values = typeof raw === 'string' ? raw.split(/\r?\n/) : Array.isArray(raw) ? raw : []
-  return values
-    .map((value) => String(value).trim().replace(/,+$/, '').trim())
-    .filter(Boolean)
-}
-
-function etaSeconds(startedAt: string | null, value: number, max: number): number | null {
-  if (!startedAt || value <= 0 || max <= 0) {
-    return null
-  }
-  const elapsed = (Date.now() - Date.parse(startedAt)) / 1000
-  if (!Number.isFinite(elapsed) || elapsed < 0.5) {
-    return null
-  }
-  return Math.max(0, Math.round((elapsed * (max - value)) / value))
-}
-
-function formatDuration(seconds: number): string {
-  if (seconds < 60) {
-    return `${Math.round(seconds * 10) / 10}s`
-  }
-  const m = Math.floor(seconds / 60)
-  const s = Math.round(seconds % 60)
-  return `${m}m ${String(s).padStart(2, '0')}s`
-}
-
-function jobSeconds(job: Job): number | null {
-  if (job.status !== 'completed') {
-    return null
-  }
-  const ms = Number(job.payload.duration_ms)
-  if (Number.isFinite(ms) && ms >= 0) {
-    return ms / 1000
-  }
-  if (job.started_at && job.finished_at) {
-    const elapsed = (Date.parse(job.finished_at) - Date.parse(job.started_at)) / 1000
-    if (Number.isFinite(elapsed) && elapsed >= 0) {
-      return elapsed
-    }
-  }
-  return null
-}
-
-const PARAMS_RATIO = 0.5
-const PARAMS_MIN_REM = 18
-const PARAMS_MAX_RATIO = 0.75
-
-function remPx() {
-  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
-}
-
-function defaultParamsWidth(row: HTMLElement | null) {
-  return row && row.clientWidth > 0 ? row.clientWidth * PARAMS_RATIO : PARAMS_MIN_REM * remPx()
-}
-
-function progressLabel(pct: number, eta: number | null): string {
-  if (pct <= 0) {
-    return 'Starting…'
-  }
-  if (eta == null) {
-    return `${Math.round(pct)}%`
-  }
-  return `${Math.round(pct)}% ETA: ${eta}s`
-}
-
-function tabForSwap(swap: ModelSwap | null) {
-  if (!swap) {
-    return null
-  }
-  if (swap.slot === 'lora') {
-    return 'LoRa'
-  }
-  if (swap.slot === 'wildcard') {
-    return 'Wildcards'
-  }
-  return 'Base Model'
-}
+import {
+  etaSeconds,
+  formatDuration,
+  idsFromJob,
+  jobSeconds,
+  progressLabel,
+  promptMatrixLines,
+  tabForSwap,
+} from './generateHelpers.ts'
 
 export function GenerateScreen() {
   const prompt = useGenerateStore((s) => s.prompt)
@@ -515,19 +392,6 @@ export function GenerateScreen() {
         : formatDuration(seconds)
   const visibleTabs = orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
-  const swapTab = tabForSwap(swapTarget)
-  const loraHits = parseLoraHits(prompt)
-  const wildHits = parseWildcardTags(prompt)
-  const loraFocus =
-    swapTarget?.slot === 'lora' && swapTarget.index >= 0
-      ? loraItems.find((row) => loraNameMatches(loraHits[swapTarget.index]?.name ?? '', row.path))?.path
-      : swapTarget?.slot === 'lora' && swapTarget.auto
-        ? swapTarget.path
-        : undefined
-  const wildFocus =
-    swapTarget?.slot === 'wildcard' && swapTarget.index >= 0
-      ? wildcardItems.find((row) => wildcardMatches(row, wildHits[swapTarget.index]?.name ?? ''))?.path
-      : undefined
   const baseKind = swapTarget?.slot === 'vae' ? 'vae' : 'checkpoints'
   const baseItems = swapTarget?.slot === 'vae' ? vaeItems : checkpoints
   const baseValue =
@@ -587,211 +451,52 @@ export function GenerateScreen() {
         }
       />
 
-      <div
-        className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'flex-1' : ''].join(' ')}
-      >
-        <div className="flex shrink-0 gap-1 px-2">
-          {visibleTabs.map((item) => (
-            <button
-              key={item}
-              type="button"
-              className={[
-                '-mb-px rounded-t-md border px-3 py-1.5 text-sm',
-                shownTab === item
-                  ? 'border-line border-b-panel bg-panel text-ink'
-                  : 'border-transparent text-muted hover:text-ink',
-              ].join(' ')}
-              onClick={() => {
-                setTab(item)
-                if (swapTab && swapTab !== item) {
-                  setSwapTarget(null)
-                }
-              }}
-            >
-              {item}
-            </button>
-          ))}
-        </div>
-        <div
-          className={[
-            'mb-4 rounded-b-md rounded-tr-md border border-line bg-panel p-3',
-            shownTab !== 'Generation' ? 'flex flex-1 flex-col' : '',
-          ].join(' ')}
-        >
-          <div ref={genRowRef} className={shownTab === 'Generation' ? 'flex min-w-0' : 'hidden'}>
-            <div className="min-w-0 shrink-0" style={{ width: paramsWidth ?? `${PARAMS_RATIO * 100}%` }}>
-              <GenerationParams
-                error={error}
-                warning={warning}
-                comfyOk={comfyOk}
-                lastSeed={
-                  [...(job?.gallery ?? [])]
-                    .reverse()
-                    .find((item) => typeof item.seed === 'number')?.seed ??
-                  (typeof payload.seed === 'number' ? payload.seed : null)
-                }
-                onPromptMatrix={setPromptMatrix}
-              />
-            </div>
-            <PaneSplitter
-              value={paramsWidth ?? defaultParamsWidth(genRowRef.current)}
-              onChange={setParamsWidth}
-              onReset={() => setParamsWidth(null)}
-              min={PARAMS_MIN_REM * remPx()}
-              containerRef={genRowRef}
-              maxRatio={PARAMS_MAX_RATIO}
-            />
-            <ImageStage
-              images={starting ? [] : imageIds}
-              gridUrls={
-                !starting && jobId && (job?.grid_count || (job?.has_grid ? 1 : 0))
-                  ? Array.from({ length: job.grid_count || 1 }, (_, i) => jobGridUrl(jobId, i))
-                  : []
-              }
-              gallery={starting ? [] : (job?.gallery ?? [])}
-              busy={busy}
-              previewUrl={
-                !starting && busy && job?.has_preview && jobId
-                  ? jobPreviewUrl(jobId, job.preview_rev ?? job.preview_steps.at(-1) ?? 0)
-                  : null
-              }
-              progressPct={progressPct}
-              progressLabel={currentLabel}
-              jobProgressPct={jobPct}
-              jobProgressLabel={overallLabel}
-              timing={timing}
-            />
-          </div>
-          {shownTab === 'Base Model' ? (
-            <div className="flex-1">
-              <GalleryView
-                kind={baseKind}
-                items={baseItems}
-                value={baseValue}
-                onSelect={(path) => {
-                  if (swapTarget?.slot === 'textEncoder') {
-                    setTextEncoder(path)
-                  } else if (swapTarget?.slot === 'vae') {
-                    setVae(path)
-                  } else {
-                    setCheckpoint(path)
-                  }
-                  setSwapTarget(null)
-                }}
-              />
-            </div>
-          ) : null}
-          {shownTab === 'LoRa' ? (
-            <div className="flex-1">
-              <GalleryView
-                kind="loras"
-                items={loraItems}
-                selected={selectedLoraPaths(prompt, loraItems, activeLoraOrder, loraAutoApplyDefault)}
-                focus={loraFocus}
-                onSelect={(path) => {
-                  const item = loraItems.find((row) => row.path === path)
-                  const instant = Boolean(item?.auto_apply ?? loraAutoApplyDefault)
-                  if (swapTarget?.slot === 'lora' && swapTarget.auto) {
-                    const oldPath = swapTarget.path
-                    if (oldPath === path) {
-                      toggleAutoLora(path)
-                      setSwapTarget(null)
-                      return
-                    }
-                    if (oldPath) {
-                      toggleAutoLora(oldPath)
-                    }
-                    if (instant) {
-                      toggleAutoLora(path)
-                    } else {
-                      const next = toggleLoraPrompts(
-                        prompt,
-                        negativePrompt,
-                        path,
-                        item?.prompt || '',
-                        item?.negative_prompt || '',
-                        item?.strength ?? 1,
-                      )
-                      setPrompt(next.prompt)
-                      setNegativePrompt(next.negativePrompt)
-                    }
-                    setSwapTarget(null)
-                    return
-                  }
-                  if (swapTarget?.slot === 'lora' && swapTarget.index >= 0) {
-                    const hit = loraHits[swapTarget.index]
-                    const old = hit
-                      ? loraItems.find((row) => loraNameMatches(hit.name, row.path))
-                      : null
-                    if (instant) {
-                      const next = removeLoraAt(prompt, negativePrompt, swapTarget.index, old?.prompt || '')
-                      setPrompt(next.prompt)
-                      setNegativePrompt(next.negativePrompt)
-                      toggleAutoLora(path)
-                      setSwapTarget(null)
-                      return
-                    }
-                    const next = replaceLoraAt(
-                      prompt,
-                      negativePrompt,
-                      swapTarget.index,
-                      path,
-                      item?.prompt || '',
-                      item?.negative_prompt || '',
-                      hit?.strength ?? item?.strength ?? 1,
-                      old?.prompt || '',
-                      old?.negative_prompt || '',
-                    )
-                    setPrompt(next.prompt)
-                    setNegativePrompt(next.negativePrompt)
-                    setSwapTarget(null)
-                    return
-                  }
-                  if (instant) {
-                    toggleAutoLora(path)
-                    setSwapTarget(null)
-                    return
-                  }
-                  const next = toggleLoraPrompts(
-                    prompt,
-                    negativePrompt,
-                    path,
-                    item?.prompt || '',
-                    item?.negative_prompt || '',
-                    item?.strength ?? 1,
-                  )
-                  setPrompt(next.prompt)
-                  setNegativePrompt(next.negativePrompt)
-                  setSwapTarget(null)
-                }}
-              />
-            </div>
-          ) : null}
-          {shownTab === 'Wildcards' ? (
-            <div className="flex-1">
-              <GalleryView
-                kind="wildcards"
-                items={wildcardItems}
-                selected={selectedWildcardPaths(prompt, wildcardItems)}
-                focus={wildFocus}
-                onSelect={(path) => {
-                  const item = wildcardItems.find((row) => row.path === path)
-                  if (!item) {
-                    return
-                  }
-                  if (swapTarget?.slot === 'wildcard' && swapTarget.index >= 0) {
-                    setPrompt(replaceWildcardAt(prompt, swapTarget.index, item))
-                    setSwapTarget(null)
-                    return
-                  }
-                  setPrompt(toggleWildcard(prompt, item))
-                  setSwapTarget(null)
-                }}
-              />
-            </div>
-          ) : null}
-        </div>
-      </div>
+      <GenerateTabs
+        shownTab={shownTab}
+        visibleTabs={visibleTabs}
+        onTab={setTab}
+        swapTab={tabForSwap(swapTarget)}
+        swapTarget={swapTarget}
+        onSwapTarget={setSwapTarget}
+        genRowRef={genRowRef}
+        paramsWidth={paramsWidth}
+        onParamsWidth={setParamsWidth}
+        error={error}
+        warning={warning}
+        comfyOk={comfyOk}
+        lastSeed={
+          [...(job?.gallery ?? [])]
+            .reverse()
+            .find((item) => typeof item.seed === 'number')?.seed ??
+          (typeof payload.seed === 'number' ? payload.seed : null)
+        }
+        onPromptMatrix={setPromptMatrix}
+        starting={starting}
+        imageIds={imageIds}
+        jobId={jobId}
+        job={job}
+        busy={busy}
+        progressPct={progressPct}
+        currentLabel={currentLabel}
+        jobPct={jobPct}
+        overallLabel={overallLabel}
+        timing={timing}
+        baseKind={baseKind}
+        baseItems={baseItems}
+        baseValue={baseValue}
+        onCheckpoint={setCheckpoint}
+        onVae={setVae}
+        onTextEncoder={setTextEncoder}
+        prompt={prompt}
+        negativePrompt={negativePrompt}
+        loraItems={loraItems}
+        activeLoraOrder={activeLoraOrder}
+        loraAutoApplyDefault={loraAutoApplyDefault}
+        wildcardItems={wildcardItems}
+        onPrompt={setPrompt}
+        onNegativePrompt={setNegativePrompt}
+        onToggleAutoLora={toggleAutoLora}
+      />
     </div>
   )
 }

@@ -1,1 +1,1 @@
-"""Helpers used by app/launch.py."""
+"""Helpers used by the install launchers."""

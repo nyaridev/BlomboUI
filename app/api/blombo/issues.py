@@ -3,9 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from blombo import models
-from blombo import thumbnail_scopes
-from blombo import wildcards as wildcard_meta
+from blombo.models import models
+from blombo.models import thumbnail_scopes
+from blombo.wildcards import wildcards as wildcard_meta
 
 
 def list_issues() -> list[dict[str, Any]]:
@@ -77,7 +77,7 @@ def _duplicate_scope_names() -> list[dict[str, Any]]:
 
 
 def _wildcard_duplicate_names() -> list[dict[str, Any]]:
-    from blombo.wildcard_files import _leaf_stem, tree
+    from blombo.wildcards.files import _leaf_stem, tree
 
     groups: dict[tuple[str, str], list[str]] = {}
 

@@ -1,5 +1,5 @@
-import { SelectField } from '@/components/SelectField.tsx'
-import { SliderField } from '@/components/SliderField.tsx'
+import { SelectField } from '@/components/primitives/SelectField.tsx'
+import { SliderField } from '@/components/primitives/SliderField.tsx'
 import { IMAGE_FORMATS, useSettingsStore, type ImageFormat } from '@/stores/settingsStore.ts'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
 

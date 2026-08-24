@@ -1,20 +1,17 @@
 from __future__ import annotations
 
-import hashlib
 import json
 import getpass
 import os
 import subprocess
 import sys
 import threading
-from datetime import datetime, timezone
 from pathlib import Path
 
 from blombo import settings
 from blombo.paths import RUNTIME, launcher_env, models_root, outputs_root, wildcards_root
 
 _PICK_LOCK = threading.Lock()
-_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
 _RESERVED = {"local", "output"}
 LOCAL_ID = "local"
 
@@ -152,6 +149,7 @@ def set_output_root(raw: str) -> dict[str, str]:
 
 
 def write_extra_model_paths() -> Path:
+    # Kept separate from launcher.env: the API may write this after settings change.
     dest = RUNTIME / "data" / "extra_model_paths.yaml"
     dest.parent.mkdir(parents=True, exist_ok=True)
     lines = _yaml_block("blomboui", models_root())
@@ -326,46 +324,6 @@ def allowed_file(path: Path) -> bool:
     return False
 
 
-def disk_id(path: Path) -> str:
-    return hashlib.sha1(str(path.resolve()).encode("utf-8")).hexdigest()
-
-
-def disk_path(ident: str) -> Path | None:
-    for folder in extra_dirs("galleryDirs"):
-        root = Path(folder["path"]) if folder["path"] else None
-        if root is None or not root.is_dir():
-            continue
-        for file in _iter_images(root):
-            if disk_id(file) == ident:
-                return file
-    return None
-
-
-def extra_gallery_items(*, hide_interrupted: bool = False) -> list[dict[str, str]]:
-    out: list[dict[str, str]] = []
-    output = outputs_root().resolve()
-    for folder in extra_dirs("galleryDirs"):
-        root = Path(folder["path"]) if folder["path"] else None
-        if root is None or not root.is_dir():
-            continue
-        try:
-            resolved_path = root.resolve()
-        except OSError:
-            continue
-        if resolved_path == output:
-            continue
-        for file in _iter_images(root):
-            if hide_interrupted and any(part.lower() == "interrupted" for part in file.parts):
-                continue
-            try:
-                stamp = file.stat().st_mtime
-            except OSError:
-                continue
-            created = datetime.fromtimestamp(stamp, tz=timezone.utc).isoformat()
-            out.append({"id": f"disk:{disk_id(file)}", "created_at": created})
-    return out
-
-
 def _with_locked(rows: list[dict[str, str]], ident: str, name: str, root: Path) -> list[dict[str, str]]:
     locked = {"id": ident, "name": name, "path": str(root.resolve())}
     extras = [item for item in rows if item["id"] != ident]
@@ -373,14 +331,6 @@ def _with_locked(rows: list[dict[str, str]], ident: str, name: str, root: Path) 
         if item["id"] == ident:
             return [*rows[:index], locked, *rows[index + 1 :]]
     return [locked, *extras]
-
-
-def _iter_images(folder: Path) -> list[Path]:
-    items: list[Path] = []
-    for path in folder.rglob("*"):
-        if path.is_file() and path.suffix.lower() in _IMAGE_EXTS and path.name not in {".gitkeep", "desktop.ini"}:
-            items.append(path)
-    return items
 
 
 def _yaml_ident(name: str) -> str:

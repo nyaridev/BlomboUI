@@ -1,4 +1,4 @@
-import { GalleryView } from '@/components/GalleryView.tsx'
+import { GalleryView } from '@/components/gallery/GalleryView.tsx'
 import { CivitaiBrowser } from './CivitaiBrowser.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'

@@ -1,4 +1,4 @@
-import { SliderField } from '@/components/SliderField.tsx'
+import { SliderField } from '@/components/primitives/SliderField.tsx'
 import { SettingsCard } from './SettingsBlock.tsx'
 import {
   GENERATE_FILTER_VIEWS,

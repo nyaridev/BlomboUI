@@ -1,4 +1,4 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useEffect, useMemo } from 'react'

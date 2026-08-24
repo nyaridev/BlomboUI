@@ -1,4 +1,4 @@
-import { MetaCard } from '@/components/MetaCard.tsx'
+import { MetaCard } from '@/components/models/MetaCard.tsx'
 import type { JobGalleryItem, JobLora } from '@/lib/api.ts'
 
 function stem(path: string) {

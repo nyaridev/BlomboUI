@@ -1,7 +1,7 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { LightboxView } from '@/components/LightboxView.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { LightboxView } from '@/components/models/LightboxView.tsx'
 import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
-import { middleOpen } from '@/lib/openImage.ts'
+import { middleOpen } from '@/lib/gallery/openImage.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 

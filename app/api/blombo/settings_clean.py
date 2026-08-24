@@ -1,0 +1,338 @@
+from __future__ import annotations
+
+from typing import Any
+
+from .settings_values import (
+    _GENERATE_TABS,
+    _GALLERY_DIRS,
+    _GALLERY_SORTS,
+    _HIDEABLE_MAIN_TABS,
+    _IMAGE_FORMATS,
+    _KEYS,
+    _ORDERABLE_MAIN_TABS,
+    GRID_NAME_DEFAULT,
+    GRID_PATH_DEFAULT,
+    IMAGE_NAME_DEFAULT,
+    IMAGE_PATH_DEFAULT,
+    INTERRUPTED_PATH_DEFAULT,
+)
+from .settings_validators import (
+    _autocomplete_lists,
+    _civitai_browse,
+    _civitai_download,
+    _civitai_tab_id,
+    _civitai_tabs,
+    _dir_list,
+    _gallery_fallback,
+    _gallery_local_scopes,
+    _gallery_map,
+    _gallery_mode_map,
+    _gallery_pin_selected,
+    _gallery_query,
+    _gallery_types,
+    _lookup_kinds,
+    _lookup_models,
+    _lookup_scope_ids,
+    _name_template,
+    _order_list,
+    _path_template,
+    _set_resolutions,
+    _unique_names,
+    _unique_allowed,
+    _lora_bound,
+)
+
+def _clean(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    if "batchGrid" in raw:
+        out["batchGrid"] = bool(raw["batchGrid"])
+    if "batchGridMax" in raw:
+        try:
+            out["batchGridMax"] = max(2, min(100, int(raw["batchGridMax"])))
+        except (TypeError, ValueError):
+            pass
+    if "batchGridQuality" in raw:
+        try:
+            out["batchGridQuality"] = max(40, min(95, int(raw["batchGridQuality"])))
+        except (TypeError, ValueError):
+            pass
+    if "batchGridRows" in raw:
+        try:
+            out["batchGridRows"] = max(0, min(25, int(raw["batchGridRows"])))
+        except (TypeError, ValueError):
+            pass
+    if "batchGridFill" in raw:
+        out["batchGridFill"] = bool(raw["batchGridFill"])
+    if "batchGridOnCancel" in raw:
+        out["batchGridOnCancel"] = bool(raw["batchGridOnCancel"])
+    if "saveInterrupted" in raw:
+        out["saveInterrupted"] = bool(raw["saveInterrupted"])
+    if "genPreview" in raw:
+        out["genPreview"] = bool(raw["genPreview"])
+    if "genPreviewEvery" in raw:
+        try:
+            out["genPreviewEvery"] = max(1, min(150, int(raw["genPreviewEvery"])))
+        except (TypeError, ValueError):
+            pass
+    if "genPreviewAfter" in raw:
+        try:
+            out["genPreviewAfter"] = max(1, min(150, int(raw["genPreviewAfter"])))
+        except (TypeError, ValueError):
+            pass
+    if "genPreviewAfterFirst" in raw:
+        out["genPreviewAfterFirst"] = bool(raw["genPreviewAfterFirst"])
+    if "genPreviewLast" in raw:
+        out["genPreviewLast"] = bool(raw["genPreviewLast"])
+    if "interruptedInGrid" in raw:
+        out["interruptedInGrid"] = bool(raw["interruptedInGrid"])
+    if "galleryHideInterrupted" in raw:
+        out["galleryHideInterrupted"] = bool(raw["galleryHideInterrupted"])
+    if "hiddenGenerateTabs" in raw and isinstance(raw["hiddenGenerateTabs"], list):
+        tabs: list[str] = []
+        for item in raw["hiddenGenerateTabs"]:
+            name = "Base Model" if item == "Checkpoints" else "LoRa" if item == "Lora" else str(item)
+            if name and name != "Generation" and name not in tabs:
+                tabs.append(name)
+        out["hiddenGenerateTabs"] = tabs
+    if "hiddenMainTabs" in raw and isinstance(raw["hiddenMainTabs"], list):
+        out["hiddenMainTabs"] = _unique_allowed(raw["hiddenMainTabs"], _HIDEABLE_MAIN_TABS)
+    if "mainTabOrder" in raw:
+        ordered = _order_list(raw["mainTabOrder"], _ORDERABLE_MAIN_TABS)
+        if ordered:
+            out["mainTabOrder"] = ordered
+    if "generateTabOrder" in raw:
+        ordered = _order_list(raw["generateTabOrder"], _GENERATE_TABS, rename={"Checkpoints": "Base Model", "Lora": "LoRa"})
+        if ordered:
+            out["generateTabOrder"] = ordered
+    if "mainTabKeysFollowLayout" in raw:
+        out["mainTabKeysFollowLayout"] = bool(raw["mainTabKeysFollowLayout"])
+    if "generateTabKeysFollowLayout" in raw:
+        out["generateTabKeysFollowLayout"] = bool(raw["generateTabKeysFollowLayout"])
+    if "hiddenModelTypes" in raw and isinstance(raw["hiddenModelTypes"], list):
+        types: list[str] = []
+        for item in raw["hiddenModelTypes"]:
+            name = str(item)
+            if name and name not in types:
+                types.append(name)
+        out["hiddenModelTypes"] = types
+    if "hiddenSamplers" in raw and isinstance(raw["hiddenSamplers"], list):
+        out["hiddenSamplers"] = _unique_names(raw["hiddenSamplers"])
+    if "hiddenSchedulers" in raw and isinstance(raw["hiddenSchedulers"], list):
+        out["hiddenSchedulers"] = _unique_names(raw["hiddenSchedulers"])
+    if "theme" in raw:
+        name = str(raw["theme"])
+        if name == "default":
+            name = "slate"
+        if name in ("darker", "slate", "midnight", "ember", "moss", "light"):
+            out["theme"] = name
+    if "civitaiSite" in raw:
+        name = str(raw["civitaiSite"])
+        if name in ("red", "civitai"):
+            out["civitaiSite"] = name
+    if "civitaiApiKey" in raw and isinstance(raw["civitaiApiKey"], str):
+        out["civitaiApiKey"] = raw["civitaiApiKey"].strip()
+    if "civitaiAutoRetry" in raw and isinstance(raw["civitaiAutoRetry"], bool):
+        out["civitaiAutoRetry"] = raw["civitaiAutoRetry"]
+    if "civitaiAutoRetryCount" in raw:
+        try:
+            out["civitaiAutoRetryCount"] = max(1, min(100, int(raw["civitaiAutoRetryCount"])))
+        except (TypeError, ValueError):
+            pass
+    if "timeDisplay" in raw:
+        name = str(raw["timeDisplay"])
+        if name in ("full", "ampm"):
+            out["timeDisplay"] = name
+    if "setResolutions" in raw and isinstance(raw["setResolutions"], list):
+        sizes = _set_resolutions(raw["setResolutions"])
+        if sizes is not None:
+            out["setResolutions"] = sizes
+    image_path = _path_template(raw.get("imagePath"), IMAGE_PATH_DEFAULT) if "imagePath" in raw else None
+    if image_path:
+        out["imagePath"] = image_path
+    image_name = _name_template(raw.get("imageName"), IMAGE_NAME_DEFAULT) if "imageName" in raw else None
+    if image_name:
+        out["imageName"] = image_name
+    grid_path = _path_template(raw.get("gridPath"), GRID_PATH_DEFAULT) if "gridPath" in raw else None
+    if grid_path:
+        out["gridPath"] = grid_path
+    grid_name = _name_template(raw.get("gridName"), GRID_NAME_DEFAULT) if "gridName" in raw else None
+    if grid_name:
+        out["gridName"] = grid_name
+    interrupted_path = (
+        _path_template(raw.get("interruptedPath"), INTERRUPTED_PATH_DEFAULT) if "interruptedPath" in raw else None
+    )
+    if interrupted_path:
+        out["interruptedPath"] = interrupted_path
+    if "imageFormat" in raw:
+        name = str(raw["imageFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["imageFormat"] = name
+    if "gridFormat" in raw:
+        name = str(raw["gridFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["gridFormat"] = name
+    if "imageQuality" in raw:
+        try:
+            out["imageQuality"] = max(1, min(100, int(raw["imageQuality"])))
+        except (TypeError, ValueError):
+            pass
+    if "saveLargeAsJpeg" in raw:
+        out["saveLargeAsJpeg"] = bool(raw["saveLargeAsJpeg"])
+    if "largeJpegMaxKb" in raw:
+        try:
+            out["largeJpegMaxKb"] = max(256, min(65536, int(raw["largeJpegMaxKb"])))
+        except (TypeError, ValueError):
+            pass
+    if "gallerySortKey" in raw:
+        mapped = _gallery_map(raw["gallerySortKey"], _GALLERY_SORTS, "name")
+        if mapped:
+            out["gallerySortKey"] = mapped
+    if "gallerySortDir" in raw:
+        mapped = _gallery_map(raw["gallerySortDir"], _GALLERY_DIRS, "asc")
+        if mapped:
+            out["gallerySortDir"] = mapped
+    if "galleryTileScale" in raw:
+        try:
+            out["galleryTileScale"] = round(min(2.0, max(0.5, float(raw["galleryTileScale"]))), 1)
+        except (TypeError, ValueError):
+            pass
+    if "galleryParentOnUnselect" in raw:
+        out["galleryParentOnUnselect"] = bool(raw["galleryParentOnUnselect"])
+    if "promptWeightStep" in raw:
+        try:
+            step = float(raw["promptWeightStep"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if step == step and step not in (float("inf"), float("-inf")):
+                out["promptWeightStep"] = round(min(1.0, max(0.01, step)), 2)
+    for key in ("loraStrengthMin", "loraStrengthMax", "loraSliderMin", "loraSliderMax"):
+        if key not in raw:
+            continue
+        bound = _lora_bound(raw[key])
+        if bound is not None:
+            out[key] = bound
+    if "loraAutoApply" in raw and isinstance(raw["loraAutoApply"], bool):
+        out["loraAutoApply"] = raw["loraAutoApply"]
+    if "loraApplyAt" in raw:
+        value = str(raw["loraApplyAt"]).lower()
+        if value in {"start", "end"}:
+            out["loraApplyAt"] = value
+    for key in ("modelDirs", "wildcardDirs", "galleryDirs"):
+        if key in raw:
+            rows = _dir_list(raw[key])
+            if rows is not None:
+                out[key] = rows
+    if "civitaiDownload" in raw and isinstance(raw["civitaiDownload"], dict):
+        out["civitaiDownload"] = _civitai_download(raw["civitaiDownload"])
+    if "removedAfterHours" in raw:
+        try:
+            out["removedAfterHours"] = max(1, min(8760, int(raw["removedAfterHours"])))
+        except (TypeError, ValueError):
+            pass
+    if "removedMaxGb" in raw:
+        try:
+            out["removedMaxGb"] = max(1, min(10000, int(raw["removedMaxGb"])))
+        except (TypeError, ValueError):
+            pass
+    if "autocompleteEnabled" in raw:
+        out["autocompleteEnabled"] = bool(raw["autocompleteEnabled"])
+    if "autocompleteMode" in raw:
+        mode = str(raw["autocompleteMode"])
+        out["autocompleteMode"] = mode if mode in ("exclude", "include") else "exclude"
+    if "autocompleteTypes" in raw and isinstance(raw["autocompleteTypes"], list):
+        out["autocompleteTypes"] = _unique_names(raw["autocompleteTypes"])
+    if "wildcardCompleteEnabled" in raw:
+        out["wildcardCompleteEnabled"] = bool(raw["wildcardCompleteEnabled"])
+    if "loraCompleteEnabled" in raw:
+        out["loraCompleteEnabled"] = bool(raw["loraCompleteEnabled"])
+    if "loraTriggerCompleteEnabled" in raw:
+        out["loraTriggerCompleteEnabled"] = bool(raw["loraTriggerCompleteEnabled"])
+    if "wildcardCompleteThumbs" in raw:
+        out["wildcardCompleteThumbs"] = bool(raw["wildcardCompleteThumbs"])
+    if "loraCompleteThumbs" in raw:
+        out["loraCompleteThumbs"] = bool(raw["loraCompleteThumbs"])
+    if "autocompleteThumbScale" in raw:
+        try:
+            out["autocompleteThumbScale"] = round(min(2.0, max(0.5, float(raw["autocompleteThumbScale"]))), 1)
+        except (TypeError, ValueError):
+            pass
+    if "frequentTagsEnabled" in raw:
+        out["frequentTagsEnabled"] = bool(raw["frequentTagsEnabled"])
+    if "autocompleteLists" in raw:
+        lists = _autocomplete_lists(raw["autocompleteLists"])
+        if lists is not None:
+            out["autocompleteLists"] = lists
+    if "galleryThumbFallback" in raw:
+        out["galleryThumbFallback"] = _gallery_fallback(raw["galleryThumbFallback"])
+    if "thumbSaveTo" in raw:
+        name = str(raw["thumbSaveTo"])
+        out["thumbSaveTo"] = name if name in ("active", "global") else "global"
+    if "thumbDisplayMode" in raw:
+        name = str(raw["thumbDisplayMode"])
+        out["thumbDisplayMode"] = name if name in ("likely", "exact") else "likely"
+    if "thumbScopeIds" in raw and isinstance(raw["thumbScopeIds"], list):
+        from blombo.models.thumbnail_scopes import ordered_ids
+
+        out["thumbScopeIds"] = ordered_ids(raw["thumbScopeIds"])
+    if "thumbScopeOptionalIds" in raw and isinstance(raw["thumbScopeOptionalIds"], list):
+        from blombo.models.thumbnail_scopes import ordered_ids
+
+        out["thumbScopeOptionalIds"] = ordered_ids(raw["thumbScopeOptionalIds"])
+    if "thumbScopeAuto" in raw:
+        out["thumbScopeAuto"] = bool(raw["thumbScopeAuto"])
+    if "trashThumbFallback" in raw:
+        out["trashThumbFallback"] = bool(raw["trashThumbFallback"])
+    if "scopeGroups" in raw and isinstance(raw["scopeGroups"], list):
+        out["scopeGroups"] = _unique_names(raw["scopeGroups"])
+    if "scopeOrder" in raw and isinstance(raw["scopeOrder"], list):
+        from blombo.models.thumbnail_scopes import ordered_ids
+
+        out["scopeOrder"] = ordered_ids(raw["scopeOrder"])
+    if "lookupScopeIds" in raw and isinstance(raw["lookupScopeIds"], list):
+        out["lookupScopeIds"] = _lookup_scope_ids(raw["lookupScopeIds"])
+    if "lookupScopeOptionalIds" in raw and isinstance(raw["lookupScopeOptionalIds"], list):
+        from blombo.models.thumbnail_scopes import ordered_ids
+
+        out["lookupScopeOptionalIds"] = ordered_ids(raw["lookupScopeOptionalIds"])
+    if "lookupKinds" in raw and isinstance(raw["lookupKinds"], list):
+        out["lookupKinds"] = _lookup_kinds(raw["lookupKinds"])
+    if "lookupModels" in raw and isinstance(raw["lookupModels"], list):
+        out["lookupModels"] = _lookup_models(raw["lookupModels"])
+    if "scopeSearch" in raw and isinstance(raw["scopeSearch"], str):
+        out["scopeSearch"] = raw["scopeSearch"][:200]
+    if "modelsTab" in raw and raw["modelsTab"] in ("Local", "Download", "CivitAI"):
+        out["modelsTab"] = raw["modelsTab"]
+    if "modelsKind" in raw and raw["modelsKind"] in ("all", "checkpoints", "loras", "wildcards"):
+        out["modelsKind"] = raw["modelsKind"]
+    if "civitaiBrowse" in raw and isinstance(raw["civitaiBrowse"], dict):
+        out["civitaiBrowse"] = _civitai_browse(raw["civitaiBrowse"])
+    if "civitaiTabs" in raw:
+        out["civitaiTabs"] = _civitai_tabs(raw["civitaiTabs"])
+    if "civitaiTabId" in raw:
+        out["civitaiTabId"] = _civitai_tab_id(raw["civitaiTabId"], out.get("civitaiTabs"))
+    if "galleryTypes" in raw and isinstance(raw["galleryTypes"], dict):
+        out["galleryTypes"] = _gallery_types(raw["galleryTypes"])
+    if "galleryQuery" in raw and isinstance(raw["galleryQuery"], dict):
+        out["galleryQuery"] = _gallery_query(raw["galleryQuery"])
+    if "galleryLocalScopes" in raw and isinstance(raw["galleryLocalScopes"], dict):
+        out["galleryLocalScopes"] = _gallery_local_scopes(raw["galleryLocalScopes"])
+    if "galleryScopeMode" in raw and isinstance(raw["galleryScopeMode"], dict):
+        out["galleryScopeMode"] = _gallery_mode_map(raw["galleryScopeMode"])
+    if "galleryFilterMode" in raw and isinstance(raw["galleryFilterMode"], dict):
+        out["galleryFilterMode"] = _gallery_mode_map(raw["galleryFilterMode"])
+    if "galleryFilterShareModels" in raw:
+        out["galleryFilterShareModels"] = bool(raw["galleryFilterShareModels"])
+    if "galleryPinSelected" in raw and isinstance(raw["galleryPinSelected"], dict):
+        out["galleryPinSelected"] = _gallery_pin_selected(raw["galleryPinSelected"])
+    ids = out.get("lookupScopeIds")
+    optional = out.get("lookupScopeOptionalIds")
+    if isinstance(ids, list) and isinstance(optional, list):
+        out["lookupScopeOptionalIds"] = [item for item in optional if item in ids]
+    return {key: out[key] for key in _KEYS if key in out}

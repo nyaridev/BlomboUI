@@ -1,4 +1,4 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 
 function fileName(path: string | null) {
   if (!path) {

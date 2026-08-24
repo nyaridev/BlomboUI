@@ -1,6 +1,6 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { ChipSelect } from '@/components/ChipSelect.tsx'
-import { SliderField } from '@/components/SliderField.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { ChipSelect } from '@/components/primitives/ChipSelect.tsx'
+import { SliderField } from '@/components/primitives/SliderField.tsx'
 import { downloadAutocompleteCsv, getAutocompleteCsv, openAutocompleteFolder, type AutocompleteCsv } from '@/lib/api.ts'
 import { filterTypeSections, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import {

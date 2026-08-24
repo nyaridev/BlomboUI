@@ -1,4 +1,4 @@
-import { ResizeGrip } from '@/components/ResizeGrip.tsx'
+import { ResizeGrip } from '@/components/chrome/ResizeGrip.tsx'
 import { PromptField } from '@/screens/generate/PromptSuggest.tsx'
 import { useLayoutEffect, useRef, useState } from 'react'
 

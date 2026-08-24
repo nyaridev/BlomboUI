@@ -1,5 +1,5 @@
-import { ChipList } from '@/components/ChipList.tsx'
-import { GLOBAL_SCOPE } from '@/lib/thumbView.ts'
+import { ChipList } from '@/components/primitives/ChipList.tsx'
+import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 export function ScopeFilter({

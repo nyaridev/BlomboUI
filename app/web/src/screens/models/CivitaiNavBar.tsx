@@ -1,5 +1,5 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import type { CivitaiTab } from '@/lib/civitaiVersion.ts'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import type { CivitaiTab } from '@/lib/civitai/version.ts'
 
 function tabClass(active: boolean) {
   return [

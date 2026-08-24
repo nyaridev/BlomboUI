@@ -1,5 +1,5 @@
 import { type ThumbScope } from '@/lib/api.ts'
-import { GLOBAL_SCOPE } from '@/lib/thumbView.ts'
+import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
 
 export const UNGROUPED = 'Ungrouped'
 

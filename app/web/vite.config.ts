@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig } from 'vite'
 
 const API = 'http://127.0.0.1:4173'
+const viteHotReload = process.env.BLOMBO_HOT_RELOAD_VITE !== '0'
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -16,6 +17,8 @@ export default defineConfig({
     host: '127.0.0.1',
     port: 5173,
     strictPort: true,
+    hmr: viteHotReload,
+    watch: viteHotReload ? {} : null,
     proxy: {
       '/api': API,
     },

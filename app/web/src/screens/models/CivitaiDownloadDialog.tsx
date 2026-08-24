@@ -1,15 +1,15 @@
-import { Dialog } from '@/components/Dialog.tsx'
+import { Dialog } from '@/components/primitives/Dialog.tsx'
 import {
   downloadCivitaiModel,
   type CivitaiModelDetail,
   type CivitaiModelFile,
   type CivitaiModelVersionDetail,
 } from '@/lib/api.ts'
-import { authorAlias, authorAliasConflict } from '@/lib/civitaiDownload.ts'
-import { isCivitaiFileDownloaded } from '@/lib/civitaiDownloaded.ts'
-import { loadCivitaiPage, peekCivitaiPage } from '@/lib/civitaiPageCache.ts'
-import { pickVersionId } from '@/lib/civitaiVersion.ts'
-import { SelectField } from '@/components/SelectField.tsx'
+import { authorAlias, authorAliasConflict } from '@/lib/civitai/download.ts'
+import { isCivitaiFileDownloaded } from '@/lib/civitai/downloaded.ts'
+import { loadCivitaiPage, peekCivitaiPage } from '@/lib/civitai/pageCache.ts'
+import { pickVersionId } from '@/lib/civitai/version.ts'
+import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { toast } from '@/stores/toastStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'

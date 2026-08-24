@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 APP = Path(__file__).resolve().parents[2]
@@ -10,8 +11,11 @@ USER = ROOT / "user"
 USER_DATA = USER / "user_data"
 WORKFLOWS = APP / "workflows"
 
-COMFY_HOST = "127.0.0.1"
-COMFY_PORT = 8188
+COMFY_HOST = os.environ.get("COMFYUI_HOST", "").strip() or "127.0.0.1"
+try:
+    COMFY_PORT = int(os.environ.get("COMFYUI_PORT", "").strip() or "8188")
+except ValueError:
+    COMFY_PORT = 8188
 
 
 def get_version() -> str:
@@ -76,4 +80,11 @@ def wildcards_root() -> Path:
 
 
 def comfy_base() -> str:
-    return f"http://{COMFY_HOST}:{COMFY_PORT}"
+    env = launcher_env()
+    host = os.environ.get("COMFYUI_HOST", "").strip() or str(env.get("comfyui.host") or "") or COMFY_HOST
+    raw_port = os.environ.get("COMFYUI_PORT", "").strip() or str(env.get("comfyui.port") or "")
+    try:
+        port = int(raw_port) if raw_port else COMFY_PORT
+    except ValueError:
+        port = COMFY_PORT
+    return f"http://{host}:{port}"

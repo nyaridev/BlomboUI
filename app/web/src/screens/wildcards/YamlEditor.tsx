@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { YamlNode } from '@/lib/api.ts'
-import { ConfirmDialog } from '@/components/Dialog.tsx'
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { ConfirmDialog } from '@/components/primitives/Dialog.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { LineList } from './LineList.tsx'
 
 function uniqueKey(map: Record<string, unknown>, base: string) {

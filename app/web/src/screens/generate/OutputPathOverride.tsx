@@ -1,4 +1,4 @@
-import { ExpandSection } from '@/components/ExpandSection.tsx'
+import { ExpandSection } from '@/components/primitives/ExpandSection.tsx'
 import { previewPath } from '@/screens/settings/SavingPanel.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { Link } from 'react-router-dom'

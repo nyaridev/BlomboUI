@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { getModels, refreshModels, type ModelEntry, type ModelLists } from '@/lib/api.ts'
-import { thumbView } from '@/lib/thumbView.ts'
+import { thumbView } from '@/lib/gallery/thumbView.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { toast, toastIssues } from '@/stores/toastStore.ts'
 

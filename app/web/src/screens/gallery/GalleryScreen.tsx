@@ -1,7 +1,7 @@
-import { LightboxView } from '@/components/LightboxView.tsx'
+import { LightboxView } from '@/components/models/LightboxView.tsx'
 import { galleryItemImageUrl, galleryItemThumbUrl, listGalleryItems } from '@/lib/api.ts'
-import { middleOpen } from '@/lib/openImage.ts'
-import { useVisible } from '@/lib/visible.ts'
+import { middleOpen } from '@/lib/gallery/openImage.ts'
+import { useVisible } from '@/lib/gallery/visible.ts'
 import { useEffect, useState, type MouseEvent } from 'react'
 
 function GalleryThumb({

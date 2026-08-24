@@ -1,16 +1,16 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { ChipSelect } from '@/components/ChipSelect.tsx'
-import { ConfirmDialog } from '@/components/Dialog.tsx'
-import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
-import { LightboxView } from '@/components/LightboxView.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { ChipSelect } from '@/components/primitives/ChipSelect.tsx'
+import { ConfirmDialog } from '@/components/primitives/Dialog.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/chrome/ContextMenu.tsx'
+import { LightboxView } from '@/components/models/LightboxView.tsx'
+import { TilePreview } from '@/components/models/TilePreview.tsx'
 import {
   deleteModelThumb,
   getScopeThumbs,
   modelThumbUrl,
   type ScopeThumb,
 } from '@/lib/api.ts'
-import { GLOBAL_SCOPE } from '@/lib/thumbView.ts'
+import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
 import { modelLabel, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbnailScopeStore } from '@/stores/thumbnailScopeStore.ts'

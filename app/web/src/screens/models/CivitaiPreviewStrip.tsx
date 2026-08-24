@@ -1,6 +1,6 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { LightboxView } from '@/components/LightboxView.tsx'
-import { middleOpen } from '@/lib/openImage.ts'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { LightboxView } from '@/components/models/LightboxView.tsx'
+import { middleOpen } from '@/lib/gallery/openImage.ts'
 import type { CivitaiModelImage } from '@/lib/api.ts'
 import { useRef, useState } from 'react'
 

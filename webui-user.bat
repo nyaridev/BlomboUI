@@ -1,36 +1,35 @@
 @echo off
-:: BlomboUI user settings.
-:: Edit this file, then double-click it to start.
-:: Do not edit webui.bat unless you are changing how the app launches.
 
-cd /D "%~dp0"
+:: -----------------------------------------------------------------------------
+:: Optional overrides
+:: -----------------------------------------------------------------------------
 
-:: --- Python ----------------------------------------------------------------
-:: Leave PYTHON unset to use the bundled embed (runtime\python_embeded).
-:: First launch downloads it automatically (~12 MB). That is BlomboUI's
-:: Python only — ComfyUI has its own under runtime\comfy\python_embeded.
-:: set PYTHON="C:\Users\nari\AppData\Local\Programs\Python\Python313\python.exe"
+:: set PYTHON=
 :: set GIT=
 :: set VENV_DIR=
-
-:: --- ComfyUI ---------------------------------------------------------------
-:: Bundled ComfyUI is runtime\comfy\ComfyUI after install\install-comfyui.bat.
-:: Point this at an existing install instead if you already have one.
-:: The app starts ComfyUI as an API backend (no node editor in the browser).
-:: Double-click comfyui.bat only if you want Comfy's graph UI.
-:: set COMFYUI_PATH=B:\AI\Diffusion\Interfaces\ComfyUI
-
-:: --- Paths -----------------------------------------------------------------
-:: Defaults are .\user\models, .\user\output, and .\user\wildcards.
-:: Override here, or change later in app Settings.
-:: set MODELS_ROOT=B:\AI\Diffusion\Models
+:: set COMFYUI_PATH=
+:: set MODELS_ROOT=
 :: set OUTPUTS_ROOT=
 :: set WILDCARDS_ROOT=
 
-:: --- Launch ----------------------------------------------------------------
-:: Extra args passed to app\launch.py
-set COMMANDLINE_ARGS=
+set COMMANDLINE_ARGS=--uv --hot_reload_vite --hot_reload_python
 
-:: comfyui.bat loads this file for COMFYUI_PATH / MODELS_ROOT, then returns.
+:: --uv -> use uv for the project environment and backend dependencies.
+:: --comfyui-window -> open ComfyUI in a separate console.
+:: --port N -> BlomboUI UI port (default 5173).
+
+:: --dev_debug -> show ComfyUI setup and startup logs in this console.
+:: --api-pings -> show backend access logs (status polls and other API hits).
+:: --hot_reload_vite -> reload the frontend when UI files change.
+:: --hot_reload_python -> reload the backend when Python files change.
+
+set COMFYUI_ARGS=
+
+:: Extra arguments forwarded to ComfyUI (main.py).
+
+:: -----------------------------------------------------------------------------
+:: Launch
+:: -----------------------------------------------------------------------------
+
 if defined BLOMBO_LOAD_SETTINGS_ONLY exit /b 0
-call webui.bat
+call "%~dp0install\webui.bat"

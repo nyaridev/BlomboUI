@@ -6,7 +6,7 @@ import {
   updateThumbScope,
   type ThumbScope,
 } from '@/lib/api.ts'
-import { contextKey, galleryThumbView, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/thumbView.ts'
+import { contextKey, galleryThumbView, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/gallery/thumbView.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'

@@ -1,4 +1,4 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { getFrequentPromptTags, type FrequentPromptTag } from '@/lib/api.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'

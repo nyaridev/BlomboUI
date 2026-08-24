@@ -1,6 +1,6 @@
 import { freeComfy, getComfyStats, type ComfyStats } from '@/lib/api.ts'
 import { toast } from '@/stores/toastStore.ts'
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { useEffect, useState } from 'react'
 
 function gb(bytes: number) {

@@ -1,5 +1,5 @@
-import { ResizableTextarea } from '@/components/ResizableTextarea.tsx'
-import { SelectField } from '@/components/SelectField.tsx'
+import { ResizableTextarea } from '@/components/primitives/ResizableTextarea.tsx'
+import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { useState } from 'react'
 
 const SCRIPTS = [

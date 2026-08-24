@@ -1,4 +1,4 @@
-import { ChipSelect } from '@/components/ChipSelect.tsx'
+import { ChipSelect } from '@/components/primitives/ChipSelect.tsx'
 import { HIDEABLE_MAIN_TABS, ORDERABLE_MAIN_TABS, type HideableMainTab, type OrderableMainTab } from '@/app/appTabs.ts'
 import { GENERATE_TABS, HIDEABLE_GENERATE_TABS, type GenerateTab } from '@/screens/generate/tabs.ts'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'

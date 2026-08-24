@@ -1,5 +1,5 @@
-import { SelectField } from '@/components/SelectField.tsx'
-import { ChipInput } from '@/components/ChipInput.tsx'
+import { SelectField } from '@/components/primitives/SelectField.tsx'
+import { ChipInput } from '@/components/primitives/ChipInput.tsx'
 import { SettingsCard } from './SettingsBlock.tsx'
 import {
   useSettingsStore,

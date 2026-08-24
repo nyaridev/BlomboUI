@@ -1,5 +1,5 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { usePromptWeightKey } from '@/lib/promptWeight.ts'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { usePromptWeightKey } from '@/lib/prompt/weight.ts'
 import { useLayoutEffect, useRef, useState } from 'react'
 
 function GrowField({ value, onChange, inset }: { value: string; onChange: (value: string) => void; inset?: boolean }) {

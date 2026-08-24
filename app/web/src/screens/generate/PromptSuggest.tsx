@@ -1,8 +1,8 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { TilePreview } from '@/components/models/TilePreview.tsx'
 import { getPromptTagUsage, suggestPromptTags, type FrequentPromptTag, type ModelEntry, type PromptTagHit } from '@/lib/api.ts'
-import { modelThumbSrc } from '@/lib/thumbView.ts'
-import { appendPromptChunk } from '@/lib/loraTags.ts'
+import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
+import { appendPromptChunk } from '@/lib/prompt/loraTags.ts'
 import {
   applyTagUsage,
   caretBox,
@@ -14,8 +14,8 @@ import {
   tokenAt,
   type PromptToken,
   type SuggestHit,
-} from '@/lib/promptComplete.ts'
-import { usePromptWeightKey } from '@/lib/promptWeight.ts'
+} from '@/lib/prompt/complete.ts'
+import { usePromptWeightKey } from '@/lib/prompt/weight.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { autocompleteApplies, useSettingsStore } from '@/stores/settingsStore.ts'

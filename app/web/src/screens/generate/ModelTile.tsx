@@ -1,5 +1,5 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { TilePreview, TILE_GLOW } from '@/components/TilePreview.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { TilePreview, TILE_GLOW } from '@/components/models/TilePreview.tsx'
 import { modelTileSpec, type ModelTileStyle } from './modelLayouts.ts'
 import type { DragEvent, ReactNode } from 'react'
 

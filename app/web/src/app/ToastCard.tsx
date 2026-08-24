@@ -1,4 +1,4 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { type ToastTone } from '@/stores/toastStore.ts'
 
 const TONE: Record<ToastTone, { bar: string; edge: string }> = {

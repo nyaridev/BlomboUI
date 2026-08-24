@@ -1,6 +1,6 @@
 import { useRef, useState, type DragEvent, type MouseEvent } from 'react'
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/chrome/ContextMenu.tsx'
 import type { WildcardTreeNode } from '@/lib/api.ts'
 
 function parentPath(path: string) {

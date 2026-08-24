@@ -10,7 +10,7 @@ import {
   type CivitaiVersion,
   type ModelLists,
 } from '@/lib/api.ts'
-import { civitaiSaveThumbView } from '@/lib/thumbView.ts'
+import { civitaiSaveThumbView } from '@/lib/gallery/thumbView.ts'
 import { SAMPLERS, SCHEDULERS } from '@/screens/generate/resolutions.ts'
 import { PARAM_KEYS, pickParams, useGenerateStore } from '@/stores/generateStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'

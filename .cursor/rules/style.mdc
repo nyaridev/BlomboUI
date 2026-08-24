@@ -1,0 +1,14 @@
+---
+description: Preserve BlomboUI's existing visual language and control recipes.
+alwaysApply: true
+---
+
+# Existing style only
+
+- Theme colors and theme variables live in `app/web/src/styles/theme.css`. Do not add new hex or RGB colors in components.
+- Control CSS lives in `app/web/src/styles/controls.css`, including `.icon-btn`, `.field-select`, `.select-menu`, `.slider`, `.check`, `.radio`, `.radio-card`, and `.number-field`.
+- Keep layout styling in Tailwind and use the existing `bg-*`, `text-*`, and `border-*` theme names.
+- Do not add CSS files, UI kits, or a new visual recipe for a one-off control.
+- Before adding a control, copy the closest live recipe from `app/web/src/screens/settings/PrimitivesPanel.tsx`.
+- Do not restyle an existing primitive to “improve” it. If a genuinely new look is required, add the token or shared class first and catalog the resulting control in `PrimitivesPanel.tsx`.
+- Keep buttons as native elements with existing class recipes; do not introduce a generic Button wrapper.

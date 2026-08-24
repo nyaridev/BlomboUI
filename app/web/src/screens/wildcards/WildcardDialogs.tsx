@@ -1,10 +1,5 @@
-import { useLayoutEffect, useRef } from 'react'
-import { Dialog } from '@/components/Dialog.tsx'
-
-const INPUT =
-  'mt-2 w-full rounded border bg-field px-2 py-1.5 text-sm text-ink outline-none placeholder:text-muted'
-const GHOST = 'rounded px-2.5 py-1 text-xs text-muted hover:bg-line hover:text-ink disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted'
-const PRIMARY = 'rounded bg-accent px-2.5 py-1 text-xs text-ink disabled:opacity-40'
+import { useRef } from 'react'
+import { NameDialog } from '@/components/primitives/NameDialog.tsx'
 const FILE_EXT = /\.(txt|ya?ml)$/i
 const OK_EXT = new Set(['.txt', '.yaml', '.yml'])
 
@@ -72,32 +67,21 @@ export function WildcardCreateDialog({
   const filled = Boolean(name.trim()) && !busy
   const blocked = Boolean(clash)
   return (
-    <Dialog onClose={onClose}>
-      <p className="text-sm text-ink">New</p>
-      <p className="mt-1.5 text-xs text-muted">Created in {folder || 'Local'}.</p>
-      <input
-        className={[INPUT, clash ? 'border-red focus:border-red' : 'border-line focus:border-accent'].join(' ')}
-        value={name}
-        onChange={(event) => onName(event.target.value)}
-        placeholder="name"
-        autoFocus
-      />
-      {clash ? <p className="mt-1.5 text-xs text-red">{clash}</p> : null}
-      <div className="mt-3 flex justify-end gap-2">
-        <button type="button" className={GHOST} onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className={GHOST} disabled={!filled || blocked} onClick={onCreateFolder}>
-          Folder
-        </button>
-        <button type="button" className={GHOST} disabled={!filled || blocked} onClick={() => onCreateFile('.txt')}>
-          .txt
-        </button>
-        <button type="button" className={PRIMARY} disabled={!filled || blocked} onClick={() => onCreateFile('.yaml')}>
-          .yaml
-        </button>
-      </div>
-    </Dialog>
+    <NameDialog
+      title="New"
+      description={<p className="mt-1.5 text-xs text-muted">Created in {folder || 'Local'}.</p>}
+      name={name}
+      issue={clash}
+      busy={busy}
+      onName={onName}
+      onClose={onClose}
+      actions={[
+        { label: 'Cancel', onClick: onClose },
+        { label: 'Folder', disabled: !filled || blocked, onClick: onCreateFolder },
+        { label: '.txt', disabled: !filled || blocked, onClick: () => onCreateFile('.txt') },
+        { label: '.yaml', kind: 'primary', disabled: !filled || blocked, onClick: () => onCreateFile('.yaml') },
+      ]}
+    />
   )
 }
 
@@ -116,52 +100,24 @@ export function WildcardRenameDialog({
   onClose: () => void
   onRename: () => void
 }) {
-  const input = useRef<HTMLInputElement>(null)
   const original = useRef(name).current
   const issue = renameError(name, original, taken)
   const canSave = Boolean(name.trim()) && !issue && !busy
 
-  useLayoutEffect(() => {
-    const el = input.current
-    if (!el) {
-      return
-    }
-    el.focus()
-    const cut = el.value.lastIndexOf('.')
-    if (cut > 0 && FILE_EXT.test(el.value.slice(cut))) {
-      el.setSelectionRange(0, cut)
-    } else {
-      el.select()
-    }
-  }, [])
-
   return (
-    <Dialog onClose={onClose}>
-      <p className="text-sm text-ink">Rename</p>
-      <input
-        ref={input}
-        className={[INPUT, issue ? 'border-red focus:border-red' : 'border-line focus:border-accent'].join(' ')}
-        value={name}
-        onChange={(event) => onName(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            if (canSave) {
-              onRename()
-            }
-          }
-        }}
-        placeholder="name"
-      />
-      {issue ? <p className="mt-1.5 text-xs text-red">{issue}</p> : null}
-      <div className="mt-3 flex justify-end gap-2">
-        <button type="button" className={GHOST} onClick={onClose}>
-          Cancel
-        </button>
-        <button type="button" className={PRIMARY} disabled={!canSave} onClick={onRename}>
-          Rename
-        </button>
-      </div>
-    </Dialog>
+    <NameDialog
+      title="Rename"
+      name={name}
+      issue={issue}
+      busy={busy}
+      onName={onName}
+      onClose={onClose}
+      selectBeforeExtension={FILE_EXT.test(original)}
+      selectAllOnOpen={!FILE_EXT.test(original)}
+      actions={[
+        { label: 'Cancel', onClick: onClose },
+        { label: 'Rename', kind: 'primary', disabled: !canSave, submit: true, onClick: onRename },
+      ]}
+    />
   )
 }

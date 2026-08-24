@@ -1,4 +1,4 @@
-import { ExpandSection } from '@/components/ExpandSection.tsx'
+import { ExpandSection } from '@/components/primitives/ExpandSection.tsx'
 import type { CivitaiVersion } from '@/lib/api.ts'
 import { useCivitaiData } from './CivitaiLayouts.tsx'
 import { SafetensorsDashboard } from './SafetensorsLayouts.tsx'

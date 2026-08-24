@@ -1,8 +1,8 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { ConfirmDialog, Dialog } from '@/components/Dialog.tsx'
-import { GlyphMark } from '@/components/GlyphMark.tsx'
-import { IconPicker } from '@/components/IconPicker.tsx'
-import { glyphOf, type Glyph } from '@/components/glyph.ts'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { ConfirmDialog, Dialog } from '@/components/primitives/Dialog.tsx'
+import { GlyphMark } from '@/components/chrome/GlyphMark.tsx'
+import { IconPicker } from '@/components/chrome/IconPicker.tsx'
+import { glyphOf, type Glyph } from '@/components/chrome/glyph.ts'
 import { TemplateParamsForm } from '@/app/TemplateParamsForm.tsx'
 import { updateTemplate, type TemplateInfo } from '@/lib/api.ts'
 import {

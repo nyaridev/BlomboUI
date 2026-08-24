@@ -1,8 +1,8 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { continueLine, indentLines, isSingleLineChunk, moveLines, unindentLines } from '@/lib/textareaEdit.ts'
-import { applyFoldEdit, foldYaml, yamlGuides } from '@/lib/yamlFold.ts'
-import { yamlErrorLines, yamlSpans } from '@/lib/yamlLint.ts'
-import { nudgePromptWeight } from '@/lib/promptWeight.ts'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { continueLine, indentLines, isSingleLineChunk, moveLines, unindentLines } from '@/lib/prompt/textareaEdit.ts'
+import { applyFoldEdit, foldYaml, yamlGuides } from '@/lib/yaml/fold.ts'
+import { yamlErrorLines, yamlSpans } from '@/lib/yaml/lint.ts'
+import { nudgePromptWeight } from '@/lib/prompt/weight.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 

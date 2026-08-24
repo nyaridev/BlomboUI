@@ -1,4 +1,4 @@
-import { SelectField } from '@/components/SelectField.tsx'
+import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { getAppPaths } from '@/lib/api.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'

@@ -1,5 +1,5 @@
-import { loraNameMatches, parseLoraHits } from '@/lib/loraTags.ts'
-import { parseWildcardTags } from '@/lib/wildcardTags.ts'
+import { loraNameMatches, parseLoraHits } from '@/lib/prompt/loraTags.ts'
+import { parseWildcardTags } from '@/lib/prompt/wildcardTags.ts'
 import type { ModelEntry } from '@/lib/api.ts'
 import { forwardRef, type ReactNode } from 'react'
 

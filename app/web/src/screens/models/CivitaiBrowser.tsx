@@ -1,110 +1,24 @@
-import { ChipSelect } from '@/components/ChipSelect.tsx'
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { SelectField } from '@/components/SelectField.tsx'
-import { listCivitaiModels, type CivitaiModel, type CivitaiSort } from '@/lib/api.ts'
-import {
-  CIVITAI_CATEGORIES,
-  CIVITAI_PERIODS,
-  CIVITAI_SORTS,
-  CIVITAI_TYPES,
-  type CivitaiBrowse,
-  type CivitaiTriState,
-} from '@/lib/civitaiBrowse.ts'
-import { dropCivitaiPage, loadCivitaiPage } from '@/lib/civitaiPageCache.ts'
-import { isCivitaiModelDownloaded } from '@/lib/civitaiDownloaded.ts'
-import { pickVersionId } from '@/lib/civitaiVersion.ts'
+import { listCivitaiModels, type CivitaiModel } from '@/lib/api.ts'
+import type { CivitaiBrowse, CivitaiTriState } from '@/lib/civitai/browse.ts'
+import { dropCivitaiPage, loadCivitaiPage } from '@/lib/civitai/pageCache.ts'
+import { pickVersionId } from '@/lib/civitai/version.ts'
 import { filterTypeSections, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { CivitaiModelView } from './CivitaiModelView.tsx'
 import { CivitaiDownloadDialog } from './CivitaiDownloadDialog.tsx'
-import { CivitaiErrorState } from './CivitaiErrorState.tsx'
 import { CivitaiNavBar } from './CivitaiNavBar.tsx'
-import { CivitaiTile } from './CivitaiTile.tsx'
+import { CivitaiFilters, filterDraftEqual, filterDraftOf, type CivitaiFilterDraft } from './CivitaiFilters.tsx'
+import { CivitaiResults } from './CivitaiResults.tsx'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-const TYPE_LABELS: Record<string, string> = {
-  TextualInversion: 'Embedding',
-  AestheticGradient: 'Aesthetic Gradient',
-  LoCon: 'LyCORIS',
-  MotionModule: 'Motion',
-}
-
-type StatusKey = 'earlyAccess' | 'supportsGeneration' | 'fromPlatform'
-
-const STATUS_FILTERS: { key: StatusKey; label: string }[] = [
-  { key: 'earlyAccess', label: 'Early Access' },
-  { key: 'supportsGeneration', label: 'On-site Generation' },
-  { key: 'fromPlatform', label: 'Made On-site' },
-]
-
 const CIVITAI_RETRY_DELAY = 2000
-
-function chipClass(active: boolean) {
-  return [
-    'rounded border px-2 py-1 text-xs',
-    active ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted hover:text-ink',
-  ].join(' ')
-}
-
-function nextTriState(value: CivitaiTriState): CivitaiTriState {
-  return value === 'off' ? 'include' : value === 'include' ? 'exclude' : 'off'
-}
 
 function triStateValue(value: CivitaiTriState): boolean | undefined {
   return value === 'off' ? undefined : value === 'include'
 }
 
-function statusClass(value: CivitaiTriState) {
-  if (value === 'include') {
-    return 'border-accent bg-accent text-ink'
-  }
-  if (value === 'exclude') {
-    return 'border-red bg-red/20 text-red-bright'
-  }
-  return 'border-line bg-field text-muted hover:text-ink'
-}
-
-type CivitaiFilterDraft = Pick<
-  CivitaiBrowse,
-  'period' | 'tag' | 'types' | 'baseModels' | 'earlyAccess' | 'supportsGeneration' | 'fromPlatform'
->
-
-function filterDraftOf(browse: CivitaiBrowse): CivitaiFilterDraft {
-  return {
-    period: browse.period,
-    tag: browse.tag,
-    types: browse.types,
-    baseModels: browse.baseModels,
-    earlyAccess: browse.earlyAccess,
-    supportsGeneration: browse.supportsGeneration,
-    fromPlatform: browse.fromPlatform,
-  }
-}
-
-function filterDraftEqual(left: CivitaiFilterDraft, right: CivitaiFilterDraft) {
-  return (
-    left.period === right.period &&
-    left.tag === right.tag &&
-    left.earlyAccess === right.earlyAccess &&
-    left.supportsGeneration === right.supportsGeneration &&
-    left.fromPlatform === right.fromPlatform &&
-    left.types.length === right.types.length &&
-    left.types.every((value) => right.types.includes(value)) &&
-    left.baseModels.length === right.baseModels.length &&
-    left.baseModels.every((value) => right.baseModels.includes(value))
-  )
-}
-
-function LoadingCircle({ label }: { label: string }) {
-  return (
-    <div className="flex min-h-24 items-center justify-center gap-2 text-sm text-muted" role="status">
-      <span className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-ink" />
-      <span>{label}</span>
-    </div>
-  )
-}
 
 export function CivitaiBrowser() {
   const loaded = useSettingsStore((state) => state.loaded)
@@ -183,10 +97,6 @@ export function CivitaiBrowser() {
     setRetryAttempt(0)
     setBusy(false)
     setError(retryMessage || 'CivitAI search retry cancelled.')
-  }
-
-  function setStatus(key: StatusKey) {
-    setFilterDraft((current) => ({ ...current, [key]: nextTriState(current[key]) }))
   }
 
   function openTab(item: CivitaiModel, focus: boolean) {
@@ -439,147 +349,23 @@ export function CivitaiBrowser() {
         </div>
       ) : null}
       {activeId === null ? (
-      <div className="flex shrink-0 flex-col gap-2">
-        <div className="flex min-w-0 items-stretch gap-2">
-          <div className="relative min-w-48 flex-1">
-            <AppIcon id="search" size={14} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
-            <input
-              className="w-full rounded border border-line bg-field py-1.5 pl-8 pr-2 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
-              value={browse.query}
-              onChange={(event) => updateBrowse({ query: event.target.value })}
-              placeholder="Search CivitAI models…"
-              aria-label="Search CivitAI models"
-            />
-          </div>
-          <SelectField
-            className="w-44 shrink-0"
-            icon="arrow-up-down"
-            value={browse.sort}
-            onChange={(value) => updateBrowse({ sort: value as CivitaiSort })}
-            options={[...CIVITAI_SORTS]}
-          />
-          <div ref={filtersRef} className="relative shrink-0">
-            <button
-              type="button"
-              className={[
-                'inline-flex h-full items-center gap-1 rounded border px-2.5 text-sm',
-                activeFilterCount > 0
-                  ? 'border-accent bg-accent text-ink'
-                  : filtersOpen
-                    ? 'border-accent bg-field text-ink'
-                    : 'border-line bg-field text-ink hover:text-ink',
-              ].join(' ')}
-              aria-expanded={filtersOpen}
-              onClick={() => setFiltersOpen((open) => !open)}
-            >
-              Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
-              <AppIcon id={filtersOpen ? 'chevron-up' : 'chevron-down'} size={12} />
-            </button>
-            {filtersOpen ? (
-              <div className="absolute right-0 top-[calc(100%+0.25rem)] z-40 w-[min(92vw,24rem)] overflow-visible rounded border border-line bg-panel p-3 shadow-[0_8px_24px_rgb(0_0_0_/_0.45)]">
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <p className="mb-1.5 text-xs text-muted">Time period</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {CIVITAI_PERIODS.map((item) => (
-                        <button
-                          key={item.value}
-                          type="button"
-                          className={chipClass(filterDraft.period === item.value)}
-                          onClick={() => setFilterDraft((current) => ({ ...current, period: item.value }))}
-                        >
-                          {item.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <p className="mb-1.5 text-xs text-muted">Model status</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {STATUS_FILTERS.map((item) => {
-                        const value = filterDraft[item.key]
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            className={['rounded border px-2 py-1 text-xs', statusClass(value)].join(' ')}
-                            title="Click once to include, twice to exclude, and again to clear"
-                            aria-label={`${item.label}: ${value}`}
-                            onClick={() => setStatus(item.key)}
-                          >
-                            {value === 'include' ? '✓ ' : value === 'exclude' ? '− ' : ''}
-                            {item.label}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            className={[
-              'inline-flex h-full shrink-0 items-center gap-1 rounded border px-2.5 text-sm',
-              browse.nsfw ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted hover:text-ink',
-            ].join(' ')}
-            aria-pressed={browse.nsfw}
-            title={browse.nsfw ? 'Blur mature previews' : 'Show mature previews'}
-            onClick={() => setCivitaiBrowse({ nsfw: !browse.nsfw })}
-          >
-            <AppIcon id={browse.nsfw ? 'eye' : 'eye-off'} size={14} />
-            NSFW
-          </button>
-        </div>
-        <div className="flex min-w-0 flex-wrap items-start gap-2">
-          <div className="flex min-w-0 flex-1 flex-wrap gap-1.5">
-            {CIVITAI_CATEGORIES.map((item) => (
-              <button
-                key={item.label}
-                type="button"
-                className={chipClass(filterDraft.tag === item.value)}
-                onClick={() => setFilterDraft((current) => ({ ...current, tag: item.value }))}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-          <div className="ml-auto flex min-h-9 min-w-0 shrink-0 items-stretch gap-2">
-            <div className="w-56 min-w-0">
-              <ChipSelect
-                options={CIVITAI_TYPES}
-                value={filterDraft.types}
-                onChange={(value) => setFilterDraft((current) => ({ ...current, types: value }))}
-                placeholder="Model types"
-                chipLabel={(value) => TYPE_LABELS[value] || value}
-              />
-            </div>
-            <div className="w-56 min-w-0">
-              <ChipSelect
-                options={baseModelOptions}
-                value={filterDraft.baseModels}
-                onChange={(value) => setFilterDraft((current) => ({ ...current, baseModels: value }))}
-                placeholder="Base model"
-              />
-            </div>
-            <button
-              type="button"
-              className={[
-                'inline-flex shrink-0 items-center gap-1 rounded border px-2.5 text-sm',
-                filtersChanged ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted',
-              ].join(' ')}
-              disabled={!filtersChanged}
-              onClick={() => {
-                setCivitaiBrowse(filterDraft)
-                resetPage()
-              }}
-            >
-              Apply filters
-            </button>
-          </div>
-        </div>
-      </div>
+        <CivitaiFilters
+          browse={browse}
+          filterDraft={filterDraft}
+          setFilterDraft={setFilterDraft}
+          baseModelOptions={baseModelOptions}
+          filtersOpen={filtersOpen}
+          filtersRef={filtersRef}
+          activeFilterCount={activeFilterCount}
+          filtersChanged={filtersChanged}
+          onUpdateBrowse={updateBrowse}
+          onToggle={() => setFiltersOpen((open) => !open)}
+          onApply={() => {
+            setCivitaiBrowse(filterDraft)
+            resetPage()
+          }}
+          onNsfw={() => setCivitaiBrowse({ nsfw: !browse.nsfw })}
+        />
       ) : null}
       {tabs.map((tab) => (
         <div
@@ -594,72 +380,40 @@ export function CivitaiBrowser() {
         </div>
       ))}
       {activeId === null ? (
-        <>
-          {error ? (
-            <CivitaiErrorState
-              message={error}
-              busy={busy}
-              onRetry={() => {
-                setError('')
-                setBusy(true)
-                setRetryCount((value) => value + 1)
-              }}
-            />
-          ) : (
-            <>
-              {busy && !items.length ? <LoadingCircle label="Loading CivitAI models…" /> : null}
-              {!busy && !items.length ? <p className="text-sm text-muted">No models found.</p> : null}
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
-                  {items.map((item) => (
-                    <CivitaiTile
-                      key={item.id}
-                      item={item}
-                      nsfw={browse.nsfw}
-                      downloaded={sessionDownloadedIds.has(item.id) || isCivitaiModelDownloaded(item, localModels)}
-                      downloading={downloadingIds.has(item.id)}
-                      site={site}
-                      preferredBases={browse.baseModels}
-                      onOpen={() => openTab(item, true)}
-                      onOpenBackground={() => openTab(item, false)}
-                      onDownload={() => openDownload(item)}
-                    />
-                  ))}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center justify-center gap-2">
-                <button
-                  type="button"
-                  className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
-                  disabled={page <= 1 || busy}
-                  onClick={() => {
-                    if (cursorHistory.length) {
-                      const previous = cursorHistory[cursorHistory.length - 1] || undefined
-                      setCursorHistory((current) => current.slice(0, -1))
-                      setCursor(previous)
-                    }
-                    setPage((current) => Math.max(1, current - 1))
-                  }}
-                >
-                  Previous
-                </button>
-                <span className="text-xs tabular-nums text-muted">Page {page}</span>
-                <button
-                  type="button"
-                  className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
-                  disabled={!hasNext || busy}
-                  onClick={() => {
-                    setCursorHistory((current) => [...current, cursor || ''])
-                    setCursor(nextCursor)
-                    setPage((current) => current + 1)
-                  }}
-                >
-                  Next
-                </button>
-              </div>
-            </>
-          )}
-        </>
+        <CivitaiResults
+          error={error}
+          busy={busy}
+          items={items}
+          page={page}
+          hasNext={hasNext}
+          nsfw={browse.nsfw}
+          localModels={localModels}
+          sessionDownloadedIds={sessionDownloadedIds}
+          downloadingIds={downloadingIds}
+          site={site}
+          preferredBases={browse.baseModels}
+          onRetry={() => {
+            setError('')
+            setBusy(true)
+            setRetryCount((value) => value + 1)
+          }}
+          onOpen={(item) => openTab(item, true)}
+          onOpenBackground={(item) => openTab(item, false)}
+          onDownload={openDownload}
+          onPrevious={() => {
+            if (cursorHistory.length) {
+              const previous = cursorHistory[cursorHistory.length - 1] || undefined
+              setCursorHistory((current) => current.slice(0, -1))
+              setCursor(previous)
+            }
+            setPage((current) => Math.max(1, current - 1))
+          }}
+          onNext={() => {
+            setCursorHistory((current) => [...current, cursor || ''])
+            setCursor(nextCursor)
+            setPage((current) => current + 1)
+          }}
+        />
       ) : null}
       {downloadRequest ? (
         <CivitaiDownloadDialog

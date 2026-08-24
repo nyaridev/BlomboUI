@@ -1,4 +1,4 @@
-import { formatLoraStrength } from '@/lib/loraTags.ts'
+import { formatLoraStrength } from '@/lib/prompt/loraTags.ts'
 import { useRef, type CSSProperties, type PointerEvent } from 'react'
 
 export function LoraStrengthSlider({

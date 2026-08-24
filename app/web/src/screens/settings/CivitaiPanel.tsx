@@ -1,5 +1,5 @@
-import { ConfirmDialog } from '@/components/Dialog.tsx'
-import { NumberField } from '@/components/NumberField.tsx'
+import { ConfirmDialog } from '@/components/primitives/Dialog.tsx'
+import { NumberField } from '@/components/primitives/NumberField.tsx'
 import {
   civitaiJobBusy,
   clearCivitai,
@@ -8,7 +8,7 @@ import {
   type ClearMode,
   type ScrapeKind,
   type ScrapeMode,
-} from '@/lib/civitaiScrape.ts'
+} from '@/lib/civitai/scrape.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
 import { useToastStore } from '@/stores/toastStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'

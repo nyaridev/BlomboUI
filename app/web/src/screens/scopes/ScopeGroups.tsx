@@ -1,13 +1,14 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
-import { ConfirmDialog } from '@/components/Dialog.tsx'
-import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
-import { LightboxView } from '@/components/LightboxView.tsx'
-import { PaneSplitter } from '@/components/PaneSplitter.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
-import { getScopeThumbs, modelThumbUrl, type ScopeThumb, type ThumbScope } from '@/lib/api.ts'
-import { GLOBAL_SCOPE } from '@/lib/thumbView.ts'
+import { ConfirmDialog } from '@/components/primitives/Dialog.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/chrome/ContextMenu.tsx'
+import { LightboxView } from '@/components/models/LightboxView.tsx'
+import { PaneSplitter } from '@/components/chrome/PaneSplitter.tsx'
+import { getScopeThumbs, type ScopeThumb, type ThumbScope } from '@/lib/api.ts'
+import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
 import { groupValue, nameKey, orderByIds, placeScope, UNGROUPED } from './scopeTree.ts'
 import { ScopeFilter } from './ScopeFilter.tsx'
+import { ScopeGroupDetail } from './ScopeGroupDetail.tsx'
+import { ScopeGroupList } from './ScopeGroupList.tsx'
+import { memberThumb, thumbSrc } from './scopeGroupUtils.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbnailScopeStore } from '@/stores/thumbnailScopeStore.ts'
 import { toast } from '@/stores/toastStore.ts'
@@ -65,46 +66,6 @@ function groupList(items: ThumbScope[], order: string[], keep = '', emptyUngroup
     names.push(UNGROUPED)
   }
   return names
-}
-
-function memberThumb(scopeId: string, thumbs: ScopeThumb[], extra: string[], optional: string[]) {
-  const need = [...new Set([scopeId, ...extra.filter((id) => id && id !== GLOBAL_SCOPE && id !== scopeId)])]
-  const strict = extra.length === 0 && optional.length === 0
-  let best: ScopeThumb | null = null
-  let bestHits = -1
-  let bestExtra = Infinity
-  for (const row of thumbs) {
-    const have = new Set(row.scopes)
-    if (need.some((id) => !have.has(id))) {
-      continue
-    }
-    if (strict && row.context !== scopeId && !(row.scopes.length === 1 && row.scopes[0] === scopeId)) {
-      continue
-    }
-    const hits = optional.reduce((sum, id) => sum + (have.has(id) ? 1 : 0), 0)
-    const leftover = have.size - need.length
-    if (
-      !best ||
-      hits > bestHits ||
-      (hits === bestHits && leftover < bestExtra) ||
-      (hits === bestHits && leftover === bestExtra && row.mtime > best.mtime)
-    ) {
-      best = row
-      bestHits = hits
-      bestExtra = leftover
-    }
-  }
-  return best
-}
-
-function thumbSrc(thumb: ScopeThumb) {
-  return modelThumbUrl(
-    thumb.kind,
-    thumb.path,
-    thumb.mtime || 1,
-    { context: thumb.context, mode: 'exact' },
-    thumb.media,
-  )
 }
 
 export function ScopeGroups({ onEditScope }: { onEditScope: (id: string) => void }) {
@@ -314,123 +275,29 @@ export function ScopeGroups({ onEditScope }: { onEditScope: (id: string) => void
     <div className="flex h-full min-h-0 flex-col gap-2">
       <ScopeFilter items={items} ids={ids} optionalIds={optionalIds} onIds={setIds} onOptional={setOptionalIds} />
       <div ref={rowRef} className="flex min-h-0 flex-1">
-        <div
-          className="flex min-h-0 shrink-0 flex-col gap-1 overflow-y-auto pr-1"
-          style={{ width: listWidth }}
-          onDragOver={(event) => event.preventDefault()}
-          onDrop={(event) => {
-            event.preventDefault()
-            if (scopeDragRef.current) {
-              return
-            }
-            applyDrop()
+        <ScopeGroupList
+          listWidth={listWidth}
+          groups={groups}
+          movable={movable}
+          selected={selected}
+          moving={moving}
+          drag={drag}
+          slot={slot}
+          groupDrop={groupDrop}
+          dragged={dragged}
+          scopeDragRef={scopeDragRef}
+          onSelect={select}
+          onApplyDrop={applyDrop}
+          onHoverSlot={hoverSlot}
+          onDropScope={(title) => void dropScopeOnGroup(title)}
+          onSetDrag={setDrag}
+          onSetSlot={setSlot}
+          onSetGroupDrop={setGroupDrop}
+          onEndDrag={() => {
+            setDrag(null)
+            setSlot(null)
           }}
-        >
-          {movable.map((item, index) => (
-            <div key={item}>
-              {moving && slot === index ? <span className="mb-1 block h-0.5 rounded-full bg-accent" /> : null}
-              <div
-                draggable
-                className={[
-                  'flex cursor-grab items-center rounded border active:cursor-grabbing',
-                  groupDrop === item
-                    ? 'border-accent bg-accent/20 text-ink'
-                    : item === selected
-                      ? 'border-accent bg-line text-ink'
-                      : 'border-line bg-field text-ink',
-                  drag === index ? 'opacity-20' : '',
-                ].join(' ')}
-                onClick={() => {
-                  if (dragged.current) {
-                    return
-                  }
-                  select(item)
-                }}
-                onDragStart={(event) => {
-                  event.dataTransfer.effectAllowed = 'move'
-                  event.dataTransfer.setData('text/plain', item)
-                  dragged.current = true
-                  setDrag(index)
-                  setSlot(index)
-                }}
-                onDragEnd={() => {
-                  setDrag(null)
-                  setSlot(null)
-                  requestAnimationFrame(() => {
-                    dragged.current = false
-                  })
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (scopeDragRef.current) {
-                    setGroupDrop(item)
-                    return
-                  }
-                  hoverSlot(index)
-                }}
-                onDragLeave={(event) => {
-                  if (!event.currentTarget.contains(event.relatedTarget as Node) && groupDrop === item) {
-                    setGroupDrop('')
-                  }
-                }}
-                onDrop={(event) => {
-                  event.preventDefault()
-                  event.stopPropagation()
-                  if (scopeDragRef.current) {
-                    void dropScopeOnGroup(item)
-                    return
-                  }
-                  applyDrop()
-                }}
-              >
-                <span className="min-w-0 flex-1 truncate py-1.5 pl-2 text-sm">{item}</span>
-                <span className="flex h-8 w-5 shrink-0 items-center justify-center text-muted">
-                  <AppIcon id="grip-vertical" size={12} />
-                </span>
-              </div>
-            </div>
-          ))}
-          {moving && slot === movable.length ? <span className="h-0.5 rounded-full bg-accent" /> : null}
-          {groups.includes(UNGROUPED) ? (
-            <button
-              type="button"
-              className={[
-                'flex items-center justify-between rounded border px-2 py-1.5 text-left text-sm',
-                groupDrop === UNGROUPED
-                  ? 'border-accent bg-accent/20 text-ink'
-                  : selected === UNGROUPED
-                    ? 'border-accent bg-line text-ink'
-                    : 'border-line bg-field text-ink',
-              ].join(' ')}
-              onClick={() => select(UNGROUPED)}
-              onDragOver={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                if (scopeDragRef.current) {
-                  setGroupDrop(UNGROUPED)
-                  return
-                }
-                if (drag !== null) {
-                  setSlot(movable.length)
-                }
-              }}
-              onDrop={(event) => {
-                event.preventDefault()
-                event.stopPropagation()
-                if (scopeDragRef.current) {
-                  void dropScopeOnGroup(UNGROUPED)
-                  return
-                }
-                applyDrop()
-              }}
-            >
-              <span className="min-w-0 truncate">{UNGROUPED}</span>
-              <span className="text-[10px] uppercase tracking-wide text-muted">Default</span>
-            </button>
-          ) : null}
-          {groups.length === 0 ? <p className="px-1 text-sm text-muted">No groups yet.</p> : null}
-        </div>
+        />
         <PaneSplitter
           value={listWidth}
           onChange={setListWidth}
@@ -439,95 +306,43 @@ export function ScopeGroups({ onEditScope }: { onEditScope: (id: string) => void
           containerRef={rowRef}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-hidden pl-4">
-          {selected ? (
-            <>
-              <div className="flex shrink-0 items-end gap-1">
-                <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs text-muted">
-                  Name
-                  <input
-                    className="h-8 rounded border border-line bg-field px-2 text-sm text-ink outline-none focus:border-accent disabled:opacity-50"
-                    value={name}
-                    disabled={ungrouped}
-                    onChange={(event) => setName(event.target.value)}
-                  />
-                </label>
-                {ungrouped ? null : (
-                  <>
-                    <button
-                      type="button"
-                      className="h-8 rounded bg-accent px-2 text-xs text-ink disabled:opacity-40"
-                      disabled={!canSave}
-                      onClick={() => void saveName()}
-                    >
-                      {dirty ? 'Save' : 'Saved'}
-                    </button>
-                    <button
-                      type="button"
-                      className="h-8 rounded border border-line px-2 text-xs text-ink disabled:opacity-40"
-                      disabled={busy}
-                      onClick={() => setPending(selected)}
-                    >
-                      Delete
-                    </button>
-                  </>
-                )}
-              </div>
-              <div className="min-h-0 flex-1 overflow-y-auto">
-                {members.length === 0 ? (
-                  <p className="text-sm text-muted">No scopes in this group.</p>
-                ) : (
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,9rem))] gap-3">
-                    {members.map((item) => {
-                      const thumb = memberThumb(item.id, thumbs, extra, optional)
-                      const src = thumb ? thumbSrc(thumb) : null
-                      return (
-                        <button
-                          key={item.id}
-                          type="button"
-                          draggable
-                          className={['text-left', scopeDrag === item.id ? 'opacity-20' : ''].join(' ')}
-                          onClick={() => {
-                            if (dragged.current) {
-                              return
-                            }
-                            const index = lit.findIndex((row) => row.item.id === item.id)
-                            if (index >= 0) {
-                              setLight(index)
-                            }
-                          }}
-                          onContextMenu={(event) => {
-                            event.preventDefault()
-                            setMenu({ x: event.clientX, y: event.clientY, id: item.id })
-                          }}
-                          onDragStart={(event) => {
-                            event.dataTransfer.effectAllowed = 'move'
-                            event.dataTransfer.setData('text/plain', item.id)
-                            dragged.current = true
-                            scopeDragRef.current = item.id
-                            setScopeDrag(item.id)
-                          }}
-                          onDragEnd={() => {
-                            setScopeDrag('')
-                            setGroupDrop('')
-                            requestAnimationFrame(() => {
-                              dragged.current = false
-                              if (scopeDragRef.current === item.id) {
-                                scopeDragRef.current = ''
-                              }
-                            })
-                          }}
-                        >
-                          <TilePreview className="w-full" src={src} mark="?" label={item.name} />
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-muted">Select a group.</p>
-          )}
+          <ScopeGroupDetail
+            selected={selected}
+            ungrouped={ungrouped}
+            name={name}
+            busy={busy}
+            canSave={canSave}
+            dirty={dirty}
+            members={members}
+            thumbs={thumbs}
+            extra={extra}
+            optional={optional}
+            lit={lit}
+            dragged={dragged}
+            scopeDragRef={scopeDragRef}
+            onName={setName}
+            onSave={() => void saveName()}
+            onDelete={() => setPending(selected)}
+            onMemberClick={(index) => {
+              if (index >= 0) {
+                setLight(index)
+              }
+            }}
+            onMemberMenu={(x, y, id) => setMenu({ x, y, id })}
+            onScopeDragStart={(id) => {
+              scopeDragRef.current = id
+              setScopeDrag(id)
+            }}
+            onScopeDragEnd={(id) => {
+              setScopeDrag('')
+              setGroupDrop('')
+              requestAnimationFrame(() => {
+                if (scopeDragRef.current === id) {
+                  scopeDragRef.current = ''
+                }
+              })
+            }}
+          />
         </div>
       </div>
       {pending ? (

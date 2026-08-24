@@ -1,10 +1,10 @@
-import { ContextMenu, ContextMenuItem } from '@/components/ContextMenu.tsx'
-import { DownloadedBadge, DownloadingBadge } from '@/components/CivitaiDownloadedBadge.tsx'
-import { TilePreview } from '@/components/TilePreview.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/chrome/ContextMenu.tsx'
+import { DownloadedBadge, DownloadingBadge } from '@/components/models/CivitaiDownloadedBadge.tsx'
+import { TilePreview } from '@/components/models/TilePreview.tsx'
 import type { CivitaiModel } from '@/lib/api.ts'
-import { modelMarks } from '@/lib/civitaiMarks.ts'
+import { modelMarks } from '@/lib/civitai/marks.ts'
 import { civitaiHost, type CivitaiSite } from '@/stores/settingsStore.ts'
-import { civitaiModelHref, pickVersionId } from '@/lib/civitaiVersion.ts'
+import { civitaiModelHref, pickVersionId } from '@/lib/civitai/version.ts'
 import { useEffect, useRef, useState } from 'react'
 
 const CLICK_WAIT = 280

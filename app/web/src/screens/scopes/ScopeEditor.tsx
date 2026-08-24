@@ -1,6 +1,6 @@
-import { ChipInput } from '@/components/ChipInput.tsx'
-import { NumberField } from '@/components/NumberField.tsx'
-import { SelectField } from '@/components/SelectField.tsx'
+import { ChipInput } from '@/components/primitives/ChipInput.tsx'
+import { NumberField } from '@/components/primitives/NumberField.tsx'
+import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { type ThumbScope } from '@/lib/api.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 

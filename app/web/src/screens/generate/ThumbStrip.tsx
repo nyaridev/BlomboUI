@@ -1,6 +1,6 @@
-import { AppIcon } from '@/components/AppIcon.tsx'
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { useEffect, useRef } from 'react'
-import { middleOpen } from '@/lib/openImage.ts'
+import { middleOpen } from '@/lib/gallery/openImage.ts'
 
 export type ThumbItem = {
   key: string

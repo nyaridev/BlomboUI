@@ -50,7 +50,7 @@ export function TabsPanel({ query = '' }: { query?: string }) {
       <SettingsCard
         query={query}
         title="Generate tabs"
-        terms="exclude hide order reorder generation base model lora wildcards hidden"
+        terms="exclude hide order reorder generation base model lora wildcards other hidden"
       >
         <SettingsBlock query={query} title="Exclude" terms="hidden tabs">
           <ChipSelect
@@ -61,7 +61,7 @@ export function TabsPanel({ query = '' }: { query?: string }) {
           />
           <p className="text-xs text-muted">Selected tabs are hidden on the generate screen.</p>
         </SettingsBlock>
-        <SettingsBlock query={query} title="Order" terms="reorder generation base model lora wildcards">
+        <SettingsBlock query={query} title="Order" terms="reorder generation base model lora wildcards other">
           <ChipSelect
             mode="order"
             options={[...GENERATE_TABS]}

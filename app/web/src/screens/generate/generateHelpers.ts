@@ -125,5 +125,8 @@ export function tabForSwap(swap: ModelSwap | null) {
   if (swap.slot === 'wildcard') {
     return 'Wildcards'
   }
+  if (swap.slot === 'vae' || swap.slot === 'textEncoder') {
+    return 'Other'
+  }
   return 'Base Model'
 }

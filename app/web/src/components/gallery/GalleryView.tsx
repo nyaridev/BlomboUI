@@ -72,7 +72,8 @@ export function GalleryView({
   const filterKey = useSettingsStore((s) => galleryFilterKey(viewKey, s))
   const scopeKey = useSettingsStore((s) => galleryScopeKey(viewKey, s))
   const saved = chrome.get(viewKey)
-  const sortKind: GalleryViewKind = kind === 'loras' || kind === 'wildcards' ? kind : 'checkpoints'
+  const sortKind: GalleryViewKind =
+    kind === 'loras' || kind === 'wildcards' ? kind : viewKey === 'other' || viewKey.endsWith('-other') ? 'other' : 'checkpoints'
   const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[filterKey] ?? 'name')
   const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[filterKey] ?? 'asc')
   const setGallerySortKey = useSettingsStore((s) => s.setGallerySortKey)

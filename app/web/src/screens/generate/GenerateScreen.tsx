@@ -2,14 +2,17 @@ import type { PromptMatrixSettings } from './GenerationScripts.tsx'
 import { GenerateModels } from './GenerateModels.tsx'
 import { GenerateTabs } from './GenerateTabs.tsx'
 import { PromptStack } from './PromptStack.tsx'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   createJob,
   getJob,
   getLatestJob,
+  getWorkflows,
   interruptJob,
   type Job,
+  type ModelEntry,
+  type ModelLists,
 } from '@/lib/api.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
 import { autoLoraId, nextSeed, usedSeed, useGenerateStore } from '@/stores/generateStore.ts'
@@ -76,9 +79,11 @@ export function GenerateScreen() {
   const generateTabKeysFollowLayout = useSettingsStore((s) => s.generateTabKeysFollowLayout)
   const loraAutoApplyDefault = useSettingsStore((s) => s.loraAutoApply)
   const checkpoints = useModelsStore((s) => s.checkpoints)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
   const loraItems = useModelsStore((s) => s.loras)
   const wildcardItems = useModelsStore((s) => s.wildcards)
   const vaeItems = useModelsStore((s) => s.vae)
+  const textEncoders = useModelsStore((s) => s.text_encoders)
 
   const health = useHealthStore((s) => s.health)
 
@@ -91,8 +96,15 @@ export function GenerateScreen() {
   const genRowRef = useRef<HTMLDivElement>(null)
   const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
+  const [workflowParams, setWorkflowParams] = useState<string[]>([])
   const location = useLocation()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    void getWorkflows()
+      .then((items) => setWorkflowParams(items.find((item) => item.id === workflow)?.params ?? []))
+      .catch(() => setWorkflowParams([]))
+  }, [workflow])
 
   useEffect(() => {
     const incoming = location.state as { tab?: string } | null
@@ -172,6 +184,12 @@ export function GenerateScreen() {
     if (!checkpoint.trim()) {
       return
     }
+    if (workflowParams.includes('textEncoder') && !textEncoder.trim()) {
+      return
+    }
+    if (workflowParams.includes('vae') && !vae.trim()) {
+      return
+    }
     setError(null)
     setStarting(true)
     setImageIds([])
@@ -192,6 +210,8 @@ export function GenerateScreen() {
         prompt,
         negative_prompt: negativePrompt,
         checkpoint,
+        vae: vae.trim() || undefined,
+        text_encoder: textEncoder.trim() || undefined,
         width,
         height,
         steps,
@@ -346,7 +366,11 @@ export function GenerateScreen() {
   }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, restart, swapTarget])
 
   const comfyOk = health?.comfy.reachable === true
-  const canGenerate = comfyOk && Boolean(checkpoint.trim())
+  const canGenerate =
+    comfyOk &&
+    Boolean(checkpoint.trim()) &&
+    (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&
+    (!workflowParams.includes('vae') || Boolean(vae.trim()))
   const payload = job?.payload ?? {}
   const missingLoras = Array.isArray(payload.lora_missing)
     ? payload.lora_missing.filter((item): item is string => typeof item === 'string' && Boolean(item))
@@ -392,10 +416,20 @@ export function GenerateScreen() {
         : formatDuration(seconds)
   const visibleTabs = orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
-  const baseKind = swapTarget?.slot === 'vae' ? 'vae' : 'checkpoints'
-  const baseItems = swapTarget?.slot === 'vae' ? vaeItems : checkpoints
-  const baseValue =
-    swapTarget?.slot === 'textEncoder' ? textEncoder : swapTarget?.slot === 'vae' ? vae : checkpoint
+  const showTextEncoder = workflowParams.includes('textEncoder')
+  const showVae = workflowParams.includes('vae')
+  const baseItems = useMemo(() => [...checkpoints, ...diffusionModels], [checkpoints, diffusionModels])
+  const baseItemKind = useMemo(() => {
+    const unetSet = new Set(diffusionModels)
+    return (item: ModelEntry): keyof ModelLists => (unetSet.has(item) ? 'diffusion_models' : 'checkpoints')
+  }, [diffusionModels])
+  const otherItems = useMemo(() => [...vaeItems, ...textEncoders], [textEncoders, vaeItems])
+  const otherItemKind = useMemo(() => {
+    const teSet = new Set(textEncoders)
+    return (item: ModelEntry): keyof ModelLists => (teSet.has(item) ? 'text_encoders' : 'vae')
+  }, [textEncoders])
+  const otherSelected = [textEncoder, vae].filter(Boolean)
+  const baseValue = checkpoint
 
   return (
     <div
@@ -408,6 +442,8 @@ export function GenerateScreen() {
       <GenerateModels
         style={modelTileStyle}
         onOpenTab={setTab}
+        showTextEncoder={showTextEncoder}
+        showVae={showVae}
         prompt={
           <PromptStack
             prompt={prompt}
@@ -481,12 +517,16 @@ export function GenerateScreen() {
         jobPct={jobPct}
         overallLabel={overallLabel}
         timing={timing}
-        baseKind={baseKind}
+        baseKind="checkpoints"
         baseItems={baseItems}
+        baseItemKind={baseItemKind}
         baseValue={baseValue}
         onCheckpoint={setCheckpoint}
         onVae={setVae}
         onTextEncoder={setTextEncoder}
+        otherItems={otherItems}
+        otherItemKind={otherItemKind}
+        otherSelected={otherSelected}
         prompt={prompt}
         negativePrompt={negativePrompt}
         loraItems={loraItems}

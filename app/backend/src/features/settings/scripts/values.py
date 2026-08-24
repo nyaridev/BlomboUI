@@ -1,0 +1,116 @@
+from __future__ import annotations
+
+import re
+
+IMAGE_PATH_DEFAULT = "[workflow]/images/[date]"
+GRID_PATH_DEFAULT = "[workflow]/grids/[date]"
+INTERRUPTED_PATH_DEFAULT = "[workflow]/interrupted/[date]"
+IMAGE_NAME_DEFAULT = "blombo_[number]"
+GRID_NAME_DEFAULT = "blombo_[number]"
+_SAFE_PATH = re.compile(r"^[A-Za-z0-9._\[\]/-]+$")
+_SAFE_NAME = re.compile(r"^[A-Za-z0-9._\[\]-]+$")
+_CSV_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.csv$")
+_SIZE = re.compile(r"^(\d+)[x×*](\d+)$", re.I)
+_GALLERY_SORTS = ("name", "added", "edited", "path")
+_GALLERY_DIRS = ("asc", "desc")
+_GALLERY_VIEWS = ("checkpoints", "loras", "wildcards", "other")
+_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes")
+_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes", "Errors")
+_GENERATE_TABS = ("Generation", "Base Model", "LoRa", "Wildcards", "Other")
+_IMAGE_FORMATS = ("png", "jpg", "webp")
+_KEYS = (
+    "batchGrid",
+    "batchGridMax",
+    "batchGridQuality",
+    "batchGridRows",
+    "batchGridFill",
+    "batchGridOnCancel",
+    "saveInterrupted",
+    "genPreview",
+    "genPreviewEvery",
+    "genPreviewAfter",
+    "genPreviewAfterFirst",
+    "genPreviewLast",
+    "interruptedInGrid",
+    "galleryHideInterrupted",
+    "hiddenGenerateTabs",
+    "hiddenMainTabs",
+    "mainTabOrder",
+    "generateTabOrder",
+    "mainTabKeysFollowLayout",
+    "generateTabKeysFollowLayout",
+    "hiddenModelTypes",
+    "hiddenSamplers",
+    "hiddenSchedulers",
+    "theme",
+    "civitaiSite",
+    "civitaiApiKey",
+    "civitaiAutoRetry",
+    "civitaiAutoRetryCount",
+    "timeDisplay",
+    "setResolutions",
+    "imagePath",
+    "imageName",
+    "gridPath",
+    "gridName",
+    "interruptedPath",
+    "imageFormat",
+    "gridFormat",
+    "imageQuality",
+    "saveLargeAsJpeg",
+    "largeJpegMaxKb",
+    "gallerySortKey",
+    "gallerySortDir",
+    "galleryTileScale",
+    "galleryParentOnUnselect",
+    "promptWeightStep",
+    "loraStrengthMin",
+    "loraStrengthMax",
+    "loraSliderMin",
+    "loraSliderMax",
+    "loraAutoApply",
+    "loraApplyAt",
+    "modelDirs",
+    "wildcardDirs",
+    "galleryDirs",
+    "civitaiDownload",
+    "removedAfterHours",
+    "removedMaxGb",
+    "autocompleteEnabled",
+    "autocompleteMode",
+    "autocompleteTypes",
+    "wildcardCompleteEnabled",
+    "loraCompleteEnabled",
+    "loraTriggerCompleteEnabled",
+    "wildcardCompleteThumbs",
+    "loraCompleteThumbs",
+    "autocompleteThumbScale",
+    "frequentTagsEnabled",
+    "autocompleteLists",
+    "galleryThumbFallback",
+    "thumbSaveTo",
+    "thumbDisplayMode",
+    "thumbScopeIds",
+    "thumbScopeOptionalIds",
+    "thumbScopeAuto",
+    "trashThumbFallback",
+    "scopeGroups",
+    "scopeOrder",
+    "lookupScopeIds",
+    "lookupScopeOptionalIds",
+    "lookupKinds",
+    "lookupModels",
+    "scopeSearch",
+    "modelsTab",
+    "modelsKind",
+    "civitaiBrowse",
+    "civitaiTabs",
+    "civitaiTabId",
+    "galleryTypes",
+    "galleryQuery",
+    "galleryLocalScopes",
+    "galleryScopeMode",
+    "galleryFilterMode",
+    "galleryFilterShareModels",
+    "galleryPinSelected",
+)

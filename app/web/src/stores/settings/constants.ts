@@ -43,7 +43,7 @@ export function civitaiHost(site: CivitaiSite) {
   return site === 'civitai' ? 'civitai.com' : 'civitai.red'
 }
 
-export const GALLERY_VIEWS = ['checkpoints', 'loras', 'wildcards'] as const
+export const GALLERY_VIEWS = ['checkpoints', 'loras', 'wildcards', 'other'] as const
 export type GalleryViewKind = (typeof GALLERY_VIEWS)[number]
 export type GallerySortKey = 'name' | 'added' | 'edited' | 'path'
 export type GallerySortDir = 'asc' | 'desc'
@@ -53,6 +53,7 @@ export const GENERATE_FILTER_VIEWS = [
   { key: 'checkpoints', label: 'Base Model' },
   { key: 'loras', label: 'LoRA' },
   { key: 'wildcards', label: 'Wildcards' },
+  { key: 'other', label: 'Other' },
 ] as const
 
 export const MODELS_FILTER_VIEWS = [
@@ -60,15 +61,17 @@ export const MODELS_FILTER_VIEWS = [
   { key: 'models-checkpoints', label: 'Base Model' },
   { key: 'models-loras', label: 'LoRA' },
   { key: 'models-wildcards', label: 'Wildcards' },
+  { key: 'models-other', label: 'Other' },
 ] as const
 
-export const GALLERY_MODE_KEYS = ['checkpoints', 'loras', 'wildcards', 'models'] as const
+export const GALLERY_MODE_KEYS = ['checkpoints', 'loras', 'wildcards', 'other', 'models'] as const
 export type GalleryModeKey = (typeof GALLERY_MODE_KEYS)[number]
 
 export const GALLERY_MODE_DEFAULTS: Record<GalleryModeKey, GalleryFilterScope> = {
   checkpoints: 'global',
   loras: 'global',
   wildcards: 'global',
+  other: 'global',
   models: 'local',
 }
 
@@ -100,7 +103,7 @@ export function galleryModeKey(viewKey: string): GalleryModeKey {
   if (viewKey.startsWith('models')) {
     return 'models'
   }
-  if (viewKey === 'loras' || viewKey === 'wildcards') {
+  if (viewKey === 'loras' || viewKey === 'wildcards' || viewKey === 'other') {
     return viewKey
   }
   return 'checkpoints'
@@ -251,7 +254,7 @@ export const SETTINGS_DEFAULTS = {
   lookupModels: [] as string[],
   scopeSearch: '',
   modelsTab: 'Local' as 'Local' | 'CivitAI',
-  modelsKind: 'all' as 'all' | 'checkpoints' | 'loras' | 'wildcards',
+  modelsKind: 'all' as 'all' | 'checkpoints' | 'loras' | 'wildcards' | 'other',
   civitaiBrowse: { ...CIVITAI_BROWSE_DEFAULT },
   civitaiTabs: [] as CivitaiTab[],
   civitaiTabId: null as number | null,

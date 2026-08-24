@@ -12,7 +12,7 @@
 :: set OUTPUTS_ROOT=
 :: set WILDCARDS_ROOT=
 
-set COMMANDLINE_ARGS=--uv --hot_reload_vite --hot_reload_python
+set COMMANDLINE_ARGS=--uv --hot_reload_vite
 
 :: --uv -> use uv for the project environment and backend dependencies.
 :: --comfyui-window -> open ComfyUI in a separate console.
@@ -21,7 +21,6 @@ set COMMANDLINE_ARGS=--uv --hot_reload_vite --hot_reload_python
 :: --dev_debug -> show ComfyUI setup and startup logs in this console.
 :: --api-pings -> show backend access logs (status polls and other API hits).
 :: --hot_reload_vite -> reload the frontend when UI files change.
-:: --hot_reload_python -> reload the backend when Python files change.
 
 set COMFYUI_ARGS=
 

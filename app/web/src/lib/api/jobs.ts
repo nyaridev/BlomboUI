@@ -63,6 +63,8 @@ export type JobRequest = {
   prompt: string
   negative_prompt: string
   checkpoint: string
+  vae?: string
+  text_encoder?: string
   width: number
   height: number
   steps: number

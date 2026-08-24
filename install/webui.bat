@@ -39,8 +39,6 @@ echo.%COMMANDLINE_ARGS% | findstr /i /c:"--api-pings" >nul
 if not errorlevel 1 set "API_PINGS=1"
 echo.%COMMANDLINE_ARGS% | findstr /i /c:"--hot_reload_vite" >nul
 if not errorlevel 1 set "HOT_RELOAD_VITE=1"
-echo.%COMMANDLINE_ARGS% | findstr /i /c:"--hot_reload_python" >nul
-if not errorlevel 1 set "HOT_RELOAD_PYTHON=1"
 
 call :flag_value FRONTEND_PORT --port %COMMANDLINE_ARGS%
 call :flag_value COMFYUI_PORT --port %COMFYUI_ARGS%
@@ -115,7 +113,7 @@ if not defined COMFY_PYTHON (
 if not exist "%ROOT%\runtime\tmp\" mkdir "%ROOT%\runtime\tmp"
 if not exist "%COMFY_OUT%\" mkdir "%COMFY_OUT%"
 
-"%VENV_PYTHON%" "%ROOT%\app\launcher\bootstrap.py"
+"%VENV_PYTHON%" -m bootstrap
 if errorlevel 1 (
     call "%ROOT%\install\windows\_ui.bat" error "Could not write launcher environment files."
     exit /b 1
@@ -204,8 +202,6 @@ goto keep_alive
 
 :start_backend
 call "%ROOT%\install\windows\_ui.bat" info "Starting backend on http://%BACKEND_HOST%:%BACKEND_PORT%"
-set "UVICORN_RELOAD="
-if defined HOT_RELOAD_PYTHON set "UVICORN_RELOAD=--reload"
 if defined API_PINGS (
     set "BLOMBO_API_PINGS=1"
     set "UVICORN_ACCESS="
@@ -213,7 +209,7 @@ if defined API_PINGS (
     set "BLOMBO_API_PINGS=0"
     set "UVICORN_ACCESS=--no-access-log"
 )
-start "BlomboUI Backend" /b cmd /d /c "pushd ""%ROOT%\app\api"" && ""%VENV_PYTHON%"" -m uvicorn blombo.main:app %UVICORN_RELOAD% %UVICORN_ACCESS% --host %BACKEND_HOST% --port %BACKEND_PORT%"
+start "BlomboUI Backend" /b cmd /d /c "pushd ""%ROOT%\app\backend"" && ""%VENV_PYTHON%"" -m uvicorn main:app %UVICORN_ACCESS% --host %BACKEND_HOST% --port %BACKEND_PORT%"
 call "%ROOT%\install\windows\_ui.bat" info "Waiting for the backend..."
 call :wait_port %BACKEND_HOST% %BACKEND_PORT%
 if errorlevel 1 (

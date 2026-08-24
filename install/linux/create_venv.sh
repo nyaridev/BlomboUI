@@ -19,7 +19,7 @@ fi
 
 export UV_PROJECT_ENVIRONMENT="$VENV_DIR"
 
-if ! cd "$ROOT/app/api"; then
+if ! cd "$ROOT/app/backend"; then
   ui_error "Backend project directory was not found."
   exit 1
 fi

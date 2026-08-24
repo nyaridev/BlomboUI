@@ -13,19 +13,24 @@ import {
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
-import { useEffect, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
 import { LoraStrengthSlider } from './LoraStrengthSlider.tsx'
 import { modelTileSpec, type ModelTileStyle } from './modelLayouts.ts'
 import { emptyTile, promptTile, RowLabel, slotTile, Tile, type Group } from './modelTileParts.tsx'
 import { displayName } from './modelTileUtils.ts'
 import { type GenerateTab } from './tabs.ts'
+import { tabForSwap } from './generateHelpers.ts'
 
 export function ModelTileRow({
   style,
   onOpenTab,
+  showTextEncoder,
+  showVae,
 }: {
   style: ModelTileStyle
   onOpenTab: (tab: GenerateTab) => void
+  showTextEncoder: boolean
+  showVae: boolean
 }) {
   const prompt = useGenerateStore((s) => s.prompt)
   const negativePrompt = useGenerateStore((s) => s.negativePrompt)
@@ -46,7 +51,9 @@ export function ModelTileRow({
   const setActiveLoraStrength = useGenerateStore((s) => s.setActiveLoraStrength)
   const toggleAutoLora = useGenerateStore((s) => s.toggleAutoLora)
   const checkpoints = useModelsStore((s) => s.checkpoints)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
   const vaes = useModelsStore((s) => s.vae)
+  const textEncoders = useModelsStore((s) => s.text_encoders)
   const loras = useModelsStore((s) => s.loras)
   const wildcards = useModelsStore((s) => s.wildcards)
   const loraAutoApplyDefault = useSettingsStore((s) => s.loraAutoApply)
@@ -55,18 +62,22 @@ export function ModelTileRow({
   const loraSliderMin = useSettingsStore((s) => s.loraSliderMin)
   const loraSliderMax = useSettingsStore((s) => s.loraSliderMax)
   useThumbView()
-  const checkpointItem = checkpoints.find((item) => modelPath(item) === checkpoint)
+  const baseModels = useMemo(() => [...checkpoints, ...diffusionModels], [checkpoints, diffusionModels])
+  const checkpointKind = diffusionModels.some((item) => modelPath(item) === checkpoint)
+    ? 'diffusion_models'
+    : 'checkpoints'
+  const checkpointItem = baseModels.find((item) => modelPath(item) === checkpoint)
 
   useEffect(() => {
-    if (!checkpoint || checkpoints.some((item) => modelPath(item) === checkpoint)) {
+    if (!checkpoint || baseModels.some((item) => modelPath(item) === checkpoint)) {
       return
     }
     const base = checkpoint.split(/[\\/]/).pop()
-    const hits = checkpoints.filter((item) => modelPath(item).split(/[\\/]/).pop() === base)
+    const hits = baseModels.filter((item) => modelPath(item).split(/[\\/]/).pop() === base)
     if (hits.length === 1) {
       setCheckpoint(modelPath(hits[0]))
     }
-  }, [checkpoint, checkpoints, setCheckpoint])
+  }, [baseModels, checkpoint, setCheckpoint])
 
   const spec = modelTileSpec(style)
   const loraHits = parseLoraHits(prompt)
@@ -191,9 +202,11 @@ export function ModelTileRow({
       tab: 'Base Model',
       labelEach: true,
       tiles: [
-        slotTile('Checkpoint', checkpoint, checkpoints, 'checkpoints', setCheckpoint, { slot: 'checkpoint' }),
-        slotTile('Text encoder', textEncoder, checkpoints, 'checkpoints', setTextEncoder, { slot: 'textEncoder' }),
-        slotTile('VAE', vae, vaes, 'vae', setVae, { slot: 'vae' }),
+        slotTile('Checkpoint', checkpoint, baseModels, checkpointKind, setCheckpoint, { slot: 'checkpoint' }),
+        ...(showTextEncoder
+          ? [slotTile('Text encoder', textEncoder, textEncoders, 'text_encoders', setTextEncoder, { slot: 'textEncoder' })]
+          : []),
+        ...(showVae ? [slotTile('VAE', vae, vaes, 'vae', setVae, { slot: 'vae' })] : []),
       ],
     },
     {
@@ -395,7 +408,7 @@ export function ModelTileRow({
                         style={style}
                         tile={tile}
                         active={sameModelSwap(swapTarget, tile.swap)}
-                        onOpen={() => focus(tile.swap, group.tab)}
+                        onOpen={() => focus(tile.swap, tabForSwap(tile.swap) ?? group.tab)}
                       />
                     </div>
                   ))
@@ -414,7 +427,7 @@ export function ModelTileRow({
                           style={style}
                           tile={tile}
                           active={sameModelSwap(swapTarget, tile.swap)}
-                          onOpen={() => focus(tile.swap, group.tab)}
+                          onOpen={() => focus(tile.swap, tabForSwap(tile.swap) ?? group.tab)}
                         />
                       ))}
                     </div>

@@ -32,9 +32,6 @@ esac
 case " $ALL_ARGS " in
   *" --hot_reload_vite "*) HOT_RELOAD_VITE=1 ;;
 esac
-case " $ALL_ARGS " in
-  *" --hot_reload_python "*) HOT_RELOAD_PYTHON=1 ;;
-esac
 
 flag_value() {
   local dest="$1"
@@ -162,7 +159,7 @@ fi
 mkdir -p "$ROOT/runtime/tmp" "$COMFY_OUT"
 export COMFY_DIR COMFY_PYTHON
 
-if ! "$VENV_PYTHON" "$ROOT/app/launcher/bootstrap.py"; then
+if ! "$VENV_PYTHON" -m bootstrap; then
   ui_error "Could not write launcher environment files."
   exit 1
 fi
@@ -214,11 +211,7 @@ wait_port() {
 
 start_backend() {
   ui_info "Starting backend on http://$BACKEND_HOST:$BACKEND_PORT"
-  UVICORN_RELOAD=()
   UVICORN_ACCESS=(--no-access-log)
-  if [ -n "${HOT_RELOAD_PYTHON:-}" ]; then
-    UVICORN_RELOAD=(--reload)
-  fi
   if [ -n "${API_PINGS:-}" ]; then
     export BLOMBO_API_PINGS=1
     UVICORN_ACCESS=()
@@ -226,8 +219,8 @@ start_backend() {
     export BLOMBO_API_PINGS=0
   fi
   (
-    cd "$ROOT/app/api" || exit 1
-    exec "$VENV_PYTHON" -m uvicorn blombo.main:app "${UVICORN_RELOAD[@]}" "${UVICORN_ACCESS[@]}" --host "$BACKEND_HOST" --port "$BACKEND_PORT"
+    cd "$ROOT/app/backend" || exit 1
+    exec "$VENV_PYTHON" -m uvicorn main:app "${UVICORN_ACCESS[@]}" --host "$BACKEND_HOST" --port "$BACKEND_PORT"
   ) &
   BACKEND_PID=$!
   ui_info "Waiting for the backend..."

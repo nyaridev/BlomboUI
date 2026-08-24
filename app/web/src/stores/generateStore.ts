@@ -16,6 +16,8 @@ export const DEFAULTS = {
   prompt: '1girl, black hair',
   negativePrompt: '',
   checkpoint: 'waiIllustriousSDXL_v140.safetensors',
+  vae: '',
+  textEncoder: '',
   width: 832,
   height: 1216,
   steps: 20,
@@ -40,6 +42,8 @@ export const PARAM_KEYS = [
   'prompt',
   'negativePrompt',
   'checkpoint',
+  'vae',
+  'textEncoder',
   'width',
   'height',
   'steps',
@@ -63,6 +67,8 @@ export type TemplateParams = {
   prompt: string
   negativePrompt: string
   checkpoint: string
+  vae: string
+  textEncoder: string
   width: number
   height: number
   steps: number
@@ -87,6 +93,8 @@ export function pickParams(source: TemplateParams): TemplateParams {
     prompt: source.prompt,
     negativePrompt: source.negativePrompt,
     checkpoint: source.checkpoint,
+    vae: source.vae,
+    textEncoder: source.textEncoder,
     width: source.width,
     height: source.height,
     steps: source.steps,
@@ -144,6 +152,8 @@ export const APPLY_FIELDS = [
   { id: 'prompt', label: 'Prompt', keys: ['prompt'] },
   { id: 'negativePrompt', label: 'Negative', keys: ['negativePrompt'] },
   { id: 'checkpoint', label: 'Checkpoint', keys: ['checkpoint'] },
+  { id: 'vae', label: 'VAE', keys: ['vae'] },
+  { id: 'textEncoder', label: 'Text encoder', keys: ['textEncoder'] },
   { id: 'sampler', label: 'Sampler', keys: ['sampler'] },
   { id: 'scheduler', label: 'Scheduler', keys: ['scheduler'] },
   { id: 'steps', label: 'Steps', keys: ['steps'] },

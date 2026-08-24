@@ -34,14 +34,25 @@ export function CivitaiBrowser() {
   const setCivitaiTabs = useSettingsStore((state) => state.setCivitaiTabs)
   const setCivitaiTabId = useSettingsStore((state) => state.setCivitaiTabId)
   const checkpoints = useModelsStore((state) => state.checkpoints)
+  const diffusionModels = useModelsStore((state) => state.diffusion_models)
   const loras = useModelsStore((state) => state.loras)
   const vae = useModelsStore((state) => state.vae)
+  const textEncoders = useModelsStore((state) => state.text_encoders)
   const controlnet = useModelsStore((state) => state.controlnet)
   const embeddings = useModelsStore((state) => state.embeddings)
   const wildcards = useModelsStore((state) => state.wildcards)
   const localModels = useMemo(
-    () => [...checkpoints, ...loras, ...vae, ...controlnet, ...embeddings, ...wildcards],
-    [checkpoints, controlnet, embeddings, loras, vae, wildcards],
+    () => [
+      ...checkpoints,
+      ...diffusionModels,
+      ...loras,
+      ...vae,
+      ...textEncoders,
+      ...controlnet,
+      ...embeddings,
+      ...wildcards,
+    ],
+    [checkpoints, controlnet, diffusionModels, embeddings, loras, textEncoders, vae, wildcards],
   )
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filterDraft, setFilterDraft] = useState<CivitaiFilterDraft>(() => filterDraftOf(browse))

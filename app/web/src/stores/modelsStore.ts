@@ -10,6 +10,8 @@ const EMPTY: ModelLists = {
   vae: [],
   controlnet: [],
   embeddings: [],
+  diffusion_models: [],
+  text_encoders: [],
   wildcards: [],
 }
 
@@ -100,6 +102,8 @@ function apply(lists: Partial<ModelLists>): ModelLists {
     vae: asList(lists.vae),
     controlnet: asList(lists.controlnet),
     embeddings: asList(lists.embeddings),
+    diffusion_models: asList(lists.diffusion_models),
+    text_encoders: asList(lists.text_encoders),
     wildcards: asList(lists.wildcards),
   }
 }

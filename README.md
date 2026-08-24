@@ -78,7 +78,7 @@ BlomboUI/
 │   ├── comfyui.bat / .sh    ComfyUI (node editor or headless)
 │   ├── windows/             Git, uv venv, ComfyUI, Torch
 │   └── linux/
-├── app/                     API, web UI, workflows
+├── app/                     backend, web UI, workflows
 ├── runtime/                 .venv, ComfyUI, launcher cache, logs
 └── user/                    created on first launch (models, output, data, wildcards)
 ```
@@ -106,7 +106,6 @@ Edit `webui-user.bat` or `webui-user.sh`. Do not edit the files under `install/`
 | `--uv` | use uv for the project environment (always used by the installer) |
 | `--port N` | UI port (default `5173`) |
 | `--hot_reload_vite` | reload the frontend when UI files change |
-| `--hot_reload_python` | reload the backend when Python files change |
 | `--comfyui-window` | start ComfyUI in a separate console |
 | `--dev_debug` | show Comfy setup and startup logs |
 | `--api-pings` | show backend access logs |

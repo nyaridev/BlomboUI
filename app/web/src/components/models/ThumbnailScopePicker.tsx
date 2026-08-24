@@ -11,7 +11,7 @@ export function ThumbnailScopePicker({
   fallbackKind,
   scopeKey = GLOBAL_SCOPE,
 }: {
-  fallbackKind?: 'checkpoints' | 'loras' | 'wildcards' | 'trash'
+  fallbackKind?: 'checkpoints' | 'loras' | 'wildcards' | 'other' | 'trash'
   scopeKey?: string
 }) {
   const local = Boolean(scopeKey && scopeKey !== GLOBAL_SCOPE && fallbackKind !== 'trash')

@@ -66,6 +66,8 @@ export type ModelLists = {
   vae: ModelEntry[]
   controlnet: ModelEntry[]
   embeddings: ModelEntry[]
+  diffusion_models: ModelEntry[]
+  text_encoders: ModelEntry[]
   wildcards: ModelEntry[]
 }
 

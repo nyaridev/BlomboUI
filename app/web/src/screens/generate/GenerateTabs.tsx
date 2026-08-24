@@ -12,7 +12,7 @@ import {
   selectedLoraPaths,
   selectedWildcardPaths,
 } from './generateHelpers.ts'
-import { jobGridUrl, jobPreviewUrl, type Job, type ModelEntry } from '@/lib/api.ts'
+import { jobGridUrl, jobPreviewUrl, type Job, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
 import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
 import type { ModelSwap } from '@/stores/generateStore.ts'
@@ -50,10 +50,14 @@ export function GenerateTabs({
   timing,
   baseKind,
   baseItems,
+  baseItemKind,
   baseValue,
   onCheckpoint,
   onVae,
   onTextEncoder,
+  otherItems,
+  otherItemKind,
+  otherSelected,
   prompt,
   negativePrompt,
   loraItems,
@@ -88,12 +92,16 @@ export function GenerateTabs({
   jobPct: number
   overallLabel: string | null
   timing: string | null
-  baseKind: 'checkpoints' | 'vae'
+  baseKind: keyof ModelLists
   baseItems: ModelEntry[]
+  baseItemKind?: (item: ModelEntry) => keyof ModelLists
   baseValue: string
   onCheckpoint: (path: string) => void
   onVae: (path: string) => void
   onTextEncoder: (path: string) => void
+  otherItems: ModelEntry[]
+  otherItemKind: (item: ModelEntry) => keyof ModelLists
+  otherSelected: string[]
   prompt: string
   negativePrompt: string
   loraItems: LoraItem[]
@@ -183,15 +191,10 @@ export function GenerateTabs({
             <GalleryView
               kind={baseKind}
               items={baseItems}
+              itemKind={baseItemKind}
               value={baseValue}
               onSelect={(path) => {
-                if (swapTarget?.slot === 'textEncoder') {
-                  onTextEncoder(path)
-                } else if (swapTarget?.slot === 'vae') {
-                  onVae(path)
-                } else {
-                  onCheckpoint(path)
-                }
+                onCheckpoint(path)
                 onSwapTarget(null)
               }}
             />
@@ -299,6 +302,27 @@ export function GenerateTabs({
                   return
                 }
                 onPrompt(toggleWildcard(prompt, item))
+                onSwapTarget(null)
+              }}
+            />
+          </div>
+        ) : null}
+        {shownTab === 'Other' ? (
+          <div className="flex-1">
+            <GalleryView
+              kind="vae"
+              chromeKey="other"
+              items={otherItems}
+              itemKind={otherItemKind}
+              selected={otherSelected}
+              onSelect={(path) => {
+                const item = otherItems.find((row) => row.path === path)
+                const kind = item ? otherItemKind(item) : 'vae'
+                if (swapTarget?.slot === 'textEncoder' || (swapTarget?.slot !== 'vae' && kind === 'text_encoders')) {
+                  onTextEncoder(path)
+                } else {
+                  onVae(path)
+                }
                 onSwapTarget(null)
               }}
             />

@@ -63,14 +63,25 @@ export function CivitaiDownloadDialog({
   const bases = useSettingsStore((state) => state.civitaiBrowse.baseModels)
   const download = useSettingsStore((state) => state.civitaiDownload)
   const checkpoints = useModelsStore((state) => state.checkpoints)
+  const diffusionModels = useModelsStore((state) => state.diffusion_models)
   const loras = useModelsStore((state) => state.loras)
   const vae = useModelsStore((state) => state.vae)
+  const textEncoders = useModelsStore((state) => state.text_encoders)
   const controlnet = useModelsStore((state) => state.controlnet)
   const embeddings = useModelsStore((state) => state.embeddings)
   const wildcards = useModelsStore((state) => state.wildcards)
   const localModels = useMemo(
-    () => [...checkpoints, ...loras, ...vae, ...controlnet, ...embeddings, ...wildcards],
-    [checkpoints, controlnet, embeddings, loras, vae, wildcards],
+    () => [
+      ...checkpoints,
+      ...diffusionModels,
+      ...loras,
+      ...vae,
+      ...textEncoders,
+      ...controlnet,
+      ...embeddings,
+      ...wildcards,
+    ],
+    [checkpoints, controlnet, diffusionModels, embeddings, loras, textEncoders, vae, wildcards],
   )
   const [model, setModel] = useState<CivitaiModelDetail | null>(null)
   const [versionId, setVersionId] = useState<number | null>(preferredVersionId ?? null)

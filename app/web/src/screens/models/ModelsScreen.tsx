@@ -11,6 +11,7 @@ const KIND_TABS = [
   { id: 'checkpoints', label: 'Base Model' },
   { id: 'loras', label: 'LoRA' },
   { id: 'wildcards', label: 'Wildcards' },
+  { id: 'other', label: 'Other' },
 ] as const
 
 type PageTab = (typeof PAGE_TABS)[number]
@@ -25,11 +26,14 @@ function tabClass(on: boolean) {
 
 function LocalModels({ kind }: { kind: KindTab }) {
   const checkpoints = useModelsStore((s) => s.checkpoints)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
   const loras = useModelsStore((s) => s.loras)
   const wildcards = useModelsStore((s) => s.wildcards)
+  const vaes = useModelsStore((s) => s.vae)
+  const textEncoders = useModelsStore((s) => s.text_encoders)
   const items = useMemo(() => {
     if (kind === 'checkpoints') {
-      return checkpoints
+      return [...checkpoints, ...diffusionModels]
     }
     if (kind === 'loras') {
       return loras
@@ -37,25 +41,41 @@ function LocalModels({ kind }: { kind: KindTab }) {
     if (kind === 'wildcards') {
       return wildcards
     }
+    if (kind === 'other') {
+      return [...vaes, ...textEncoders]
+    }
     return [...checkpoints, ...loras, ...wildcards]
-  }, [checkpoints, kind, loras, wildcards])
+  }, [checkpoints, diffusionModels, kind, loras, textEncoders, vaes, wildcards])
   const itemKind = useMemo(() => {
-    if (kind !== 'all') {
+    if (kind === 'loras' || kind === 'wildcards') {
       return undefined
     }
     const loraSet = new Set(loras)
     const wildSet = new Set(wildcards)
+    const unetSet = new Set(diffusionModels)
+    const teSet = new Set(textEncoders)
+    const vaeSet = new Set(vaes)
     return (item: ModelEntry): keyof ModelLists => {
+      if (kind === 'checkpoints') {
+        return unetSet.has(item) ? 'diffusion_models' : 'checkpoints'
+      }
+      if (kind === 'other') {
+        return teSet.has(item) ? 'text_encoders' : 'vae'
+      }
       if (loraSet.has(item)) {
         return 'loras'
       }
       if (wildSet.has(item)) {
         return 'wildcards'
       }
+      if (vaeSet.has(item)) {
+        return 'vae'
+      }
       return 'checkpoints'
     }
-  }, [kind, loras, wildcards])
-  const viewKind = kind === 'all' ? 'checkpoints' : kind
+  }, [diffusionModels, kind, loras, textEncoders, vaes, wildcards])
+  const viewKind: keyof ModelLists =
+    kind === 'all' || kind === 'checkpoints' ? 'checkpoints' : kind === 'other' ? 'vae' : kind
 
   return (
     <GalleryView

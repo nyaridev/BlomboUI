@@ -9,8 +9,8 @@ BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still
 
 ## Structure
 
-- Keep the tree obvious: launcher, API, web screens, Comfy as the backend.
-- API keeps shared I/O at `app/api/blombo/` and groups feature code under `generate/`, `models/`, `civitai/`, `gallery/`, `wildcards/`, `complete/`, and `routes/`.
+- Keep the tree obvious: install launchers, backend, web screens, Comfy as the generation backend.
+- Backend lives at `app/backend/src/` with `api/` (routes), `features/` (`service.py` + `scripts/`), `shared/`, `infrastructure/` (Comfy client + storage), and `bootstrap/` (install-time env files).
 - Web keeps screens under `app/web/src/screens/`; shared UI is grouped under `components/primitives/`, `components/chrome/`, `components/gallery/`, and `components/models/`, with matching `lib/` feature folders.
 - `app/web/src/screens/settings/PrimitivesPanel.tsx` is the live catalog of existing controls. Check it and `style.mdc` before adding UI.
 - Do not add layers, services, or "core" packages for one caller.
@@ -24,7 +24,7 @@ BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still
 
 ```text
 ❌  api.py (routes + sqlite + Comfy websocket + image import)
-✅  main.py (app shell)  routes/ (HTTP groups)  generate/ (jobs + Comfy)  models/ (model I/O)
+✅  main.py (app shell)  api/routes/  features/  infrastructure/comfy  infrastructure/storage
 ```
 
 ## Cleaner when it is clearly better
@@ -32,8 +32,8 @@ BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still
 - If the same thing can be done with less code, fewer types, or a straighter data flow, do that.
 - Delete indirection that does not earn its keep. Do not "simplify" by rewriting working code into a new pattern.
 - Match what is already here (FastAPI, small React screens, zustand). No extra framework.
-- Keep `db.py` and `model_meta_db.py` separate; they own different SQLite stores.
-- Keep launcher bootstrap path/YAML helpers separate from API runtime helpers.
+- Keep `infrastructure/storage/user.py` and `infrastructure/storage/cache.py` separate; they own different SQLite files. Table access goes through `infrastructure/storage/repositories/`.
+- Keep `bootstrap/env.py` path/YAML helpers separate from API runtime helpers in `config.py` / `shared/dirs.py`.
 
 ## Robust later
 

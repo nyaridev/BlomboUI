@@ -31,7 +31,7 @@ if errorlevel 1 (
 
 set "UV_PROJECT_ENVIRONMENT=%VENV_DIR%"
 
-pushd "%ROOT%\app\api"
+pushd "%ROOT%\app\backend"
 if errorlevel 1 (
     call "%ROOT%\install\windows\_ui.bat" error "Backend project directory was not found."
     exit /b 1

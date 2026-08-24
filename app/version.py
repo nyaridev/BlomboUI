@@ -3,8 +3,8 @@
 import sys
 from pathlib import Path
 
-_API = Path(__file__).resolve().parent / "api"
-if str(_API) not in sys.path:
-    sys.path.insert(0, str(_API))
+_BACKEND_SRC = Path(__file__).resolve().parent / "backend" / "src"
+if str(_BACKEND_SRC) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_SRC))
 
-from blombo.paths import VERSION, get_version  # noqa: E402, F401
+from config import VERSION, get_version  # noqa: E402, F401

@@ -233,8 +233,10 @@ export function cleanModelsTab(raw: unknown): 'Local' | 'CivitAI' {
   return raw === 'CivitAI' || raw === 'Download' ? 'CivitAI' : 'Local'
 }
 
-export function cleanModelsKind(raw: unknown): 'all' | 'checkpoints' | 'loras' | 'wildcards' {
-  return raw === 'checkpoints' || raw === 'loras' || raw === 'wildcards' || raw === 'all' ? raw : 'all'
+export function cleanModelsKind(raw: unknown): 'all' | 'checkpoints' | 'loras' | 'wildcards' | 'other' {
+  return raw === 'checkpoints' || raw === 'loras' || raw === 'wildcards' || raw === 'other' || raw === 'all'
+    ? raw
+    : 'all'
 }
 
 export function cleanTypeList(raw: unknown): string[] {

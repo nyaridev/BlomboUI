@@ -13,10 +13,12 @@ type OutputPathOverrideProps = {
   gridPath: string
   imageName: string
   gridName: string
+  enabled: boolean
   onImagePath: (value: string) => void
   onGridPath: (value: string) => void
   onImageName: (value: string) => void
   onGridName: (value: string) => void
+  onEnabled: (value: boolean) => void
 }
 
 function PathCard({
@@ -78,10 +80,12 @@ export function OutputPathOverride({
   gridPath,
   imageName,
   gridName,
+  enabled,
   onImagePath,
   onGridPath,
   onImageName,
   onGridName,
+  onEnabled,
 }: OutputPathOverrideProps) {
   const settingsImagePath = useSettingsStore((s) => s.imagePath)
   const settingsGridPath = useSettingsStore((s) => s.gridPath)
@@ -91,7 +95,7 @@ export function OutputPathOverride({
   const gridFormat = useSettingsStore((s) => s.gridFormat)
 
   return (
-    <ExpandSection title="Output path" fit>
+    <ExpandSection title="Output path" enabled={enabled} onEnabled={onEnabled} fit>
       <div className="flex flex-col gap-2">
         <PathCard
           title="Images"
@@ -120,7 +124,8 @@ export function OutputPathOverride({
           onFolder={onGridPath}
         />
         <p className="text-xs text-muted">
-          Overwrites the Saving folders and names for this generate. Uses the same{' '}
+          Overwrites the Saving folders and names for this generate when this section is on. Empty fields still use
+          the settings values. Uses the same{' '}
           <Link to="/settings#placeholders" className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright">
             placeholders
           </Link>

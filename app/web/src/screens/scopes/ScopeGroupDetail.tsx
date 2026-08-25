@@ -77,6 +77,7 @@ export function ScopeGroupDetail({
             {members.map((item) => {
               const thumb = memberThumb(item.id, thumbs, extra, optional)
               const src = thumb ? thumbSrc(thumb) : null
+              const rawSrc = thumb ? thumbSrc(thumb, true) : null
               return (
                 <button
                   key={item.id}
@@ -105,7 +106,7 @@ export function ScopeGroupDetail({
                     })
                   }}
                 >
-                  <TilePreview className="w-full" src={src} mark="?" label={item.name} />
+                  <TilePreview className="w-full" src={src} rawSrc={rawSrc} mark="?" label={item.name} />
                 </button>
               )
             })}

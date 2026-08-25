@@ -9,6 +9,25 @@ class PromptMatrixIn(BaseModel):
     lines: str = ""
     save_grid: bool = True
     use_batch: bool = True
+    mode: Literal["start", "end", "prompt_sr"] = "end"
+    target: Literal["prompt", "negative"] = "prompt"
+    search: str = ""
+
+
+class XyAxisIn(BaseModel):
+    type: str = "none"
+    values: list[str] = Field(default_factory=list)
+
+
+class XyPlotIn(BaseModel):
+    x: XyAxisIn = Field(default_factory=XyAxisIn)
+    y: XyAxisIn = Field(default_factory=XyAxisIn)
+    draw_legend: bool = True
+    draw_type: bool = False
+    keep_minus_one: bool = False
+    include_sub_images: bool = True
+    respect_instant_lora: bool = False
+    grid_margin: int = Field(default=0, ge=0, le=256)
 
 
 class AutoLoraIn(BaseModel):
@@ -49,6 +68,7 @@ class JobIn(BaseModel):
     output_grid_name: str | None = None
     auto_loras: list[str | AutoLoraIn] = Field(default_factory=list)
     prompt_matrix: PromptMatrixIn | None = None
+    xy_plot: XyPlotIn | None = None
 
 
 class InterruptIn(BaseModel):

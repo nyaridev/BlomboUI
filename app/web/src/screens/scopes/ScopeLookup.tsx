@@ -82,8 +82,14 @@ function optionalHits(row: ScopeThumb, optional: string[]) {
   return optional.reduce((sum, id) => sum + (have.has(id) ? 1 : 0), 0)
 }
 
-function thumbSrc(row: ScopeThumb) {
-  return modelThumbUrl(row.kind, row.path, row.mtime || 1, { context: row.context, mode: 'exact' }, row.media)
+function thumbSrc(row: ScopeThumb, raw = false) {
+  return modelThumbUrl(
+    row.kind,
+    row.path,
+    row.mtime || 1,
+    { context: row.context, mode: 'exact', raw: raw || undefined },
+    row.media,
+  )
 }
 
 export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void }) {
@@ -258,6 +264,7 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
                   <TilePreview
                     className="w-full"
                     src={thumbSrc(row)}
+                    rawSrc={thumbSrc(row, true)}
                     mark="?"
                     label={itemLabel(row.kind, row.path)}
                     badge={kindLabel(row.kind)}
@@ -324,7 +331,7 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
       ) : null}
       {light != null && shown[light] ? (
         <LightboxView
-          src={thumbSrc(shown[light])}
+          src={thumbSrc(shown[light], true)}
           alt={itemLabel(shown[light].kind, shown[light].path)}
           resetKey={`${shown[light].kind}:${shown[light].path}:${shown[light].context}`}
           many={shown.length > 1}

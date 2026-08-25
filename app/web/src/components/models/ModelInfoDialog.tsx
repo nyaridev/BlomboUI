@@ -2,6 +2,7 @@ import { ConfirmDialog, Dialog } from '@/components/primitives/Dialog.tsx'
 import { ModelInfoActions, ModelInfoBody, ModelInfoHeader } from '@/components/models/ModelInfoLayouts.tsx'
 import { TilePreview } from '@/components/models/TilePreview.tsx'
 import { clampLora, loraRange, modelFileName } from '@/components/models/modelInfoLayouts.ts'
+import { otherKindLabel } from '@/components/gallery/galleryUtils.ts'
 import {
   fetchCivitaiImage,
   getModelInfo,
@@ -400,11 +401,12 @@ export function ModelInfoDialog({
         applyAtOverride={applyAtOverride}
         onApplyAt={(value) => setApplyAtOverride(value)}
         onApplyAtInherit={() => setApplyAtOverride(null)}
+        fileKind={otherKindLabel(kind) || undefined}
         preview={
           <TilePreview
             className="h-full w-full"
             eager
-            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { ...item, thumb }, view)}
+            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { ...item, thumb }, { ...view, raw: true })}
             media={pending && pending !== 'clear' ? pending.type : item.thumb_media}
           />
         }

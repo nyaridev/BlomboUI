@@ -1,5 +1,14 @@
 import { parseModelTileStyle, type ModelTileStyle } from '@/screens/generate/modelLayouts.ts'
 import { isResMode, type ResMode } from '@/screens/generate/resolutions.ts'
+import {
+  applyWorkflowModels,
+  AUTO_LORA_PREFIX,
+  emptyWorkflowModels,
+  parseModelsByWorkflow,
+  patchWorkflowModels,
+  snapshotWorkflowModels,
+  type WorkflowModels,
+} from '@/stores/workflowModels.ts'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -28,6 +37,7 @@ export const DEFAULTS = {
   outputGridPath: '',
   outputImageName: '',
   outputGridName: '',
+  outputPathEnabled: false,
   batchSize: 1,
   batchCount: 1,
   sampler: 'euler',
@@ -54,6 +64,7 @@ export const PARAM_KEYS = [
   'outputGridPath',
   'outputImageName',
   'outputGridName',
+  'outputPathEnabled',
   'batchSize',
   'batchCount',
   'sampler',
@@ -79,6 +90,7 @@ export type TemplateParams = {
   outputGridPath: string
   outputImageName: string
   outputGridName: string
+  outputPathEnabled: boolean
   batchSize: number
   batchCount: number
   sampler: string
@@ -105,6 +117,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     outputGridPath: source.outputGridPath,
     outputImageName: source.outputImageName,
     outputGridName: source.outputGridName,
+    outputPathEnabled: source.outputPathEnabled,
     batchSize: source.batchSize,
     batchCount: source.batchCount,
     sampler: source.sampler,
@@ -129,6 +142,9 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
         continue
       }
       if (key === 'seedAfter' && !SEED_AFTER.some((item) => item.value === value)) {
+        continue
+      }
+      if (key === 'outputPathEnabled' && typeof value !== 'boolean') {
         continue
       }
       ;(next as Record<string, unknown>)[key] = value
@@ -159,7 +175,7 @@ export const APPLY_FIELDS = [
   { id: 'steps', label: 'Steps', keys: ['steps'] },
   { id: 'cfg', label: 'CFG', keys: ['cfg'] },
   { id: 'seed', label: 'Seed', keys: ['seed', 'seedAfter'] },
-  { id: 'outputPath', label: 'Output path', keys: ['outputImagePath', 'outputGridPath', 'outputImageName', 'outputGridName'] },
+  { id: 'outputPath', label: 'Output path', keys: ['outputImagePath', 'outputGridPath', 'outputImageName', 'outputGridName', 'outputPathEnabled'] },
   { id: 'resolution', label: 'Resolution', keys: ['width', 'height', 'resMode', 'aspect', 'megapixels'] },
   { id: 'batchCount', label: 'Batch count', keys: ['batchCount'] },
   { id: 'batchSize', label: 'Batch size', keys: ['batchSize'] },
@@ -263,7 +279,7 @@ export function sameModelSwap(a: ModelSwap | null, b: ModelSwap | null) {
 }
 
 export function autoLoraId(path: string) {
-  return `auto:${path}`
+  return `${AUTO_LORA_PREFIX}${path}`
 }
 
 export function promptLoraId(path: string, index: number) {
@@ -322,11 +338,13 @@ type GenerateState = {
   workflow: string
   templateId: string
   templateByWorkflow: Record<string, string>
+  modelsByWorkflow: Record<string, WorkflowModels>
   seedAfter: SeedAfter
   outputImagePath: string
   outputGridPath: string
   outputImageName: string
   outputGridName: string
+  outputPathEnabled: boolean
   modelTileStyle: ModelTileStyle
   vae: string
   textEncoder: string
@@ -346,6 +364,7 @@ type GenerateState = {
   setOutputGridPath: (value: string) => void
   setOutputImageName: (value: string) => void
   setOutputGridName: (value: string) => void
+  setOutputPathEnabled: (value: boolean) => void
   setModelTileStyle: (value: ModelTileStyle) => void
   setVae: (value: string) => void
   setTextEncoder: (value: string) => void
@@ -373,6 +392,7 @@ export const useGenerateStore = create<GenerateState>()(
       ...DEFAULTS,
       templateId: 'default',
       templateByWorkflow: {},
+      modelsByWorkflow: {},
       viewedImageUrl: null,
       modelTileStyle: 'tall',
       vae: '',
@@ -382,7 +402,7 @@ export const useGenerateStore = create<GenerateState>()(
       activeLoraStrengths: {},
       setPrompt: (prompt) => set({ prompt }),
       setNegativePrompt: (negativePrompt) => set({ negativePrompt }),
-      setCheckpoint: (checkpoint) => set({ checkpoint }),
+      setCheckpoint: (checkpoint) => set((s) => patchWorkflowModels(s, { checkpoint })),
       setWidth: (width) => set({ width }),
       setHeight: (height) => set({ height }),
       setSteps: (steps) => set({ steps }),
@@ -402,25 +422,30 @@ export const useGenerateStore = create<GenerateState>()(
       setOutputGridPath: (outputGridPath) => set({ outputGridPath }),
       setOutputImageName: (outputImageName) => set({ outputImageName }),
       setOutputGridName: (outputGridName) => set({ outputGridName }),
+      setOutputPathEnabled: (outputPathEnabled) => set({ outputPathEnabled }),
       setModelTileStyle: (modelTileStyle) => set({ modelTileStyle: parseModelTileStyle(modelTileStyle) }),
-      setVae: (vae) => set({ vae }),
-      setTextEncoder: (textEncoder) => set({ textEncoder }),
+      setVae: (vae) => set((s) => patchWorkflowModels(s, { vae })),
+      setTextEncoder: (textEncoder) => set((s) => patchWorkflowModels(s, { textEncoder })),
       setSwapTarget: (swapTarget) => set({ swapTarget }),
       setActiveLoraOrder: (activeLoraOrder) =>
-        set({ activeLoraOrder: cleanActiveLoraOrder(activeLoraOrder) }),
+        set((s) => patchWorkflowModels(s, { activeLoraOrder: cleanActiveLoraOrder(activeLoraOrder) })),
       setActiveLoraStrength: (path, value) =>
-        set((state) => (
-          path && Number.isFinite(value)
-            ? { activeLoraStrengths: { ...state.activeLoraStrengths, [path]: value } }
-            : state
-        )),
+        set((state) => {
+          if (!path || !Number.isFinite(value)) {
+            return state
+          }
+          return patchWorkflowModels(state, {
+            activeLoraStrengths: { ...state.activeLoraStrengths, [path]: value },
+          })
+        }),
       toggleAutoLora: (path) =>
         set((state) => {
           const id = autoLoraId(path)
           const order = state.activeLoraOrder
-          return order.includes(id)
-            ? { activeLoraOrder: order.filter((item) => item !== id) }
-            : { activeLoraOrder: [...order, id] }
+          const activeLoraOrder = order.includes(id)
+            ? order.filter((item) => item !== id)
+            : [...order, id]
+          return patchWorkflowModels(state, { activeLoraOrder })
         }),
       setBatchSize: (batchSize) => set({ batchSize }),
       setBatchCount: (batchCount) => set({ batchCount }),
@@ -430,16 +455,40 @@ export const useGenerateStore = create<GenerateState>()(
       setAspect: (aspect) => set({ aspect }),
       setMegapixels: (megapixels) => set({ megapixels }),
       setWorkflow: (workflow) =>
-        set((s) => ({
-          workflow,
-          templateId: s.templateByWorkflow?.[workflow] ?? 'default',
-        })),
+        set((s) => {
+          if (workflow === s.workflow) {
+            return s
+          }
+          const modelsByWorkflow = {
+            ...s.modelsByWorkflow,
+            [s.workflow]: snapshotWorkflowModels(s),
+          }
+          const incoming = modelsByWorkflow[workflow] ?? emptyWorkflowModels(DEFAULTS.checkpoint)
+          return {
+            ...applyWorkflowModels(incoming, s.activeLoraOrder, s.activeLoraStrengths),
+            workflow,
+            templateId: s.templateByWorkflow?.[workflow] ?? 'default',
+            modelsByWorkflow,
+            swapTarget: null,
+          }
+        }),
       setTemplateId: (templateId) =>
         set((s) => ({
           templateId,
           templateByWorkflow: { ...s.templateByWorkflow, [s.workflow]: templateId },
         })),
-      applyParams: (params) => set(pickParams({ ...params, cfg: Math.max(1, params.cfg) })),
+      applyParams: (params) =>
+        set((s) => {
+          const next = pickParams({ ...params, cfg: Math.max(1, params.cfg) })
+          return {
+            ...next,
+            ...patchWorkflowModels(s, {
+              checkpoint: next.checkpoint,
+              vae: next.vae,
+              textEncoder: next.textEncoder,
+            }),
+          }
+        }),
       setViewedImageUrl: (viewedImageUrl) => set({ viewedImageUrl }),
     }),
     {
@@ -447,12 +496,30 @@ export const useGenerateStore = create<GenerateState>()(
       partialize: ({ viewedImageUrl: _viewed, swapTarget: _swap, ...rest }) => rest,
       merge: (persisted, current) => {
         const rest = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
+        const activeLoraOrder = cleanActiveLoraOrder(rest.activeLoraOrder)
+        const activeLoraStrengths = cleanActiveLoraStrengths(rest.activeLoraStrengths)
+        const checkpoint = typeof rest.checkpoint === 'string' ? rest.checkpoint : current.checkpoint
+        const vae = typeof rest.vae === 'string' ? rest.vae : current.vae
+        const textEncoder = typeof rest.textEncoder === 'string' ? rest.textEncoder : current.textEncoder
+        const workflow = typeof rest.workflow === 'string' && rest.workflow ? rest.workflow : current.workflow
+        const modelsByWorkflow = {
+          ...parseModelsByWorkflow(rest.modelsByWorkflow, DEFAULTS.checkpoint),
+          [workflow]: snapshotWorkflowModels({
+            checkpoint,
+            vae,
+            textEncoder,
+            activeLoraOrder,
+            activeLoraStrengths,
+          }),
+        }
         return {
           ...current,
           ...rest,
           modelTileStyle: parseModelTileStyle(rest.modelTileStyle),
-          activeLoraOrder: cleanActiveLoraOrder(rest.activeLoraOrder),
-          activeLoraStrengths: cleanActiveLoraStrengths(rest.activeLoraStrengths),
+          outputPathEnabled: typeof rest.outputPathEnabled === 'boolean' ? rest.outputPathEnabled : current.outputPathEnabled,
+          activeLoraOrder,
+          activeLoraStrengths,
+          modelsByWorkflow,
         }
       },
     },

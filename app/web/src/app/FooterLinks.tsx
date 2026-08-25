@@ -1,3 +1,5 @@
+import { useHealthStore } from '@/stores/healthStore.ts'
+
 function GithubIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -6,19 +8,25 @@ function GithubIcon() {
   )
 }
 
+const GITHUB = 'https://github.com/nyaridev/BlomboUI'
+
 export function FooterLinks() {
+  const version = useHealthStore((s) => s.health?.version)
+
   return (
     <div className="ml-auto flex items-center">
       <a
-        className="flex items-center justify-center p-0.5 text-muted hover:text-ink"
-        href="https://github.com/nyaridev/BlomboUI"
+        className="flex items-center gap-1.5 p-0.5 text-muted hover:text-ink"
+        href={GITHUB}
         target="_blank"
         rel="noreferrer"
-        aria-label="BlomboUI on GitHub"
-        title="GitHub"
+        aria-label={version ? `BlomboUI ${version} on GitHub` : 'BlomboUI on GitHub'}
+        title={version ? `BlomboUI ${version}` : 'GitHub'}
       >
+        {version ? <span className="text-xs tabular-nums">{version}</span> : null}
         <GithubIcon />
       </a>
     </div>
   )
 }
+

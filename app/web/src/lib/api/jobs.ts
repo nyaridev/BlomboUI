@@ -55,6 +55,20 @@ export type PromptMatrixRequest = {
   lines: string
   save_grid: boolean
   use_batch: boolean
+  mode?: 'start' | 'end' | 'prompt_sr'
+  target?: 'prompt' | 'negative'
+  search?: string
+}
+
+export type XyPlotRequest = {
+  x: { type: string; values: string[] }
+  y: { type: string; values: string[] }
+  draw_legend: boolean
+  draw_type: boolean
+  keep_minus_one: boolean
+  include_sub_images: boolean
+  respect_instant_lora: boolean
+  grid_margin: number
 }
 
 export type AutoLoraRequest = string | { path: string; strength: number }
@@ -92,6 +106,7 @@ export type JobRequest = {
   output_grid_name?: string
   auto_loras?: AutoLoraRequest[]
   prompt_matrix?: PromptMatrixRequest
+  xy_plot?: XyPlotRequest
 }
 
 export async function createJob(body: JobRequest): Promise<Job> {

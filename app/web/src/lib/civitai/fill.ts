@@ -46,8 +46,22 @@ export function civitaiThumbMeta(hit: CivitaiVersion): ThumbMeta {
   }
 }
 
-export function hasCivitaiLocalData(info: Pick<ModelInfo, 'types' | 'thumb' | 'thumb_exact' | 'prompt'>, lora: boolean) {
-  return Boolean((info.types || []).length || info.thumb_exact || (lora && (info.prompt || '').trim()))
+export type CivitaiFillScope = 'all' | 'thumbs' | 'meta'
+
+export function hasCivitaiLocalData(
+  info: Pick<ModelInfo, 'types' | 'thumb' | 'thumb_exact' | 'prompt'>,
+  lora: boolean,
+  scope: CivitaiFillScope = 'all',
+) {
+  const hasMeta = Boolean((info.types || []).length || (lora && (info.prompt || '').trim()))
+  const hasThumb = Boolean(info.thumb_exact)
+  if (scope === 'thumbs') {
+    return hasThumb
+  }
+  if (scope === 'meta') {
+    return hasMeta
+  }
+  return hasMeta || hasThumb
 }
 
 export async function lookupCivitai(hashes: string[]) {
@@ -83,14 +97,22 @@ export async function waitModelInfo(kind: keyof ModelLists, path: string, signal
   }
 }
 
-export async function applyCivitaiMeta(kind: keyof ModelLists, path: string, hit: CivitaiVersion, current: Pick<ModelInfo, 'types' | 'prompt'>) {
+export async function applyCivitaiMeta(
+  kind: keyof ModelLists,
+  path: string,
+  hit: CivitaiVersion,
+  current: Pick<ModelInfo, 'types' | 'prompt'>,
+  scope: CivitaiFillScope = 'all',
+) {
   const lora = kind === 'loras'
   const type = matchModelType(hit.baseModel || '')
   const types = type ? [type] : current.types || []
   const words = (hit.trainedWords || []).map((word) => word.trim()).filter(Boolean)
   const prompt = lora && words.length ? words.join(', ') : current.prompt || ''
-  await saveModelInfo(kind, path, types, lora ? { prompt } : undefined)
-  const url = civitaiPreviewUrl(hit)
+  if (scope !== 'thumbs') {
+    await saveModelInfo(kind, path, types, lora ? { prompt } : undefined)
+  }
+  const url = scope === 'meta' ? '' : civitaiPreviewUrl(hit)
   let thumb = 0
   if (url) {
     const file = await fetchCivitaiImage(url)

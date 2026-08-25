@@ -38,7 +38,10 @@ export function ExpandSection({ title, children, enabled = true, onEnabled, fit 
         ) : null}
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center justify-between text-sm text-ink"
+          className={[
+            'flex min-w-0 flex-1 items-center justify-between text-sm',
+            dimmed ? 'text-muted' : 'text-ink',
+          ].join(' ')}
           onClick={() => setOpen((value) => !value)}
         >
           <span>{title}</span>

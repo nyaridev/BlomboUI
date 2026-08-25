@@ -56,6 +56,29 @@ export function promptMatrixLines(raw: unknown): string[] {
     .filter(Boolean)
 }
 
+function xyAxisLen(raw: unknown): number {
+  if (!raw || typeof raw !== 'object') {
+    return 0
+  }
+  const row = raw as { type?: unknown; values?: unknown }
+  if (row.type === 'none') {
+    return 0
+  }
+  return Array.isArray(row.values) ? row.values.map((item) => String(item).trim()).filter(Boolean).length : 0
+}
+
+export function xyPlotCellCount(raw: unknown): number {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return 0
+  }
+  const x = xyAxisLen((raw as { x?: unknown }).x)
+  const y = xyAxisLen((raw as { y?: unknown }).y)
+  if (!x && !y) {
+    return 0
+  }
+  return Math.max(1, x) * Math.max(1, y)
+}
+
 export function etaSeconds(startedAt: string | null, value: number, max: number): number | null {
   if (!startedAt || value <= 0 || max <= 0) {
     return null

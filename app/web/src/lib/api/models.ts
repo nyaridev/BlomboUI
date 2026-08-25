@@ -93,6 +93,7 @@ export type ThumbView = {
   mode?: 'exact' | 'likely'
   fallback?: boolean
   optional?: string
+  raw?: boolean
 }
 
 function thumbQs(view?: ThumbView, extra: Record<string, string> = {}) {
@@ -108,6 +109,9 @@ function thumbQs(view?: ThumbView, extra: Record<string, string> = {}) {
   }
   if (view?.optional) {
     qs.set('optional', view.optional)
+  }
+  if (view?.raw) {
+    qs.set('raw', 'true')
   }
   const text = qs.toString()
   return text ? `?${text}` : ''

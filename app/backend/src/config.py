@@ -23,8 +23,8 @@ def get_version() -> str:
     try:
         value = path.read_text(encoding="utf-8").splitlines()[0].strip()
     except OSError:
-        return "0.1.0"
-    return value or "0.1.0"
+        return "1.0.0"
+    return value or "1.0.0"
 
 
 VERSION = get_version()

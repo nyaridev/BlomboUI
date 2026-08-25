@@ -125,6 +125,16 @@ input[type='number'].number-field::-webkit-outer-spin-button {
   color: var(--color-ink);
 }
 
+.select-menu button:disabled {
+  color: var(--color-muted);
+  cursor: default;
+  opacity: 0.5;
+}
+
+.select-menu button:disabled:hover {
+  background: transparent;
+}
+
 input[type='range'].slider {
   -webkit-appearance: none;
   appearance: none;
@@ -352,6 +362,14 @@ input[type='range'].slider::-moz-range-thumb {
 
 .section-body .field-select input {
   background: transparent;
+}
+
+.section-body .icon-btn {
+  background: var(--color-bg);
+}
+
+.section-body .icon-btn:hover {
+  background: var(--color-line);
 }
 
 .icon-btn {

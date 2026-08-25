@@ -1,4 +1,5 @@
 import type { PromptMatrixSettings } from './GenerationScripts.tsx'
+import { xyCellCount, type XyPlotSettings } from './xyPlot.ts'
 import { GenerateModels } from './GenerateModels.tsx'
 import { GenerateTabs } from './GenerateTabs.tsx'
 import { PromptStack } from './PromptStack.tsx'
@@ -28,6 +29,7 @@ import {
   jobSeconds,
   progressLabel,
   promptMatrixLines,
+  xyPlotCellCount,
   tabForSwap,
 } from './generateHelpers.ts'
 
@@ -52,6 +54,7 @@ export function GenerateScreen() {
   const outputGridPath = useGenerateStore((s) => s.outputGridPath)
   const outputImageName = useGenerateStore((s) => s.outputImageName)
   const outputGridName = useGenerateStore((s) => s.outputGridName)
+  const outputPathEnabled = useGenerateStore((s) => s.outputPathEnabled)
   const modelTileStyle = useGenerateStore((s) => s.modelTileStyle)
   const activeLoraOrder = useGenerateStore((s) => s.activeLoraOrder)
   const activeLoraStrengths = useGenerateStore((s) => s.activeLoraStrengths)
@@ -93,6 +96,7 @@ export function GenerateScreen() {
   const [tab, setTab] = useState<GenerateTab>('Generation')
   const [starting, setStarting] = useState(false)
   const [promptMatrix, setPromptMatrix] = useState<PromptMatrixSettings | null>(null)
+  const [xyPlot, setXyPlot] = useState<XyPlotSettings | null>(null)
   const genRowRef = useRef<HTMLDivElement>(null)
   const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
@@ -193,18 +197,25 @@ export function GenerateScreen() {
     setError(null)
     setStarting(true)
     setImageIds([])
-    const used = usedSeed(seed, seedAfter)
+    const activeLines = promptMatrixLines(promptMatrix?.lines)
+    const activePromptMatrix = promptMatrix && activeLines.length ? promptMatrix : null
+    const xyCells = xyCellCount(xyPlot)
+    const activeXyPlot = xyPlot && xyCells ? xyPlot : null
+    const keepMinusOne = Boolean(activeXyPlot?.keepMinusOne && seed < 0)
+    const used = keepMinusOne ? seed : usedSeed(seed, seedAfter)
     const previous = seed
     const previousIds = job ? idsFromJob(job) : []
     const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
-    const activeLines = promptMatrixLines(promptMatrix?.lines)
-    const activePromptMatrix = promptMatrix && activeLines.length ? promptMatrix : null
-    const seedSteps = activePromptMatrix
-      ? activePromptMatrix.useBatch
-        ? activeLines.length * count
-        : activeLines.length
-      : count
-    setSeed(nextSeed(used, seedAfter, seedSteps))
+    const seedSteps = activeXyPlot
+      ? xyCells
+      : activePromptMatrix
+        ? activePromptMatrix.useBatch
+          ? activeLines.length * count
+          : activeLines.length
+        : count
+    if (!(keepMinusOne && seed < 0)) {
+      setSeed(nextSeed(used, seedAfter, seedSteps))
+    }
     try {
       const next = await createJob({
         prompt,
@@ -220,7 +231,7 @@ export function GenerateScreen() {
         seed_after: seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
-        batch_grid: activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
+        batch_grid: activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
         batch_grid_format: gridFormat,
@@ -233,15 +244,30 @@ export function GenerateScreen() {
         scheduler,
         workflow,
         template: templateId,
-        output_image_path: outputImagePath.trim() || undefined,
-        output_grid_path: outputGridPath.trim() || undefined,
-        output_image_name: outputImageName.trim() || undefined,
-        output_grid_name: outputGridName.trim() || undefined,
+        output_image_path: outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
+        output_grid_path: outputPathEnabled ? outputGridPath.trim() || undefined : undefined,
+        output_image_name: outputPathEnabled ? outputImageName.trim() || undefined : undefined,
+        output_grid_name: outputPathEnabled ? outputGridName.trim() || undefined : undefined,
         prompt_matrix: activePromptMatrix
           ? {
               lines: activePromptMatrix.lines,
               save_grid: activePromptMatrix.saveGrid,
               use_batch: activePromptMatrix.useBatch,
+              mode: activePromptMatrix.mode,
+              target: activePromptMatrix.target,
+              search: activePromptMatrix.search,
+            }
+          : undefined,
+        xy_plot: activeXyPlot
+          ? {
+              x: activeXyPlot.x,
+              y: activeXyPlot.y,
+              draw_legend: activeXyPlot.drawLegend,
+              draw_type: activeXyPlot.drawType,
+              keep_minus_one: activeXyPlot.keepMinusOne,
+              include_sub_images: activeXyPlot.includeSubImages,
+              respect_instant_lora: Boolean(activeXyPlot.respectInstantLora),
+              grid_margin: activeXyPlot.gridMargin,
             }
           : undefined,
         auto_loras: activeLoraOrder
@@ -384,11 +410,14 @@ export function GenerateScreen() {
       ? (payload.prompt_matrix as { lines?: unknown; use_batch?: unknown })
       : null
   const matrixPayloadLines = promptMatrixLines(matrixPayload?.lines)
-  const batchTotal = matrixPayloadLines.length
-    ? matrixPayload?.use_batch === false
-      ? matrixPayloadLines.length
-      : baseBatchTotal * matrixPayloadLines.length
-    : baseBatchTotal
+  const xyCells = xyPlotCellCount(payload.xy_plot)
+  const batchTotal = xyCells
+    ? xyCells
+    : matrixPayloadLines.length
+      ? matrixPayload?.use_batch === false
+        ? matrixPayloadLines.length
+        : baseBatchTotal * matrixPayloadLines.length
+      : baseBatchTotal
   const batched = batchTotal > 1
   const progress = job?.progress
   const progressMax = progress?.max || 0
@@ -428,7 +457,10 @@ export function GenerateScreen() {
     const teSet = new Set(textEncoders)
     return (item: ModelEntry): keyof ModelLists => (teSet.has(item) ? 'text_encoders' : 'vae')
   }, [textEncoders])
-  const otherSelected = [textEncoder, vae].filter(Boolean)
+  const otherSelected = [
+    ...(showTextEncoder ? [textEncoder] : []),
+    ...(showVae ? [vae] : []),
+  ].filter(Boolean)
   const baseValue = checkpoint
 
   return (
@@ -507,6 +539,8 @@ export function GenerateScreen() {
           (typeof payload.seed === 'number' ? payload.seed : null)
         }
         onPromptMatrix={setPromptMatrix}
+        onXyPlot={setXyPlot}
+        workflowParams={workflowParams}
         starting={starting}
         imageIds={imageIds}
         jobId={jobId}

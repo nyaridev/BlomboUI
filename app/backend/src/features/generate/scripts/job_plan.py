@@ -64,10 +64,19 @@ def _prompt_matrix_config(raw: Any) -> dict[str, Any] | None:
     lines = _prompt_matrix_lines(raw.get("lines"))
     if not lines:
         return None
+    mode = str(raw.get("mode") or "end").strip()
+    if mode not in {"start", "end", "prompt_sr"}:
+        mode = "end"
+    target = str(raw.get("target") or "prompt").strip()
+    if target not in {"prompt", "negative"}:
+        target = "prompt"
     return {
         "lines": lines,
         "save_grid": bool(raw.get("save_grid", True)),
         "use_batch": bool(raw.get("use_batch", True)),
+        "mode": mode,
+        "target": target,
+        "search": str(raw.get("search") or "").strip(),
     }
 
 
@@ -79,6 +88,26 @@ def _prompt_matrix_prompt(base: str, addition: str) -> str:
     if not addition:
         return base
     return f"{base}, {addition}"
+
+
+def _prompt_matrix_apply(values: dict[str, Any], line: str, matrix: dict[str, Any]) -> tuple[str, str]:
+    prompt = str(values.get("prompt") or "")
+    negative = str(values.get("negative_prompt") or "")
+    mode = str(matrix.get("mode") or "end")
+    if mode == "prompt_sr":
+        search = str(matrix.get("search") or "")
+        if search:
+            if search in prompt:
+                prompt = prompt.replace(search, line)
+            if search in negative:
+                negative = negative.replace(search, line)
+        return prompt, negative
+    target = str(matrix.get("target") or "prompt")
+    field = prompt if target == "prompt" else negative
+    next_text = _prompt_matrix_prompt(line, field) if mode == "start" else _prompt_matrix_prompt(field, line)
+    if target == "negative":
+        return prompt, next_text
+    return next_text, negative
 
 
 def _generation_plan(values: dict[str, Any]) -> tuple[list[str], int, int]:

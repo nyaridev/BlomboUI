@@ -44,6 +44,7 @@ _KEYS = {
     "outputGridPath": str,
     "outputImageName": str,
     "outputGridName": str,
+    "outputPathEnabled": bool,
     "batchSize": int,
     "batchCount": int,
     "sampler": str,
@@ -147,6 +148,10 @@ def _clean_params(raw: Any) -> dict[str, Any]:
             value = raw[key]
             if conv is str:
                 out[key] = str(value)
+            elif conv is bool:
+                if not isinstance(value, bool):
+                    continue
+                out[key] = value
             elif conv is int:
                 out[key] = int(value)
             else:

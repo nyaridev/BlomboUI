@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { PaneSplitter } from '@/components/chrome/PaneSplitter.tsx'
 import { GalleryTree } from '@/components/gallery/GalleryTree.tsx'
+import { otherKindLabel } from '@/components/gallery/galleryUtils.ts'
 import { TilePreview, TILE_GLOW } from '@/components/models/TilePreview.tsx'
 import type { GalleryNode } from '@/lib/gallery/tree.ts'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
@@ -178,14 +179,16 @@ export function GalleryTiles({
             {tiles.map((item) => {
               const selected = isOn(item.path) || focus === item.path
               const itemType = kindOf(item)
-              const strength = itemType === 'loras' ? storedLoraStrengthLabel(item.strength, item.slider) : ''
+              const badge =
+                itemType === 'loras' ? storedLoraStrengthLabel(item.strength, item.slider) : otherKindLabel(itemType)
               const preview = (
                 <TilePreview
                   className="w-full"
                   src={modelThumbSrc(itemType, item, thumbView)}
+                  rawSrc={modelThumbSrc(itemType, item, { ...thumbView, raw: true })}
                   mark="?"
                   label={labelOf(item)}
-                  badge={strength || undefined}
+                  badge={badge || undefined}
                   selected={selected}
                 />
               )

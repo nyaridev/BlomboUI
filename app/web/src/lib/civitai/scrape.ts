@@ -4,6 +4,7 @@ import {
   hasCivitaiLocalData,
   lookupCivitai,
   waitModelInfo,
+  type CivitaiFillScope,
 } from '@/lib/civitai/fill.ts'
 import { deleteModelThumb, saveModelInfo, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { civitaiSaveThumbView } from '@/lib/gallery/thumbView.ts'
@@ -12,6 +13,7 @@ import { useModelsStore } from '@/stores/modelsStore.ts'
 export type ScrapeKind = 'checkpoints' | 'loras'
 export type ClearKind = keyof Pick<ModelLists, 'checkpoints' | 'loras' | 'wildcards'>
 export type ScrapeMode = 'missing' | 'force' | 'full'
+export type ScrapeScope = CivitaiFillScope
 export type ClearMode = 'thumbs' | 'meta'
 export type ScrapeCounts = { filled: number; skipped: number; missed: number; cancelled: boolean }
 
@@ -30,14 +32,18 @@ function filePath(item: ModelEntry) {
 
 function paths(kind: ClearKind, perTile = false) {
   const seen = new Set<string>()
-  const out: string[] = []
-  for (const item of useModelsStore.getState()[kind]) {
-    const path = perTile ? item.path : filePath(item)
-    if (!path || seen.has(path)) {
-      continue
+  const out: { kind: keyof ModelLists; path: string }[] = []
+  const kinds: (keyof ModelLists)[] = kind === 'checkpoints' ? ['checkpoints', 'diffusion_models'] : [kind]
+  const store = useModelsStore.getState()
+  for (const itemKind of kinds) {
+    for (const item of store[itemKind]) {
+      const path = perTile ? item.path : filePath(item)
+      if (!path || seen.has(path)) {
+        continue
+      }
+      seen.add(path)
+      out.push({ kind: itemKind, path })
     }
-    seen.add(path)
-    out.push(path)
   }
   return out
 }
@@ -47,6 +53,7 @@ export async function scrapeCivitai(
   mode: ScrapeMode,
   signal: AbortSignal,
   onProgress?: (done: number, total: number) => void,
+  scope: ScrapeScope = 'all',
 ): Promise<ScrapeCounts> {
   if (busy) {
     return { filled: 0, skipped: 0, missed: 0, cancelled: true }
@@ -64,10 +71,10 @@ export async function scrapeCivitai(
         return { filled, skipped, missed, cancelled: true }
       }
       onProgress?.(i, total)
-      const path = list[i]
+      const { kind: itemKind, path } = list[i]
       try {
         const dest = civitaiSaveThumbView()
-        const info = await waitModelInfo(kind, path, signal, dest)
+        const info = await waitModelInfo(itemKind, path, signal, dest)
         if (signal.aborted) {
           return { filled, skipped, missed, cancelled: true }
         }
@@ -75,7 +82,7 @@ export async function scrapeCivitai(
           skipped += 1
           continue
         }
-        if (mode === 'missing' && hasCivitaiLocalData(info, lora)) {
+        if (mode === 'missing' && hasCivitaiLocalData(info, lora, scope)) {
           skipped += 1
           continue
         }
@@ -91,12 +98,12 @@ export async function scrapeCivitai(
           missed += 1
           continue
         }
-        const next = await applyCivitaiMeta(kind, path, hit, { types: info.types || [], prompt: info.prompt || '' })
+        const next = await applyCivitaiMeta(itemKind, path, hit, { types: info.types || [], prompt: info.prompt || '' }, scope)
         if (next.thumb) {
-          useModelsStore.getState().setThumb(kind, path, next.thumb)
+          useModelsStore.getState().setThumb(itemKind, path, next.thumb)
         }
-        if (lora) {
-          useModelsStore.getState().setMeta(kind, path, { prompt: next.prompt })
+        if (lora && scope !== 'thumbs') {
+          useModelsStore.getState().setMeta(itemKind, path, { prompt: next.prompt })
         }
         filled += 1
       } catch (err) {
@@ -134,15 +141,15 @@ export async function clearCivitai(
         return { filled, skipped: 0, missed, cancelled: true }
       }
       onProgress?.(i, total)
-      const path = list[i]
+      const { kind: itemKind, path } = list[i]
       try {
         if (mode === 'thumbs') {
-          await deleteModelThumb(kind, path, undefined, true)
-          useModelsStore.getState().setThumb(kind, path, 0)
+          await deleteModelThumb(itemKind, path, undefined, true)
+          useModelsStore.getState().setThumb(itemKind, path, 0)
         } else {
-          await saveModelInfo(kind, path, [], lora ? { prompt: '' } : undefined)
+          await saveModelInfo(itemKind, path, [], lora ? { prompt: '' } : undefined)
           if (lora) {
-            useModelsStore.getState().setMeta(kind, path, { prompt: '' })
+            useModelsStore.getState().setMeta(itemKind, path, { prompt: '' })
           }
         }
         filled += 1

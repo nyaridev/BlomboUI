@@ -14,7 +14,7 @@ from features.gallery.scripts import cache as gallery_cache
 from infrastructure.comfy import client as comfy
 from shared import pnginfo
 from features.generate.scripts import templates
-from config import comfy_output_root, outputs_root
+from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
 
 _save_lock = threading.Lock()
@@ -312,10 +312,15 @@ def _image_save_opts() -> tuple[str, int, bool, int]:
 
 
 def _import_image(
-    job_id: str, values: dict[str, Any], info: dict[str, str], graph: dict[str, Any] | None = None
+    job_id: str,
+    values: dict[str, Any],
+    info: dict[str, str],
+    graph: dict[str, Any] | None = None,
+    persist: bool = True,
 ) -> tuple[str, Path]:
     raw = comfy.download_image(info)
-    result = _import_bytes(job_id, values, raw, graph, "images")
+    folder = None if persist else _xy_temp_dir(job_id)
+    result = _import_bytes(job_id, values, raw, graph, "images", folder)
     _forget_comfy_file(info)
     return result
 
@@ -326,8 +331,19 @@ def _import_preview(
     return _import_bytes(job_id, values, data, graph, "interrupted")
 
 
+def _xy_temp_dir(job_id: str) -> Path:
+    folder = RUNTIME / "tmp" / "xy-plot" / job_id
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
 def _import_bytes(
-    job_id: str, values: dict[str, Any], raw: bytes, graph: dict[str, Any] | None, kind: str
+    job_id: str,
+    values: dict[str, Any],
+    raw: bytes,
+    graph: dict[str, Any] | None,
+    kind: str,
+    folder: Path | None = None,
 ) -> tuple[str, Path]:
     fmt, quality, sidecar, max_kb = _image_save_opts()
     packed = {
@@ -337,7 +353,7 @@ def _import_bytes(
     }
     if kind == "interrupted":
         packed["interrupted"] = True
-    folder = _output_dir(values, kind)
+    folder = folder or _output_dir(values, kind)
     created_at = _now()
     metadata = {
         "version": 1,
@@ -462,4 +478,39 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
         return
     values["grid_path"] = dests[0]
     values["grid_paths"] = dests
+    jobs_repo.set_payload(job_id, json.dumps(values))
+
+
+def _maybe_xy_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
+    xy = values.get("xy_plot")
+    if not isinstance(xy, dict) or not paths:
+        return
+    quality = int(values.get("batch_grid_quality") or 85)
+    fmt = _grid_fmt(values.get("batch_grid_format"))
+    folder = _output_dir(values, "grids")
+    try:
+        from features.generate.scripts.grid import save_xy_sheet
+        from features.generate.scripts.xy_plot import xy_labels, xy_shape
+
+        cols, rows = xy_shape(xy)
+        x_labels, y_labels = xy_labels(xy)
+        with _save_lock:
+            dest = _alloc_named(folder, fmt, values, "grids", start=_file_index(paths[0]))
+            save_xy_sheet(
+                paths,
+                dest,
+                cols,
+                rows,
+                int(xy.get("grid_margin") or 0),
+                x_labels,
+                y_labels,
+                bool(xy.get("draw_legend", True)),
+                quality,
+                pnginfo.parameters_text(_grid_values(paths[0], values), raw=True),
+                fmt,
+            )
+    except Exception:
+        return
+    values["grid_path"] = str(dest)
+    values["grid_paths"] = [str(dest)]
     jobs_repo.set_payload(job_id, json.dumps(values))

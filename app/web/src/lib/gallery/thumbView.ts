@@ -2,6 +2,7 @@ import { useSettingsStore, LOCAL_SCOPE_DEFAULT, type GalleryLocalScope, type Gal
 import { modelThumbUrl, type ModelEntry, type ModelLists, type ThumbView } from '@/lib/api.ts'
 
 export const GLOBAL_SCOPE = 'global'
+export const RAW_TILE_MIN_PX = 512
 
 let autoIds: string[] = []
 

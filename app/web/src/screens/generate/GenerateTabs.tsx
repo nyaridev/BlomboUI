@@ -1,7 +1,7 @@
 import { GalleryView } from '@/components/gallery/GalleryView.tsx'
 import { PaneSplitter } from '@/components/chrome/PaneSplitter.tsx'
 import { GenerationParams } from './GenerationParams.tsx'
-import type { PromptMatrixSettings } from './GenerationScripts.tsx'
+import type { PromptMatrixSettings, XyPlotSettings } from './GenerationScripts.tsx'
 import { ImageStage } from './ImageStage.tsx'
 import {
   defaultParamsWidth,
@@ -38,6 +38,8 @@ export function GenerateTabs({
   comfyOk,
   lastSeed,
   onPromptMatrix,
+  onXyPlot,
+  workflowParams,
   starting,
   imageIds,
   jobId,
@@ -82,6 +84,8 @@ export function GenerateTabs({
   comfyOk: boolean
   lastSeed: number | null
   onPromptMatrix: (value: PromptMatrixSettings | null) => void
+  onXyPlot: (value: XyPlotSettings | null) => void
+  workflowParams: string[]
   starting: boolean
   imageIds: string[]
   jobId?: string
@@ -155,6 +159,8 @@ export function GenerateTabs({
               comfyOk={comfyOk}
               lastSeed={lastSeed}
               onPromptMatrix={onPromptMatrix}
+              onXyPlot={onXyPlot}
+              workflowParams={workflowParams}
             />
           </div>
           <PaneSplitter
@@ -318,8 +324,15 @@ export function GenerateTabs({
               onSelect={(path) => {
                 const item = otherItems.find((row) => row.path === path)
                 const kind = item ? otherItemKind(item) : 'vae'
-                if (swapTarget?.slot === 'textEncoder' || (swapTarget?.slot !== 'vae' && kind === 'text_encoders')) {
+                const useTextEncoder =
+                  swapTarget?.slot === 'textEncoder' || (swapTarget?.slot !== 'vae' && kind === 'text_encoders')
+                if (useTextEncoder) {
+                  if (!workflowParams.includes('textEncoder')) {
+                    return
+                  }
                   onTextEncoder(path)
+                } else if (!workflowParams.includes('vae')) {
+                  return
                 } else {
                   onVae(path)
                 }

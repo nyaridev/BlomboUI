@@ -1,5 +1,6 @@
 import { OutputPathOverride } from './OutputPathOverride.tsx'
-import { GenerationScripts, type PromptMatrixSettings } from './GenerationScripts.tsx'
+import { GenerationExtras } from './GenerationExtras.tsx'
+import { GenerationScripts, type PromptMatrixSettings, type XyPlotSettings } from './GenerationScripts.tsx'
 import { SliderField } from '@/components/primitives/SliderField.tsx'
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { NumberField } from '@/components/primitives/NumberField.tsx'
@@ -7,11 +8,23 @@ import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { getKSamplerChoices } from '@/lib/api.ts'
 import { useGenerateStore, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, inferScaler, listedChoices, orientSize, parseSize, sizeFromScaler, snapToSet, type ResMode } from './resolutions.ts'
 
 function FieldLabel({ children }: { children: string }) {
   return <span className="text-xs text-muted">{children}</span>
+}
+
+function ParamSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="mt-8 flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <h2 className="shrink-0 text-xs text-label">{title}</h2>
+        <div className="min-w-0 flex-1 border-t border-line" />
+      </div>
+      {children}
+    </section>
+  )
 }
 
 type GenerationParamsProps = {
@@ -20,6 +33,8 @@ type GenerationParamsProps = {
   comfyOk: boolean
   lastSeed: number | null
   onPromptMatrix: (value: PromptMatrixSettings | null) => void
+  onXyPlot: (value: XyPlotSettings | null) => void
+  workflowParams: string[]
 }
 
 export function GenerationParams({
@@ -28,6 +43,8 @@ export function GenerationParams({
   comfyOk,
   lastSeed,
   onPromptMatrix,
+  onXyPlot,
+  workflowParams,
 }: GenerationParamsProps) {
   const width = useGenerateStore((s) => s.width)
   const height = useGenerateStore((s) => s.height)
@@ -59,10 +76,12 @@ export function GenerationParams({
   const outputGridPath = useGenerateStore((s) => s.outputGridPath)
   const outputImageName = useGenerateStore((s) => s.outputImageName)
   const outputGridName = useGenerateStore((s) => s.outputGridName)
+  const outputPathEnabled = useGenerateStore((s) => s.outputPathEnabled)
   const setOutputImagePath = useGenerateStore((s) => s.setOutputImagePath)
   const setOutputGridPath = useGenerateStore((s) => s.setOutputGridPath)
   const setOutputImageName = useGenerateStore((s) => s.setOutputImageName)
   const setOutputGridName = useGenerateStore((s) => s.setOutputGridName)
+  const setOutputPathEnabled = useGenerateStore((s) => s.setOutputPathEnabled)
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
   const setResolutions = useSettingsStore((s) => s.setResolutions)
@@ -283,17 +302,29 @@ export function GenerationParams({
           />
         </div>
       </div>
-      <OutputPathOverride
-        imagePath={outputImagePath}
-        gridPath={outputGridPath}
-        imageName={outputImageName}
-        gridName={outputGridName}
-        onImagePath={setOutputImagePath}
-        onGridPath={setOutputGridPath}
-        onImageName={setOutputImageName}
-        onGridName={setOutputGridName}
-      />
-      <GenerationScripts onPromptMatrix={onPromptMatrix} />
+      <ParamSection title="Extras">
+        <GenerationExtras />
+      </ParamSection>
+      <ParamSection title="Other">
+        <OutputPathOverride
+          imagePath={outputImagePath}
+          gridPath={outputGridPath}
+          imageName={outputImageName}
+          gridName={outputGridName}
+          enabled={outputPathEnabled}
+          onImagePath={setOutputImagePath}
+          onGridPath={setOutputGridPath}
+          onImageName={setOutputImageName}
+          onGridName={setOutputGridName}
+          onEnabled={setOutputPathEnabled}
+        />
+        <GenerationScripts
+          onPromptMatrix={onPromptMatrix}
+          onXyPlot={onXyPlot}
+          workflowParams={workflowParams}
+          comfyOk={comfyOk}
+        />
+      </ParamSection>
       {error ? <p className="text-xs text-accent">{error}</p> : null}
       {warning ? <p className="text-xs text-muted">{warning}</p> : null}
     </aside>

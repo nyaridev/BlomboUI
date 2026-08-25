@@ -60,8 +60,10 @@ def pack(context: str, source: dict[str, Any] | None = None) -> dict[str, Any]:
     }
 
 
-def write_image(image: Any, fmt: str, payload: dict[str, Any], dest: Path) -> None:
+def write_image(image: Any, fmt: str, payload: dict[str, Any], dest: Path, quality: int = 85) -> None:
     fmt = (fmt or "").upper()
+    if fmt == "JPG":
+        fmt = "JPEG"
     blob = json.dumps(payload, separators=(",", ":"))
     params = str(payload.get("parameters") or "")
     out = BytesIO()
@@ -79,12 +81,12 @@ def write_image(image: Any, fmt: str, payload: dict[str, Any], dest: Path) -> No
             info.add_text("parameters", params, zip=True)
         image.save(out, format="PNG", pnginfo=info)
     else:
-        if fmt == "JPEG" and image.mode in ("RGBA", "P"):
+        if fmt == "JPEG" and image.mode in ("RGBA", "P", "LA"):
             image = image.convert("RGB")
         exif = _exif(blob, params)
         opts: dict[str, Any] = {}
-        if fmt == "JPEG":
-            opts["quality"] = 85
+        if fmt in {"JPEG", "WEBP"}:
+            opts["quality"] = max(1, min(100, int(quality)))
         if exif is not None:
             opts["exif"] = exif
         image.save(out, format=fmt, **opts)

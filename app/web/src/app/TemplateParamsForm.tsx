@@ -241,10 +241,12 @@ export function TemplateParamsForm({ value, onChange, apply }: TemplateParamsFor
           gridPath={value.outputGridPath}
           imageName={value.outputImageName}
           gridName={value.outputGridName}
+          enabled={value.outputPathEnabled}
           onImagePath={(outputImagePath) => set('outputImagePath', outputImagePath)}
           onGridPath={(outputGridPath) => set('outputGridPath', outputGridPath)}
           onImageName={(outputImageName) => set('outputImageName', outputImageName)}
           onGridName={(outputGridName) => set('outputGridName', outputGridName)}
+          onEnabled={(outputPathEnabled) => set('outputPathEnabled', outputPathEnabled)}
         />
       </div>
     </div>

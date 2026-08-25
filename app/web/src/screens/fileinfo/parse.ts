@@ -303,6 +303,9 @@ function validParam(key: keyof TemplateParams, value: unknown, choices: { sample
   if (key === 'outputImagePath' || key === 'outputGridPath' || key === 'outputImageName' || key === 'outputGridName') {
     return typeof value === 'string'
   }
+  if (key === 'outputPathEnabled') {
+    return typeof value === 'boolean'
+  }
   return false
 }
 

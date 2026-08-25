@@ -1,3 +1,4 @@
+import { OTHER_KIND_IDS } from '@/components/gallery/galleryUtils.ts'
 import { MODEL_TYPES } from '@/lib/modelTypes.ts'
 import { generateTabOrderList, type GenerateTab } from '@/screens/generate/tabs.ts'
 import {
@@ -100,12 +101,20 @@ export function cleanImageFormat(raw: unknown, fallback: ImageFormat = SETTINGS_
   return IMAGE_FORMAT_IDS.has(name as string) ? (name as ImageFormat) : fallback
 }
 
-export function cleanImageQuality(raw: unknown) {
+export function cleanImageQuality(raw: unknown, fallback = SETTINGS_DEFAULTS.imageQuality) {
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(n)) {
-    return SETTINGS_DEFAULTS.imageQuality
+    return fallback
   }
   return Math.max(1, Math.min(100, Math.round(n)))
+}
+
+export function cleanThumbMegapixels(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.thumbMegapixels
+  }
+  return Math.round(Math.min(2, Math.max(0.05, n)) * 20) / 20
 }
 
 export function cleanLargeJpegMaxKb(raw: unknown) {
@@ -243,7 +252,7 @@ export function cleanTypeList(raw: unknown): string[] {
   if (!Array.isArray(raw)) {
     return []
   }
-  const allowed = new Set(MODEL_TYPES)
+  const allowed = new Set<string>([...MODEL_TYPES, ...OTHER_KIND_IDS])
   const out: string[] = []
   for (const item of raw) {
     const name = String(item)
@@ -585,6 +594,16 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     saveLargeAsJpeg: typeof patch.saveLargeAsJpeg === 'boolean' ? patch.saveLargeAsJpeg : SETTINGS_DEFAULTS.saveLargeAsJpeg,
     largeJpegMaxKb:
       typeof patch.largeJpegMaxKb === 'number' ? cleanLargeJpegMaxKb(patch.largeJpegMaxKb) : SETTINGS_DEFAULTS.largeJpegMaxKb,
+    thumbMegapixels:
+      typeof patch.thumbMegapixels === 'number' ? cleanThumbMegapixels(patch.thumbMegapixels) : SETTINGS_DEFAULTS.thumbMegapixels,
+    thumbFormat: patch.thumbFormat
+      ? cleanImageFormat(patch.thumbFormat, SETTINGS_DEFAULTS.thumbFormat)
+      : SETTINGS_DEFAULTS.thumbFormat,
+    thumbQuality:
+      typeof patch.thumbQuality === 'number'
+        ? cleanImageQuality(patch.thumbQuality, SETTINGS_DEFAULTS.thumbQuality)
+        : SETTINGS_DEFAULTS.thumbQuality,
+    saveRawThumbs: typeof patch.saveRawThumbs === 'boolean' ? patch.saveRawThumbs : SETTINGS_DEFAULTS.saveRawThumbs,
     gallerySortKey: patch.gallerySortKey ? cleanSortKeyMap(patch.gallerySortKey) : SETTINGS_DEFAULTS.gallerySortKey,
     gallerySortDir: patch.gallerySortDir ? cleanSortDirMap(patch.gallerySortDir) : SETTINGS_DEFAULTS.gallerySortDir,
     galleryTileScale:

@@ -23,8 +23,12 @@ from .model_thumb_storage import (
 ROOT = USER / "model_thumbs"
 THUMBS = ROOT
 THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4")
-THUMB_MAX = 512
-_FORMATS = {"PNG": ".png", "JPEG": ".jpg", "WEBP": ".webp"}
+_SAVE = {"png": ("PNG", ".png"), "jpg": ("JPEG", ".jpg"), "webp": ("WEBP", ".webp")}
+THUMB_MP_DEFAULT = 0.25
+THUMB_FMT_DEFAULT = "jpg"
+THUMB_QUALITY_DEFAULT = 85
+OUTPUT_FMT_DEFAULT = "png"
+OUTPUT_QUALITY_DEFAULT = 100
 _MEDIA = {
     ".png": "image/png",
     ".jpg": "image/jpeg",
@@ -42,6 +46,11 @@ def thumb_dir(kind: str, ident: str) -> Path:
 
 def thumb_paths(kind: str, ident: str, context: str = GLOBAL) -> list[Path]:
     base = thumb_dir(kind, ident) / context
+    return [Path(str(base) + ext) for ext in THUMB_EXTS]
+
+
+def raw_paths(kind: str, ident: str, context: str = GLOBAL) -> list[Path]:
+    base = thumb_dir(kind, ident) / f"{context}_raw"
     return [Path(str(base) + ext) for ext in THUMB_EXTS]
 
 
@@ -76,41 +85,45 @@ def resolved_file(
     mode: str = "exact",
     fallback: bool = False,
     optional: list[str] | None = None,
+    raw: bool = False,
 ) -> Path | None:
     ident = _ident(rel)
     if not ident:
         return None
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
     exact = thumb_at(kind, ident, key)
+    found: Path | None = None
     if mode != "likely":
         if exact:
-            return exact
-        if fallback and key != GLOBAL:
-            return thumb_at(kind, ident, GLOBAL)
-        return None
-    if exact:
-        return exact
-    ids = thumbnail_scopes.parse_context(key)
-    best: tuple[tuple[int, int, int], int, Path] | None = None
-    for ctx, row in ident_index(kind, ident).items():
-        if ctx == key or ctx == GLOBAL:
-            continue
-        path = thumb_at(kind, ident, ctx)
-        if not path:
-            continue
-        rank = thumbnail_scopes.rank_thumb(
-            ids, ctx, row.get("tags") if isinstance(row, dict) else None, optional
-        )
-        if not rank:
-            continue
-        score = (rank, _mtime(path), path)
-        if best is None or score[0] > best[0] or (score[0] == best[0] and score[1] > best[1]):
-            best = score
-    if best:
-        return best[2]
-    if fallback:
-        return thumb_at(kind, ident, GLOBAL)
-    return None
+            found = exact
+        elif fallback and key != GLOBAL:
+            found = thumb_at(kind, ident, GLOBAL)
+    elif exact:
+        found = exact
+    else:
+        ids = thumbnail_scopes.parse_context(key)
+        best: tuple[tuple[int, int, int], int, Path] | None = None
+        for ctx, row in ident_index(kind, ident).items():
+            if ctx == key or ctx == GLOBAL:
+                continue
+            path = thumb_at(kind, ident, ctx)
+            if not path:
+                continue
+            rank = thumbnail_scopes.rank_thumb(
+                ids, ctx, row.get("tags") if isinstance(row, dict) else None, optional
+            )
+            if not rank:
+                continue
+            score = (rank, _mtime(path), path)
+            if best is None or score[0] > best[0] or (score[0] == best[0] and score[1] > best[1]):
+                best = score
+        if best:
+            found = best[2]
+        elif fallback:
+            found = thumb_at(kind, ident, GLOBAL)
+    if raw and found:
+        return _raw_beside(found) or found
+    return found
 
 
 def resolved_mtime(
@@ -166,26 +179,29 @@ def save_thumb(
             if old != dest and old.is_file():
                 old.unlink()
         dest.write_bytes(data)
+        _drop_raw(kind, ident, key)
         stamp = int(dest.stat().st_mtime)
         set_index(kind, ident, key, stamp, payload.get("tags") if isinstance(payload.get("tags"), list) else [])
         return stamp
     assert image is not None
-    fmt = (image.format or "").upper()
-    ext = _FORMATS.get(fmt)
-    if not ext:
-        raise ValueError("use png, jpg, or webp")
-    if max(image.size) > THUMB_MAX:
-        image.thumbnail((THUMB_MAX, THUMB_MAX))
+    megapixels, thumb_fmt, thumb_quality, save_raw, out_fmt, out_quality = _save_opts()
     source = thumbnail_embed.extract_source(data)
     if meta:
         _apply_meta(source, meta)
     payload = thumbnail_embed.pack(key, source)
-    dest = Path(str(thumb_dir(kind, ident) / key) + ext)
-    dest.parent.mkdir(parents=True, exist_ok=True)
+    full = image.copy()
+    _fit_megapixels(image, megapixels)
+    dest = _write_still(image, thumb_fmt, thumb_quality, payload, thumb_dir(kind, ident) / key)
     for old in thumb_paths(kind, ident, key):
         if old != dest and old.is_file():
             old.unlink()
-    thumbnail_embed.write_image(image, fmt, payload, dest)
+    if save_raw:
+        raw_dest = _write_still(full, out_fmt, out_quality, payload, thumb_dir(kind, ident) / f"{key}_raw")
+        for old in raw_paths(kind, ident, key):
+            if old != raw_dest and old.is_file():
+                old.unlink()
+    else:
+        _drop_raw(kind, ident, key)
     stamp = int(dest.stat().st_mtime)
     set_index(kind, ident, key, stamp, payload.get("tags") if isinstance(payload.get("tags"), list) else [])
     return stamp
@@ -205,7 +221,7 @@ def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: 
         drop_ident(kind, ident)
         return
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context or GLOBAL))
-    for path in thumb_paths(kind, ident, key):
+    for path in [*thumb_paths(kind, ident, key), *raw_paths(kind, ident, key)]:
         if path.is_file():
             path.unlink()
     drop_context(kind, ident, key)
@@ -229,7 +245,7 @@ def drop_scope(scope_id: str) -> None:
                 parts = thumbnail_scopes.parse_context(key)
                 if name not in parts:
                     continue
-                for path in thumb_paths(kind, ident, key):
+                for path in [*thumb_paths(kind, ident, key), *raw_paths(kind, ident, key)]:
                     if path.is_file():
                         path.unlink()
                 contexts.pop(key, None)
@@ -474,6 +490,84 @@ def _mtime(path: Path | None) -> int:
         return int(path.stat().st_mtime)
     except OSError:
         return 0
+
+
+def _raw_beside(path: Path) -> Path | None:
+    ext = _thumb_ext(path.name)
+    if not ext:
+        return None
+    context = path.name[: -len(ext)]
+    if context.endswith("_raw"):
+        return path if path.is_file() else None
+    for item in THUMB_EXTS:
+        candidate = path.parent / f"{context}_raw{item}"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _drop_raw(kind: str, ident: str, context: str) -> None:
+    for path in raw_paths(kind, ident, context):
+        if path.is_file():
+            path.unlink()
+
+
+def _fit_megapixels(image: Any, megapixels: float) -> None:
+    width, height = image.size
+    if width <= 0 or height <= 0:
+        return
+    cap = max(0.05, megapixels) * 1_000_000
+    pixels = width * height
+    if pixels <= cap:
+        return
+    ratio = (cap / pixels) ** 0.5
+    image.thumbnail((max(1, round(width * ratio)), max(1, round(height * ratio))))
+
+
+def _save_opts() -> tuple[float, str, int, bool, str, int]:
+    from features.settings import service as settings
+
+    cfg = settings.load()
+    return (
+        _clamp_mp(cfg.get("thumbMegapixels", THUMB_MP_DEFAULT)),
+        _image_fmt(cfg.get("thumbFormat"), THUMB_FMT_DEFAULT),
+        _clamp_quality(cfg.get("thumbQuality"), THUMB_QUALITY_DEFAULT),
+        bool(cfg.get("saveRawThumbs", False)),
+        _image_fmt(cfg.get("imageFormat"), OUTPUT_FMT_DEFAULT),
+        _clamp_quality(cfg.get("imageQuality"), OUTPUT_QUALITY_DEFAULT),
+    )
+
+
+def _clamp_mp(raw: Any) -> float:
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return THUMB_MP_DEFAULT
+    if value != value or value in (float("inf"), float("-inf")):
+        return THUMB_MP_DEFAULT
+    return round(min(2.0, max(0.05, value)) * 20) / 20
+
+
+def _image_fmt(raw: Any, fallback: str) -> str:
+    name = str(raw or "").lower()
+    if name == "jpeg":
+        name = "jpg"
+    return name if name in _SAVE else fallback
+
+
+def _clamp_quality(raw: Any, fallback: int) -> int:
+    try:
+        return max(1, min(100, int(raw)))
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _write_still(image: Any, fmt: str, quality: int, payload: dict[str, Any], base: Path) -> Path:
+    pil_fmt, ext = _SAVE[fmt]
+    dest = Path(str(base) + ext)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    thumbnail_embed.write_image(image, pil_fmt, payload, dest, quality)
+    return dest
 
 
 

@@ -47,6 +47,10 @@ export type UserSettings = {
   imageQuality?: number
   saveLargeAsJpeg?: boolean
   largeJpegMaxKb?: number
+  thumbMegapixels?: number
+  thumbFormat?: string
+  thumbQuality?: number
+  saveRawThumbs?: boolean
   gallerySortKey?: Record<string, string> | string
   gallerySortDir?: Record<string, string> | string
   galleryTileScale?: number

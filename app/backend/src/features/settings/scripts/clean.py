@@ -189,6 +189,27 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["largeJpegMaxKb"] = max(256, min(65536, int(raw["largeJpegMaxKb"])))
         except (TypeError, ValueError):
             pass
+    if "thumbMegapixels" in raw:
+        try:
+            value = float(raw["thumbMegapixels"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if value == value and value not in (float("inf"), float("-inf")):
+                out["thumbMegapixels"] = round(min(2.0, max(0.05, value)) * 20) / 20
+    if "thumbFormat" in raw:
+        name = str(raw["thumbFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["thumbFormat"] = name
+    if "thumbQuality" in raw:
+        try:
+            out["thumbQuality"] = max(1, min(100, int(raw["thumbQuality"])))
+        except (TypeError, ValueError):
+            pass
+    if "saveRawThumbs" in raw:
+        out["saveRawThumbs"] = bool(raw["saveRawThumbs"])
     if "gallerySortKey" in raw:
         mapped = _gallery_map(raw["gallerySortKey"], _GALLERY_SORTS, "name")
         if mapped:

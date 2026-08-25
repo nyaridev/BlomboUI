@@ -15,8 +15,11 @@ import {
   fileName,
   filePath,
   isFileTile,
+  isOtherKind,
   matchesQuery,
   matchesTypes,
+  OTHER_KIND_IDS,
+  otherKindLabel,
   remPx,
   sortItems,
   tileName,
@@ -89,12 +92,16 @@ export function GalleryView({
   const query = useSettingsStore((s) => s.galleryQuery[filterKey] ?? '')
   const setGalleryQuery = useSettingsStore((s) => s.setGalleryQuery)
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes) ?? []
-  const typeOptions = useMemo(
-    () => filterTypeSections(MODEL_TYPE_SECTIONS, (item) => !hiddenModelTypes.includes(item)),
-    [hiddenModelTypes],
-  )
+  const otherGallery = kind === 'vae' && Boolean(itemKind)
+  const typeOptions = useMemo(() => {
+    const sections = filterTypeSections(MODEL_TYPE_SECTIONS, (item) => !hiddenModelTypes.includes(item))
+    if (!otherGallery) {
+      return sections
+    }
+    return [{ title: 'Kind', options: [...OTHER_KIND_IDS] }, ...sections]
+  }, [hiddenModelTypes, otherGallery])
   const visibleTypeFilter = useMemo(
-    () => typeFilter.filter((item) => !hiddenModelTypes.includes(item)),
+    () => typeFilter.filter((item) => isOtherKind(item) || !hiddenModelTypes.includes(item)),
     [hiddenModelTypes, typeFilter],
   )
   const extraNames = useMemo(() => {
@@ -241,7 +248,11 @@ export function GalleryView({
     const isPinned = (item: ModelEntry) =>
       pinnedSelected ? pinnedSelected.includes(item.path) : Boolean(pinnedValue) && pinnedValue === item.path
     function keep(item: ModelEntry, pinned: boolean) {
-      return Boolean(modelPath(item)) && (pinned || matchesQuery(item, query, extraNames)) && matchesTypes(item, visibleTypeFilter)
+      return (
+        Boolean(modelPath(item)) &&
+        (pinned || matchesQuery(item, query, extraNames)) &&
+        matchesTypes(item, visibleTypeFilter, itemKind?.(item) ?? kind)
+      )
     }
     if (!pinSelected) {
       return sortItems(
@@ -265,7 +276,7 @@ export function GalleryView({
       ? pinnedSelected.flatMap((path) => pinned.filter((item) => item.path === path))
       : sortItems(pinned, shownSortKey, shownSortDir)
     return [...orderedPinned, ...sortItems(rest, shownSortKey, shownSortDir)]
-  }, [extraNames, items, pinnedSelected, pinnedValue, pinSelected, query, shownSortDir, shownSortKey, visibleTypeFilter])
+  }, [extraNames, itemKind, items, kind, pinnedSelected, pinnedValue, pinSelected, query, shownSortDir, shownSortKey, visibleTypeFilter])
 
   function isOn(path: string) {
     if (selected) {
@@ -359,6 +370,7 @@ export function GalleryView({
         typeOptions={typeOptions}
         typeFilter={visibleTypeFilter}
         onTypes={(value) => setGalleryTypes(filterKey, value)}
+        chipLabel={(item) => otherKindLabel(item) || item}
         sortKey={shownSortKey}
         sortDir={shownSortDir}
         onSortKey={(value) => setGallerySortKey(filterKey, value as SortKey)}

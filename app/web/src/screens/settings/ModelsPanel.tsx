@@ -6,11 +6,11 @@ import { getKSamplerChoices } from '@/lib/api.ts'
 import { MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { SAMPLERS, SCHEDULERS } from '@/screens/generate/resolutions.ts'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { IMAGE_FORMATS, useSettingsStore, type ImageFormat } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
 
 export const MODELS_QUERY =
-  'models hidden types picker chips sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention preview every last batch first auto apply instant trigger start end'
+  'models hidden types picker chips sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention preview every last batch first auto apply instant trigger start end thumbnails megapixels format png jpg jpeg webp quality raw'
 
 export function ModelsPanel({ query = '' }: { query?: string }) {
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes) ?? []
@@ -43,6 +43,14 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
   const setGenPreviewAfter = useSettingsStore((s) => s.setGenPreviewAfter)
   const setGenPreviewLast = useSettingsStore((s) => s.setGenPreviewLast)
   const setGenPreviewAfterFirst = useSettingsStore((s) => s.setGenPreviewAfterFirst)
+  const thumbMegapixels = useSettingsStore((s) => s.thumbMegapixels)
+  const thumbFormat = useSettingsStore((s) => s.thumbFormat)
+  const thumbQuality = useSettingsStore((s) => s.thumbQuality)
+  const saveRawThumbs = useSettingsStore((s) => s.saveRawThumbs)
+  const setThumbMegapixels = useSettingsStore((s) => s.setThumbMegapixels)
+  const setThumbFormat = useSettingsStore((s) => s.setThumbFormat)
+  const setThumbQuality = useSettingsStore((s) => s.setThumbQuality)
+  const setSaveRawThumbs = useSettingsStore((s) => s.setSaveRawThumbs)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
 
@@ -61,6 +69,41 @@ export function ModelsPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
+      <SettingsCard query={query} title="Thumbnails" terms="thumbnails megapixels format png jpg jpeg webp quality raw">
+        <SettingsBlock query={query} title="Thumbnail megapixels" terms="megapixels size cap resize">
+          <SliderField value={thumbMegapixels} onChange={setThumbMegapixels} min={0.05} max={2} step={0.05} />
+          <p className="text-xs text-muted">
+            Small thumbs are downscaled to this area. Larger images are never upscaled.
+          </p>
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Thumbnail format" terms="png jpg jpeg webp extension">
+          <SelectField
+            value={thumbFormat}
+            onChange={(value) => setThumbFormat(value as ImageFormat)}
+            options={[...IMAGE_FORMATS]}
+          />
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Thumbnail quality" terms="jpeg webp jpg quality">
+          <div className={thumbFormat === 'png' ? 'pointer-events-none opacity-40' : ''}>
+            <SliderField value={thumbQuality} onChange={setThumbQuality} min={1} max={100} />
+          </div>
+          <p className="text-xs text-muted">Used for JPEG and WebP.</p>
+        </SettingsBlock>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="check"
+            checked={saveRawThumbs}
+            onChange={(e) => setSaveRawThumbs(e.target.checked)}
+          />
+          Save raw thumbnails
+        </label>
+        <p className="text-xs text-muted">
+          Also write a full-size copy next to the thumbnail as {'{context}'}_raw, encoded with Output image format and
+          quality. Scopes still resolve the same context. Small tiles keep using the thumbnail; large tiles and opened
+          photos use the raw file when it exists.
+        </p>
+      </SettingsCard>
       <SettingsCard query={query} title="Preview" terms="generation preview every step last sampling">
         <label className="flex items-center gap-2 text-sm text-ink">
           <input

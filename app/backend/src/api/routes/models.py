@@ -92,12 +92,18 @@ def put_model_info(kind: str, path: str, body: ModelInfoUpdate) -> dict:
 
 @api.get("/user-models/{kind}/thumb")
 def get_model_thumb(
-    kind: str, path: str, context: str = "", mode: str = "exact", fallback: bool = False, optional: str = ""
+    kind: str,
+    path: str,
+    context: str = "",
+    mode: str = "exact",
+    fallback: bool = False,
+    optional: str = "",
+    raw: bool = False,
 ) -> FileResponse:
     if kind not in models.ALL_KINDS:
         raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
     key, view, use_global, opt = resolve_view(context, mode, fallback, optional)
-    file = models.resolved_file(kind, path, key, view, use_global, opt)
+    file = models.resolved_file(kind, path, key, view, use_global, opt, raw=raw)
     if not file:
         raise ApiError("not_found", "thumb not found")
     return file_response(file, models.thumb_media(file), immutable=True)

@@ -12,7 +12,9 @@ type ChipSelectProps = {
   placeholder?: string
   mode?: 'select' | 'order'
   chipLabel?: (item: string) => string
+  chipClassName?: (item: string) => string
   compact?: boolean
+  allowCustom?: boolean
 }
 
 function asSections(options: string[] | ChipSection[]): ChipSection[] {
@@ -22,6 +24,8 @@ function asSections(options: string[] | ChipSection[]): ChipSection[] {
   return [{ title: '', options: options as string[] }]
 }
 
+const ADD = '__chip_add__'
+
 export function ChipSelect({
   options,
   value,
@@ -29,7 +33,9 @@ export function ChipSelect({
   placeholder = 'Select…',
   mode = 'select',
   chipLabel,
+  chipClassName,
   compact = false,
+  allowCustom = false,
 }: ChipSelectProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -49,7 +55,12 @@ export function ChipSelect({
       })
       .filter((section) => section.options.length > 0)
   }, [sections, value, query, chipLabel])
-  const flat = useMemo(() => shown.flatMap((section) => section.options), [shown])
+  const custom = allowCustom ? query.trim() : ''
+  const canAddCustom = Boolean(custom) && !value.includes(custom)
+  const flat = useMemo(() => {
+    const items = shown.flatMap((section) => section.options)
+    return canAddCustom && !items.includes(custom) ? [...items, ADD] : items
+  }, [shown, canAddCustom, custom])
   const leftCount = sections.reduce((sum, section) => sum + section.options.filter((item) => !value.includes(item)).length, 0)
 
   function close() {
@@ -59,10 +70,19 @@ export function ChipSelect({
   }
 
   function add(item: string) {
+    if (!item || value.includes(item)) {
+      return
+    }
     onChange([...value, item])
     setQuery('')
     setActive(0)
     input.current?.focus()
+  }
+
+  function addCustom() {
+    if (canAddCustom) {
+      add(custom)
+    }
   }
 
   useEffect(() => {
@@ -136,8 +156,8 @@ export function ChipSelect({
 
   if (mode === 'order') {
     return (
-      <div className="flex min-h-9 items-center rounded border border-line bg-field px-2 py-1.5">
-        <ChipList value={value} onChange={onChange} removable={false} chipLabel={chipLabel} />
+      <div className="field-select">
+        <ChipList value={value} onChange={onChange} removable={false} chipLabel={chipLabel} chipClassName={chipClassName} />
       </div>
     )
   }
@@ -149,13 +169,12 @@ export function ChipSelect({
       <div
         ref={field}
         className={[
-          'flex cursor-text gap-1 rounded border border-line bg-field focus-within:border-accent',
-          compact
-            ? 'h-full min-h-0 items-center overflow-hidden px-1.5 py-0'
-            : tall
-              ? 'min-h-9 items-start px-2 py-1.5'
-              : 'min-h-9 items-center px-2 py-1.5',
-        ].join(' ')}
+          'field-select cursor-text',
+          compact ? 'h-full min-h-0 overflow-hidden' : '',
+          !compact && tall ? 'items-start' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onClick={() => {
           input.current?.focus()
           setOpen(true)
@@ -166,6 +185,7 @@ export function ChipSelect({
           onChange={onChange}
           onChipClick={() => input.current?.focus()}
           chipLabel={chipLabel}
+          chipClassName={chipClassName}
           className={
             compact
               ? 'flex min-h-0 min-w-0 flex-1 flex-nowrap items-center gap-1 overflow-x-auto'
@@ -174,10 +194,7 @@ export function ChipSelect({
         >
           <input
             ref={input}
-            className={[
-              'min-w-16 flex-1 bg-transparent py-0.5 text-ink outline-none',
-              compact ? 'text-xs' : 'text-sm',
-            ].join(' ')}
+            className={['min-w-16 flex-1 bg-transparent outline-none', compact ? 'text-xs' : ''].filter(Boolean).join(' ')}
             value={query}
             placeholder={value.length === 0 ? placeholder : ''}
             spellCheck={false}
@@ -200,10 +217,21 @@ export function ChipSelect({
               }
               if (event.key === 'Enter' && open) {
                 const hit = flat[active] ?? flat[0]
-                if (hit) {
-                  event.preventDefault()
-                  add(hit)
+                event.preventDefault()
+                if (hit === ADD) {
+                  addCustom()
+                  return
                 }
+                if (hit) {
+                  add(hit)
+                  return
+                }
+                addCustom()
+                return
+              }
+              if (event.key === 'Enter' && allowCustom && custom) {
+                event.preventDefault()
+                addCustom()
                 return
               }
               if (event.key === 'Backspace' && !query && value.length) {
@@ -217,7 +245,7 @@ export function ChipSelect({
         <button
           type="button"
           tabIndex={-1}
-          className={compact ? 'text-muted' : tall ? 'mt-1 text-muted' : 'text-muted'}
+          className={['field-select-chevron', !compact && tall ? 'mt-1' : ''].filter(Boolean).join(' ')}
           aria-label={open ? 'Close' : 'Open'}
           onMouseDown={(event) => {
             event.preventDefault()
@@ -233,35 +261,61 @@ export function ChipSelect({
         </button>
       </div>
       {open ? (
-        <ul ref={menu} className="select-menu">
-          {shown.length === 0 ? (
-            <li className="px-2 py-1.5 text-sm text-muted">{leftCount === 0 ? 'Nothing left' : 'No matches'}</li>
+        <ul
+          ref={menu}
+          className="select-menu"
+          onMouseDown={(event) => event.preventDefault()}
+        >
+          {shown.length === 0 && !canAddCustom ? (
+            <li className="px-2 py-1.5 text-sm text-muted" onMouseDown={(event) => event.preventDefault()}>
+              {leftCount === 0 && !allowCustom ? 'Nothing left' : 'No matches'}
+            </li>
           ) : (
-            shown.map((section) => (
-              <li key={section.title || 'options'} className="select-menu-group">
-                {section.title ? <div className="select-menu-section">{section.title}</div> : null}
-                <ul>
-                  {section.options.map((item) => {
-                    const index = optionIndex
-                    optionIndex += 1
-                    return (
-                      <li key={item}>
-                        <button
-                          type="button"
-                          data-active={index === active ? 'true' : undefined}
-                          className={index === active ? 'is-selected' : undefined}
-                          onMouseEnter={() => setActive(index)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={() => add(item)}
-                        >
-                          {chipLabel ? chipLabel(item) : item}
-                        </button>
-                      </li>
-                    )
-                  })}
-                </ul>
-              </li>
-            ))
+            <>
+              {shown.map((section) => (
+                <li key={section.title || 'options'} className="select-menu-group">
+                  {section.title ? (
+                    <div className="select-menu-section" onMouseDown={(event) => event.preventDefault()}>
+                      {section.title}
+                    </div>
+                  ) : null}
+                  <ul>
+                    {section.options.map((item) => {
+                      const index = optionIndex
+                      optionIndex += 1
+                      return (
+                        <li key={item}>
+                          <button
+                            type="button"
+                            data-active={index === active ? 'true' : undefined}
+                            className={index === active ? 'is-selected' : undefined}
+                            onMouseEnter={() => setActive(index)}
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => add(item)}
+                          >
+                            {chipLabel ? chipLabel(item) : item}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </li>
+              ))}
+              {canAddCustom && !shown.some((section) => section.options.includes(custom)) ? (
+                <li>
+                  <button
+                    type="button"
+                    data-active={flat[active] === ADD ? 'true' : undefined}
+                    className={flat[active] === ADD ? 'is-selected' : undefined}
+                    onMouseEnter={() => setActive(Math.max(0, flat.lastIndexOf(ADD)))}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => addCustom()}
+                  >
+                    Add “{custom}”
+                  </button>
+                </li>
+              ) : null}
+            </>
           )}
         </ul>
       ) : null}

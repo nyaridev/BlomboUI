@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useVisible } from '@/lib/gallery/visible.ts'
+import { RAW_TILE_MIN_PX } from '@/lib/gallery/thumbView.ts'
 
 export const TILE_GRAD = 'bg-gradient-to-tr from-field via-line to-muted/45'
 export const TILE_PATTERN =
@@ -10,6 +11,7 @@ export const TILE_ON = `ring-2 ring-inset ring-white ${TILE_GLOW_IN}`
 
 export function TilePreview({
   src,
+  rawSrc,
   mark = '?',
   markClass = 'text-2xl',
   markAlign = 'center',
@@ -26,6 +28,7 @@ export function TilePreview({
   className = '',
 }: {
   src?: string | null
+  rawSrc?: string | null
   mark?: string
   markClass?: string
   markAlign?: 'center' | 'start'
@@ -42,14 +45,38 @@ export function TilePreview({
   className?: string
 }) {
   const [broken, setBroken] = useState(false)
-  const [ref, visible] = useVisible<HTMLSpanElement>()
+  const [visibleRef, visible] = useVisible<HTMLSpanElement>()
+  const [node, setNode] = useState<HTMLSpanElement | null>(null)
+  const [useRaw, setUseRaw] = useState(false)
+  const ref = useCallback(
+    (el: HTMLSpanElement | null) => {
+      visibleRef(el)
+      setNode(el)
+    },
+    [visibleRef],
+  )
 
   useEffect(() => {
     setBroken(false)
-  }, [media, src])
+  }, [media, src, rawSrc])
 
-  const showMedia = Boolean(src) && !broken
-  const mediaType = media || mediaFromUrl(src)
+  useEffect(() => {
+    if (!node || !rawSrc) {
+      setUseRaw(false)
+      return
+    }
+    const update = () => {
+      setUseRaw(Math.max(node.clientWidth, node.clientHeight) >= RAW_TILE_MIN_PX)
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [node, rawSrc])
+
+  const shown = useRaw && rawSrc ? rawSrc : src
+  const showMedia = Boolean(shown) && !broken
+  const mediaType = media || mediaFromUrl(shown)
   const isVideo = mediaType.toLowerCase().startsWith('video/')
 
   return (
@@ -65,7 +92,7 @@ export function TilePreview({
       {showMedia && (eager || visible) ? (
         isVideo ? (
           <video
-            src={src || ''}
+            src={shown || ''}
             className="absolute inset-0 h-full w-full max-h-none max-w-none object-cover"
             autoPlay
             loop
@@ -81,7 +108,7 @@ export function TilePreview({
           />
         ) : (
           <img
-            src={src || ''}
+            src={shown || ''}
             alt=""
             className="absolute inset-0 h-full w-full max-h-none max-w-none object-cover"
             loading="lazy"

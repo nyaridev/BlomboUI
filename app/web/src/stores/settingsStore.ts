@@ -70,6 +70,10 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setImageQuality: (value: number) => void
   setSaveLargeAsJpeg: (value: boolean) => void
   setLargeJpegMaxKb: (value: number) => void
+  setThumbMegapixels: (value: number) => void
+  setThumbFormat: (value: ImageFormat) => void
+  setThumbQuality: (value: number) => void
+  setSaveRawThumbs: (value: boolean) => void
   setGallerySortKey: (key: string, value: GallerySortKey) => void
   setGallerySortDir: (key: string, value: GallerySortDir) => void
   setGalleryTileScale: (value: number) => void
@@ -168,6 +172,10 @@ const KEYS = [
   'imageQuality',
   'saveLargeAsJpeg',
   'largeJpegMaxKb',
+  'thumbMegapixels',
+  'thumbFormat',
+  'thumbQuality',
+  'saveRawThumbs',
   'gallerySortKey',
   'gallerySortDir',
   'galleryTileScale',

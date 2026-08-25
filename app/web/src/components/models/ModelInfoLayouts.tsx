@@ -270,6 +270,7 @@ type ViewProps = {
   applyAtOverride: 'start' | 'end' | null
   onApplyAt: (value: 'start' | 'end') => void
   onApplyAtInherit: () => void
+  fileKind?: string
   preview: ReactNode
 }
 
@@ -409,6 +410,7 @@ function AutoApplyCard(props: ViewProps) {
 function EditBlock(props: ViewProps) {
   return (
     <Section title="Model">
+      {props.fileKind ? <Field label="Type" value={props.fileKind} /> : null}
       <ChipSelect options={props.pickerOptions} value={props.types} onChange={props.onTypes} placeholder="Assign types…" />
       {props.lora ? (
         <>

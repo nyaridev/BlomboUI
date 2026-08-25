@@ -23,7 +23,7 @@ KINDS = {
 
 WILDCARD_EXTS = (".txt", ".yaml", ".yml")
 ALL_KINDS = frozenset((*KINDS, "wildcards"))
-HASH_KINDS = ("checkpoints", "loras")
+HASH_KINDS = ("checkpoints", "loras", "diffusion_models")
 
 
 def list_models(

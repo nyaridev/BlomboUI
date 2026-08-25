@@ -34,6 +34,7 @@ export function GalleryToolbar({
   hasSelection,
   busy,
   onRefresh,
+  chipLabel,
 }: {
   sortKind: GalleryViewKind
   scopeKey: string
@@ -53,6 +54,7 @@ export function GalleryToolbar({
   hasSelection: boolean
   busy: boolean
   onRefresh: () => void
+  chipLabel?: (item: string) => string
 }) {
   return (
     <>
@@ -72,7 +74,7 @@ export function GalleryToolbar({
           />
         </div>
         <div className="h-full w-44 shrink-0">
-          <ChipSelect compact options={typeOptions} value={typeFilter} onChange={onTypes} placeholder="Types…" />
+          <ChipSelect compact options={typeOptions} value={typeFilter} onChange={onTypes} placeholder="Types…" chipLabel={chipLabel} />
         </div>
         <div className="flex h-full w-40 shrink-0 [&>div]:h-full [&>div]:w-full [&_.field-select]:h-full [&_.field-select]:py-0">
           <SelectField value={sortKey} onChange={(value) => onSortKey(value as GallerySortKey)} options={[...GALLERY_SORTS]} />

@@ -369,7 +369,7 @@ export function ScopeGroups({ onEditScope }: { onEditScope: (id: string) => void
       ) : null}
       {light != null && lit[light] ? (
         <LightboxView
-          src={thumbSrc(lit[light].thumb)}
+          src={thumbSrc(lit[light].thumb, true)}
           alt={lit[light].item.name}
           resetKey={lit[light].item.id}
           many={lit.length > 1}

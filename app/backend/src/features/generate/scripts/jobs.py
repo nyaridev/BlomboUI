@@ -28,6 +28,7 @@ from .job_output import (
     _import_image,
     _import_preview,
     _maybe_grid,
+    _maybe_xy_grid,
     _template_name,
     _template_snapshot,
 )
@@ -40,6 +41,7 @@ from .job_plan import (
     _attach_lora_hashes,
     _generation_plan,
     _normalize_auto_loras,
+    _prompt_matrix_apply,
     _prompt_matrix_config,
     _prompt_matrix_lines,
     _prompt_matrix_prompt,
@@ -48,6 +50,7 @@ from .job_plan import (
     _run_seed,
     _seed_after,
 )
+from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 
 
 class LiveJob:
@@ -330,16 +333,19 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     values = {**DEFAULTS, **{k: v for k, v in body.items() if v is not None}}
     values["workflow_id"] = str(values.get("workflow") or DEFAULTS["workflow"])
     values["template_id"] = str(values.get("template") or DEFAULTS["template"])
+    values["xy_plot"] = xy_config(values.get("xy_plot"))
     seed = int(values["seed"])
-    if seed < 0:
+    xy = values.get("xy_plot")
+    keep_minus_one = isinstance(xy, dict) and bool(xy.get("keep_minus_one"))
+    if seed < 0 and not keep_minus_one:
         seed = random.randint(0, 2**53 - 1)
         values["seed"] = seed
     values["batch_size"] = max(1, int(values.get("batch_size") or 1))
     values["batch_count"] = max(1, int(values.get("batch_count") or 1))
-    values["prompt_matrix"] = _prompt_matrix_config(values.get("prompt_matrix"))
+    values["prompt_matrix"] = None if xy else _prompt_matrix_config(values.get("prompt_matrix"))
     values["auto_loras"] = _normalize_auto_loras(values.get("auto_loras"))
     matrix = values.get("prompt_matrix")
-    values["batch_grid"] = bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True))
+    values["batch_grid"] = True if xy else (bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True)))
     values["batch_grid_max"] = max(2, min(100, int(values.get("batch_grid_max") or 36)))
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
     values["batch_grid_format"] = _grid_fmt(values.get("batch_grid_format"))
@@ -358,8 +364,14 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
     jobs_repo.insert_queued(job_id, json.dumps(values), _now())
     with _live_lock:
         _live.clear()
-        matrix_lines, matrix_count, _ = _generation_plan(values)
-        _live[job_id] = LiveJob(int(values["steps"]), len(matrix_lines) * matrix_count)
+        xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
+        n = xy_cell_count(xy) if xy else 0
+        if n:
+            live_count = n
+        else:
+            matrix_lines, matrix_count, _ = _generation_plan(values)
+            live_count = len(matrix_lines) * matrix_count
+        _live[job_id] = LiveJob(int(values["steps"]), live_count)
     _prune_jobs()
     task = asyncio.create_task(run_job(job_id, values))
     _tasks.add(task)
@@ -371,14 +383,37 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
 
 async def run_job(job_id: str, values: dict[str, Any]) -> None:
     try:
-        mode = _seed_after(values)
-        matrix_lines, batch_count, batch_size = _generation_plan(values)
-        matrix = values.get("prompt_matrix")
-        matrix_active = isinstance(matrix, dict) and bool(matrix.get("lines"))
-        total_batch_count = len(matrix_lines) * batch_count
-        base_seed = int(values["seed"])
+        xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
+        if xy:
+            runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
+        else:
+            mode = _seed_after(values)
+            matrix_lines, batch_count, batch_size = _generation_plan(values)
+            matrix = values.get("prompt_matrix")
+            matrix_active = isinstance(matrix, dict) and bool(matrix.get("lines"))
+            base_seed = int(values["seed"])
+            runs = []
+            for matrix_i, matrix_line in enumerate(matrix_lines):
+                for batch_i in range(batch_count):
+                    run_i = matrix_i * batch_count + batch_i
+                    prompt = str(values.get("prompt") or "")
+                    negative = str(values.get("negative_prompt") or "")
+                    if matrix_active:
+                        prompt, negative = _prompt_matrix_apply(values, matrix_line, matrix)
+                    runs.append(
+                        {
+                            **values,
+                            "prompt": prompt,
+                            "negative_prompt": negative,
+                            "seed": _run_seed(mode, base_seed, run_i),
+                            "batch_size": batch_size,
+                        }
+                    )
+        total_batch_count = len(runs)
+        include_sub = True if not xy else bool(xy.get("include_sub_images", True))
         prompt_id = ""
         saved: list[Path] = []
+        temps: list[Path] = []
         had_image = False
         started = time.monotonic()
         canceled = False
@@ -387,113 +422,118 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         row = await asyncio.to_thread(hashes.checkpoint_hashes, str(values.get("checkpoint") or ""))
         values["model_hash"] = row.get("autov2") or ""
         values["model_hashes"] = row
-        for matrix_i, matrix_line in enumerate(matrix_lines):
-            for batch_i in range(batch_count):
-                run_i = matrix_i * batch_count + batch_i
-                with _live_lock:
-                    live = _live.get(job_id)
-                    if live and live.cancel:
-                        canceled = True
-                        break
-                    if live:
-                        live.skip = False
-                        live.batch_i = run_i
-                        live.value = 0
-
-                run_values = {
-                    **values,
-                    "prompt": _prompt_matrix_prompt(str(values.get("prompt") or ""), matrix_line)
-                    if matrix_active
-                    else str(values.get("prompt") or ""),
-                    "seed": _run_seed(mode, base_seed, run_i),
-                    "batch_size": batch_size,
-                }
-                rng = random.Random(int(run_values["seed"]))
-                wildcard_tags.apply(run_values, rng)
-                expanded_prompt = str(run_values.get("prompt_expanded") or run_values.get("prompt") or "")
-                run_values["prompt"] = expanded_prompt
-                run_values["negative_prompt"] = str(
-                    run_values.get("negative_prompt_expanded") or run_values.get("negative_prompt") or ""
-                )
-                auto_loras, auto_missing = await asyncio.to_thread(_resolve_auto_loras, run_values.get("auto_loras"))
-                _apply_auto_loras(run_values, auto_loras, auto_missing)
-                if run_i == 0:
-                    tag_complete.record(
-                        str(values.get("prompt") or ""),
-                        str(values.get("negative_prompt") or ""),
-                        [run_values["prompt"], run_values["negative_prompt"]],
-                    )
-                grew = False
-                for name in run_values.get("wildcard_missing") or []:
-                    if name not in missing_wildcards:
-                        missing_wildcards.append(name)
-                        grew = True
-                for name in run_values.get("lora_missing") or []:
-                    if name not in missing_loras:
-                        missing_loras.append(name)
-                        grew = True
-                if grew:
-                    values["wildcard_missing"] = missing_wildcards
-                    values["lora_missing"] = missing_loras
-                    jobs_repo.set_payload(job_id, json.dumps(values))
-
-                def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
-                    _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
-
-                graph = comfy.fill_txt2img({**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"})
-                _attach_lora_hashes(run_values)
-                prompt_id, images = await asyncio.to_thread(
-                    comfy.run_prompt,
-                    graph,
-                    f"{job_id}-{run_i}",
-                    on_event,
-                )
-                jobs_repo.set_running(job_id, prompt_id, _now())
-                with _live_lock:
-                    live = _live.get(job_id)
-                    skip = bool(live and live.skip)
-                    preview = b""
-                    if live:
-                        if live.latest:
-                            preview = bytes(live.latest)
-                        elif live.preview:
-                            preview = bytes(live.preview)
-                        elif live.snapshots:
-                            preview = bytes(live.snapshots[max(live.snapshots)])
-                    if live and live.cancel:
-                        canceled = True
-                    if live and (skip or canceled):
-                        live.skip = False
-                        _clear_preview(live)
-                if (skip or canceled) and preview and values.get("save_interrupted", True):
-                    gen_id, path = await asyncio.to_thread(_import_preview, job_id, run_values, preview, graph)
-                    _record_output(job_id, values, gen_id, path, "interrupted")
-                    had_image = True
-                    if values.get("interrupted_in_grid", False):
-                        saved.append(path)
-                if canceled:
+        for run_i, run_values in enumerate(runs):
+            with _live_lock:
+                live = _live.get(job_id)
+                if live and live.cancel:
+                    canceled = True
                     break
-                if skip:
-                    continue
-                for info in images:
-                    gen_id, path = await asyncio.to_thread(_import_image, job_id, run_values, info, graph)
-                    _record_output(job_id, values, gen_id, path, "image")
-                    had_image = True
+                if live:
+                    live.skip = False
+                    live.batch_i = run_i
+                    live.value = 0
+
+            rng = random.Random(int(run_values["seed"]))
+            wildcard_tags.apply(run_values, rng)
+            expanded_prompt = str(run_values.get("prompt_expanded") or run_values.get("prompt") or "")
+            run_values["prompt"] = expanded_prompt
+            run_values["negative_prompt"] = str(
+                run_values.get("negative_prompt_expanded") or run_values.get("negative_prompt") or ""
+            )
+            auto_loras, auto_missing = await asyncio.to_thread(_resolve_auto_loras, run_values.get("auto_loras"))
+            _apply_auto_loras(run_values, auto_loras, auto_missing)
+            if run_i == 0:
+                tag_complete.record(
+                    str(values.get("prompt") or ""),
+                    str(values.get("negative_prompt") or ""),
+                    [run_values["prompt"], run_values["negative_prompt"]],
+                )
+            grew = False
+            for name in run_values.get("wildcard_missing") or []:
+                if name not in missing_wildcards:
+                    missing_wildcards.append(name)
+                    grew = True
+            for name in run_values.get("lora_missing") or []:
+                if name not in missing_loras:
+                    missing_loras.append(name)
+                    grew = True
+            if grew:
+                values["wildcard_missing"] = missing_wildcards
+                values["lora_missing"] = missing_loras
+                jobs_repo.set_payload(job_id, json.dumps(values))
+
+            def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
+                _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
+
+            graph = comfy.fill_txt2img({**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"})
+            _attach_lora_hashes(run_values)
+            prompt_id, images = await asyncio.to_thread(
+                comfy.run_prompt,
+                graph,
+                f"{job_id}-{run_i}",
+                on_event,
+            )
+            jobs_repo.set_running(job_id, prompt_id, _now())
+            with _live_lock:
+                live = _live.get(job_id)
+                skip = bool(live and live.skip)
+                preview = b""
+                if live:
+                    if live.latest:
+                        preview = bytes(live.latest)
+                    elif live.preview:
+                        preview = bytes(live.preview)
+                    elif live.snapshots:
+                        preview = bytes(live.snapshots[max(live.snapshots)])
+                if live and live.cancel:
+                    canceled = True
+                if live and (skip or canceled):
+                    live.skip = False
+                    _clear_preview(live)
+            if (skip or canceled) and preview and values.get("save_interrupted", True):
+                gen_id, path = await asyncio.to_thread(_import_preview, job_id, run_values, preview, graph)
+                _record_output(job_id, values, gen_id, path, "interrupted")
+                had_image = True
+                if values.get("interrupted_in_grid", False):
                     saved.append(path)
             if canceled:
                 break
+            if skip:
+                continue
+            for info in images:
+                gen_id, path = await asyncio.to_thread(
+                    _import_image, job_id, run_values, info, graph, include_sub
+                )
+                if include_sub:
+                    _record_output(job_id, values, gen_id, path, "image")
+                else:
+                    temps.append(path)
+                had_image = True
+                saved.append(path)
         values["duration_ms"] = int((time.monotonic() - started) * 1000)
         if canceled:
             if saved and values.get("batch_grid_on_cancel", True):
-                _maybe_grid(job_id, values, saved)
+                if xy:
+                    _maybe_xy_grid(job_id, values, saved)
+                else:
+                    _maybe_grid(job_id, values, saved)
+            for path in temps:
+                path.unlink(missing_ok=True)
             jobs_repo.finish(job_id, "canceled", _now(), json.dumps(values))
             _prune_jobs()
             return
         if not had_image:
+            for path in temps:
+                path.unlink(missing_ok=True)
             jobs_repo.finish(job_id, "canceled", _now(), json.dumps(values))
             _prune_jobs()
             return
-        _maybe_grid(job_id, values, saved)
+        if xy:
+            _maybe_xy_grid(job_id, values, saved)
+        else:
+            _maybe_grid(job_id, values, saved)
+        for path in temps:
+            path.unlink(missing_ok=True)
         jobs_repo.finish(job_id, "completed", _now(), json.dumps(values))
         _prune_jobs()
     except comfy.ComfyError as exc:

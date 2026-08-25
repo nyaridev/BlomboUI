@@ -31,6 +31,12 @@ export function memberThumb(scopeId: string, thumbs: ScopeThumb[], extra: string
   return best
 }
 
-export function thumbSrc(thumb: ScopeThumb) {
-  return modelThumbUrl(thumb.kind, thumb.path, thumb.mtime || 1, { context: thumb.context, mode: 'exact' }, thumb.media)
+export function thumbSrc(thumb: ScopeThumb, raw = false) {
+  return modelThumbUrl(
+    thumb.kind,
+    thumb.path,
+    thumb.mtime || 1,
+    { context: thumb.context, mode: 'exact', raw: raw || undefined },
+    thumb.media,
+  )
 }

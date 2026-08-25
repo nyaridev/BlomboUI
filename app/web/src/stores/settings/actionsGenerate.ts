@@ -8,6 +8,7 @@ import {
   cleanImageFormat,
   cleanImageQuality,
   cleanLoraBound,
+  cleanThumbMegapixels,
   cleanNames,
   cleanPreviewCount,
   cleanPromptWeightStep,
@@ -182,6 +183,22 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     },
     setLargeJpegMaxKb: (largeJpegMaxKb) => {
       set({ largeJpegMaxKb: cleanLargeJpegMaxKb(largeJpegMaxKb) })
+      persist()
+    },
+    setThumbMegapixels: (thumbMegapixels) => {
+      set({ thumbMegapixels: cleanThumbMegapixels(thumbMegapixels) })
+      persist()
+    },
+    setThumbFormat: (thumbFormat) => {
+      set({ thumbFormat: cleanImageFormat(thumbFormat, SETTINGS_DEFAULTS.thumbFormat) })
+      persist()
+    },
+    setThumbQuality: (thumbQuality) => {
+      set({ thumbQuality: cleanImageQuality(thumbQuality, SETTINGS_DEFAULTS.thumbQuality) })
+      persist()
+    },
+    setSaveRawThumbs: (saveRawThumbs) => {
+      set({ saveRawThumbs })
       persist()
     },
     setGallerySortKey: (key, gallerySortKey) => {

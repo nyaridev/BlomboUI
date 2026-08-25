@@ -69,7 +69,7 @@ export function ChipList({
           ) : null}
           <span
             draggable
-            title={chipTitle?.(item)}
+            title={chipTitle?.(item) || (chipLabel ? item : undefined)}
             className={[
               'inline-flex shrink-0 cursor-grab items-center gap-1 rounded px-1.5 py-0.5 text-xs active:cursor-grabbing',
               chipClassName?.(item) || 'bg-bg text-ink',
@@ -108,13 +108,18 @@ export function ChipList({
             }}
             onDragEnd={clearDrag}
           >
-            {renderChip ? renderChip(item) : item}
+            {renderChip ? renderChip(item) : chipLabel?.(item) || item}
             {removable ? (
               <button
                 type="button"
                 className="px-0.5 text-sm leading-none text-muted hover:text-ink"
                 aria-label={`Remove ${chipLabel?.(item) || item}`}
+                onMouseDown={(event) => {
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}
                 onClick={(event) => {
+                  event.preventDefault()
                   event.stopPropagation()
                   remove(item)
                 }}

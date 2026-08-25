@@ -159,7 +159,7 @@ export function SelectField({
             if (event.key === 'Enter' && open) {
               event.preventDefault()
               const hit = shown[active] ?? shown[0]
-              if (hit) {
+              if (hit && !hit.disabled) {
                 pick(hit.value)
                 return
               }
@@ -207,11 +207,16 @@ export function SelectField({
             <li key={`${item.value}:${item.label}`}>
               <button
                 type="button"
+                disabled={item.disabled}
                 data-active={index === active ? 'true' : undefined}
                 className={index === active ? 'is-selected' : undefined}
                 onMouseEnter={() => setActive(index)}
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={() => pick(item.value)}
+                onClick={() => {
+                  if (!item.disabled) {
+                    pick(item.value)
+                  }
+                }}
               >
                 <span className="flex min-w-0 items-center justify-between gap-2">
                   <span className="min-w-0 truncate">{item.label}</span>

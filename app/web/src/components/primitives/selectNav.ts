@@ -1,4 +1,4 @@
-export type SelectOption = { value: string; label: string; badge?: string }
+export type SelectOption = { value: string; label: string; badge?: string; disabled?: boolean }
 
 export function toOptions(options: string[] | SelectOption[]): SelectOption[] {
   return options.map((item) => (typeof item === 'string' ? { value: item, label: item } : item))

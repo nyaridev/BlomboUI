@@ -2,7 +2,23 @@ import type { GallerySortDir, GallerySortKey } from './GalleryToolbar.tsx'
 import { LOCAL_ID } from '@/components/primitives/FolderList.tsx'
 import { modelLabel } from '@/stores/modelsStore.ts'
 import { identToDisplay, treeDisplayPath } from '@/lib/gallery/tree.ts'
-import type { ModelEntry } from '@/lib/api.ts'
+import type { ModelEntry, ModelLists } from '@/lib/api.ts'
+
+export const OTHER_KIND_IDS = ['vae', 'text_encoders'] as const
+export type OtherKindId = (typeof OTHER_KIND_IDS)[number]
+
+const OTHER_KIND_LABELS: Record<OtherKindId, string> = {
+  vae: 'VAE',
+  text_encoders: 'Text encoder',
+}
+
+export function isOtherKind(kind: string): kind is OtherKindId {
+  return kind === 'vae' || kind === 'text_encoders'
+}
+
+export function otherKindLabel(kind: string) {
+  return isOtherKind(kind) ? OTHER_KIND_LABELS[kind] : ''
+}
 
 export const TREE_REM = 18
 export const TREE_MIN_REM = 12
@@ -121,11 +137,15 @@ export function sortItems(items: ModelEntry[], key: GallerySortKey, dir: Gallery
   return next
 }
 
-export function matchesTypes(item: ModelEntry, types: string[]) {
+export function matchesTypes(item: ModelEntry, types: string[], kind?: keyof ModelLists) {
   if (!types.length) {
     return true
   }
-  return (item.types || []).some((type) => types.includes(type))
+  const kindFilters = types.filter(isOtherKind)
+  const archFilters = types.filter((type) => !isOtherKind(type))
+  const kindOk = !kindFilters.length || (kind != null && isOtherKind(kind) && kindFilters.includes(kind))
+  const archOk = !archFilters.length || (item.types || []).some((type) => archFilters.includes(type))
+  return kindOk && archOk
 }
 
 export { LOCAL_ID }

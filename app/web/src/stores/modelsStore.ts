@@ -19,7 +19,7 @@ type ModelsState = ModelLists & {
   busy: boolean
   load: () => Promise<void>
   pull: () => Promise<void>
-  refresh: () => Promise<void>
+  refresh: (opts?: { silent?: boolean }) => Promise<void>
   refreshKind: (kind: keyof ModelLists) => Promise<void>
   setThumb: (kind: keyof ModelLists, path: string, thumb: number) => void
   setMeta: (
@@ -140,18 +140,22 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       /* keep current */
     }
   },
-  refresh: async () => {
+  refresh: async (opts) => {
     if (get().busy) {
       return
     }
     set({ busy: true })
     try {
       set(apply(await refreshModels(undefined, view())))
-      toast('Models reloaded', 'ok')
+      if (!opts?.silent) {
+        toast('Models reloaded', 'ok')
+      }
     } catch {
       try {
         set(apply(await getModels(view())))
-        toast('Models reloaded', 'ok')
+        if (!opts?.silent) {
+          toast('Models reloaded', 'ok')
+        }
       } catch {
         /* keep current */
       }

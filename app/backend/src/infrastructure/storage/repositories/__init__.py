@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from infrastructure.storage.repositories import (
+    download_history,
+    error_log,
     gallery,
     hashes,
     jobs,
@@ -12,6 +14,8 @@ from infrastructure.storage.repositories import (
 )
 
 __all__ = [
+    "download_history",
+    "error_log",
     "gallery",
     "hashes",
     "jobs",

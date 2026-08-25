@@ -3,27 +3,52 @@ import { getFrequentPromptTags, type FrequentPromptTag } from '@/lib/api.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
-export const FREQUENT_TAGS_QUERY = 'frequent tags autocomplete favorites star usage count prompt'
+export const FREQUENT_TAGS_QUERY = 'frequent tags autocomplete favorites star usage count prompt refresh reload'
 
 export function FrequentTagsPanel({ query = '' }: { query?: string }) {
   const frequentTagsEnabled = useSettingsStore((s) => s.frequentTagsEnabled)
   const [tags, setTags] = useState<FrequentPromptTag[]>([])
   const [threshold, setThreshold] = useState(2)
+  const [busy, setBusy] = useState(false)
+
+  const load = useCallback(async () => {
+    setBusy(true)
+    try {
+      const data = await getFrequentPromptTags()
+      setTags(data.tags)
+      setThreshold(data.threshold)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not load frequent tags', 'error')
+    } finally {
+      setBusy(false)
+    }
+  }, [])
 
   useEffect(() => {
-    void getFrequentPromptTags()
-      .then((data) => {
-        setTags(data.tags)
-        setThreshold(data.threshold)
-      })
-      .catch((err) => toast(err instanceof Error ? err.message : 'Could not load frequent tags', 'error'))
-  }, [])
+    void load()
+  }, [load])
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
-      <SettingsCard query={query} title="Frequent Tags" terms={FREQUENT_TAGS_QUERY}>
+      <SettingsCard
+        query={query}
+        title="Frequent Tags"
+        terms={FREQUENT_TAGS_QUERY}
+        action={
+          <button
+            type="button"
+            className="icon-btn shrink-0"
+            aria-label="Refresh tags"
+            title="Refresh"
+            disabled={busy}
+            onClick={() => void load()}
+          >
+            <AppIcon id="refresh-cw" size={14} />
+          </button>
+        }
+      >
         <p className="text-xs text-muted">
           Tags from your prompts after generate. Starred when used at least {threshold} times.
         </p>

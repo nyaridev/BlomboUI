@@ -406,7 +406,8 @@ export function ModelInfoDialog({
           <TilePreview
             className="h-full w-full"
             eager
-            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { ...item, thumb }, { ...view, raw: true })}
+            src={pending === 'clear' ? null : pendingUrl || modelThumbSrc(kind, { ...item, thumb }, view)}
+            rawSrc={pending === 'clear' || pendingUrl ? null : modelThumbSrc(kind, { ...item, thumb }, { ...view, raw: true })}
             media={pending && pending !== 'clear' ? pending.type : item.thumb_media}
           />
         }

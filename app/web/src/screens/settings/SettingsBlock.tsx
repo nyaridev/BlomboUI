@@ -14,12 +14,14 @@ export function SettingsCard({
   title,
   terms = '',
   id,
+  action,
   children,
 }: {
   query: string
   title: string
   terms?: string
   id?: string
+  action?: ReactNode
   children: ReactNode
 }) {
   const hit = matchesSetting(query, title, terms)
@@ -32,7 +34,14 @@ export function SettingsCard({
         searching && !hit ? 'hidden has-[.settings-block]:flex' : 'flex',
       ].join(' ')}
     >
-      <h2 className="text-xs text-label">{title}</h2>
+      {action ? (
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xs text-label">{title}</h2>
+          {action}
+        </div>
+      ) : (
+        <h2 className="text-xs text-label">{title}</h2>
+      )}
       {children}
     </section>
   )

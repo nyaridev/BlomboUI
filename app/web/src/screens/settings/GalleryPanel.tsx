@@ -9,7 +9,7 @@ import {
 } from '@/stores/settingsStore.ts'
 
 export const GALLERY_QUERY =
-  'gallery view tiles scale size base model lora wildcards tree folder parent unselect thumbnail scope filter share local generate models types'
+  'pickers gallery view tiles scale size base model lora wildcards tree folder parent unselect thumbnail scope filter share local generate models types'
 
 function ScopeSwitch({
   value,
@@ -70,6 +70,9 @@ export function GalleryPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
+      <p className="text-xs text-muted">
+        Used on Generate’s Base Model, LoRA, Wildcards, and Other tabs, and on Models → Local.
+      </p>
       {GENERATE_FILTER_VIEWS.map((view) => {
         const key = view.key as GalleryModeKey
         return (
@@ -126,7 +129,7 @@ export function GalleryPanel({ query = '' }: { query?: string }) {
           Select parent when unselecting a folder
         </label>
         <p className="text-xs text-muted">
-          Clicking the selected folder in the gallery tree selects its parent. Off clears the search instead.
+          Clicking the selected folder in the picker tree selects its parent. Off clears the search instead.
         </p>
       </SettingsCard>
     </div>

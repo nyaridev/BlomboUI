@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from api.errors import ApiError
 from features.generate.schemas import ComfyFreeIn
 from features.generate import service as generate
-from features.issues.service import list_issues
+from features.issues.service import clear_log, dismiss_log, list_issues
 from features.settings import service as settings
 from features.settings.schemas import OutputPathIn, PathsCheckIn
 from shared import dirs
@@ -17,6 +17,18 @@ api = APIRouter()
 @api.get("/issues")
 def get_issues() -> dict:
     return {"issues": list_issues()}
+
+
+@api.delete("/issues")
+def delete_issue_log() -> dict:
+    return {"ok": True, "count": clear_log()}
+
+
+@api.delete("/issues/{ident}")
+def delete_issue(ident: int) -> dict:
+    if not dismiss_log(ident):
+        raise ApiError("not_found", "issue not found")
+    return {"ok": True}
 
 
 @api.get("/health")

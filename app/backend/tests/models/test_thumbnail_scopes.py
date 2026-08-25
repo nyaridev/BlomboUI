@@ -271,11 +271,18 @@ class ScopeTests(unittest.TestCase):
         self.assertTrue(any(item["context"] == "global" and item["scopes"] == [] for item in rows))
 
     def test_gif_and_mp4_thumbnails(self) -> None:
+        from features.settings import service as settings
+
         gif = BytesIO()
         Image.new("P", (8, 8), 2).save(gif, format="GIF")
-        model_thumbs.save_thumb("loras", "animated.safetensors", gif.getvalue(), media="image/gif")
-        mp4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
-        model_thumbs.save_thumb("loras", "video.safetensors", mp4, media="video/mp4")
+        with patch.object(
+            settings,
+            "load",
+            return_value={"saveAnimatedThumbs": True, "animatedThumbFormat": "gif", "thumbFormat": "jpg"},
+        ):
+            model_thumbs.save_thumb("loras", "animated.safetensors", gif.getvalue(), media="image/gif")
+            mp4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
+            model_thumbs.save_thumb("loras", "video.safetensors", mp4, media="video/mp4")
 
         gif_path = model_thumbs.thumb_at("loras", "animated.safetensors")
         mp4_path = model_thumbs.thumb_at("loras", "video.safetensors")

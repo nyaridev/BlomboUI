@@ -8,12 +8,15 @@ import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
+from urllib.error import HTTPError, URLError
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from shared import dirs
 
 from features.settings import service as settings
 from features.civitai.scripts import client as civitai
+from features.downloads.scripts import progress as download_progress
 from features.models.scripts import model_meta
 from features.models.scripts import model_thumbs
 
@@ -28,6 +31,27 @@ _MODEL_KINDS = {
     "controlnet": "controlnet",
     "vae": "vae",
 }
+_CHECKPOINT_BASES = frozenset(
+    {
+        "sd 1.4",
+        "sd 1.5",
+        "sd 1.5 lcm",
+        "sd 1.5 hyper",
+        "sd 2.0",
+        "sd 2.1",
+        "sdxl 1.0",
+        "sdxl lightning",
+        "sdxl hyper",
+        "sdxl",
+        "pony",
+        "pony v7",
+        "illustrious",
+        "noobai",
+    }
+)
+_MODEL_KIND_FOLDERS = frozenset(
+    {"checkpoints", "loras", "vae", "controlnet", "embeddings", "diffusion_models", "text_encoders"}
+)
 _CATEGORY_TAGS = {
     "character",
     "style",
@@ -55,6 +79,32 @@ _ARCHIVE_EXTS = {".zip", ".tar", ".gz", ".tgz", ".bz2", ".xz"}
 
 class CivitaiDownloadError(RuntimeError):
     pass
+
+
+def _cause_detail(exc: BaseException) -> str:
+    if isinstance(exc, HTTPError):
+        reason = str(exc.reason or "").strip()
+        extra = f" {reason}" if reason else ""
+        return f"HTTP {exc.code}{extra}."
+    if isinstance(exc, URLError):
+        reason = str(getattr(exc, "reason", "") or exc).strip()
+        if reason and not reason.endswith("."):
+            reason = f"{reason}."
+        return reason
+    if isinstance(exc, TimeoutError):
+        return "Timed out."
+    text = str(exc).strip()
+    if text and not text.endswith("."):
+        text = f"{text}."
+    return text or type(exc).__name__
+
+
+def _failed(prefix: str, exc: BaseException) -> CivitaiDownloadError:
+    detail = _cause_detail(exc)
+    message = f"{prefix} {detail}".strip() if detail else prefix
+    error = CivitaiDownloadError(message)
+    error.__cause__ = exc
+    return error
 
 
 def _safe_segment(raw: object, fallback: str) -> str:
@@ -86,7 +136,7 @@ def _selected_root(key: str, selected_id: object) -> Path:
     try:
         path.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise CivitaiDownloadError("Download directory is not available.") from exc
+        raise _failed("Download directory is not available.", exc)
     return path
 
 
@@ -101,19 +151,26 @@ def _model_rel_path(path: Path, config: dict[str, Any]) -> str:
 def _model_kind_from_path(path: Path, root: Path) -> str:
     relative = path.relative_to(root)
     kind = relative.parts[0] if relative.parts else ""
-    if kind not in {"checkpoints", "loras", "vae", "controlnet", "embeddings"}:
+    if kind not in _MODEL_KIND_FOLDERS:
         raise CivitaiDownloadError("Downloaded model path is invalid.")
     return kind
 
 
-def _model_kind(model_type: object) -> str:
+def _model_kind(model_type: object, base_model: object = "") -> str:
     key = str(model_type or "").replace("_", "").replace("-", "").replace(" ", "").lower()
     kind = _MODEL_KINDS.get(key)
+    if kind == "checkpoints" and _is_diffusion_base(base_model):
+        return "diffusion_models"
     if kind:
         return kind
     if key in {"wildcard", "wildcards"}:
         return "wildcards"
     raise CivitaiDownloadError(f"Unsupported CivitAI model type: {model_type or 'unknown'}.")
+
+
+def _is_diffusion_base(base_model: object) -> bool:
+    value = str(base_model or "").strip().casefold()
+    return bool(value) and value not in _CHECKPOINT_BASES
 
 
 def _model_type(base_model: object) -> str:
@@ -134,6 +191,245 @@ def _category(tags: object) -> str:
             if value in _CATEGORY_TAGS:
                 return value.capitalize()
     return "General"
+
+
+def _preview_kind(item: dict[str, Any]) -> str:
+    url = str(item.get("url") or "").split("?", 1)[0].casefold()
+    kind = str(item.get("type") or "").strip().casefold()
+    if kind == "video" or url.endswith((".mp4", ".webm", ".mkv")):
+        return "video"
+    if url.endswith(".gif"):
+        return "gif"
+    return "image"
+
+
+def _preview_url(version: dict[str, Any]) -> str:
+    images = version.get("images")
+    if not isinstance(images, list):
+        return ""
+    ordered: list[tuple[str, str]] = []
+    for item in images:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        if not url:
+            continue
+        ordered.append((_preview_kind(item), url))
+    if not ordered:
+        return ""
+    if settings.load().get("saveAnimatedThumbs", True) is not False:
+        return ordered[0][1]
+    stills = [url for kind, url in ordered if kind == "image"]
+    if stills:
+        return stills[0]
+    gifs = [url for kind, url in ordered if kind == "gif"]
+    return gifs[0] if gifs else ""
+
+
+def _site() -> str:
+    value = str(settings.load().get("civitaiSite") or "").strip()
+    return value if value in {"civitai", "red"} else "red"
+
+
+def _file_size(file: dict[str, Any]) -> int:
+    try:
+        return max(0, int(file.get("sizeBytes") or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _paths_size(paths: list[Path]) -> int:
+    total = 0
+    for path in paths:
+        try:
+            total += path.stat().st_size
+        except OSError:
+            pass
+    return total
+
+
+def _str_list(raw: object) -> list[str]:
+    if not isinstance(raw, list):
+        return []
+    return [str(item).strip() for item in raw if str(item).strip()]
+
+
+def _download_meta(
+    model: dict[str, Any],
+    version: dict[str, Any],
+    file: dict[str, Any],
+    *,
+    kind: str,
+    creator: str,
+    file_name: str,
+) -> dict[str, Any]:
+    from features.downloads.scripts.history import plain, search_blob
+
+    tags = _str_list(model.get("tags"))
+    words = _str_list(version.get("trainedWords"))
+    description = plain(" ".join([str(model.get("description") or ""), str(version.get("description") or "")]))
+    base_model = str(version.get("baseModel") or "").strip()
+    model_type = str(model.get("type") or "").strip()
+    return {
+        "base_model": base_model,
+        "tags": tags,
+        "trained_words": words,
+        "description": description,
+        "model_type": model_type,
+        "search_text": search_blob(
+            model.get("name"),
+            creator,
+            file_name,
+            file.get("name"),
+            version.get("name"),
+            kind,
+            model_type,
+            base_model,
+            *tags,
+            *words,
+            description,
+        ),
+    }
+
+
+def _progress_meta(
+    key: str,
+    model: dict[str, Any],
+    version: dict[str, Any],
+    file: dict[str, Any],
+    *,
+    kind: str,
+    creator: str,
+    file_name: str,
+) -> None:
+    extra = _download_meta(model, version, file, kind=kind, creator=creator, file_name=file_name)
+    download_progress.set_fields(
+        key,
+        fileName=file_name,
+        kind=kind,
+        searchText=extra["search_text"],
+    )
+
+
+def _request_body(body: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(body, dict):
+        return {}
+    return {
+        key: body[key]
+        for key in ("modelId", "versionId", "fileId", "customNaming", "modelName", "creatorAlias")
+        if key in body
+    }
+
+
+def _begin_history(
+    body: dict[str, Any],
+    model: dict[str, Any],
+    version: dict[str, Any],
+    file: dict[str, Any],
+    model_id: int,
+    version_id: int,
+    creator: str,
+    extra: dict[str, Any],
+    history_id: int | None,
+) -> int:
+    from features.downloads.scripts import history as download_history
+    from features.downloads.scripts import thumbs as download_thumbs
+
+    if not history_id:
+        raw_file_id = file.get("id")
+        try:
+            file_id = int(raw_file_id) if raw_file_id is not None else None
+        except (TypeError, ValueError):
+            file_id = None
+        history_id = download_history.record(
+            source="civitai",
+            model_id=model_id,
+            version_id=version_id,
+            file_id=file_id,
+            name=str(model.get("name") or ""),
+            version_name=str(version.get("name") or ""),
+            kind="",
+            creator=creator,
+            file_name=str(file.get("name") or ""),
+            size_bytes=_file_size(file),
+            paths=[],
+            image_url=_preview_url(version),
+            site=_site(),
+            base_model=str(extra["base_model"]),
+            tags=list(extra["tags"]),
+            trained_words=list(extra["trained_words"]),
+            description=str(extra["description"]),
+            search_text=str(extra["search_text"]),
+            model_type=str(extra["model_type"]),
+            status="downloading",
+            request=_request_body(body),
+        )
+    download_thumbs.prefetch(int(history_id))
+    return int(history_id)
+
+
+def _fail_history(
+    body: dict[str, Any],
+    exc: BaseException,
+    history_id: int | None,
+    extra: dict[str, Any],
+) -> None:
+    try:
+        from features.downloads.scripts import history as download_history
+
+        download_history.record_failed(body=body, error=str(exc), history_id=history_id, extra=extra)
+    except Exception:
+        pass
+
+
+def _record_download(
+    *,
+    model: dict[str, Any],
+    version: dict[str, Any],
+    file: dict[str, Any],
+    model_id: int,
+    version_id: int,
+    kind: str,
+    creator: str,
+    paths: list[Path],
+    request: dict[str, Any] | None = None,
+    history_id: int | None = None,
+) -> None:
+    try:
+        from features.downloads.scripts import history as download_history
+
+        raw_file_id = file.get("id")
+        try:
+            file_id = int(raw_file_id) if raw_file_id is not None else None
+        except (TypeError, ValueError):
+            file_id = None
+        file_name = paths[0].name if paths else str(file.get("name") or "")
+        extra = _download_meta(model, version, file, kind=kind, creator=creator, file_name=file_name)
+        download_history.record(
+            source="civitai",
+            model_id=model_id,
+            version_id=version_id,
+            file_id=file_id,
+            name=str(model.get("name") or ""),
+            version_name=str(version.get("name") or ""),
+            kind=kind,
+            creator=creator,
+            file_name=file_name,
+            size_bytes=_paths_size(paths) or _file_size(file),
+            paths=[str(path) for path in paths],
+            image_url=_preview_url(version),
+            site=_site(),
+            base_model=str(extra["base_model"]),
+            tags=list(extra["tags"]),
+            trained_words=list(extra["trained_words"]),
+            description=str(extra["description"]),
+            search_text=str(extra["search_text"]),
+            model_type=str(extra["model_type"]),
+            request=_request_body(request if isinstance(request, dict) else {}),
+            history_id=history_id,
+        )
+    except Exception:
+        pass
 
 
 def _refresh_model_info(kind: str, destination: Path, model: dict[str, Any], version: dict[str, Any], config: dict[str, Any]) -> None:
@@ -161,13 +457,7 @@ def _refresh_model_info(kind: str, destination: Path, model: dict[str, Any], ver
     except Exception:
         pass
 
-    images = version.get("images")
-    image_url = ""
-    if isinstance(images, list):
-        image_url = next(
-            (str(item.get("url") or "").strip() for item in images if isinstance(item, dict) and item.get("url")),
-            "",
-        )
+    image_url = _preview_url(version)
     if not image_url:
         return
     try:
@@ -228,21 +518,43 @@ def _expected_sha256(file: dict[str, Any]) -> str:
     return ""
 
 
+def _token_url(url: str, token: str) -> str:
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["token"] = token
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
+def _content_length(response: object) -> int:
+    headers = getattr(response, "headers", None)
+    if headers is None:
+        return 0
+    raw = headers.get("Content-Length")
+    try:
+        return max(0, int(raw or 0))
+    except (TypeError, ValueError):
+        return 0
+
+
 def _write_download(url: str, target: Path) -> None:
     key = str(settings.load().get("civitaiApiKey") or "").strip()
     if not key:
         raise CivitaiDownloadError("Set a CivitAI API key in Settings first.")
     request = Request(
-        url,
-        headers={"Authorization": f"Bearer {key}", "User-Agent": "BlomboUI"},
+        _token_url(url, key),
+        headers={"User-Agent": "BlomboUI"},
         method="GET",
     )
     try:
-        with urlopen(request, timeout=30) as response, target.open("wb") as output:
+        with urlopen(request, timeout=60) as response, target.open("wb") as output:
+            expected = _content_length(response)
+            done = 0
             while chunk := response.read(_CHUNK):
                 output.write(chunk)
+                done += len(chunk)
+                download_progress.bump(done, expected)
     except Exception as exc:
-        raise CivitaiDownloadError("CivitAI file download failed.") from exc
+        raise _failed("CivitAI file download failed.", exc)
 
 
 def _install_download(url: str, folder: Path, filename: str, expected_hash: str = "") -> Path:
@@ -260,7 +572,7 @@ def _install_download(url: str, folder: Path, filename: str, expected_hash: str 
         raise
     except OSError as exc:
         temporary.unlink(missing_ok=True)
-        raise CivitaiDownloadError("Could not save the downloaded file.") from exc
+        raise _failed("Could not save the downloaded file.", exc)
 
 
 def _relative_member(raw: str) -> PurePosixPath | None:
@@ -325,7 +637,7 @@ def _extract_archive(source: Path, folder: Path) -> list[Path]:
         if tarfile.is_tarfile(source):
             return _extract_tar(source, folder)
     except (OSError, tarfile.TarError, zipfile.BadZipFile) as exc:
-        raise CivitaiDownloadError("Could not unpack the wildcard archive.") from exc
+        raise _failed("Could not unpack the wildcard archive.", exc)
     raise CivitaiDownloadError("The downloaded wildcard archive format is not supported.")
 
 
@@ -381,7 +693,7 @@ def _model_destination(
     custom_name: str,
     creator_alias: str,
 ) -> tuple[Path, str]:
-    kind = _model_kind(model.get("type"))
+    kind = _model_kind(model.get("type"), version.get("baseModel"))
     root = _selected_root("modelDirs", config.get("modelDirId")) / kind
     if config.get("modelIntelligent", True):
         if config.get("modelSortBaseModel", True):
@@ -406,7 +718,7 @@ def _wildcard_destination(model: dict[str, Any], file: dict[str, Any], config: d
     return root, f"{stem}{suffix}"
 
 
-def download(body: dict[str, Any]) -> dict[str, Any]:
+def download(body: dict[str, Any], history_id: int | None = None) -> dict[str, Any]:
     try:
         model_id = int(body.get("modelId"))
         version_id = int(body.get("versionId"))
@@ -432,8 +744,96 @@ def download(body: dict[str, Any]) -> dict[str, Any]:
     custom = bool(body.get("customNaming"))
     creator = str(model.get("creator") or "").strip()
     alias = _alias(config, creator, str(body.get("creatorAlias") or ""), custom)
+    progress_key = uuid.uuid4().hex
+    extra = _download_meta(
+        model,
+        version,
+        file,
+        kind="",
+        creator=creator,
+        file_name=str(file.get("name") or ""),
+    )
+    download_progress.start(
+        progress_key,
+        {
+            "modelId": model_id,
+            "versionId": version_id,
+            "fileId": file_id,
+            "name": str(model.get("name") or ""),
+            "versionName": str(version.get("name") or ""),
+            "kind": "",
+            "creator": creator,
+            "fileName": str(file.get("name") or ""),
+            "sizeBytes": _file_size(file),
+            "imageUrl": _preview_url(version),
+            "site": _site(),
+            "baseModel": extra["base_model"],
+            "tags": extra["tags"],
+            "trainedWords": extra["trained_words"],
+            "description": extra["description"],
+            "searchText": extra["search_text"],
+            "historyId": history_id,
+        },
+    )
+    try:
+        history_id = _begin_history(
+            body,
+            model,
+            version,
+            file,
+            model_id,
+            version_id,
+            creator,
+            extra,
+            history_id,
+        )
+        download_progress.set_fields(progress_key, historyId=history_id)
+        return _run_download(
+            body, model, version, file, model_id, version_id, config, creator, alias, progress_key, history_id
+        )
+    except Exception as exc:
+        _fail_history(
+            body,
+            exc,
+            history_id,
+            {
+                "name": str(model.get("name") or ""),
+                "versionName": str(version.get("name") or ""),
+                "creator": creator,
+                "fileName": str(file.get("name") or ""),
+                "sizeBytes": _file_size(file),
+                "imageUrl": _preview_url(version),
+                "site": _site(),
+                "baseModel": extra["base_model"],
+                "tags": extra["tags"],
+                "trainedWords": extra["trained_words"],
+                "description": extra["description"],
+                "searchText": extra["search_text"],
+            },
+        )
+        if isinstance(exc, CivitaiDownloadError):
+            raise
+        raise CivitaiDownloadError(str(exc)) from exc
+    finally:
+        download_progress.finish(progress_key)
+
+
+def _run_download(
+    body: dict[str, Any],
+    model: dict[str, Any],
+    version: dict[str, Any],
+    file: dict[str, Any],
+    model_id: int,
+    version_id: int,
+    config: dict[str, Any],
+    creator: str,
+    alias: str,
+    progress_key: str,
+    history_id: int | None = None,
+) -> dict[str, Any]:
     if _model_kind(model.get("type")) == "wildcards":
         folder, filename = _wildcard_destination(model, file, config)
+        _progress_meta(progress_key, model, version, file, kind="wildcards", creator=creator, file_name=filename)
         source = folder / f".{filename}.{uuid.uuid4().hex}.download"
         try:
             _write_download(str(file["downloadUrl"]), source)
@@ -455,10 +855,12 @@ def download(body: dict[str, Any]) -> dict[str, Any]:
             raise
         except OSError as exc:
             source.unlink(missing_ok=True)
-            raise CivitaiDownloadError("Could not save the downloaded wildcard.") from exc
+            raise _failed("Could not save the downloaded wildcard.", exc)
         kind = "wildcards"
     else:
         folder, filename = _model_destination(model, version, file, config, str(body.get("modelName") or ""), alias)
+        kind = _model_kind(model.get("type"), version.get("baseModel"))
+        _progress_meta(progress_key, model, version, file, kind=kind, creator=creator, file_name=filename)
         destination = _install_download(
             str(file["downloadUrl"]),
             folder,
@@ -466,8 +868,19 @@ def download(body: dict[str, Any]) -> dict[str, Any]:
             _expected_sha256(file),
         )
         paths = [destination]
-        kind = _model_kind(model.get("type"))
         _refresh_model_info(kind, destination, model, version, config)
+    _record_download(
+        model=model,
+        version=version,
+        file=file,
+        model_id=model_id,
+        version_id=version_id,
+        kind=kind,
+        creator=creator,
+        paths=paths,
+        request=body,
+        history_id=history_id,
+    )
     return {
         "modelId": model_id,
         "versionId": version_id,

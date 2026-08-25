@@ -33,7 +33,7 @@ export function ToastCard({
         <div className={['w-1.5 shrink-0 rounded-sm', c.bar].join(' ')} />
         <div className="flex min-w-0 flex-1 flex-col gap-2 px-3 py-2 text-sm text-ink">
           <div className="flex items-start gap-2">
-            <p className="min-w-0 flex-1">{text}</p>
+            <p className="min-w-0 flex-1 break-all">{text}</p>
             {onCancel ? (
               <button
                 type="button"

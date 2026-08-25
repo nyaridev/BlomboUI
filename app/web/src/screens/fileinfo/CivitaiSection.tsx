@@ -52,7 +52,7 @@ function Message({ children, onClick }: { children: ReactNode; onClick?: () => v
 
 function authorImages(info: CivitaiVersion): CivitaiImage[] {
   const creator = info.model?.creator?.username
-  const list = (info.images || []).filter((image) => image.url && image.type !== 'video')
+  const list = (info.images || []).filter((image) => image.url)
   if (creator && list.some((image) => image.username)) {
     const matched = list.filter((image) => image.username === creator)
     if (matched.length) {
@@ -93,7 +93,7 @@ export function CivitaiSection({
   let body: ReactNode
   let fail = false
   if (preview) {
-    body = <ImageCarousel key={preview} urls={[preview]} alt={previewAlt} onCurrent={setCurrentUrl} />
+    body = <ImageCarousel key={preview} items={[{ url: preview }]} alt={previewAlt} onCurrent={setCurrentUrl} />
   } else if (status === 'idle') {
     body = (
       <Message onClick={onPick}>
@@ -117,9 +117,13 @@ export function CivitaiSection({
   } else {
     const name = info.model?.name || 'CivitAI model'
     const images = authorImages(info)
-    const urls = images.map((image) => image.url as string)
-    body = urls.length ? (
-      <ImageCarousel key={urls.join('\n')} urls={urls} alt={name} onCurrent={setCurrentUrl} />
+    body = images.length ? (
+      <ImageCarousel
+        key={images.map((image) => image.url).join('\n')}
+        items={images.map((image) => ({ url: image.url as string, type: image.type }))}
+        alt={name}
+        onCurrent={setCurrentUrl}
+      />
     ) : (
       <Message>
         <p className="text-sm text-muted">Matched on CivitAI, no author images</p>

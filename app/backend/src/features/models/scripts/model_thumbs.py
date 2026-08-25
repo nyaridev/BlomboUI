@@ -9,6 +9,7 @@ from infrastructure.storage.repositories import model_meta as model_meta_db
 from config import USER
 from features.models.scripts import thumbnail_embed
 from features.models.scripts import thumbnail_scopes
+from features.models.scripts import model_thumb_anim
 from .model_thumb_storage import (
     drop_context,
     drop_ident,
@@ -22,7 +23,7 @@ from .model_thumb_storage import (
 
 ROOT = USER / "model_thumbs"
 THUMBS = ROOT
-THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4")
+THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm")
 _SAVE = {"png": ("PNG", ".png"), "jpg": ("JPEG", ".jpg"), "webp": ("WEBP", ".webp")}
 THUMB_MP_DEFAULT = 0.25
 THUMB_FMT_DEFAULT = "jpg"
@@ -36,6 +37,7 @@ _MEDIA = {
     ".webp": "image/webp",
     ".gif": "image/gif",
     ".mp4": "video/mp4",
+    ".webm": "video/webm",
 }
 GLOBAL = thumbnail_scopes.GLOBAL_ID
 
@@ -122,7 +124,10 @@ def resolved_file(
         elif fallback:
             found = thumb_at(kind, ident, GLOBAL)
     if raw and found:
-        return _raw_beside(found) or found
+        beside = _raw_beside(found)
+        if beside and beside.suffix.lower() not in {".mp4", ".webm"}:
+            return beside
+        return found
     return found
 
 
@@ -151,16 +156,10 @@ def save_thumb(
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
     from PIL import Image
 
-    ext = _media_ext(data, media)
+    ext = model_thumb_anim.detect_ext(data, media)
     image = None
-    if ext == ".gif":
-        try:
-            image = Image.open(BytesIO(data))
-            image.verify()
-        except Exception as exc:
-            raise ValueError("could not read gif") from exc
-    elif ext == ".mp4":
-        if not _is_mp4(data):
+    if model_thumb_anim.is_video_ext(ext):
+        if ext == ".mp4" and not model_thumb_anim.is_mp4(data):
             raise ValueError("could not read mp4")
     else:
         try:
@@ -168,40 +167,56 @@ def save_thumb(
             image.load()
         except Exception as exc:
             raise ValueError("could not read image") from exc
-    if ext in (".gif", ".mp4"):
-        source = thumbnail_embed.extract_source(data) if image is not None else {}
-        if meta:
-            _apply_meta(source, meta)
-        payload = thumbnail_embed.pack(key, source)
-        dest = Path(str(thumb_dir(kind, ident) / key) + ext)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        for old in thumb_paths(kind, ident, key):
-            if old != dest and old.is_file():
-                old.unlink()
-        dest.write_bytes(data)
-        _drop_raw(kind, ident, key)
-        stamp = int(dest.stat().st_mtime)
-        set_index(kind, ident, key, stamp, payload.get("tags") if isinstance(payload.get("tags"), list) else [])
-        return stamp
-    assert image is not None
-    megapixels, thumb_fmt, thumb_quality, save_raw, out_fmt, out_quality = _save_opts()
-    source = thumbnail_embed.extract_source(data)
+        if not ext and model_thumb_anim.is_animated_image(image):
+            ext = ".webp"
+    animated_src = ext == ".gif" or model_thumb_anim.is_video_ext(ext) or model_thumb_anim.is_animated_image(image)
+    megapixels, thumb_fmt, thumb_quality, save_raw, out_fmt, out_quality, save_animated, anim_fmt = _save_opts()
+    source = thumbnail_embed.extract_source(data) if not model_thumb_anim.is_video_ext(ext) else {}
     if meta:
         _apply_meta(source, meta)
     payload = thumbnail_embed.pack(key, source)
-    full = image.copy()
-    _fit_megapixels(image, megapixels)
-    dest = _write_still(image, thumb_fmt, thumb_quality, payload, thumb_dir(kind, ident) / key)
+    dest_stem = thumb_dir(kind, ident) / key
+    dest: Path | None = None
+    if animated_src and save_animated:
+        dest = model_thumb_anim.encode_animated(data, ext, dest_stem, anim_fmt, megapixels, thumb_quality)
+        if dest is None:
+            raise ValueError("could not encode animated thumbnail")
+        if save_raw:
+            raw_dest = model_thumb_anim.write_original(thumb_dir(kind, ident) / f"{key}_raw", ext, data)
+            for old in raw_paths(kind, ident, key):
+                if old != raw_dest and old.is_file():
+                    old.unlink()
+        else:
+            _drop_raw(kind, ident, key)
+    elif animated_src:
+        frame = model_thumb_anim.first_frame(data, ext)
+        if frame is None:
+            raise ValueError("could not read image")
+        full = frame.copy()
+        _fit_megapixels(frame, megapixels)
+        dest = _write_still(frame, thumb_fmt, thumb_quality, payload, dest_stem)
+        if save_raw:
+            raw_dest = _write_still(full, out_fmt, out_quality, payload, thumb_dir(kind, ident) / f"{key}_raw")
+            for old in raw_paths(kind, ident, key):
+                if old != raw_dest and old.is_file():
+                    old.unlink()
+        else:
+            _drop_raw(kind, ident, key)
+    else:
+        assert image is not None
+        full = image.copy()
+        _fit_megapixels(image, megapixels)
+        dest = _write_still(image, thumb_fmt, thumb_quality, payload, dest_stem)
+        if save_raw:
+            raw_dest = _write_still(full, out_fmt, out_quality, payload, thumb_dir(kind, ident) / f"{key}_raw")
+            for old in raw_paths(kind, ident, key):
+                if old != raw_dest and old.is_file():
+                    old.unlink()
+        else:
+            _drop_raw(kind, ident, key)
     for old in thumb_paths(kind, ident, key):
         if old != dest and old.is_file():
             old.unlink()
-    if save_raw:
-        raw_dest = _write_still(full, out_fmt, out_quality, payload, thumb_dir(kind, ident) / f"{key}_raw")
-        for old in raw_paths(kind, ident, key):
-            if old != raw_dest and old.is_file():
-                old.unlink()
-    else:
-        _drop_raw(kind, ident, key)
     stamp = int(dest.stat().st_mtime)
     set_index(kind, ident, key, stamp, payload.get("tags") if isinstance(payload.get("tags"), list) else [])
     return stamp
@@ -432,16 +447,11 @@ def _ident(rel: str) -> str | None:
 
 
 def _media_ext(data: bytes, media: str) -> str:
-    mime = str(media or "").split(";", 1)[0].strip().lower()
-    if mime == "image/gif" or data[:6] in (b"GIF87a", b"GIF89a"):
-        return ".gif"
-    if mime == "video/mp4" or _is_mp4(data):
-        return ".mp4"
-    return ""
+    return model_thumb_anim.detect_ext(data, media)
 
 
 def _is_mp4(data: bytes) -> bool:
-    return len(data) >= 12 and data[4:8] == b"ftyp"
+    return model_thumb_anim.is_mp4(data)
 
 
 def _apply_meta(source: dict[str, Any], meta: dict[str, Any]) -> None:
@@ -524,10 +534,14 @@ def _fit_megapixels(image: Any, megapixels: float) -> None:
     image.thumbnail((max(1, round(width * ratio)), max(1, round(height * ratio))))
 
 
-def _save_opts() -> tuple[float, str, int, bool, str, int]:
+def _save_opts() -> tuple[float, str, int, bool, str, int, bool, str]:
     from features.settings import service as settings
 
     cfg = settings.load()
+    anim = str(cfg.get("animatedThumbFormat") or "webp").lower()
+    if anim not in model_thumb_anim.ANIM_FORMATS:
+        anim = "webp"
+    save_animated = cfg.get("saveAnimatedThumbs", True)
     return (
         _clamp_mp(cfg.get("thumbMegapixels", THUMB_MP_DEFAULT)),
         _image_fmt(cfg.get("thumbFormat"), THUMB_FMT_DEFAULT),
@@ -535,6 +549,8 @@ def _save_opts() -> tuple[float, str, int, bool, str, int]:
         bool(cfg.get("saveRawThumbs", False)),
         _image_fmt(cfg.get("imageFormat"), OUTPUT_FMT_DEFAULT),
         _clamp_quality(cfg.get("imageQuality"), OUTPUT_QUALITY_DEFAULT),
+        False if save_animated is False else bool(save_animated),
+        anim,
     )
 
 

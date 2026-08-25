@@ -4,6 +4,7 @@ import type { SettingsState } from '../settingsStore.ts'
 import type { SettingsSet } from './actionTypes.ts'
 import {
   cleanDirs,
+  cleanDownloadQueueParallel,
   cleanListTypes,
   cleanRemovedHours,
   cleanRemovedMaxGb,
@@ -45,6 +46,14 @@ export function createModelActions(set: SettingsSet, persist: () => void): Parti
           state.wildcardDirs,
         ),
       }))
+      persist()
+    },
+    setDownloadQueue: (downloadQueue) => {
+      set({ downloadQueue })
+      persist()
+    },
+    setDownloadQueueParallel: (downloadQueueParallel) => {
+      set({ downloadQueueParallel: cleanDownloadQueueParallel(downloadQueueParallel) })
       persist()
     },
     setRemovedAfterHours: (removedAfterHours) => {

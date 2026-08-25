@@ -214,8 +214,9 @@ class CivitaiRequestTests(unittest.TestCase):
         self.assertEqual(
             model["versions"][0]["images"],
             [
-                {"url": "https://image.civitai.com/a.jpg", "nsfw": False},
-                {"url": "https://image.civitai.com/c.jpg", "nsfw": True},
+                {"url": "https://image.civitai.com/a.jpg", "nsfw": False, "type": "image"},
+                {"url": "https://image.civitai.com/b.jpg", "nsfw": False, "type": "video"},
+                {"url": "https://image.civitai.com/c.jpg", "nsfw": True, "type": "image"},
             ],
         )
         self.assertEqual(model["versions"][1]["baseModel"], "Illustrious")
@@ -265,6 +266,169 @@ class CivitaiRequestTests(unittest.TestCase):
 
         self.assertEqual(civitai_downloads._primary_file(version, 11)["name"], "fp8.safetensors")
         self.assertEqual(civitai_downloads._primary_file(version, 999)["name"], "primary.safetensors")
+
+    def test_anima_checkpoint_kind_is_diffusion_models(self) -> None:
+        self.assertEqual(civitai_downloads._model_kind("Checkpoint", "Anima"), "diffusion_models")
+        self.assertEqual(civitai_downloads._model_kind("Checkpoint", "Flux.1 D"), "diffusion_models")
+        self.assertEqual(civitai_downloads._model_kind("Checkpoint", "SD 1.5"), "checkpoints")
+        self.assertEqual(civitai_downloads._model_kind("Checkpoint", "Illustrious"), "checkpoints")
+        self.assertEqual(civitai_downloads._model_kind("LORA", "Anima"), "loras")
+
+    def test_anima_checkpoint_downloads_to_diffusion_models(self) -> None:
+        model = {
+            "id": 60196,
+            "name": "irises-mix",
+            "type": "Checkpoint",
+            "creator": "chosen",
+            "tags": ["style"],
+            "versions": [
+                {
+                    "id": 3253659,
+                    "baseModel": "Anima",
+                    "paid": False,
+                    "files": [
+                        {
+                            "name": "chosenIrisesMix_v20Anima.safetensors",
+                            "primary": True,
+                            "downloadUrl": "https://civitai.com/api/download/models/3253659?fileId=3136718",
+                            "hashes": {},
+                        }
+                    ],
+                }
+            ],
+        }
+
+        def fake_write(_url: str, target: Path) -> None:
+            target.write_bytes(b"model")
+
+        with TemporaryDirectory() as root:
+            with (
+                patch.object(civitai_downloads.civitai, "get_model", return_value=model),
+                patch.object(
+                    civitai_downloads.dirs,
+                    "listed_dirs",
+                    return_value=[{"id": "local", "name": "Local", "path": root}],
+                ),
+                patch.object(
+                    civitai_downloads.settings,
+                    "load",
+                    return_value={
+                        "civitaiApiKey": "secret",
+                        "civitaiDownload": {
+                            "modelDirId": "local",
+                            "modelIntelligent": True,
+                            "modelSortBaseModel": True,
+                            "modelSortCategory": False,
+                            "modelSortCreator": False,
+                            "updateModelInfo": False,
+                        },
+                    },
+                ),
+                patch.object(civitai_downloads, "_write_download", side_effect=fake_write),
+            ):
+                result = civitai_downloads.download({"modelId": 60196, "versionId": 3253659})
+            path = Path(result["paths"][0])
+            self.assertEqual(result["kind"], "diffusion_models")
+            self.assertEqual(path.relative_to(root).as_posix(), "diffusion_models/Anima/irises-mix.safetensors")
+
+    def test_download_exposes_progress_and_records_file(self) -> None:
+        from features.downloads.scripts import progress as download_progress
+
+        model = {
+            "id": 99,
+            "name": "Model Name",
+            "type": "LORA",
+            "creator": "maker",
+            "versions": [
+                {
+                    "id": 7,
+                    "name": "v1",
+                    "baseModel": "Pony",
+                    "paid": False,
+                    "files": [
+                        {
+                            "id": 10,
+                            "name": "source.safetensors",
+                            "sizeBytes": 5,
+                            "primary": True,
+                            "downloadUrl": "https://download/example",
+                            "hashes": {},
+                        }
+                    ],
+                }
+            ],
+        }
+        seen: list[dict] = []
+
+        def fake_write(_url: str, target: Path) -> None:
+            seen.extend(download_progress.list_active())
+            target.write_bytes(b"model")
+
+        with TemporaryDirectory() as root:
+            with (
+                patch.object(civitai_downloads.civitai, "get_model", return_value=model),
+                patch.object(
+                    civitai_downloads.dirs,
+                    "listed_dirs",
+                    return_value=[{"id": "local", "name": "Local", "path": root}],
+                ),
+                patch.object(
+                    civitai_downloads.settings,
+                    "load",
+                    return_value={
+                        "civitaiApiKey": "secret",
+                        "civitaiDownload": {"modelDirId": "local", "modelIntelligent": False, "updateModelInfo": False},
+                    },
+                ),
+                patch.object(civitai_downloads, "_write_download", side_effect=fake_write),
+                patch("features.downloads.scripts.history.record", return_value=1) as record,
+            ):
+                civitai_downloads.download({"modelId": 99, "versionId": 7})
+
+        self.assertEqual(len(seen), 1)
+        self.assertEqual(seen[0]["name"], "Model Name")
+        self.assertEqual(seen[0]["fileName"], "Model_Name.safetensors")
+        self.assertEqual(seen[0]["sizeBytes"], 5)
+        self.assertIn("model name", seen[0]["searchText"])
+        self.assertIn("maker", seen[0]["searchText"])
+        self.assertEqual(download_progress.list_active(), [])
+        self.assertEqual(record.call_args.kwargs["file_name"], "Model_Name.safetensors")
+        self.assertEqual(record.call_args.kwargs["size_bytes"], 5)
+        self.assertIn("model name", record.call_args.kwargs["search_text"])
+
+    def test_write_download_uses_token_query_not_bearer(self) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeResponse:
+            def read(self, _size: int = -1) -> bytes:
+                return b""
+
+            def __enter__(self) -> FakeResponse:
+                return self
+
+            def __exit__(self, *_args: object) -> None:
+                return None
+
+        def fake_urlopen(request: object, timeout: object = None) -> FakeResponse:
+            captured["url"] = getattr(request, "full_url", "")
+            captured["auth"] = request.get_header("Authorization")  # type: ignore[union-attr]
+            return FakeResponse()
+
+        with TemporaryDirectory() as root:
+            target = Path(root) / "file.bin"
+            with (
+                patch.object(civitai_downloads.settings, "load", return_value={"civitaiApiKey": "secret"}),
+                patch.object(civitai_downloads, "urlopen", side_effect=fake_urlopen),
+            ):
+                civitai_downloads._write_download(
+                    "https://civitai.com/api/download/models/3253659?fileId=3136718",
+                    target,
+                )
+
+        query = parse_qs(urlsplit(str(captured["url"])).query)
+        self.assertEqual(query["fileId"], ["3136718"])
+        self.assertEqual(query["token"], ["secret"])
+        self.assertIsNone(captured["auth"])
 
     def test_download_uses_intelligent_model_path_and_alias(self) -> None:
         model = {

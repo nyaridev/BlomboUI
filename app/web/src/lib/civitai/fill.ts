@@ -10,12 +10,34 @@ import {
   type ThumbMeta,
   type ThumbView,
 } from '@/lib/api.ts'
+import { isGifPreview, isVideoPreview } from '@/lib/civitai/media.ts'
 import { matchModelType } from '@/lib/modelTypes.ts'
+import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { civitaiSaveThumbView } from '@/lib/gallery/thumbView.ts'
 
 export function civitaiPreviewUrl(info: CivitaiVersion) {
   const creator = info.model?.creator?.username
-  const list = (info.images || []).filter((image) => image.url && image.type !== 'video')
+  const animated = useSettingsStore.getState().saveAnimatedThumbs
+  const list = (info.images || []).filter((image) => {
+    if (!image.url) {
+      return false
+    }
+    if (animated) {
+      return true
+    }
+    return !isVideoPreview(image.url, image.type)
+  })
+  if (!animated) {
+    const stills = list.filter((image) => !isGifPreview(image.url || ''))
+    const picked = stills.length ? stills : list
+    if (creator && picked.some((image) => image.username)) {
+      const matched = picked.filter((image) => image.username === creator)
+      if (matched[0]?.url) {
+        return matched[0].url
+      }
+    }
+    return picked[0]?.url || ''
+  }
   if (creator && list.some((image) => image.username)) {
     const matched = list.filter((image) => image.username === creator)
     if (matched[0]?.url) {

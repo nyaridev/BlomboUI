@@ -17,7 +17,12 @@ UUID_RE = re.compile(
 VERSION_URL = "https://civitai.com/api/v1/model-versions/by-hash/"
 IMAGES_URL = "https://civitai.com/api/v1/images"
 MODELS_URL = "https://civitai.com/api/v1/models"
-IMAGE_PREFIXES = ("https://image.civitai.com/", "https://image.civitai.red/")
+IMAGE_PREFIXES = (
+    "https://image.civitai.com/",
+    "https://image.civitai.red/",
+    "https://video.civitai.com/",
+    "https://video.civitai.red/",
+)
 
 
 class CivitaiRequestError(RuntimeError):
@@ -197,12 +202,11 @@ def _trim_images(raw: object) -> list[dict[str, Any]]:
     for image in raw:
         if not isinstance(image, dict):
             continue
-        if image.get("type") == "video":
-            continue
         url = str(image.get("url") or "").strip()
         if not url:
             continue
-        images.append({"url": url, "nsfw": _image_nsfw(image)})
+        kind = "video" if str(image.get("type") or "").strip().casefold() == "video" else "image"
+        images.append({"url": url, "nsfw": _image_nsfw(image), "type": kind})
     return images
 
 
@@ -381,15 +385,21 @@ def fetch_image(url: str) -> tuple[bytes, str] | None:
         return None
     req = Request(
         url,
-        headers={"User-Agent": "BlomboUI", "Accept": "image/*"},
+        headers={"User-Agent": "BlomboUI", "Accept": "image/*,video/*"},
         method="GET",
     )
     try:
         with urlopen(req, timeout=20) as res:
             data = res.read()
-            media = (res.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip()
+            media = (res.headers.get("Content-Type") or "image/jpeg").split(";")[0].strip().lower()
     except (HTTPError, URLError, TimeoutError, OSError):
         return None
-    if not data or not media.startswith("image/"):
+    if not data:
         return None
-    return data, media
+    if media.startswith("image/") or media.startswith("video/"):
+        return data, media
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return data, "image/gif"
+    if len(data) >= 12 and data[4:8] == b"ftyp":
+        return data, "video/mp4"
+    return None

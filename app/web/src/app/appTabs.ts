@@ -6,6 +6,7 @@ export const MAIN_TABS = [
   { id: 'Wildcard Manager', to: '/wildcards', label: 'Wildcard Manager' },
   { id: 'Scopes', to: '/scopes', label: 'Scopes' },
   { id: 'Errors', to: '/errors', label: 'Errors' },
+  { id: 'Downloads', to: '/downloads', label: 'Downloads' },
   { id: 'Settings', to: '/settings', label: 'Settings' },
 ] as const
 
@@ -52,6 +53,7 @@ export function visibleMainTabIds(order: readonly string[], hidden: readonly str
   if (!hidden.includes('Errors')) {
     right.push('Errors')
   }
+  right.push('Downloads')
   right.push('Settings')
   return [...left, ...right]
 }
@@ -62,5 +64,5 @@ export function firstVisiblePath(order: readonly string[], hidden: readonly stri
 }
 
 export function mainTabHidden(id: string, hidden: readonly string[]) {
-  return id !== 'Settings' && hidden.includes(id)
+  return id !== 'Settings' && id !== 'Downloads' && hidden.includes(id)
 }

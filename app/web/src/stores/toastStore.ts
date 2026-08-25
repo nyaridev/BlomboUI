@@ -18,6 +18,7 @@ const ISSUE_LABEL: Record<string, string> = {
   invalid_file: 'Invalid file',
   duplicate_dir: 'Duplicate directory',
   missing_dir: 'Missing directory',
+  download_failed: 'Download failed',
 }
 
 let seq = 0
@@ -82,6 +83,9 @@ export function toast(text: string, tone: ToastTone = 'info') {
 
 export function toastIssues(items: GuiIssue[]) {
   for (const item of items) {
+    if (item.id != null) {
+      continue
+    }
     const label = ISSUE_LABEL[item.code] || item.code
     toast(`${label}: ${item.name}`, 'error')
   }

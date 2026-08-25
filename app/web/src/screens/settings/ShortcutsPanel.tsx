@@ -44,7 +44,7 @@ const SHORTCUT_SECTIONS: { title: string; items: Shortcut[] }[] = [
     title: 'Navigation',
     items: [
       { keys: ['Alt', '1…4'], action: 'Generate tabs. Follows order and exclusions if that setting is on' },
-      { keys: ['Ctrl', '1…7'], action: 'App tabs. Follows order and exclusions if that setting is on' },
+      { keys: ['Ctrl', '1…9'], action: 'App tabs. Follows order and exclusions if that setting is on' },
     ],
   },
   {

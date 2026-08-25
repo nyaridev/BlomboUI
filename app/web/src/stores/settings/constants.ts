@@ -148,6 +148,13 @@ export const IMAGE_FORMATS = [
 ] as const
 export type ImageFormat = (typeof IMAGE_FORMATS)[number]['value']
 
+export const ANIMATED_THUMB_FORMATS = [
+  { value: 'gif', label: 'GIF' },
+  { value: 'webp', label: 'WebP' },
+  { value: 'video', label: 'Video' },
+] as const
+export type AnimatedThumbFormat = (typeof ANIMATED_THUMB_FORMATS)[number]['value']
+
 export type AutocompleteMode = 'exclude' | 'include'
 export type AutocompleteListRule = { enabled: boolean; mode: AutocompleteMode; types: string[] }
 export const AUTOCOMPLETE_LIST_DEFAULT: AutocompleteListRule = {
@@ -215,6 +222,12 @@ export const SETTINGS_DEFAULTS = {
   thumbFormat: 'jpg' as ImageFormat,
   thumbQuality: 85,
   saveRawThumbs: false,
+  saveAnimatedThumbs: true,
+  animatedThumbFormat: 'webp' as AnimatedThumbFormat,
+  downloadThumbMegapixels: 0.25,
+  downloadThumbImageFormat: 'jpg' as ImageFormat,
+  downloadThumbVideoFormat: 'webp' as AnimatedThumbFormat,
+  downloadThumbQuality: 85,
   gallerySortKey: {} as Record<string, GallerySortKey>,
   gallerySortDir: {} as Record<string, GallerySortDir>,
   galleryTileScale: 1,
@@ -230,6 +243,8 @@ export const SETTINGS_DEFAULTS = {
   wildcardDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
   galleryDirs: [] as FolderDir[],
   civitaiDownload: { ...CIVITAI_DOWNLOAD_DEFAULT },
+  downloadQueue: true,
+  downloadQueueParallel: 10,
   removedAfterHours: 48,
   removedMaxGb: 100,
   autocompleteEnabled: true,

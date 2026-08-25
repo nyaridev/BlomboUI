@@ -8,6 +8,7 @@ import { ScopesScreen } from '../screens/scopes/ScopesScreen.tsx'
 import { FileInfoScreen } from '../screens/fileinfo/FileInfoScreen.tsx'
 import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
 import { ErrorsScreen } from '../screens/errors/ErrorsScreen.tsx'
+import { DownloadsScreen } from '../screens/downloads/DownloadsScreen.tsx'
 import { getHealth, reloadApp } from '../lib/api.ts'
 import { digitKey, isTyping } from '../lib/hotkeys.ts'
 import { bindSmoothWheel } from '../lib/smoothWheel.ts'
@@ -23,6 +24,7 @@ import { FooterLinks } from './FooterLinks.tsx'
 import { GpuBar } from './GpuBar.tsx'
 import { TemplateBar } from './TemplateBar.tsx'
 import { ToastStack } from './ToastStack.tsx'
+import { useRefreshModelsOnDownload } from './useRefreshModelsOnDownload.ts'
 import { WorkflowPicker } from './WorkflowPicker.tsx'
 import {
   firstVisiblePath,
@@ -40,6 +42,9 @@ function tabClass(isActive: boolean, extra = '') {
     isActive ? 'border-line border-b-bg bg-bg text-ink' : 'border-transparent text-muted hover:text-ink',
   ].join(' ')
 }
+
+const COUNT_BADGE =
+  'inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red px-1 text-[10px] leading-none tabular-nums text-ink'
 
 function pane(on: boolean, fill = false) {
   if (!on) {
@@ -72,6 +77,7 @@ export function App() {
   const mainRef = useRef<HTMLElement>(null)
   const location = useLocation()
   const navigate = useNavigate()
+  useRefreshModelsOnDownload()
   const fileInfo = location.pathname === '/file-info'
   const settings = location.pathname === '/settings'
   const generate = location.pathname === '/'
@@ -80,7 +86,8 @@ export function App() {
   const wildcards = location.pathname === '/wildcards'
   const scopes = location.pathname === '/scopes'
   const errors = location.pathname === '/errors'
-  const issueCount = useIssuesStore((s) => s.items.length)
+  const downloads = location.pathname === '/downloads'
+  const issueCount = useIssuesStore((s) => s.items.filter((item) => item.id == null).length)
   const health = useHealthStore((s) => s.health)
   const refreshHealth = useHealthStore((s) => s.refresh)
   const refreshModels = useModelsStore((s) => s.refresh)
@@ -165,9 +172,9 @@ export function App() {
         return
       }
       const digit = digitKey(event)
-      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 8) {
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 9) {
         event.preventDefault()
-        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/scopes', '/errors', '/settings']
+        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/scopes', '/errors', '/downloads', '/settings']
         const routes = mainTabKeysFollowLayout
           ? visibleMainTabIds(mainTabOrder, hiddenMainTabs).map((id) => mainTab(id)?.to ?? '/')
           : fixed
@@ -251,17 +258,31 @@ export function App() {
           })}
           <div className="ml-auto flex gap-1">
             {showErrors ? (
-              <NavLink to="/errors" className={({ isActive }) => tabClass(isActive, 'flex items-center gap-1.5')}>
+              <NavLink
+                to="/errors"
+                title="Errors"
+                aria-label={issueCount > 0 ? `Errors, ${issueCount}` : 'Errors'}
+                className={({ isActive }) => tabClass(isActive, 'flex items-center gap-1.5')}
+              >
                 <AppIcon id="triangle-alert" size={14} />
-                <span>Errors</span>
-                {issueCount > 0 ? (
-                  <span className="ml-1.5 rounded-full bg-red px-1.5 text-[10px] leading-4 text-ink">{issueCount}</span>
-                ) : null}
+                {issueCount > 0 ? <span className={COUNT_BADGE}>{issueCount}</span> : null}
               </NavLink>
             ) : null}
-            <NavLink to="/settings" className={({ isActive }) => tabClass(isActive, 'flex items-center gap-1.5')}>
+            <NavLink
+              to="/downloads"
+              title="Downloads"
+              aria-label="Downloads"
+              className={({ isActive }) => tabClass(isActive, 'flex items-center')}
+            >
+              <AppIcon id="download" size={14} />
+            </NavLink>
+            <NavLink
+              to="/settings"
+              title="Settings"
+              aria-label="Settings"
+              className={({ isActive }) => tabClass(isActive, 'flex items-center')}
+            >
               <AppIcon id="settings" size={14} />
-              <span>Settings</span>
             </NavLink>
           </div>
         </nav>
@@ -270,10 +291,10 @@ export function App() {
         ref={mainRef}
         className={[
           'min-h-0 flex-1 [overflow-anchor:none]',
-          settings || fileInfo || wildcards || scopes || models ? 'overflow-hidden' : 'overflow-y-auto',
+          settings || fileInfo || wildcards || scopes || models || downloads || errors ? 'overflow-hidden' : 'overflow-y-auto',
         ].join(' ')}
       >
-        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes || models ? '' : 'px-10 py-4'].join(' ')}>
+        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes || models || downloads || errors ? '' : 'px-10 py-4'].join(' ')}>
           {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
           <div className={pane(generate)}>
             <GenerateScreen />
@@ -296,7 +317,10 @@ export function App() {
           <div className={pane(settings, true)}>
             <SettingsScreen />
           </div>
-          <div className={pane(errors)}>
+          <div className={pane(downloads, true)}>
+            <DownloadsScreen />
+          </div>
+          <div className={pane(errors, true)}>
             <ErrorsScreen />
           </div>
         </div>

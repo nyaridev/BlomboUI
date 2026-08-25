@@ -13,11 +13,88 @@ import {
 } from '@/lib/civitai/scrape.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
 import { useToastStore } from '@/stores/toastStore.ts'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
+import {
+  CIVITAI_SITES,
+  civitaiHost,
+  useSettingsStore,
+  type CivitaiSite,
+} from '@/stores/settingsStore.ts'
 import { useState } from 'react'
 
+export const CIVITAI_ACCOUNT_QUERY =
+  'civitai site red com api key account automatic retry attempts search error request'
 export const CIVITAI_QUERY =
-  'civitai scrape fill missing overwrite force full thumbnail type trigger words checkpoint lora wildcards metadata clear auto retry attempts scope all'
+  'civitai scrape fill missing overwrite force full thumbnail type trigger words checkpoint lora wildcards metadata clear scope all'
+
+export function CivitaiAccountPanel({ query = '' }: { query?: string }) {
+  const civitaiSite = useSettingsStore((s) => s.civitaiSite)
+  const civitaiApiKey = useSettingsStore((s) => s.civitaiApiKey)
+  const autoRetry = useSettingsStore((s) => s.civitaiAutoRetry)
+  const autoRetryCount = useSettingsStore((s) => s.civitaiAutoRetryCount)
+  const setCivitaiSite = useSettingsStore((s) => s.setCivitaiSite)
+  const setCivitaiApiKey = useSettingsStore((s) => s.setCivitaiApiKey)
+  const setAutoRetry = useSettingsStore((s) => s.setCivitaiAutoRetry)
+  const setAutoRetryCount = useSettingsStore((s) => s.setCivitaiAutoRetryCount)
+
+  return (
+    <div className="flex max-w-xl flex-col gap-3">
+      <SettingsCard
+        query={query}
+        title="Civitai"
+        terms="preferred civitai site red com links api key account"
+        id="settings-civitai"
+      >
+        <SelectField
+          value={civitaiSite}
+          onChange={(value) => setCivitaiSite(value as CivitaiSite)}
+          options={[...CIVITAI_SITES]}
+        />
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          <span className="text-xs text-muted">API key</span>
+          <input
+            type="password"
+            className="w-full rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+            value={civitaiApiKey}
+            onChange={(event) => setCivitaiApiKey(event.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Optional"
+          />
+        </label>
+        <p className="text-xs text-muted">
+          Used for the CivitAI browser on Models → CivitAI.{' '}
+          <a
+            href={`https://${civitaiHost(civitaiSite)}/user/account`}
+            target="_blank"
+            rel="noreferrer"
+            className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright"
+          >
+            Manage API key
+          </a>
+        </p>
+      </SettingsCard>
+      <SettingsCard query={query} title="Automatic retry" terms="civitai request search error retry attempts">
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="check"
+            checked={autoRetry}
+            onChange={(event) => setAutoRetry(event.target.checked)}
+          />
+          Automatically retry failed CivitAI searches
+        </label>
+        <label className="flex flex-col gap-1 text-sm text-ink">
+          <span className="text-xs text-muted">Maximum retry attempts</span>
+          <NumberField value={autoRetryCount} min={1} max={100} onChange={setAutoRetryCount} />
+        </label>
+        <p className="text-xs text-muted">
+          Failed searches retry automatically up to this many times. The default is 20; you can cancel an active retry
+          from the CivitAI screen.
+        </p>
+      </SettingsCard>
+    </div>
+  )
+}
 
 const SCRAPE_SCOPES = [
   { value: 'all', label: 'All' },
@@ -65,10 +142,6 @@ function parseScope(value: string): ScrapeScope {
 }
 
 export function CivitaiPanel({ query = '' }: { query?: string }) {
-  const autoRetry = useSettingsStore((state) => state.civitaiAutoRetry)
-  const autoRetryCount = useSettingsStore((state) => state.civitaiAutoRetryCount)
-  const setAutoRetry = useSettingsStore((state) => state.setCivitaiAutoRetry)
-  const setAutoRetryCount = useSettingsStore((state) => state.setCivitaiAutoRetryCount)
   const [busy, setBusy] = useState(false)
   const [pending, setPending] = useState<Pending | null>(null)
   const [scope, setScope] = useState<ScrapeScope>('all')
@@ -136,25 +209,6 @@ export function CivitaiPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
-      <SettingsCard query={query} title="Automatic retry" terms="civitai request search error retry attempts">
-        <label className="flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            className="check"
-            checked={autoRetry}
-            onChange={(event) => setAutoRetry(event.target.checked)}
-          />
-          Automatically retry failed CivitAI searches
-        </label>
-        <label className="flex flex-col gap-1 text-sm text-ink">
-          <span className="text-xs text-muted">Maximum retry attempts</span>
-          <NumberField value={autoRetryCount} min={1} max={100} onChange={setAutoRetryCount} />
-        </label>
-        <p className="text-xs text-muted">
-          Failed searches retry automatically up to this many times. The default is 20; you can cancel an active retry
-          from the CivitAI screen.
-        </p>
-      </SettingsCard>
       <SettingsCard query={query} title="Scrape scope" terms="scrape scope all thumbnails metadata type trigger">
         <SelectField value={scope} onChange={(value) => setScope(parseScope(value))} options={[...SCRAPE_SCOPES]} />
         <p className="text-xs text-muted">

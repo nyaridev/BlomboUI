@@ -10,6 +10,7 @@ import {
   SETTINGS_DEFAULTS,
   THEME_IDS,
   type AutocompleteListRule,
+  type AnimatedThumbFormat,
   type GalleryFilterScope,
   type GalleryLocalScope,
   type GalleryModeKey,
@@ -115,6 +116,18 @@ export function cleanThumbMegapixels(raw: unknown) {
     return SETTINGS_DEFAULTS.thumbMegapixels
   }
   return Math.round(Math.min(2, Math.max(0.05, n)) * 20) / 20
+}
+
+export function cleanAnimatedThumbFormat(raw: unknown): AnimatedThumbFormat {
+  return raw === 'gif' || raw === 'video' || raw === 'webp' ? raw : SETTINGS_DEFAULTS.animatedThumbFormat
+}
+
+export function cleanDownloadQueueParallel(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.downloadQueueParallel
+  }
+  return Math.max(1, Math.min(20, Math.round(n)))
 }
 
 export function cleanLargeJpegMaxKb(raw: unknown) {
@@ -604,6 +617,25 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
         ? cleanImageQuality(patch.thumbQuality, SETTINGS_DEFAULTS.thumbQuality)
         : SETTINGS_DEFAULTS.thumbQuality,
     saveRawThumbs: typeof patch.saveRawThumbs === 'boolean' ? patch.saveRawThumbs : SETTINGS_DEFAULTS.saveRawThumbs,
+    saveAnimatedThumbs:
+      typeof patch.saveAnimatedThumbs === 'boolean' ? patch.saveAnimatedThumbs : SETTINGS_DEFAULTS.saveAnimatedThumbs,
+    animatedThumbFormat: patch.animatedThumbFormat
+      ? cleanAnimatedThumbFormat(patch.animatedThumbFormat)
+      : SETTINGS_DEFAULTS.animatedThumbFormat,
+    downloadThumbMegapixels:
+      typeof patch.downloadThumbMegapixels === 'number'
+        ? cleanThumbMegapixels(patch.downloadThumbMegapixels)
+        : SETTINGS_DEFAULTS.downloadThumbMegapixels,
+    downloadThumbImageFormat: patch.downloadThumbImageFormat
+      ? cleanImageFormat(patch.downloadThumbImageFormat, SETTINGS_DEFAULTS.downloadThumbImageFormat)
+      : SETTINGS_DEFAULTS.downloadThumbImageFormat,
+    downloadThumbVideoFormat: patch.downloadThumbVideoFormat
+      ? cleanAnimatedThumbFormat(patch.downloadThumbVideoFormat)
+      : SETTINGS_DEFAULTS.downloadThumbVideoFormat,
+    downloadThumbQuality:
+      typeof patch.downloadThumbQuality === 'number'
+        ? cleanImageQuality(patch.downloadThumbQuality, SETTINGS_DEFAULTS.downloadThumbQuality)
+        : SETTINGS_DEFAULTS.downloadThumbQuality,
     gallerySortKey: patch.gallerySortKey ? cleanSortKeyMap(patch.gallerySortKey) : SETTINGS_DEFAULTS.gallerySortKey,
     gallerySortDir: patch.gallerySortDir ? cleanSortDirMap(patch.gallerySortDir) : SETTINGS_DEFAULTS.gallerySortDir,
     galleryTileScale:
@@ -639,6 +671,11 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     wildcardDirs,
     galleryDirs,
     civitaiDownload,
+    downloadQueue: typeof patch.downloadQueue === 'boolean' ? patch.downloadQueue : SETTINGS_DEFAULTS.downloadQueue,
+    downloadQueueParallel:
+      typeof patch.downloadQueueParallel === 'number'
+        ? cleanDownloadQueueParallel(patch.downloadQueueParallel)
+        : SETTINGS_DEFAULTS.downloadQueueParallel,
     removedAfterHours:
       typeof patch.removedAfterHours === 'number'
         ? cleanRemovedHours(patch.removedAfterHours)

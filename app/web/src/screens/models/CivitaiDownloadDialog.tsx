@@ -11,6 +11,7 @@ import { loadCivitaiPage, peekCivitaiPage } from '@/lib/civitai/pageCache.ts'
 import { pickVersionId } from '@/lib/civitai/version.ts'
 import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { toast } from '@/stores/toastStore.ts'
+import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useMemo, useState } from 'react'
@@ -186,12 +187,17 @@ export function CivitaiDownloadDialog({
         }
         useSettingsStore.getState().setCivitaiDownload({ authorAliases: aliases })
       }
-      const downloadedName = result.paths[0]?.split(/[\\/]/).pop() || file.name
-      toast(`Downloaded ${downloadedName}`, 'ok')
+      if ('queued' in result && result.queued) {
+        toast(`Queued ${file.name}`, 'ok')
+      } else {
+        const downloadedName = result.paths[0]?.split(/[\\/]/).pop() || file.name
+        toast(`Downloaded ${downloadedName}`, 'ok')
+      }
       success = true
       onDownloaded()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not download the model.', 'error')
+      void useIssuesStore.getState().load()
     } finally {
       onDownloadFinished(success)
       setBusy(false)

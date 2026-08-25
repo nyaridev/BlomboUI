@@ -10,7 +10,7 @@ import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 export const DIRECTORIES_QUERY =
-  'directories folders models wildcards output gallery extra roots local path browse download reload comfyui restart'
+  'directories folders models wildcards output gallery extra roots local path browse download civitai reload comfyui restart'
 
 export function DirectoriesPanel({ query = '' }: { query?: string }) {
   const modelDirs = useSettingsStore((s) => s.modelDirs)
@@ -117,7 +117,7 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
         <p className="text-xs text-muted">
           Extra folders use the same layout as user/models (checkpoints/, loras/, vae/, controlnet/, embeddings/).
           Change a model path, then reload ComfyUI to make the extra model paths available there. Download targets are
-          configured under General → Download.
+          configured under Civitai → Download.
         </p>
       </SettingsCard>
       <SettingsCard query={query} title="Wildcards" terms="wildcards extra folders txt yaml local download">
@@ -128,7 +128,7 @@ export function DirectoriesPanel({ query = '' }: { query?: string }) {
           lockedId={LOCAL_ID}
           livePaths={{ [LOCAL_ID]: paths?.wildcards || '' }}
         />
-        <p className="text-xs text-muted">Configure the wildcard download target under General → Download.</p>
+        <p className="text-xs text-muted">Configure the wildcard download target under Civitai → Download.</p>
       </SettingsCard>
       <SettingsCard query={query} title="Output" terms="output save root folder images">
         <SettingsBlock query={query} title="Save folder" terms="output path browse" className="flex flex-col gap-2">

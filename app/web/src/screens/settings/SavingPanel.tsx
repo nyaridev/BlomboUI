@@ -6,7 +6,7 @@ import { SliderField } from '@/components/primitives/SliderField.tsx'
 import { Fragment } from 'react'
 
 export const SAVING_QUERY =
-  'saving output path folder images grids interrupted skip cancel name filename number placeholder token workflow template model date time year month day weekday hour minute second datetime sampler scheduler seed width height size steps cfg format png jpg jpeg webp quality large sidecar'
+  'saving output path folder images grids interrupted skip cancel hide gallery name filename number placeholder token workflow template model date time year month day weekday hour minute second datetime sampler scheduler seed width height size steps cfg format png jpg jpeg webp quality large sidecar'
 
 const INPUT =
   'w-full rounded border border-line bg-field px-2 py-1.5 font-mono text-sm text-ink outline-none placeholder:text-muted focus:border-accent'
@@ -76,6 +76,7 @@ export function SavingPanel({ query = '' }: { query?: string }) {
   const imageName = useSettingsStore((s) => s.imageName)
   const gridName = useSettingsStore((s) => s.gridName)
   const saveInterrupted = useSettingsStore((s) => s.saveInterrupted)
+  const galleryHideInterrupted = useSettingsStore((s) => s.galleryHideInterrupted)
   const imageFormat = useSettingsStore((s) => s.imageFormat)
   const gridFormat = useSettingsStore((s) => s.gridFormat)
   const imageQuality = useSettingsStore((s) => s.imageQuality)
@@ -87,8 +88,8 @@ export function SavingPanel({ query = '' }: { query?: string }) {
   const setImageName = useSettingsStore((s) => s.setImageName)
   const setGridName = useSettingsStore((s) => s.setGridName)
   const setSaveInterrupted = useSettingsStore((s) => s.setSaveInterrupted)
+  const setGalleryHideInterrupted = useSettingsStore((s) => s.setGalleryHideInterrupted)
   const setImageFormat = useSettingsStore((s) => s.setImageFormat)
-  const setGridFormat = useSettingsStore((s) => s.setGridFormat)
   const setImageQuality = useSettingsStore((s) => s.setImageQuality)
   const setSaveLargeAsJpeg = useSettingsStore((s) => s.setSaveLargeAsJpeg)
   const setLargeJpegMaxKb = useSettingsStore((s) => s.setLargeJpegMaxKb)
@@ -101,13 +102,6 @@ export function SavingPanel({ query = '' }: { query?: string }) {
           <SelectField
             value={imageFormat}
             onChange={(value) => setImageFormat(value as ImageFormat)}
-            options={[...IMAGE_FORMATS]}
-          />
-        </SettingsBlock>
-        <SettingsBlock query={query} title="Grid format" terms="png jpg jpeg webp extension contact sheet grid">
-          <SelectField
-            value={gridFormat}
-            onChange={(value) => setGridFormat(value as ImageFormat)}
             options={[...IMAGE_FORMATS]}
           />
         </SettingsBlock>
@@ -178,7 +172,7 @@ export function SavingPanel({ query = '' }: { query?: string }) {
           <p className="text-xs text-muted">Example: {previewPath(gridPath)}</p>
         </SettingsBlock>
       </SettingsCard>
-      <SettingsCard query={query} title="Interrupted images" terms="skip cancel unfinished preview save interrupted folder">
+      <SettingsCard query={query} title="Interrupted images" terms="skip cancel unfinished preview save interrupted folder hide gallery">
         <label className="flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"
@@ -198,6 +192,18 @@ export function SavingPanel({ query = '' }: { query?: string }) {
           />
           <p className="mt-1 text-xs text-muted">Example: {previewPath(interruptedPath)}</p>
         </div>
+        <label className="flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            className="check"
+            checked={galleryHideInterrupted}
+            onChange={(event) => setGalleryHideInterrupted(event.target.checked)}
+          />
+          Hide interrupted images in the Gallery tab
+        </label>
+        <p className="text-xs text-muted">
+          Off shows photos saved from a cancelled or skipped generation. They stay on disk either way.
+        </p>
       </SettingsCard>
       <SettingsCard query={query} title="Placeholders" terms={SAVING_QUERY} id="settings-placeholders">
         <p className="text-xs text-muted">

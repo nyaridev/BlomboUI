@@ -121,6 +121,7 @@ def _civitai_download(raw: dict[str, Any]) -> dict[str, Any]:
         "wildcardIntelligent",
         "wildcardUnpack",
         "updateModelInfo",
+        "refreshModelsAfterDownload",
     ):
         if isinstance(raw.get(key), bool):
             out[key] = raw[key]

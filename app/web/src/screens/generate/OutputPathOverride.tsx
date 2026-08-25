@@ -124,7 +124,7 @@ export function OutputPathOverride({
           onFolder={onGridPath}
         />
         <p className="text-xs text-muted">
-          Overwrites the Saving folders and names for this generate when this section is on. Empty fields still use
+          Overwrites the Files → Saving folders and names for this generate when this section is on. Empty fields still use
           the settings values. Uses the same{' '}
           <Link to="/settings#placeholders" className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright">
             placeholders

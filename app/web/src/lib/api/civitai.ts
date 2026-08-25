@@ -51,6 +51,7 @@ export type CivitaiModel = {
 export type CivitaiModelImage = {
   url: string
   nsfw: boolean
+  type?: string
 }
 
 export type CivitaiModelVersionDetail = {
@@ -178,7 +179,10 @@ export async function downloadCivitaiModel(params: {
   customNaming: boolean
   modelName?: string
   creatorAlias?: string
-}): Promise<{ modelId: number; versionId: number; kind: string; paths: string[]; creator: string; creatorAlias: string }> {
+}): Promise<
+  | { queued: true; key: string }
+  | { queued?: false; modelId: number; versionId: number; kind: string; paths: string[]; creator: string; creatorAlias: string }
+> {
   const res = await fetch(api('/civitai/download'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -187,14 +191,9 @@ export async function downloadCivitaiModel(params: {
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  return (await res.json()) as {
-    modelId: number
-    versionId: number
-    kind: string
-    paths: string[]
-    creator: string
-    creatorAlias: string
-  }
+  return (await res.json()) as
+    | { queued: true; key: string }
+    | { queued?: false; modelId: number; versionId: number; kind: string; paths: string[]; creator: string; creatorAlias: string }
 }
 
 export async function fetchCivitaiImage(url: string): Promise<File> {
@@ -204,6 +203,12 @@ export async function fetchCivitaiImage(url: string): Promise<File> {
   }
   const blob = await res.blob()
   const type = blob.type || 'image/jpeg'
-  const ext = type === 'image/png' ? 'png' : type === 'image/webp' ? 'webp' : 'jpg'
+  const ext =
+    type.includes('mp4') ? 'mp4'
+    : type.includes('webm') ? 'webm'
+    : type.includes('gif') ? 'gif'
+    : type === 'image/png' ? 'png'
+    : type === 'image/webp' ? 'webp'
+    : 'jpg'
   return new File([blob], `preview.${ext}`, { type })
 }

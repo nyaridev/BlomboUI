@@ -1,6 +1,7 @@
 import { listCivitaiModels, type CivitaiModel } from '@/lib/api.ts'
 import type { CivitaiBrowse, CivitaiTriState } from '@/lib/civitai/browse.ts'
 import { dropCivitaiPage, loadCivitaiPage } from '@/lib/civitai/pageCache.ts'
+import { openCivitaiModelTab } from '@/lib/civitai/openTab.ts'
 import { pickVersionId } from '@/lib/civitai/version.ts'
 import { filterTypeSections, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { CivitaiModelView } from './CivitaiModelView.tsx'
@@ -9,6 +10,7 @@ import { CivitaiNavBar } from './CivitaiNavBar.tsx'
 import { CivitaiFilters, filterDraftEqual, filterDraftOf, type CivitaiFilterDraft } from './CivitaiFilters.tsx'
 import { CivitaiResults } from './CivitaiResults.tsx'
 import { useModelsStore } from '@/stores/modelsStore.ts'
+import { useDownloadsStore } from '@/stores/downloadsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { Link } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -111,26 +113,7 @@ export function CivitaiBrowser() {
   }
 
   function openTab(item: CivitaiModel, focus: boolean) {
-    const store = useSettingsStore.getState()
-    const current = store.civitaiTabs
-    const initialVersionId = pickVersionId(item.versions || [], store.civitaiBrowse.baseModels)
-    const next = current.some((tab) => tab.id === item.id)
-      ? current
-      : [
-          ...current,
-          {
-            id: item.id,
-            name: item.name,
-            ...(initialVersionId === undefined ? {} : { initialVersionId, versionId: initialVersionId }),
-          },
-        ]
-    if (next !== current) {
-      store.setCivitaiTabs(next)
-    }
-    void loadCivitaiPage(item.id, store.civitaiBrowse.baseModels)
-    if (focus) {
-      store.setCivitaiTabId(item.id)
-    }
+    openCivitaiModelTab(item, focus)
   }
 
   function openDownload(item: CivitaiModel) {
@@ -317,8 +300,8 @@ export function CivitaiBrowser() {
       <div className="flex h-full items-center justify-center text-sm text-muted">
         <p>
           Add a CivitAI API key in{' '}
-          <Link to="/settings" className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright">
-            Settings → General
+          <Link to="/settings#civitai" className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright">
+            Settings → Civitai → Account
           </Link>{' '}
           to browse models.
         </p>
@@ -431,7 +414,10 @@ export function CivitaiBrowser() {
           modelId={downloadRequest.modelId}
           preferredVersionId={downloadRequest.versionId}
           onClose={() => setDownloadRequest(null)}
-          onDownloaded={() => void useModelsStore.getState().pull()}
+          onDownloaded={() => {
+            void useModelsStore.getState().pull()
+            void useDownloadsStore.getState().load()
+          }}
           onDownloadStart={() =>
             setDownloadingIds((current) => {
               const next = new Set(current)

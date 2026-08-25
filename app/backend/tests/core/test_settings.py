@@ -19,6 +19,7 @@ class SettingsTests(unittest.TestCase):
                     "modelNaming": "custom",
                     "wildcardUnpack": False,
                     "updateModelInfo": False,
+                    "refreshModelsAfterDownload": False,
                     "authorAliases": {
                         "THEANTLERS": "ta",
                         "Other": "ta",
@@ -32,6 +33,7 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(result["civitaiDownload"]["modelNaming"], "custom")
         self.assertFalse(result["civitaiDownload"]["wildcardUnpack"])
         self.assertFalse(result["civitaiDownload"]["updateModelInfo"])
+        self.assertFalse(result["civitaiDownload"]["refreshModelsAfterDownload"])
         self.assertEqual(result["civitaiDownload"]["authorAliases"], {"THEANTLERS": "ta"})
 
 

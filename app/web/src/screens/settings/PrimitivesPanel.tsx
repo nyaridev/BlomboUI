@@ -9,6 +9,7 @@ import { FolderList, type FolderEntry } from '@/components/primitives/FolderList
 import { ImageDrop } from '@/components/primitives/ImageDrop.tsx'
 import { NumberField } from '@/components/primitives/NumberField.tsx'
 import { ResizableTextarea } from '@/components/primitives/ResizableTextarea.tsx'
+import { DownloadMeter } from '@/components/primitives/DownloadMeter.tsx'
 import { ProgressBar } from '@/components/primitives/ProgressBar.tsx'
 import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { SliderField } from '@/components/primitives/SliderField.tsx'
@@ -203,7 +204,7 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
         </SettingsBlock>
       </SettingsCard>
 
-      <SettingsCard query={query} title="Meters" terms="slider progress eta">
+      <SettingsCard query={query} title="Meters" terms="slider progress eta download meter">
         <SettingsBlock query={query} title="Slider" className="flex flex-col gap-4">
           <div className="flex items-center gap-3">
             <input
@@ -234,6 +235,7 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
             <span className="w-10 shrink-0 text-right text-sm text-muted">{pct}%</span>
           </div>
           <ProgressBar pct={pct} label={`${pct}% ETA: ${eta}s`} />
+          <DownloadMeter pct={pct} label="1.0 GB / 2.2 GB · 18 MB/s" />
         </SettingsBlock>
       </SettingsCard>
 

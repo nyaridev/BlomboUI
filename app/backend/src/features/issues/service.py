@@ -1,15 +1,18 @@
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 from typing import Any
 
 from features.models.scripts import models
 from features.models.scripts import thumbnail_scopes
 from features.wildcards.scripts import wildcards as wildcard_meta
+from infrastructure.storage.repositories import error_log as error_log_repo
 
 
 def list_issues() -> list[dict[str, Any]]:
-    items = [
+    scanned = [
         *_duplicate_names("loras"),
         *_wildcard_duplicate_names(),
         *_wildcard_invalid(),
@@ -17,12 +20,55 @@ def list_issues() -> list[dict[str, Any]]:
         *_directory_issues(),
         *_duplicate_scope_names(),
     ]
-    items.sort(key=lambda row: (str(row["kind"]), str(row["code"]), str(row["name"])))
-    return items
+    scanned.sort(key=lambda row: (str(row["kind"]), str(row["code"]), str(row["name"])))
+    return [*_logged_issues(), *scanned]
 
 
 def _issue(code: str, kind: str, name: str, message: str, paths: list[str]) -> dict[str, Any]:
     return {"code": code, "kind": kind, "name": name, "message": message, "paths": paths}
+
+
+def record_log(kind: str, code: str, name: str, message: str, paths: list[str] | None = None) -> None:
+    try:
+        error_log_repo.insert(
+            {
+                "kind": kind,
+                "code": code,
+                "name": name,
+                "message": message,
+                "paths": paths or [],
+                "created_at": int(time.time()),
+            }
+        )
+    except Exception:
+        pass
+
+
+def dismiss_log(ident: int) -> bool:
+    return error_log_repo.delete(ident)
+
+
+def clear_log() -> int:
+    return error_log_repo.delete_all()
+
+
+def _logged_issues() -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for row in error_log_repo.list_rows():
+        try:
+            paths = json.loads(row["paths_json"])
+        except (TypeError, json.JSONDecodeError):
+            paths = []
+        item = _issue(
+            str(row["code"] or ""),
+            str(row["kind"] or ""),
+            str(row["name"] or ""),
+            str(row["message"] or ""),
+            paths if isinstance(paths, list) else [],
+        )
+        item["id"] = int(row["id"])
+        out.append(item)
+    return out
 
 
 def _duplicate_names(kind: str) -> list[dict[str, Any]]:

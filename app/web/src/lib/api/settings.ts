@@ -51,6 +51,12 @@ export type UserSettings = {
   thumbFormat?: string
   thumbQuality?: number
   saveRawThumbs?: boolean
+  saveAnimatedThumbs?: boolean
+  animatedThumbFormat?: string
+  downloadThumbMegapixels?: number
+  downloadThumbImageFormat?: string
+  downloadThumbVideoFormat?: string
+  downloadThumbQuality?: number
   gallerySortKey?: Record<string, string> | string
   gallerySortDir?: Record<string, string> | string
   galleryTileScale?: number
@@ -83,8 +89,11 @@ export type UserSettings = {
     wildcardIntelligent?: boolean
     wildcardUnpack?: boolean
     updateModelInfo?: boolean
+    refreshModelsAfterDownload?: boolean
     authorAliases?: Record<string, string>
   }
+  downloadQueue?: boolean
+  downloadQueueParallel?: number
   removedAfterHours?: number
   removedMaxGb?: number
   autocompleteEnabled?: boolean

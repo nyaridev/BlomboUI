@@ -17,6 +17,7 @@ import {
   type GalleryModeKey,
   type GallerySortDir,
   type GallerySortKey,
+  type AnimatedThumbFormat,
   type ImageFormat,
   type Theme,
 } from './settings/constants.ts'
@@ -74,6 +75,12 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setThumbFormat: (value: ImageFormat) => void
   setThumbQuality: (value: number) => void
   setSaveRawThumbs: (value: boolean) => void
+  setSaveAnimatedThumbs: (value: boolean) => void
+  setAnimatedThumbFormat: (value: AnimatedThumbFormat) => void
+  setDownloadThumbMegapixels: (value: number) => void
+  setDownloadThumbImageFormat: (value: ImageFormat) => void
+  setDownloadThumbVideoFormat: (value: AnimatedThumbFormat) => void
+  setDownloadThumbQuality: (value: number) => void
   setGallerySortKey: (key: string, value: GallerySortKey) => void
   setGallerySortDir: (key: string, value: GallerySortDir) => void
   setGalleryTileScale: (value: number) => void
@@ -89,6 +96,8 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setWildcardDirs: (value: FolderDir[]) => void
   setGalleryDirs: (value: FolderDir[]) => void
   setCivitaiDownload: (value: Partial<CivitaiDownloadSettings>) => void
+  setDownloadQueue: (value: boolean) => void
+  setDownloadQueueParallel: (value: number) => void
   setRemovedAfterHours: (value: number) => void
   setRemovedMaxGb: (value: number) => void
   setAutocompleteEnabled: (value: boolean) => void
@@ -176,6 +185,12 @@ const KEYS = [
   'thumbFormat',
   'thumbQuality',
   'saveRawThumbs',
+  'saveAnimatedThumbs',
+  'animatedThumbFormat',
+  'downloadThumbMegapixels',
+  'downloadThumbImageFormat',
+  'downloadThumbVideoFormat',
+  'downloadThumbQuality',
   'gallerySortKey',
   'gallerySortDir',
   'galleryTileScale',
@@ -191,6 +206,8 @@ const KEYS = [
   'wildcardDirs',
   'galleryDirs',
   'civitaiDownload',
+  'downloadQueue',
+  'downloadQueueParallel',
   'removedAfterHours',
   'removedMaxGb',
   'autocompleteEnabled',

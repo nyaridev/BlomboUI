@@ -1,9 +1,15 @@
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { LightboxView } from '@/components/models/LightboxView.tsx'
+import { PreviewMedia } from '@/components/models/PreviewMedia.tsx'
 import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
+
+export type CarouselItem = {
+  url: string
+  type?: string
+}
 
 function Nav({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
   return (
@@ -22,11 +28,11 @@ function Nav({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
 }
 
 export function ImageCarousel({
-  urls,
+  items,
   alt,
   onCurrent,
 }: {
-  urls: string[]
+  items: CarouselItem[]
   alt: string
   onCurrent?: (url: string) => void
 }) {
@@ -34,7 +40,7 @@ export function ImageCarousel({
   const [open, setOpen] = useState(false)
   const stageRef = useRef<HTMLDivElement>(null)
   const wheelAcc = useRef(0)
-  const n = urls.length
+  const n = items.length
   const location = useLocation()
   const fileInfo = location.pathname === '/file-info'
 
@@ -66,8 +72,8 @@ export function ImageCarousel({
       onCurrent?.('')
       return
     }
-    onCurrent?.(urls[((index % n) + n) % n] || '')
-  }, [index, n, onCurrent, urls])
+    onCurrent?.(items[((index % n) + n) % n]?.url || '')
+  }, [index, items, n, onCurrent])
 
   useEffect(() => {
     if (!fileInfo || !n) {
@@ -92,20 +98,18 @@ export function ImageCarousel({
   }
   const many = n > 1
   const current = ((index % n) + n) % n
-  const shown =
-    n <= 3
-      ? urls.map((_, i) => i)
-      : [current, (current + 1) % n, (current + n - 1) % n]
+  const shown = n <= 3 ? items.map((_, i) => i) : [current, (current + 1) % n, (current + n - 1) % n]
+  const currentItem = items[current]
 
   return (
     <>
       <div ref={stageRef} className="relative h-full w-full overflow-hidden">
         {shown.map((i) => {
-          const url = urls[i]
+          const item = items[i]
           const front = i === current
           return (
             <button
-              key={`${i}-${url}`}
+              key={`${i}-${item.url}`}
               type="button"
               className="absolute top-1/2 left-1/2 h-[32rem] w-[min(100%,40rem)] overflow-hidden rounded-md bg-bg transition-[transform,opacity] duration-150 ease-out"
               style={{
@@ -115,15 +119,12 @@ export function ImageCarousel({
                 pointerEvents: front ? 'auto' : 'none',
               }}
               onClick={() => setOpen(true)}
-              onMouseDown={(event) => middleOpen(event, url)}
+              onMouseDown={(event) => middleOpen(event, item.url)}
             >
-              <img
-                src={url}
-                alt=""
+              <PreviewMedia
+                src={item.url}
+                type={item.type}
                 className="h-full w-full object-contain"
-                loading={front ? undefined : 'lazy'}
-                decoding="async"
-                draggable={false}
               />
             </button>
           )
@@ -136,14 +137,11 @@ export function ImageCarousel({
         ) : null}
         {many ? (
           <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 gap-1.5">
-            {urls.map((url, i) => (
+            {items.map((item, i) => (
               <button
-                key={`dot-${i}-${url}`}
+                key={`dot-${i}-${item.url}`}
                 type="button"
-                className={[
-                  'h-1.5 rounded-full',
-                  i === current ? 'w-4 bg-ink' : 'w-1.5 bg-muted hover:bg-ink',
-                ].join(' ')}
+                className={['h-1.5 rounded-full', i === current ? 'w-4 bg-ink' : 'w-1.5 bg-muted hover:bg-ink'].join(' ')}
                 aria-label={`Image ${i + 1}`}
                 onClick={() => setIndex(i)}
               />
@@ -151,11 +149,12 @@ export function ImageCarousel({
           </div>
         ) : null}
       </div>
-      {open ? (
+      {open && currentItem ? (
         <LightboxView
-          src={urls[current]}
+          src={currentItem.url}
+          type={currentItem.type}
           alt={alt}
-          resetKey={urls[current]}
+          resetKey={currentItem.url}
           many={many}
           onClose={() => setOpen(false)}
           onPrev={() => setIndex((i) => (i + n - 1) % n)}

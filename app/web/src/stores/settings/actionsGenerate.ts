@@ -3,6 +3,7 @@ import type { SettingsSet } from './actionTypes.ts'
 import {
   cleanCivitaiSite,
   cleanCompleteThumbScale,
+  cleanAnimatedThumbFormat,
   cleanGenerateTabOrder,
   cleanHiddenMainTabs,
   cleanImageFormat,
@@ -199,6 +200,40 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     },
     setSaveRawThumbs: (saveRawThumbs) => {
       set({ saveRawThumbs })
+      persist()
+    },
+    setSaveAnimatedThumbs: (saveAnimatedThumbs) => {
+      set({ saveAnimatedThumbs })
+      persist()
+    },
+    setAnimatedThumbFormat: (animatedThumbFormat) => {
+      set({ animatedThumbFormat: cleanAnimatedThumbFormat(animatedThumbFormat) })
+      persist()
+    },
+    setDownloadThumbMegapixels: (downloadThumbMegapixels) => {
+      set({ downloadThumbMegapixels: cleanThumbMegapixels(downloadThumbMegapixels) })
+      persist()
+    },
+    setDownloadThumbImageFormat: (downloadThumbImageFormat) => {
+      set({
+        downloadThumbImageFormat: cleanImageFormat(
+          downloadThumbImageFormat,
+          SETTINGS_DEFAULTS.downloadThumbImageFormat,
+        ),
+      })
+      persist()
+    },
+    setDownloadThumbVideoFormat: (downloadThumbVideoFormat) => {
+      set({ downloadThumbVideoFormat: cleanAnimatedThumbFormat(downloadThumbVideoFormat) })
+      persist()
+    },
+    setDownloadThumbQuality: (downloadThumbQuality) => {
+      set({
+        downloadThumbQuality: cleanImageQuality(
+          downloadThumbQuality,
+          SETTINGS_DEFAULTS.downloadThumbQuality,
+        ),
+      })
       persist()
     },
     setGallerySortKey: (key, gallerySortKey) => {

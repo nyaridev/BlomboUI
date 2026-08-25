@@ -76,6 +76,7 @@ def ensure_dirs() -> None:
     (USER / "autocompletion").mkdir(exist_ok=True)
     (USER / "gallery_thumbs").mkdir(exist_ok=True)
     (USER / "model_thumbs").mkdir(exist_ok=True)
+    (USER / "download_thumbs").mkdir(exist_ok=True)
     (USER / "removed").mkdir(exist_ok=True)
 
 

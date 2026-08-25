@@ -9,6 +9,8 @@ from api.errors import ApiError
 from features.civitai.schemas import CivitaiDownloadIn
 from features.civitai.service import client as civitai
 from features.civitai.service import downloads as civitai_downloads
+from features.downloads import service as download_jobs
+from features.issues.service import record_log
 from features.models import service as models
 
 api = APIRouter()
@@ -168,9 +170,18 @@ def civitai_model(model_id: int) -> dict:
 @api.post("/civitai/download")
 def civitai_download(body: CivitaiDownloadIn) -> dict:
     try:
-        result = civitai_downloads.download(body.model_dump())
+        result = download_jobs.submit_civitai(body.model_dump())
     except civitai_downloads.CivitaiDownloadError as exc:
+        record_log(
+            "civitai",
+            "download_failed",
+            str(body.modelName or "").strip() or f"model {body.modelId}",
+            str(exc),
+            [f"model {body.modelId}", f"version {body.versionId}"],
+        )
         raise ApiError("civitai_download_error", str(exc), 400) from exc
+    if result.get("queued"):
+        return result
     try:
         models.refresh_models(result["kind"])
     except Exception:

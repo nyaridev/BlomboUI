@@ -4,20 +4,21 @@ import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { PaneSplitter } from '@/components/chrome/PaneSplitter.tsx'
 import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
 import { DownloadPanel, DOWNLOAD_QUERY } from './DownloadPanel.tsx'
+import { HistoryPanel, HISTORY_QUERY } from './HistoryPanel.tsx'
 import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
+import { GenerationPanel, GENERATION_QUERY } from './GenerationPanel.tsx'
 import { ModelsPanel, MODELS_QUERY } from './ModelsPanel.tsx'
-import { CivitaiPanel, CIVITAI_QUERY } from './CivitaiPanel.tsx'
+import { CivitaiAccountPanel, CivitaiPanel, CIVITAI_ACCOUNT_QUERY, CIVITAI_QUERY } from './CivitaiPanel.tsx'
 import { PrimitivesPanel } from './PrimitivesPanel.tsx'
 import { DirectoriesPanel, DIRECTORIES_QUERY } from './DirectoriesPanel.tsx'
 import { SavingPanel, SAVING_QUERY } from './SavingPanel.tsx'
-import { OutputGalleryPanel, OUTPUT_GALLERY_QUERY } from './OutputGalleryPanel.tsx'
 import { ShortcutsPanel, SHORTCUTS_QUERY } from './ShortcutsPanel.tsx'
 import { TabsPanel, TABS_QUERY } from './TabsPanel.tsx'
 import { AutocompleteGeneralPanel, AutocompletePanel, AUTOCOMPLETE_GENERAL_QUERY, AUTOCOMPLETE_QUERY } from './AutocompletePanel.tsx'
 import { FrequentTagsPanel, FREQUENT_TAGS_QUERY } from './FrequentTagsPanel.tsx'
 import { RemovedPanel, REMOVED_QUERY } from './RemovedPanel.tsx'
-import { ScopesPanel, SCOPES_QUERY } from './ScopesPanel.tsx'
+import { ThumbnailsPanel, THUMBNAILS_QUERY } from './ThumbnailsPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
 import { pageLabel, SettingsNav } from './SettingsNav.tsx'
 
@@ -28,33 +29,45 @@ const GROUPS = [
   {
     title: 'General',
     pages: [
-      { id: 'General', terms: GENERAL_QUERY, Panel: GeneralPanel },
-      { id: 'Download', terms: DOWNLOAD_QUERY, Panel: DownloadPanel },
+      { id: 'Appearance', terms: GENERAL_QUERY, Panel: GeneralPanel },
       { id: 'Tabs', terms: TABS_QUERY, Panel: TabsPanel },
-      { id: 'Grids', terms: GRIDS_QUERY, Panel: GridsPanel },
-      { id: 'Gallery', terms: OUTPUT_GALLERY_QUERY, Panel: OutputGalleryPanel },
-      { id: 'Gallery View', terms: GALLERY_QUERY, Panel: GalleryPanel },
+      { id: 'Pickers', terms: GALLERY_QUERY, Panel: GalleryPanel },
     ],
   },
   {
-    title: 'Output',
+    title: 'Generate',
+    pages: [
+      { id: 'Generation', terms: GENERATION_QUERY, Panel: GenerationPanel },
+      { id: 'Grids', terms: GRIDS_QUERY, Panel: GridsPanel },
+    ],
+  },
+  {
+    title: 'Files',
     pages: [
       { id: 'Directories', terms: DIRECTORIES_QUERY, Panel: DirectoriesPanel },
-      { id: 'Output', terms: SAVING_QUERY, Panel: SavingPanel },
+      { id: 'Output', label: 'Saving', terms: SAVING_QUERY, Panel: SavingPanel },
     ],
   },
   {
     title: 'Models',
     pages: [
       { id: 'Models', terms: MODELS_QUERY, Panel: ModelsPanel },
-      { id: 'Thumbnail Scopes', terms: SCOPES_QUERY, Panel: ScopesPanel },
+      { id: 'Thumbnails', terms: THUMBNAILS_QUERY, Panel: ThumbnailsPanel },
+    ],
+  },
+  {
+    title: 'Civitai',
+    pages: [
+      { id: 'civitai-account', label: 'Account', terms: CIVITAI_ACCOUNT_QUERY, Panel: CivitaiAccountPanel },
+      { id: 'Download', terms: DOWNLOAD_QUERY, Panel: DownloadPanel },
+      { id: 'History', terms: HISTORY_QUERY, Panel: HistoryPanel },
       { id: 'Metadata', terms: CIVITAI_QUERY, Panel: CivitaiPanel },
     ],
   },
   {
     title: 'Autocomplete',
     pages: [
-      { id: 'autocomplete-general', label: 'General', terms: AUTOCOMPLETE_GENERAL_QUERY, Panel: AutocompleteGeneralPanel },
+      { id: 'autocomplete-general', label: 'Behavior', terms: AUTOCOMPLETE_GENERAL_QUERY, Panel: AutocompleteGeneralPanel },
       { id: 'autocomplete-tag-lists', label: 'Tag Lists', terms: AUTOCOMPLETE_QUERY, Panel: AutocompletePanel },
       { id: 'autocomplete-frequent-tags', label: 'Frequent Tags', terms: FREQUENT_TAGS_QUERY, Panel: FrequentTagsPanel },
     ],
@@ -75,14 +88,26 @@ function remPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
 }
 
+function glow(id: string) {
+  const el = document.getElementById(id)
+  if (!el) {
+    return
+  }
+  el.scrollIntoView({ block: 'center' })
+  el.classList.remove('settings-glow')
+  void el.offsetWidth
+  el.classList.add('settings-glow')
+}
+
 export function SettingsScreen() {
   const location = useLocation()
   const rowRef = useRef<HTMLDivElement>(null)
   const [navWidth, setNavWidth] = useState(() => NAV_REM * 16)
   const [query, setQuery] = useState('')
-  const [page, setPage] = useState<PageId>('General')
+  const [page, setPage] = useState<PageId>('Appearance')
   const searching = query.trim().length > 0
   const highlightPlaceholders = location.pathname === '/settings' && location.hash === '#placeholders'
+  const highlightCivitai = location.pathname === '/settings' && location.hash === '#civitai'
   const groups = useMemo(
     () =>
       GROUPS.map((group) => ({
@@ -116,23 +141,21 @@ export function SettingsScreen() {
     setPage('Output')
   }, [highlightPlaceholders])
 
+  useEffect(() => {
+    if (!highlightCivitai) {
+      return
+    }
+    setQuery('')
+    setPage('civitai-account')
+  }, [highlightCivitai])
+
   useLayoutEffect(() => {
     if (!highlightPlaceholders || page !== 'Output' || searching) {
       return
     }
-    const run = () => {
-      const el = document.getElementById('settings-placeholders')
-      if (!el) {
-        return
-      }
-      el.scrollIntoView({ block: 'center' })
-      el.classList.remove('settings-glow')
-      void el.offsetWidth
-      el.classList.add('settings-glow')
-    }
     let inner = 0
     const frame = window.requestAnimationFrame(() => {
-      inner = window.requestAnimationFrame(run)
+      inner = window.requestAnimationFrame(() => glow('settings-placeholders'))
     })
     const hide = window.setTimeout(() => {
       document.getElementById('settings-placeholders')?.classList.remove('settings-glow')
@@ -143,6 +166,24 @@ export function SettingsScreen() {
       window.clearTimeout(hide)
     }
   }, [highlightPlaceholders, page, searching])
+
+  useLayoutEffect(() => {
+    if (!highlightCivitai || page !== 'civitai-account' || searching) {
+      return
+    }
+    let inner = 0
+    const frame = window.requestAnimationFrame(() => {
+      inner = window.requestAnimationFrame(() => glow('settings-civitai'))
+    })
+    const hide = window.setTimeout(() => {
+      document.getElementById('settings-civitai')?.classList.remove('settings-glow')
+    }, 450)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(inner)
+      window.clearTimeout(hide)
+    }
+  }, [highlightCivitai, page, searching])
 
   useEffect(() => {
     if (shown.some((item) => item.id === page)) {

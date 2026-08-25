@@ -11,6 +11,7 @@ export type CivitaiDownloadSettings = {
   wildcardIntelligent: boolean
   wildcardUnpack: boolean
   updateModelInfo: boolean
+  refreshModelsAfterDownload: boolean
   authorAliases: Record<string, string>
 }
 
@@ -27,6 +28,7 @@ export const CIVITAI_DOWNLOAD_DEFAULT: CivitaiDownloadSettings = {
   wildcardIntelligent: true,
   wildcardUnpack: true,
   updateModelInfo: true,
+  refreshModelsAfterDownload: true,
   authorAliases: {},
 }
 
@@ -71,6 +73,7 @@ export function cleanCivitaiDownload(
     wildcardIntelligent: typeof row.wildcardIntelligent === 'boolean' ? row.wildcardIntelligent : true,
     wildcardUnpack: typeof row.wildcardUnpack === 'boolean' ? row.wildcardUnpack : true,
     updateModelInfo: typeof row.updateModelInfo === 'boolean' ? row.updateModelInfo : true,
+    refreshModelsAfterDownload: typeof row.refreshModelsAfterDownload === 'boolean' ? row.refreshModelsAfterDownload : true,
     authorAliases: cleanAliases(row.authorAliases),
   }
 }

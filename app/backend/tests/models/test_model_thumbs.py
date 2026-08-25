@@ -137,11 +137,31 @@ class ThumbEncodeTests(unittest.TestCase):
         self.assertEqual(list(model_thumbs.contexts("loras", "char.safetensors")), ["global"])
         self.assertEqual(len(model_thumbs.list_saved()), 1)
 
-    def test_gif_skips_raw(self) -> None:
+    def test_gif_saves_raw_original(self) -> None:
         gif = BytesIO()
         Image.new("P", (8, 8), 2).save(gif, format="GIF")
-        with patch.object(settings, "load", return_value={"saveRawThumbs": True}):
+        with patch.object(
+            settings,
+            "load",
+            return_value={"saveRawThumbs": True, "saveAnimatedThumbs": True, "animatedThumbFormat": "gif"},
+        ):
             model_thumbs.save_thumb("loras", "animated.safetensors", gif.getvalue(), media="image/gif")
         path = model_thumbs.thumb_at("loras", "animated.safetensors")
         self.assertTrue(path and path.suffix == ".gif")
-        self.assertFalse(any(item.is_file() for item in model_thumbs.raw_paths("loras", "animated.safetensors")))
+        self.assertTrue(any(item.is_file() for item in model_thumbs.raw_paths("loras", "animated.safetensors")))
+
+    def test_raw_skips_video_and_uses_thumb(self) -> None:
+        mp4 = b"\x00\x00\x00\x18ftypisom\x00\x00\x02\x00isomiso2"
+        with patch.object(
+            settings,
+            "load",
+            return_value={"saveRawThumbs": True, "saveAnimatedThumbs": True, "animatedThumbFormat": "webp"},
+        ):
+            model_thumbs.save_thumb("loras", "video.safetensors", mp4, media="video/mp4")
+        thumb = model_thumbs.thumb_at("loras", "video.safetensors")
+        raw = model_thumbs.resolved_file("loras", "video.safetensors", raw=True)
+        self.assertTrue(thumb)
+        self.assertEqual(raw, thumb)
+        self.assertTrue(
+            any(item.suffix.lower() == ".mp4" and item.is_file() for item in model_thumbs.raw_paths("loras", "video.safetensors"))
+        )

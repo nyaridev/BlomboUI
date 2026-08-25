@@ -72,6 +72,7 @@ export type ModelLists = {
 }
 
 export type GuiIssue = {
+  id?: number
   code: 'duplicate_name' | 'duplicate_tag' | 'invalid_file' | string
   kind: keyof ModelLists | string
   name: string
@@ -86,6 +87,20 @@ export async function getIssues(): Promise<GuiIssue[]> {
   }
   const data = (await res.json()) as { issues?: GuiIssue[] }
   return Array.isArray(data.issues) ? data.issues : []
+}
+
+export async function dismissIssue(id: number): Promise<void> {
+  const res = await fetch(api(`/issues/${id}`), { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function dismissIssueLog(): Promise<void> {
+  const res = await fetch(api('/issues'), { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
 }
 
 export type ThumbView = {

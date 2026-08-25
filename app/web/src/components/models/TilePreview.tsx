@@ -79,6 +79,15 @@ export function TilePreview({
   const mediaType = media || mediaFromUrl(shown)
   const isVideo = mediaType.toLowerCase().startsWith('video/')
 
+  function failMedia() {
+    if (useRaw && src && shown !== src) {
+      setUseRaw(false)
+      return
+    }
+    setBroken(true)
+    onError?.()
+  }
+
   return (
     <span
       ref={ref}
@@ -101,10 +110,7 @@ export function TilePreview({
             preload="metadata"
             draggable={preventMediaDrag ? false : undefined}
             onLoadedData={onLoad}
-            onError={() => {
-              setBroken(true)
-              onError?.()
-            }}
+            onError={failMedia}
           />
         ) : (
           <img
@@ -115,10 +121,7 @@ export function TilePreview({
             decoding="async"
             draggable={preventMediaDrag ? false : undefined}
             onLoad={onLoad}
-            onError={() => {
-              setBroken(true)
-              onError?.()
-            }}
+            onError={failMedia}
           />
         )
       ) : (

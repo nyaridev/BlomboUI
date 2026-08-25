@@ -1,5 +1,6 @@
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { LightboxView } from '@/components/models/LightboxView.tsx'
+import { PreviewMedia } from '@/components/models/PreviewMedia.tsx'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
 import type { CivitaiModelImage } from '@/lib/api.ts'
 import { useRef, useState } from 'react'
@@ -44,16 +45,15 @@ function PreviewCell({
       onClick={onOpen}
       onMouseDown={(event) => middleOpen(event, image.url)}
     >
-      <img
+      <PreviewMedia
         src={image.url}
+        type={image.type}
         alt={alt}
         className={[
           'relative z-10 block h-[32rem] w-auto max-w-none rounded-md border border-line bg-bg object-contain transition-opacity duration-200',
           blur ? 'blur-2xl' : '',
           loaded && !failed ? 'opacity-100' : 'opacity-0',
         ].join(' ')}
-        decoding="async"
-        draggable={false}
         onLoad={() => setLoaded(true)}
         onError={() => setFailed(true)}
       />
@@ -130,6 +130,7 @@ export function CivitaiPreviewStrip({
       {open !== null ? (
         <LightboxView
           src={images[lit]?.url || ''}
+          type={images[lit]?.type}
           alt={alt}
           resetKey={images[lit]?.url || ''}
           many={n > 1}

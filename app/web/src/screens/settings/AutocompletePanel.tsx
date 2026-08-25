@@ -13,7 +13,7 @@ import { SettingsCard } from './SettingsBlock.tsx'
 import { useEffect, useMemo, useState } from 'react'
 
 export const AUTOCOMPLETE_GENERAL_QUERY =
-  'autocomplete enable disable exclude include whitelist blacklist frequent tags types wildcard lora trigger words thumbnail thumb preview tile scale size'
+  'autocomplete behavior enable disable exclude include whitelist blacklist frequent tags types wildcard lora trigger words thumbnail thumb preview tile scale size'
 export const AUTOCOMPLETE_QUERY = 'autocomplete tags csv danbooru download catalog lists folder'
 
 function formatSize(bytes: number) {

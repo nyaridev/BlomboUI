@@ -210,6 +210,35 @@ def _clean(raw: Any) -> dict[str, Any]:
             pass
     if "saveRawThumbs" in raw:
         out["saveRawThumbs"] = bool(raw["saveRawThumbs"])
+    if "saveAnimatedThumbs" in raw:
+        out["saveAnimatedThumbs"] = bool(raw["saveAnimatedThumbs"])
+    if "animatedThumbFormat" in raw:
+        name = str(raw["animatedThumbFormat"]).lower()
+        if name in ("gif", "webp", "video"):
+            out["animatedThumbFormat"] = name
+    if "downloadThumbMegapixels" in raw:
+        try:
+            value = float(raw["downloadThumbMegapixels"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if value == value and value not in (float("inf"), float("-inf")):
+                out["downloadThumbMegapixels"] = round(min(2.0, max(0.05, value)) * 20) / 20
+    if "downloadThumbImageFormat" in raw:
+        name = str(raw["downloadThumbImageFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["downloadThumbImageFormat"] = name
+    if "downloadThumbVideoFormat" in raw:
+        name = str(raw["downloadThumbVideoFormat"]).lower()
+        if name in ("gif", "webp", "video"):
+            out["downloadThumbVideoFormat"] = name
+    if "downloadThumbQuality" in raw:
+        try:
+            out["downloadThumbQuality"] = max(1, min(100, int(raw["downloadThumbQuality"])))
+        except (TypeError, ValueError):
+            pass
     if "gallerySortKey" in raw:
         mapped = _gallery_map(raw["gallerySortKey"], _GALLERY_SORTS, "name")
         if mapped:
@@ -252,6 +281,13 @@ def _clean(raw: Any) -> dict[str, Any]:
                 out[key] = rows
     if "civitaiDownload" in raw and isinstance(raw["civitaiDownload"], dict):
         out["civitaiDownload"] = _civitai_download(raw["civitaiDownload"])
+    if "downloadQueue" in raw:
+        out["downloadQueue"] = bool(raw["downloadQueue"])
+    if "downloadQueueParallel" in raw:
+        try:
+            out["downloadQueueParallel"] = max(1, min(20, int(raw["downloadQueueParallel"])))
+        except (TypeError, ValueError):
+            pass
     if "removedAfterHours" in raw:
         try:
             out["removedAfterHours"] = max(1, min(8760, int(raw["removedAfterHours"])))

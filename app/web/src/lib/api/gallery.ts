@@ -7,6 +7,8 @@ export type GalleryItem = {
   media_kind?: 'image' | 'video'
   asset_kind?: 'image' | 'interrupted' | 'grid'
   checkpoint?: string
+  width?: number | null
+  height?: number | null
 }
 
 export type GalleryPreview = {

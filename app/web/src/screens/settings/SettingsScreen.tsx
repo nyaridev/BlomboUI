@@ -7,6 +7,7 @@ import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
 import { DownloadPanel, DOWNLOAD_QUERY } from './DownloadPanel.tsx'
 import { HistoryPanel, HISTORY_QUERY } from './HistoryPanel.tsx'
 import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
+import { GalleryTabPanel, GALLERY_TAB_QUERY } from './GalleryTabPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
 import { GenerationPanel, GENERATION_QUERY } from './GenerationPanel.tsx'
 import { ModelsPanel, MODELS_QUERY } from './ModelsPanel.tsx'
@@ -51,6 +52,10 @@ const GROUPS = [
       { id: 'Directories', terms: DIRECTORIES_QUERY, Panel: DirectoriesPanel },
       { id: 'Output', label: 'Saving', terms: SAVING_QUERY, Panel: SavingPanel },
     ],
+  },
+  {
+    title: 'Gallery',
+    pages: [{ id: 'Gallery', terms: GALLERY_TAB_QUERY, Panel: GalleryTabPanel }],
   },
   {
     title: 'Models',

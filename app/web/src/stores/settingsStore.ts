@@ -86,6 +86,11 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setDownloadThumbImageFormat: (value: ImageFormat) => void
   setDownloadThumbVideoFormat: (value: AnimatedThumbFormat) => void
   setDownloadThumbQuality: (value: number) => void
+  setGalleryItemThumbMegapixels: (value: number) => void
+  setGalleryItemThumbFormat: (value: ImageFormat) => void
+  setGalleryItemThumbVideoFormat: (value: AnimatedThumbFormat) => void
+  setGalleryItemThumbQuality: (value: number) => void
+  setGalleryPageSize: (value: number) => void
   setDownloadHistoryLimit: (value: number) => void
   setBrowseHistoryLimit: (value: number) => void
   setGallerySortKey: (key: string, value: GallerySortKey) => void
@@ -201,6 +206,11 @@ const KEYS = [
   'downloadThumbImageFormat',
   'downloadThumbVideoFormat',
   'downloadThumbQuality',
+  'galleryItemThumbMegapixels',
+  'galleryItemThumbFormat',
+  'galleryItemThumbVideoFormat',
+  'galleryItemThumbQuality',
+  'galleryPageSize',
   'downloadHistoryLimit',
   'browseHistoryLimit',
   'civitaiMarks',

@@ -110,6 +110,16 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(len(by_lora["items"]), 1)
         by_wild = search.search(wildcards=["outfit"])
         self.assertEqual(len(by_wild["items"]), 1)
+        self.assertEqual(found["items"][0]["width"], 16)
+        self.assertEqual(found["items"][0]["height"], 16)
+
+    def test_search_respects_page_limit(self) -> None:
+        gallery_cache.ingest(_write(self.root / "a.png", {"prompt": "one"}, "2026-01-01T00:00:00.000Z"))
+        gallery_cache.ingest(_write(self.root / "b.png", {"prompt": "two"}, "2026-01-02T00:00:00.000Z"))
+        gallery_cache.ingest(_write(self.root / "c.png", {"prompt": "three"}, "2026-01-03T00:00:00.000Z"))
+        found = search.search(limit=2)
+        self.assertEqual(len(found["items"]), 2)
+        self.assertTrue(found["cursor"])
 
     def test_index_uses_raw_prompt_and_model_hashes_only(self) -> None:
         gallery_cache.ingest(

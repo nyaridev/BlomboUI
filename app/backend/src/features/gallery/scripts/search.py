@@ -10,7 +10,9 @@ from infrastructure.storage.repositories import gallery as gallery_repo
 HOME_LIMIT = 24
 HOME_SHELF = 12
 TAG_LIMIT = 12
-PAGE = 60
+PAGE = 200
+PAGE_MIN = 20
+PAGE_MAX = 500
 BROWSE_PREVIEW = 6
 BROWSE_KINDS = {"checkpoints": "checkpoint", "loras": "lora", "wildcards": "wildcard"}
 
@@ -31,13 +33,37 @@ def _base_where(hide_interrupted: bool, media: str) -> tuple[str, list[Any]]:
     return " AND ".join(clauses), params
 
 
+def _dim(raw: object) -> int | None:
+    try:
+        value = int(raw)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _page_size(limit: int = 0) -> int:
+    if limit:
+        try:
+            return max(1, min(PAGE_MAX, int(limit)))
+        except (TypeError, ValueError):
+            pass
+    try:
+        raw = int(settings.load().get("galleryPageSize") or PAGE)
+    except (TypeError, ValueError):
+        raw = PAGE
+    return max(PAGE_MIN, min(PAGE_MAX, raw))
+
+
 def _public(row: Any) -> dict[str, Any]:
+    keys = row.keys() if hasattr(row, "keys") else ()
     return {
         "id": str(row["id"]),
         "created_at": str(row["created_at"]),
-        "media_kind": str(row["media_kind"] or "image") if "media_kind" in row.keys() else "image",
+        "media_kind": str(row["media_kind"] or "image") if "media_kind" in keys else "image",
         "asset_kind": str(row["asset_kind"] or "image"),
         "checkpoint": str(row["checkpoint_name"] or ""),
+        "width": _dim(row["width"] if "width" in keys else None),
+        "height": _dim(row["height"] if "height" in keys else None),
     }
 
 
@@ -96,9 +122,9 @@ def search(
     wildcards: list[str] | None = None,
     media: str = "all",
     cursor: str = "",
-    limit: int = PAGE,
+    limit: int = 0,
 ) -> dict[str, Any]:
-    cap = max(1, min(PAGE, int(limit or PAGE)))
+    cap = _page_size(limit)
     where, params = _base_where(_hide(), media)
     extra: list[str] = []
 

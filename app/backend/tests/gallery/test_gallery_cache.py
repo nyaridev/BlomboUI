@@ -281,10 +281,29 @@ class GalleryCacheTests(unittest.TestCase):
     def test_thumbnail_cache_sanitizes_path_unsafe_item_ids(self) -> None:
         source = self.tmp / "source.png"
         source.write_bytes(_png())
-        with patch.object(gallery, "THUMBS", self.tmp / "thumbs"):
+        with (
+            patch.object(gallery, "THUMBS", self.tmp / "thumbs"),
+            patch("features.settings.service.load", return_value={}),
+        ):
             thumb = gallery._thumb(source, "gallery:abc")
-        self.assertEqual(thumb, self.tmp / "thumbs" / "gallery_abc.jpg")
+        self.assertEqual(thumb, self.tmp / "thumbs" / "gallery_abc_50_jpg_webp_85.jpg")
         self.assertTrue(thumb.is_file())
+        with Image.open(thumb) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertEqual(image.size, (16, 16))
+
+    def test_thumbnail_fits_megapixels(self) -> None:
+        source = self.tmp / "big.png"
+        Image.new("RGB", (2000, 2000), (20, 80, 160)).save(source)
+        with (
+            patch.object(gallery, "THUMBS", self.tmp / "thumbs"),
+            patch("features.settings.service.load", return_value={}),
+        ):
+            thumb = gallery._thumb(source, "big")
+        self.assertTrue(thumb and thumb.is_file())
+        with Image.open(thumb) as image:
+            self.assertEqual(image.format, "JPEG")
+            self.assertLessEqual(image.size[0] * image.size[1], 500_000)
 
 
 if __name__ == "__main__":

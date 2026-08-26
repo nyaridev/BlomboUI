@@ -5,12 +5,14 @@ import { GenerateTabs } from './GenerateTabs.tsx'
 import { PromptStack } from './PromptStack.tsx'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { ConfirmDialog } from '@/components/primitives/Dialog.tsx'
 import {
   createJob,
   getJob,
   getLatestJob,
   getWorkflows,
   interruptJob,
+  postIssueLog,
   type Job,
   type ModelEntry,
   type ModelLists,
@@ -18,6 +20,7 @@ import {
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
 import { autoLoraId, nextSeed, usedSeed, useGenerateStore } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
+import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { toast } from '@/stores/toastStore.ts'
@@ -101,6 +104,7 @@ export function GenerateScreen() {
   const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
   const [workflowParams, setWorkflowParams] = useState<string[]>([])
+  const seenFail = useRef('')
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -145,7 +149,13 @@ export function GenerateScreen() {
       setJob(next)
       setImageIds(idsFromJob(next))
       if (next.status === 'failed') {
-        setError(next.error || 'Generate failed')
+        const message = next.error || 'Generate failed'
+        const key = `${next.id}:${message}`
+        if (seenFail.current !== key) {
+          seenFail.current = key
+          setError(message)
+          void useIssuesStore.getState().load()
+        }
       }
     }
     if (!busy) {
@@ -291,6 +301,7 @@ export function GenerateScreen() {
       setSeed(previous)
       setImageIds(previousIds)
       setError(err instanceof Error ? err.message : 'Generate failed')
+      void useIssuesStore.getState().load()
     } finally {
       setStarting(false)
     }
@@ -334,7 +345,18 @@ export function GenerateScreen() {
       toast(mode === 'cancel' ? 'Generation cancelled' : 'Generation interrupted', 'info')
       return true
     } catch (err) {
-      setError(err instanceof Error ? err.message : mode === 'cancel' ? 'Cancel failed' : 'Interrupt failed')
+      const message = err instanceof Error ? err.message : mode === 'cancel' ? 'Cancel failed' : 'Interrupt failed'
+      void postIssueLog({
+        kind: 'generate',
+        code: mode === 'cancel' ? 'cancel_failed' : 'interrupt_failed',
+        name: jobId,
+        message,
+      })
+        .catch(() => {})
+        .finally(() => {
+          void useIssuesStore.getState().load()
+        })
+      setError(message)
       return false
     }
   }
@@ -529,7 +551,6 @@ export function GenerateScreen() {
         genRowRef={genRowRef}
         paramsWidth={paramsWidth}
         onParamsWidth={setParamsWidth}
-        error={error}
         warning={warning}
         comfyOk={comfyOk}
         lastSeed={
@@ -571,6 +592,14 @@ export function GenerateScreen() {
         onNegativePrompt={setNegativePrompt}
         onToggleAutoLora={toggleAutoLora}
       />
+      {error ? (
+        <ConfirmDialog
+          title="Generate failed"
+          body={error}
+          onClose={() => setError(null)}
+          actions={[{ label: 'Close', kind: 'primary', onClick: () => setError(null) }]}
+        />
+      ) : null}
     </div>
   )
 }

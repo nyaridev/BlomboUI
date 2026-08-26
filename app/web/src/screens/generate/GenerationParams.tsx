@@ -28,7 +28,6 @@ function ParamSection({ title, children }: { title: string; children: ReactNode 
 }
 
 type GenerationParamsProps = {
-  error: string | null
   warning?: string | null
   comfyOk: boolean
   lastSeed: number | null
@@ -38,7 +37,6 @@ type GenerationParamsProps = {
 }
 
 export function GenerationParams({
-  error,
   warning,
   comfyOk,
   lastSeed,
@@ -325,7 +323,6 @@ export function GenerationParams({
           comfyOk={comfyOk}
         />
       </ParamSection>
-      {error ? <p className="text-xs text-accent">{error}</p> : null}
       {warning ? <p className="text-xs text-muted">{warning}</p> : null}
     </aside>
   )

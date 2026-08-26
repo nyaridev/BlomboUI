@@ -33,7 +33,6 @@ export function GenerateTabs({
   genRowRef,
   paramsWidth,
   onParamsWidth,
-  error,
   warning,
   comfyOk,
   lastSeed,
@@ -79,7 +78,6 @@ export function GenerateTabs({
   genRowRef: RefObject<HTMLDivElement | null>
   paramsWidth: number | null
   onParamsWidth: (value: number | null) => void
-  error: string | null
   warning: string | null
   comfyOk: boolean
   lastSeed: number | null
@@ -154,7 +152,6 @@ export function GenerateTabs({
         <div ref={genRowRef} className={shownTab === 'Generation' ? 'flex min-w-0' : 'hidden'}>
           <div className="min-w-0 shrink-0" style={{ width: paramsWidth ?? `${PARAMS_RATIO * 100}%` }}>
             <GenerationParams
-              error={error}
               warning={warning}
               comfyOk={comfyOk}
               lastSeed={lastSeed}

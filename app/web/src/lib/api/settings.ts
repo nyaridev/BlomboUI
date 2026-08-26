@@ -57,6 +57,11 @@ export type UserSettings = {
   downloadThumbImageFormat?: string
   downloadThumbVideoFormat?: string
   downloadThumbQuality?: number
+  galleryItemThumbMegapixels?: number
+  galleryItemThumbFormat?: string
+  galleryItemThumbVideoFormat?: string
+  galleryItemThumbQuality?: number
+  galleryPageSize?: number
   downloadHistoryLimit?: number
   browseHistoryLimit?: number
   civitaiMarks?: Record<string, { text?: string; icon?: { kind?: string; id?: string; color?: string } }>

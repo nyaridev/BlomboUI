@@ -146,6 +146,14 @@ export function cleanHistoryLimit(raw: unknown, fallback: number) {
   return value < -1 ? fallback : value
 }
 
+export function cleanGalleryPageSize(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.galleryPageSize
+  }
+  return Math.max(20, Math.min(500, Math.round(n)))
+}
+
 export function cleanLargeJpegMaxKb(raw: unknown) {
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(n)) {
@@ -688,6 +696,24 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       typeof patch.downloadThumbQuality === 'number'
         ? cleanImageQuality(patch.downloadThumbQuality, SETTINGS_DEFAULTS.downloadThumbQuality)
         : SETTINGS_DEFAULTS.downloadThumbQuality,
+    galleryItemThumbMegapixels:
+      typeof patch.galleryItemThumbMegapixels === 'number'
+        ? cleanThumbMegapixels(patch.galleryItemThumbMegapixels)
+        : SETTINGS_DEFAULTS.galleryItemThumbMegapixels,
+    galleryItemThumbFormat: patch.galleryItemThumbFormat
+      ? cleanImageFormat(patch.galleryItemThumbFormat, SETTINGS_DEFAULTS.galleryItemThumbFormat)
+      : SETTINGS_DEFAULTS.galleryItemThumbFormat,
+    galleryItemThumbVideoFormat: patch.galleryItemThumbVideoFormat
+      ? cleanAnimatedThumbFormat(patch.galleryItemThumbVideoFormat)
+      : SETTINGS_DEFAULTS.galleryItemThumbVideoFormat,
+    galleryItemThumbQuality:
+      typeof patch.galleryItemThumbQuality === 'number'
+        ? cleanImageQuality(patch.galleryItemThumbQuality, SETTINGS_DEFAULTS.galleryItemThumbQuality)
+        : SETTINGS_DEFAULTS.galleryItemThumbQuality,
+    galleryPageSize:
+      typeof patch.galleryPageSize === 'number'
+        ? cleanGalleryPageSize(patch.galleryPageSize)
+        : SETTINGS_DEFAULTS.galleryPageSize,
     downloadHistoryLimit: cleanHistoryLimit(patch.downloadHistoryLimit, SETTINGS_DEFAULTS.downloadHistoryLimit),
     browseHistoryLimit: cleanHistoryLimit(patch.browseHistoryLimit, SETTINGS_DEFAULTS.browseHistoryLimit),
     civitaiMarks: 'civitaiMarks' in patch ? cleanCivitaiMarks(patch.civitaiMarks) : SETTINGS_DEFAULTS.civitaiMarks,

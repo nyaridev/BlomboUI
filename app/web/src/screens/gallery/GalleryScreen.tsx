@@ -70,11 +70,14 @@ export function GalleryScreen() {
   const [preview, setPreview] = useState<{ items: GalleryItem[]; index: number } | null>(null)
   const [edit, setEdit] = useState<GalleryLibrary | 'new' | null>(null)
   const [remove, setRemove] = useState<GalleryLibrary | null>(null)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const loadingMoreRef = useRef(false)
   const searching = filtersActive(filters) || nav.startsWith('library:')
   const share = useSettingsStore((s) => s.galleryBrowseShare)
   const browseKey = isBrowse(nav) ? galleryBrowseKey(nav, share) : ''
   const sort = useSettingsStore((s) => (browseKey ? s.galleryBrowseSort[browseKey] ?? 'recent' : 'recent'))
   const dir = useSettingsStore((s) => (browseKey ? s.galleryBrowseDir[browseKey] ?? 'desc' : 'desc'))
+  const pageSize = useSettingsStore((s) => s.galleryPageSize)
 
   const reload = useCallback(() => setTick((value) => value + 1), [])
   const setNewest = useGalleryLive(visible, reload)
@@ -129,6 +132,8 @@ export function GalleryScreen() {
         })
     }
     if (searching) {
+      loadingMoreRef.current = false
+      setLoadingMore(false)
       void searchGallery({
         q: filters.q,
         tags: filters.tags,
@@ -137,6 +142,7 @@ export function GalleryScreen() {
         loras: filters.loras,
         wildcards: filters.wildcards,
         media: filters.media,
+        limit: pageSize,
       })
         .then((data) => {
           if (stop) {
@@ -173,7 +179,7 @@ export function GalleryScreen() {
     return () => {
       stop = true
     }
-  }, [visible, tick, searching, nav, filters, sort, dir, homeReady, setNewest])
+  }, [visible, tick, searching, nav, filters, sort, dir, homeReady, setNewest, pageSize])
 
   function applyLibrary(library: GalleryLibrary) {
     setFilters({
@@ -223,10 +229,12 @@ export function GalleryScreen() {
     setRemove(null)
   }
 
-  function loadMore() {
-    if (!cursor) {
+  const loadMore = useCallback(() => {
+    if (!cursor || loadingMoreRef.current) {
       return
     }
+    loadingMoreRef.current = true
+    setLoadingMore(true)
     void searchGallery({
       q: filters.q,
       tags: filters.tags,
@@ -236,11 +244,17 @@ export function GalleryScreen() {
       wildcards: filters.wildcards,
       media: filters.media,
       cursor,
-    }).then((data) => {
-      setResults((items) => [...items, ...data.items])
-      setCursor(data.cursor)
+      limit: pageSize,
     })
-  }
+      .then((data) => {
+        setResults((items) => [...items, ...data.items])
+        setCursor(data.cursor)
+      })
+      .finally(() => {
+        loadingMoreRef.current = false
+        setLoadingMore(false)
+      })
+  }, [cursor, filters, pageSize])
 
   const current = preview ? preview.items[preview.index] : null
   const scopeLabels = Object.fromEntries(scopes.map((item) => [item.id, item.name]))
@@ -369,9 +383,15 @@ export function GalleryScreen() {
             </button>
           ) : null}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className={searching ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto'}>
           {searching ? (
-            <GalleryResults items={results} error={error} cursor={cursor} onMore={loadMore} />
+            <GalleryResults
+              items={results}
+              error={error}
+              hasNext={Boolean(cursor)}
+              loadingMore={loadingMore}
+              onMore={loadMore}
+            />
           ) : nav === 'home' ? (
             <GalleryHome
               data={home}

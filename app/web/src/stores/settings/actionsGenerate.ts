@@ -22,6 +22,7 @@ import {
   cleanMainTabOrder,
   cleanLargeJpegMaxKb,
   cleanHistoryLimit,
+  cleanGalleryPageSize,
 } from './clean.ts'
 import {
   GALLERY_BROWSE_DIR_DEFAULT,
@@ -90,6 +91,36 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     },
     setGalleryHideInterrupted: (galleryHideInterrupted) => {
       set({ galleryHideInterrupted })
+      persist()
+    },
+    setGalleryItemThumbMegapixels: (galleryItemThumbMegapixels) => {
+      set({ galleryItemThumbMegapixels: cleanThumbMegapixels(galleryItemThumbMegapixels) })
+      persist()
+    },
+    setGalleryItemThumbFormat: (galleryItemThumbFormat) => {
+      set({
+        galleryItemThumbFormat: cleanImageFormat(
+          galleryItemThumbFormat,
+          SETTINGS_DEFAULTS.galleryItemThumbFormat,
+        ),
+      })
+      persist()
+    },
+    setGalleryItemThumbVideoFormat: (galleryItemThumbVideoFormat) => {
+      set({ galleryItemThumbVideoFormat: cleanAnimatedThumbFormat(galleryItemThumbVideoFormat) })
+      persist()
+    },
+    setGalleryItemThumbQuality: (galleryItemThumbQuality) => {
+      set({
+        galleryItemThumbQuality: cleanImageQuality(
+          galleryItemThumbQuality,
+          SETTINGS_DEFAULTS.galleryItemThumbQuality,
+        ),
+      })
+      persist()
+    },
+    setGalleryPageSize: (galleryPageSize) => {
+      set({ galleryPageSize: cleanGalleryPageSize(galleryPageSize) })
       persist()
     },
     setHiddenGenerateTabs: (hiddenGenerateTabs) => {

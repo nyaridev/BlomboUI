@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
+from pydantic import BaseModel, Field
 
 from api.errors import ApiError
 from features.generate.schemas import ComfyFreeIn
 from features.generate import service as generate
-from features.issues.service import clear_log, dismiss_log, list_issues
+from features.issues.service import clear_log, dismiss_log, list_issues, record_log
 from features.settings import service as settings
 from features.settings.schemas import OutputPathIn, PathsCheckIn
 from shared import dirs, pnginfo
@@ -14,9 +15,23 @@ from config import RUNTIME, VERSION, launcher_env
 api = APIRouter()
 
 
+class IssueLogIn(BaseModel):
+    kind: str = ""
+    code: str = ""
+    name: str = ""
+    message: str = ""
+    paths: list[str] = Field(default_factory=list)
+
+
 @api.get("/issues")
 def get_issues() -> dict:
     return {"issues": list_issues()}
+
+
+@api.post("/issues")
+def post_issue_log(body: IssueLogIn) -> dict:
+    record_log(body.kind, body.code, body.name, body.message, body.paths)
+    return {"ok": True}
 
 
 @api.delete("/issues")

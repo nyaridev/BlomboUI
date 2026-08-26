@@ -242,6 +242,36 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["downloadThumbQuality"] = max(1, min(100, int(raw["downloadThumbQuality"])))
         except (TypeError, ValueError):
             pass
+    if "galleryItemThumbMegapixels" in raw:
+        try:
+            value = float(raw["galleryItemThumbMegapixels"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if value == value and value not in (float("inf"), float("-inf")):
+                out["galleryItemThumbMegapixels"] = round(min(2.0, max(0.05, value)) * 20) / 20
+    if "galleryItemThumbFormat" in raw:
+        name = str(raw["galleryItemThumbFormat"]).lower()
+        if name == "jpeg":
+            name = "jpg"
+        if name in _IMAGE_FORMATS:
+            out["galleryItemThumbFormat"] = name
+    if "galleryItemThumbVideoFormat" in raw:
+        name = str(raw["galleryItemThumbVideoFormat"]).lower()
+        if name in ("gif", "webp", "video"):
+            out["galleryItemThumbVideoFormat"] = name
+    if "galleryItemThumbQuality" in raw:
+        try:
+            out["galleryItemThumbQuality"] = max(1, min(100, int(raw["galleryItemThumbQuality"])))
+        except (TypeError, ValueError):
+            pass
+    if "galleryPageSize" in raw:
+        try:
+            value = int(raw["galleryPageSize"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            out["galleryPageSize"] = max(20, min(500, value))
     if "downloadHistoryLimit" in raw:
         try:
             value = int(raw["downloadHistoryLimit"])

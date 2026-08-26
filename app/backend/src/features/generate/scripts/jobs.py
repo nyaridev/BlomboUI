@@ -12,6 +12,7 @@ from typing import Any
 
 from infrastructure.storage.repositories import jobs as jobs_repo
 
+from features.issues.service import record_log
 from features.settings import service as settings
 from features.complete.scripts import tag_complete
 from features.gallery.scripts import cache as gallery_cache
@@ -332,10 +333,9 @@ def _is_interrupted(path: str, params_json: str | None = None) -> bool:
 
 def create_job(body: dict[str, Any]) -> dict[str, Any]:
     if not comfy.reachable():
-        raise comfy.ComfyError(
-            "comfy_unreachable",
-            f"ComfyUI is not running on {comfy_base()}.",
-        )
+        message = f"ComfyUI is not running on {comfy_base()}."
+        record_log("generate", "generate_failed", "start", message)
+        raise comfy.ComfyError("comfy_unreachable", message)
     values = {**DEFAULTS, **{k: v for k, v in body.items() if v is not None}}
     values["workflow_id"] = str(values.get("workflow") or DEFAULTS["workflow"])
     values["template_id"] = str(values.get("template") or DEFAULTS["template"])
@@ -555,9 +555,11 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         _prune_jobs()
     except comfy.ComfyError as exc:
         jobs_repo.finish(job_id, "failed", _now(), error=str(exc))
+        record_log("generate", "generate_failed", job_id, str(exc))
         _prune_jobs()
     except Exception as exc:
         jobs_repo.finish(job_id, "failed", _now(), error=str(exc))
+        record_log("generate", "generate_failed", job_id, str(exc))
         _prune_jobs()
 
 

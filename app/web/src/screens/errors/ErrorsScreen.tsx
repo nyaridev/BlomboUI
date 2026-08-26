@@ -12,6 +12,7 @@ const KIND_LABEL: Record<string, string> = {
   gallery: 'Gallery',
   scopes: 'Scopes',
   civitai: 'Civitai',
+  generate: 'Generate',
 }
 
 const CODE_LABEL: Record<string, string> = {
@@ -21,6 +22,9 @@ const CODE_LABEL: Record<string, string> = {
   duplicate_dir: 'Duplicate directory',
   missing_dir: 'Missing directory',
   download_failed: 'Download failed',
+  generate_failed: 'Generate failed',
+  cancel_failed: 'Cancel failed',
+  interrupt_failed: 'Interrupt failed',
 }
 
 type Pane = 'errors' | 'logs'

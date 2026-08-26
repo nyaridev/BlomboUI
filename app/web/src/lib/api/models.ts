@@ -89,6 +89,23 @@ export async function getIssues(): Promise<GuiIssue[]> {
   return Array.isArray(data.issues) ? data.issues : []
 }
 
+export async function postIssueLog(body: {
+  kind: string
+  code: string
+  name?: string
+  message: string
+  paths?: string[]
+}): Promise<void> {
+  const res = await fetch(api('/issues'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
 export async function dismissIssue(id: number): Promise<void> {
   const res = await fetch(api(`/issues/${id}`), { method: 'DELETE' })
   if (!res.ok) {

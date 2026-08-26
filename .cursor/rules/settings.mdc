@@ -12,6 +12,7 @@ Canonical groups in `app/web/src/screens/settings/SettingsScreen.tsx`:
 - **General** — Appearance, Tabs, Pickers
 - **Generate** — Generation, Grids
 - **Files** — Directories, Saving
+- **Gallery** — Gallery
 - **Models** — Models, Thumbnails
 - **Civitai** — Account, Download, History, Metadata
 - **Autocomplete** — Behavior, Tag Lists, Frequent Tags

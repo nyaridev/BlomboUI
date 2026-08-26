@@ -108,7 +108,7 @@ def search_gallery(
     wildcard: list[str] = Query(default=[]),
     media: str = "all",
     cursor: str = "",
-    limit: int = 60,
+    limit: int = 200,
 ) -> dict:
     return gallery.search(
         q=q,
@@ -176,7 +176,7 @@ def gallery_item_thumb(ident: str) -> FileResponse:
     path = gallery.item_thumb(ident)
     if not path:
         raise ApiError("not_found", "image not found")
-    return file_response(path, "image/jpeg")
+    return image_response(path)
 
 
 @api.get("/gallery/items/{ident}/image")
@@ -192,7 +192,7 @@ def gallery_disk_thumb(ident: str) -> FileResponse:
     path = gallery.disk_thumb(ident)
     if not path:
         raise ApiError("not_found", "image not found")
-    return file_response(path, "image/jpeg")
+    return image_response(path)
 
 
 @api.get("/gallery/disk/{ident}/image")

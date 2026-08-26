@@ -14,8 +14,8 @@ _SIZE = re.compile(r"^(\d+)[x×*](\d+)$", re.I)
 _GALLERY_SORTS = ("name", "added", "edited", "path")
 _GALLERY_DIRS = ("asc", "desc")
 _GALLERY_VIEWS = ("checkpoints", "loras", "wildcards", "other")
-_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes")
-_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Models", "Wildcard Manager", "Scopes", "Errors")
+_ORDERABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Scopes", "Models", "Wildcard Manager")
+_HIDEABLE_MAIN_TABS = ("Generate", "File Info", "Gallery", "Scopes", "Models", "Wildcard Manager", "Errors")
 _GENERATE_TABS = ("Generation", "Base Model", "LoRa", "Wildcards", "Other")
 _IMAGE_FORMATS = ("png", "jpg", "webp")
 _KEYS = (
@@ -66,6 +66,8 @@ _KEYS = (
     "downloadThumbImageFormat",
     "downloadThumbVideoFormat",
     "downloadThumbQuality",
+    "downloadHistoryLimit",
+    "browseHistoryLimit",
     "saveRawThumbs",
     "saveAnimatedThumbs",
     "animatedThumbFormat",
@@ -116,6 +118,7 @@ _KEYS = (
     "modelsTab",
     "modelsKind",
     "civitaiBrowse",
+    "civitaiMarks",
     "civitaiTabs",
     "civitaiTabId",
     "galleryTypes",
@@ -123,6 +126,9 @@ _KEYS = (
     "galleryLocalScopes",
     "galleryScopeMode",
     "galleryFilterMode",
-    "galleryFilterShareModels",
+    "galleryAutoTypes",
     "galleryPinSelected",
+    "galleryBrowseSort",
+    "galleryBrowseDir",
+    "galleryBrowseShare",
 )

@@ -32,9 +32,9 @@ export function glyphColorMuted(id: string) {
   return `color-mix(in srgb, ${glyphColor(id)} 60%, var(--color-muted))`
 }
 
-export function parseGlyph(raw: unknown): Glyph {
+export function parseGlyphOrNull(raw: unknown): Glyph | undefined {
   if (!raw || typeof raw !== 'object') {
-    return { ...CUSTOM_GLYPH }
+    return undefined
   }
   const item = raw as Record<string, unknown>
   const id = typeof item.id === 'string' ? item.id.trim() : ''
@@ -45,7 +45,11 @@ export function parseGlyph(raw: unknown): Glyph {
     const color = typeof item.color === 'string' && COLOR_IDS.has(item.color) ? item.color : 'ink'
     return { kind: 'icon', id, color }
   }
-  return { ...CUSTOM_GLYPH }
+  return undefined
+}
+
+export function parseGlyph(raw: unknown): Glyph {
+  return parseGlyphOrNull(raw) ?? { ...CUSTOM_GLYPH }
 }
 
 export function glyphOf(item: { builtin?: boolean; icon?: unknown }): Glyph {

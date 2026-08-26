@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -26,13 +27,17 @@ async def lifespan(_app: FastAPI):
     models.list_scopes()
     complete.schedule_rebuild()
     models.start()
-    models.warm(models.hash_files())
+    threading.Thread(target=_warm_hashes, daemon=True, name="hash-warm").start()
     try:
         gallery.purge_expired()
     except OSError:
         pass
     yield
     models.stop()
+
+
+def _warm_hashes() -> None:
+    models.warm(models.hash_files())
 
 
 app = FastAPI(title="BlomboUI", lifespan=lifespan)

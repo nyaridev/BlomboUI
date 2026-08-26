@@ -6,12 +6,12 @@ export const MAIN_TABS = [
   { id: 'Wildcard Manager', to: '/wildcards', label: 'Wildcard Manager' },
   { id: 'Scopes', to: '/scopes', label: 'Scopes' },
   { id: 'Errors', to: '/errors', label: 'Errors' },
-  { id: 'Downloads', to: '/downloads', label: 'Downloads' },
+  { id: 'History', to: '/history', label: 'History' },
   { id: 'Settings', to: '/settings', label: 'Settings' },
 ] as const
 
-export const ORDERABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Models', 'Wildcard Manager', 'Scopes'] as const
-export const HIDEABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Models', 'Wildcard Manager', 'Scopes', 'Errors'] as const
+export const ORDERABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Scopes', 'Models', 'Wildcard Manager'] as const
+export const HIDEABLE_MAIN_TABS = ['Generate', 'File Info', 'Gallery', 'Scopes', 'Models', 'Wildcard Manager', 'Errors'] as const
 
 export type MainTabId = (typeof MAIN_TABS)[number]['id']
 export type OrderableMainTab = (typeof ORDERABLE_MAIN_TABS)[number]
@@ -53,7 +53,7 @@ export function visibleMainTabIds(order: readonly string[], hidden: readonly str
   if (!hidden.includes('Errors')) {
     right.push('Errors')
   }
-  right.push('Downloads')
+  right.push('History')
   right.push('Settings')
   return [...left, ...right]
 }
@@ -64,5 +64,5 @@ export function firstVisiblePath(order: readonly string[], hidden: readonly stri
 }
 
 export function mainTabHidden(id: string, hidden: readonly string[]) {
-  return id !== 'Settings' && id !== 'Downloads' && hidden.includes(id)
+  return id !== 'Settings' && id !== 'History' && hidden.includes(id)
 }

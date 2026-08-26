@@ -45,11 +45,11 @@ from .job_plan import (
     _prompt_matrix_config,
     _prompt_matrix_lines,
     _prompt_matrix_prompt,
-    _public_loras,
     _resolve_auto_loras,
     _run_seed,
     _seed_after,
 )
+from . import save_meta
 from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 
 
@@ -227,12 +227,19 @@ def _public_generation(row: Any) -> dict[str, Any]:
         "width": row["width"],
         "height": row["height"],
         "checkpoint": str(row["checkpoint_name"] or params.get("checkpoint") or ""),
-        "checkpoint_hash": str(params.get("model_hash") or ""),
+        "checkpoint_hash": str(save_meta.checkpoint_hashes(params).get("autov2") or ""),
         "steps": params.get("steps"),
         "cfg": params.get("cfg"),
         "sampler": str(params.get("sampler") or ""),
         "scheduler": str(params.get("scheduler") or ""),
-        "loras": _public_loras(params.get("loras")),
+        "loras": [
+            {
+                "path": save_meta.rel_for_hashes("loras", item.get("hashes")),
+                "strength": item.get("strength", 1),
+                "hash": str((item.get("hashes") or {}).get("autov2") or ""),
+            }
+            for item in save_meta.lora_models(params)
+        ],
         "workflow": str(params.get("workflow_id") or params.get("workflow") or ""),
         "template_id": str(params.get("template_id") or ""),
         "template_name": str(params.get("template_name") or params.get("template") or ""),
@@ -306,7 +313,6 @@ def interrupt_job(job_id: str, mode: str) -> dict[str, Any] | None:
 
 
 def latest_generation() -> dict[str, Any] | None:
-    gallery_cache.sync()
     row = gallery_cache.latest_non_grid()
     if not row:
         return None
@@ -434,7 +440,18 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                     live.value = 0
 
             rng = random.Random(int(run_values["seed"]))
+            raw_prompt = str(run_values.get("prompt") or "")
+            raw_negative = str(run_values.get("negative_prompt") or "")
+            run_values["prompt_raw"] = raw_prompt
+            run_values["negative_prompt_raw"] = raw_negative
             wildcard_tags.apply(run_values, rng)
+            used: list[str] = []
+            for blob in (raw_prompt, raw_negative):
+                for match in wildcard_tags.TAG.finditer(blob):
+                    name = match.group(1).replace("\\", "/").strip("/")
+                    if name and name not in used:
+                        used.append(name)
+            run_values["wildcards_used"] = used
             expanded_prompt = str(run_values.get("prompt_expanded") or run_values.get("prompt") or "")
             run_values["prompt"] = expanded_prompt
             run_values["negative_prompt"] = str(

@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { PaneSplitter } from '@/components/chrome/PaneSplitter.tsx'
+import { AuthorAliasesPanel, AUTHOR_ALIASES_QUERY } from './AuthorAliasesPanel.tsx'
 import { GeneralPanel, GENERAL_QUERY } from './GeneralPanel.tsx'
 import { DownloadPanel, DOWNLOAD_QUERY } from './DownloadPanel.tsx'
 import { HistoryPanel, HISTORY_QUERY } from './HistoryPanel.tsx'
@@ -9,6 +10,8 @@ import { GalleryPanel, GALLERY_QUERY } from './GalleryPanel.tsx'
 import { GridsPanel, GRIDS_QUERY } from './GridsPanel.tsx'
 import { GenerationPanel, GENERATION_QUERY } from './GenerationPanel.tsx'
 import { ModelsPanel, MODELS_QUERY } from './ModelsPanel.tsx'
+import { BrowsePanel, CIVITAI_BROWSE_QUERY } from './BrowsePanel.tsx'
+import { LabelsPanel, CIVITAI_LABELS_QUERY } from './LabelsPanel.tsx'
 import { CivitaiAccountPanel, CivitaiPanel, CIVITAI_ACCOUNT_QUERY, CIVITAI_QUERY } from './CivitaiPanel.tsx'
 import { PrimitivesPanel } from './PrimitivesPanel.tsx'
 import { DirectoriesPanel, DIRECTORIES_QUERY } from './DirectoriesPanel.tsx'
@@ -21,6 +24,7 @@ import { RemovedPanel, REMOVED_QUERY } from './RemovedPanel.tsx'
 import { ThumbnailsPanel, THUMBNAILS_QUERY } from './ThumbnailsPanel.tsx'
 import { matchesSetting } from './SettingsBlock.tsx'
 import { pageLabel, SettingsNav } from './SettingsNav.tsx'
+import { useSettingsHighlight } from './useSettingsHighlight.ts'
 
 const NAV_REM = 12
 const NAV_MIN_REM = 10
@@ -59,7 +63,10 @@ const GROUPS = [
     title: 'Civitai',
     pages: [
       { id: 'civitai-account', label: 'Account', terms: CIVITAI_ACCOUNT_QUERY, Panel: CivitaiAccountPanel },
+      { id: 'civitai-browse', label: 'Browse', terms: CIVITAI_BROWSE_QUERY, Panel: BrowsePanel },
+      { id: 'civitai-labels', label: 'Labels', terms: CIVITAI_LABELS_QUERY, Panel: LabelsPanel },
       { id: 'Download', terms: DOWNLOAD_QUERY, Panel: DownloadPanel },
+      { id: 'author-aliases', label: 'Author Aliases', terms: AUTHOR_ALIASES_QUERY, Panel: AuthorAliasesPanel },
       { id: 'History', terms: HISTORY_QUERY, Panel: HistoryPanel },
       { id: 'Metadata', terms: CIVITAI_QUERY, Panel: CivitaiPanel },
     ],
@@ -88,17 +95,6 @@ function remPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
 }
 
-function glow(id: string) {
-  const el = document.getElementById(id)
-  if (!el) {
-    return
-  }
-  el.scrollIntoView({ block: 'center' })
-  el.classList.remove('settings-glow')
-  void el.offsetWidth
-  el.classList.add('settings-glow')
-}
-
 export function SettingsScreen() {
   const location = useLocation()
   const rowRef = useRef<HTMLDivElement>(null)
@@ -106,8 +102,6 @@ export function SettingsScreen() {
   const [query, setQuery] = useState('')
   const [page, setPage] = useState<PageId>('Appearance')
   const searching = query.trim().length > 0
-  const highlightPlaceholders = location.pathname === '/settings' && location.hash === '#placeholders'
-  const highlightCivitai = location.pathname === '/settings' && location.hash === '#civitai'
   const groups = useMemo(
     () =>
       GROUPS.map((group) => ({
@@ -129,61 +123,18 @@ export function SettingsScreen() {
     return pages.filter((item) => item.id === page)
   }, [groups, page, searching])
 
+  useSettingsHighlight({
+    pathname: location.pathname,
+    hash: location.hash,
+    page,
+    searching,
+    setPage: setPage as (id: string) => void,
+    setQuery,
+  })
+
   useEffect(() => {
     setNavWidth(NAV_REM * remPx())
   }, [])
-
-  useEffect(() => {
-    if (!highlightPlaceholders) {
-      return
-    }
-    setQuery('')
-    setPage('Output')
-  }, [highlightPlaceholders])
-
-  useEffect(() => {
-    if (!highlightCivitai) {
-      return
-    }
-    setQuery('')
-    setPage('civitai-account')
-  }, [highlightCivitai])
-
-  useLayoutEffect(() => {
-    if (!highlightPlaceholders || page !== 'Output' || searching) {
-      return
-    }
-    let inner = 0
-    const frame = window.requestAnimationFrame(() => {
-      inner = window.requestAnimationFrame(() => glow('settings-placeholders'))
-    })
-    const hide = window.setTimeout(() => {
-      document.getElementById('settings-placeholders')?.classList.remove('settings-glow')
-    }, 450)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.cancelAnimationFrame(inner)
-      window.clearTimeout(hide)
-    }
-  }, [highlightPlaceholders, page, searching])
-
-  useLayoutEffect(() => {
-    if (!highlightCivitai || page !== 'civitai-account' || searching) {
-      return
-    }
-    let inner = 0
-    const frame = window.requestAnimationFrame(() => {
-      inner = window.requestAnimationFrame(() => glow('settings-civitai'))
-    })
-    const hide = window.setTimeout(() => {
-      document.getElementById('settings-civitai')?.classList.remove('settings-glow')
-    }, 450)
-    return () => {
-      window.cancelAnimationFrame(frame)
-      window.cancelAnimationFrame(inner)
-      window.clearTimeout(hide)
-    }
-  }, [highlightCivitai, page, searching])
 
   useEffect(() => {
     if (shown.some((item) => item.id === page)) {

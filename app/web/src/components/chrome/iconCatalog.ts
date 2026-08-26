@@ -1,4 +1,5 @@
 import { icons, type LucideIcon } from 'lucide-react'
+import { HorseHead } from '@/components/chrome/HorseHead.tsx'
 
 function toKebab(name: string) {
   return name
@@ -8,8 +9,9 @@ function toKebab(name: string) {
     .toLowerCase()
 }
 
-export const ICON_BY_ID = Object.fromEntries(
-  Object.entries(icons).map(([name, Icon]) => [toKebab(name), Icon]),
-) as Record<string, LucideIcon>
+export const ICON_BY_ID = {
+  ...Object.fromEntries(Object.entries(icons).map(([name, Icon]) => [toKebab(name), Icon])),
+  'horse-head': HorseHead,
+} as Record<string, LucideIcon>
 
 export const ICON_IDS = Object.keys(ICON_BY_ID)

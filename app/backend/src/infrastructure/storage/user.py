@@ -107,6 +107,19 @@ CREATE TABLE IF NOT EXISTS download_history (
 );
 CREATE INDEX IF NOT EXISTS download_history_created
     ON download_history (created_at DESC, id DESC);
+CREATE TABLE IF NOT EXISTS browse_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model_id INTEGER NOT NULL UNIQUE,
+    name TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT '',
+    creator TEXT NOT NULL DEFAULT '',
+    image_url TEXT NOT NULL DEFAULT '',
+    site TEXT NOT NULL DEFAULT '',
+    search_text TEXT NOT NULL DEFAULT '',
+    viewed_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS browse_history_viewed
+    ON browse_history (viewed_at DESC, id DESC);
 CREATE TABLE IF NOT EXISTS error_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     kind TEXT NOT NULL,
@@ -118,6 +131,16 @@ CREATE TABLE IF NOT EXISTS error_log (
 );
 CREATE INDEX IF NOT EXISTS error_log_created
     ON error_log (created_at DESC, id DESC);
+CREATE TABLE IF NOT EXISTS user_galleries (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    query TEXT NOT NULL DEFAULT '',
+    scopes_json TEXT NOT NULL DEFAULT '[]',
+    models_json TEXT NOT NULL DEFAULT '[]',
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS user_galleries_created
+    ON user_galleries (created_at ASC, id ASC);
 """
 
 

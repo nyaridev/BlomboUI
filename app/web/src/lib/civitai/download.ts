@@ -24,7 +24,7 @@ export const CIVITAI_DOWNLOAD_DEFAULT: CivitaiDownloadSettings = {
   modelSortBaseModel: true,
   modelSortCategory: true,
   modelSortCreator: true,
-  modelNaming: 'normal',
+  modelNaming: 'custom',
   wildcardIntelligent: true,
   wildcardUnpack: true,
   updateModelInfo: true,
@@ -37,6 +37,8 @@ function cleanDirectoryId(raw: unknown, dirs: DirectoryRef[] | undefined) {
   return id && (dirs || []).some((item) => item.id === id) ? id : 'local'
 }
 
+export const AUTHOR_ALIAS_RE = /^[A-Za-z0-9._-]+$/
+
 function cleanAliases(raw: unknown) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
@@ -47,7 +49,7 @@ function cleanAliases(raw: unknown) {
     const author = rawAuthor.trim().slice(0, 200)
     const alias = String(rawAlias || '').trim().slice(0, 80)
     const key = alias.toLowerCase()
-    if (!author || !/^[A-Za-z0-9._-]+$/.test(alias) || used.has(key)) {
+    if (!author || !AUTHOR_ALIAS_RE.test(alias) || used.has(key)) {
       continue
     }
     used.add(key)
@@ -69,7 +71,7 @@ export function cleanCivitaiDownload(
     modelSortBaseModel: typeof row.modelSortBaseModel === 'boolean' ? row.modelSortBaseModel : true,
     modelSortCategory: typeof row.modelSortCategory === 'boolean' ? row.modelSortCategory : true,
     modelSortCreator: typeof row.modelSortCreator === 'boolean' ? row.modelSortCreator : true,
-    modelNaming: row.modelNaming === 'custom' ? 'custom' : 'normal',
+    modelNaming: row.modelNaming === 'normal' ? 'normal' : 'custom',
     wildcardIntelligent: typeof row.wildcardIntelligent === 'boolean' ? row.wildcardIntelligent : true,
     wildcardUnpack: typeof row.wildcardUnpack === 'boolean' ? row.wildcardUnpack : true,
     updateModelInfo: typeof row.updateModelInfo === 'boolean' ? row.updateModelInfo : true,

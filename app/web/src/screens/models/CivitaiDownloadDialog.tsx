@@ -5,7 +5,7 @@ import {
   type CivitaiModelFile,
   type CivitaiModelVersionDetail,
 } from '@/lib/api.ts'
-import { authorAlias, authorAliasConflict } from '@/lib/civitai/download.ts'
+import { AUTHOR_ALIAS_RE, authorAlias, authorAliasConflict } from '@/lib/civitai/download.ts'
 import { isCivitaiFileDownloaded } from '@/lib/civitai/downloaded.ts'
 import { loadCivitaiPage, peekCivitaiPage } from '@/lib/civitai/pageCache.ts'
 import { pickVersionId } from '@/lib/civitai/version.ts'
@@ -145,7 +145,7 @@ export function CivitaiDownloadDialog({
   const aliasInvalid =
     custom &&
     (!aliasValue ||
-      (!aliasIsOriginal && !/^[A-Za-z0-9._-]+$/.test(aliasValue)) ||
+      (!aliasIsOriginal && !AUTHOR_ALIAS_RE.test(aliasValue)) ||
       authorAliasConflict(download.authorAliases, model?.creator || '', aliasValue))
   const canDownload = Boolean(model && version && file && !busy && modelName.trim() && !aliasInvalid)
 

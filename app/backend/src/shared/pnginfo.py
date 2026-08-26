@@ -19,14 +19,32 @@ def read(data: bytes, filename: str = "") -> dict[str, Any]:
         image = Image.open(BytesIO(data))
         image.load()
     except Exception:
-        return {"text": "Could not read image.", "raw": {}}
+        return {"text": "Could not read image.", "raw": {}, "metadata": {}}
+    return _from_image(image, filename)
+
+
+def read_path(path: Path | str) -> dict[str, Any]:
+    from PIL import Image
+
+    filename = str(path)
+    try:
+        with Image.open(path) as image:
+            return _from_image(image, filename)
+    except Exception:
+        return {"text": "Could not read image.", "raw": {}, "metadata": {}}
+
+
+def _from_image(image: Any, filename: str = "") -> dict[str, Any]:
     texts = _texts(image)
     text = _format(texts) or _from_sidecar(filename)
     metadata = _json(texts.get(BLOMBOUI_KEY, ""))
+    width, height = image.size
     return {
         "text": text or "No generation metadata found.",
         "raw": texts,
         "metadata": metadata if isinstance(metadata, dict) else {},
+        "width": width,
+        "height": height,
     }
 
 
@@ -42,18 +60,15 @@ def embed(
 
 
 def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:
-    hashes = values.get("model_hashes")
-    autov1 = autov3 = sha256 = ""
-    if isinstance(hashes, dict):
-        autov1 = str(hashes.get("autov1") or "")
-        autov3 = str(hashes.get("autov3") or "")
-        sha256 = str(hashes.get("sha256") or "")
+    from features.generate.scripts import save_meta
+
+    ckpt = save_meta.checkpoint_hashes(values)
     if raw:
+        prompt = str(values.get("prompt_raw") or values.get("prompt") or "")
+        negative = str(values.get("negative_prompt_raw") or values.get("negative_prompt") or "")
+    else:
         prompt = str(values.get("prompt") or "")
         negative = str(values.get("negative_prompt") or "")
-    else:
-        prompt = str(values.get("prompt_expanded") or values.get("prompt") or "")
-        negative = str(values.get("negative_prompt_expanded") or values.get("negative_prompt") or "")
     return _lines(
         prompt,
         negative,
@@ -64,12 +79,12 @@ def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:
         values.get("seed"),
         values.get("width"),
         values.get("height"),
-        values.get("checkpoint"),
-        values.get("model_hash"),
-        autov3,
-        sha256,
-        autov1,
-        values.get("loras"),
+        None,
+        ckpt.get("autov2") or values.get("model_hash"),
+        ckpt.get("autov3"),
+        ckpt.get("sha256"),
+        ckpt.get("autov1"),
+        save_meta.lora_models(values),
         values.get("interrupted"),
     )
 
@@ -305,36 +320,24 @@ def _lines(
     return f"{text}\nGenerated using BlomboUI {VERSION}"
 
 
-def _lora_stem(path: str) -> str:
-    name = path.replace("\\", "/").rsplit("/", 1)[-1]
-    if "." in name:
-        return name.rsplit(".", 1)[0]
-    return name
-
-
 def _lora_lines(raw: Any) -> list[str]:
     if not isinstance(raw, list) or not raw:
         return []
     hashes: list[str] = []
     weights: list[str] = []
     for item in raw:
-        if isinstance(item, str):
-            name, strength, digest = item, 1.0, ""
-        elif isinstance(item, dict):
-            name = str(item.get("lora") or item.get("path") or "")
-            digest = str(item.get("hash") or "")
-            try:
-                strength = float(item.get("strength") if item.get("strength") is not None else 1)
-            except (TypeError, ValueError):
-                strength = 1.0
-        else:
+        if not isinstance(item, dict):
             continue
-        stem = _lora_stem(name.strip())
-        if not stem:
+        row = item.get("hashes") if isinstance(item.get("hashes"), dict) else {}
+        digest = str(row.get("autov2") or row.get("sha256") or item.get("hash") or "")
+        try:
+            strength = float(item.get("strength") if item.get("strength") is not None else 1)
+        except (TypeError, ValueError):
+            strength = 1.0
+        if not digest:
             continue
-        if digest:
-            hashes.append(f"{stem}: {digest}")
-        weights.append(f"{stem}: {strength:g}")
+        hashes.append(digest)
+        weights.append(f"{digest}: {strength:g}")
     out: list[str] = []
     if hashes:
         out.append(f"Lora hashes: {', '.join(hashes)}")
@@ -356,7 +359,8 @@ def _from_sidecar(filename: str) -> str:
         return ""
     if not isinstance(data, dict):
         return ""
-    return parameters_text(data)
+    payload = data["params"] if isinstance(data.get("params"), dict) else data
+    return parameters_text(payload)
 
 
 def _json(raw: str) -> Any:

@@ -27,6 +27,10 @@ def image_response(path: Path | None) -> FileResponse:
         media = "image/jpeg"
     elif suffix == ".webp":
         media = "image/webp"
+    elif suffix == ".mp4":
+        media = "video/mp4"
+    elif suffix == ".webm":
+        media = "video/webm"
     else:
         media = "image/png"
     return file_response(path, media)

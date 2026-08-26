@@ -5,14 +5,57 @@ import type { CivitaiVersion } from '@/lib/api.ts'
 import { civitaiHost, useSettingsStore } from '@/stores/settingsStore.ts'
 import { useState, type ReactNode } from 'react'
 import { civitaiUrl, type Host } from './CivitaiLayouts.tsx'
-import { parsePngInfo, type PngInfoParams, type PngLora } from './parse.ts'
+import { type PngLora } from './parse.ts'
+
+type SavedHashes = {
+  autov1?: string
+  autov2?: string
+  autov3?: string
+  sha256?: string
+}
+
+type SavedModel = {
+  kind: string
+  hashes?: SavedHashes
+  strength?: number
+}
+
+type SavedParams = {
+  prompt?: string
+  negative_prompt?: string
+  prompt_raw?: string
+  negative_prompt_raw?: string
+  steps?: number
+  cfg?: number
+  seed?: number
+  sampler?: string
+  scheduler?: string
+  width?: number
+  height?: number
+  interrupted?: boolean
+  models?: SavedModel[]
+}
+
+type BlomboMeta = {
+  version?: number
+  params?: SavedParams
+}
 
 type ImageInfoProps = {
   text: string
   raw: Record<string, string>
+  metadata?: Record<string, unknown> | null
   busy: boolean
   civitai?: CivitaiVersion | null
   loraCivitai?: Record<string, CivitaiVersion | null>
+}
+
+function isV2(meta: Record<string, unknown> | null | undefined): meta is BlomboMeta & { version: 2; params: SavedParams } {
+  if (!meta || meta.version !== 2 || !meta.params || typeof meta.params !== 'object') {
+    return false
+  }
+  const params = meta.params as SavedParams
+  return Array.isArray(params.models) && typeof params.prompt === 'string' && typeof params.prompt_raw === 'string'
 }
 
 function pretty(value: string) {
@@ -80,21 +123,25 @@ function loraBits(item: PngLora) {
 
 export function GenMetaPanel({
   prompt,
+  promptRaw,
   negative,
+  negativeRaw,
   rows,
   loras,
   loraCivitai,
   site,
 }: {
   prompt?: string
+  promptRaw?: string
   negative?: string
+  negativeRaw?: string
   rows: MetaRow[]
   loras?: PngLora[]
   loraCivitai?: Record<string, CivitaiVersion | null>
   site?: Host
 }) {
   const list = loras || []
-  if (!prompt && !negative && !rows.length && !list.length) {
+  if (!prompt && !promptRaw && !negative && !negativeRaw && !rows.length && !list.length) {
     return null
   }
   const host = site || 'civitai.com'
@@ -103,7 +150,11 @@ export function GenMetaPanel({
       {prompt ? (
         <CopyCard title="Prompt" value={prompt} className="bg-field" mono />
       ) : null}
+      {promptRaw && promptRaw !== prompt ? (
+        <CopyCard title="Prompt (raw)" value={promptRaw} className="bg-field" mono />
+      ) : null}
       {negative ? <CopyCard title="Negative" value={negative} /> : null}
+      {negativeRaw && negativeRaw !== negative ? <CopyCard title="Negative (raw)" value={negativeRaw} /> : null}
       {rows.length ? (
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {rows.map((row) => (
@@ -153,67 +204,150 @@ export function GenMetaPanel({
   )
 }
 
-function infoRows(parsed: PngInfoParams, civitai: CivitaiVersion | null, href: string): MetaRow[] {
-  const modelName = civitai?.model?.name || parsed.checkpoint || ''
+function hashOf(row?: SavedHashes) {
+  return row?.autov2 || row?.sha256 || row?.autov3 || row?.autov1 || ''
+}
+
+function hitFor(hashes: SavedHashes | undefined, hits: Record<string, CivitaiVersion | null>) {
+  for (const key of ['autov2', 'sha256', 'autov3', 'autov1'] as const) {
+    const digest = hashes?.[key]?.toLowerCase()
+    if (digest && hits[digest]) {
+      return hits[digest]
+    }
+  }
+  return null
+}
+
+function v2Rows(
+  params: SavedParams,
+  civitai: CivitaiVersion | null,
+  href: string,
+  hits: Record<string, CivitaiVersion | null>,
+  host: Host,
+): MetaRow[] {
+  const ckpt = (params.models || []).find((item) => item.kind === 'checkpoints' || item.kind === 'diffusion_models' || item.kind === 'checkpoint')
+  const ckptHash = hashOf(ckpt?.hashes)
+  const modelName = civitai?.model?.name || ckptHash
   const rows: MetaRow[] = [
-    { label: 'Steps', value: parsed.steps != null ? String(parsed.steps) : '' },
-    { label: 'Sampler', value: parsed.sampler || '' },
-    { label: 'Scheduler', value: parsed.scheduler || '' },
-    { label: 'CFG', value: parsed.cfg != null ? String(parsed.cfg) : '' },
-    { label: 'Seed', value: parsed.seed != null ? String(parsed.seed) : '' },
+    { label: 'Steps', value: params.steps != null ? String(params.steps) : '' },
+    { label: 'Sampler', value: params.sampler || '' },
+    { label: 'Scheduler', value: params.scheduler || '' },
+    { label: 'CFG', value: params.cfg != null ? String(params.cfg) : '' },
+    { label: 'Seed', value: params.seed != null ? String(params.seed) : '' },
     {
       label: 'Size',
-      value: parsed.width != null && parsed.height != null ? `${parsed.width}x${parsed.height}` : '',
+      value: params.width != null && params.height != null ? `${params.width}x${params.height}` : '',
     },
     { label: 'Model', value: modelName, href: href || undefined },
-    { label: 'Model hash', value: parsed.modelHash || '' },
-    { label: 'Batch size', value: parsed.batchSize != null ? String(parsed.batchSize) : '' },
-    { label: 'Batch count', value: parsed.batchCount != null ? String(parsed.batchCount) : '' },
-    { label: 'Interrupted', value: parsed.interrupted ? 'True' : '' },
-    { label: 'AutoV1', value: parsed.autov1 || '' },
-    { label: 'AutoV3', value: parsed.autov3 || '' },
-    { label: 'SHA256', value: parsed.sha256 || '' },
+    { label: 'Model hash', value: ckptHash },
+    { label: 'Interrupted', value: params.interrupted ? 'True' : '' },
+    { label: 'AutoV1', value: ckpt?.hashes?.autov1 || '' },
+    { label: 'AutoV3', value: ckpt?.hashes?.autov3 || '' },
+    { label: 'SHA256', value: ckpt?.hashes?.sha256 || '' },
   ]
+  const labels: Record<string, string> = {
+    vae: 'VAE',
+    text_encoders: 'Text encoder',
+    controlnet: 'ControlNet',
+  }
+  for (const item of params.models || []) {
+    const label = labels[item.kind]
+    if (!label) {
+      continue
+    }
+    const digest = hashOf(item.hashes)
+    const hit = hitFor(item.hashes, hits)
+    const link = hit ? civitaiUrl(host, hit) : undefined
+    rows.push({ label, value: hit?.model?.name || digest, href: link })
+  }
   return rows.filter((row) => row.value)
 }
 
-export function ImageInfo({ text, raw, busy, civitai, loraCivitai }: ImageInfoProps) {
+function v2Loras(params: SavedParams, hits: Record<string, CivitaiVersion | null>): PngLora[] {
+  return (params.models || [])
+    .filter((item) => item.kind === 'loras')
+    .map((item) => {
+      const hash = hashOf(item.hashes)
+      const hit = hitFor(item.hashes, hits)
+      return { name: hit?.model?.name || hash, hash: hash.toLowerCase(), strength: item.strength }
+    })
+}
+
+function RawSwitch({ mode, onMode }: { mode: 'json' | 'formatted'; onMode: (mode: 'json' | 'formatted') => void }) {
+  return (
+    <div className="flex gap-1">
+      <label className="radio-card text-xs text-ink">
+        <input type="radio" className="radio" name="raw-meta-mode" checked={mode === 'json'} onChange={() => onMode('json')} />
+        JSON
+      </label>
+      <label className="radio-card text-xs text-ink">
+        <input
+          type="radio"
+          className="radio"
+          name="raw-meta-mode"
+          checked={mode === 'formatted'}
+          onChange={() => onMode('formatted')}
+        />
+        Formatted
+      </label>
+    </div>
+  )
+}
+
+export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: ImageInfoProps) {
   const site = useSettingsStore((s) => s.civitaiSite)
+  const [rawMode, setRawMode] = useState<'json' | 'formatted'>('json')
   if (busy) {
     return <p className="text-sm text-muted">Reading…</p>
   }
   if (!text && !Object.keys(raw).length) {
     return <p className="text-sm text-muted">Drop an image or .safetensors file</p>
   }
-  const parsed = parsePngInfo(text)
-  const href = civitai ? civitaiUrl(civitaiHost(site), civitai) : ''
-  const rows = infoRows(parsed, civitai || null, href)
-  const structured = Boolean(parsed.prompt || parsed.negativePrompt || rows.length || parsed.loras?.length)
+  const host = civitaiHost(site)
+  const blob = isV2(metadata) ? metadata : null
+  const href = civitai ? civitaiUrl(host, civitai) : ''
+  const hits = loraCivitai || {}
+  const rows = blob ? v2Rows(blob.params, civitai || null, href, hits, host) : []
+  const loras = blob ? v2Loras(blob.params, hits) : []
+  const prompt = blob ? blob.params.prompt || '' : ''
+  const promptRaw = blob ? blob.params.prompt_raw || '' : ''
+  const negative = blob ? blob.params.negative_prompt || '' : ''
+  const negativeRaw = blob ? blob.params.negative_prompt_raw || '' : ''
   const rawKeys = Object.keys(raw).sort((a, b) => Number(a === 'prompt') - Number(b === 'prompt'))
+  const jsonText = blob ? JSON.stringify(blob, null, 2) : ''
 
   return (
     <div className="flex flex-col gap-3">
-      <GenMetaPanel
-        prompt={parsed.prompt}
-        negative={parsed.negativePrompt}
-        rows={rows}
-        loras={parsed.loras}
-        loraCivitai={loraCivitai}
-        site={civitaiHost(site)}
-      />
-      {!structured && text ? (
-        <pre className="whitespace-pre-wrap break-words font-mono text-sm text-ink">{text}</pre>
+      {blob ? (
+        <GenMetaPanel
+          prompt={prompt}
+          promptRaw={promptRaw}
+          negative={negative}
+          negativeRaw={negativeRaw}
+          rows={rows}
+          loras={loras}
+          loraCivitai={hits}
+          site={host}
+        />
       ) : null}
       {rawKeys.length ? (
-        <ExpandSection title="Raw metadata">
-          <div className="flex flex-col gap-3">
-            {rawKeys.map((key) => (
-              <div key={key} className="flex flex-col gap-1">
-                {key === 'prompt' ? null : <span className="text-xs text-muted">{key}</span>}
-                <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{pretty(raw[key])}</pre>
-              </div>
-            ))}
-          </div>
+        <ExpandSection title="Raw metadata" trailing={<RawSwitch mode={rawMode} onMode={setRawMode} />}>
+          {rawMode === 'json' ? (
+            jsonText ? (
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{jsonText}</pre>
+            ) : (
+              <p className="text-xs text-muted">No JSON metadata</p>
+            )
+          ) : (
+            <div className="flex flex-col gap-3">
+              {rawKeys.map((key) => (
+                <div key={key} className="flex flex-col gap-1">
+                  {key === 'prompt' ? null : <span className="text-xs text-muted">{key}</span>}
+                  <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{pretty(raw[key])}</pre>
+                </div>
+              ))}
+            </div>
+          )}
         </ExpandSection>
       ) : null}
     </div>

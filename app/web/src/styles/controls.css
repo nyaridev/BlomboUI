@@ -411,6 +411,15 @@ input[type='range'].slider::-moz-range-thumb {
   background: var(--color-line);
 }
 
+.icon-btn.on,
+.icon-btn.on:hover,
+.section-body .icon-btn.on,
+.section-body .icon-btn.on:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
 .icon-btn:disabled {
   opacity: 0.4;
   cursor: default;
@@ -591,17 +600,30 @@ input[type='range'].slider::-moz-range-thumb {
   color: var(--color-muted);
 }
 
+.yaml-hl-error {
+  background: color-mix(in srgb, var(--color-red) 22%, transparent);
+}
+
 .yaml-hl-error,
 .yaml-hl-error span {
-  background: color-mix(in srgb, var(--color-red) 22%, transparent);
   color: var(--color-red-bright);
 }
 
-.yaml-hl-error span.yaml-hl-note {
+.cm-line.yaml-hl-error::after {
+  content: attr(data-yaml-note);
   margin-left: 1.5rem;
   font-size: 0.75rem;
   font-weight: 500;
-  background: transparent;
+  color: var(--color-red-bright);
+  pointer-events: none;
+  user-select: none;
+}
+
+.yaml-guides {
+  position: absolute;
+  inset: 0;
+  width: 0;
+  pointer-events: none;
 }
 
 .yaml-guide {
@@ -609,5 +631,47 @@ input[type='range'].slider::-moz-range-thumb {
   top: 0;
   bottom: 0;
   width: 2px;
+  pointer-events: none;
   background: color-mix(in srgb, var(--yaml-tint) 70%, var(--color-line));
+}
+
+.yaml-cm .cm-editor {
+  height: 100%;
+}
+
+.yaml-cm .cm-foldGutter .cm-gutterElement,
+.yaml-cm .cm-lineNumbers .cm-gutterElement {
+  display: flex;
+  align-items: center;
+}
+
+.yaml-cm .cm-lineNumbers .cm-gutterElement {
+  justify-content: flex-end;
+}
+
+.yaml-cm .cm-foldGutter .cm-gutterElement {
+  justify-content: center;
+}
+
+.yaml-cm .cm-tooltip-lint {
+  background: var(--color-panel);
+  color: var(--color-red-bright);
+  border: 1px solid var(--color-line);
+}
+
+@keyframes tab-glow {
+  0% {
+    box-shadow:
+      0 0 0 2px color-mix(in srgb, var(--color-ink) 85%, transparent),
+      0 0 24px 6px color-mix(in srgb, var(--color-ink) 50%, transparent);
+    background-color: color-mix(in srgb, var(--color-ink) 16%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: transparent;
+  }
+}
+
+.tab-glow {
+  animation: tab-glow 1s ease-out;
 }

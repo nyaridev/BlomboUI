@@ -1,3 +1,4 @@
+import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { GlyphMark } from '@/components/chrome/GlyphMark.tsx'
 import { EMOJIS } from '@/components/chrome/emojiCatalog.ts'
 import { GLYPH_COLORS, type Glyph } from '@/components/chrome/glyph.ts'
@@ -8,7 +9,7 @@ import { createPortal } from 'react-dom'
 type Tab = 'icon' | 'emoji'
 
 type IconPickerProps = {
-  value: Glyph
+  value: Glyph | null
   onChange: (value: Glyph) => void
   disabled?: boolean
   colors?: readonly { id: string; css: string }[]
@@ -31,9 +32,9 @@ export function IconPicker({
   const triggerRef = useRef<HTMLButtonElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [tab, setTab] = useState<Tab>(value.kind)
+  const [tab, setTab] = useState<Tab>(value?.kind ?? 'icon')
   const [query, setQuery] = useState('')
-  const [color, setColor] = useState(value.kind === 'icon' ? value.color : 'ink')
+  const [color, setColor] = useState(value?.kind === 'icon' ? value.color : 'ink')
   const [pos, setPos] = useState<CSSProperties>({})
 
   function show() {
@@ -55,9 +56,9 @@ export function IconPicker({
       }
       setPos({ top, left, width })
     }
-    setTab(value.kind)
+    setTab(value?.kind ?? 'icon')
     setQuery('')
-    setColor(value.kind === 'icon' ? value.color : 'ink')
+    setColor(value?.kind === 'icon' ? value.color : 'ink')
     setOpen(true)
   }
 
@@ -113,8 +114,7 @@ export function IconPicker({
   }, [tab, needle, query])
 
   function pickIcon(id: string) {
-    const next: Glyph = { kind: 'icon', id, color }
-    onChange(next)
+    onChange({ kind: 'icon', id, color: colors.length ? color : 'ink' })
   }
 
   function pickEmoji(id: string) {
@@ -123,12 +123,12 @@ export function IconPicker({
 
   function pickColor(id: string) {
     setColor(id)
-    if (value.kind === 'icon') {
+    if (value?.kind === 'icon') {
       onChange({ kind: 'icon', id: value.id, color: id })
     }
   }
 
-  const selected = glyphKey(value)
+  const selected = value ? glyphKey(value) : ''
 
   return (
     <>
@@ -147,7 +147,7 @@ export function IconPicker({
         disabled={disabled}
         onClick={() => (open ? setOpen(false) : show())}
       >
-        <GlyphMark value={value} size={size} />
+        {value ? <GlyphMark value={value} size={size} /> : <AppIcon id="plus" size={size} />}
       </button>
       {open
         ? createPortal(
@@ -215,7 +215,7 @@ export function IconPicker({
                       )
                     })}
               </div>
-              {tab === 'icon' ? (
+              {tab === 'icon' && colors.length ? (
                 <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-line pt-2">
                   {colors.map((item) => (
                     <button

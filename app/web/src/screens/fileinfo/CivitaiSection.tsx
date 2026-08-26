@@ -1,9 +1,9 @@
+import { MediaCarousel } from '@/components/models/MediaCarousel.tsx'
 import type { CivitaiImage, CivitaiVersion } from '@/lib/api.ts'
 import { civitaiHost, useSettingsStore } from '@/stores/settingsStore.ts'
 import { useState, type ReactNode } from 'react'
 import { CivitaiImageMetaPanel } from './CivitaiImageMeta.tsx'
 import { civitaiUrl } from './CivitaiLayouts.tsx'
-import { ImageCarousel } from './ImageCarousel.tsx'
 
 type Status = 'idle' | 'looking' | 'found' | 'none'
 
@@ -92,8 +92,18 @@ export function CivitaiSection({
   const preferred = civitaiHost(site)
   let body: ReactNode
   let fail = false
+  let framed = true
   if (preview) {
-    body = <ImageCarousel key={preview} items={[{ url: preview }]} alt={previewAlt} onCurrent={setCurrentUrl} />
+    framed = false
+    body = (
+      <MediaCarousel
+        key={preview}
+        items={[{ url: preview }]}
+        alt={previewAlt}
+        onCurrent={setCurrentUrl}
+        openHotkey="f"
+      />
+    )
   } else if (status === 'idle') {
     body = (
       <Message onClick={onPick}>
@@ -115,19 +125,17 @@ export function CivitaiSection({
       </Message>
     )
   } else {
+    framed = false
     const name = info.model?.name || 'CivitAI model'
     const images = authorImages(info)
-    body = images.length ? (
-      <ImageCarousel
+    body = (
+      <MediaCarousel
         key={images.map((image) => image.url).join('\n')}
         items={images.map((image) => ({ url: image.url as string, type: image.type }))}
         alt={name}
         onCurrent={setCurrentUrl}
+        openHotkey="f"
       />
-    ) : (
-      <Message>
-        <p className="text-sm text-muted">Matched on CivitAI, no author images</p>
-      </Message>
     )
   }
 
@@ -143,7 +151,7 @@ export function CivitaiSection({
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <Stage fail={fail}>{body}</Stage>
+      {framed ? <Stage fail={fail}>{body}</Stage> : body}
       <div className="flex flex-wrap items-center justify-center gap-2">
         {onClear ? (
           <button type="button" className={`${BTN} border-line bg-field`} onClick={onClear}>

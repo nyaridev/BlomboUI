@@ -1,5 +1,7 @@
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import type { CivitaiModelDetail } from '@/lib/api.ts'
+import { recordBrowseHistory } from '@/lib/api/history.ts'
+import { markNamesFromModels } from '@/lib/civitai/marks.ts'
 import { sanitizeCivitaiHtml } from '@/lib/civitai/html.ts'
 import { dropCivitaiPage, loadCivitaiPage, peekCivitaiPage, setCachedVersion } from '@/lib/civitai/pageCache.ts'
 import { civitaiModelHref, pickVersionId } from '@/lib/civitai/version.ts'
@@ -51,10 +53,12 @@ const DESCRIPTION_CLASS = [
 export function CivitaiModelView({
   modelId,
   preferredBases,
+  active = false,
   onDownload,
 }: {
   modelId: number
   preferredBases: string[]
+  active?: boolean
   onDownload?: (versionId: number) => void
 }) {
   const site = useSettingsStore((state) => state.civitaiSite)
@@ -98,8 +102,30 @@ export function CivitaiModelView({
   }, [modelId, retryCount])
 
   useEffect(() => {
+    if (!model) {
+      return
+    }
+    useSettingsStore.getState().rememberCivitaiMarks(markNamesFromModels([model]))
+  }, [model])
+
+  useEffect(() => {
     setCachedVersion(modelId, versionId)
   }, [modelId, versionId])
+
+  useEffect(() => {
+    if (!active || !model) {
+      return
+    }
+    const imageUrl = model.versions.flatMap((item) => item.images).find((item) => item.url)?.url || ''
+    void recordBrowseHistory({
+      modelId: model.id,
+      name: model.name,
+      type: model.type,
+      creator: model.creator,
+      imageUrl,
+      site,
+    })
+  }, [active, model, site])
 
   useEffect(() => {
     if (!model || versionId === null) {

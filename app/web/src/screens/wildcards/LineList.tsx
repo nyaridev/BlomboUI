@@ -114,9 +114,6 @@ export function LineList({
             >
               <AppIcon id="grip-vertical" size={12} />
             </span>
-            {depth != null ? (
-              <span className="flex h-8 w-3 shrink-0 items-center justify-center font-mono text-sm text-muted">-</span>
-            ) : null}
             <GrowField value={line} onChange={(next) => patch(index, next)} inset={depth != null} />
             <button type="button" className="icon-btn shrink-0" aria-label="Remove line" onClick={() => remove(index)}>
               <AppIcon id="x" />

@@ -1,37 +1,18 @@
+import { GlyphMark } from '@/components/chrome/GlyphMark.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/chrome/ContextMenu.tsx'
 import { DownloadedBadge, DownloadingBadge } from '@/components/models/CivitaiDownloadedBadge.tsx'
 import { TilePreview } from '@/components/models/TilePreview.tsx'
 import type { CivitaiModel } from '@/lib/api.ts'
 import { modelMarks } from '@/lib/civitai/marks.ts'
-import { civitaiHost, type CivitaiSite } from '@/stores/settingsStore.ts'
+import { civitaiHost, useSettingsStore, type CivitaiSite } from '@/stores/settingsStore.ts'
 import { civitaiModelHref, pickVersionId } from '@/lib/civitai/version.ts'
 import { useEffect, useRef, useState } from 'react'
 
 const CLICK_WAIT = 280
 
-function HorseHeadIcon({ size = 12 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="shrink-0"
-      aria-label="Pony"
-    >
-      <path d="M11.5 12H11" />
-      <path d="M5 15a4 4 0 0 0 4 4h7.8l.3.3a3 3 0 0 0 4-4.46L12 7c0-3-1-5-1-5S8 3 8 7c-4 1-6 3-6 3" />
-      <path d="M6.14 17.8S4 19 2 22" />
-    </svg>
-  )
-}
-
 function BaseMarks({ item }: { item: CivitaiModel }) {
-  const marks = modelMarks(item)
+  const table = useSettingsStore((state) => state.civitaiMarks)
+  const marks = modelMarks(item, table)
   if (!marks.length) {
     return null
   }
@@ -45,7 +26,7 @@ function BaseMarks({ item }: { item: CivitaiModel }) {
         {marks.map((mark, index) => (
           <span key={mark.id} className="inline-flex items-center">
             {index ? <span className="px-1">·</span> : null}
-            {mark.pony ? <HorseHeadIcon /> : mark.text}
+            {mark.icon ? <GlyphMark value={mark.icon} size={12} /> : mark.text}
           </span>
         ))}
       </span>

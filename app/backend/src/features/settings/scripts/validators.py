@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from features.settings.scripts.values import _CSV_NAME, _GALLERY_VIEWS, _SAFE_NAME, _SAFE_PATH, _SIZE
@@ -12,14 +13,25 @@ def _lookup_scope_ids(raw: Any) -> list[str]:
     return ordered_ids(raw)
 
 
-_LOOKUP_KINDS = ("checkpoints", "loras", "wildcards")
+_LOOKUP_GROUPS = ("checkpoints", "loras", "wildcards", "other")
+_LOOKUP_KIND_GROUPS = {
+    "checkpoints": "checkpoints",
+    "diffusion_models": "checkpoints",
+    "loras": "loras",
+    "wildcards": "wildcards",
+    "vae": "other",
+    "text_encoders": "other",
+    "controlnet": "other",
+    "embeddings": "other",
+    "other": "other",
+}
 
 
 def _lookup_kinds(raw: Any) -> list[str]:
     out: list[str] = []
     for item in raw:
-        name = str(item)
-        if name in _LOOKUP_KINDS and name not in out:
+        name = _LOOKUP_KIND_GROUPS.get(str(item))
+        if name in _LOOKUP_GROUPS and name not in out:
             out.append(name)
     return out
 
@@ -104,6 +116,10 @@ def _civitai_browse(raw: dict[str, Any]) -> dict[str, Any]:
     for key in ("earlyAccess", "supportsGeneration", "fromPlatform"):
         if raw.get(key) in _CIVITAI_TRI:
             out[key] = raw[key]
+    try:
+        out["limit"] = max(1, min(100, int(raw["limit"])))
+    except (KeyError, TypeError, ValueError):
+        pass
     return out
 
 
@@ -140,6 +156,31 @@ def _civitai_download(raw: dict[str, Any]) -> dict[str, Any]:
             used.add(alias_key)
             clean[author] = alias
         out["authorAliases"] = clean
+    return out
+
+
+_ICON_ID = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+
+
+def _civitai_marks(raw: Any) -> dict[str, Any]:
+    if not isinstance(raw, dict):
+        return {}
+    out: dict[str, Any] = {}
+    for name, item in raw.items():
+        key = str(name).strip()[:80]
+        if not key or not isinstance(item, dict):
+            continue
+        text = str(item.get("text") or "").strip()[:12]
+        entry: dict[str, Any] = {"text": text}
+        icon = item.get("icon")
+        if isinstance(icon, dict):
+            kind = icon.get("kind")
+            ident = str(icon.get("id") or "").strip()
+            if kind == "emoji" and ident and len(ident) <= 32:
+                entry["icon"] = {"kind": "emoji", "id": ident}
+            elif kind == "icon" and _ICON_ID.fullmatch(ident):
+                entry["icon"] = {"kind": "icon", "id": ident, "color": "ink"}
+        out[key] = entry
     return out
 
 
@@ -204,14 +245,19 @@ def _gallery_types(raw: Any) -> dict[str, list[str]]:
     return out
 
 
-_GALLERY_MODE_KEYS = ("checkpoints", "loras", "wildcards", "other", "models")
-_GALLERY_MODE_DEFAULTS = {
-    "checkpoints": "global",
-    "loras": "global",
-    "wildcards": "global",
-    "other": "global",
-    "models": "local",
-}
+_GALLERY_MODE_KEYS = (
+    "checkpoints",
+    "loras",
+    "wildcards",
+    "other",
+    "models-all",
+    "models-checkpoints",
+    "models-loras",
+    "models-wildcards",
+    "models-other",
+)
+def _gallery_mode_default(name: str) -> str:
+    return "global" if name.startswith("models") else "local"
 _GALLERY_LOCAL_KEYS = (
     "checkpoints",
     "loras",
@@ -234,7 +280,7 @@ def _gallery_mode_map(raw: Any) -> dict[str, str]:
         name = str(key).strip()
         if name not in _GALLERY_MODE_KEYS or value not in ("global", "local"):
             continue
-        if value != _GALLERY_MODE_DEFAULTS[name]:
+        if value != _gallery_mode_default(name):
             out[name] = value
     return out
 
@@ -250,6 +296,36 @@ def _gallery_query(raw: Any) -> dict[str, str]:
         text = value[:200]
         if text:
             out[name] = text
+    return out
+
+
+_GALLERY_BROWSE_KEYS = ("checkpoints", "loras", "wildcards", "global")
+_GALLERY_BROWSE_SORTS = ("recent", "works")
+
+
+def _gallery_browse_sort(raw: Any) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()
+        sort = str(value or "").strip().lower()
+        if name not in _GALLERY_BROWSE_KEYS or sort not in _GALLERY_BROWSE_SORTS or sort == "recent":
+            continue
+        out[name] = sort
+    return out
+
+
+def _gallery_browse_dir(raw: Any) -> dict[str, str]:
+    out: dict[str, str] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()
+        direction = str(value or "").strip().lower()
+        if name not in _GALLERY_BROWSE_KEYS or direction not in ("asc", "desc") or direction == "desc":
+            continue
+        out[name] = direction
     return out
 
 
@@ -284,7 +360,7 @@ def _gallery_local_scopes(raw: Any) -> dict[str, dict[str, Any]]:
             "mode": "exact" if item.get("mode") == "exact" else "likely",
             "fallback": bool(item.get("fallback")),
         }
-        if pack["ids"] or pack["optionalIds"] or pack["auto"] or pack["mode"] != "likely" or pack["fallback"]:
+        if pack["ids"] or pack["optionalIds"] or pack["auto"] or pack["mode"] != "likely" or not pack["fallback"]:
             out[name] = pack
     return out
 

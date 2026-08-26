@@ -2,18 +2,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from infrastructure.storage.repositories import gallery as gallery_repo
 
+from features.gallery.scripts import index as gallery_index
+from features.generate.scripts import save_meta
 from shared import dirs
 from shared import pnginfo
 from config import outputs_root
 
-IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp"}
+IMAGE_EXTS = gallery_index.IMAGE_EXTS
+VIDEO_EXTS = gallery_index.VIDEO_EXTS
+MEDIA_EXTS = gallery_index.MEDIA_EXTS
 _OUTPUT_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}
+_SYNC_LOCK = threading.Lock()
+_SYNC_THREAD: threading.Thread | None = None
 
 
 def canonical(path: Path) -> Path:
@@ -46,13 +53,13 @@ def _root_for(path: Path, roots: list[Path]) -> Path:
     return max(matches, key=lambda root: len(str(root))) if matches else path.parent
 
 
-def _iter_images(root: Path) -> list[Path]:
+def _iter_media(root: Path) -> list[Path]:
     try:
         return sorted(
             (
                 canonical(path)
                 for path in root.rglob("*")
-                if path.is_file() and path.suffix.lower() in IMAGE_EXTS
+                if path.is_file() and path.suffix.lower() in MEDIA_EXTS
             ),
             key=lambda path: str(path).casefold(),
         )
@@ -82,51 +89,64 @@ def _int(value: Any) -> int | None:
         return None
 
 
-def _file_metadata(path: Path) -> tuple[dict[str, Any], int | None, int | None, str]:
+def _file_metadata(path: Path) -> tuple[dict[str, Any], int | None, int | None, str] | None:
     try:
         stat = path.stat()
-        raw = path.read_bytes()
     except OSError:
-        return {}, None, None, ""
+        return None
+    if path.suffix.lower() in VIDEO_EXTS:
+        return None
     try:
-        from PIL import Image
-
-        with Image.open(path) as image:
-            width, height = image.size
+        info = pnginfo.read_path(path)
     except Exception:
-        width = height = None
-    try:
-        info = pnginfo.read(raw, str(path))
-    except Exception:
-        info = {}
+        return None
     metadata = info.get("metadata") if isinstance(info, dict) else None
-    metadata = metadata if isinstance(metadata, dict) else {}
-    params = metadata.get("params")
-    params = dict(params) if isinstance(params, dict) else pnginfo.parse_parameters(str(info.get("text") or ""))
-    if not isinstance(params, dict):
-        params = {}
-    if metadata:
-        aliases = {
-            "workflow_id": "workflow",
-            "template_id": "template_id",
-            "template_name": "template_name",
-            "template_params": "template_params",
-            "created_at": "created_at",
-            "asset_kind": "asset_kind",
-        }
-        for source, target in aliases.items():
-            if metadata.get(source) is not None:
-                params.setdefault(target, metadata[source])
-        if metadata.get("job_id") is not None:
-            params.setdefault("job_id", metadata["job_id"])
-        for key in ("sidecar", "sidecar_for"):
-            if metadata.get(key) is not None:
-                params.setdefault(key, metadata[key])
+    if not save_meta.valid_meta(metadata):
+        return None
+    params = dict(metadata.get("params") or {})
+    for key in ("workflow_id", "template_id", "template_name", "template_params", "job_id", "asset_kind"):
+        if metadata.get(key) is not None:
+            params[key] = metadata[key]
+    for key in ("sidecar", "sidecar_for"):
+        if metadata.get(key) is not None:
+            params[key] = metadata[key]
+    width = info.get("width")
+    height = info.get("height")
+    try:
+        width = int(width) if width is not None else None
+        height = int(height) if height is not None else None
+    except (TypeError, ValueError):
+        width = height = None
     return params, width, height, _timestamp(metadata.get("created_at"), stat.st_mtime)
 
 
-def _row_values(path: Path, root: Path, ident: str | None = None) -> dict[str, Any]:
-    params, width, height, created_at = _file_metadata(path)
+def _row_values(path: Path, root: Path, ident: str | None = None) -> dict[str, Any] | None:
+    if path.suffix.lower() in VIDEO_EXTS:
+        try:
+            stat = path.stat()
+        except OSError:
+            return None
+        return {
+            "id": ident or item_id(path),
+            "path": str(path),
+            "root": str(root),
+            "asset_kind": _asset_kind(path, root),
+            "media_kind": gallery_index.media_kind(path),
+            "size": int(stat.st_size),
+            "mtime_ns": int(stat.st_mtime_ns),
+            "width": None,
+            "height": None,
+            "seed": None,
+            "checkpoint_name": "",
+            "prompt": "",
+            "negative_prompt": "",
+            "params_json": "{}",
+            "created_at": _timestamp(None, stat.st_mtime),
+        }
+    parsed = _file_metadata(path)
+    if not parsed:
+        return None
+    params, width, height, created_at = parsed
     try:
         stat = path.stat()
         size = int(stat.st_size)
@@ -142,14 +162,15 @@ def _row_values(path: Path, root: Path, ident: str | None = None) -> dict[str, A
         "path": str(path),
         "root": str(root),
         "asset_kind": kind,
+        "media_kind": gallery_index.media_kind(path),
         "size": size,
         "mtime_ns": mtime_ns,
         "width": width,
         "height": height,
         "seed": _int(params.get("seed")),
-        "checkpoint_name": str(params.get("checkpoint") or ""),
-        "prompt": str(params.get("prompt") or params.get("prompt_clip") or ""),
-        "negative_prompt": str(params.get("negative_prompt") or params.get("negative_clip") or ""),
+        "checkpoint_name": gallery_index.checkpoint_name(params),
+        "prompt": str(params.get("prompt") or ""),
+        "negative_prompt": str(params.get("negative_prompt") or ""),
         "params_json": json.dumps(params, ensure_ascii=False),
         "created_at": created_at,
     }
@@ -163,64 +184,181 @@ def _is_sidecar(path: Path, params: dict[str, Any], root: Path | None = None) ->
     return any(path.with_suffix(ext).is_file() for ext in (".png", ".webp"))
 
 
-def _insert_or_update(conn: Any, values: dict[str, Any], existing: Any) -> None:
+def _params_of(values: dict[str, Any]) -> dict[str, Any]:
+    try:
+        data = json.loads(values.get("params_json") or "{}")
+    except (TypeError, json.JSONDecodeError):
+        data = {}
+    return data if isinstance(data, dict) else {}
+
+
+def _write_row(conn: Any, values: dict[str, Any], existing: Any) -> None:
     gallery_repo.upsert(conn, values, existing)
+    gallery_repo.replace_links(conn, values["id"], gallery_index.links(_params_of(values), str(values.get("prompt") or "")))
+
+
+def ingest(path: Path, ident: str | None = None) -> dict[str, Any] | None:
+    path = canonical(path)
+    if not path.is_file() or path.suffix.lower() not in MEDIA_EXTS:
+        return None
+    try:
+        stat = path.stat()
+        size = int(stat.st_size)
+        mtime_ns = int(stat.st_mtime_ns)
+    except OSError:
+        return None
+    roots = _roots()
+    root = _root_for(path, roots)
+    values = _row_values(path, root, ident=ident)
+    if not values or _is_sidecar(path, _params_of(values), root):
+        _mark_seen(str(path), size, mtime_ns, False)
+        return None
+
+    def write(conn: Any) -> None:
+        existing = gallery_repo.fetch_by_path(conn, values["path"])
+        _write_row(conn, values, existing)
+        gallery_repo.upsert_seen(conn, values["path"], size, mtime_ns, True)
+
+    gallery_repo.transaction(write)
+    _OUTPUT_CACHE[values["path"]] = (int(values["size"]), int(values["mtime_ns"]), dict(values))
+    return dict(values)
+
+
+def start_sync() -> bool:
+    global _SYNC_THREAD
+    with _SYNC_LOCK:
+        if _SYNC_THREAD is not None and _SYNC_THREAD.is_alive():
+            return True
+        _SYNC_THREAD = threading.Thread(target=_sync_safe, daemon=True, name="gallery-sync")
+        _SYNC_THREAD.start()
+        return True
+
+
+def _sync_safe() -> None:
+    try:
+        sync()
+    except Exception:
+        pass
+
+
+def _mark_seen(path: str, size: int, mtime_ns: int, ok: bool) -> None:
+    gallery_repo.transaction(lambda conn: gallery_repo.upsert_seen(conn, path, size, mtime_ns, ok))
+
+
+def _refresh_links(existing: Any) -> None:
+    ident = str(existing["id"])
+    try:
+        cached_params = json.loads(existing["params_json"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        cached_params = {}
+    if not isinstance(cached_params, dict):
+        return
+    links = gallery_index.links(cached_params, str(existing["prompt"] or ""))
+    if not (links["tags"] or links["loras"] or links["wildcards"]):
+        return
+
+    def write(conn: Any) -> None:
+        if gallery_repo.has_links(conn, ident):
+            return
+        gallery_repo.replace_links(conn, ident, links)
+
+    gallery_repo.transaction(write)
+
+
+def _cached_ok(path: Path, key: str, size: int, mtime_ns: int, scan_root: Path, existing: Any) -> bool:
+    if path.suffix.lower() in VIDEO_EXTS:
+        _mark_seen(key, size, mtime_ns, True)
+        return True
+    try:
+        cached_params = json.loads(existing["params_json"] or "{}")
+    except (TypeError, json.JSONDecodeError):
+        cached_params = {}
+    if not save_meta.valid_params(cached_params) or _is_sidecar(path, cached_params, scan_root):
+        return False
+    _refresh_links(existing)
+    _mark_seen(key, size, mtime_ns, True)
+    return True
 
 
 def sync() -> None:
     roots = _roots()
     root_keys = [str(root) for root in roots]
-    seen: set[str] = set()
+    disk: set[str] = set()
+    items: set[str] = set()
+    for root in roots:
+        for path in _iter_media(root):
+            key = str(path)
+            if key in disk:
+                continue
+            try:
+                stat = path.stat()
+                size = int(stat.st_size)
+                mtime_ns = int(stat.st_mtime_ns)
+            except OSError:
+                continue
+            disk.add(key)
+            scan_root = _root_for(path, roots)
 
-    def write(conn: Any) -> None:
-        for root in roots:
-            for path in _iter_images(root):
-                key = str(path)
-                if key in seen:
+            def lookup(conn: Any, p: str = key) -> tuple[Any, Any]:
+                return gallery_repo.fetch_seen(conn, p), gallery_repo.fetch_by_path(conn, p)
+
+            seen_row, existing = gallery_repo.transaction(lookup)
+            if seen_row and int(seen_row["size"]) == size and int(seen_row["mtime_ns"]) == mtime_ns:
+                if int(seen_row["ok"]) and existing:
+                    items.add(key)
+                    _refresh_links(existing)
                     continue
-                try:
-                    stat = path.stat()
-                    size = int(stat.st_size)
-                    mtime_ns = int(stat.st_mtime_ns)
-                except OSError:
+                if not int(seen_row["ok"]):
                     continue
-                existing = gallery_repo.fetch_by_path(conn, key)
-                scan_root = _root_for(path, roots)
-                if (
-                    existing
-                    and int(existing["size"]) == size
-                    and int(existing["mtime_ns"]) == mtime_ns
-                    and str(existing["root"]) == str(scan_root)
-                ):
-                    try:
-                        cached_params = json.loads(existing["params_json"] or "{}")
-                    except (TypeError, json.JSONDecodeError):
-                        cached_params = {}
-                    if isinstance(cached_params, dict) and _is_sidecar(path, cached_params, scan_root):
-                        continue
-                    seen.add(key)
-                    continue
-                params, _, _, _ = _file_metadata(path)
-                if _is_sidecar(path, params, scan_root):
-                    continue
-                seen.add(key)
-                values = _row_values(path, scan_root)
-                _insert_or_update(conn, values, existing)
+            if (
+                existing
+                and int(existing["size"]) == size
+                and int(existing["mtime_ns"]) == mtime_ns
+                and str(existing["root"]) == str(scan_root)
+                and _cached_ok(path, key, size, mtime_ns, scan_root, existing)
+            ):
+                items.add(key)
+                continue
+            values = _row_values(path, scan_root)
+            if values and not _is_sidecar(path, _params_of(values), scan_root):
+                items.add(key)
+
+                def write(conn: Any, row: dict[str, Any] = values, p: str = key, n: int = size, m: int = mtime_ns) -> None:
+                    _write_row(conn, row, gallery_repo.fetch_by_path(conn, row["path"]))
+                    gallery_repo.upsert_seen(conn, p, n, m, True)
+
+                gallery_repo.transaction(write)
+                continue
+            _mark_seen(key, size, mtime_ns, False)
+
+    def finish(conn: Any) -> None:
         if root_keys:
-            gallery_repo.delete_stale(conn, root_keys, seen)
+            gallery_repo.delete_stale(conn, root_keys, items)
         else:
             gallery_repo.delete_all(conn)
+        gallery_repo.delete_stale_seen(conn, disk)
 
-    gallery_repo.transaction(write)
+    gallery_repo.transaction(finish)
 
 
 def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
-    sync()
     cap = max(1, min(200, int(limit)))
     clauses = ["asset_kind != 'grid'"]
     if hide_interrupted:
         clauses.append("asset_kind != 'interrupted'")
     return gallery_repo.list_items(" AND ".join(clauses), (cap,))
+
+
+def list_since(created_at: str, hide_interrupted: bool = True, limit: int = 60) -> list[Any]:
+    stamp = str(created_at or "").strip()
+    if not stamp:
+        return []
+    cap = max(1, min(60, int(limit)))
+    clauses = ["asset_kind != 'grid'", "created_at > ?"]
+    params: list[Any] = [stamp, cap]
+    if hide_interrupted:
+        clauses.insert(1, "asset_kind != 'interrupted'")
+    return gallery_repo.list_items(" AND ".join(clauses), params)
 
 
 def row(ident: str) -> Any | None:
@@ -247,23 +385,24 @@ def output_row(output: dict[str, Any]) -> dict[str, Any] | None:
         cached_output = _OUTPUT_CACHE.get(cache_key)
         if cached_output and cached_output[:2] == (int(stat.st_size), int(stat.st_mtime_ns)):
             return dict(cached_output[2])
+        size = int(stat.st_size)
+        mtime_ns = int(stat.st_mtime_ns)
     except OSError:
         return None
     cached = row(ident) or row_for_path(str(path))
-    if cached:
+    if cached and int(cached["size"]) == size and int(cached["mtime_ns"]) == mtime_ns:
         result = dict(cached)
-    else:
-        roots = _roots()
-        result = _row_values(path, _root_for(canonical(path), roots), ident=ident)
-    _OUTPUT_CACHE[str(path)] = (int(stat.st_size), int(stat.st_mtime_ns), result)
+        _OUTPUT_CACHE[str(path)] = (size, mtime_ns, result)
+        return dict(result)
+    result = ingest(path, ident)
+    if not result:
+        return None
+    _OUTPUT_CACHE[str(path)] = (size, mtime_ns, result)
     return dict(result)
 
 
 def path_for_id(ident: str) -> Path | None:
     cached = row(ident)
-    if not cached:
-        sync()
-        cached = row(ident)
     if not cached:
         return None
     path = Path(str(cached["path"]))

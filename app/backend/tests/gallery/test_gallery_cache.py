@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import tempfile
+import threading
 import unittest
 from io import BytesIO
 from pathlib import Path
@@ -21,6 +22,43 @@ def _png() -> bytes:
     out = BytesIO()
     image.save(out, format="PNG")
     return out.getvalue()
+
+
+def _v2(created_at: str = "2026-01-01T00:00:00.000Z", asset_kind: str = "image", **values) -> dict:
+    params = {
+        "prompt": str(values.get("prompt") or ""),
+        "negative_prompt": str(values.get("negative_prompt") or ""),
+        "prompt_raw": str(values["prompt_raw"] if "prompt_raw" in values else values.get("prompt") or ""),
+        "negative_prompt_raw": str(
+            values["negative_prompt_raw"] if "negative_prompt_raw" in values else values.get("negative_prompt") or ""
+        ),
+        "steps": values.get("steps"),
+        "cfg": values.get("cfg"),
+        "seed": values.get("seed"),
+        "sampler": str(values.get("sampler") or ""),
+        "scheduler": str(values.get("scheduler") or ""),
+        "width": values.get("width"),
+        "height": values.get("height"),
+        "models": list(values.get("models") or []),
+    }
+    return {
+        "version": 2,
+        "asset_kind": asset_kind,
+        "created_at": created_at,
+        "job_id": str(values.get("job_id") or ""),
+        "workflow_id": str(values.get("workflow_id") or values.get("workflow") or ""),
+        "template_id": str(values.get("template_id") or ""),
+        "template_name": str(values.get("template_name") or ""),
+        "template_params": values.get("template_params") if isinstance(values.get("template_params"), dict) else {},
+        "params": params,
+    }
+
+
+def _write_v2(path: Path, created_at: str = "2026-01-01T00:00:00.000Z", **values) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    meta = _v2(created_at, **values)
+    path.write_bytes(pnginfo.embed(_png(), meta["params"], metadata=meta))
+    return path
 
 
 class GalleryCacheTests(unittest.TestCase):
@@ -65,13 +103,45 @@ class GalleryCacheTests(unittest.TestCase):
         self.assertEqual(cache_db.query_one("SELECT COUNT(*) AS n FROM jobs WHERE status = 'completed'")["n"], 500)
         self.assertIsNotNone(cache_db.query_one("SELECT id FROM jobs WHERE id = 'active'"))
 
+    def test_connect_migrates_gallery_items_without_media_kind(self) -> None:
+        path = self.tmp / "cache.sqlite"
+        conn = cache_db._CONN
+        if conn is not None:
+            conn.close()
+            cache_db._CONN = None
+        raw = __import__("sqlite3").connect(path)
+        raw.executescript(
+            """
+            CREATE TABLE gallery_items (
+                id TEXT PRIMARY KEY,
+                path TEXT NOT NULL UNIQUE,
+                root TEXT NOT NULL,
+                asset_kind TEXT NOT NULL DEFAULT 'image',
+                size INTEGER NOT NULL DEFAULT 0,
+                mtime_ns INTEGER NOT NULL DEFAULT 0,
+                width INTEGER,
+                height INTEGER,
+                seed INTEGER,
+                checkpoint_name TEXT,
+                prompt TEXT,
+                negative_prompt TEXT,
+                params_json TEXT NOT NULL DEFAULT '{}',
+                created_at TEXT NOT NULL,
+                favorite INTEGER NOT NULL DEFAULT 0
+            );
+            """
+        )
+        raw.commit()
+        raw.close()
+        opened = cache_db.connect()
+        cols = {row[1] for row in opened.execute("PRAGMA table_info(gallery_items)")}
+        self.assertIn("media_kind", cols)
+
     def test_gallery_scan_rebuilds_and_excludes_grids_from_listing(self) -> None:
         root = self.tmp / "gallery"
         (root / "grids").mkdir(parents=True)
-        image_path = root / "image.png"
-        grid_path = root / "grids" / "grid.png"
-        image_path.write_bytes(_png())
-        grid_path.write_bytes(_png())
+        image_path = _write_v2(root / "image.png", prompt="still")
+        grid_path = _write_v2(root / "grids" / "grid.png", prompt="sheet", asset_kind="grid")
         with (
             patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]),
             patch.object(gallery_cache, "outputs_root", return_value=root),
@@ -88,8 +158,7 @@ class GalleryCacheTests(unittest.TestCase):
     def test_gallery_cache_rebuilds_after_table_loss_and_file_removal(self) -> None:
         root = self.tmp / "gallery"
         root.mkdir()
-        image_path = root / "image.png"
-        image_path.write_bytes(_png())
+        image_path = _write_v2(root / "image.png", prompt="still")
         with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
             gallery_cache.sync()
             self.assertEqual(len(gallery_cache.list_rows()), 1)
@@ -97,55 +166,42 @@ class GalleryCacheTests(unittest.TestCase):
             cache_db._CONN.close()
             cache_db._CONN = None
             cache_db.connect()
+            gallery_cache.sync()
             self.assertEqual(len(gallery_cache.list_rows()), 1)
             image_path.unlink()
             gallery_cache.sync()
             self.assertEqual(len(gallery_cache.list_rows()), 0)
 
     def test_metadata_round_trip_for_supported_formats(self) -> None:
-        values = {"prompt": "portrait", "negative_prompt": "blurry", "seed": 42, "workflow": "txt2img"}
-        metadata = {
-            "version": 1,
-            "workflow_id": "txt2img",
-            "template_id": "portrait",
-            "template_params": {"steps": 24},
-            "params": values,
-        }
+        metadata = _v2(
+            prompt="portrait",
+            negative_prompt="blurry",
+            seed=42,
+            workflow="txt2img",
+            template_id="portrait",
+            template_params={"steps": 24},
+        )
         for fmt in ("png", "jpg", "webp"):
             with self.subTest(fmt=fmt):
-                packed = pnginfo.embed(_png(), values, fmt=fmt, metadata=metadata)
+                packed = pnginfo.embed(_png(), metadata["params"], fmt=fmt, metadata=metadata)
                 read = pnginfo.read(packed)
                 self.assertEqual(read["metadata"]["template_id"], "portrait")
                 self.assertEqual(read["metadata"]["params"]["seed"], 42)
+                self.assertEqual(read["metadata"]["version"], 2)
 
     def test_job_restores_gallery_item_from_output_path_and_metadata(self) -> None:
         path = self.tmp / "generated.png"
-        values = {
-            "prompt": "portrait",
-            "negative_prompt": "blurry",
-            "seed": 42,
-            "width": 16,
-            "height": 16,
-            "checkpoint": "model.safetensors",
-            "workflow_id": "txt2img",
-            "template_id": "portrait",
-            "template_name": "Portrait",
-            "template_params": {"steps": 24},
-        }
-        path.write_bytes(
-            pnginfo.embed(
-                _png(),
-                values,
-                metadata={
-                    "version": 1,
-                    "asset_kind": "image",
-                    "workflow_id": "txt2img",
-                    "template_id": "portrait",
-                    "template_name": "Portrait",
-                    "template_params": {"steps": 24},
-                    "params": values,
-                },
-            )
+        _write_v2(
+            path,
+            prompt="portrait",
+            negative_prompt="blurry",
+            seed=42,
+            width=16,
+            height=16,
+            workflow_id="txt2img",
+            template_id="portrait",
+            template_name="Portrait",
+            template_params={"steps": 24},
         )
         ident = gallery_cache.item_id(path)
         cache_db.execute(
@@ -159,6 +215,68 @@ class GalleryCacheTests(unittest.TestCase):
         self.assertIsNotNone(restored)
         self.assertEqual(restored["gallery_ids"], [ident])
         self.assertEqual(restored["gallery"][0]["template_id"], "portrait")
+
+    def test_ingest_skips_missing_and_old_blobs(self) -> None:
+        root = self.tmp / "gallery"
+        root.mkdir()
+        bare = root / "bare.png"
+        bare.write_bytes(_png())
+        old = root / "old.png"
+        old.write_bytes(
+            pnginfo.embed(
+                _png(),
+                {"prompt": "legacy", "checkpoint": "model.safetensors", "loras": [{"lora": "a.safetensors"}]},
+                metadata={
+                    "version": 1,
+                    "asset_kind": "image",
+                    "params": {"prompt": "legacy", "checkpoint": "model.safetensors"},
+                },
+            )
+        )
+        with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
+            self.assertIsNone(gallery_cache.ingest(bare))
+            self.assertIsNone(gallery_cache.ingest(old))
+            ident = gallery_cache.item_id(old)
+            cache_db.execute(
+                """
+                INSERT INTO gallery_items (
+                    id, path, root, asset_kind, media_kind, size, mtime_ns,
+                    prompt, negative_prompt, params_json, created_at
+                ) VALUES (?, ?, ?, 'image', 'image', 1, 1, 'legacy', '', '{"checkpoint":"old"}', '2026-01-01T00:00:00Z')
+                """,
+                (ident, str(old.resolve()), str(root.resolve())),
+            )
+            self.assertEqual(len(gallery_cache.list_rows()), 1)
+            gallery_cache.sync()
+            self.assertEqual(gallery_cache.list_rows(), [])
+
+    def test_sync_does_not_reopen_cached_invalid_files(self) -> None:
+        root = self.tmp / "gallery"
+        root.mkdir()
+        bare = root / "bare.png"
+        bare.write_bytes(_png())
+        with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
+            gallery_cache.sync()
+            self.assertEqual(gallery_cache.list_rows(), [])
+            with patch.object(pnginfo, "read_path") as peek:
+                gallery_cache.sync()
+                peek.assert_not_called()
+            self.assertEqual(gallery_cache.list_rows(), [])
+
+    def test_start_sync_returns_without_waiting(self) -> None:
+        started = threading.Event()
+        block = threading.Event()
+
+        def hang() -> None:
+            started.set()
+            block.wait(1)
+
+        with patch.object(gallery_cache, "sync", hang):
+            busy = gallery_cache.start_sync()
+            self.assertTrue(busy)
+            self.assertTrue(started.wait(1))
+            self.assertTrue(gallery_cache.start_sync())
+            block.set()
 
     def test_thumbnail_cache_sanitizes_path_unsafe_item_ids(self) -> None:
         source = self.tmp / "source.png"

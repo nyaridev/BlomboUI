@@ -4,13 +4,15 @@ import io
 import threading
 from pathlib import Path
 
-from config import USER
+from config import DATA
 from features.civitai.scripts.client import fetch_image
 from features.downloads.scripts import history
 from features.models.scripts import model_thumb_anim
 from features.settings import service as settings
 
-THUMBS = USER / "download_thumbs"
+DOWNLOAD_THUMBS = DATA / "history" / "download"
+BROWSE_THUMBS = DATA / "history" / "browse"
+THUMBS = DOWNLOAD_THUMBS
 _DEFAULT_MP = 0.25
 _DEFAULT_IMAGE = "jpg"
 _DEFAULT_VIDEO = "webp"
@@ -38,22 +40,27 @@ def thumb_media(path: Path) -> str:
     return _MEDIA.get(path.suffix.lower(), "image/jpeg")
 
 
-def prefetch(ident: int) -> None:
+def prefetch(ident: int, *, root: Path | None = None, image_url: str | None = None) -> None:
     if not ident:
         return
-    threading.Thread(target=_prefetch, args=(ident,), daemon=True, name=f"dl-thumb-{ident}").start()
+    threading.Thread(
+        target=_prefetch,
+        args=(ident, root, image_url),
+        daemon=True,
+        name=f"dl-thumb-{ident}",
+    ).start()
 
 
-def item_thumb(ident: int) -> Path | None:
+def item_thumb(ident: int, *, root: Path | None = None, image_url: str | None = None) -> Path | None:
     if not ident:
         return None
     with _ident_lock(ident):
-        return _item_thumb(ident)
+        return _item_thumb(ident, root or DOWNLOAD_THUMBS, image_url)
 
 
-def _prefetch(ident: int) -> None:
+def _prefetch(ident: int, root: Path | None, image_url: str | None) -> None:
     try:
-        item_thumb(ident)
+        item_thumb(ident, root=root, image_url=image_url)
     except Exception:
         pass
 
@@ -67,18 +74,20 @@ def _ident_lock(ident: int) -> threading.Lock:
         return lock
 
 
-def _item_thumb(ident: int) -> Path | None:
-    row = history.get(ident)
-    if not row:
+def _item_thumb(ident: int, root: Path, image_url: str | None) -> Path | None:
+    url = str(image_url or "").strip()
+    if not url:
+        row = history.get(ident) if root == DOWNLOAD_THUMBS else None
+        if not row:
+            return None
+        url = str(row.get("imageUrl") or "").strip()
+    if not url:
         return None
     megapixels, image_fmt, video_fmt, quality = _opts()
-    stem = THUMBS / _stem(ident, megapixels, image_fmt, video_fmt, quality)
+    stem = root / _stem(ident, megapixels, image_fmt, video_fmt, quality)
     existing = _existing(stem)
     if existing:
         return existing
-    url = str(row.get("imageUrl") or "").strip()
-    if not url:
-        return None
     fetched = fetch_image(url)
     if not fetched:
         return None
@@ -86,23 +95,25 @@ def _item_thumb(ident: int) -> Path | None:
     path = _encode(data, media, stem, image_fmt, video_fmt, megapixels, quality)
     if not path:
         return None
-    _drop_others(ident, path)
+    _drop_others(ident, path, root)
     return path
 
 
-def delete_thumbs(ident: int) -> None:
-    if not THUMBS.is_dir():
+def delete_thumbs(ident: int, root: Path | None = None) -> None:
+    folder = root or DOWNLOAD_THUMBS
+    if not folder.is_dir():
         return
     prefix = f"{ident}_"
-    for path in THUMBS.iterdir():
+    for path in folder.iterdir():
         if path.is_file() and path.name.startswith(prefix):
             path.unlink(missing_ok=True)
 
 
-def clear_thumbs() -> None:
-    if not THUMBS.is_dir():
+def clear_thumbs(root: Path | None = None) -> None:
+    folder = root or DOWNLOAD_THUMBS
+    if not folder.is_dir():
         return
-    for path in THUMBS.iterdir():
+    for path in folder.iterdir():
         if path.is_file():
             path.unlink(missing_ok=True)
 
@@ -158,11 +169,11 @@ def _existing(stem: Path) -> Path | None:
     return None
 
 
-def _drop_others(ident: int, keep: Path) -> None:
-    if not THUMBS.is_dir():
+def _drop_others(ident: int, keep: Path, root: Path) -> None:
+    if not root.is_dir():
         return
     prefix = f"{ident}_"
-    for path in THUMBS.iterdir():
+    for path in root.iterdir():
         if path.is_file() and path.name.startswith(prefix) and path.resolve() != keep.resolve():
             path.unlink(missing_ok=True)
 
@@ -220,7 +231,7 @@ def _write_still(data: bytes, stem: Path, fmt: str, megapixels: float, quality: 
     try:
         from PIL import Image
 
-        THUMBS.mkdir(parents=True, exist_ok=True)
+        dest.parent.mkdir(parents=True, exist_ok=True)
         with Image.open(io.BytesIO(data)) as image:
             image.load()
             _fit_megapixels(image, megapixels)

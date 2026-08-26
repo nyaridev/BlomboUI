@@ -5,7 +5,7 @@ import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 
 export const TABS_QUERY =
-  'tabs exclude hide order reorder generate main keybind shortcut ctrl alt 1 2 3 4 5 6 7 8 9 errors downloads settings file info gallery models wildcard manager scopes'
+  'tabs exclude hide order reorder generate main keybind shortcut ctrl alt 1 2 3 4 5 6 7 8 9 errors history settings file info gallery models wildcard manager scopes'
 
 export function TabsPanel({ query = '' }: { query?: string }) {
   const hiddenGenerateTabs = useSettingsStore((s) => s.hiddenGenerateTabs) ?? []
@@ -35,7 +35,7 @@ export function TabsPanel({ query = '' }: { query?: string }) {
             onChange={(value) => setHiddenMainTabs(value as HideableMainTab[])}
             placeholder="Select tabs to hide…"
           />
-          <p className="text-xs text-muted">Downloads and Settings stay visible. Selected tabs leave the header.</p>
+          <p className="text-xs text-muted">History and Settings stay visible. Selected tabs leave the header.</p>
         </SettingsBlock>
         <SettingsBlock query={query} title="Order" terms="reorder left generate file info gallery models wildcard manager scopes">
           <ChipSelect
@@ -44,7 +44,7 @@ export function TabsPanel({ query = '' }: { query?: string }) {
             value={mainTabOrder}
             onChange={(value) => setMainTabOrder(value as OrderableMainTab[])}
           />
-          <p className="text-xs text-muted">Drag to reorder the left header tabs. Errors, Downloads, and Settings stay on the right.</p>
+          <p className="text-xs text-muted">Drag to reorder the left header tabs. Errors, History, and Settings stay on the right.</p>
         </SettingsBlock>
       </SettingsCard>
       <SettingsCard

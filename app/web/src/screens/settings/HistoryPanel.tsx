@@ -1,3 +1,4 @@
+import { NumberField } from '@/components/primitives/NumberField.tsx'
 import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { SliderField } from '@/components/primitives/SliderField.tsx'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
@@ -10,9 +11,13 @@ import {
 } from '@/stores/settingsStore.ts'
 
 export const HISTORY_QUERY =
-  'download history thumbnails megapixels size icon cache downloads tab jpg jpeg png webp gif video quality format'
+  'download history browse pages viewed keep limit store thumbnails megapixels size icon cache downloads tab jpg jpeg png webp gif video quality format'
 
 export function HistoryPanel({ query = '' }: { query?: string }) {
+  const downloadHistoryLimit = useSettingsStore((s) => s.downloadHistoryLimit)
+  const browseHistoryLimit = useSettingsStore((s) => s.browseHistoryLimit)
+  const setDownloadHistoryLimit = useSettingsStore((s) => s.setDownloadHistoryLimit)
+  const setBrowseHistoryLimit = useSettingsStore((s) => s.setBrowseHistoryLimit)
   const downloadThumbMegapixels = useSettingsStore((s) => s.downloadThumbMegapixels)
   const downloadThumbImageFormat = useSettingsStore((s) => s.downloadThumbImageFormat)
   const downloadThumbVideoFormat = useSettingsStore((s) => s.downloadThumbVideoFormat)
@@ -25,6 +30,16 @@ export function HistoryPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
+      <SettingsCard query={query} title="Keep" terms="keep limit store download browse pages viewed history">
+        <SettingsBlock query={query} title="Download history" terms="download keep limit store">
+          <NumberField value={downloadHistoryLimit} onChange={setDownloadHistoryLimit} min={-1} />
+          <p className="text-xs text-muted">Newest completed downloads to keep. -1 keeps all.</p>
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Browse history" terms="browse pages viewed keep limit store">
+          <NumberField value={browseHistoryLimit} onChange={setBrowseHistoryLimit} min={-1} />
+          <p className="text-xs text-muted">Newest opened CivitAI model pages to keep. -1 keeps all.</p>
+        </SettingsBlock>
+      </SettingsCard>
       <SettingsCard
         query={query}
         title="Thumbnails"
@@ -39,8 +54,8 @@ export function HistoryPanel({ query = '' }: { query?: string }) {
             step={0.05}
           />
           <p className="text-xs text-muted">
-            Downloads-tab previews are downscaled to this area. Image and video thumbs share this cap. Larger sources
-            are never upscaled. Does not change model thumbnails.
+            History and Downloads pane previews are downscaled to this area. Image and video thumbs share this cap.
+            Larger sources are never upscaled. Does not change model thumbnails.
           </p>
         </SettingsBlock>
         <SettingsBlock query={query} title="Image format" terms="png jpg jpeg webp still photo">

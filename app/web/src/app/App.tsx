@@ -8,7 +8,7 @@ import { ScopesScreen } from '../screens/scopes/ScopesScreen.tsx'
 import { FileInfoScreen } from '../screens/fileinfo/FileInfoScreen.tsx'
 import { SettingsScreen } from '../screens/settings/SettingsScreen.tsx'
 import { ErrorsScreen } from '../screens/errors/ErrorsScreen.tsx'
-import { DownloadsScreen } from '../screens/downloads/DownloadsScreen.tsx'
+import { HistoryScreen } from '../screens/history/HistoryScreen.tsx'
 import { getHealth, reloadApp } from '../lib/api.ts'
 import { digitKey, isTyping } from '../lib/hotkeys.ts'
 import { bindSmoothWheel } from '../lib/smoothWheel.ts'
@@ -86,7 +86,7 @@ export function App() {
   const wildcards = location.pathname === '/wildcards'
   const scopes = location.pathname === '/scopes'
   const errors = location.pathname === '/errors'
-  const downloads = location.pathname === '/downloads'
+  const history = location.pathname === '/history'
   const issueCount = useIssuesStore((s) => s.items.filter((item) => item.id == null).length)
   const health = useHealthStore((s) => s.health)
   const refreshHealth = useHealthStore((s) => s.refresh)
@@ -174,7 +174,7 @@ export function App() {
       const digit = digitKey(event)
       if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && digit && digit <= 9) {
         event.preventDefault()
-        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/scopes', '/errors', '/downloads', '/settings']
+        const fixed = ['/', '/file-info', '/gallery', '/models', '/wildcards', '/scopes', '/errors', '/history', '/settings']
         const routes = mainTabKeysFollowLayout
           ? visibleMainTabIds(mainTabOrder, hiddenMainTabs).map((id) => mainTab(id)?.to ?? '/')
           : fixed
@@ -269,12 +269,12 @@ export function App() {
               </NavLink>
             ) : null}
             <NavLink
-              to="/downloads"
-              title="Downloads"
-              aria-label="Downloads"
+              to="/history"
+              title="History"
+              aria-label="History"
               className={({ isActive }) => tabClass(isActive, 'flex items-center')}
             >
-              <AppIcon id="download" size={14} />
+              <AppIcon id="clock" size={14} />
             </NavLink>
             <NavLink
               to="/settings"
@@ -291,18 +291,19 @@ export function App() {
         ref={mainRef}
         className={[
           'min-h-0 flex-1 [overflow-anchor:none]',
-          settings || fileInfo || wildcards || scopes || models || downloads || errors ? 'overflow-hidden' : 'overflow-y-auto',
+          settings || fileInfo || wildcards || scopes || models || history || errors || gallery ? 'overflow-hidden' : 'overflow-y-auto',
         ].join(' ')}
       >
-        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes || models || downloads || errors ? '' : 'px-10 py-4'].join(' ')}>
+        <div className={['flex h-full min-h-0 flex-col', settings || fileInfo || wildcards || scopes || models || history || errors || gallery ? '' : 'px-10 py-4'].join(' ')}>
           {location.pathname === '/png-info' ? <Navigate to="/file-info" replace /> : null}
+          {location.pathname === '/downloads' ? <Navigate to="/history" replace /> : null}
           <div className={pane(generate)}>
             <GenerateScreen />
           </div>
           <div className={pane(fileInfo, true)}>
             <FileInfoScreen />
           </div>
-          <div className={pane(gallery)}>
+          <div className={pane(gallery, true)}>
             <GalleryScreen />
           </div>
           <div className={pane(models, true)}>
@@ -317,8 +318,8 @@ export function App() {
           <div className={pane(settings, true)}>
             <SettingsScreen />
           </div>
-          <div className={pane(downloads, true)}>
-            <DownloadsScreen />
+          <div className={pane(history, true)}>
+            <HistoryScreen />
           </div>
           <div className={pane(errors, true)}>
             <ErrorsScreen />

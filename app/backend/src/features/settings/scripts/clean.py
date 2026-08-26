@@ -20,6 +20,7 @@ from features.settings.scripts.validators import (
     _autocomplete_lists,
     _civitai_browse,
     _civitai_download,
+    _civitai_marks,
     _civitai_tab_id,
     _civitai_tabs,
     _dir_list,
@@ -29,6 +30,8 @@ from features.settings.scripts.validators import (
     _gallery_mode_map,
     _gallery_pin_selected,
     _gallery_query,
+    _gallery_browse_dir,
+    _gallery_browse_sort,
     _gallery_types,
     _lookup_kinds,
     _lookup_models,
@@ -239,12 +242,28 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["downloadThumbQuality"] = max(1, min(100, int(raw["downloadThumbQuality"])))
         except (TypeError, ValueError):
             pass
+    if "downloadHistoryLimit" in raw:
+        try:
+            value = int(raw["downloadHistoryLimit"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if value >= -1:
+                out["downloadHistoryLimit"] = value
+    if "browseHistoryLimit" in raw:
+        try:
+            value = int(raw["browseHistoryLimit"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            if value >= -1:
+                out["browseHistoryLimit"] = value
     if "gallerySortKey" in raw:
-        mapped = _gallery_map(raw["gallerySortKey"], _GALLERY_SORTS, "name")
+        mapped = _gallery_map(raw["gallerySortKey"], _GALLERY_SORTS, "added")
         if mapped:
             out["gallerySortKey"] = mapped
     if "gallerySortDir" in raw:
-        mapped = _gallery_map(raw["gallerySortDir"], _GALLERY_DIRS, "asc")
+        mapped = _gallery_map(raw["gallerySortDir"], _GALLERY_DIRS, "desc")
         if mapped:
             out["gallerySortDir"] = mapped
     if "galleryTileScale" in raw:
@@ -370,6 +389,8 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["modelsKind"] = raw["modelsKind"]
     if "civitaiBrowse" in raw and isinstance(raw["civitaiBrowse"], dict):
         out["civitaiBrowse"] = _civitai_browse(raw["civitaiBrowse"])
+    if "civitaiMarks" in raw:
+        out["civitaiMarks"] = _civitai_marks(raw["civitaiMarks"])
     if "civitaiTabs" in raw:
         out["civitaiTabs"] = _civitai_tabs(raw["civitaiTabs"])
     if "civitaiTabId" in raw:
@@ -384,10 +405,16 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["galleryScopeMode"] = _gallery_mode_map(raw["galleryScopeMode"])
     if "galleryFilterMode" in raw and isinstance(raw["galleryFilterMode"], dict):
         out["galleryFilterMode"] = _gallery_mode_map(raw["galleryFilterMode"])
-    if "galleryFilterShareModels" in raw:
-        out["galleryFilterShareModels"] = bool(raw["galleryFilterShareModels"])
+    if "galleryAutoTypes" in raw and isinstance(raw["galleryAutoTypes"], dict):
+        out["galleryAutoTypes"] = _gallery_pin_selected(raw["galleryAutoTypes"])
     if "galleryPinSelected" in raw and isinstance(raw["galleryPinSelected"], dict):
         out["galleryPinSelected"] = _gallery_pin_selected(raw["galleryPinSelected"])
+    if "galleryBrowseSort" in raw and isinstance(raw["galleryBrowseSort"], dict):
+        out["galleryBrowseSort"] = _gallery_browse_sort(raw["galleryBrowseSort"])
+    if "galleryBrowseDir" in raw and isinstance(raw["galleryBrowseDir"], dict):
+        out["galleryBrowseDir"] = _gallery_browse_dir(raw["galleryBrowseDir"])
+    if "galleryBrowseShare" in raw:
+        out["galleryBrowseShare"] = bool(raw["galleryBrowseShare"])
     ids = out.get("lookupScopeIds")
     optional = out.get("lookupScopeOptionalIds")
     if isinstance(ids, list) and isinstance(optional, list):

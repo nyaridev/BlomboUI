@@ -107,3 +107,18 @@ def delete(ident: int) -> bool:
 def delete_all() -> int:
     cur = db.execute("DELETE FROM download_history")
     return int(cur.rowcount or 0)
+
+
+def ids_beyond(limit: int) -> list[int]:
+    if limit < 0:
+        return []
+    rows = db.query(
+        """
+        SELECT id FROM download_history
+        WHERE status != 'downloading'
+        ORDER BY created_at DESC, id DESC
+        LIMIT -1 OFFSET ?
+        """,
+        (max(0, limit),),
+    )
+    return [int(row["id"]) for row in rows]

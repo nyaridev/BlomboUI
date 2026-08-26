@@ -44,7 +44,13 @@ export function WildcardEditorPane({
         onRename={onRename}
         onSave={onSave}
       />
-      <div className="min-h-0 flex-1 overflow-y-auto pr-1 pb-8">
+      <div
+        className={
+          draft && (raw || (draft.format === 'yaml' && (draft.error || !draft.tree))) && draft.format === 'yaml'
+            ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pr-1'
+            : 'min-h-0 flex-1 overflow-y-auto pr-1 pb-8'
+        }
+      >
         {!draft ? (
           <p className="text-sm text-muted">Choose a .txt or .yaml file, or use + on a folder to add one.</p>
         ) : raw || (draft.format === 'yaml' && (draft.error || !draft.tree)) ? (

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from io import BytesIO
 from pathlib import Path
 
 
@@ -50,7 +51,16 @@ def _legend_font(px: int):
         return ImageFont.load_default()
 
 
-def _write_sheet(sheet: object, dest: Path, quality: int, comment: str, fmt: str) -> None:
+def _write_sheet(
+    sheet: object,
+    dest: Path,
+    quality: int,
+    comment: str,
+    fmt: str,
+    values: dict | None = None,
+    metadata: dict | None = None,
+) -> None:
+    from shared import pnginfo
     from shared.pnginfo_write import jpeg_exif, rgb
 
     max_edge = 4096
@@ -61,22 +71,29 @@ def _write_sheet(sheet: object, dest: Path, quality: int, comment: str, fmt: str
     if fmt not in {"png", "jpg", "webp"}:
         fmt = "jpg"
     q = max(1, min(100, int(quality)))
+    buf = BytesIO()
     if fmt == "png":
         extra: dict = {}
-        if comment:
+        if comment and not metadata:
             from PIL.PngImagePlugin import PngInfo
 
             info = PngInfo()
             info.add_text("parameters", comment)
             extra["pnginfo"] = info
-        sheet.save(dest, "PNG", **extra)  # type: ignore[attr-defined]
+        sheet.save(buf, "PNG", **extra)  # type: ignore[attr-defined]
+    else:
+        sheet = rgb(sheet)
+        opts: dict = {"quality": q}
+        if comment and not metadata:
+            exif = jpeg_exif(comment)
+            if exif is not None:
+                opts["exif"] = exif
+        sheet.save(buf, "WEBP" if fmt == "webp" else "JPEG", **opts)
+    data = buf.getvalue()
+    if metadata:
+        dest.write_bytes(pnginfo.embed(data, values or {}, None, fmt, q, metadata))
         return
-    sheet = rgb(sheet)
-    opts: dict = {"quality": q}
-    exif = jpeg_exif(comment) if comment else None
-    if exif is not None:
-        opts["exif"] = exif
-    sheet.save(dest, "WEBP" if fmt == "webp" else "JPEG", **opts)
+    dest.write_bytes(data)
 
 
 def save_contact_sheet(
@@ -87,6 +104,8 @@ def save_contact_sheet(
     fill: bool = False,
     comment: str = "",
     fmt: str = "jpg",
+    values: dict | None = None,
+    metadata: dict | None = None,
 ) -> None:
     from PIL import Image
 
@@ -98,7 +117,7 @@ def save_contact_sheet(
         if image.size != (cell_w, cell_h):
             image = image.resize((cell_w, cell_h))
         sheet.paste(image, ((i % cols) * cell_w, (i // cols) * cell_h))
-    _write_sheet(sheet, dest, quality, comment, fmt)
+    _write_sheet(sheet, dest, quality, comment, fmt, values, metadata)
 
 
 def save_xy_sheet(
@@ -113,6 +132,8 @@ def save_xy_sheet(
     quality: int = 85,
     comment: str = "",
     fmt: str = "jpg",
+    values: dict | None = None,
+    metadata: dict | None = None,
 ) -> None:
     from PIL import Image, ImageDraw
 
@@ -164,4 +185,4 @@ def save_xy_sheet(
             _tw, th = _text_size(draw, label, font)
             y = top + row * (cell_h + margin) + max(0, (cell_h - th) // 2)
             draw.text((edge, y), label, fill=(255, 255, 255, 255), font=font)
-    _write_sheet(sheet, dest, quality, comment, fmt)
+    _write_sheet(sheet, dest, quality, comment, fmt, values, metadata)

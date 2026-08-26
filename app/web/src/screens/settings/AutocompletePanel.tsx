@@ -246,9 +246,9 @@ export function AutocompleteGeneralPanel({ query = '' }: { query?: string }) {
             checked={frequentTagsEnabled}
             onChange={(event) => setFrequentTagsEnabled(event.target.checked)}
           />
-          Enable frequent tags
+          Enable frequent tags in autocomplete
         </label>
-        <p className="text-xs text-muted">Off skips saving tags after generate and hides them from autocomplete ranking.</p>
+        <p className="text-xs text-muted">Off hides them from autocomplete. Tags are still saved after generate.</p>
       </SettingsCard>
     </div>
   )

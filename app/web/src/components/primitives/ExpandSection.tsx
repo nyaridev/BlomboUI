@@ -12,9 +12,10 @@ type ExpandSectionProps = {
   enabled?: boolean
   onEnabled?: (value: boolean) => void
   fit?: boolean
+  trailing?: ReactNode
 }
 
-export function ExpandSection({ title, children, enabled = true, onEnabled, fit = false }: ExpandSectionProps) {
+export function ExpandSection({ title, children, enabled = true, onEnabled, fit = false, trailing }: ExpandSectionProps) {
   const [open, setOpen] = useState(false)
   const [height, setHeight] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
@@ -24,6 +25,10 @@ export function ExpandSection({ title, children, enabled = true, onEnabled, fit 
   const minH = 4 * rem
   const maxH = 48 * rem
   const defaultH = 16 * rem
+
+  function toggle() {
+    setOpen((value) => !value)
+  }
 
   return (
     <div className="rounded border border-line bg-field">
@@ -39,15 +44,21 @@ export function ExpandSection({ title, children, enabled = true, onEnabled, fit 
         <button
           type="button"
           className={[
-            'flex min-w-0 flex-1 items-center justify-between text-sm',
+            'flex min-w-0 flex-1 items-center text-sm',
             dimmed ? 'text-muted' : 'text-ink',
           ].join(' ')}
-          onClick={() => setOpen((value) => !value)}
+          onClick={toggle}
         >
           <span>{title}</span>
-          <span className="text-muted">
-            <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
-          </span>
+        </button>
+        {trailing}
+        <button
+          type="button"
+          className="flex items-center text-muted"
+          aria-label={open ? 'Collapse' : 'Expand'}
+          onClick={toggle}
+        >
+          <AppIcon id={open ? 'chevron-up' : 'chevron-down'} size={12} />
         </button>
       </div>
       {open ? (

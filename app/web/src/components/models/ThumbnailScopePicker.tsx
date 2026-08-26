@@ -257,7 +257,7 @@ export function ThumbnailScopePicker({
       </div>
       <button
         type="button"
-        className={['icon-btn', auto ? 'bg-line' : ''].join(' ')}
+        className={['icon-btn', auto ? 'on' : ''].join(' ')}
         aria-label={auto ? 'Disable Auto scopes' : 'Enable Auto scopes'}
         aria-pressed={auto}
         title={

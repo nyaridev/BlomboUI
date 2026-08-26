@@ -56,7 +56,7 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
-      <SettingsCard query={query} title="Buttons" terms="generate interrupt disabled icon">
+      <SettingsCard query={query} title="Buttons" terms="generate interrupt disabled icon pressed on accent">
         <div className="flex flex-wrap gap-2">
           <button type="button" className="rounded bg-generate px-3 py-2 text-sm font-semibold text-ink">
             Generate
@@ -93,6 +93,9 @@ export function PrimitivesPanel({ query = '' }: { query?: string }) {
           </button>
           <button type="button" className="icon-btn" aria-label="Close">
             <AppIcon id="x" />
+          </button>
+          <button type="button" className="icon-btn on" aria-label="On" aria-pressed>
+            <AppIcon id="globe" />
           </button>
           <button type="button" className="icon-btn" aria-label="Disabled" disabled>
             <AppIcon id="shuffle" />

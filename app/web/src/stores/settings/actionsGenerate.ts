@@ -4,6 +4,7 @@ import {
   cleanCivitaiSite,
   cleanCompleteThumbScale,
   cleanAnimatedThumbFormat,
+  cleanBrowseSort,
   cleanGenerateTabOrder,
   cleanHiddenMainTabs,
   cleanImageFormat,
@@ -20,9 +21,18 @@ import {
   cleanTimeDisplay,
   cleanMainTabOrder,
   cleanLargeJpegMaxKb,
+  cleanHistoryLimit,
 } from './clean.ts'
-import { SETTINGS_DEFAULTS } from './constants.ts'
+import {
+  GALLERY_BROWSE_DIR_DEFAULT,
+  GALLERY_BROWSE_SORT_DEFAULT,
+  GALLERY_SORT_DIR_DEFAULT,
+  GALLERY_SORT_KEY_DEFAULT,
+  SETTINGS_DEFAULTS,
+  galleryBrowseKey,
+} from './constants.ts'
 import { cleanSetResolutions } from '@/screens/generate/resolutions.ts'
+import { cleanCivitaiMarks, missingMarkNames } from '@/lib/civitai/marks.ts'
 
 export function createGenerateActions(set: SettingsSet, persist: () => void): Partial<SettingsState> {
   return {
@@ -109,6 +119,24 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     setHiddenModelTypes: (hiddenModelTypes) => {
       set({ hiddenModelTypes })
       persist()
+    },
+    setCivitaiMarks: (civitaiMarks) => {
+      set({ civitaiMarks: cleanCivitaiMarks(civitaiMarks) })
+      persist()
+    },
+    rememberCivitaiMarks: (names) => {
+      let added = false
+      set((state) => {
+        const extra = missingMarkNames(names, state.civitaiMarks)
+        if (!Object.keys(extra).length) {
+          return {}
+        }
+        added = true
+        return { civitaiMarks: { ...state.civitaiMarks, ...extra } }
+      })
+      if (added) {
+        persist()
+      }
     },
     setHiddenSamplers: (hiddenSamplers) => {
       set({ hiddenSamplers: cleanNames(hiddenSamplers) })
@@ -236,6 +264,14 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
       })
       persist()
     },
+    setDownloadHistoryLimit: (downloadHistoryLimit) => {
+      set({ downloadHistoryLimit: cleanHistoryLimit(downloadHistoryLimit, SETTINGS_DEFAULTS.downloadHistoryLimit) })
+      persist()
+    },
+    setBrowseHistoryLimit: (browseHistoryLimit) => {
+      set({ browseHistoryLimit: cleanHistoryLimit(browseHistoryLimit, SETTINGS_DEFAULTS.browseHistoryLimit) })
+      persist()
+    },
     setGallerySortKey: (key, gallerySortKey) => {
       const name = key.trim().slice(0, 80)
       if (!name) {
@@ -244,7 +280,7 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
       set((state) => {
         const next = { ...state.gallerySortKey }
         const value = cleanSortKey(gallerySortKey)
-        if (value === 'name') {
+        if (value === GALLERY_SORT_KEY_DEFAULT) {
           delete next[name]
         } else {
           next[name] = value
@@ -261,7 +297,7 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
       set((state) => {
         const next = { ...state.gallerySortDir }
         const value = cleanSortDir(gallerySortDir)
-        if (value === 'asc') {
+        if (value === GALLERY_SORT_DIR_DEFAULT) {
           delete next[name]
         } else {
           next[name] = value
@@ -308,6 +344,66 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     },
     setAutocompleteThumbScale: (autocompleteThumbScale) => {
       set({ autocompleteThumbScale: cleanCompleteThumbScale(autocompleteThumbScale) })
+      persist()
+    },
+    setGalleryBrowseSort: (kind, value) => {
+      set((state) => {
+        const key = galleryBrowseKey(kind, state.galleryBrowseShare)
+        const next = { ...state.galleryBrowseSort }
+        const sort = cleanBrowseSort(value)
+        if (sort === GALLERY_BROWSE_SORT_DEFAULT) {
+          delete next[key]
+        } else {
+          next[key] = sort
+        }
+        return { galleryBrowseSort: next }
+      })
+      persist()
+    },
+    setGalleryBrowseDir: (kind, value) => {
+      set((state) => {
+        const key = galleryBrowseKey(kind, state.galleryBrowseShare)
+        const next = { ...state.galleryBrowseDir }
+        if (value === GALLERY_BROWSE_DIR_DEFAULT) {
+          delete next[key]
+        } else {
+          next[key] = value
+        }
+        return { galleryBrowseDir: next }
+      })
+      persist()
+    },
+    setGalleryBrowseShare: (galleryBrowseShare) => {
+      set((state) => {
+        if (!galleryBrowseShare) {
+          return { galleryBrowseShare }
+        }
+        const sort =
+          state.galleryBrowseSort.global ??
+          state.galleryBrowseSort.checkpoints ??
+          state.galleryBrowseSort.loras ??
+          state.galleryBrowseSort.wildcards ??
+          GALLERY_BROWSE_SORT_DEFAULT
+        const dir =
+          state.galleryBrowseDir.global ??
+          state.galleryBrowseDir.checkpoints ??
+          state.galleryBrowseDir.loras ??
+          state.galleryBrowseDir.wildcards ??
+          GALLERY_BROWSE_DIR_DEFAULT
+        const galleryBrowseSort = { ...state.galleryBrowseSort }
+        const galleryBrowseDir = { ...state.galleryBrowseDir }
+        if (sort === GALLERY_BROWSE_SORT_DEFAULT) {
+          delete galleryBrowseSort.global
+        } else {
+          galleryBrowseSort.global = sort
+        }
+        if (dir === GALLERY_BROWSE_DIR_DEFAULT) {
+          delete galleryBrowseDir.global
+        } else {
+          galleryBrowseDir.global = dir
+        }
+        return { galleryBrowseShare, galleryBrowseSort, galleryBrowseDir }
+      })
       persist()
     },
   }

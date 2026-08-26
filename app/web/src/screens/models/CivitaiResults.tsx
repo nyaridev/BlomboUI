@@ -4,6 +4,7 @@ import type { CivitaiModel } from '@/lib/api.ts'
 import { isCivitaiModelDownloaded } from '@/lib/civitai/downloaded.ts'
 import type { ModelEntry } from '@/lib/api.ts'
 import type { CivitaiSite } from '@/stores/settingsStore.ts'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 function LoadingCircle({ label }: { label: string }) {
   return (
@@ -14,12 +15,37 @@ function LoadingCircle({ label }: { label: string }) {
   )
 }
 
+function CivitaiPlaceholder({
+  sentinel,
+  loading = false,
+}: {
+  sentinel?: (node: HTMLDivElement | null) => void
+  loading?: boolean
+}) {
+  return (
+    <div
+      ref={sentinel}
+      className="relative aspect-[2/3] min-w-0 overflow-hidden rounded-md border border-line bg-bg"
+      aria-hidden={!loading}
+    >
+      {loading ? (
+        <div className="absolute inset-0 flex items-center justify-center" role="status" aria-label="Loading more models">
+          <span className="h-7 w-7 animate-spin rounded-full border-2 border-muted border-t-ink" />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 export function CivitaiResults({
   error,
   busy,
   items,
-  page,
   hasNext,
+  loadingMore,
+  loadMoreError,
+  placeholderCount,
+  scrollNonce,
   nsfw,
   localModels,
   sessionDownloadedIds,
@@ -27,17 +53,19 @@ export function CivitaiResults({
   site,
   preferredBases,
   onRetry,
+  onLoadMore,
   onOpen,
   onOpenBackground,
   onDownload,
-  onPrevious,
-  onNext,
 }: {
   error: string
   busy: boolean
   items: CivitaiModel[]
-  page: number
   hasNext: boolean
+  loadingMore: boolean
+  loadMoreError: string
+  placeholderCount: number
+  scrollNonce: number
   nsfw: boolean
   localModels: ModelEntry[]
   sessionDownloadedIds: Set<number>
@@ -45,12 +73,36 @@ export function CivitaiResults({
   site: CivitaiSite
   preferredBases: string[]
   onRetry: () => void
+  onLoadMore: () => void
   onOpen: (item: CivitaiModel) => void
   onOpenBackground: (item: CivitaiModel) => void
   onDownload: (item: CivitaiModel) => void
-  onPrevious: () => void
-  onNext: () => void
 }) {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null)
+  const setSentinelRef = useCallback((node: HTMLDivElement | null) => setSentinel(node), [])
+
+  useEffect(() => {
+    scrollerRef.current?.scrollTo(0, 0)
+  }, [scrollNonce])
+
+  useEffect(() => {
+    const root = scrollerRef.current
+    if (!root || !sentinel || !hasNext || loadingMore || loadMoreError) {
+      return
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          onLoadMore()
+        }
+      },
+      { root, rootMargin: '200px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasNext, loadMoreError, loadingMore, onLoadMore, sentinel])
+
   if (error) {
     return <CivitaiErrorState message={error} busy={busy} onRetry={onRetry} />
   }
@@ -58,7 +110,7 @@ export function CivitaiResults({
     <>
       {busy && !items.length ? <LoadingCircle label="Loading CivitAI models…" /> : null}
       {!busy && !items.length ? <p className="text-sm text-muted">No models found.</p> : null}
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={scrollerRef} className="min-h-0 flex-1 overflow-y-auto">
         <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3">
           {items.map((item) => (
             <CivitaiTile
@@ -74,26 +126,28 @@ export function CivitaiResults({
               onDownload={() => onDownload(item)}
             />
           ))}
+          {hasNext
+            ? Array.from({ length: placeholderCount }, (_, index) => (
+                <CivitaiPlaceholder
+                  key={`ph-${index}`}
+                  sentinel={index === 0 ? setSentinelRef : undefined}
+                  loading={loadingMore && index === 0}
+                />
+              ))
+            : null}
         </div>
-      </div>
-      <div className="flex shrink-0 items-center justify-center gap-2">
-        <button
-          type="button"
-          className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
-          disabled={page <= 1 || busy}
-          onClick={onPrevious}
-        >
-          Previous
-        </button>
-        <span className="text-xs tabular-nums text-muted">Page {page}</span>
-        <button
-          type="button"
-          className="rounded border border-line bg-field px-2 py-1 text-xs text-ink disabled:opacity-40"
-          disabled={!hasNext || busy}
-          onClick={onNext}
-        >
-          Next
-        </button>
+        {loadMoreError ? (
+          <div className="flex flex-col items-center gap-2 py-4">
+            <p className="text-xs text-red-bright">{loadMoreError}</p>
+            <button
+              type="button"
+              className="rounded border border-line bg-field px-2 py-1 text-xs text-ink hover:bg-line"
+              onClick={onLoadMore}
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
       </div>
     </>
   )

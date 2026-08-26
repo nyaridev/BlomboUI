@@ -120,7 +120,8 @@ export async function listCivitaiModels(params: {
   baseModels: string[]
   sort: CivitaiSort
   period: CivitaiPeriod
-  page: number
+  page?: number
+  limit: number
   cursor?: string
   earlyAccess?: boolean
   supportsGeneration?: boolean
@@ -133,7 +134,8 @@ export async function listCivitaiModels(params: {
     query: params.query,
     sort: params.sort,
     period: params.period,
-    page: String(params.page),
+    page: String(params.page ?? 1),
+    limit: String(params.limit),
     nsfw: String(params.nsfw ?? true),
   })
   for (const type of params.types) {

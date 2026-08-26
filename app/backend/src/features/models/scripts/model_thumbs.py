@@ -381,7 +381,16 @@ def contexts(kind: str, rel: str) -> dict[str, dict[str, Any]]:
     return ident_index(kind, ident)
 
 
-LOOKUP_KINDS = ("checkpoints", "loras", "wildcards")
+LOOKUP_KINDS = (
+    "checkpoints",
+    "diffusion_models",
+    "loras",
+    "vae",
+    "text_encoders",
+    "controlnet",
+    "embeddings",
+    "wildcards",
+)
 
 
 def list_saved() -> list[dict[str, Any]]:
@@ -546,7 +555,7 @@ def _save_opts() -> tuple[float, str, int, bool, str, int, bool, str]:
         _clamp_mp(cfg.get("thumbMegapixels", THUMB_MP_DEFAULT)),
         _image_fmt(cfg.get("thumbFormat"), THUMB_FMT_DEFAULT),
         _clamp_quality(cfg.get("thumbQuality"), THUMB_QUALITY_DEFAULT),
-        bool(cfg.get("saveRawThumbs", False)),
+        bool(cfg.get("saveRawThumbs", True)),
         _image_fmt(cfg.get("imageFormat"), OUTPUT_FMT_DEFAULT),
         _clamp_quality(cfg.get("imageQuality"), OUTPUT_QUALITY_DEFAULT),
         False if save_animated is False else bool(save_animated),

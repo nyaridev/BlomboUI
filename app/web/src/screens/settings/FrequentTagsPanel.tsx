@@ -1,14 +1,12 @@
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
 import { getFrequentPromptTags, type FrequentPromptTag } from '@/lib/api.ts'
 import { toast } from '@/stores/toastStore.ts'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { SettingsCard } from './SettingsBlock.tsx'
 import { useCallback, useEffect, useState } from 'react'
 
 export const FREQUENT_TAGS_QUERY = 'frequent tags autocomplete favorites star usage count prompt refresh reload'
 
 export function FrequentTagsPanel({ query = '' }: { query?: string }) {
-  const frequentTagsEnabled = useSettingsStore((s) => s.frequentTagsEnabled)
   const [tags, setTags] = useState<FrequentPromptTag[]>([])
   const [threshold, setThreshold] = useState(2)
   const [busy, setBusy] = useState(false)
@@ -55,7 +53,7 @@ export function FrequentTagsPanel({ query = '' }: { query?: string }) {
         {tags.length === 0 ? (
           <p className="text-xs text-muted">Generate with a prompt to start collecting tags.</p>
         ) : (
-          <div className={['flex flex-col divide-y divide-line', frequentTagsEnabled ? '' : 'opacity-40'].join(' ')}>
+          <div className="flex flex-col divide-y divide-line">
             {tags.map((item) => (
               <div key={item.tag} className="flex items-center gap-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate font-mono text-sm text-ink">{item.tag}</span>

@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { getSettings, saveSettings, type UserSettings } from '@/lib/api.ts'
 import { type CivitaiBrowse } from '@/lib/civitai/browse.ts'
+import { type CivitaiMarks } from '@/lib/civitai/marks.ts'
 import { type CivitaiDownloadSettings } from '@/lib/civitai/download.ts'
 import { type CivitaiTab } from '@/lib/civitai/version.ts'
 import { type GenerateTab } from '@/screens/generate/tabs.ts'
@@ -15,6 +16,8 @@ import {
   type GalleryFilterScope,
   type GalleryLocalScope,
   type GalleryModeKey,
+  type GalleryBrowseKind,
+  type GalleryBrowseSort,
   type GallerySortDir,
   type GallerySortKey,
   type AnimatedThumbFormat,
@@ -52,6 +55,8 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setMainTabKeysFollowLayout: (value: boolean) => void
   setGenerateTabKeysFollowLayout: (value: boolean) => void
   setHiddenModelTypes: (value: string[]) => void
+  setCivitaiMarks: (value: CivitaiMarks) => void
+  rememberCivitaiMarks: (names: string[]) => void
   setHiddenSamplers: (value: string[]) => void
   setHiddenSchedulers: (value: string[]) => void
   setTheme: (value: Theme) => void
@@ -81,6 +86,8 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setDownloadThumbImageFormat: (value: ImageFormat) => void
   setDownloadThumbVideoFormat: (value: AnimatedThumbFormat) => void
   setDownloadThumbQuality: (value: number) => void
+  setDownloadHistoryLimit: (value: number) => void
+  setBrowseHistoryLimit: (value: number) => void
   setGallerySortKey: (key: string, value: GallerySortKey) => void
   setGallerySortDir: (key: string, value: GallerySortDir) => void
   setGalleryTileScale: (value: number) => void
@@ -136,8 +143,11 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   dropGalleryLocalScopeId: (id: string) => void
   setGalleryScopeMode: (key: GalleryModeKey, value: GalleryFilterScope) => void
   setGalleryFilterMode: (key: GalleryModeKey, value: GalleryFilterScope) => void
-  setGalleryFilterShareModels: (value: boolean) => void
+  setGalleryAutoTypes: (key: string, value: boolean) => void
   setGalleryPinSelected: (key: string, value: boolean) => void
+  setGalleryBrowseSort: (kind: GalleryBrowseKind, value: GalleryBrowseSort) => void
+  setGalleryBrowseDir: (kind: GalleryBrowseKind, value: GallerySortDir) => void
+  setGalleryBrowseShare: (value: boolean) => void
 }
 
 const KEYS = [
@@ -191,6 +201,9 @@ const KEYS = [
   'downloadThumbImageFormat',
   'downloadThumbVideoFormat',
   'downloadThumbQuality',
+  'downloadHistoryLimit',
+  'browseHistoryLimit',
+  'civitaiMarks',
   'gallerySortKey',
   'gallerySortDir',
   'galleryTileScale',
@@ -245,8 +258,11 @@ const KEYS = [
   'galleryLocalScopes',
   'galleryScopeMode',
   'galleryFilterMode',
-  'galleryFilterShareModels',
+  'galleryAutoTypes',
   'galleryPinSelected',
+  'galleryBrowseSort',
+  'galleryBrowseDir',
+  'galleryBrowseShare',
 ] as const
 
 type SettingsValues = typeof SETTINGS_DEFAULTS

@@ -1,9 +1,11 @@
+import { ExpandSection } from '@/components/primitives/ExpandSection.tsx'
 import { SelectField } from '@/components/primitives/SelectField.tsx'
 import { NumberField } from '@/components/primitives/NumberField.tsx'
 import { getAppPaths } from '@/lib/api.ts'
 import { SettingsBlock, SettingsCard } from './SettingsBlock.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 
 export const DOWNLOAD_QUERY =
   'download civitai model wildcard directory folder intelligent sort base model category creator naming author alias archive unpack zip queue parallel refresh reload models'
@@ -36,22 +38,19 @@ function modelExamplePath(
 
 function Check({
   checked,
-  disabled = false,
   label,
   onChange,
 }: {
   checked: boolean
-  disabled?: boolean
   label: string
   onChange: (value: boolean) => void
 }) {
   return (
-    <label className={['flex items-center gap-2 text-sm', disabled ? 'text-muted' : 'text-ink'].join(' ')}>
+    <label className="flex items-center gap-2 text-sm text-ink">
       <input
         type="checkbox"
         className="check"
         checked={checked}
-        disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
       />
       {label}
@@ -112,7 +111,11 @@ export function DownloadPanel({ query = '' }: { query?: string }) {
           </div>
         </SettingsBlock>
       </SettingsCard>
-      <SettingsCard query={query} title="Models" terms="civitai model downloads destination folder refresh reload">
+      <SettingsCard
+        query={query}
+        title="Models"
+        terms="civitai model downloads destination folder refresh reload intelligent sort base category creator"
+      >
         <label className="flex flex-col gap-1 text-sm text-ink">
           <span className="text-xs text-muted">Download directory</span>
           <SelectField
@@ -121,38 +124,34 @@ export function DownloadPanel({ query = '' }: { query?: string }) {
             options={directoryOptions(modelDirs)}
           />
         </label>
-        <div className="flex flex-col gap-2 rounded border border-line bg-bg p-2">
-          <p className="text-xs uppercase tracking-wide text-muted">Intelligent download</p>
-          <Check
-            checked={download.modelIntelligent}
-            label="Sort downloaded models into folders"
-            onChange={(value) => setDownload({ modelIntelligent: value })}
-          />
-          <div className="ml-6 flex flex-col gap-2">
+        <ExpandSection
+          title="Intelligent download"
+          enabled={download.modelIntelligent}
+          onEnabled={(value) => setDownload({ modelIntelligent: value })}
+          fit
+        >
+          <div className="flex flex-col gap-2">
             <Check
               checked={download.modelSortBaseModel}
-              disabled={!download.modelIntelligent}
               label="Sort by base model"
               onChange={(value) => setDownload({ modelSortBaseModel: value })}
             />
             <Check
               checked={download.modelSortCategory}
-              disabled={!download.modelIntelligent}
               label="Sort by category"
               onChange={(value) => setDownload({ modelSortCategory: value })}
             />
             <Check
               checked={download.modelSortCreator}
-              disabled={!download.modelIntelligent}
               label="Sort by creator"
               onChange={(value) => setDownload({ modelSortCreator: value })}
             />
+            <p className="text-xs text-muted">
+              Example: <span className="text-ink">{examplePath}</span>. The path updates with the sorting options; a
+              custom creator prefix only changes the filename.
+            </p>
           </div>
-          <p className="text-xs text-muted">
-            Example: <span className="text-ink">{examplePath}</span>. The path updates with the sorting options; a
-            custom creator prefix only changes the filename.
-          </p>
-        </div>
+        </ExpandSection>
         <label className="flex flex-col gap-1 text-sm text-ink">
           <span className="text-xs text-muted">Naming convention</span>
           <SelectField
@@ -166,6 +165,14 @@ export function DownloadPanel({ query = '' }: { query?: string }) {
         </label>
         <p className="text-xs text-muted">
           Custom naming opens a dialog where the model name and creator filename prefix can be edited per download.
+          Saved prefixes live in{' '}
+          <Link
+            to="/settings#author-aliases"
+            className="text-purple-bright underline decoration-purple-bright/50 hover:decoration-purple-bright"
+          >
+            Author Aliases
+          </Link>
+          .
         </p>
         <Check
           checked={download.updateModelInfo}

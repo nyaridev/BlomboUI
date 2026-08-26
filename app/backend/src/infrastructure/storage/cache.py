@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS gallery_items (
     path TEXT NOT NULL UNIQUE,
     root TEXT NOT NULL,
     asset_kind TEXT NOT NULL DEFAULT 'image',
+    media_kind TEXT NOT NULL DEFAULT 'image',
     size INTEGER NOT NULL DEFAULT 0,
     mtime_ns INTEGER NOT NULL DEFAULT 0,
     width INTEGER,
@@ -47,6 +48,33 @@ CREATE INDEX IF NOT EXISTS gallery_items_created
 CREATE INDEX IF NOT EXISTS gallery_items_kind_created
     ON gallery_items (asset_kind, created_at DESC);
 
+CREATE TABLE IF NOT EXISTS gallery_item_tags (
+    item_id TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (item_id, tag),
+    FOREIGN KEY (item_id) REFERENCES gallery_items(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS gallery_item_tags_tag
+    ON gallery_item_tags (tag);
+
+CREATE TABLE IF NOT EXISTS gallery_item_loras (
+    item_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (item_id, name),
+    FOREIGN KEY (item_id) REFERENCES gallery_items(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS gallery_item_loras_name
+    ON gallery_item_loras (name);
+
+CREATE TABLE IF NOT EXISTS gallery_item_wildcards (
+    item_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    PRIMARY KEY (item_id, name),
+    FOREIGN KEY (item_id) REFERENCES gallery_items(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS gallery_item_wildcards_name
+    ON gallery_item_wildcards (name);
+
 CREATE TABLE IF NOT EXISTS model_hashes (
     path TEXT PRIMARY KEY,
     mtime INTEGER NOT NULL,
@@ -55,6 +83,13 @@ CREATE TABLE IF NOT EXISTS model_hashes (
     autov1 TEXT NOT NULL DEFAULT '',
     autov2 TEXT NOT NULL DEFAULT '',
     autov3 TEXT NOT NULL DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS gallery_seen (
+    path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL DEFAULT 0,
+    mtime_ns INTEGER NOT NULL DEFAULT 0,
+    ok INTEGER NOT NULL DEFAULT 0
 );
 """
 
@@ -72,8 +107,21 @@ def connect() -> sqlite3.Connection:
             _CONN.execute("PRAGMA foreign_keys = ON")
             _CONN.execute("PRAGMA journal_mode=WAL")
             _CONN.executescript(SCHEMA)
+            _migrate(_CONN)
             _CONN.commit()
         return _CONN
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(gallery_items)")}
+    if "media_kind" not in cols:
+        conn.execute("ALTER TABLE gallery_items ADD COLUMN media_kind TEXT NOT NULL DEFAULT 'image'")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS gallery_items_media_created ON gallery_items (media_kind, created_at DESC)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS gallery_items_checkpoint ON gallery_items (checkpoint_name, created_at DESC)"
+    )
 
 
 def execute(sql: str, params: tuple | list = ()) -> sqlite3.Cursor:

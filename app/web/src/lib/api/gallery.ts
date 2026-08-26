@@ -4,10 +4,87 @@ import type { ModelLists, ThumbView } from './models.ts'
 export type GalleryItem = {
   id: string
   created_at: string
+  media_kind?: 'image' | 'video'
   asset_kind?: 'image' | 'interrupted' | 'grid'
+  checkpoint?: string
+}
+
+export type GalleryPreview = {
+  id: string
+  media_kind: 'image' | 'video' | string
+}
+
+export type GalleryTag = {
+  tag: string
+  count: number
+  previews: GalleryPreview[]
+}
+
+export type GalleryBrowseKind = 'checkpoints' | 'loras' | 'wildcards'
+
+export type GalleryBrowseItem = {
+  name: string
+  recent: string
+  works: number
+  previews: GalleryPreview[]
+}
+
+export type GalleryHome = {
+  recent: GalleryItem[]
+  tags: GalleryTag[]
+  checkpoints: GalleryBrowseItem[]
+  loras: GalleryBrowseItem[]
+  wildcards: GalleryBrowseItem[]
+}
+
+export type GallerySearch = {
+  items: GalleryItem[]
+  cursor: string
+}
+
+export type GalleryLibrary = {
+  id: string
+  name: string
+  query: string
+  scopes: string[]
+  models: string[]
+  created_at: string
+  previews: GalleryPreview[]
 }
 
 export type Generation = GalleryItem
+
+export type GallerySearchQuery = {
+  q?: string
+  tags?: string[]
+  scopes?: string[]
+  models?: string[]
+  loras?: string[]
+  wildcards?: string[]
+  media?: 'all' | 'image' | 'video'
+  cursor?: string
+  limit?: number
+}
+
+function qs(params: Record<string, string | string[] | undefined>) {
+  const search = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value == null || value === '') {
+      continue
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item) {
+          search.append(key, item)
+        }
+      }
+      continue
+    }
+    search.set(key, value)
+  }
+  const text = search.toString()
+  return text ? `?${text}` : ''
+}
 
 export async function listGalleryItems(): Promise<GalleryItem[]> {
   const res = await fetch(api('/gallery/items'))
@@ -16,6 +93,118 @@ export async function listGalleryItems(): Promise<GalleryItem[]> {
   }
   const data = (await res.json()) as { items?: GalleryItem[] }
   return data.items ?? []
+}
+
+export async function listGallerySince(createdAt: string): Promise<GalleryItem[]> {
+  const res = await fetch(api(`/gallery/items/since${qs({ created_at: createdAt })}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { items?: GalleryItem[] }
+  return data.items ?? []
+}
+
+export async function syncGallery(): Promise<void> {
+  const res = await fetch(api('/gallery/sync'), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
+export async function searchGallery(query: GallerySearchQuery): Promise<GallerySearch> {
+  const res = await fetch(
+    api(
+      `/gallery/search${qs({
+        q: query.q,
+        tag: query.tags,
+        scope: query.scopes,
+        model: query.models,
+        lora: query.loras,
+        wildcard: query.wildcards,
+        media: query.media === 'all' ? undefined : query.media,
+        cursor: query.cursor,
+        limit: query.limit != null ? String(query.limit) : undefined,
+      })}`,
+    ),
+  )
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as GallerySearch
+  return { items: data.items ?? [], cursor: data.cursor ?? '' }
+}
+
+export async function getGalleryHome(): Promise<GalleryHome> {
+  const res = await fetch(api('/gallery/home'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as GalleryHome
+  return {
+    recent: data.recent ?? [],
+    tags: (data.tags ?? []).map((item) => ({ ...item, previews: item.previews ?? [] })),
+    checkpoints: data.checkpoints ?? [],
+    loras: data.loras ?? [],
+    wildcards: data.wildcards ?? [],
+  }
+}
+
+export async function browseGallery(
+  kind: GalleryBrowseKind,
+  sort: 'recent' | 'works' = 'recent',
+  dir: 'asc' | 'desc' = 'desc',
+): Promise<GalleryBrowseItem[]> {
+  const res = await fetch(api(`/gallery/browse/${kind}${qs({ sort, dir })}`))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { items?: GalleryBrowseItem[] }
+  return data.items ?? []
+}
+
+export async function listGalleryLibraries(): Promise<GalleryLibrary[]> {
+  const res = await fetch(api('/gallery/libraries'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { items?: GalleryLibrary[] }
+  return (data.items ?? []).map((item) => ({ ...item, previews: item.previews ?? [] }))
+}
+
+export async function createGalleryLibrary(
+  body: Pick<GalleryLibrary, 'name' | 'query' | 'scopes' | 'models'>,
+): Promise<GalleryLibrary> {
+  const res = await fetch(api('/gallery/libraries'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as GalleryLibrary
+}
+
+export async function updateGalleryLibrary(
+  id: string,
+  body: Pick<GalleryLibrary, 'name' | 'query' | 'scopes' | 'models'>,
+): Promise<GalleryLibrary> {
+  const res = await fetch(api(`/gallery/libraries/${encodeURIComponent(id)}`), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as GalleryLibrary
+}
+
+export async function deleteGalleryLibrary(id: string): Promise<void> {
+  const res = await fetch(api(`/gallery/libraries/${encodeURIComponent(id)}`), { method: 'DELETE' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
 }
 
 export async function getLatestGalleryItem(): Promise<GalleryItem | null> {

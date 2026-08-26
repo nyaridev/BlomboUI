@@ -33,6 +33,11 @@ def load() -> dict[str, Any]:
 def save(raw: Any) -> dict[str, Any]:
     data = _clean(raw)
     _write(data)
+    from features.downloads.scripts import history as download_history
+    from features.history import service as browse_history
+
+    download_history.trim_to_limit()
+    browse_history.trim_to_limit()
     return data
 
 

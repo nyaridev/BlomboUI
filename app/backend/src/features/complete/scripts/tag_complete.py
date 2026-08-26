@@ -210,8 +210,6 @@ def star_threshold(unique: int | None = None) -> int:
 
 def record(prompt: str, negative: str, extra: list[str] | None = None) -> None:
     try:
-        if settings.load().get("frequentTagsEnabled") is False:
-            return
         _record(prompt, negative, extra or [])
     except (sqlite3.Error, OSError, ValueError):
         return

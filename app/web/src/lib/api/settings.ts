@@ -57,6 +57,9 @@ export type UserSettings = {
   downloadThumbImageFormat?: string
   downloadThumbVideoFormat?: string
   downloadThumbQuality?: number
+  downloadHistoryLimit?: number
+  browseHistoryLimit?: number
+  civitaiMarks?: Record<string, { text?: string; icon?: { kind?: string; id?: string; color?: string } }>
   gallerySortKey?: Record<string, string> | string
   gallerySortDir?: Record<string, string> | string
   galleryTileScale?: number
@@ -108,6 +111,7 @@ export type UserSettings = {
   frequentTagsEnabled?: boolean
   autocompleteLists?: Record<string, { enabled?: boolean; mode?: string; types?: string[] }>
   galleryPinSelected?: Record<string, boolean>
+  galleryAutoTypes?: Record<string, boolean>
   scopeGroups?: string[]
   scopeOrder?: string[]
   lookupScopeIds?: string[]
@@ -128,6 +132,7 @@ export type UserSettings = {
     earlyAccess?: string
     supportsGeneration?: string
     fromPlatform?: string
+    limit?: number
   }
   civitaiTabs?: {
     id?: number
@@ -144,7 +149,9 @@ export type UserSettings = {
   >
   galleryScopeMode?: Record<string, string>
   galleryFilterMode?: Record<string, string>
-  galleryFilterShareModels?: boolean
+  galleryBrowseSort?: Record<string, string>
+  galleryBrowseDir?: Record<string, string>
+  galleryBrowseShare?: boolean
 }
 
 export type AppPaths = {

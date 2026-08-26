@@ -267,7 +267,13 @@ function DownloadThumb({
   return <img src={src} alt="" className={frame} onError={() => setMode('video')} />
 }
 
-export function DownloadsScreen() {
+export function DownloadsScreen({
+  embedded = false,
+  active,
+}: {
+  embedded?: boolean
+  active?: boolean
+}) {
   const location = useLocation()
   const navigate = useNavigate()
   const items = useDownloadsStore((s) => s.items)
@@ -291,7 +297,7 @@ export function DownloadsScreen() {
   const [removeDay, setRemoveDay] = useState<{ label: string; ids: number[] } | null>(null)
   const [menu, setMenu] = useState<CivitaiMenu | null>(null)
   const [dayMenu, setDayMenu] = useState<DayMenu | null>(null)
-  const tabActive = location.pathname === '/downloads'
+  const tabActive = active ?? location.pathname === '/downloads'
   const days = useMemo(
     () => groupByDay(items, activeItems, queuedItems, query),
     [items, activeItems, queuedItems, query],
@@ -343,21 +349,23 @@ export function DownloadsScreen() {
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col px-10 py-4">
-      <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2">
-          <h1 className="text-2xl font-semibold">Downloads</h1>
-          <button
-            type="button"
-            className="icon-btn text-red"
-            aria-label="Clear list"
-            title="Clear list"
-            disabled={busy || items.length === 0}
-            onClick={() => setConfirmAll(true)}
-          >
-            <AppIcon id="trash-2" />
-          </button>
-        </div>
+    <section className={embedded ? 'flex min-h-0 flex-1 flex-col' : 'flex h-full min-h-0 flex-col px-10 py-4'}>
+      <div className={embedded ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col'}>
+        {embedded ? null : (
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">Downloads</h1>
+            <button
+              type="button"
+              className="icon-btn text-red"
+              aria-label="Clear list"
+              title="Clear list"
+              disabled={busy || items.length === 0}
+              onClick={() => setConfirmAll(true)}
+            >
+              <AppIcon id="trash-2" />
+            </button>
+          </div>
+        )}
         <div className="relative mt-3 h-8 shrink-0">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
             <AppIcon id="search" size={12} />

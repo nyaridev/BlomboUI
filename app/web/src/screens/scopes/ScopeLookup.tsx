@@ -11,24 +11,14 @@ import {
   type ScopeThumb,
 } from '@/lib/api.ts'
 import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
+import { libraryKindLabel } from '@/lib/libraryKindLabel.ts'
 import { modelLabel, useModelsStore } from '@/stores/modelsStore.ts'
+import { LOOKUP_GROUPS, LOOKUP_KINDS, lookupGroupFor, type LookupKind } from '@/stores/settings/constants.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbnailScopeStore } from '@/stores/thumbnailScopeStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { ScopeFilter } from './ScopeFilter.tsx'
 import { useEffect, useMemo, useState } from 'react'
-
-const KINDS = [
-  { id: 'checkpoints' as const, label: 'Base Model' },
-  { id: 'loras' as const, label: 'LoRA' },
-  { id: 'wildcards' as const, label: 'Wildcards' },
-]
-
-type KindId = (typeof KINDS)[number]['id']
-
-function kindLabel(kind: string) {
-  return KINDS.find((item) => item.id === kind)?.label || kind
-}
 
 function fileName(path: string) {
   return path.split(/[\\/]/).pop()?.replace(/\.[^/.]+$/, '') || path
@@ -99,7 +89,12 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
   const loadModels = useModelsStore((s) => s.load)
   const pullModels = useModelsStore((s) => s.pull)
   const checkpoints = useModelsStore((s) => s.checkpoints)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
   const loras = useModelsStore((s) => s.loras)
+  const vae = useModelsStore((s) => s.vae)
+  const textEncoders = useModelsStore((s) => s.text_encoders)
+  const controlnet = useModelsStore((s) => s.controlnet)
+  const embeddings = useModelsStore((s) => s.embeddings)
   const wildcards = useModelsStore((s) => s.wildcards)
   const [thumbs, setThumbs] = useState<ScopeThumb[]>([])
   const [busy, setBusy] = useState(false)
@@ -107,7 +102,7 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
   const optionalIds = useSettingsStore((s) => s.lookupScopeOptionalIds)
   const setIds = useSettingsStore((s) => s.setLookupScopeIds)
   const setOptionalIds = useSettingsStore((s) => s.setLookupScopeOptionalIds)
-  const kinds = useSettingsStore((s) => s.lookupKinds) as KindId[]
+  const kinds = useSettingsStore((s) => s.lookupKinds) as LookupKind[]
   const models = useSettingsStore((s) => s.lookupModels)
   const setKinds = useSettingsStore((s) => s.setLookupKinds)
   const setModels = useSettingsStore((s) => s.setLookupModels)
@@ -140,23 +135,33 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
 
   const required = ids.filter((id) => !optionalIds.includes(id))
   const optional = ids.filter((id) => optionalIds.includes(id))
-  const activeKinds = kinds.length ? kinds : KINDS.map((item) => item.id)
-  const byKind: Record<KindId, typeof checkpoints> = { checkpoints, loras, wildcards }
+  const activeGroups = kinds.length ? kinds : LOOKUP_KINDS
+  const activeKinds = new Set(LOOKUP_GROUPS.filter((item) => activeGroups.includes(item.id)).flatMap((item) => item.kinds))
+  const byKind = {
+    checkpoints,
+    diffusion_models: diffusionModels,
+    loras,
+    vae,
+    text_encoders: textEncoders,
+    controlnet,
+    embeddings,
+    wildcards,
+  }
   const modelOptions = useMemo(
     () =>
-      KINDS.filter((item) => activeKinds.includes(item.id)).map((item) => ({
+      LOOKUP_GROUPS.filter((item) => activeGroups.includes(item.id)).map((item) => ({
         title: item.label,
-        options: byKind[item.id]
-          .filter((row) => !row.dir)
-          .map((row) => modelKey(item.id, row.path)),
+        options: item.kinds.flatMap((kind) =>
+          byKind[kind].filter((row) => !row.dir).map((row) => modelKey(kind, row.path)),
+        ),
       })),
-    [activeKinds, checkpoints, loras, wildcards],
+    [activeGroups, checkpoints, controlnet, diffusionModels, embeddings, loras, textEncoders, vae, wildcards],
   )
 
   const shown = useMemo(() => {
     const picked = new Set(models)
     return thumbs
-      .filter((row) => activeKinds.includes(row.kind as KindId))
+      .filter((row) => activeKinds.has(row.kind))
       .filter((row) => (picked.size ? picked.has(modelKey(row.kind, row.path)) : true))
       .filter((row) => matchScopes(row, required, optional))
       .slice()
@@ -184,15 +189,13 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
     }
   }
 
-  function toggleKind(id: KindId) {
+  function toggleKind(id: LookupKind) {
     const next = kinds.includes(id) ? kinds.filter((item) => item !== id) : [...kinds, id]
     setKinds(next)
-    setModels(
-      models.filter((item) => {
-        const kind = parseModelKey(item).kind
-        return !next.length || next.includes(kind as KindId)
-      }),
+    const keep = new Set(
+      (next.length ? LOOKUP_GROUPS.filter((item) => next.includes(item.id)) : LOOKUP_GROUPS).flatMap((item) => item.kinds),
     )
+    setModels(models.filter((item) => keep.has(parseModelKey(item).kind)))
   }
 
   return (
@@ -205,7 +208,7 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
         onOptional={setOptionalIds}
       />
       <div className="flex min-h-9 shrink-0 items-stretch gap-1">
-        {KINDS.map((item) => {
+        {LOOKUP_GROUPS.map((item) => {
           const on = kinds.includes(item.id)
           return (
             <button
@@ -267,7 +270,7 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
                     rawSrc={thumbSrc(row, true)}
                     mark="?"
                     label={itemLabel(row.kind, row.path)}
-                    badge={kindLabel(row.kind)}
+                    badge={libraryKindLabel(row.kind)}
                   />
                 </button>
                 <p className="mt-1 truncate text-[11px] text-muted" title={scopeLabel(row)}>
@@ -281,7 +284,7 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
       {pending ? (
         <ConfirmDialog
           title="Remove thumbnail?"
-          body={`This deletes the ${kindLabel(pending.kind)} thumbnail saved for ${scopeLabel(pending)}.`}
+          body={`This deletes the ${libraryKindLabel(pending.kind)} thumbnail saved for ${scopeLabel(pending)}.`}
           onClose={() => setPending(null)}
           actions={[
             { label: 'Cancel', onClick: () => setPending(null) },
@@ -313,8 +316,9 @@ export function ScopeLookup({ onEditScope }: { onEditScope: (id: string) => void
               if (!models.includes(key)) {
                 setModels([...models, key])
               }
-              if (kinds.length && !kinds.includes(menu.row.kind as KindId)) {
-                setKinds([...kinds, menu.row.kind as KindId])
+              const group = lookupGroupFor(menu.row.kind)
+              if (kinds.length && group && !kinds.includes(group)) {
+                setKinds([...kinds, group])
               }
               setMenu(null)
             }}

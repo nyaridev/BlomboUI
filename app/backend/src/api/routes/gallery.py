@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import FileResponse
 
 from api.errors import ApiError
 from api.http import file_response, image_response, removed_error, resolve_view
 from features.gallery import service as gallery
-from features.gallery.schemas import RemovedIn
+from features.gallery.schemas import LibraryIn, RemovedIn
 from features.generate import service as generate
 from features.models import service as models
 
@@ -85,6 +85,85 @@ def get_user_removed_thumb_meta(
 @api.get("/gallery/items")
 def list_gallery_items() -> dict:
     return {"items": gallery.list_items()}
+
+
+@api.get("/gallery/items/since")
+def list_gallery_since(created_at: str = "") -> dict:
+    return {"items": gallery.list_since(created_at)}
+
+
+@api.post("/gallery/sync")
+def sync_gallery() -> dict:
+    busy = gallery.start_sync()
+    return {"ok": True, "busy": busy}
+
+
+@api.get("/gallery/search")
+def search_gallery(
+    q: str = "",
+    tag: list[str] = Query(default=[]),
+    scope: list[str] = Query(default=[]),
+    model: list[str] = Query(default=[]),
+    lora: list[str] = Query(default=[]),
+    wildcard: list[str] = Query(default=[]),
+    media: str = "all",
+    cursor: str = "",
+    limit: int = 60,
+) -> dict:
+    return gallery.search(
+        q=q,
+        tags=tag,
+        scopes=scope,
+        models=model,
+        loras=lora,
+        wildcards=wildcard,
+        media=media,
+        cursor=cursor,
+        limit=limit,
+    )
+
+
+@api.get("/gallery/home")
+def gallery_home() -> dict:
+    return gallery.home()
+
+
+@api.get("/gallery/browse/{kind}")
+def gallery_browse(kind: str, sort: str = "recent", dir: str = "desc") -> dict:
+    try:
+        return gallery.browse(kind, sort, dir)
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@api.get("/gallery/libraries")
+def list_libraries() -> dict:
+    return {"items": gallery.list_libraries()}
+
+
+@api.post("/gallery/libraries")
+def post_library(body: LibraryIn) -> dict:
+    try:
+        return gallery.create_library(body.model_dump())
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@api.put("/gallery/libraries/{ident}")
+def put_library(ident: str, body: LibraryIn) -> dict:
+    try:
+        return gallery.update_library(ident, body.model_dump())
+    except KeyError as exc:
+        raise ApiError("not_found", str(exc), 404) from exc
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@api.delete("/gallery/libraries/{ident}")
+def delete_library(ident: str) -> dict:
+    if not gallery.delete_library(ident):
+        raise ApiError("not_found", "gallery not found")
+    return {"ok": True}
 
 
 @api.get("/gallery/items/latest")

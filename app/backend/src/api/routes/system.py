@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from api.errors import ApiError
 from features.generate.schemas import ComfyFreeIn
@@ -8,7 +8,7 @@ from features.generate import service as generate
 from features.issues.service import clear_log, dismiss_log, list_issues
 from features.settings import service as settings
 from features.settings.schemas import OutputPathIn, PathsCheckIn
-from shared import dirs
+from shared import dirs, pnginfo
 from config import RUNTIME, VERSION, launcher_env
 
 api = APIRouter()
@@ -29,6 +29,18 @@ def delete_issue(ident: int) -> dict:
     if not dismiss_log(ident):
         raise ApiError("not_found", "issue not found")
     return {"ok": True}
+
+
+@api.post("/pnginfo")
+async def post_pnginfo(request: Request) -> dict:
+    info = pnginfo.read(await request.body(), request.headers.get("x-filename") or "")
+    raw = info.get("raw")
+    meta = info.get("metadata")
+    return {
+        "text": str(info.get("text") or ""),
+        "raw": raw if isinstance(raw, dict) else {},
+        "metadata": meta if isinstance(meta, dict) else {},
+    }
 
 
 @api.get("/health")

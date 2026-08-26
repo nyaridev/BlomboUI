@@ -1,4 +1,5 @@
 import { isVideoPreview } from '@/lib/civitai/media.ts'
+import { useEffect, useRef } from 'react'
 
 export function PreviewMedia({
   src,
@@ -19,9 +20,24 @@ export function PreviewMedia({
   onLoad?: () => void
   onError?: () => void
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  useEffect(() => {
+    const el = videoRef.current
+    if (!el) {
+      return
+    }
+    if (autoPlay) {
+      void el.play().catch(() => {})
+    } else {
+      el.pause()
+    }
+  }, [autoPlay, src])
+
   if (isVideoPreview(src, type)) {
     return (
       <video
+        ref={videoRef}
         src={src}
         className={className}
         autoPlay={autoPlay}

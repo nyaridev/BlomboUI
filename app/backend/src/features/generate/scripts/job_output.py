@@ -13,7 +13,7 @@ from features.settings import service as settings
 from features.gallery.scripts import cache as gallery_cache
 from infrastructure.comfy import client as comfy
 from shared import pnginfo
-from features.generate.scripts import templates
+from features.generate.scripts import save_meta, templates
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
 
@@ -346,30 +346,16 @@ def _import_bytes(
     folder: Path | None = None,
 ) -> tuple[str, Path]:
     fmt, quality, sidecar, max_kb = _image_save_opts()
-    packed = {
-        key: value
-        for key, value in values.items()
-        if key not in {"outputs", "grid_path", "grid_paths", "duration_ms"}
-    }
+    packed = save_meta.pack_params(values, graph)
     if kind == "interrupted":
         packed["interrupted"] = True
+    persist = folder is None
     folder = folder or _output_dir(values, kind)
     created_at = _now()
-    metadata = {
-        "version": 1,
-        "asset_kind": "interrupted" if kind == "interrupted" else "image",
-        "created_at": created_at,
-        "job_id": job_id,
-        "workflow_id": str(values.get("workflow_id") or values.get("workflow") or ""),
-        "template_id": str(values.get("template_id") or ""),
-        "template_name": str(values.get("template_name") or values.get("template") or ""),
-        "template_params": values.get("template_params")
-        if isinstance(values.get("template_params"), dict)
-        else {},
-        "params": packed,
-    }
+    asset_kind = "interrupted" if kind == "interrupted" else "image"
+    metadata = save_meta.envelope(job_id, values, packed, asset_kind, created_at)
     data = pnginfo.embed(raw, packed, graph, fmt=fmt, quality=quality, metadata=metadata)
-    dest = _save_image(folder, data, fmt, packed, kind)
+    dest = _save_image(folder, data, fmt, values, kind)
     if sidecar and fmt != "jpg" and dest.stat().st_size > max_kb * 1024:
         try:
             jpeg = pnginfo.embed(
@@ -384,7 +370,10 @@ def _import_bytes(
                 dest.with_suffix(".jpg").write_bytes(jpeg)
         except Exception:
             pass
-    return gallery_cache.item_id(dest), dest
+    ident = gallery_cache.item_id(dest)
+    if persist:
+        gallery_cache.ingest(dest, ident)
+    return ident, dest
 
 
 def _save_image(folder: Path, data: bytes, ext: str, values: dict[str, Any], kind: str) -> Path:
@@ -396,22 +385,24 @@ def _save_image(folder: Path, data: bytes, ext: str, values: dict[str, Any], kin
 
 def _grid_values(first: Path, job_values: dict[str, Any]) -> dict[str, Any]:
     row = gallery_cache.row_for_path(str(first))
-    if not row:
-        row = gallery_cache.output_row({"id": gallery_cache.item_id(first), "path": str(first)})
-    data: dict[str, Any] = dict(job_values)
     if row:
         try:
             packed = json.loads(row["params_json"] or "{}")
         except (TypeError, json.JSONDecodeError):
             packed = None
-        if isinstance(packed, dict):
-            data = packed
-    data["prompt"] = str(job_values.get("prompt") or "")
-    data["negative_prompt"] = str(job_values.get("negative_prompt") or "")
-    data.pop("prompt_expanded", None)
-    data.pop("negative_prompt_expanded", None)
-    data.pop("interrupted", None)
-    return data
+        taken = save_meta.take_params(packed)
+        if taken:
+            return taken
+    try:
+        info = pnginfo.read(first.read_bytes(), str(first))
+    except (OSError, ValueError):
+        info = {}
+    meta = info.get("metadata") if isinstance(info, dict) else None
+    params = meta.get("params") if isinstance(meta, dict) else None
+    taken = save_meta.take_params(params)
+    if taken:
+        return taken
+    return save_meta.pack_params(job_values)
 
 
 def _forget_comfy_file(info: dict[str, str]) -> None:
@@ -460,6 +451,9 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
             chunk = paths[i : i + max_n]
             if len(chunk) < 2:
                 continue
+            packed = _grid_values(chunk[0], values)
+            created_at = _now()
+            metadata = save_meta.envelope(job_id, values, packed, "grid", created_at)
             with _save_lock:
                 dest = _alloc_named(folder, fmt, values, "grids", start=_file_index(chunk[0]))
                 save_contact_sheet(
@@ -468,8 +462,9 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
                     quality,
                     rows,
                     fill,
-                    pnginfo.parameters_text(_grid_values(chunk[0], values), raw=True),
-                    fmt,
+                    fmt=fmt,
+                    values=packed,
+                    metadata=metadata,
                 )
             dests.append(str(dest))
     except Exception:
@@ -494,6 +489,9 @@ def _maybe_xy_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> No
 
         cols, rows = xy_shape(xy)
         x_labels, y_labels = xy_labels(xy)
+        packed = _grid_values(paths[0], values)
+        created_at = _now()
+        metadata = save_meta.envelope(job_id, values, packed, "grid", created_at)
         with _save_lock:
             dest = _alloc_named(folder, fmt, values, "grids", start=_file_index(paths[0]))
             save_xy_sheet(
@@ -506,8 +504,9 @@ def _maybe_xy_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> No
                 y_labels,
                 bool(xy.get("draw_legend", True)),
                 quality,
-                pnginfo.parameters_text(_grid_values(paths[0], values), raw=True),
-                fmt,
+                fmt=fmt,
+                values=packed,
+                metadata=metadata,
             )
     except Exception:
         return

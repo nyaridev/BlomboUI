@@ -52,7 +52,7 @@ def entry(path: Path) -> dict[str, str] | None:
         key = str(path.resolve())
     except OSError:
         return None
-    raw = _load().get(key)
+    raw = hashes_repo.get_by_path(key)
     if not _complete(raw, stat):
         return None
     sha256 = str(raw["sha256"])
@@ -96,6 +96,11 @@ def warm(paths: list[Path]) -> None:
     start()
     for path in paths:
         request(path, urgent=False)
+
+
+def find_path(digests: set[str]) -> Path | None:
+    key = hashes_repo.find_path(digests)
+    return Path(key) if key else None
 
 
 def checkpoint_hashes(name: str) -> dict[str, str]:

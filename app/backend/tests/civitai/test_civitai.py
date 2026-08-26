@@ -53,6 +53,7 @@ class CivitaiRequestTests(unittest.TestCase):
         self.assertEqual(query["period"], ["Month"])
         self.assertEqual(query["cursor"], ["next-token"])
         self.assertNotIn("page", query)
+        self.assertEqual(query["limit"], ["20"])
         self.assertEqual(query["earlyAccess"], ["true"])
         self.assertEqual(query["supportsGeneration"], ["false"])
         self.assertEqual(query["nsfw"], ["false"])
@@ -100,6 +101,7 @@ class CivitaiRequestTests(unittest.TestCase):
                 sort="Oldest",
                 period="Year",
                 page=2,
+                limit=50,
                 cursor="cursor",
                 early_access=None,
                 supports_generation=True,
@@ -118,7 +120,7 @@ class CivitaiRequestTests(unittest.TestCase):
                 "sort": "Oldest",
                 "period": "Year",
                 "page": 2,
-                "limit": 20,
+                "limit": 50,
                 "cursor": "cursor",
                 "early_access": None,
                 "supports_generation": True,
@@ -127,6 +129,13 @@ class CivitaiRequestTests(unittest.TestCase):
                 "tag": "style",
             },
         )
+
+    @unittest.skipIf(main is None, "FastAPI is not installed in this test environment")
+    def test_route_clamps_limit(self) -> None:
+        with patch.object(main.civitai, "list_models", return_value={"items": [], "metadata": {}}) as request:
+            main.civitai_models(limit=500)
+
+        self.assertEqual(request.call_args.kwargs["limit"], 100)
 
     @unittest.skipIf(main is None, "FastAPI is not installed in this test environment")
     def test_route_exposes_download_names_and_hashes(self) -> None:

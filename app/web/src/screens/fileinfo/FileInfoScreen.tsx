@@ -18,7 +18,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CivitaiSection } from './CivitaiSection.tsx'
 import { ImageInfo } from './ImageInfo.tsx'
-import { applyPngInfo, parsePngInfo, pngLoraHashes, pngModelHashes } from './parse.ts'
+import { applyPngInfo, parsePngInfo } from './parse.ts'
 import { SafetensorsInfo } from './SafetensorsInfo.tsx'
 import { embeddedHashes, readSafetensorsMetadata, type SafetensorsMeta } from './safetensors.ts'
 
@@ -55,6 +55,7 @@ export function FileInfoScreen() {
   const [text, setText] = useState('')
   const [raw, setRaw] = useState<Record<string, string>>({})
   const [meta, setMeta] = useState<SafetensorsMeta | null>(null)
+  const [pngMeta, setPngMeta] = useState<Record<string, unknown> | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [civitai, setCivitai] = useState<CivitaiVersion | null>(null)
   const [loraCivitai, setLoraCivitai] = useState<Record<string, CivitaiVersion | null>>({})
@@ -136,6 +137,7 @@ export function FileInfoScreen() {
     setText('')
     setRaw({})
     setMeta(null)
+    setPngMeta(null)
     setError(null)
     setCivitai(null)
     setLoraCivitai({})
@@ -186,6 +188,7 @@ export function FileInfoScreen() {
       setText('')
       setRaw({})
       setMeta(null)
+      setPngMeta(null)
       setError(null)
       setCivitai(null)
       setLoraCivitai({})
@@ -207,6 +210,7 @@ export function FileInfoScreen() {
       setText('')
       setRaw({})
       setMeta(null)
+      setPngMeta(null)
       try {
         const next = await readSafetensorsMetadata(file)
         if (id !== seq.current) {
@@ -230,6 +234,7 @@ export function FileInfoScreen() {
     }
     setKind('image')
     setMeta(null)
+    setPngMeta(null)
     try {
       const info = await readPngInfo(file)
       if (id !== seq.current) {
@@ -237,14 +242,20 @@ export function FileInfoScreen() {
       }
       setText(info.text)
       setRaw(info.raw)
-      const parsed = parsePngInfo(info.text)
-      await Promise.all([loadCivitai(id, pngModelHashes(parsed)), loadLoraCivitai(id, pngLoraHashes(parsed))])
+      setPngMeta(info.metadata)
+      const params = info.metadata.params as { prompt?: string; prompt_raw?: string; models?: { kind?: string; hashes?: Record<string, string> }[] } | undefined
+      const models = info.metadata.version === 2 && typeof params?.prompt === 'string' && typeof params?.prompt_raw === 'string' && Array.isArray(params.models) ? params.models : []
+      const ckpt = models.find((item) => item.kind === 'checkpoints' || item.kind === 'diffusion_models' || item.kind === 'checkpoint')
+      const all = models.flatMap((item) => Object.values(item.hashes || {}).filter(Boolean))
+      const ckptHashes = Object.values(ckpt?.hashes || {}).filter(Boolean)
+      await Promise.all([loadCivitai(id, ckptHashes), loadLoraCivitai(id, all)])
     } catch (err) {
       if (id !== seq.current) {
         return
       }
       setText(err instanceof Error ? err.message : 'Could not read metadata')
       setRaw({})
+      setPngMeta(null)
     } finally {
       if (id === seq.current) {
         setBusy(false)
@@ -419,7 +430,7 @@ export function FileInfoScreen() {
                 civitaiStatus={civitaiStatus}
               />
             ) : kind === 'image' ? (
-              <ImageInfo text={text} raw={raw} busy={busy} civitai={civitai} loraCivitai={loraCivitai} />
+              <ImageInfo text={text} raw={raw} metadata={pngMeta} busy={busy} civitai={civitai} loraCivitai={loraCivitai} />
             ) : null}
           </div>
         </div>

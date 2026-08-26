@@ -95,8 +95,12 @@ def record(
     }
     if history_id:
         repo.update(history_id, payload)
-        return history_id
-    return repo.insert(payload)
+        ident = history_id
+    else:
+        ident = repo.insert(payload)
+    if payload["status"] != "downloading":
+        trim_to_limit()
+    return ident
 
 
 def record_failed(
@@ -157,6 +161,23 @@ def delete(ident: int) -> bool:
 
 def clear() -> int:
     return repo.delete_all()
+
+
+def trim_to_limit() -> list[int]:
+    from features.downloads.scripts.thumbs import delete_thumbs
+    from features.settings import service as settings
+
+    try:
+        limit = int(settings.load().get("downloadHistoryLimit", -1))
+    except (TypeError, ValueError):
+        limit = -1
+    if limit < -1:
+        limit = -1
+    dropped = repo.ids_beyond(limit)
+    for ident in dropped:
+        repo.delete(ident)
+        delete_thumbs(ident)
+    return dropped
 
 
 def plain(raw: object, limit: int = _DESC_MAX) -> str:

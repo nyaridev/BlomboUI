@@ -49,6 +49,10 @@ export const CIVITAI_TYPES = [
   'Other',
 ]
 
+export const CIVITAI_BROWSE_LIMIT_MIN = 1
+export const CIVITAI_BROWSE_LIMIT_MAX = 100
+export const CIVITAI_BROWSE_LIMIT_DEFAULT = 20
+
 export const CIVITAI_BROWSE_DEFAULT = {
   query: '',
   sort: 'Newest' as CivitaiSort,
@@ -60,6 +64,7 @@ export const CIVITAI_BROWSE_DEFAULT = {
   earlyAccess: 'off' as CivitaiTriState,
   supportsGeneration: 'off' as CivitaiTriState,
   fromPlatform: 'off' as CivitaiTriState,
+  limit: CIVITAI_BROWSE_LIMIT_DEFAULT,
 }
 
 export type CivitaiBrowse = typeof CIVITAI_BROWSE_DEFAULT
@@ -74,6 +79,14 @@ function cleanTri(raw: unknown): CivitaiTriState {
   return raw === 'include' || raw === 'exclude' ? raw : 'off'
 }
 
+function cleanCivitaiLimit(raw: unknown): number {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return CIVITAI_BROWSE_LIMIT_DEFAULT
+  }
+  return Math.max(CIVITAI_BROWSE_LIMIT_MIN, Math.min(CIVITAI_BROWSE_LIMIT_MAX, Math.round(n)))
+}
+
 function cleanNames(raw: unknown, allowed: Set<string>): string[] {
   if (!Array.isArray(raw)) {
     return []
@@ -84,6 +97,9 @@ function cleanNames(raw: unknown, allowed: Set<string>): string[] {
     if (allowed.has(name) && !out.includes(name)) {
       out.push(name)
     }
+  }
+  if (out.length === raw.length && out.every((item, index) => item === raw[index])) {
+    return raw as string[]
   }
   return out
 }
@@ -107,5 +123,6 @@ export function cleanCivitaiBrowse(raw: unknown): CivitaiBrowse {
     earlyAccess: cleanTri(row.earlyAccess),
     supportsGeneration: cleanTri(row.supportsGeneration),
     fromPlatform: cleanTri(row.fromPlatform),
+    limit: cleanCivitaiLimit(row.limit),
   }
 }

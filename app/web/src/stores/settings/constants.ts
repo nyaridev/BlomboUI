@@ -7,6 +7,7 @@ import {
   type OrderableMainTab,
 } from '@/app/appTabs.ts'
 import { type TimeDisplay } from '@/lib/timeDisplay.ts'
+import { defaultCivitaiMarks } from '@/lib/civitai/marks.ts'
 import { DEFAULT_SET_RESOLUTIONS } from '@/screens/generate/resolutions.ts'
 import { CIVITAI_BROWSE_DEFAULT } from '@/lib/civitai/browse.ts'
 import { type CivitaiTab } from '@/lib/civitai/version.ts'
@@ -47,7 +48,33 @@ export const GALLERY_VIEWS = ['checkpoints', 'loras', 'wildcards', 'other'] as c
 export type GalleryViewKind = (typeof GALLERY_VIEWS)[number]
 export type GallerySortKey = 'name' | 'added' | 'edited' | 'path'
 export type GallerySortDir = 'asc' | 'desc'
+export const GALLERY_SORT_KEY_DEFAULT: GallerySortKey = 'added'
+export const GALLERY_SORT_DIR_DEFAULT: GallerySortDir = 'desc'
 export type GalleryFilterScope = 'global' | 'local'
+
+export const GALLERY_BROWSE_KINDS = ['checkpoints', 'loras', 'wildcards'] as const
+export const LOOKUP_GROUPS = [
+  { id: 'checkpoints' as const, label: 'Base Model', kinds: ['checkpoints', 'diffusion_models'] },
+  { id: 'loras' as const, label: 'LoRA', kinds: ['loras'] },
+  { id: 'wildcards' as const, label: 'Wildcards', kinds: ['wildcards'] },
+  { id: 'other' as const, label: 'Other', kinds: ['vae', 'text_encoders', 'controlnet', 'embeddings'] },
+] as const
+export type LookupKind = (typeof LOOKUP_GROUPS)[number]['id']
+export const LOOKUP_KINDS = LOOKUP_GROUPS.map((item) => item.id)
+
+export function lookupGroupFor(kind: string): LookupKind | undefined {
+  const group = LOOKUP_GROUPS.find((item) => item.id === kind || (item.kinds as readonly string[]).includes(kind))
+  return group?.id
+}
+
+export type GalleryBrowseKind = (typeof GALLERY_BROWSE_KINDS)[number]
+export type GalleryBrowseSort = 'recent' | 'works'
+export const GALLERY_BROWSE_SORT_DEFAULT: GalleryBrowseSort = 'recent'
+export const GALLERY_BROWSE_DIR_DEFAULT: GallerySortDir = 'desc'
+
+export function galleryBrowseKey(kind: GalleryBrowseKind, share: boolean) {
+  return share ? 'global' : kind
+}
 
 export const GENERATE_FILTER_VIEWS = [
   { key: 'checkpoints', label: 'Base Model' },
@@ -64,15 +91,14 @@ export const MODELS_FILTER_VIEWS = [
   { key: 'models-other', label: 'Other' },
 ] as const
 
-export const GALLERY_MODE_KEYS = ['checkpoints', 'loras', 'wildcards', 'other', 'models'] as const
+export const GALLERY_MODE_KEYS = [
+  ...GENERATE_FILTER_VIEWS.map((item) => item.key),
+  ...MODELS_FILTER_VIEWS.map((item) => item.key),
+] as const
 export type GalleryModeKey = (typeof GALLERY_MODE_KEYS)[number]
 
-export const GALLERY_MODE_DEFAULTS: Record<GalleryModeKey, GalleryFilterScope> = {
-  checkpoints: 'global',
-  loras: 'global',
-  wildcards: 'global',
-  other: 'global',
-  models: 'local',
+export function galleryModeDefault(viewKey: string): GalleryFilterScope {
+  return viewKey.startsWith('models') ? 'global' : 'local'
 }
 
 export type GalleryLocalScope = {
@@ -88,7 +114,7 @@ export const LOCAL_SCOPE_DEFAULT: GalleryLocalScope = {
   optionalIds: [],
   auto: false,
   mode: 'likely',
-  fallback: false,
+  fallback: true,
 }
 
 export const GALLERY_LOCAL_KEYS = new Set<string>([
@@ -100,45 +126,48 @@ export const GALLERY_FILTER_KEYS = new Set<string>(['global', ...GALLERY_LOCAL_K
 export const GALLERY_MODE_KEY_SET = new Set<string>(GALLERY_MODE_KEYS)
 
 export function galleryModeKey(viewKey: string): GalleryModeKey {
-  if (viewKey.startsWith('models')) {
-    return 'models'
-  }
   if (viewKey === 'loras' || viewKey === 'wildcards' || viewKey === 'other') {
     return viewKey
+  }
+  if (GALLERY_MODE_KEY_SET.has(viewKey)) {
+    return viewKey as GalleryModeKey
+  }
+  if (viewKey.startsWith('models')) {
+    return 'models-all'
   }
   return 'checkpoints'
 }
 
 export function galleryModeValue(
   map: Record<string, GalleryFilterScope>,
-  key: GalleryModeKey,
+  viewKey: string,
 ): GalleryFilterScope {
-  return map[key] ?? GALLERY_MODE_DEFAULTS[key]
+  const key = galleryModeKey(viewKey)
+  return map[key] ?? galleryModeDefault(key)
 }
 
-function galleryStoreKey(viewKey: string, modeMap: Record<string, GalleryFilterScope>, shareModels: boolean): string {
-  const modeKey = galleryModeKey(viewKey)
-  if (galleryModeValue(modeMap, modeKey) === 'global') {
-    return 'global'
+export function galleryShareKey(viewKey: string): string {
+  return galleryModeKey(viewKey).startsWith('models') ? 'models' : 'global'
+}
+
+export function isGenerateGallery(viewKey: string): boolean {
+  return !galleryModeKey(viewKey).startsWith('models')
+}
+
+function galleryStoreKey(viewKey: string, modeMap: Record<string, GalleryFilterScope>): string {
+  const key = galleryModeKey(viewKey)
+  if (galleryModeValue(modeMap, key) === 'global') {
+    return galleryShareKey(key)
   }
-  if (modeKey === 'models' && shareModels) {
-    return 'models'
-  }
-  return viewKey
+  return key
 }
 
-export function galleryFilterKey(
-  viewKey: string,
-  state: { galleryFilterMode: Record<string, GalleryFilterScope>; galleryFilterShareModels: boolean },
-): string {
-  return galleryStoreKey(viewKey, state.galleryFilterMode, state.galleryFilterShareModels)
+export function galleryFilterKey(viewKey: string, state: { galleryFilterMode: Record<string, GalleryFilterScope> }): string {
+  return galleryStoreKey(viewKey, state.galleryFilterMode)
 }
 
-export function galleryScopeKey(
-  viewKey: string,
-  state: { galleryScopeMode: Record<string, GalleryFilterScope>; galleryFilterShareModels: boolean },
-): string {
-  return galleryStoreKey(viewKey, state.galleryScopeMode, state.galleryFilterShareModels)
+export function galleryScopeKey(viewKey: string, state: { galleryScopeMode: Record<string, GalleryFilterScope> }): string {
+  return galleryStoreKey(viewKey, state.galleryScopeMode)
 }
 
 export const IMAGE_FORMATS = [
@@ -221,13 +250,16 @@ export const SETTINGS_DEFAULTS = {
   thumbMegapixels: 0.25,
   thumbFormat: 'jpg' as ImageFormat,
   thumbQuality: 85,
-  saveRawThumbs: false,
+  saveRawThumbs: true,
   saveAnimatedThumbs: true,
   animatedThumbFormat: 'webp' as AnimatedThumbFormat,
   downloadThumbMegapixels: 0.25,
   downloadThumbImageFormat: 'jpg' as ImageFormat,
   downloadThumbVideoFormat: 'webp' as AnimatedThumbFormat,
   downloadThumbQuality: 85,
+  downloadHistoryLimit: -1,
+  browseHistoryLimit: 500,
+  civitaiMarks: defaultCivitaiMarks(),
   gallerySortKey: {} as Record<string, GallerySortKey>,
   gallerySortDir: {} as Record<string, GallerySortDir>,
   galleryTileScale: 1,
@@ -258,7 +290,7 @@ export const SETTINGS_DEFAULTS = {
   autocompleteThumbScale: 1,
   frequentTagsEnabled: true,
   autocompleteLists: {} as Record<string, AutocompleteListRule>,
-  galleryThumbFallback: false,
+  galleryThumbFallback: true,
   thumbSaveTo: 'global' as 'active' | 'global',
   thumbDisplayMode: 'likely' as 'likely' | 'exact',
   thumbScopeIds: [] as string[],
@@ -282,6 +314,9 @@ export const SETTINGS_DEFAULTS = {
   galleryLocalScopes: {} as Record<string, GalleryLocalScope>,
   galleryScopeMode: {} as Record<string, GalleryFilterScope>,
   galleryFilterMode: {} as Record<string, GalleryFilterScope>,
-  galleryFilterShareModels: true,
+  galleryAutoTypes: {} as Record<string, boolean>,
   galleryPinSelected: {} as Record<string, boolean>,
+  galleryBrowseSort: {} as Record<string, GalleryBrowseSort>,
+  galleryBrowseDir: {} as Record<string, GallerySortDir>,
+  galleryBrowseShare: false,
 }

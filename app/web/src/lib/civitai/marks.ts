@@ -1,4 +1,6 @@
+import { parseGlyphOrNull, type Glyph } from '@/components/chrome/glyph.ts'
 import type { CivitaiModel } from '@/lib/api.ts'
+import { matchModelType, MODEL_TYPES } from '@/lib/modelTypes.ts'
 
 const MODEL_CODES: Record<string, string> = {
   illustrious: 'IL',
@@ -32,7 +34,14 @@ const MODEL_CODES: Record<string, string> = {
   wanvideo27: 'W27',
 }
 
-export type ModelMark = { id: string; text?: string; pony?: boolean; title: string }
+const NAME_MAX = 80
+const TEXT_MAX = 12
+
+export const PONY_ICON: Glyph = { kind: 'icon', id: 'horse-head', color: 'ink' }
+
+export type CivitaiMarkEntry = { text: string; icon?: Glyph }
+export type CivitaiMarks = Record<string, CivitaiMarkEntry>
+export type ModelMark = { id: string; title: string; text?: string; icon?: Glyph }
 
 function wanCode(raw: string) {
   const image = /image/i.test(raw)
@@ -52,14 +61,14 @@ function wanCode(raw: string) {
   return ('W' + ver + mode.replace(/2$/, '') + size).toUpperCase()
 }
 
-function modelMark(raw: string): ModelMark | null {
+function modelMark(raw: string): { text: string; pony: boolean } | null {
   const value = raw.trim()
   if (!value) {
     return null
   }
   const key = value.toLowerCase().replace(/[^a-z0-9]/g, '')
   if (key.includes('pony')) {
-    return { id: 'pony', pony: true, title: value }
+    return { text: 'PONY', pony: true }
   }
   let text = ''
   if (key.includes('illustrious')) {
@@ -82,20 +91,120 @@ function modelMark(raw: string): ModelMark | null {
       .toUpperCase()
       .slice(0, 6)
   }
-  return text ? { id: text, text, title: value } : null
+  return text ? { text, pony: false } : null
 }
 
-export function modelMarks(item: CivitaiModel) {
+export function markEntryFor(name: string): CivitaiMarkEntry | null {
+  const mark = modelMark(name)
+  if (!mark) {
+    return null
+  }
+  if (mark.pony) {
+    return { text: mark.text, icon: { ...PONY_ICON } }
+  }
+  return { text: mark.text }
+}
+
+export function defaultCivitaiMarks(): CivitaiMarks {
+  const out: CivitaiMarks = {}
+  for (const name of MODEL_TYPES) {
+    const entry = markEntryFor(name)
+    if (entry) {
+      out[name] = entry
+    }
+  }
+  return out
+}
+
+function inkIcon(value: Glyph): Glyph {
+  return value.kind === 'icon' ? { kind: 'icon', id: value.id, color: 'ink' } : value
+}
+
+export function cleanCivitaiMarks(raw: unknown): CivitaiMarks {
+  const out = defaultCivitaiMarks()
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return out
+  }
+  for (const [name, item] of Object.entries(raw as Record<string, unknown>)) {
+    const key = name.trim().slice(0, NAME_MAX)
+    if (!key || !item || typeof item !== 'object' || Array.isArray(item)) {
+      continue
+    }
+    const row = item as Record<string, unknown>
+    const text = typeof row.text === 'string' ? row.text.trim().slice(0, TEXT_MAX) : ''
+    const parsed = parseGlyphOrNull(row.icon)
+    out[key] = parsed ? { text, icon: inkIcon(parsed) } : { text }
+  }
+  return out
+}
+
+export function missingMarkNames(names: string[], table: CivitaiMarks): CivitaiMarks {
+  const extra: CivitaiMarks = {}
+  for (const raw of names) {
+    const value = raw.trim()
+    if (!value) {
+      continue
+    }
+    const key = matchModelType(value) || value
+    if (key in table || key in extra) {
+      continue
+    }
+    const entry = markEntryFor(value)
+    if (entry) {
+      extra[key] = entry
+    }
+  }
+  return extra
+}
+
+export function markNamesFromModels(
+  items: { baseModel?: string; baseModels?: string[]; versions?: { baseModel?: string }[] }[],
+) {
+  const names: string[] = []
+  for (const item of items) {
+    if (item.baseModels?.length) {
+      names.push(...item.baseModels)
+    } else if (item.baseModel) {
+      names.push(item.baseModel)
+    }
+    for (const version of item.versions || []) {
+      if (version.baseModel) {
+        names.push(version.baseModel)
+      }
+    }
+  }
+  return names
+}
+
+function entryFor(name: string, table: CivitaiMarks): CivitaiMarkEntry | null {
+  const value = name.trim()
+  if (!value) {
+    return null
+  }
+  const key = matchModelType(value) || value
+  return table[key] || table[value] || markEntryFor(value)
+}
+
+export function modelMarks(item: CivitaiModel, table: CivitaiMarks) {
   const values = item.baseModels?.length ? item.baseModels : item.baseModel ? [item.baseModel] : []
   const out: ModelMark[] = []
   const seen = new Set<string>()
   for (const value of values) {
-    const mark = modelMark(value)
-    if (!mark || seen.has(mark.id)) {
+    const entry = entryFor(value, table)
+    if (!entry || (!entry.icon && !entry.text)) {
       continue
     }
-    seen.add(mark.id)
-    out.push(mark)
+    const id = entry.icon ? `icon:${entry.icon.kind}:${entry.icon.id}` : `text:${entry.text}`
+    if (seen.has(id)) {
+      continue
+    }
+    seen.add(id)
+    out.push({
+      id,
+      title: value,
+      text: entry.icon ? undefined : entry.text,
+      icon: entry.icon,
+    })
   }
   return out
 }

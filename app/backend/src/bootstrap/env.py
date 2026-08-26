@@ -76,7 +76,24 @@ def ensure_dirs() -> None:
     (USER / "autocompletion").mkdir(exist_ok=True)
     (USER / "gallery_thumbs").mkdir(exist_ok=True)
     (USER / "model_thumbs").mkdir(exist_ok=True)
-    (USER / "download_thumbs").mkdir(exist_ok=True)
+    download_thumbs = USER / "data" / "history" / "download"
+    browse_thumbs = USER / "data" / "history" / "browse"
+    download_thumbs.mkdir(parents=True, exist_ok=True)
+    browse_thumbs.mkdir(parents=True, exist_ok=True)
+    old_thumbs = USER / "download_thumbs"
+    if old_thumbs.is_dir():
+        for path in old_thumbs.iterdir():
+            if not path.is_file():
+                continue
+            dest = download_thumbs / path.name
+            if dest.exists():
+                path.unlink(missing_ok=True)
+                continue
+            path.replace(dest)
+        try:
+            old_thumbs.rmdir()
+        except OSError:
+            pass
     (USER / "removed").mkdir(exist_ok=True)
 
 

@@ -3,6 +3,7 @@ import { api, readError } from './http.ts'
 export type PngInfoResult = {
   text: string
   raw: Record<string, string>
+  metadata: Record<string, unknown>
 }
 
 export async function readPngInfo(file: File): Promise<PngInfoResult> {
@@ -14,7 +15,12 @@ export async function readPngInfo(file: File): Promise<PngInfoResult> {
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  const data = (await res.json()) as { text?: string; raw?: Record<string, string> }
+  const data = (await res.json()) as {
+    text?: string
+    raw?: Record<string, string>
+    metadata?: Record<string, unknown>
+  }
   const raw = data.raw && typeof data.raw === 'object' ? data.raw : {}
-  return { text: data.text || 'No generation metadata found.', raw }
+  const metadata = data.metadata && typeof data.metadata === 'object' ? data.metadata : {}
+  return { text: data.text || 'No generation metadata found.', raw, metadata }
 }

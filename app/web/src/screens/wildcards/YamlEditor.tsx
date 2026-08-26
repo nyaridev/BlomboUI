@@ -225,21 +225,32 @@ function YamlSection({
             }
           }}
         />
+        <span className="shrink-0 font-mono text-sm text-muted" aria-hidden="true">
+          :
+        </span>
         <button type="button" className="icon-btn shrink-0" aria-label="Remove section" onClick={onRemove}>
           <AppIcon id="x" />
         </button>
       </div>
       {open ? (
         <div className="yaml-kids mt-2 flex flex-col gap-2">
-          {list && node.length > 0 ? (
+          {list ? (
             <LineList value={node} onChange={onChange} depth={depth} />
-          ) : list || empty ? (
-            <AddRow
-              depth={depth}
-              to={title.trim() || name}
-              onLine={() => onChange([''])}
-              onSection={() => onChange({ [uniqueKey({}, 'section')]: {} })}
-            />
+          ) : empty ? (
+            <div className="flex flex-wrap gap-1.5">
+              <AddRow
+                depth={depth}
+                to={title.trim() || name}
+                onSection={() => onChange({ [uniqueKey({}, 'section')]: {} })}
+              />
+              <button
+                type="button"
+                className={`yaml-add-section ${tint}`}
+                onClick={() => onChange([''])}
+              >
+                Add line
+              </button>
+            </div>
           ) : (
             <>
               <YamlMap value={node} onChange={onChange} depth={depth + 1} />

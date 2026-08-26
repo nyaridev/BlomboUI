@@ -14,7 +14,7 @@ import {
   cleanTypeList,
   emptyLocalScope,
 } from './clean.ts'
-import { GALLERY_LOCAL_KEYS, GALLERY_MODE_DEFAULTS, LOCAL_SCOPE_DEFAULT, type GalleryLocalScope } from './constants.ts'
+import { GALLERY_LOCAL_KEYS, GALLERY_MODE_KEY_SET, galleryModeDefault, LOCAL_SCOPE_DEFAULT, type GalleryLocalScope } from './constants.ts'
 
 export function createScopeActions(set: SettingsSet, persist: () => void): Partial<SettingsState> {
   return {
@@ -181,10 +181,14 @@ export function createScopeActions(set: SettingsSet, persist: () => void): Parti
       persist()
     },
     setGalleryScopeMode: (key, value) => {
+      if (!GALLERY_MODE_KEY_SET.has(key)) {
+        return
+      }
       set((state) => {
-        const scope = cleanFilterScope(value, GALLERY_MODE_DEFAULTS[key])
+        const fallback = galleryModeDefault(key)
+        const scope = cleanFilterScope(value, fallback)
         const galleryScopeMode = { ...state.galleryScopeMode }
-        if (scope === GALLERY_MODE_DEFAULTS[key]) {
+        if (scope === fallback) {
           delete galleryScopeMode[key]
         } else {
           galleryScopeMode[key] = scope
@@ -194,10 +198,14 @@ export function createScopeActions(set: SettingsSet, persist: () => void): Parti
       persist()
     },
     setGalleryFilterMode: (key, value) => {
+      if (!GALLERY_MODE_KEY_SET.has(key)) {
+        return
+      }
       set((state) => {
-        const scope = cleanFilterScope(value, GALLERY_MODE_DEFAULTS[key])
+        const fallback = galleryModeDefault(key)
+        const scope = cleanFilterScope(value, fallback)
         const galleryFilterMode = { ...state.galleryFilterMode }
-        if (scope === GALLERY_MODE_DEFAULTS[key]) {
+        if (scope === fallback) {
           delete galleryFilterMode[key]
         } else {
           galleryFilterMode[key] = scope
@@ -206,8 +214,20 @@ export function createScopeActions(set: SettingsSet, persist: () => void): Parti
       })
       persist()
     },
-    setGalleryFilterShareModels: (galleryFilterShareModels) => {
-      set({ galleryFilterShareModels })
+    setGalleryAutoTypes: (key, value) => {
+      const name = key.trim().slice(0, 80)
+      if (!name) {
+        return
+      }
+      set((state) => {
+        const galleryAutoTypes = { ...state.galleryAutoTypes }
+        if (value) {
+          delete galleryAutoTypes[name]
+        } else {
+          galleryAutoTypes[name] = false
+        }
+        return { galleryAutoTypes }
+      })
       persist()
     },
     setGalleryPinSelected: (key, value) => {

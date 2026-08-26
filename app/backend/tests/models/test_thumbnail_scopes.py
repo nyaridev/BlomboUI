@@ -266,9 +266,15 @@ class ScopeTests(unittest.TestCase):
         key = thumbnail_scopes.context_key([ruby["id"]])
         model_thumbs.save_thumb("loras", "char.safetensors", _png((20, 80, 20)), key, {"tags": ["ruby"]})
         model_thumbs.save_thumb("loras", "char.safetensors", _png((20, 20, 80)), "global", {"tags": []})
+        model_thumbs.save_thumb("vae", "ae.safetensors", _png((80, 20, 20)), "global", {"tags": []})
+        model_thumbs.save_thumb("text_encoders", "te.safetensors", _png((20, 80, 80)), key, {"tags": ["ruby"]})
+        model_thumbs.save_thumb("diffusion_models", "unet.safetensors", _png((80, 80, 20)), "global", {"tags": []})
         rows = model_thumbs.list_saved()
         self.assertTrue(any(item["context"] == key and item["kind"] == "loras" for item in rows))
         self.assertTrue(any(item["context"] == "global" and item["scopes"] == [] for item in rows))
+        self.assertTrue(any(item["kind"] == "vae" and item["path"] == "ae.safetensors" for item in rows))
+        self.assertTrue(any(item["kind"] == "text_encoders" and item["path"] == "te.safetensors" for item in rows))
+        self.assertTrue(any(item["kind"] == "diffusion_models" for item in rows))
 
     def test_gif_and_mp4_thumbnails(self) -> None:
         from features.settings import service as settings

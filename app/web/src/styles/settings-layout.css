@@ -77,12 +77,11 @@
   border-bottom: 0;
 }
 
-#settings-placeholders {
+.settings-card {
   scroll-margin-top: 1.25rem;
-  border-radius: 0.5rem;
 }
 
-@keyframes settings-placeholder-glow {
+@keyframes settings-glow {
   0% {
     box-shadow:
       0 0 0 2px color-mix(in srgb, var(--color-accent) 85%, transparent),
@@ -95,6 +94,6 @@
   }
 }
 
-#settings-placeholders.settings-glow {
-  animation: settings-placeholder-glow 0.4s ease-out;
+.settings-glow {
+  animation: settings-glow 1s ease-out;
 }

@@ -1,5 +1,6 @@
 import { listCivitaiModels, type CivitaiModel } from '@/lib/api.ts'
 import type { CivitaiBrowse, CivitaiTriState } from '@/lib/civitai/browse.ts'
+import { markNamesFromModels } from '@/lib/civitai/marks.ts'
 import { dropCivitaiPage, loadCivitaiPage } from '@/lib/civitai/pageCache.ts'
 import { openCivitaiModelTab } from '@/lib/civitai/openTab.ts'
 import { pickVersionId } from '@/lib/civitai/version.ts'
@@ -13,7 +14,7 @@ import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useDownloadsStore } from '@/stores/downloadsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { Link } from 'react-router-dom'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 const CIVITAI_RETRY_DELAY = 2000
 
@@ -21,6 +22,19 @@ function triStateValue(value: CivitaiTriState): boolean | undefined {
   return value === 'off' ? undefined : value === 'include'
 }
 
+function mergeModels(current: CivitaiModel[], incoming: CivitaiModel[]) {
+  if (!incoming.length) {
+    return current
+  }
+  const seen = new Set(current.map((item) => item.id))
+  const extra = incoming.filter((item) => !seen.has(item.id))
+  return extra.length ? [...current, ...extra] : current
+}
+
+
+function rememberMarks(items: CivitaiModel[]) {
+  useSettingsStore.getState().rememberCivitaiMarks(markNamesFromModels(items))
+}
 
 export function CivitaiBrowser() {
   const loaded = useSettingsStore((state) => state.loaded)
@@ -58,13 +72,11 @@ export function CivitaiBrowser() {
   )
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [filterDraft, setFilterDraft] = useState<CivitaiFilterDraft>(() => filterDraftOf(browse))
-  const [page, setPage] = useState(1)
-  const [cursor, setCursor] = useState<string | undefined>()
-  const [cursorHistory, setCursorHistory] = useState<string[]>([])
-  const [nextCursor, setNextCursor] = useState<string | undefined>()
   const [items, setItems] = useState<CivitaiModel[]>([])
   const [hasNext, setHasNext] = useState(false)
   const [busy, setBusy] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [loadMoreError, setLoadMoreError] = useState('')
   const [error, setError] = useState('')
   const [retryCount, setRetryCount] = useState(0)
   const [autoRetrying, setAutoRetrying] = useState(false)
@@ -73,25 +85,27 @@ export function CivitaiBrowser() {
   const [downloadRequest, setDownloadRequest] = useState<{ modelId: number; versionId?: number } | null>(null)
   const [downloadingIds, setDownloadingIds] = useState<Set<number>>(() => new Set())
   const [sessionDownloadedIds, setSessionDownloadedIds] = useState<Set<number>>(() => new Set())
+  const [scrollNonce, setScrollNonce] = useState(0)
   const request = useRef(0)
   const retryTimer = useRef<number | null>(null)
   const retryAbort = useRef<AbortController | null>(null)
+  const loadMoreAbort = useRef<AbortController | null>(null)
+  const loadingMoreRef = useRef(false)
+  const nextCursorRef = useRef<string | undefined>(undefined)
   const filtersRef = useRef<HTMLDivElement>(null)
   const baseModelOptions = filterTypeSections(
     MODEL_TYPE_SECTIONS,
     (item) => !hiddenModelTypes.includes(item) || browse.baseModels.includes(item),
   )
 
-  function resetPage() {
-    setPage(1)
-    setCursor(undefined)
-    setCursorHistory([])
-    setNextCursor(undefined)
+  function resetSearch() {
+    setHasNext(false)
+    nextCursorRef.current = undefined
   }
 
   function updateBrowse(patch: Partial<CivitaiBrowse>) {
     setCivitaiBrowse(patch)
-    resetPage()
+    resetSearch()
   }
 
   function clearRetryTimer() {
@@ -157,10 +171,15 @@ export function CivitaiBrowser() {
     setAutoRetrying(false)
     setRetryAttempt(0)
     setRetryMessage('')
+    setLoadingMore(false)
+    setLoadMoreError('')
+    loadingMoreRef.current = false
+    loadMoreAbort.current?.abort()
+    loadMoreAbort.current = null
     if (!apiKey.trim()) {
       setItems([])
       setHasNext(false)
-      setNextCursor(undefined)
+      nextCursorRef.current = undefined
       setError('')
       setBusy(false)
       return
@@ -169,6 +188,12 @@ export function CivitaiBrowser() {
     const abort = new AbortController()
     retryAbort.current = abort
     let stopped = false
+    setItems([])
+    setHasNext(false)
+    nextCursorRef.current = undefined
+    setScrollNonce((value) => value + 1)
+    setBusy(true)
+    setError('')
 
     function run(attempt: number) {
       if (stopped || id !== request.current) {
@@ -182,8 +207,7 @@ export function CivitaiBrowser() {
         baseModels: browse.baseModels,
         sort: browse.sort,
         period: browse.period,
-        page,
-        cursor,
+        limit: browse.limit,
         earlyAccess: triStateValue(browse.earlyAccess),
         supportsGeneration: triStateValue(browse.supportsGeneration),
         fromPlatform: triStateValue(browse.fromPlatform),
@@ -195,9 +219,11 @@ export function CivitaiBrowser() {
           if (stopped || id !== request.current) {
             return
           }
+          const cursor = result.nextCursor || undefined
           setItems(result.items)
-          setHasNext(result.hasNext)
-          setNextCursor(result.nextCursor || undefined)
+          rememberMarks(result.items)
+          setHasNext(Boolean(cursor))
+          nextCursorRef.current = cursor
           setError('')
           setAutoRetrying(false)
           setRetryAttempt(0)
@@ -218,6 +244,7 @@ export function CivitaiBrowser() {
           }
           setItems([])
           setHasNext(false)
+          nextCursorRef.current = undefined
           setError(message)
           setAutoRetrying(false)
           setRetryAttempt(0)
@@ -231,8 +258,6 @@ export function CivitaiBrowser() {
 
     const timer = window.setTimeout(() => {
       if (!stopped && id === request.current) {
-        setBusy(true)
-        setError('')
         run(0)
       }
     }, 250)
@@ -252,20 +277,75 @@ export function CivitaiBrowser() {
     apiKey,
     autoRetry,
     autoRetryCount,
-    browse.baseModels,
+    browse.baseModels.join('\n'),
     browse.earlyAccess,
     browse.fromPlatform,
+    browse.limit,
     browse.period,
     browse.query,
     browse.sort,
     browse.supportsGeneration,
     browse.tag,
-    browse.types,
-    cursor,
+    browse.types.join('\n'),
     loaded,
-    page,
     retryCount,
   ])
+
+  const loadMore = useCallback(() => {
+    const cursor = nextCursorRef.current
+    if (!cursor || loadingMoreRef.current || !apiKey.trim()) {
+      return
+    }
+    const id = request.current
+    loadingMoreRef.current = true
+    setLoadingMore(true)
+    setLoadMoreError('')
+    const abort = new AbortController()
+    loadMoreAbort.current?.abort()
+    loadMoreAbort.current = abort
+    const store = useSettingsStore.getState().civitaiBrowse
+    void listCivitaiModels({
+      query: store.query,
+      types: store.types,
+      baseModels: store.baseModels,
+      sort: store.sort,
+      period: store.period,
+      limit: store.limit,
+      cursor,
+      earlyAccess: triStateValue(store.earlyAccess),
+      supportsGeneration: triStateValue(store.supportsGeneration),
+      fromPlatform: triStateValue(store.fromPlatform),
+      nsfw: true,
+      tag: store.tag,
+      signal: abort.signal,
+    })
+      .then((result) => {
+        if (id !== request.current) {
+          return
+        }
+        const next = result.nextCursor || undefined
+        setItems((current) => mergeModels(current, result.items))
+        rememberMarks(result.items)
+        setHasNext(Boolean(next))
+        nextCursorRef.current = next
+        setLoadMoreError('')
+      })
+      .catch((err) => {
+        if (id !== request.current || abort.signal.aborted) {
+          return
+        }
+        setLoadMoreError(err instanceof Error ? err.message : 'Could not load more CivitAI models')
+      })
+      .finally(() => {
+        if (loadMoreAbort.current === abort) {
+          loadMoreAbort.current = null
+        }
+        if (id === request.current) {
+          loadingMoreRef.current = false
+          setLoadingMore(false)
+        }
+      })
+  }, [apiKey])
 
   useEffect(() => {
     if (!filtersOpen) {
@@ -356,7 +436,7 @@ export function CivitaiBrowser() {
           onToggle={() => setFiltersOpen((open) => !open)}
           onApply={() => {
             setCivitaiBrowse(filterDraft)
-            resetPage()
+            resetSearch()
           }}
           onNsfw={() => setCivitaiBrowse({ nsfw: !browse.nsfw })}
         />
@@ -369,6 +449,7 @@ export function CivitaiBrowser() {
           <CivitaiModelView
             modelId={tab.id}
             preferredBases={browse.baseModels}
+            active={tab.id === activeId}
             onDownload={(versionId) => setDownloadRequest({ modelId: tab.id, versionId })}
           />
         </div>
@@ -378,8 +459,11 @@ export function CivitaiBrowser() {
           error={error}
           busy={busy}
           items={items}
-          page={page}
           hasNext={hasNext}
+          loadingMore={loadingMore}
+          loadMoreError={loadMoreError}
+          placeholderCount={browse.limit}
+          scrollNonce={scrollNonce}
           nsfw={browse.nsfw}
           localModels={localModels}
           sessionDownloadedIds={sessionDownloadedIds}
@@ -391,22 +475,10 @@ export function CivitaiBrowser() {
             setBusy(true)
             setRetryCount((value) => value + 1)
           }}
+          onLoadMore={loadMore}
           onOpen={(item) => openTab(item, true)}
           onOpenBackground={(item) => openTab(item, false)}
           onDownload={openDownload}
-          onPrevious={() => {
-            if (cursorHistory.length) {
-              const previous = cursorHistory[cursorHistory.length - 1] || undefined
-              setCursorHistory((current) => current.slice(0, -1))
-              setCursor(previous)
-            }
-            setPage((current) => Math.max(1, current - 1))
-          }}
-          onNext={() => {
-            setCursorHistory((current) => [...current, cursor || ''])
-            setCursor(nextCursor)
-            setPage((current) => current + 1)
-          }}
         />
       ) : null}
       {downloadRequest ? (

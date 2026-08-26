@@ -143,7 +143,7 @@ export function matchesTypes(item: ModelEntry, types: string[], kind?: keyof Mod
   }
   const kindFilters = types.filter(isOtherKind)
   const archFilters = types.filter((type) => !isOtherKind(type))
-  const kindOk = !kindFilters.length || (kind != null && isOtherKind(kind) && kindFilters.includes(kind))
+  const kindOk = !kindFilters.length || kind == null || !isOtherKind(kind) || kindFilters.includes(kind)
   const archOk = !archFilters.length || (item.types || []).some((type) => archFilters.includes(type))
   return kindOk && archOk
 }

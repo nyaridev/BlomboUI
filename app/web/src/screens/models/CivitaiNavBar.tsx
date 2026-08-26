@@ -1,5 +1,9 @@
 import { AppIcon } from '@/components/chrome/AppIcon.tsx'
+import { setCivitaiTabFlashHandler } from '@/lib/civitai/openTab.ts'
 import type { CivitaiTab } from '@/lib/civitai/version.ts'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+
+const GLOW_MS = 1000
 
 function tabClass(active: boolean) {
   return [
@@ -23,6 +27,40 @@ export function CivitaiNavBar({
   onClose: (id: number) => void
   onClear: () => void
 }) {
+  const flashRef = useRef<HTMLDivElement>(null)
+  const [flash, setFlash] = useState<{ id: number; n: number } | null>(null)
+  const nRef = useRef(0)
+
+  useEffect(() => {
+    setCivitaiTabFlashHandler((id) => {
+      nRef.current += 1
+      setFlash({ id, n: nRef.current })
+    })
+    return () => setCivitaiTabFlashHandler(null)
+  }, [])
+
+  useEffect(() => {
+    if (!flash) {
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setFlash((current) => (current?.n === flash.n ? null : current))
+    }, GLOW_MS)
+    return () => window.clearTimeout(timer)
+  }, [flash])
+
+  useLayoutEffect(() => {
+    const el = flashRef.current
+    if (!el || !flash) {
+      return
+    }
+    el.classList.remove('tab-glow')
+    void el.offsetWidth
+    el.classList.add('tab-glow')
+    el.scrollIntoView({ inline: 'nearest', block: 'nearest' })
+    return () => el.classList.remove('tab-glow')
+  }, [flash])
+
   return (
     <div className="flex min-w-0 shrink-0 items-stretch gap-2">
       <button
@@ -37,6 +75,7 @@ export function CivitaiNavBar({
         {tabs.map((tab) => (
           <div
             key={tab.id}
+            ref={flash?.id === tab.id ? flashRef : undefined}
             className={tabClass(activeId === tab.id)}
             onMouseDown={(event) => {
               if (event.button === 1) {

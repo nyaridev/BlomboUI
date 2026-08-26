@@ -78,6 +78,26 @@ def encode_animated(
     return _pillow_encode(data, dest_stem, dest_ext, megapixels, quality)
 
 
+def first_frame_path(path: Path) -> Any | None:
+    ffmpeg = ffmpeg_bin()
+    if not ffmpeg:
+        return None
+    try:
+        from PIL import Image
+    except Exception:
+        return None
+    with tempfile.TemporaryDirectory() as folder:
+        out = Path(folder) / "frame.png"
+        if not _run([ffmpeg, "-y", "-i", str(path), "-frames:v", "1", str(out)]) or not out.is_file():
+            return None
+        try:
+            image = Image.open(out)
+            image.load()
+            return image.convert("RGBA")
+        except Exception:
+            return None
+
+
 def first_frame(data: bytes, src_ext: str) -> Any | None:
     if is_video_ext(src_ext):
         return _ffmpeg_frame(data)

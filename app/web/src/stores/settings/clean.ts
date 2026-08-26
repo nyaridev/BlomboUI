@@ -2,18 +2,24 @@ import { OTHER_KIND_IDS } from '@/components/gallery/galleryUtils.ts'
 import { MODEL_TYPES } from '@/lib/modelTypes.ts'
 import { generateTabOrderList, type GenerateTab } from '@/screens/generate/tabs.ts'
 import {
+  GALLERY_BROWSE_DIR_DEFAULT,
+  GALLERY_BROWSE_KINDS,
+  GALLERY_BROWSE_SORT_DEFAULT,
   GALLERY_FILTER_KEYS,
   GALLERY_LOCAL_KEYS,
-  GALLERY_MODE_DEFAULTS,
   GALLERY_MODE_KEY_SET,
+  GALLERY_SORT_DIR_DEFAULT,
+  GALLERY_SORT_KEY_DEFAULT,
+  galleryModeDefault,
   IMAGE_FORMATS,
+  lookupGroupFor,
   SETTINGS_DEFAULTS,
   THEME_IDS,
   type AutocompleteListRule,
   type AnimatedThumbFormat,
+  type GalleryBrowseSort,
   type GalleryFilterScope,
   type GalleryLocalScope,
-  type GalleryModeKey,
   type GallerySortDir,
   type GallerySortKey,
   type ImageFormat,
@@ -28,6 +34,7 @@ import {
 } from '@/app/appTabs.ts'
 import { cleanSetResolutions } from '@/screens/generate/resolutions.ts'
 import { cleanCivitaiBrowse } from '@/lib/civitai/browse.ts'
+import { cleanCivitaiMarks } from '@/lib/civitai/marks.ts'
 import { cleanCivitaiTabId, cleanCivitaiTabs } from '@/lib/civitai/version.ts'
 import { cleanCivitaiDownload } from '@/lib/civitai/download.ts'
 import type { FolderDir, UserSettings } from '@/lib/api.ts'
@@ -130,6 +137,15 @@ export function cleanDownloadQueueParallel(raw: unknown) {
   return Math.max(1, Math.min(20, Math.round(n)))
 }
 
+export function cleanHistoryLimit(raw: unknown, fallback: number) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return fallback
+  }
+  const value = Math.trunc(n)
+  return value < -1 ? fallback : value
+}
+
 export function cleanLargeJpegMaxKb(raw: unknown) {
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(n)) {
@@ -225,9 +241,9 @@ export function cleanLookupKinds(raw: unknown): string[] {
   }
   const out: string[] = []
   for (const item of raw) {
-    const name = String(item)
-    if ((name === 'checkpoints' || name === 'loras' || name === 'wildcards') && !out.includes(name)) {
-      out.push(name)
+    const group = lookupGroupFor(String(item))
+    if (group && !out.includes(group)) {
+      out.push(group)
     }
   }
   return out
@@ -303,7 +319,7 @@ export function cleanModeMap(raw: unknown): Record<string, GalleryFilterScope> {
     if (!GALLERY_MODE_KEY_SET.has(key) || (value !== 'global' && value !== 'local')) {
       continue
     }
-    if (value !== GALLERY_MODE_DEFAULTS[key as GalleryModeKey]) {
+    if (value !== galleryModeDefault(key)) {
       out[key] = value
     }
   }
@@ -324,7 +340,7 @@ export function cleanGalleryPinSelected(raw: unknown): Record<string, boolean> {
 }
 
 export function emptyLocalScope(pack: GalleryLocalScope) {
-  return pack.ids.length === 0 && pack.optionalIds.length === 0 && !pack.auto && pack.mode === 'likely' && !pack.fallback
+  return pack.ids.length === 0 && pack.optionalIds.length === 0 && !pack.auto && pack.mode === 'likely' && pack.fallback
 }
 
 export function cleanLocalScope(raw: unknown): GalleryLocalScope | null {
@@ -432,17 +448,17 @@ export function cleanName(raw: unknown, fallback: string) {
 }
 
 export function cleanSortKey(raw: unknown): GallerySortKey {
-  return SORT_KEYS.has(raw as string) ? (raw as GallerySortKey) : 'name'
+  return SORT_KEYS.has(raw as string) ? (raw as GallerySortKey) : GALLERY_SORT_KEY_DEFAULT
 }
 
 export function cleanSortDir(raw: unknown): GallerySortDir {
-  return raw === 'desc' ? 'desc' : 'asc'
+  return raw === 'asc' ? 'asc' : GALLERY_SORT_DIR_DEFAULT
 }
 
 export function cleanSortKeyMap(raw: unknown): Record<string, GallerySortKey> {
   if (typeof raw === 'string') {
     const value = cleanSortKey(raw)
-    return value === 'name' ? {} : { checkpoints: value, loras: value, wildcards: value }
+    return value === GALLERY_SORT_KEY_DEFAULT ? {} : { checkpoints: value, loras: value, wildcards: value }
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
@@ -451,7 +467,7 @@ export function cleanSortKeyMap(raw: unknown): Record<string, GallerySortKey> {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const name = key.trim().slice(0, 80)
     const sort = cleanSortKey(value)
-    if (name && sort !== 'name') {
+    if (name && sort !== GALLERY_SORT_KEY_DEFAULT) {
       out[name] = sort
     }
   }
@@ -461,7 +477,7 @@ export function cleanSortKeyMap(raw: unknown): Record<string, GallerySortKey> {
 export function cleanSortDirMap(raw: unknown): Record<string, GallerySortDir> {
   if (typeof raw === 'string') {
     const value = cleanSortDir(raw)
-    return value === 'asc' ? {} : { checkpoints: value, loras: value, wildcards: value }
+    return value === GALLERY_SORT_DIR_DEFAULT ? {} : { checkpoints: value, loras: value, wildcards: value }
   }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
@@ -470,7 +486,43 @@ export function cleanSortDirMap(raw: unknown): Record<string, GallerySortDir> {
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const name = key.trim().slice(0, 80)
     const dir = cleanSortDir(value)
-    if (name && dir !== 'asc') {
+    if (name && dir !== GALLERY_SORT_DIR_DEFAULT) {
+      out[name] = dir
+    }
+  }
+  return out
+}
+
+const BROWSE_KEYS = new Set<string>([...GALLERY_BROWSE_KINDS, 'global'])
+
+export function cleanBrowseSort(raw: unknown): GalleryBrowseSort {
+  return raw === 'works' ? 'works' : GALLERY_BROWSE_SORT_DEFAULT
+}
+
+export function cleanBrowseSortMap(raw: unknown): Record<string, GalleryBrowseSort> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const out: Record<string, GalleryBrowseSort> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim()
+    const sort = cleanBrowseSort(value)
+    if (BROWSE_KEYS.has(name) && sort !== GALLERY_BROWSE_SORT_DEFAULT) {
+      out[name] = sort
+    }
+  }
+  return out
+}
+
+export function cleanBrowseDirMap(raw: unknown): Record<string, GallerySortDir> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const out: Record<string, GallerySortDir> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim()
+    const dir = cleanSortDir(value)
+    if (BROWSE_KEYS.has(name) && dir !== GALLERY_BROWSE_DIR_DEFAULT) {
       out[name] = dir
     }
   }
@@ -636,6 +688,9 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       typeof patch.downloadThumbQuality === 'number'
         ? cleanImageQuality(patch.downloadThumbQuality, SETTINGS_DEFAULTS.downloadThumbQuality)
         : SETTINGS_DEFAULTS.downloadThumbQuality,
+    downloadHistoryLimit: cleanHistoryLimit(patch.downloadHistoryLimit, SETTINGS_DEFAULTS.downloadHistoryLimit),
+    browseHistoryLimit: cleanHistoryLimit(patch.browseHistoryLimit, SETTINGS_DEFAULTS.browseHistoryLimit),
+    civitaiMarks: 'civitaiMarks' in patch ? cleanCivitaiMarks(patch.civitaiMarks) : SETTINGS_DEFAULTS.civitaiMarks,
     gallerySortKey: patch.gallerySortKey ? cleanSortKeyMap(patch.gallerySortKey) : SETTINGS_DEFAULTS.gallerySortKey,
     gallerySortDir: patch.gallerySortDir ? cleanSortDirMap(patch.gallerySortDir) : SETTINGS_DEFAULTS.gallerySortDir,
     galleryTileScale:
@@ -772,13 +827,22 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       patch.galleryFilterMode && typeof patch.galleryFilterMode === 'object'
         ? cleanModeMap(patch.galleryFilterMode)
         : SETTINGS_DEFAULTS.galleryFilterMode,
-    galleryFilterShareModels:
-      typeof patch.galleryFilterShareModels === 'boolean'
-        ? patch.galleryFilterShareModels
-        : SETTINGS_DEFAULTS.galleryFilterShareModels,
+    galleryAutoTypes:
+      patch.galleryAutoTypes && typeof patch.galleryAutoTypes === 'object'
+        ? cleanGalleryPinSelected(patch.galleryAutoTypes)
+        : SETTINGS_DEFAULTS.galleryAutoTypes,
     galleryPinSelected:
       patch.galleryPinSelected && typeof patch.galleryPinSelected === 'object'
         ? cleanGalleryPinSelected(patch.galleryPinSelected)
         : SETTINGS_DEFAULTS.galleryPinSelected,
+    galleryBrowseSort:
+      patch.galleryBrowseSort && typeof patch.galleryBrowseSort === 'object'
+        ? cleanBrowseSortMap(patch.galleryBrowseSort)
+        : SETTINGS_DEFAULTS.galleryBrowseSort,
+    galleryBrowseDir:
+      patch.galleryBrowseDir && typeof patch.galleryBrowseDir === 'object'
+        ? cleanBrowseDirMap(patch.galleryBrowseDir)
+        : SETTINGS_DEFAULTS.galleryBrowseDir,
+    galleryBrowseShare: typeof patch.galleryBrowseShare === 'boolean' ? patch.galleryBrowseShare : SETTINGS_DEFAULTS.galleryBrowseShare,
   }
 }

@@ -42,6 +42,12 @@ def cache_db_path() -> Path:
     return folder / "cache.sqlite"
 
 
+def cache_gallery_db_path() -> Path:
+    folder = RUNTIME / "data" / "sqlite"
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder / "cache_gallery.sqlite"
+
+
 def launcher_env() -> dict:
     path = RUNTIME / "data" / "launcher-env.json"
     if not path.is_file():

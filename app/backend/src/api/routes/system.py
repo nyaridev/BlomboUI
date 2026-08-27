@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
@@ -48,7 +50,8 @@ def delete_issue(ident: int) -> dict:
 
 @api.post("/pnginfo")
 async def post_pnginfo(request: Request) -> dict:
-    info = pnginfo.read(await request.body(), request.headers.get("x-filename") or "")
+    data = await request.body()
+    info = await asyncio.to_thread(pnginfo.read, data, request.headers.get("x-filename") or "")
     raw = info.get("raw")
     meta = info.get("metadata")
     return {

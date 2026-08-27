@@ -4,22 +4,43 @@ import { galleryItemImageUrl, galleryItemThumbUrl, type GalleryItem } from '@/li
 import { middleOpen } from '@/lib/gallery/openImage.ts'
 import { useVisible } from '@/lib/gallery/visible.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import { useCallback, useEffect, useRef, useState, type MouseEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 
-function tileAspect(item: GalleryItem): '2/3' | '1/1' | '3/2' {
+const GAP_REM = 0.5
+const MIN_COL_REM = 13
+
+function aspectOf(item: GalleryItem): number {
   const width = item.width
   const height = item.height
   if (!width || !height || item.media_kind === 'video') {
-    return '2/3'
+    return 2 / 3
   }
-  const ratio = width / height
-  if (ratio >= 0.9 && ratio <= 1.1) {
-    return '1/1'
+  return width / height
+}
+
+function aspectCss(item: GalleryItem) {
+  const width = item.width
+  const height = item.height
+  if (!width || !height || item.media_kind === 'video') {
+    return '2 / 3'
   }
-  if (ratio > 1) {
-    return '3/2'
-  }
-  return '2/3'
+  return `${width} / ${height}`
+}
+
+function packColumns(items: GalleryItem[], cols: number) {
+  const columns: { item: GalleryItem; index: number }[][] = Array.from({ length: cols }, () => [])
+  const heights = Array(cols).fill(0)
+  items.forEach((item, index) => {
+    let slot = 0
+    for (let c = 1; c < cols; c++) {
+      if (heights[c] < heights[slot]) {
+        slot = c
+      }
+    }
+    columns[slot].push({ item, index })
+    heights[slot] += 1 / aspectOf(item) + GAP_REM / MIN_COL_REM
+  })
+  return columns
 }
 
 function Thumb({
@@ -33,7 +54,6 @@ function Thumb({
   const full = galleryItemImageUrl(item.id)
   const videoFormat = useSettingsStore((s) => s.galleryItemThumbVideoFormat)
   const asVideo = item.media_kind === 'video' && videoFormat === 'video'
-  const aspect = tileAspect(item)
 
   function onMiddle(event: MouseEvent<HTMLButtonElement>) {
     middleOpen(event, full)
@@ -43,10 +63,8 @@ function Thumb({
     <button
       ref={ref}
       type="button"
-      className={[
-        'h-72 shrink-0 overflow-hidden rounded-md border border-line bg-panel [content-visibility:auto]',
-        aspect === '1/1' ? 'aspect-square' : aspect === '3/2' ? 'aspect-[3/2]' : 'aspect-[2/3]',
-      ].join(' ')}
+      className="w-full overflow-hidden rounded-md border border-line bg-panel [content-visibility:auto]"
+      style={{ aspectRatio: aspectCss(item) }}
       onClick={onSelect}
       onMouseDown={onMiddle}
     >
@@ -75,11 +93,30 @@ export function GalleryResults({
   onMore: () => void
 }) {
   const [index, setIndex] = useState<number | null>(null)
+  const [cols, setCols] = useState(1)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null)
   const setSentinelRef = useCallback((node: HTMLDivElement | null) => setSentinel(node), [])
   const current = index != null ? items[index] : null
   const many = items.length > 1
+  const columns = useMemo(() => packColumns(items, cols), [items, cols])
+
+  useEffect(() => {
+    const root = scrollerRef.current
+    if (!root) {
+      return
+    }
+    function measure() {
+      const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
+      const gap = GAP_REM * rem
+      const minCol = MIN_COL_REM * rem
+      setCols(Math.max(1, Math.floor((root.clientWidth + gap) / (minCol + gap))))
+    }
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(root)
+    return () => observer.disconnect()
+  }, [])
 
   useEffect(() => {
     const root = scrollerRef.current
@@ -102,11 +139,17 @@ export function GalleryResults({
     <div ref={scrollerRef} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
       {error ? <p className="text-sm text-accent">{error}</p> : null}
       {items.length === 0 && !error ? <p className="text-sm text-muted">No matching generations.</p> : null}
-      <div className="flex flex-wrap gap-2">
-        {items.map((item, i) => (
-          <Thumb key={item.id} item={item} onSelect={() => setIndex(i)} />
-        ))}
-      </div>
+      {items.length ? (
+        <div className="flex gap-2">
+          {columns.map((column, c) => (
+            <div key={c} className="flex min-w-0 flex-1 flex-col gap-2">
+              {column.map(({ item, index: itemIndex }) => (
+                <Thumb key={item.id} item={item} onSelect={() => setIndex(itemIndex)} />
+              ))}
+            </div>
+          ))}
+        </div>
+      ) : null}
       {hasNext ? (
         <div ref={setSentinelRef} className="flex h-12 w-full items-center justify-center" aria-hidden={!loadingMore}>
           {loadingMore ? (

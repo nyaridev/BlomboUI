@@ -34,7 +34,7 @@ class CreateJobLogTests(unittest.TestCase):
     def test_create_job_logs_when_comfy_down(self) -> None:
         with patch.object(jobs.comfy, "reachable", return_value=False):
             with self.assertRaises(comfy.ComfyError):
-                jobs.create_job({"prompt": "x"})
+                jobs._prepare_job({"prompt": "x"})
         rows = error_log_repo.list_rows()
         self.assertTrue(rows)
         self.assertEqual(str(rows[0]["kind"]), "generate")

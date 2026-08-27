@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 from typing import Any
 
 from features.gallery.scripts import cache as gallery_cache
@@ -123,6 +124,7 @@ def search(
     media: str = "all",
     cursor: str = "",
     limit: int = 0,
+    order_random: bool = False,
 ) -> dict[str, Any]:
     cap = _page_size(limit)
     where, params = _base_where(_hide(), media)
@@ -166,6 +168,12 @@ def search(
 
     if extra:
         where = f"{where} AND {' AND '.join(extra)}"
+    if order_random:
+        rows = gallery_repo.query(
+            f"SELECT * FROM gallery_items WHERE {where} ORDER BY RANDOM() LIMIT ?",
+            (*params, cap),
+        )
+        return {"items": [_public(row) for row in rows], "cursor": ""}
     clause, cursor_params = _cursor_clause(cursor)
     if clause:
         where = f"{where} AND {clause}"
@@ -216,6 +224,7 @@ def previews_for_library(library: dict[str, Any]) -> list[dict[str, str]]:
         scopes=list(library.get("scopes") or []),
         models=list(library.get("models") or []),
         limit=BROWSE_PREVIEW,
+        order_random=True,
     )
     return [{"id": item["id"], "media_kind": str(item.get("media_kind") or "image")} for item in result["items"]]
 
@@ -308,12 +317,16 @@ def _join_previews(table: str, names: list[str], hide: bool, column: str = "name
 
 
 def _take_previews(rows: list[Any]) -> dict[str, list[dict[str, str]]]:
-    out: dict[str, list[dict[str, str]]] = {}
+    grouped: dict[str, list[dict[str, str]]] = {}
+    names: dict[str, str] = {}
     for row in rows:
         name = str(row["name"])
-        bucket = out.setdefault(name.casefold(), [])
-        if len(bucket) >= BROWSE_PREVIEW:
-            continue
-        bucket.append({"id": str(row["id"]), "media_kind": str(row["media_kind"] or "image")})
-        out[name] = bucket
+        key = name.casefold()
+        names[key] = name
+        grouped.setdefault(key, []).append({"id": str(row["id"]), "media_kind": str(row["media_kind"] or "image")})
+    out: dict[str, list[dict[str, str]]] = {}
+    for key, items in grouped.items():
+        picked = items if len(items) <= BROWSE_PREVIEW else random.sample(items, BROWSE_PREVIEW)
+        out[key] = picked
+        out[names[key]] = picked
     return out

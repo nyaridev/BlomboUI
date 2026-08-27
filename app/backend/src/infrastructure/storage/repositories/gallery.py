@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from infrastructure.storage import cache
+from infrastructure.storage import cache_gallery as cache
 
 
 def transaction(callback):

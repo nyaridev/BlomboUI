@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
-from infrastructure.storage import cache as cache_db
+from infrastructure.storage import cache_gallery as gallery_db
 from infrastructure.storage import user as user_db
 from features.gallery.scripts import cache as gallery_cache
 from features.gallery.scripts import libraries, search
@@ -64,8 +64,8 @@ class GallerySearchTests(unittest.TestCase):
         self.root = self.tmp / "gallery"
         self.root.mkdir()
         self.patches = [
-            patch.object(cache_db, "_CONN", None),
-            patch.object(cache_db, "db_path", return_value=self.tmp / "cache.sqlite"),
+            patch.object(gallery_db, "_CONN", None),
+            patch.object(gallery_db, "db_path", return_value=self.tmp / "cache_gallery.sqlite"),
             patch.object(user_db, "_CONN", None),
             patch.object(user_db, "db_path", return_value=self.tmp / "user.sqlite"),
             patch.object(gallery_cache.dirs, "gallery_roots", return_value=[self.root]),
@@ -73,13 +73,13 @@ class GallerySearchTests(unittest.TestCase):
         ]
         for item in self.patches:
             item.start()
-        cache_db.connect()
+        gallery_db.connect()
         user_db.connect()
 
     def tearDown(self) -> None:
-        if cache_db._CONN is not None:
-            cache_db._CONN.close()
-            cache_db._CONN = None
+        if gallery_db._CONN is not None:
+            gallery_db._CONN.close()
+            gallery_db._CONN = None
         if user_db._CONN is not None:
             user_db._CONN.close()
             user_db._CONN = None
@@ -228,6 +228,29 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(data["checkpoints"][0]["name"], "alpha.safetensors")
         self.assertIsInstance(data["loras"], list)
         self.assertIsInstance(data["wildcards"], list)
+
+    def test_cover_previews_sample_not_newest(self) -> None:
+        ids: list[str] = []
+        for i in range(8):
+            path = _write(
+                self.root / f"{i}.png",
+                {"prompt": "cat"},
+                f"2026-01-{i + 1:02d}T00:00:00.000Z",
+            )
+            gallery_cache.ingest(path)
+            ids.append(gallery_cache.item_id(path))
+        newest = list(reversed(ids[-6:]))
+
+        def oldest(items: list, k: int) -> list:
+            return items[-k:]
+
+        with patch("features.gallery.scripts.search.random.sample", side_effect=oldest):
+            data = search.home()
+        cat = next(item for item in data["tags"] if item["tag"] == "cat")
+        preview_ids = [item["id"] for item in cat["previews"]]
+        self.assertEqual(len(preview_ids), 6)
+        self.assertNotEqual(preview_ids, newest)
+        self.assertEqual(preview_ids, list(reversed(ids[:6])))
 
 
 if __name__ == "__main__":

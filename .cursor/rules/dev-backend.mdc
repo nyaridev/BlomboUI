@@ -1,0 +1,136 @@
+---
+description: Backend structure, features, storage, and async/thread rules for BlomboUI.
+alwaysApply: true
+---
+
+# Backend
+
+Thin FastAPI GUI over ComfyUI. Package root is `app/backend/src/`. Uvicorn runs `main:app` from `app/backend` (setuptools `package-dir` maps `src/`). No extra frameworks, no plugin loader, no `JobServiceFactory`.
+
+## Tree
+
+```text
+app/backend/src/
+  main.py                 FastAPI app + lifespan
+  config.py               ROOT/USER/RUNTIME paths, DB paths, comfy_base()
+  api/                    routes, errors, FileResponse helpers
+  features/<name>/        service.py façade + scripts/ + schemas.py
+  infrastructure/comfy/   sync Comfy HTTP + websocket client
+  infrastructure/storage/ user.sqlite + cache.sqlite + cache_gallery.sqlite + repositories/
+  shared/                 dirs, pnginfo, extra_model_paths
+  bootstrap/              install-time launcher-env + YAML (not request path)
+```
+
+Routes live under `/api`. Register a new router in [`api/router.py`](app/backend/src/api/router.py).
+
+## Request flow
+
+```text
+api/routes/<surface>.py  →  features.<name>.service  →  scripts/  →  repositories or comfy
+```
+
+- Routes stay thin: validate, call service, map errors (`ApiError`, `ComfyError`, feature errors).
+- `service.py` is a façade (re-exports). Logic lives in `scripts/`.
+- Table access only through `infrastructure/storage/repositories/`. Never `sqlite3.connect` from a feature.
+- I/O at the edges (Comfy, disk, HTTP). Keep the middle boring.
+
+## Features
+
+| Feature | Owns |
+|---|---|
+| **generate** | Jobs, templates, grids, workflow fill |
+| **models** | List/refresh, thumbs, scopes, hashes |
+| **gallery** | Index/sync, search, libraries, trash |
+| **wildcards** | Tree CRUD + `__tag__` expand |
+| **civitai** | Civitai HTTP + file install |
+| **downloads** | Queue, progress, download history thumbs |
+| **history** | Civitai browse history |
+| **complete** | Autocomplete CSV + tag suggest |
+| **settings** | Load/save/clean JSON blob (`_clean` / `_KEYS`) |
+| **issues** | Scanned + logged issues |
+
+Settings keys: persist through `features/settings` (`clean.py` / `values.py`). Page placement is `settings.mdc`. Do not add a second settings store.
+
+## Add a feature
+
+1. Put logic in `features/<name>/scripts/`. Façade in `service.py`. Pydantic bodies in `schemas.py` next to the feature.
+2. Thin router in `api/routes/<name>.py` (`api = APIRouter()`). Include it in `router.py`.
+3. New table → new file under `repositories/`, wired into `user.py`, `cache.py`, or `cache_gallery.py` schema. Do not open a fourth SQLite file.
+4. Shared path/PNG helpers go in `shared/`, not a new "core" package.
+5. One file, one job. Soft limit **500 lines**; split by responsibility (`jobs.py`, `job_plan.py`), not ceremony.
+6. unittest next to the concern under `app/backend/tests/<feature>/`. `PYTHONPATH=src python -m unittest discover -s tests` from `app/backend`.
+
+```text
+❌  api.py with sqlite + Comfy websocket + image import
+✅  route → service → scripts + repositories + comfy.client
+```
+
+## Storage
+
+Three singleton connections, `check_same_thread=False`, WAL, module `RLock` on every query:
+
+- **User** `user/data/sqlite/blombo.sqlite` — settings, tags, templates, scopes, model meta, download/browse history, error_log, user galleries
+- **Cache** `runtime/data/sqlite/cache.sqlite` — jobs, model hashes
+- **Gallery cache** `runtime/data/sqlite/cache_gallery.sqlite` — gallery index (`gallery_items` + link/seen tables)
+
+That lock serializes access. Threads are fine. Concurrent async SQLite on one conn is not. Do not add aiosqlite. `connect_storage()` in lifespan must stay sync (open before serve).
+
+## Concurrency
+
+Default: **sync `def` routes**. Starlette already runs them on its threadpool. Civitai `urlopen`, model `rglob`, gallery thumbs, `nvidia-smi`, folder picker — leave them sync.
+
+`async def` only when you `await` (`request.body()`, `asyncio.create_task`, `asyncio.to_thread`). Sync I/O inside `async def` or `run_job` **freezes the event loop** (job progress included).
+
+```python
+# ❌ async + sync I/O
+async def post_pnginfo(request: Request) -> dict:
+    return pnginfo.read(await request.body(), "")
+
+# ✅ await the body, offload the rest
+async def post_pnginfo(request: Request) -> dict:
+    data = await request.body()
+    return await asyncio.to_thread(pnginfo.read, data, "")
+
+# ✅ default: sync def (already threadpooled)
+@api.get("/user-models")
+def get_models(...) -> dict:
+    return models.list_models(...)
+```
+
+Jobs: `asyncio.create_task` must run on the loop. Blocking prepare (Comfy HTTP, SQLite insert) goes through `to_thread`; spawn after it returns.
+
+```python
+async def create_job(body):
+    job_id, values = await asyncio.to_thread(_prepare_job, body)
+    task = asyncio.create_task(run_job(job_id, values))
+```
+
+Inside `run_job`, wrap disk/CPU/network: wildcard apply, tag record, `fill_txt2img`, `run_prompt`, image import, grid assembly. Tiny `jobs_repo.set_*` under the cache `RLock` may stay sync.
+
+Comfy client (`infrastructure/comfy/client.py`) stays **sync** (`urlopen`, `websockets.sync`, `time.sleep` poll). Call it from a sync route or `to_thread`. Do not rewrite it to httpx/aiohttp.
+
+Long background work uses a **named daemon thread**, not FastAPI `BackgroundTasks`:
+
+- `model-hash` + `hash-warm` — SHA256 worker
+- `gallery-sync` — library scan (`start_sync` returns immediately)
+- `tag-complete` — CSV index rebuild
+- download queue workers (when `downloadQueue` is on)
+- download/browse thumb prefetch
+
+Copy that pattern. Do not add a process pool or a custom executor.
+
+Download-queue-off is a user setting: the sync Civitai download then pins one threadpool worker. Do not force-queue.
+
+Shared mutable state already has locks (`_live` jobs, hash queue, gallery sync, download deque, tag index, GPU smi cache). Use them; do not add a second copy of the same dict.
+
+## Lifespan
+
+`connect_storage()` → scopes → `complete.schedule_rebuild()` → `models.start()` → `hash-warm` thread → `gallery.purge_expired` via `to_thread`. Shutdown: `models.stop()`.
+
+## Do not
+
+- Convert all routes to `async def`
+- Put a second SQLite connection or async driver on the user/cache files
+- Call `hashes.wait` / `file_hash` / `comfy.run_prompt` / wildcard `apply` on the event loop
+- Add layers (`core/`, services package, DI) for one caller
+- Put install/bootstrap path logic in API runtime (`bootstrap/env.py` vs `config.py` / `shared/dirs.py`)

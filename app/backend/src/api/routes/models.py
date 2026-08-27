@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse
 
@@ -128,10 +130,12 @@ async def put_model_thumb(kind: str, path: str, request: Request, context: str =
         raise ApiError("not_found", "model not found")
     key, _, _, _ = resolve_view(context)
     try:
-        thumb = models.save_thumb(
+        data = await request.body()
+        thumb = await asyncio.to_thread(
+            models.save_thumb,
             kind,
             path,
-            await request.body(),
+            data,
             key,
             thumb_meta(request),
             request.headers.get("content-type", ""),

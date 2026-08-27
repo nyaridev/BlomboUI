@@ -44,7 +44,7 @@ def comfy_ksampler() -> dict:
 
 @api.post("/jobs")
 async def post_job(body: JobIn) -> dict:
-    job = generate.create_job(body.model_dump())
+    job = await generate.create_job(body.model_dump())
     return {"job": job}
 
 

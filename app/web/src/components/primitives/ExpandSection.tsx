@@ -13,10 +13,19 @@ type ExpandSectionProps = {
   onEnabled?: (value: boolean) => void
   fit?: boolean
   trailing?: ReactNode
+  defaultOpen?: boolean
 }
 
-export function ExpandSection({ title, children, enabled = true, onEnabled, fit = false, trailing }: ExpandSectionProps) {
-  const [open, setOpen] = useState(false)
+export function ExpandSection({
+  title,
+  children,
+  enabled = true,
+  onEnabled,
+  fit = false,
+  trailing,
+  defaultOpen = false,
+}: ExpandSectionProps) {
+  const [open, setOpen] = useState(defaultOpen)
   const [height, setHeight] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const togglable = onEnabled != null

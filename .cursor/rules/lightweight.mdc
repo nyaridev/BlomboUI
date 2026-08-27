@@ -32,7 +32,7 @@ BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still
 - If the same thing can be done with less code, fewer types, or a straighter data flow, do that.
 - Delete indirection that does not earn its keep. Do not "simplify" by rewriting working code into a new pattern.
 - Match what is already here (FastAPI, small React screens, zustand). No extra framework.
-- Keep `infrastructure/storage/user.py` and `infrastructure/storage/cache.py` separate; they own different SQLite files. Table access goes through `infrastructure/storage/repositories/`.
+- Keep `infrastructure/storage/user.py`, `infrastructure/storage/cache.py`, and `infrastructure/storage/cache_gallery.py` separate; they own different SQLite files. Table access goes through `infrastructure/storage/repositories/`.
 - Keep `bootstrap/env.py` path/YAML helpers separate from API runtime helpers in `config.py` / `shared/dirs.py`.
 
 ## Robust later

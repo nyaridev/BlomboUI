@@ -331,7 +331,7 @@ def _is_interrupted(path: str, params_json: str | None = None) -> bool:
     return any(part.lower() == "interrupted" for part in Path(path).parts)
 
 
-def create_job(body: dict[str, Any]) -> dict[str, Any]:
+def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     if not comfy.reachable():
         message = f"ComfyUI is not running on {comfy_base()}."
         record_log("generate", "generate_failed", "start", message)
@@ -379,10 +379,15 @@ def create_job(body: dict[str, Any]) -> dict[str, Any]:
             live_count = len(matrix_lines) * matrix_count
         _live[job_id] = LiveJob(int(values["steps"]), live_count)
     _prune_jobs()
+    return job_id, values
+
+
+async def create_job(body: dict[str, Any]) -> dict[str, Any]:
+    job_id, values = await asyncio.to_thread(_prepare_job, body)
     task = asyncio.create_task(run_job(job_id, values))
     _tasks.add(task)
     task.add_done_callback(_tasks.discard)
-    job = get_job(job_id)
+    job = await asyncio.to_thread(get_job, job_id)
     assert job is not None
     return job
 
@@ -444,7 +449,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             raw_negative = str(run_values.get("negative_prompt") or "")
             run_values["prompt_raw"] = raw_prompt
             run_values["negative_prompt_raw"] = raw_negative
-            wildcard_tags.apply(run_values, rng)
+            await asyncio.to_thread(wildcard_tags.apply, run_values, rng)
             used: list[str] = []
             for blob in (raw_prompt, raw_negative):
                 for match in wildcard_tags.TAG.finditer(blob):
@@ -460,7 +465,8 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             auto_loras, auto_missing = await asyncio.to_thread(_resolve_auto_loras, run_values.get("auto_loras"))
             _apply_auto_loras(run_values, auto_loras, auto_missing)
             if run_i == 0:
-                tag_complete.record(
+                await asyncio.to_thread(
+                    tag_complete.record,
                     str(values.get("prompt") or ""),
                     str(values.get("negative_prompt") or ""),
                     [run_values["prompt"], run_values["negative_prompt"]],
@@ -482,7 +488,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
                 _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
 
-            graph = comfy.fill_txt2img({**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"})
+            graph = await asyncio.to_thread(
+                comfy.fill_txt2img, {**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"}
+            )
             _attach_lora_hashes(run_values)
             prompt_id, images = await asyncio.to_thread(
                 comfy.run_prompt,
@@ -531,9 +539,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         if canceled:
             if saved and values.get("batch_grid_on_cancel", True):
                 if xy:
-                    _maybe_xy_grid(job_id, values, saved)
+                    await asyncio.to_thread(_maybe_xy_grid, job_id, values, saved)
                 else:
-                    _maybe_grid(job_id, values, saved)
+                    await asyncio.to_thread(_maybe_grid, job_id, values, saved)
             for path in temps:
                 path.unlink(missing_ok=True)
             jobs_repo.finish(job_id, "canceled", _now(), json.dumps(values))
@@ -546,9 +554,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             _prune_jobs()
             return
         if xy:
-            _maybe_xy_grid(job_id, values, saved)
+            await asyncio.to_thread(_maybe_xy_grid, job_id, values, saved)
         else:
-            _maybe_grid(job_id, values, saved)
+            await asyncio.to_thread(_maybe_grid, job_id, values, saved)
         for path in temps:
             path.unlink(missing_ok=True)
         jobs_repo.finish(job_id, "completed", _now(), json.dumps(values))

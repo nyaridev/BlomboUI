@@ -28,7 +28,7 @@ export function SafetensorsInfo({ metadata, error, busy, civitai, civitaiStatus 
     <div className="flex flex-col gap-4">
       <SafetensorsDashboard data={data} groups={groups} tags={tags} raw={raw} />
       {raw ? (
-        <ExpandSection title="Raw metadata">
+        <ExpandSection title="Raw metadata" defaultOpen>
           <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{raw}</pre>
         </ExpandSection>
       ) : null}

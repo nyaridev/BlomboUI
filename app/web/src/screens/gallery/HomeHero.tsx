@@ -4,6 +4,7 @@ import { galleryItemImageUrl, galleryItemThumbUrl, type GalleryItem } from '@/li
 import { useEffect, useState } from 'react'
 
 const SPAN = 3
+const REACH = SPAN * 2
 
 function wrapOffset(i: number, index: number, n: number) {
   let delta = i - index
@@ -77,24 +78,28 @@ export function HomeHero({
           {items.map((item, i) => {
             const delta = wrapOffset(i, Math.min(index, n - 1), n)
             const abs = Math.abs(delta)
-            if (abs > SPAN) {
+            if (abs > REACH) {
               return null
             }
             const on = delta === 0
+            const peek = abs > SPAN
             return (
               <button
                 key={item.id}
                 type="button"
+                tabIndex={peek ? -1 : undefined}
                 className={[
                   'absolute top-1/2 left-1/2 h-80 w-52 overflow-hidden rounded-md border bg-panel/70 shadow-md backdrop-blur-md transition-[transform,opacity] duration-700 ease-out',
                   on ? 'border-accent' : 'border-line',
+                  peek ? 'pointer-events-none' : '',
                 ].join(' ')}
                 style={{
                   transform: `translate(-50%, -50%) translateX(${delta * 9.5}rem) scale(${1 - abs * 0.12})`,
-                  opacity: Math.max(0.2, 1 - abs * 0.28),
+                  opacity: peek ? 0 : Math.max(0.2, 1 - abs * 0.28),
                   zIndex: SPAN + 1 - abs,
                 }}
-                aria-label={on ? 'Open image' : 'Show this image'}
+                aria-hidden={peek}
+                aria-label={peek ? undefined : on ? 'Open image' : 'Show this image'}
                 onClick={() => (on ? onOpen(item) : setIndex(i))}
               >
                 <PreviewMedia

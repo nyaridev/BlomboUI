@@ -12,6 +12,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from infrastructure.storage import cache as cache_db
+from infrastructure.storage import cache_gallery as gallery_db
 from features.gallery.scripts import cache as gallery_cache, gallery
 from features.generate.scripts import jobs
 from shared import pnginfo
@@ -67,6 +68,8 @@ class GalleryCacheTests(unittest.TestCase):
         self.patches = [
             patch.object(cache_db, "_CONN", None),
             patch.object(cache_db, "db_path", return_value=self.tmp / "cache.sqlite"),
+            patch.object(gallery_db, "_CONN", None),
+            patch.object(gallery_db, "db_path", return_value=self.tmp / "cache_gallery.sqlite"),
         ]
         for item in self.patches:
             item.start()
@@ -75,6 +78,9 @@ class GalleryCacheTests(unittest.TestCase):
         if cache_db._CONN is not None:
             cache_db._CONN.close()
             cache_db._CONN = None
+        if gallery_db._CONN is not None:
+            gallery_db._CONN.close()
+            gallery_db._CONN = None
         for item in self.patches:
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
@@ -103,40 +109,6 @@ class GalleryCacheTests(unittest.TestCase):
         self.assertEqual(cache_db.query_one("SELECT COUNT(*) AS n FROM jobs WHERE status = 'completed'")["n"], 500)
         self.assertIsNotNone(cache_db.query_one("SELECT id FROM jobs WHERE id = 'active'"))
 
-    def test_connect_migrates_gallery_items_without_media_kind(self) -> None:
-        path = self.tmp / "cache.sqlite"
-        conn = cache_db._CONN
-        if conn is not None:
-            conn.close()
-            cache_db._CONN = None
-        raw = __import__("sqlite3").connect(path)
-        raw.executescript(
-            """
-            CREATE TABLE gallery_items (
-                id TEXT PRIMARY KEY,
-                path TEXT NOT NULL UNIQUE,
-                root TEXT NOT NULL,
-                asset_kind TEXT NOT NULL DEFAULT 'image',
-                size INTEGER NOT NULL DEFAULT 0,
-                mtime_ns INTEGER NOT NULL DEFAULT 0,
-                width INTEGER,
-                height INTEGER,
-                seed INTEGER,
-                checkpoint_name TEXT,
-                prompt TEXT,
-                negative_prompt TEXT,
-                params_json TEXT NOT NULL DEFAULT '{}',
-                created_at TEXT NOT NULL,
-                favorite INTEGER NOT NULL DEFAULT 0
-            );
-            """
-        )
-        raw.commit()
-        raw.close()
-        opened = cache_db.connect()
-        cols = {row[1] for row in opened.execute("PRAGMA table_info(gallery_items)")}
-        self.assertIn("media_kind", cols)
-
     def test_gallery_scan_rebuilds_and_excludes_grids_from_listing(self) -> None:
         root = self.tmp / "gallery"
         (root / "grids").mkdir(parents=True)
@@ -149,7 +121,7 @@ class GalleryCacheTests(unittest.TestCase):
             gallery_cache.sync()
             rows = gallery_cache.list_rows(hide_interrupted=False)
         self.assertEqual([row["path"] for row in rows], [str(image_path.resolve())])
-        all_rows = cache_db.query("SELECT path, asset_kind FROM gallery_items ORDER BY path")
+        all_rows = gallery_db.query("SELECT path, asset_kind FROM gallery_items ORDER BY path")
         self.assertEqual([(row["path"], row["asset_kind"]) for row in all_rows], [
             (str(grid_path.resolve()), "grid"),
             (str(image_path.resolve()), "image"),
@@ -162,10 +134,10 @@ class GalleryCacheTests(unittest.TestCase):
         with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
             gallery_cache.sync()
             self.assertEqual(len(gallery_cache.list_rows()), 1)
-            cache_db.execute("DROP TABLE gallery_items")
-            cache_db._CONN.close()
-            cache_db._CONN = None
-            cache_db.connect()
+            gallery_db.execute("DROP TABLE gallery_items")
+            gallery_db._CONN.close()
+            gallery_db._CONN = None
+            gallery_db.connect()
             gallery_cache.sync()
             self.assertEqual(len(gallery_cache.list_rows()), 1)
             image_path.unlink()
@@ -237,7 +209,7 @@ class GalleryCacheTests(unittest.TestCase):
             self.assertIsNone(gallery_cache.ingest(bare))
             self.assertIsNone(gallery_cache.ingest(old))
             ident = gallery_cache.item_id(old)
-            cache_db.execute(
+            gallery_db.execute(
                 """
                 INSERT INTO gallery_items (
                     id, path, root, asset_kind, media_kind, size, mtime_ns,

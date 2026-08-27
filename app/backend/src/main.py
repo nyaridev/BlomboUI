@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import threading
@@ -29,7 +30,7 @@ async def lifespan(_app: FastAPI):
     models.start()
     threading.Thread(target=_warm_hashes, daemon=True, name="hash-warm").start()
     try:
-        gallery.purge_expired()
+        await asyncio.to_thread(gallery.purge_expired)
     except OSError:
         pass
     yield

@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from infrastructure.storage import cache as cache_db
-
+from infrastructure.storage import cache_gallery as gallery_db
 from infrastructure.storage import user as db
 from config import ROOT
 
@@ -20,7 +20,8 @@ USER_TABLES = (
     "thumb_scopes",
 )
 META_TABLES = ("model_info", "thumbnail_index")
-CACHE_TABLES = ("jobs", "gallery_items")
+CACHE_TABLES = ("jobs",)
+GALLERY_TABLES = ("gallery_items",)
 
 
 def migrate(root: Path) -> None:
@@ -28,17 +29,20 @@ def migrate(root: Path) -> None:
     old_runtime = root / "runtime" / "data"
     user_db = root / "user" / "data" / "sqlite" / "blombo.sqlite"
     cache_path = root / "runtime" / "data" / "sqlite" / "cache.sqlite"
+    gallery_path = root / "runtime" / "data" / "sqlite" / "cache_gallery.sqlite"
     user_db.parent.mkdir(parents=True, exist_ok=True)
     cache_path.parent.mkdir(parents=True, exist_ok=True)
 
     _init_schema(user_db, db.SCHEMA)
     _init_schema(cache_path, cache_db.SCHEMA)
+    _init_schema(gallery_path, gallery_db.SCHEMA)
 
     old_app = old_user / "blombo.sqlite"
     if old_app.is_file():
         _checkpoint(old_app)
         _copy_tables(old_app, user_db, USER_TABLES)
         _copy_tables(old_app, cache_path, CACHE_TABLES)
+        _copy_tables(old_app, gallery_path, GALLERY_TABLES)
 
     old_meta = old_user / "model_meta.sqlite"
     if old_meta.is_file():
@@ -222,6 +226,7 @@ class MigrateUserDataTests(unittest.TestCase):
 
         user_db = self.tmp / "user" / "data" / "sqlite" / "blombo.sqlite"
         cache_path = self.tmp / "runtime" / "data" / "sqlite" / "cache.sqlite"
+        gallery_path = self.tmp / "runtime" / "data" / "sqlite" / "cache_gallery.sqlite"
         conn = sqlite3.connect(user_db)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM thumb_scopes").fetchone()[0], 1)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM prompt_tags").fetchone()[0], 1)
@@ -237,8 +242,13 @@ class MigrateUserDataTests(unittest.TestCase):
 
         conn = sqlite3.connect(cache_path)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0], 1)
-        self.assertEqual(conn.execute("SELECT COUNT(*) FROM gallery_items").fetchone()[0], 1)
         self.assertEqual(conn.execute("SELECT COUNT(*) FROM model_hashes").fetchone()[0], 1)
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        self.assertNotIn("gallery_items", tables)
+        conn.close()
+
+        conn = sqlite3.connect(gallery_path)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM gallery_items").fetchone()[0], 1)
         conn.close()
 
         self.assertFalse(old_user.exists())

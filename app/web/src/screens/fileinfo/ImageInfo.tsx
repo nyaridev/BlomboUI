@@ -275,28 +275,30 @@ function v2Loras(params: SavedParams, hits: Record<string, CivitaiVersion | null
 
 function RawSwitch({ mode, onMode }: { mode: 'json' | 'formatted'; onMode: (mode: 'json' | 'formatted') => void }) {
   return (
-    <div className="flex gap-1">
-      <label className="radio-card text-xs text-ink">
-        <input type="radio" className="radio" name="raw-meta-mode" checked={mode === 'json'} onChange={() => onMode('json')} />
-        JSON
-      </label>
-      <label className="radio-card text-xs text-ink">
-        <input
-          type="radio"
-          className="radio"
-          name="raw-meta-mode"
-          checked={mode === 'formatted'}
-          onChange={() => onMode('formatted')}
-        />
+    <div className="inline-flex h-8 shrink-0 rounded border border-line text-xs">
+      <button
+        type="button"
+        className={['h-full rounded-l px-2', mode === 'formatted' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
+        disabled={mode === 'formatted'}
+        onClick={() => onMode('formatted')}
+      >
         Formatted
-      </label>
+      </button>
+      <button
+        type="button"
+        className={['h-full rounded-r px-2', mode === 'json' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
+        disabled={mode === 'json'}
+        onClick={() => onMode('json')}
+      >
+        JSON
+      </button>
     </div>
   )
 }
 
 export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: ImageInfoProps) {
   const site = useSettingsStore((s) => s.civitaiSite)
-  const [rawMode, setRawMode] = useState<'json' | 'formatted'>('json')
+  const [rawMode, setRawMode] = useState<'json' | 'formatted'>('formatted')
   if (busy) {
     return <p className="text-sm text-muted">Reading…</p>
   }
@@ -331,7 +333,7 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
         />
       ) : null}
       {rawKeys.length ? (
-        <ExpandSection title="Raw metadata" trailing={<RawSwitch mode={rawMode} onMode={setRawMode} />}>
+        <ExpandSection title="Raw metadata" defaultOpen trailing={<RawSwitch mode={rawMode} onMode={setRawMode} />}>
           {rawMode === 'json' ? (
             jsonText ? (
               <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{jsonText}</pre>

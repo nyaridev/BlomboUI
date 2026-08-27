@@ -73,8 +73,8 @@ if errorlevel 1 goto :backend_failed
 popd
 
 call "%ROOT%\install\windows\_ui.bat" info "Installing frontend dependencies..."
-if not exist "%ROOT%\app\web\package.json" (
-    call "%ROOT%\install\windows\_ui.bat" error "Frontend is missing: app\web\package.json"
+if not exist "%ROOT%\app\frontend\package.json" (
+    call "%ROOT%\install\windows\_ui.bat" error "Frontend is missing: app\frontend\package.json"
     exit /b 1
 )
 where.exe npm.cmd >nul 2>&1
@@ -86,8 +86,8 @@ if errorlevel 1 (
         exit /b 1
     )
 )
-if not exist "%ROOT%\app\web\node_modules\" (
-    pushd "%ROOT%\app\web"
+if not exist "%ROOT%\app\frontend\node_modules\" (
+    pushd "%ROOT%\app\frontend"
     npm install
     if errorlevel 1 (
         popd

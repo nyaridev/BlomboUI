@@ -40,6 +40,7 @@ _KEYS = (
     "mainTabKeysFollowLayout",
     "generateTabKeysFollowLayout",
     "hiddenModelTypes",
+    "modelInfoLayout",
     "hiddenSamplers",
     "hiddenSchedulers",
     "theme",

@@ -51,8 +51,8 @@ fi
 cd "$ROOT" || exit 1
 
 ui_info "Installing frontend dependencies..."
-if [ ! -f "$ROOT/app/web/package.json" ]; then
-  ui_error "Frontend is missing: app/web/package.json"
+if [ ! -f "$ROOT/app/frontend/package.json" ]; then
+  ui_error "Frontend is missing: app/frontend/package.json"
   exit 1
 fi
 if ! command -v npm >/dev/null 2>&1; then
@@ -60,8 +60,8 @@ if ! command -v npm >/dev/null 2>&1; then
   ui_info "Install Node.js LTS and run again."
   exit 1
 fi
-if [ ! -d "$ROOT/app/web/node_modules" ]; then
-  if ! (cd "$ROOT/app/web" && npm install); then
+if [ ! -d "$ROOT/app/frontend/node_modules" ]; then
+  if ! (cd "$ROOT/app/frontend" && npm install); then
     ui_error "Frontend dependency installation failed."
     exit 1
   fi

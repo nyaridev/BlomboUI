@@ -9,10 +9,10 @@ BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still
 
 ## Structure
 
-- Keep the tree obvious: install launchers, backend, web screens, Comfy as the generation backend.
+- Keep the tree obvious: install launchers, backend, frontend, Comfy as the generation backend.
 - Backend lives at `app/backend/src/` with `api/` (routes), `features/` (`service.py` + `scripts/`), `shared/`, `infrastructure/` (Comfy client + storage), and `bootstrap/` (install-time env files).
-- Web keeps screens under `app/web/src/screens/`; shared UI is grouped under `components/primitives/`, `components/chrome/`, `components/gallery/`, and `components/models/`, with matching `lib/` feature folders.
-- `app/web/src/screens/settings/PrimitivesPanel.tsx` is the live catalog of existing controls. Check it and `style.mdc` before adding UI.
+- Frontend lives at `app/frontend/src/` with `app/` (shell + router), `views/` (`*View.tsx` + `panels/<region>/`), `components/` (`primitives/`, `controls/`, `layout/`, `composites/`), `theme/`, `lib/`, and `stores/`.
+- `views/settings/panels/content/sections/other/PrimitivesSection.tsx` is the live catalog of existing controls. Check it and `style-frontend.mdc` / `dev-frontend.mdc` before adding UI.
 - Do not add layers, services, or "core" packages for one caller.
 - A new feature is usually one small module plus the screen that uses it — not a new architecture.
 

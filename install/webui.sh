@@ -240,7 +240,7 @@ start_frontend() {
     export BLOMBO_HOT_RELOAD_VITE=0
   fi
   (
-    cd "$ROOT/app/web" || exit 1
+    cd "$ROOT/app/frontend" || exit 1
     exec npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" --strictPort
   ) &
   FRONTEND_PID=$!

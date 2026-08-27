@@ -78,7 +78,7 @@ BlomboUI/
 │   ├── comfyui.bat / .sh    ComfyUI (node editor or headless)
 │   ├── windows/             Git, uv venv, ComfyUI, Torch
 │   └── linux/
-├── app/                     backend, web UI, workflows
+├── app/                     backend, frontend, workflows
 ├── runtime/                 .venv, ComfyUI, launcher cache, logs
 └── user/                    created on first launch (models, output, data, wildcards)
 ```

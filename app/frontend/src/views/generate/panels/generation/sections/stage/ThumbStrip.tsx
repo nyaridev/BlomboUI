@@ -1,0 +1,96 @@
+import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
+import { useEffect, useRef } from 'react'
+import { middleOpen } from '@/lib/gallery/openImage.ts'
+
+export type ThumbItem = {
+  key: string
+  src: string
+  thumb?: string
+}
+
+type ThumbStripProps = {
+  items: ThumbItem[]
+  index: number
+  onSelect: (i: number) => void
+  onError?: (key: string) => void
+}
+
+function StripArrow({ dir }: { dir: 'left' | 'right' }) {
+  return <AppIcon id={dir === 'left' ? 'chevron-left' : 'chevron-right'} />
+}
+
+export function ThumbStrip({ items, index, onSelect, onError }: ThumbStripProps) {
+  const scrollerRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    const selected = scroller?.querySelector(`[data-thumb="${index}"]`)
+    if (!scroller || !(selected instanceof HTMLElement)) {
+      return
+    }
+    const left = selected.offsetLeft
+    const right = left + selected.offsetWidth
+    if (left < scroller.scrollLeft) {
+      scroller.scrollLeft = left
+    } else if (right > scroller.scrollLeft + scroller.clientWidth) {
+      scroller.scrollLeft = right - scroller.clientWidth
+    }
+  }, [index])
+
+  function step(dir: -1 | 1) {
+    onSelect((index + dir + items.length) % items.length)
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        type="button"
+        className="flex h-16 w-7 shrink-0 items-center justify-center rounded border border-line bg-panel text-ink hover:bg-line"
+        aria-label="Previous image"
+        onClick={() => step(-1)}
+      >
+        <StripArrow dir="left" />
+      </button>
+      <div
+        ref={scrollerRef}
+        className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="flex w-max min-w-full justify-center gap-2 px-0.5 py-1">
+          {items.map((item, i) => (
+            <button
+              key={item.key}
+              type="button"
+              data-thumb={i}
+              className={[
+                'h-16 w-16 shrink-0 rounded',
+                i === index
+                  ? 'ring-2 ring-accent ring-offset-2 ring-offset-bg'
+                  : 'opacity-40 hover:opacity-75',
+              ].join(' ')}
+              onClick={() => onSelect(i)}
+              onMouseDown={(event) => middleOpen(event, item.src)}
+            >
+              <span className="block h-full w-full overflow-hidden rounded">
+                <img
+                  src={item.thumb || item.src}
+                  alt=""
+                  className="h-full w-full object-cover"
+                  decoding="async"
+                  onError={() => onError?.(item.key)}
+                />
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <button
+        type="button"
+        className="flex h-16 w-7 shrink-0 items-center justify-center rounded border border-line bg-panel text-ink hover:bg-line"
+        aria-label="Next image"
+        onClick={() => step(1)}
+      >
+        <StripArrow dir="right" />
+      </button>
+    </div>
+  )
+}

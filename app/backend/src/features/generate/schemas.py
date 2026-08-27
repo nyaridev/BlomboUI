@@ -84,10 +84,16 @@ class TemplateUpdate(BaseModel):
     params: dict[str, Any] | None = None
     name: str | None = None
     icon: dict[str, Any] | None = None
+    apply: list[str] | None = None
+    enabled: bool | None = None
 
 
 class WorkflowApplyIn(BaseModel):
     apply: list[str]
+
+
+class TemplateOrderIn(BaseModel):
+    ids: list[str]
 
 
 class ComfyFreeIn(BaseModel):

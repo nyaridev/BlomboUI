@@ -113,6 +113,86 @@ def _words(query: str) -> list[str]:
     return [part for part in query.replace(",", " ").split() if part]
 
 
+def _query_extra(q: str) -> tuple[list[str], list[Any]]:
+    extra: list[str] = []
+    params: list[Any] = []
+    for word in _words(str(q or "").strip().casefold()):
+        extra.append(
+            "(prompt LIKE ? ESCAPE '\\' OR negative_prompt LIKE ? ESCAPE '\\' OR id IN (SELECT item_id FROM gallery_item_tags WHERE tag LIKE ? ESCAPE '\\'))"
+        )
+        needle = _like(word)
+        params.extend([needle, needle, needle])
+    return extra, params
+
+
+def _models_extra(models: list[str] | None) -> tuple[list[str], list[Any]]:
+    names = [str(item).strip() for item in models or [] if str(item).strip()]
+    if not names:
+        return [], []
+    marks = ",".join("?" for _ in names)
+    return [f"checkpoint_name IN ({marks})"], names
+
+
+def _link_extra(names: list[str] | None, table: str) -> tuple[list[str], list[Any]]:
+    extra: list[str] = []
+    params: list[Any] = []
+    for name in [str(item).strip() for item in names or [] if str(item).strip()]:
+        extra.append(f"id IN (SELECT item_id FROM {table} WHERE name = ? OR name LIKE ? ESCAPE '\\')")
+        params.extend([name, _like(name)])
+    return extra, params
+
+
+def _orientation_extra(orientation: str) -> tuple[list[str], list[Any]]:
+    kind = str(orientation or "all").strip().lower()
+    if kind == "vertical":
+        return ["width > 0 AND height > 0 AND height > width"], []
+    if kind == "square":
+        return ["width > 0 AND height > 0 AND width = height"], []
+    if kind == "horizontal":
+        return ["width > 0 AND height > 0 AND width > height"], []
+    return [], []
+
+
+def _library_clause(library: dict[str, Any]) -> tuple[str, list[Any]] | None:
+    extra, params = _query_extra(str(library.get("query") or ""))
+    model_sql, model_params = _models_extra(list(library.get("models") or []))
+    extra.extend(model_sql)
+    params.extend(model_params)
+    lora_sql, lora_params = _link_extra(list(library.get("loras") or []), "gallery_item_loras")
+    extra.extend(lora_sql)
+    params.extend(lora_params)
+    wild_sql, wild_params = _link_extra(list(library.get("wildcards") or []), "gallery_item_wildcards")
+    extra.extend(wild_sql)
+    params.extend(wild_params)
+    hits = _scope_ids(list(library.get("scopes") or []))
+    if hits is not None:
+        if not hits:
+            return "0", []
+        marks = ",".join("?" for _ in hits)
+        extra.append(f"id IN ({marks})")
+        params.extend(sorted(hits))
+    if not extra:
+        return None
+    return f"({' AND '.join(extra)})", params
+
+
+def _unions_extra(unions: list[dict[str, Any]] | None) -> tuple[list[str], list[Any]] | None:
+    if unions is None:
+        return [], []
+    if not unions:
+        return None
+    parts: list[str] = []
+    params: list[Any] = []
+    for item in unions:
+        clause = _library_clause(item)
+        if clause is None:
+            return [], []
+        sql, values = clause
+        parts.append(sql)
+        params.extend(values)
+    return [f"({' OR '.join(parts)})"], params
+
+
 def search(
     *,
     q: str = "",
@@ -122,21 +202,19 @@ def search(
     loras: list[str] | None = None,
     wildcards: list[str] | None = None,
     media: str = "all",
+    orientation: str = "all",
     cursor: str = "",
     limit: int = 0,
     order_random: bool = False,
+    unions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     cap = _page_size(limit)
     where, params = _base_where(_hide(), media)
     extra: list[str] = []
 
-    query = str(q or "").strip()
-    for word in _words(query.casefold()):
-        extra.append(
-            "(prompt LIKE ? ESCAPE '\\' OR negative_prompt LIKE ? ESCAPE '\\' OR id IN (SELECT item_id FROM gallery_item_tags WHERE tag LIKE ? ESCAPE '\\'))"
-        )
-        needle = _like(word)
-        params.extend([needle, needle, needle])
+    query_sql, query_params = _query_extra(q)
+    extra.extend(query_sql)
+    params.extend(query_params)
 
     for tag in [thumbnail_scopes.normalize_tag(item) for item in tags or []]:
         if not tag:
@@ -144,19 +222,20 @@ def search(
         extra.append("id IN (SELECT item_id FROM gallery_item_tags WHERE tag = ?)")
         params.append(tag)
 
-    names = [str(item).strip() for item in models or [] if str(item).strip()]
-    if names:
-        marks = ",".join("?" for _ in names)
-        extra.append(f"checkpoint_name IN ({marks})")
-        params.extend(names)
+    model_sql, model_params = _models_extra(models)
+    extra.extend(model_sql)
+    params.extend(model_params)
 
-    for name in [str(item).strip() for item in loras or [] if str(item).strip()]:
-        extra.append("id IN (SELECT item_id FROM gallery_item_loras WHERE name = ? OR name LIKE ? ESCAPE '\\')")
-        params.extend([name, _like(name)])
+    lora_sql, lora_params = _link_extra(loras, "gallery_item_loras")
+    extra.extend(lora_sql)
+    params.extend(lora_params)
+    wild_sql, wild_params = _link_extra(wildcards, "gallery_item_wildcards")
+    extra.extend(wild_sql)
+    params.extend(wild_params)
 
-    for name in [str(item).strip() for item in wildcards or [] if str(item).strip()]:
-        extra.append("id IN (SELECT item_id FROM gallery_item_wildcards WHERE name = ? OR name LIKE ? ESCAPE '\\')")
-        params.extend([name, _like(name)])
+    orient_sql, orient_params = _orientation_extra(orientation)
+    extra.extend(orient_sql)
+    params.extend(orient_params)
 
     hits = _scope_ids(list(scopes or []))
     if hits is not None:
@@ -165,6 +244,13 @@ def search(
         marks = ",".join("?" for _ in hits)
         extra.append(f"id IN ({marks})")
         params.extend(sorted(hits))
+
+    union_extra = _unions_extra(unions)
+    if union_extra is None:
+        return {"items": [], "cursor": ""}
+    union_sql, union_params = union_extra
+    extra.extend(union_sql)
+    params.extend(union_params)
 
     if extra:
         where = f"{where} AND {' AND '.join(extra)}"
@@ -219,10 +305,14 @@ def home() -> dict[str, Any]:
 
 
 def previews_for_library(library: dict[str, Any]) -> list[dict[str, str]]:
+    unions = library.get("unions")
     result = search(
         q=str(library.get("query") or ""),
         scopes=list(library.get("scopes") or []),
         models=list(library.get("models") or []),
+        loras=list(library.get("loras") or []),
+        wildcards=list(library.get("wildcards") or []),
+        unions=list(unions) if isinstance(unions, list) else None,
         limit=BROWSE_PREVIEW,
         order_random=True,
     )

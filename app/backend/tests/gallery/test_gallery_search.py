@@ -18,8 +18,8 @@ from features.models.scripts import thumbnail_scopes
 from shared import pnginfo
 
 
-def _png() -> bytes:
-    image = Image.new("RGB", (16, 16), (20, 80, 160))
+def _png(size: tuple[int, int] = (16, 16)) -> bytes:
+    image = Image.new("RGB", size, (20, 80, 160))
     out = BytesIO()
     image.save(out, format="PNG")
     return out.getvalue()
@@ -50,10 +50,15 @@ def _v2(created_at: str = "2026-01-01T00:00:00.000Z", **values) -> dict:
     }
 
 
-def _write(path: Path, values: dict, created_at: str = "2026-01-01T00:00:00.000Z") -> Path:
+def _write(
+    path: Path,
+    values: dict,
+    created_at: str = "2026-01-01T00:00:00.000Z",
+    size: tuple[int, int] = (16, 16),
+) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     meta = _v2(created_at, **values)
-    packed = pnginfo.embed(_png(), meta["params"], metadata=meta)
+    packed = pnginfo.embed(_png(size), meta["params"], metadata=meta)
     path.write_bytes(packed)
     return path
 
@@ -161,6 +166,17 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual([item["media_kind"] for item in images["items"]], ["image"])
         self.assertEqual([item["media_kind"] for item in videos["items"]], ["video"])
 
+    def test_orientation_filters_by_aspect(self) -> None:
+        gallery_cache.ingest(_write(self.root / "portrait.png", {"prompt": "tall"}, size=(8, 16)))
+        gallery_cache.ingest(_write(self.root / "square.png", {"prompt": "even"}, size=(16, 16)))
+        gallery_cache.ingest(_write(self.root / "land.png", {"prompt": "wide"}, size=(16, 8)))
+        self.assertEqual(len(search.search(orientation="vertical")["items"]), 1)
+        self.assertEqual(len(search.search(orientation="square")["items"]), 1)
+        self.assertEqual(len(search.search(orientation="horizontal")["items"]), 1)
+        self.assertEqual(len(search.search(orientation="all")["items"]), 3)
+        self.assertEqual(search.search(orientation="vertical")["items"][0]["height"], 16)
+        self.assertEqual(search.search(orientation="horizontal")["items"][0]["width"], 16)
+
     def test_browse_recent_and_works(self) -> None:
         gallery_cache.ingest(
             _write(
@@ -204,6 +220,10 @@ class GallerySearchTests(unittest.TestCase):
         gallery_cache.ingest(path)
         created = libraries.create_library({"name": "Cats", "query": "cat", "models": []})
         self.assertEqual(created["name"], "Cats")
+        self.assertEqual(created["kind"], "library")
+        self.assertEqual(created["loras"], [])
+        self.assertEqual(created["wildcards"], [])
+        self.assertIsNone(created["parent_id"])
         self.assertEqual(created["previews"][0]["id"], gallery_cache.item_id(path))
         listed = libraries.list_libraries()
         self.assertEqual(len(listed), 1)
@@ -211,6 +231,50 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(updated["name"], "Kittens")
         self.assertTrue(libraries.delete_library(created["id"]))
         self.assertEqual(libraries.list_libraries(), [])
+
+    def test_library_stores_loras_and_wildcards(self) -> None:
+        gallery_cache.ingest(
+            _write(
+                self.root / "a.png",
+                {
+                    "prompt": "cat, sitting, dress",
+                    "prompt_raw": "cat, sitting, __outfit__",
+                    "models": [{"kind": "loras", "hashes": {"autov2": "detail.safetensors"}, "strength": 0.8}],
+                },
+            )
+        )
+        created = libraries.create_library({"name": "Detail", "loras": ["detail.safetensors"], "wildcards": ["outfit"]})
+        self.assertEqual(created["loras"], ["detail.safetensors"])
+        self.assertEqual(created["wildcards"], ["outfit"])
+        self.assertEqual(len(created["previews"]), 1)
+
+    def test_library_folders_nest_order_and_delete(self) -> None:
+        folder = libraries.create_library({"name": "Animals", "kind": "folder"})
+        inner = libraries.create_library({"name": "Nested", "kind": "folder", "parent_id": folder["id"]})
+        cats = libraries.create_library({"name": "Cats", "query": "cat", "parent_id": inner["id"]})
+        dogs = libraries.create_library({"name": "Dogs", "query": "dog", "parent_id": folder["id"]})
+        with self.assertRaises(ValueError):
+            libraries.order_libraries(inner["id"], [folder["id"], cats["id"]])
+        libraries.order_libraries(folder["id"], [dogs["id"], inner["id"]])
+        by_id = {item["id"]: item for item in libraries.list_libraries()}
+        self.assertEqual(by_id[dogs["id"]]["position"], 0)
+        self.assertEqual(by_id[inner["id"]]["position"], 1)
+        self.assertEqual(by_id[inner["id"]]["parent_id"], folder["id"])
+        self.assertTrue(libraries.delete_library(folder["id"]))
+        self.assertEqual(libraries.list_libraries(), [])
+
+    def test_folder_search_ors_descendant_libraries(self) -> None:
+        gallery_cache.ingest(_write(self.root / "cat.png", {"prompt": "cat"}))
+        gallery_cache.ingest(_write(self.root / "dog.png", {"prompt": "dog"}))
+        gallery_cache.ingest(_write(self.root / "bird.png", {"prompt": "bird"}))
+        folder = libraries.create_library({"name": "Pets", "kind": "folder"})
+        libraries.create_library({"name": "Cats", "query": "cat", "parent_id": folder["id"]})
+        libraries.create_library({"name": "Dogs", "query": "dog", "parent_id": folder["id"]})
+        unions = libraries.folder_unions(folder["id"])
+        found = search.search(unions=unions)
+        prompts = {item["id"] for item in found["items"]}
+        self.assertEqual(len(prompts), 2)
+        self.assertEqual(len(search.search(q="bird", unions=unions)["items"]), 0)
 
     def test_home_popular_tags(self) -> None:
         gallery_cache.ingest(

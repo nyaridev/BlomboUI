@@ -76,6 +76,23 @@ def thumb_mtime(kind: str, rel: str, context: str = GLOBAL) -> int:
     return _mtime(path)
 
 
+def thumb_any_mtime(kind: str, rel: str) -> int:
+    ident = _ident(rel)
+    if not ident:
+        return 0
+    best = 0
+    for row in ident_index(kind, ident).values():
+        if not isinstance(row, dict):
+            continue
+        try:
+            mtime = int(row.get("mtime") or 0)
+        except (TypeError, ValueError):
+            continue
+        if mtime > best:
+            best = mtime
+    return best
+
+
 def thumb_media(path: Path) -> str:
     return _MEDIA.get(path.suffix.lower(), "application/octet-stream")
 
@@ -95,7 +112,8 @@ def resolved_file(
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
     exact = thumb_at(kind, ident, key)
     found: Path | None = None
-    if mode != "likely":
+    rank_mode = mode == "likely" or bool(optional)
+    if not rank_mode:
         if exact:
             found = exact
         elif fallback and key != GLOBAL:

@@ -120,6 +120,10 @@ def _clean(raw: Any) -> dict[str, Any]:
             if name and name not in types:
                 types.append(name)
         out["hiddenModelTypes"] = types
+    if "modelInfoLayout" in raw:
+        layout = str(raw["modelInfoLayout"]).lower()
+        if layout in ("horizontal", "vertical"):
+            out["modelInfoLayout"] = layout
     if "hiddenSamplers" in raw and isinstance(raw["hiddenSamplers"], list):
         out["hiddenSamplers"] = _unique_names(raw["hiddenSamplers"])
     if "hiddenSchedulers" in raw and isinstance(raw["hiddenSchedulers"], list):

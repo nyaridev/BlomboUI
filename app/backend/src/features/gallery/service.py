@@ -13,8 +13,10 @@ from features.gallery.scripts.search import browse, home, search
 from features.gallery.scripts.libraries import (
     create_library,
     delete_library,
+    folder_unions,
     get_library,
     list_libraries,
+    order_libraries,
     update_library,
 )
 from features.gallery.scripts.removed import (
@@ -37,6 +39,7 @@ __all__ = [
     "delete_library",
     "disk_image",
     "disk_thumb",
+    "folder_unions",
     "get_library",
     "home",
     "ingest",
@@ -46,6 +49,7 @@ __all__ = [
     "list_libraries",
     "list_removed",
     "list_since",
+    "order_libraries",
     "purge_all",
     "purge_expired",
     "purge_permanent",

@@ -143,8 +143,26 @@ def _key_matches(key: str, prefix: str, compact: str) -> bool:
     return key.startswith(prefix) or (bool(compact) and key.replace("_", "").startswith(compact))
 
 
+def _key_contains(key: str, prefix: str, compact: str) -> bool:
+    if _key_matches(key, prefix, compact):
+        return False
+    if prefix in key:
+        return True
+    return bool(compact) and compact in key.replace("_", "")
+
+
+def _prefix_hit(tag: str, alias: str | None, prefix: str, compact: str) -> bool:
+    if _key_matches(_norm_key(tag), prefix, compact):
+        return True
+    return bool(alias) and _key_matches(_norm_key(alias), prefix, compact)
+
+
 def _like_prefix(prefix: str) -> str:
     return _LIKE_ESC.sub(r"\\\1", prefix) + "%"
+
+
+def _like_contains(needle: str) -> str:
+    return "%" + _LIKE_ESC.sub(r"\\\1", needle) + "%"
 
 
 def _now() -> str:
@@ -268,29 +286,59 @@ def _applicable(checkpoint: str) -> list[_FileIndex]:
     return [index for index in files if _applies(_rule(lists, index.name), model_types)]
 
 
-def _catalog_hits(files: list[_FileIndex], prefix: str) -> dict[str, tuple[int, str | None]]:
-    compact = prefix.replace("_", "")
+def _add_catalog_row(
+    out: dict[str, tuple[int, str | None]],
+    seen: set[str],
+    index: _FileIndex,
+    canonical: str,
+    alias: str | None,
+) -> None:
+    posts = index.posts.get(canonical, 0)
+    if canonical in seen:
+        prev = out.get(canonical)
+        if prev and alias and prev[1] is None:
+            out[canonical] = (prev[0], alias)
+        return
+    seen.add(canonical)
+    prev = out.get(canonical)
+    if prev:
+        out[canonical] = (prev[0] + posts, alias or prev[1])
+    else:
+        out[canonical] = (posts, alias)
+
+
+def _collect_catalog(
+    files: list[_FileIndex],
+    prefix: str,
+    compact: str,
+    out: dict[str, tuple[int, str | None]],
+    contains: bool,
+) -> None:
     first = prefix[0]
-    out: dict[str, tuple[int, str | None]] = {}
     for index in files:
         seen: set[str] = set()
-        for key, canonical, alias in index.buckets.get(first, ()):
-            if not _key_matches(key, prefix, compact):
-                continue
-            posts = index.posts.get(canonical, 0)
-            if canonical in seen:
-                prev = out.get(canonical)
-                if prev and alias and prev[1] is None:
-                    out[canonical] = (prev[0], alias)
-                continue
-            seen.add(canonical)
-            prev = out.get(canonical)
-            if prev:
-                out[canonical] = (prev[0] + posts, alias or prev[1])
-            else:
-                out[canonical] = (posts, alias)
+        groups = index.buckets.items() if contains else [(first, index.buckets.get(first, ()))]
+        for _, rows in groups:
+            for key, canonical, alias in rows:
+                if contains:
+                    if canonical in out or not _key_contains(key, prefix, compact):
+                        continue
+                elif not _key_matches(key, prefix, compact):
+                    continue
+                _add_catalog_row(out, seen, index, canonical, alias)
+
+
+def _catalog_hits(files: list[_FileIndex], prefix: str) -> dict[str, tuple[int, str | None]]:
+    compact = prefix.replace("_", "")
+    out: dict[str, tuple[int, str | None]] = {}
+    _collect_catalog(files, prefix, compact, out, False)
+    if len(out) < LIMIT:
+        _collect_catalog(files, prefix, compact, out, True)
     for tag, (posts, alias) in list(out.items()):
-        if alias and _key_matches(_norm_key(tag), prefix, compact):
+        if not alias:
+            continue
+        key = _norm_key(tag)
+        if _key_matches(key, prefix, compact) or prefix in key or (bool(compact) and compact in key.replace("_", "")):
             out[tag] = (posts, None)
     return out
 
@@ -301,7 +349,18 @@ def _freq_hits(prefix: str) -> dict[str, int]:
         rows = tags_repo.search_tags(_like_prefix(prefix), _like_prefix(compact), LIMIT)
     except sqlite3.Error:
         return {}
-    return {str(row["tag"]): int(row["count"]) for row in rows}
+    out = {str(row["tag"]): int(row["count"]) for row in rows}
+    if len(out) >= LIMIT:
+        return out
+    try:
+        extra = tags_repo.search_tags(_like_contains(prefix), _like_contains(compact), LIMIT)
+    except sqlite3.Error:
+        return out
+    for row in extra:
+        tag = str(row["tag"])
+        if tag not in out:
+            out[tag] = int(row["count"])
+    return out
 
 
 def _maybe_refresh() -> None:
@@ -344,6 +403,16 @@ def _global_applies(checkpoint: str, cfg: dict[str, Any]) -> bool:
     )
 
 
+def _suggest_key(item: dict[str, Any], prefix: str, compact: str) -> tuple[int, int, int, int, str]:
+    return (
+        0 if item["favorite"] else 1 if item["count"] else 2,
+        0 if _prefix_hit(str(item["tag"]), item.get("alias"), prefix, compact) else 1,
+        -int(item["count"]),
+        -int(item["posts"]),
+        str(item["tag"]),
+    )
+
+
 def suggest(q: str, checkpoint: str) -> list[dict[str, Any]]:
     prefix = _norm_key(q)
     if len(prefix.replace("_", "")) < 1:
@@ -379,14 +448,8 @@ def suggest(q: str, checkpoint: str) -> list[dict[str, Any]]:
         if item["alias"]:
             row["alias"] = item["alias"]
         rows.append(row)
-    rows.sort(
-        key=lambda item: (
-            0 if item["favorite"] else 1 if item["count"] else 2,
-            -int(item["count"]),
-            -int(item["posts"]),
-            str(item["tag"]),
-        )
-    )
+    compact = prefix.replace("_", "")
+    rows.sort(key=lambda item: _suggest_key(item, prefix, compact))
     return rows[:LIMIT]
 
 

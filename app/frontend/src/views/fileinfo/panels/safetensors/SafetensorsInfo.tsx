@@ -1,0 +1,37 @@
+import { ExpandSection } from '@/components/controls/expand-section/ExpandSection.tsx'
+import type { CivitaiVersion } from '@/lib/api.ts'
+import { useCivitaiData } from '@/views/fileinfo/panels/civitai/CivitaiLayouts.tsx'
+import { SafetensorsDashboard } from '@/views/fileinfo/panels/safetensors/SafetensorsLayouts.tsx'
+import { trainingGroups, tagFrequency, type SafetensorsMeta } from '@/views/fileinfo/panels/safetensors/safetensors.ts'
+
+type SafetensorsInfoProps = {
+  metadata: SafetensorsMeta | null
+  error: string | null
+  busy: boolean
+  civitai: CivitaiVersion | null
+  civitaiStatus: 'idle' | 'looking' | 'found' | 'none'
+}
+
+export function SafetensorsInfo({ metadata, error, busy, civitai, civitaiStatus }: SafetensorsInfoProps) {
+  const data = useCivitaiData(civitaiStatus === 'found' ? civitai : null)
+  if (busy && !metadata) {
+    return <p className="text-sm text-muted">Reading…</p>
+  }
+  if (error) {
+    return <p className="text-sm text-ink">{error}</p>
+  }
+  const groups = metadata ? trainingGroups(metadata) : []
+  const tags = metadata ? tagFrequency(metadata) : []
+  const raw = metadata && Object.keys(metadata).length ? JSON.stringify(metadata, null, 2) : ''
+
+  return (
+    <div className="flex flex-col gap-4">
+      <SafetensorsDashboard data={data} groups={groups} tags={tags} raw={raw} />
+      {raw ? (
+        <ExpandSection title="Raw metadata" defaultOpen>
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs text-ink">{raw}</pre>
+        </ExpandSection>
+      ) : null}
+    </div>
+  )
+}

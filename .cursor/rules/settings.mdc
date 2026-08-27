@@ -7,14 +7,14 @@ alwaysApply: true
 
 Group = product surface. Page = one job. Put a control on the page that already owns that surface.
 
-Canonical groups in `app/web/src/screens/settings/SettingsScreen.tsx`:
+Canonical groups in `app/frontend/src/views/settings/panels/content/groups.ts` (composed by `views/settings/SettingsView.tsx`):
 
 - **General** — Appearance, Tabs, Pickers
 - **Generate** — Generation, Grids
 - **Files** — Directories, Saving
 - **Gallery** — Gallery
 - **Models** — Models, Thumbnails
-- **Civitai** — Account, Download, History, Metadata
+- **Civitai** — Account, Browse, Labels, Download, Aliases, History, Metadata
 - **Autocomplete** — Behavior, Tag Lists, Frequent Tags
 - **Other** — Shortcuts, Primitives, Trash (not a junk drawer)
 
@@ -25,6 +25,6 @@ Canonical groups in `app/web/src/screens/settings/SettingsScreen.tsx`:
 
 - One editor per key. If two surfaces need it, one page owns it; the other links `Settings → Group → Page`.
 - Name pages after the surface the user already knows. Do not call model/wildcard pickers “Gallery”.
-- Add a setting in one pass: persist key (web store + backend `_KEYS` / clean), card on the owning page, `GROUPS` only if a new page is required, search `*_QUERY` on that page, and any `Settings → …` copy or hash (`#placeholders`, `#civitai`). Do not rename persisted keys to match a nav label.
+- Add a setting in one pass: persist key (frontend store + backend `_KEYS` / clean), card on the owning page, `GROUPS` only if a new page is required, search `*_QUERY` on that page, and any `Settings → …` copy or hash (`#placeholders`, `#civitai`). Do not rename persisted keys to match a nav label.
 - New page only when the concern is a distinct job. Split a dump (or a file near 500 lines); do not invent a group for one card.
-- Reuse `SettingsCard` / `SettingsBlock` and existing primitives. Check `PrimitivesPanel.tsx` and `style.mdc`. Primitives is a catalog, not a settings home.
+- Reuse `SettingsCard` / `SettingsBlock` and existing controls. Check Settings → Other → Primitives and `style-frontend.mdc`. Primitives is a catalog, not a settings home.

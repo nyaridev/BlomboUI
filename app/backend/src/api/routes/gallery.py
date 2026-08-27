@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from api.errors import ApiError
 from api.http import file_response, image_response, removed_error, resolve_view
 from features.gallery import service as gallery
-from features.gallery.schemas import LibraryIn, RemovedIn
+from features.gallery.schemas import LibraryIn, LibraryOrderIn, RemovedIn
 from features.generate import service as generate
 from features.models import service as models
 
@@ -107,9 +107,16 @@ def search_gallery(
     lora: list[str] = Query(default=[]),
     wildcard: list[str] = Query(default=[]),
     media: str = "all",
+    orientation: str = "all",
+    folder: str = "",
     cursor: str = "",
     limit: int = 200,
+    random: bool = False,
 ) -> dict:
+    try:
+        unions = gallery.folder_unions(folder) if folder else None
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
     return gallery.search(
         q=q,
         tags=tag,
@@ -118,8 +125,11 @@ def search_gallery(
         loras=lora,
         wildcards=wildcard,
         media=media,
+        orientation=orientation,
         cursor=cursor,
         limit=limit,
+        order_random=random,
+        unions=unions,
     )
 
 
@@ -145,6 +155,16 @@ def list_libraries() -> dict:
 def post_library(body: LibraryIn) -> dict:
     try:
         return gallery.create_library(body.model_dump())
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@api.put("/gallery/libraries/order")
+def put_library_order(body: LibraryOrderIn) -> dict:
+    try:
+        return {"items": gallery.order_libraries(body.parent_id, body.ids)}
+    except KeyError as exc:
+        raise ApiError("not_found", str(exc), 404) from exc
     except ValueError as exc:
         raise ApiError("bad_request", str(exc), 400) from exc
 

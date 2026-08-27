@@ -19,7 +19,7 @@ def get_apply_json(workflow: str) -> str | None:
 
 def list_rows(workflow: str) -> list[Any]:
     return user.query(
-        "SELECT id, name, params_json, icon_json FROM workflow_templates "
+        "SELECT id, name, params_json, icon_json, apply_json, enabled FROM workflow_templates "
         "WHERE workflow = ? ORDER BY position",
         (workflow,),
     )
@@ -27,7 +27,7 @@ def list_rows(workflow: str) -> list[Any]:
 
 def replace_workflow(
     workflow: str,
-    items: list[tuple[str, str, int, str, str | None]],
+    items: list[tuple[str, str, int, str, str | None, str | None, int]],
     apply_json: str | None,
 ) -> None:
     def write(conn) -> None:
@@ -41,8 +41,9 @@ def replace_workflow(
             )
         conn.execute("DELETE FROM workflow_templates WHERE workflow = ?", (workflow,))
         conn.executemany(
-            "INSERT INTO workflow_templates (workflow, id, name, position, params_json, icon_json) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
+            "INSERT INTO workflow_templates "
+            "(workflow, id, name, position, params_json, icon_json, apply_json, enabled) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [(workflow, *item) for item in items],
         )
 

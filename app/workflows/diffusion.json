@@ -1,9 +1,5 @@
 {
   "apply": [
-    "negativePrompt",
-    "checkpoint",
-    "textEncoder",
-    "vae",
     "sampler",
     "scheduler",
     "steps",
@@ -13,7 +9,7 @@
   ],
   "2": {
     "inputs": {
-      "text": "1girl, black hair",
+      "text": "",
       "clip": ["15", 1]
     },
     "class_type": "CLIPTextEncode",
@@ -96,7 +92,7 @@
   },
   "17": {
     "inputs": {
-      "vae_name": "qwenImage_qwenImageVAE.safetensors"
+      "vae_name": ""
     },
     "class_type": "VAELoader",
     "_meta": {
@@ -105,7 +101,7 @@
   },
   "18": {
     "inputs": {
-      "clip_name": "waiANIMA_v10Base10_txt.safetensors",
+      "clip_name": "",
       "type": "stable_diffusion",
       "device": "default"
     },
@@ -116,7 +112,7 @@
   },
   "19": {
     "inputs": {
-      "unet_name": "Anima\\waiANIMA_v10Base10.safetensors",
+      "unet_name": "",
       "weight_dtype": "default"
     },
     "class_type": "UNETLoader",

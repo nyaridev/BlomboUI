@@ -1,0 +1,39 @@
+---
+description: Theme tokens, control padding, and toolbar spacing for the BlomboUI frontend.
+alwaysApply: true
+---
+
+# Frontend style
+
+Keep the current look. Density is extracted into tokens that match today’s values, not a new visual recipe.
+
+## Tokens
+
+Theme colors, radius, and spacing live in `app/frontend/src/theme/themes.css`. Hex/RGB stay there only.
+
+Toolbar and cluster gaps:
+
+- **cluster** (`gap-cluster`) — gap between every sibling in a toolbar/filter row (search, All/Images/Videos, scopes, selectors)
+- **stack** (`gap-stack`) — gap between form/section blocks, not toolbar siblings
+- **toolbar height** (`h-toolbar`) — one height for search, chips, filter buttons, and icon buttons in that row
+
+Control padding and radius stay on the control (`--control-pad-*`, `--radius-control`). Point new controls at those tokens.
+
+`ThemeProvider` owns `document.documentElement.dataset.theme`. `theme/registry.ts` holds the `THEMES` list.
+
+## Tailwind
+
+Tailwind is for **layout** (flex/grid). Sibling spacing in toolbars/stacks uses the stack/cluster tokens, not one-off `gap-1` vs `gap-2` vs `gap-3` in the same row. Views do not pick random `gap-*` for control clusters.
+
+Use existing `bg-*`, `text-*`, and `border-*` theme names.
+
+## Controls own look
+
+- Controls own padding, radius, and colors via tokens / `theme/controls.css`.
+- Do not restyle a control in a view. If a genuinely new look is required, add the token or shared class first and catalog the resulting control in Settings → Other → Primitives.
+- Do not add CSS files, UI kits, or a new visual recipe for a one-off control.
+- Shared control CSS (`.icon-btn`, `.field-select`, `.slider-control`, `.check`, `.radio`) lives in `theme/controls.css`. Settings layout CSS lives with settings content (`views/settings/panels/content/settings-layout.css`).
+
+## Catalog
+
+Live catalog is Settings → Other → Primitives: category switcher (Buttons, Fields, Choices, Toggles, Meters, Overlays, Layout, Media) and every control variant. Catalog uses the real controls.

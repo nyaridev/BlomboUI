@@ -226,7 +226,7 @@ if defined HOT_RELOAD_VITE (
 ) else (
     set "BLOMBO_HOT_RELOAD_VITE=0"
 )
-start "BlomboUI Frontend" /b cmd /d /c "pushd ""%ROOT%\app\web"" && npm run dev -- --host %FRONTEND_HOST% --port %FRONTEND_PORT% --strictPort"
+start "BlomboUI Frontend" /b cmd /d /c "pushd ""%ROOT%\app\frontend"" && npm run dev -- --host %FRONTEND_HOST% --port %FRONTEND_PORT% --strictPort"
 exit /b 0
 
 :start_comfy

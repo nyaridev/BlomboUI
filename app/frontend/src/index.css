@@ -1,0 +1,5 @@
+@import 'tailwindcss';
+@import './theme/themes.css';
+@import './theme/base.css';
+@import './theme/controls.css';
+@import './views/settings/panels/content/settings-layout.css';

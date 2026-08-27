@@ -80,9 +80,10 @@ def list_kind(
         item["thumb_global_media"] = model_thumbs.thumb_media(global_path) if global_path else ""
         item["thumb_exact"] = model_thumbs.thumb_mtime(kind, tile, context)
         item["thumb_exact_media"] = model_thumbs.thumb_media(exact_path) if exact_path else ""
+        item["thumb_any"] = model_thumbs.thumb_any_mtime(kind, tile)
         if file_path is not None and kind != "wildcards":
             item["hashes"] = hashes.entry(file_path) or {}
-        item["edited"] = max(int(item["edited"]), thumb, item["thumb_global"], stamps.get(rel, 0))
+        item["edited"] = max(int(item["edited"]), thumb, item["thumb_global"], item["thumb_any"], stamps.get(rel, 0))
         row = info.get(rel) or {}
         item["prompt"] = str(row.get("prompt") or "")
         item["negative_prompt"] = str(row.get("negative_prompt") or "")

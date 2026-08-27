@@ -255,6 +255,17 @@ _GALLERY_MODE_KEYS = (
     "models-loras",
     "models-wildcards",
     "models-other",
+    "template-checkpoints",
+    "template-text-encoders",
+    "template-vae",
+    "template-loras",
+    "template-wildcards",
+    "gallery-search-checkpoints",
+    "gallery-search-loras",
+    "gallery-search-wildcards",
+    "gallery-create-checkpoints",
+    "gallery-create-loras",
+    "gallery-create-wildcards",
 )
 def _gallery_mode_default(name: str) -> str:
     return "global" if name.startswith("models") else "local"
@@ -269,6 +280,20 @@ _GALLERY_LOCAL_KEYS = (
     "models-loras",
     "models-wildcards",
     "models-other",
+    "template",
+    "template-checkpoints",
+    "template-text-encoders",
+    "template-vae",
+    "template-loras",
+    "template-wildcards",
+    "gallery-search",
+    "gallery-search-checkpoints",
+    "gallery-search-loras",
+    "gallery-search-wildcards",
+    "gallery-create",
+    "gallery-create-checkpoints",
+    "gallery-create-loras",
+    "gallery-create-wildcards",
 )
 
 

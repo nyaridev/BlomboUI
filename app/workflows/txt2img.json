@@ -1,7 +1,5 @@
 {
   "apply": [
-    "negativePrompt",
-    "checkpoint",
     "sampler",
     "scheduler",
     "steps",
@@ -11,7 +9,7 @@
   ],
   "1": {
     "inputs": {
-      "ckpt_name": "waiIllustriousSDXL_v140.safetensors"
+      "ckpt_name": ""
     },
     "class_type": "CheckpointLoaderSimple",
     "_meta": {
@@ -20,7 +18,7 @@
   },
   "2": {
     "inputs": {
-      "text": "1girl, black hair",
+      "text": "",
       "clip": ["12", 1]
     },
     "class_type": "CLIPTextEncode",

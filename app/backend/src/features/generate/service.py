@@ -22,7 +22,9 @@ from features.generate.scripts.jobs import (
 from features.generate.scripts.templates import (
     TemplateError,
     create_template,
+    delete_template,
     list_templates,
+    reorder_templates,
     set_apply,
     update_template,
 )
@@ -33,6 +35,7 @@ __all__ = [
     "comfy_base",
     "create_job",
     "create_template",
+    "delete_template",
     "free",
     "get_job",
     "gpu_stats",
@@ -46,6 +49,7 @@ __all__ = [
     "preview_bytes",
     "preview_media",
     "reachable",
+    "reorder_templates",
     "set_apply",
     "update_template",
 ]

@@ -252,6 +252,65 @@ class ScopeTests(unittest.TestCase):
         likely = removed.thumb_file(uid, pair, "likely", False)
         self.assertTrue(likely and likely.name.startswith(pair))
 
+    def test_display_match_cases(self) -> None:
+        kirito = thumbnail_scopes.create_scope({"name": "Kirito", "anyGroups": [["kirito"]]})
+        skirt = thumbnail_scopes.create_scope({"name": "Skirt", "anyGroups": [["skirt"]]})
+        extra = thumbnail_scopes.create_scope({"name": "Coat", "anyGroups": [["coat"]]})
+        k = thumbnail_scopes.context_key([kirito["id"]])
+        pair = thumbnail_scopes.context_key([kirito["id"], skirt["id"]])
+        mixed = thumbnail_scopes.context_key([kirito["id"], extra["id"]])
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((200, 10, 10)), k, {"tags": ["kirito"]})
+        model_thumbs.save_thumb(
+            "loras", "char.safetensors", _png((10, 200, 10)), pair, {"tags": ["kirito", "skirt"]}
+        )
+        model_thumbs.save_thumb(
+            "loras", "char.safetensors", _png((80, 80, 10)), mixed, {"tags": ["kirito", "coat"]}
+        )
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((10, 10, 200)), "global", {"tags": []})
+
+        likely = model_thumbs.resolved_file("loras", "char.safetensors", k, "likely", True)
+        self.assertTrue(likely and likely.stem == k)
+        model_thumbs.delete_thumb("loras", "char.safetensors", k)
+        likely = model_thumbs.resolved_file("loras", "char.safetensors", k, "likely", True)
+        self.assertTrue(likely and likely.stem in {pair, mixed})
+
+        exact = model_thumbs.resolved_file("loras", "char.safetensors", k, "exact", True)
+        self.assertTrue(exact and exact.stem == "global")
+
+        optional = model_thumbs.resolved_file("loras", "char.safetensors", k, "exact", True, [kirito["id"]])
+        self.assertTrue(optional and optional.stem in {pair, mixed})
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((200, 10, 10)), k, {"tags": ["kirito"]})
+        optional = model_thumbs.resolved_file("loras", "char.safetensors", k, "exact", True, [kirito["id"]])
+        self.assertTrue(optional and optional.stem == k)
+
+        pair_hit = model_thumbs.resolved_file(
+            "loras", "char.safetensors", pair, "likely", False, [skirt["id"]]
+        )
+        self.assertTrue(pair_hit and pair_hit.stem == pair)
+        model_thumbs.delete_thumb("loras", "char.safetensors", pair)
+        drop_opt = model_thumbs.resolved_file(
+            "loras", "char.safetensors", pair, "likely", False, [skirt["id"]]
+        )
+        self.assertTrue(drop_opt and drop_opt.stem == k)
+        model_thumbs.delete_thumb("loras", "char.safetensors", k)
+        any_k = model_thumbs.resolved_file(
+            "loras", "char.safetensors", pair, "likely", False, [skirt["id"]]
+        )
+        self.assertTrue(any_k and any_k.stem == mixed)
+        model_thumbs.delete_thumb("loras", "char.safetensors", mixed)
+        self.assertIsNone(
+            model_thumbs.resolved_file("loras", "char.safetensors", pair, "likely", False, [skirt["id"]])
+        )
+
+        model_thumbs.save_thumb(
+            "loras", "char.safetensors", _png((10, 200, 10)), pair, {"tags": ["kirito", "skirt"]}
+        )
+        model_thumbs.save_thumb("loras", "char.safetensors", _png((200, 10, 10)), k, {"tags": ["kirito"]})
+        exact_pair = model_thumbs.resolved_file("loras", "char.safetensors", pair, "exact", False)
+        self.assertTrue(exact_pair and exact_pair.stem == pair)
+        model_thumbs.delete_thumb("loras", "char.safetensors", pair)
+        self.assertIsNone(model_thumbs.resolved_file("loras", "char.safetensors", pair, "exact", False))
+
     def test_duplicate_scope_names_are_issues(self) -> None:
         thumbnail_scopes.create_scope({"name": "Fern", "anyGroups": [["fern"]]})
         thumbnail_scopes.create_scope({"name": "fern", "anyGroups": [["plant"]]})

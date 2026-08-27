@@ -60,6 +60,53 @@ class SettingsTests(unittest.TestCase):
         result = settings._clean({"lookupKinds": ["loras", "other", "checkpoints"]})
         self.assertEqual(result["lookupKinds"], ["loras", "other", "checkpoints"])
 
+    def test_gallery_local_scopes_keep_template_and_search_keys(self) -> None:
+        result = settings._clean(
+            {
+                "galleryScopeMode": {
+                    "template-loras": "global",
+                    "gallery-search-loras": "global",
+                    "gallery-create-loras": "local",
+                },
+                "galleryLocalScopes": {
+                    "template": {
+                        "ids": ["aaaaaaaaaaaa"],
+                        "optionalIds": [],
+                        "auto": False,
+                        "mode": "likely",
+                        "fallback": True,
+                    },
+                    "gallery-search": {
+                        "ids": ["bbbbbbbbbbbb"],
+                        "optionalIds": [],
+                        "auto": False,
+                        "mode": "exact",
+                        "fallback": False,
+                    },
+                    "gallery-create": {
+                        "ids": ["dddddddddddd"],
+                        "optionalIds": [],
+                        "auto": False,
+                        "mode": "likely",
+                        "fallback": True,
+                    },
+                    "template-loras": {
+                        "ids": ["cccccccccccc"],
+                        "optionalIds": [],
+                        "auto": False,
+                        "mode": "likely",
+                        "fallback": True,
+                    },
+                },
+            }
+        )
+        self.assertEqual(result["galleryScopeMode"]["template-loras"], "global")
+        self.assertEqual(result["galleryScopeMode"]["gallery-search-loras"], "global")
+        self.assertEqual(result["galleryLocalScopes"]["template"]["ids"], ["aaaaaaaaaaaa"])
+        self.assertEqual(result["galleryLocalScopes"]["gallery-search"]["ids"], ["bbbbbbbbbbbb"])
+        self.assertEqual(result["galleryLocalScopes"]["gallery-create"]["ids"], ["dddddddddddd"])
+        self.assertEqual(result["galleryLocalScopes"]["template-loras"]["ids"], ["cccccccccccc"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, Response
 from api.errors import ApiError
 from api.http import image_response
 from features.generate import service as generate
-from features.generate.schemas import InterruptIn, JobIn, TemplateIn, TemplateUpdate, WorkflowApplyIn
+from features.generate.schemas import InterruptIn, JobIn, TemplateIn, TemplateOrderIn, TemplateUpdate, WorkflowApplyIn
 
 api = APIRouter()
 
@@ -19,12 +19,13 @@ def workflows() -> dict:
 @api.get("/templates/{workflow}")
 def list_templates(workflow: str) -> dict:
     packed, apply = generate.list_templates(workflow)
-    return {"templates": packed, "apply": apply}
+    return {"templates": packed, "defaultApply": apply, "apply": apply}
 
 
 @api.put("/templates/{workflow}")
 def put_workflow_apply(workflow: str, body: WorkflowApplyIn) -> dict:
-    return {"apply": generate.set_apply(workflow, body.apply)}
+    apply = generate.set_apply(workflow, body.apply)
+    return {"defaultApply": apply, "apply": apply}
 
 
 @api.post("/templates/{workflow}")
@@ -32,9 +33,25 @@ def post_template(workflow: str, body: TemplateIn) -> dict:
     return {"template": generate.create_template(workflow, body.name, body.params)}
 
 
+@api.put("/templates/{workflow}/order")
+def put_template_order(workflow: str, body: TemplateOrderIn) -> dict:
+    packed, apply = generate.reorder_templates(workflow, body.ids)
+    return {"templates": packed, "defaultApply": apply, "apply": apply}
+
+
 @api.put("/templates/{workflow}/{template_id}")
 def put_template(workflow: str, template_id: str, body: TemplateUpdate) -> dict:
-    return {"template": generate.update_template(workflow, template_id, body.params, body.name, body.icon)}
+    return {
+        "template": generate.update_template(
+            workflow, template_id, body.params, body.name, body.icon, body.apply, body.enabled
+        )
+    }
+
+
+@api.delete("/templates/{workflow}/{template_id}")
+def delete_template(workflow: str, template_id: str) -> dict:
+    generate.delete_template(workflow, template_id)
+    return {"ok": True}
 
 
 @api.get("/comfy/ksampler")

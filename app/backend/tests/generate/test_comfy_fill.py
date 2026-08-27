@@ -25,6 +25,31 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertIn("VAELoader", kinds)
         self.assertIn("EmptyLatentImage", kinds)
 
+    def test_workflow_defaults_have_empty_prompt_and_models(self) -> None:
+        for name in ("diffusion.json", "txt2img.json"):
+            data = json.loads((WORKFLOWS / name).read_text(encoding="utf-8"))
+            apply = data.get("apply") or []
+            self.assertNotIn("prompt", apply)
+            self.assertNotIn("checkpoint", apply)
+            self.assertNotIn("vae", apply)
+            self.assertNotIn("textEncoder", apply)
+            for node in data.values():
+                if not isinstance(node, dict):
+                    continue
+                inputs = node.get("inputs") or {}
+                kind = node.get("class_type")
+                if kind == "CLIPTextEncode":
+                    self.assertEqual(inputs.get("text"), "")
+                if kind == "UNETLoader":
+                    self.assertEqual(inputs.get("unet_name"), "")
+                if kind == "CheckpointLoaderSimple":
+                    self.assertEqual(inputs.get("ckpt_name"), "")
+                if kind == "CLIPLoader":
+                    self.assertEqual(inputs.get("clip_name"), "")
+                if kind == "VAELoader":
+                    self.assertEqual(inputs.get("vae_name"), "")
+
+
     def test_fill_sets_unet_clip_vae_and_size(self) -> None:
         data = json.loads((WORKFLOWS / "diffusion.json").read_text(encoding="utf-8"))
         with patch.object(comfy_fill.lora_tags, "apply"):

@@ -1,0 +1,41 @@
+---
+description: Local vs shared gallery scope and type/sort filters. Do not mix packs across surfaces.
+alwaysApply: true
+---
+
+# Gallery filter sharing
+
+Each gallery (and chrome tiles that show its models) has its own filter packs. The globe only shares **inside one surface**. Do not mix Generate, Models Local, Templates, Gallery search, or Gallery libraries.
+
+Keys live in [`stores/settings/constants.ts`](app/frontend/src/stores/settings/constants.ts) (`galleryScopeKey` / `galleryFilterKey`). Persist through settings. Backend `_GALLERY_MODE_KEYS` and `_GALLERY_LOCAL_KEYS` in [`validators.py`](app/backend/src/features/settings/scripts/validators.py) must list every view key and share key.
+
+| Surface | Globe label | Share pack | Per-view local pack |
+|---|---|---|---|
+| Generate galleries | Generate galleries | `thumbScopeIds` (`'global'`) for scopes; `'global'` for type/sort | `checkpoints` / `loras` / `wildcards` / `other` |
+| Models Local | Models galleries | `galleryLocalScopes.models` | `models-all` / `models-loras` / … |
+| Templates picker | Templates | `galleryLocalScopes.template` | `template-loras` / … |
+| Gallery filter tiles | Gallery search | `galleryLocalScopes['gallery-search']` | `gallery-search-loras` / … |
+| Gallery create/edit | Gallery libraries | `galleryLocalScopes['gallery-create']` | `gallery-create-loras` / … |
+
+Two globes, two meanings:
+
+- **Scope globe** — share chips, Auto, Most Likely/Exact, Global Fallback across sibling galleries on **that** surface.
+- **Type/sort globe** — share types and sort the same way. Search query stays per-view (`galleryQuery[modeKey]`).
+
+**Global Fallback** is not the globe. It is a per-pack flag: if this scope has no thumb, show the global thumbnail file.
+
+## Packs stay separate
+
+- Globe **on** → read/write the surface share pack only.
+- Globe **off** → read/write that view’s local pack only.
+- Missing local pack → `LOCAL_SCOPE_DEFAULT` (empty chips, Most Likely, Auto off, Fallback on).
+- Do **not** copy share → local on globe off, or local → share on globe on.
+
+Chrome tiles follow **their** gallery’s current pack (`useThumbView('loras')` → LoRA gallery, not Base Model). Same for checkpoint / Other / wildcard tiles vs Templates field thumbs.
+
+Gallery tab **image** search chips (`filters.scopes`) are a different feature. Do not reuse thumbnail-scope packs there.
+
+```text
+❌  One app-wide thumbScopeIds; LoRA tiles using Base Model’s globe; seeding local from share when globe turns off
+✅  Five share buckets; each view’s globe; empty local = defaults; prompt tiles use that kind’s gallery pack
+```

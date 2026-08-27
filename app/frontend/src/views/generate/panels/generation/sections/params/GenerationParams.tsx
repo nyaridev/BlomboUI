@@ -71,12 +71,16 @@ export function GenerationParams({
   const outputGridPath = useGenerateStore((s) => s.outputGridPath)
   const outputImageName = useGenerateStore((s) => s.outputImageName)
   const outputGridName = useGenerateStore((s) => s.outputGridName)
+  const outputHiresPath = useGenerateStore((s) => s.outputHiresPath)
+  const outputHiresName = useGenerateStore((s) => s.outputHiresName)
   const outputPathEnabled = useGenerateStore((s) => s.outputPathEnabled)
   const workflow = useGenerateStore((s) => s.workflow)
   const setOutputImagePath = useGenerateStore((s) => s.setOutputImagePath)
   const setOutputGridPath = useGenerateStore((s) => s.setOutputGridPath)
   const setOutputImageName = useGenerateStore((s) => s.setOutputImageName)
   const setOutputGridName = useGenerateStore((s) => s.setOutputGridName)
+  const setOutputHiresPath = useGenerateStore((s) => s.setOutputHiresPath)
+  const setOutputHiresName = useGenerateStore((s) => s.setOutputHiresName)
   const setOutputPathEnabled = useGenerateStore((s) => s.setOutputPathEnabled)
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
@@ -297,7 +301,7 @@ export function GenerationParams({
         </div>
       </div>
       <ParamSection title="Extras">
-        <GenerationExtras key={workflow} />
+        <GenerationExtras key={workflow} workflowParams={workflowParams} comfyOk={comfyOk} lastSeed={lastSeed} />
       </ParamSection>
       <ParamSection title="Other">
         <OutputPathOverride
@@ -306,11 +310,15 @@ export function GenerationParams({
           gridPath={outputGridPath}
           imageName={outputImageName}
           gridName={outputGridName}
+          hiresPath={outputHiresPath}
+          hiresName={outputHiresName}
           enabled={outputPathEnabled}
           onImagePath={setOutputImagePath}
           onGridPath={setOutputGridPath}
           onImageName={setOutputImageName}
           onGridName={setOutputGridName}
+          onHiresPath={setOutputHiresPath}
+          onHiresName={setOutputHiresName}
           onEnabled={setOutputPathEnabled}
         />
         <GenerationScripts key={`scripts-${workflow}`} workflowParams={workflowParams} comfyOk={comfyOk} />

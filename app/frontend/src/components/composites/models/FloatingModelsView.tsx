@@ -1,12 +1,14 @@
 import { GalleryBrowser } from '@/components/composites/gallery/GalleryBrowser.tsx'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import type { ModelLists } from '@/lib/api.ts'
+import type { ModelEntry, ModelLists } from '@/lib/api.ts'
 import { useEffect, useRef, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 
 type FloatingModelsViewProps = {
   kind: keyof ModelLists
+  items?: ModelEntry[]
+  itemKind?: (item: ModelEntry) => keyof ModelLists
   value?: string
   selected?: string[]
   onSelect: (path: string) => void
@@ -19,6 +21,8 @@ type FloatingModelsViewProps = {
 
 export function FloatingModelsView({
   kind,
+  items: itemsProp,
+  itemKind,
   value = '',
   selected,
   onSelect,
@@ -28,7 +32,8 @@ export function FloatingModelsView({
   dismissOutside = true,
   closeOnSelect = true,
 }: FloatingModelsViewProps) {
-  const items = useModelsStore((s) => s[kind])
+  const stored = useModelsStore((s) => s[kind])
+  const items = itemsProp ?? stored
   const load = useModelsStore((s) => s.load)
   const galleryTileScale = useSettingsStore((s) => s.galleryTileScale)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -76,6 +81,7 @@ export function FloatingModelsView({
       <GalleryBrowser
         kind={kind}
         items={items}
+        itemKind={itemKind}
         value={value}
         selected={selected}
         onSelect={(path) => {

@@ -3,6 +3,9 @@ from __future__ import annotations
 from features.models.scripts.hashes import start, stop, warm
 from features.models.scripts.model_meta import delete_thumb, save_thumb, set_info, thumb_media, thumb_mtime
 from features.models.scripts.model_thumbs import drop_scope, list_saved, resolved_file
+from features.models.scripts.manager_catalog import CatalogError as ManagerCatalogError
+from features.models.scripts.manager_catalog import install as install_manager_model
+from features.models.scripts.manager_catalog import list_models as list_manager_models
 from features.models.scripts.models import (
     ALL_KINDS,
     hash_files,
@@ -25,6 +28,7 @@ from features.models.scripts.thumbnail_scopes import (
 )
 
 __all__ = [
+    "ManagerCatalogError",
     "ALL_KINDS",
     "GLOBAL_ID",
     "auto_ids",
@@ -34,6 +38,8 @@ __all__ = [
     "delete_thumb",
     "drop_scope",
     "hash_files",
+    "install_manager_model",
+    "list_manager_models",
     "list_models",
     "list_saved",
     "list_scopes",

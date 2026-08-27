@@ -11,6 +11,13 @@ MODEL_SUBDIRS = (
     "text_encoders",
     "diffusion_models",
     "upscale_models",
+    "vae_approx",
+    "clip_vision",
+    "hypernetworks",
+    "photomaker",
+    "gligen",
+    "diffusers",
+    "classifiers",
 )
 
 

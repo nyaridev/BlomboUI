@@ -35,6 +35,46 @@ class AutoLoraIn(BaseModel):
     strength: float = 1.0
 
 
+class HiresLoraIn(BaseModel):
+    path: str
+    strength: float = 1.0
+
+
+class HiresIn(BaseModel):
+    enabled: bool = False
+    scale: float = Field(default=1.5, ge=1, le=8)
+    size_mode: Literal["scale", "raw", "scaler", "set"] = "scale"
+    width: int | None = Field(default=None, ge=64, le=4096)
+    height: int | None = Field(default=None, ge=64, le=4096)
+    aspect: str = ""
+    megapixels: float = Field(default=1, ge=0.2, le=4)
+    upscale_model: str = ""
+    steps: int = Field(default=15, ge=1, le=150)
+    cfg: float = Field(default=4, ge=1, le=30)
+    sampler: str = ""
+    scheduler: str = ""
+    denoise: float = Field(default=0.55, ge=0, le=1)
+    seed: int = -1
+    seed_after: Literal["randomize", "fixed", "increment", "decrement"] = "randomize"
+    seed_override: bool = False
+    seed_follow: bool | None = None
+    upscale_method: Literal["nearest-exact", "bilinear", "area", "bicubic", "lanczos"] = "bilinear"
+    crop: Literal["disabled", "center"] = "disabled"
+    prompt_override: bool = False
+    prompt: str = ""
+    negative_override: bool = False
+    negative_prompt: str = ""
+    model_override: bool = False
+    checkpoint: str = ""
+    vae: str = ""
+    text_encoder: str = ""
+    kind: str = ""
+    lora_override: bool = False
+    loras: list[HiresLoraIn] = Field(default_factory=list)
+    save_before: bool = True
+    clear_vram: bool = False
+
+
 class JobIn(BaseModel):
     prompt: str = ""
     negative_prompt: str = ""
@@ -66,6 +106,9 @@ class JobIn(BaseModel):
     output_grid_path: str | None = None
     output_image_name: str | None = None
     output_grid_name: str | None = None
+    output_hires_path: str | None = None
+    output_hires_name: str | None = None
+    hires: HiresIn | None = None
     auto_loras: list[str | AutoLoraIn] = Field(default_factory=list)
     prompt_matrix: PromptMatrixIn | None = None
     xy_plot: XyPlotIn | None = None

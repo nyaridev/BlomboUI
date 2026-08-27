@@ -93,6 +93,7 @@ export function ScopeLookup({ onEditScope, active = true }: { onEditScope: (id: 
   const loras = useModelsStore((s) => s.loras)
   const vae = useModelsStore((s) => s.vae)
   const textEncoders = useModelsStore((s) => s.text_encoders)
+  const upscaleModels = useModelsStore((s) => s.upscale_models)
   const controlnet = useModelsStore((s) => s.controlnet)
   const embeddings = useModelsStore((s) => s.embeddings)
   const wildcards = useModelsStore((s) => s.wildcards)
@@ -146,6 +147,7 @@ export function ScopeLookup({ onEditScope, active = true }: { onEditScope: (id: 
     loras,
     vae,
     text_encoders: textEncoders,
+    upscale_models: upscaleModels,
     controlnet,
     embeddings,
     wildcards,
@@ -158,7 +160,7 @@ export function ScopeLookup({ onEditScope, active = true }: { onEditScope: (id: 
           byKind[kind].filter((row) => !row.dir).map((row) => modelKey(kind, row.path)),
         ),
       })),
-    [activeGroups, checkpoints, controlnet, diffusionModels, embeddings, loras, textEncoders, vae, wildcards],
+    [activeGroups, checkpoints, controlnet, diffusionModels, embeddings, loras, textEncoders, upscaleModels, vae, wildcards],
   )
 
   const shown = useMemo(() => {

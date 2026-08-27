@@ -76,6 +76,10 @@ fi
 
 install_node "comfyui-manager" "https://github.com/Comfy-Org/ComfyUI-Manager" || exit 1
 install_node "rgthree-comfy" "https://github.com/rgthree/rgthree-comfy" || exit 1
+install_node "ComfyUI-KJNodes" "https://github.com/kijai/ComfyUI-KJNodes" || exit 1
+install_node "ComfyUI-Easy-Use" "https://github.com/yolain/Comfyui-Easy-Use" || exit 1
+install_node "ComfyUI-Impact-Pack" "https://github.com/ltdrdata/ComfyUI-Impact-Pack" || exit 1
+install_node "ComfyUI-Impact-Subpack" "https://github.com/ltdrdata/ComfyUI-Impact-Subpack" || exit 1
 
 echo
 ui_ok "ComfyUI custom nodes are ready."

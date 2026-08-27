@@ -1,7 +1,8 @@
-import type { Job } from '@/lib/api.ts'
+import type { Job, ModelEntry } from '@/lib/api.ts'
 import { loraNameMatches, parseLoraHits } from '@/lib/prompt/loraTags.ts'
 import { parseWildcardTags, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
 import { autoLoraId, type ModelSwap } from '@/stores/generateStore.ts'
+import { modelPath } from '@/stores/modelsStore.ts'
 
 export function idsFromJob(job: Job): string[] {
   return job.gallery_ids
@@ -138,6 +139,33 @@ export function progressLabel(pct: number, eta: number | null): string {
   return `${Math.round(pct)}% ETA: ${eta}s`
 }
 
+export const HIRES_PROGRESS_SEGMENTS = ['Generation', 'Upscaling', 'Hires. fix'] as const
+
+const HIRES_STAGE_LABEL: Record<string, string> = {
+  generation: 'Generation',
+  upscaling: 'Upscaling',
+  hires: 'Hires. fix',
+}
+
+export function hiresProgressLabel(
+  stage: string | undefined,
+  pct: number,
+  eta: number | null,
+  step?: number,
+  steps?: number,
+): string {
+  const name = (stage && HIRES_STAGE_LABEL[stage]) || 'Generation'
+  const counted = typeof step === 'number' && typeof steps === 'number' && steps > 0
+  if (pct <= 0 && stage === 'generation') {
+    return 'Starting…'
+  }
+  const body = counted ? `${name} · ${step} / ${steps}` : name
+  if (eta == null || pct <= 0) {
+    return body
+  }
+  return `${body} · ETA: ${eta}s`
+}
+
 export function tabForSwap(swap: ModelSwap | null) {
   if (!swap) {
     return null
@@ -152,4 +180,8 @@ export function tabForSwap(swap: ModelSwap | null) {
     return 'Other'
   }
   return 'Base Model'
+}
+
+export function hiresDiffusion(checkpoint: string, diffusionModels: ModelEntry[]) {
+  return diffusionModels.some((item) => modelPath(item) === checkpoint)
 }

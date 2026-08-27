@@ -15,7 +15,7 @@ export type Job = {
   created_at: string
   started_at: string | null
   finished_at: string | null
-  progress: { value: number; max: number } | null
+  progress: { value: number; max: number; stage?: string; step?: number; steps?: number } | null
   job_progress: { value: number; max: number } | null
   has_preview: boolean
   preview_steps: number[]
@@ -31,6 +31,7 @@ export type JobLora = {
 
 export type JobGalleryItem = {
   id: string
+  kind?: string
   prompt: string
   negative_prompt: string
   seed: number | null
@@ -104,6 +105,41 @@ export type JobRequest = {
   output_grid_path?: string
   output_image_name?: string
   output_grid_name?: string
+  output_hires_path?: string
+  output_hires_name?: string
+  hires?: {
+    enabled: boolean
+    scale: number
+    size_mode: 'scale' | 'raw' | 'scaler' | 'set'
+    width: number
+    height: number
+    aspect: string
+    megapixels: number
+    upscale_model: string
+    steps: number
+    cfg: number
+    sampler: string
+    scheduler: string
+    denoise: number
+    seed: number
+    seed_after: 'randomize' | 'fixed' | 'increment' | 'decrement'
+    seed_override: boolean
+    upscale_method: string
+    crop: string
+    prompt_override: boolean
+    prompt: string
+    negative_override: boolean
+    negative_prompt: string
+    model_override: boolean
+    checkpoint: string
+    vae: string
+    text_encoder: string
+    kind: string
+    lora_override: boolean
+    loras: { path: string; strength: number }[]
+    save_before: boolean
+    clear_vram: boolean
+  }
   auto_loras?: AutoLoraRequest[]
   prompt_matrix?: PromptMatrixRequest
   xy_plot?: XyPlotRequest

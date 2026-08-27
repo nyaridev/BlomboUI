@@ -221,12 +221,20 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
       set({ interruptedPath })
       persist()
     },
+    setHiresPath: (hiresPath) => {
+      set({ hiresPath })
+      persist()
+    },
     setImageName: (imageName) => {
       set({ imageName })
       persist()
     },
     setGridName: (gridName) => {
       set({ gridName })
+      persist()
+    },
+    setHiresName: (hiresName) => {
+      set({ hiresName })
       persist()
     },
     setImageFormat: (imageFormat) => {

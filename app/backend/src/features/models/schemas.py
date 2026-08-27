@@ -35,6 +35,12 @@ class ModelMoveIn(BaseModel):
     folder: str = ""
 
 
+class ManagerInstallIn(BaseModel):
+    name: str
+    filename: str
+    save_path: str = ""
+
+
 class ScopeIn(BaseModel):
     name: str = ""
     group: str = ""

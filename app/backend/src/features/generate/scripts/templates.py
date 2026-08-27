@@ -44,6 +44,8 @@ _KEYS = {
     "outputGridPath": str,
     "outputImageName": str,
     "outputGridName": str,
+    "outputHiresPath": str,
+    "outputHiresName": str,
     "outputPathEnabled": bool,
     "batchSize": int,
     "batchCount": int,

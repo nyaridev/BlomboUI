@@ -16,6 +16,8 @@ class ExtraModelPathsTests(unittest.TestCase):
         self.assertIn("    text_encoders: text_encoders", text)
         self.assertIn("    diffusion_models: diffusion_models", text)
         self.assertIn("    upscale_models: upscale_models", text)
+        self.assertIn("    vae_approx: vae_approx", text)
+        self.assertIn("    clip_vision: clip_vision", text)
         for name in MODEL_SUBDIRS:
             self.assertIn(f"    {name}: {name}", text)
 

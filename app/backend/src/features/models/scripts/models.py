@@ -19,6 +19,7 @@ KINDS = {
     "embeddings": (".safetensors", ".pt", ".bin", ".pth"),
     "diffusion_models": (".safetensors", ".ckpt", ".pt", ".pth", ".sft"),
     "text_encoders": (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".bin"),
+    "upscale_models": (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".onnx"),
 }
 
 WILDCARD_EXTS = (".txt", ".yaml", ".yml")

@@ -8,7 +8,7 @@ import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.ts
 import { Fragment } from 'react'
 
 export const SAVING_QUERY =
-  'saving output path folder images grids interrupted skip cancel hide gallery name filename number placeholder token workflow template model date time year month day weekday hour minute second datetime sampler scheduler seed width height size steps cfg format png jpg jpeg webp quality large sidecar'
+  'saving output path folder images grids hires hiresfix interrupted skip cancel hide gallery name filename number placeholder token workflow template model date time year month day weekday hour minute second datetime sampler scheduler seed width height size steps cfg format png jpg jpeg webp quality large sidecar'
 
 const INPUT =
   'w-full rounded border border-line bg-field px-2 py-1.5 font-mono text-sm text-ink outline-none placeholder:text-muted focus:border-accent'
@@ -75,8 +75,10 @@ export function SavingSection({ query = '' }: { query?: string }) {
   const imagePath = useSettingsStore((s) => s.imagePath)
   const gridPath = useSettingsStore((s) => s.gridPath)
   const interruptedPath = useSettingsStore((s) => s.interruptedPath)
+  const hiresPath = useSettingsStore((s) => s.hiresPath)
   const imageName = useSettingsStore((s) => s.imageName)
   const gridName = useSettingsStore((s) => s.gridName)
+  const hiresName = useSettingsStore((s) => s.hiresName)
   const saveInterrupted = useSettingsStore((s) => s.saveInterrupted)
   const galleryHideInterrupted = useSettingsStore((s) => s.galleryHideInterrupted)
   const imageFormat = useSettingsStore((s) => s.imageFormat)
@@ -87,8 +89,10 @@ export function SavingSection({ query = '' }: { query?: string }) {
   const setImagePath = useSettingsStore((s) => s.setImagePath)
   const setGridPath = useSettingsStore((s) => s.setGridPath)
   const setInterruptedPath = useSettingsStore((s) => s.setInterruptedPath)
+  const setHiresPath = useSettingsStore((s) => s.setHiresPath)
   const setImageName = useSettingsStore((s) => s.setImageName)
   const setGridName = useSettingsStore((s) => s.setGridName)
+  const setHiresName = useSettingsStore((s) => s.setHiresName)
   const setSaveInterrupted = useSettingsStore((s) => s.setSaveInterrupted)
   const setGalleryHideInterrupted = useSettingsStore((s) => s.setGalleryHideInterrupted)
   const setImageFormat = useSettingsStore((s) => s.setImageFormat)
@@ -152,6 +156,28 @@ export function SavingSection({ query = '' }: { query?: string }) {
             spellCheck={false}
           />
           <p className="text-xs text-muted">Example: {previewPath(imagePath)}</p>
+        </SettingsBlock>
+      </SettingsCard>
+      <SettingsCard query={query} title="Hires. fix" terms="hires hiresfix name folder filename number output path workflow date scale">
+        <SettingsBlock query={query} title="Name" terms="hires name filename number" setting="hiresName">
+          <input
+            className={INPUT}
+            value={hiresName}
+            onChange={(e) => setHiresName(e.target.value)}
+            spellCheck={false}
+          />
+          <p className="text-xs text-muted">
+            Example: {previewPath(hiresName)}.{imageFormat}
+          </p>
+        </SettingsBlock>
+        <SettingsBlock query={query} title="Folder" terms="hires folder output path workflow date" setting="hiresPath">
+          <input
+            className={INPUT}
+            value={hiresPath}
+            onChange={(e) => setHiresPath(e.target.value)}
+            spellCheck={false}
+          />
+          <p className="text-xs text-muted">Example: {previewPath(hiresPath)}</p>
         </SettingsBlock>
       </SettingsCard>
       <SettingsCard query={query} title="Grids" terms="grid name grids folder filename number contact sheet jpg output path">

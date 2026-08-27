@@ -32,6 +32,7 @@ from .job_output import (
     _maybe_xy_grid,
     _template_name,
     _template_snapshot,
+    save_kind,
 )
 from .job_plan import (
     DEFAULTS,
@@ -50,6 +51,7 @@ from .job_plan import (
     _run_seed,
     _seed_after,
 )
+from .comfy_fill import combined_progress, hires_enabled, progress_stage_map, stage_index
 from . import save_meta
 from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 
@@ -69,6 +71,8 @@ class LiveJob:
         self.preview_enabled, self.preview_every, self.preview_after, self.preview_last, self.preview_after_first = (
             _preview_opts()
         )
+        self.stages: dict[str, str] | None = None
+        self.stage = "generation"
 
 
 _live: dict[str, LiveJob] = {}
@@ -98,6 +102,26 @@ def _preview_first(every: int, after: int) -> int:
     after = max(1, after)
     extra = after % every
     return after if extra == 0 else after + (every - extra)
+
+
+def _expand_hires_prompts(run_values: dict[str, Any], rng: random.Random) -> None:
+    blob = run_values.get("hires")
+    if not isinstance(blob, dict):
+        return
+    missing = run_values.get("wildcard_missing")
+    if not isinstance(missing, list):
+        missing = []
+        run_values["wildcard_missing"] = missing
+    prompt_on = bool(blob.get("prompt_override") if blob.get("prompt_override") is not None else blob.get("promptOverride"))
+    negative_on = bool(
+        blob.get("negative_override") if blob.get("negative_override") is not None else blob.get("negativeOverride")
+    )
+    if prompt_on:
+        blob["prompt"] = wildcard_tags.expand(str(blob.get("prompt") or ""), rng, missing)
+    if negative_on:
+        blob["negative_prompt"] = wildcard_tags.expand(
+            str(blob.get("negative_prompt") or blob.get("negativePrompt") or ""), rng, missing
+        )
 
 
 def _preview_opts() -> tuple[bool, int, int, bool, bool]:
@@ -151,6 +175,14 @@ def _on_live(job_id: str, event: dict[str, Any]) -> None:
             live.batch_i = int(event["batch_i"])
         if event.get("batch_count") is not None:
             live.batch_count = max(1, int(event["batch_count"]))
+        node = event.get("node")
+        if node is not None and live.stages:
+            stage = live.stages.get(str(node))
+            if stage is not None and stage_index(stage) >= stage_index(live.stage):
+                if stage != live.stage:
+                    live.value = 0
+                    live.max = 0
+                live.stage = stage
         if event.get("max") is not None:
             live.max = int(event["max"])
         if event.get("value") is not None:
@@ -177,11 +209,25 @@ def _live_fields(job_id: str) -> dict[str, Any]:
                 "preview_batch": 0,
                 "preview_rev": 0,
             }
-        current_max = live.max or 0
-        overall_max = live.batch_count * current_max
-        overall_value = live.batch_i * current_max + live.value
+        if live.stages:
+            pct = combined_progress(live.stage, live.value, live.max)
+            current_max = 100
+            current_value = pct
+            progress: dict[str, Any] = {
+                "value": pct,
+                "max": 100,
+                "stage": live.stage,
+                "step": live.value,
+                "steps": live.max,
+            }
+        else:
+            current_max = live.max or 0
+            current_value = live.value
+            progress = {"value": live.value, "max": live.max}
+        overall_max = live.batch_count * (current_max or 1)
+        overall_value = live.batch_i * (current_max or 1) + current_value
         return {
-            "progress": {"value": live.value, "max": live.max},
+            "progress": progress,
             "job_progress": {"value": overall_value, "max": overall_max},
             "has_preview": live.preview is not None,
             "preview_steps": sorted(live.snapshots),
@@ -260,7 +306,7 @@ def _row_job(row: Any) -> dict[str, Any]:
             continue
         item = gallery_cache.output_row(output)
         if item:
-            public.append(_public_generation(item))
+            public.append({**_public_generation(item), "kind": str(output.get("kind") or "image")})
     grid = payload.get("grid_path")
     grids = payload.get("grid_paths")
     paths: list[str] = []
@@ -450,6 +496,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             run_values["prompt_raw"] = raw_prompt
             run_values["negative_prompt_raw"] = raw_negative
             await asyncio.to_thread(wildcard_tags.apply, run_values, rng)
+            _expand_hires_prompts(run_values, rng)
             used: list[str] = []
             for blob in (raw_prompt, raw_negative):
                 for match in wildcard_tags.TAG.finditer(blob):
@@ -491,6 +538,13 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             graph = await asyncio.to_thread(
                 comfy.fill_txt2img, {**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"}
             )
+            with _live_lock:
+                live = _live.get(job_id)
+                if live:
+                    live.stages = progress_stage_map(graph) if hires_enabled(run_values) else None
+                    live.stage = "generation"
+                    live.value = 0
+                    live.max = int(run_values.get("steps") or live.max or 0)
             _attach_lora_hashes(run_values)
             prompt_id, images = await asyncio.to_thread(
                 comfy.run_prompt,
@@ -526,15 +580,20 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             if skip:
                 continue
             for info in images:
-                gen_id, path = await asyncio.to_thread(
+                kind = save_kind(run_values, info, graph)
+                first_pass = hires_enabled(run_values) and kind == "images"
+                if first_pass and not include_sub:
+                    continue
+                gen_id, path, kind = await asyncio.to_thread(
                     _import_image, job_id, run_values, info, graph, include_sub
                 )
                 if include_sub:
-                    _record_output(job_id, values, gen_id, path, "image")
+                    _record_output(job_id, values, gen_id, path, "hires" if kind == "hires" else "image")
                 else:
                     temps.append(path)
                 had_image = True
-                saved.append(path)
+                if not first_pass:
+                    saved.append(path)
         values["duration_ms"] = int((time.monotonic() - started) * 1000)
         if canceled:
             if saved and values.get("batch_grid_on_cancel", True):

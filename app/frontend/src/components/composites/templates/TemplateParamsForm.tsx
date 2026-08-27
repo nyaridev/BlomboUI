@@ -338,11 +338,15 @@ export function TemplateParamsForm({
             gridPath={value.outputGridPath}
             imageName={value.outputImageName}
             gridName={value.outputGridName}
+            hiresPath={value.outputHiresPath}
+            hiresName={value.outputHiresName}
             enabled={value.outputPathEnabled}
             onImagePath={(outputImagePath) => set('outputImagePath', outputImagePath)}
             onGridPath={(outputGridPath) => set('outputGridPath', outputGridPath)}
             onImageName={(outputImageName) => set('outputImageName', outputImageName)}
             onGridName={(outputGridName) => set('outputGridName', outputGridName)}
+            onHiresPath={(outputHiresPath) => set('outputHiresPath', outputHiresPath)}
+            onHiresName={(outputHiresName) => set('outputHiresName', outputHiresName)}
             onEnabled={(outputPathEnabled) => set('outputPathEnabled', outputPathEnabled)}
           />
         </ApplyRow>
@@ -354,6 +358,10 @@ export function TemplateParamsForm({
             onChange={(patch) => onChange({ ...value, ...patch })}
             locked={locked}
             only="hires"
+            workflowParams={workflowParams}
+            comfyOk
+            width={value.width}
+            height={value.height}
           />
         </ApplyRow>
         <ApplyRow id="adetailer" apply={apply} onToggle={toggle} locked={locked}>

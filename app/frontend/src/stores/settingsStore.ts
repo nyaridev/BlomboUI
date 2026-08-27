@@ -73,8 +73,10 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setImagePath: (value: string) => void
   setGridPath: (value: string) => void
   setInterruptedPath: (value: string) => void
+  setHiresPath: (value: string) => void
   setImageName: (value: string) => void
   setGridName: (value: string) => void
+  setHiresName: (value: string) => void
   setImageFormat: (value: ImageFormat) => void
   setGridFormat: (value: ImageFormat) => void
   setImageQuality: (value: number) => void
@@ -141,7 +143,7 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setLookupKinds: (value: string[]) => void
   setLookupModels: (value: string[]) => void
   setScopeSearch: (value: string) => void
-  setModelsTab: (value: 'Local' | 'CivitAI') => void
+  setModelsTab: (value: 'Local' | 'CivitAI' | 'Manager') => void
   setModelsKind: (value: 'all' | 'checkpoints' | 'loras' | 'wildcards' | 'other') => void
   setCivitaiBrowse: (value: Partial<CivitaiBrowse>) => void
   setCivitaiTabs: (value: CivitaiTab[]) => void
@@ -194,8 +196,10 @@ const KEYS = [
   'imagePath',
   'gridPath',
   'interruptedPath',
+  'hiresPath',
   'imageName',
   'gridName',
+  'hiresName',
   'imageFormat',
   'gridFormat',
   'imageQuality',

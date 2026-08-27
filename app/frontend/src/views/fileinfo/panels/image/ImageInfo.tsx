@@ -279,6 +279,7 @@ function v2Rows(
   const labels: Record<string, string> = {
     vae: 'VAE',
     text_encoders: 'Text encoder',
+    upscale_models: 'Upscale',
     controlnet: 'ControlNet',
   }
   for (const item of params.models || []) {

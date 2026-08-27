@@ -320,7 +320,7 @@ function validParam(key: keyof TemplateParams, value: unknown, choices: { sample
   if (key === 'resMode') {
     return value === 'raw' || value === 'scaler' || value === 'set'
   }
-  if (key === 'outputImagePath' || key === 'outputGridPath' || key === 'outputImageName' || key === 'outputGridName') {
+  if (key === 'outputImagePath' || key === 'outputGridPath' || key === 'outputImageName' || key === 'outputGridName' || key === 'outputHiresPath' || key === 'outputHiresName') {
     return typeof value === 'string'
   }
   if (key === 'outputPathEnabled') {

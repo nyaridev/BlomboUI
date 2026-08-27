@@ -12,6 +12,8 @@ from features.settings.scripts.values import (
     _ORDERABLE_MAIN_TABS,
     GRID_NAME_DEFAULT,
     GRID_PATH_DEFAULT,
+    HIRES_NAME_DEFAULT,
+    HIRES_PATH_DEFAULT,
     IMAGE_NAME_DEFAULT,
     IMAGE_PATH_DEFAULT,
     INTERRUPTED_PATH_DEFAULT,
@@ -172,6 +174,12 @@ def _clean(raw: Any) -> dict[str, Any]:
     )
     if interrupted_path:
         out["interruptedPath"] = interrupted_path
+    hires_path = _path_template(raw.get("hiresPath"), HIRES_PATH_DEFAULT) if "hiresPath" in raw else None
+    if hires_path:
+        out["hiresPath"] = hires_path
+    hires_name = _name_template(raw.get("hiresName"), HIRES_NAME_DEFAULT) if "hiresName" in raw else None
+    if hires_name:
+        out["hiresName"] = hires_name
     if "imageFormat" in raw:
         name = str(raw["imageFormat"]).lower()
         if name == "jpeg":
@@ -417,7 +425,7 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["lookupModels"] = _lookup_models(raw["lookupModels"])
     if "scopeSearch" in raw and isinstance(raw["scopeSearch"], str):
         out["scopeSearch"] = raw["scopeSearch"][:200]
-    if "modelsTab" in raw and raw["modelsTab"] in ("Local", "Download", "CivitAI"):
+    if "modelsTab" in raw and raw["modelsTab"] in ("Local", "Download", "CivitAI", "Manager"):
         out["modelsTab"] = raw["modelsTab"]
     if "modelsKind" in raw and raw["modelsKind"] in ("all", "checkpoints", "loras", "wildcards", "other"):
         out["modelsKind"] = raw["modelsKind"]

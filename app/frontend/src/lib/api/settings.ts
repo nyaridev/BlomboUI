@@ -41,8 +41,10 @@ export type UserSettings = {
   imagePath?: string
   gridPath?: string
   interruptedPath?: string
+  hiresPath?: string
   imageName?: string
   gridName?: string
+  hiresName?: string
   imageFormat?: string
   gridFormat?: string
   imageQuality?: number

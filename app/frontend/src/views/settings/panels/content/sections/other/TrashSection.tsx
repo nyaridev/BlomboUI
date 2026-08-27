@@ -30,6 +30,8 @@ const KINDS: Record<string, string> = {
   controlnet: 'ControlNet',
   embeddings: 'Embedding',
   wildcards: 'Wildcard',
+  text_encoders: 'Text encoder',
+  upscale_models: 'Upscale',
 }
 
 function formatSize(bytes: number) {

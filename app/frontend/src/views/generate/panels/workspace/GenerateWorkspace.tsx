@@ -36,6 +36,7 @@ export function GenerateWorkspace({
   busy,
   progressPct,
   currentLabel,
+  progressSegments,
   jobPct,
   overallLabel,
   timing,
@@ -79,6 +80,7 @@ export function GenerateWorkspace({
   busy: boolean
   progressPct: number
   currentLabel: string
+  progressSegments?: string[]
   jobPct: number
   overallLabel: string | null
   timing: string | null
@@ -142,6 +144,7 @@ export function GenerateWorkspace({
           busy={busy}
           progressPct={progressPct}
           currentLabel={currentLabel}
+          progressSegments={progressSegments}
           jobPct={jobPct}
           overallLabel={overallLabel}
           timing={timing}
@@ -200,6 +203,9 @@ export function GenerateWorkspace({
             onSelect={(path) => {
               const item = otherItems.find((row) => row.path === path)
               const kind = item ? otherItemKind(item) : 'vae'
+              if (kind === 'upscale_models') {
+                return
+              }
               const useTextEncoder =
                 swapTarget?.slot === 'textEncoder' || (swapTarget?.slot !== 'vae' && kind === 'text_encoders')
               if (useTextEncoder) {

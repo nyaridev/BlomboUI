@@ -14,9 +14,19 @@ type ModelPickTileProps = {
   onClear?: () => void
   disabled?: boolean
   chromeKey?: string
+  size?: 'row' | 'tall'
 }
 
-export function ModelPickTile({ kind, role, value, onChange, onClear, disabled = false, chromeKey }: ModelPickTileProps) {
+export function ModelPickTile({
+  kind,
+  role,
+  value,
+  onChange,
+  onClear,
+  disabled = false,
+  chromeKey,
+  size = 'row',
+}: ModelPickTileProps) {
   const items = useModelsStore((s) => s[kind])
   const load = useModelsStore((s) => s.load)
   const triggerRef = useRef<HTMLButtonElement>(null)
@@ -25,6 +35,7 @@ export function ModelPickTile({ kind, role, value, onChange, onClear, disabled =
   const item = useMemo(() => findModel(items, value), [items, value])
   const empty = !value
   const unresolved = Boolean(value) && !item
+  const name = empty ? role : modelLabel(value) || value
 
   useEffect(() => {
     void load()
@@ -52,59 +63,98 @@ export function ModelPickTile({ kind, role, value, onChange, onClear, disabled =
     setOpen(true)
   }
 
+  function clear(event: { preventDefault(): void; stopPropagation(): void }) {
+    event.preventDefault()
+    event.stopPropagation()
+    onClear?.()
+  }
+
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        disabled={disabled}
-        title={empty ? `Choose ${role}` : modelLabel(value) || value}
-        className={[
-          'group flex min-w-0 items-center gap-cluster rounded border border-line bg-field px-1.5 py-1 text-left',
-          disabled ? 'cursor-default opacity-60' : 'hover:bg-line',
-        ].join(' ')}
-        onClick={() => (open ? setOpen(false) : show())}
-      >
-        <span className="relative w-10 shrink-0">
-          <TilePreview
-            src={item ? modelThumbSrc(kind, item) : null}
-            mark={empty ? '' : unresolved ? '?' : ''}
-            eager
-            className="w-10"
-          />
-          {empty ? (
-            <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-muted">
-              <AppIcon id="plus" size={14} />
+      {size === 'tall' ? (
+        <div className="group relative w-28 shrink-0">
+          <button
+            ref={triggerRef}
+            type="button"
+            disabled={disabled}
+            title={empty ? `Add ${role}` : name}
+            className={[
+              'relative block transition duration-150 ease-out',
+              disabled ? 'cursor-default' : 'hover:brightness-110',
+            ].join(' ')}
+            onClick={() => (open ? setOpen(false) : show())}
+          >
+            <TilePreview
+              src={empty || unresolved || !item ? null : modelThumbSrc(kind, item)}
+              mark={empty ? '' : unresolved ? '?' : ''}
+              label={!empty ? name : undefined}
+              eager
+              className="w-28 [&_img]:origin-center [&_img]:transition-transform [&_img]:duration-200 [&_img]:ease-out group-hover:[&_img]:scale-110"
+            />
+            {empty ? (
+              <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-muted">
+                <AppIcon id="plus" size={22} />
+              </span>
+            ) : null}
+          </button>
+          {onClear && !empty && !disabled ? (
+            <button
+              type="button"
+              className="absolute top-1 right-1 z-20 flex h-5 w-5 items-center justify-center rounded bg-bg/70 text-muted opacity-0 hover:bg-red hover:text-ink group-hover:opacity-100"
+              aria-label={`Clear ${role}`}
+              onClick={clear}
+            >
+              <AppIcon id="x" size={12} />
+            </button>
+          ) : null}
+        </div>
+      ) : (
+        <button
+          ref={triggerRef}
+          type="button"
+          disabled={disabled}
+          title={empty ? `Choose ${role}` : name}
+          className={[
+            'group flex min-w-0 items-center gap-cluster rounded border border-line bg-field px-1.5 py-1 text-left',
+            disabled ? 'cursor-default opacity-60' : 'hover:bg-line',
+          ].join(' ')}
+          onClick={() => (open ? setOpen(false) : show())}
+        >
+          <span className="relative w-10 shrink-0">
+            <TilePreview
+              src={item ? modelThumbSrc(kind, item) : null}
+              mark={empty ? '' : unresolved ? '?' : ''}
+              eager
+              className="w-10"
+            />
+            {empty ? (
+              <span className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center text-muted">
+                <AppIcon id="plus" size={14} />
+              </span>
+            ) : null}
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[10px] uppercase tracking-wide text-muted">{role}</span>
+            <span className="block truncate text-sm text-ink">{empty ? `Choose ${role}` : name}</span>
+          </span>
+          {onClear && !empty ? (
+            <span
+              role="button"
+              tabIndex={0}
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink"
+              aria-label={`Clear ${role}`}
+              onClick={clear}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  clear(event)
+                }
+              }}
+            >
+              <AppIcon id="x" size={12} />
             </span>
           ) : null}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-[10px] uppercase tracking-wide text-muted">{role}</span>
-          <span className="block truncate text-sm text-ink">{empty ? `Choose ${role}` : modelLabel(value) || value}</span>
-        </span>
-        {onClear && !empty ? (
-          <span
-            role="button"
-            tabIndex={0}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink"
-            aria-label={`Clear ${role}`}
-            onClick={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              onClear()
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                event.preventDefault()
-                event.stopPropagation()
-                onClear()
-              }
-            }}
-          >
-            <AppIcon id="x" size={12} />
-          </span>
-        ) : null}
-      </button>
+        </button>
+      )}
       {open && anchor ? (
         <FloatingModelsView
           kind={kind}

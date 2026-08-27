@@ -9,7 +9,7 @@ import {
   type PromptMatrixSettings,
 } from '@/views/generate/panels/generation/sections/params/promptMatrix.ts'
 import { DEFAULT_XY_PLOT, type XyPlotSettings } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
-import { isResMode, type ResMode } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
+import { isHiresSizeMode, isResMode, snapDim, type HiresSizeMode, type ResMode } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import {
   applyWorkflowModels,
   AUTO_LORA_PREFIX,
@@ -31,9 +31,81 @@ export const SEED_AFTER = [
 
 export type SeedAfter = (typeof SEED_AFTER)[number]['value']
 
+function isSeedAfter(value: unknown): value is SeedAfter {
+  return SEED_AFTER.some((item) => item.value === value)
+}
+
 export type ExtraSettings = { enabled: boolean; [key: string]: unknown }
 
+export type HiresLora = { path: string; strength: number }
+
+export type HiresSettings = {
+  enabled: boolean
+  scale: number
+  sizeMode: HiresSizeMode
+  width: number
+  height: number
+  aspect: string
+  megapixels: number
+  upscaleModel: string
+  upscaleMethod: string
+  crop: string
+  steps: number
+  cfg: number
+  sampler: string
+  scheduler: string
+  denoise: number
+  seed: number
+  seedAfter: SeedAfter
+  seedOverride: boolean
+  promptOverride: boolean
+  prompt: string
+  negativeOverride: boolean
+  negativePrompt: string
+  modelOverride: boolean
+  checkpoint: string
+  vae: string
+  textEncoder: string
+  loraOverride: boolean
+  loras: HiresLora[]
+  saveBefore: boolean
+  clearVram: boolean
+}
+
 const DEFAULT_EXTRA: ExtraSettings = { enabled: false }
+
+export const DEFAULT_HIRES: HiresSettings = {
+  enabled: false,
+  scale: 1.5,
+  sizeMode: 'scale',
+  width: 1248,
+  height: 1824,
+  aspect: '2:3',
+  megapixels: 1,
+  upscaleModel: '',
+  upscaleMethod: 'bilinear',
+  crop: 'disabled',
+  steps: 15,
+  cfg: 4,
+  sampler: 'euler',
+  scheduler: 'sgm_uniform',
+  denoise: 0.55,
+  seed: -1,
+  seedAfter: 'randomize',
+  seedOverride: false,
+  promptOverride: false,
+  prompt: '',
+  negativeOverride: false,
+  negativePrompt: '',
+  modelOverride: false,
+  checkpoint: '',
+  vae: '',
+  textEncoder: '',
+  loraOverride: false,
+  loras: [],
+  saveBefore: true,
+  clearVram: false,
+}
 
 function cloneJson<T>(value: T): T {
   return JSON.parse(JSON.stringify(value)) as T
@@ -47,6 +119,77 @@ function sameParam(a: unknown, b: unknown) {
     return false
   }
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function mergeHires(raw: unknown, firstW = 832, firstH = 1216): HiresSettings {
+  const base = cloneJson(DEFAULT_HIRES)
+  const scaleFallback = Math.max(1, Math.min(8, base.scale))
+  const seededW = snapDim(firstW * scaleFallback)
+  const seededH = snapDim(firstH * scaleFallback)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return { ...base, width: seededW, height: seededH }
+  }
+  const row = raw as Record<string, unknown>
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  const scale = Math.max(1, Math.min(8, num(row.scale, base.scale)))
+  const dim = (value: unknown, fallback: number) => {
+    const n = num(value, fallback)
+    return n >= 64 ? snapDim(n) : fallback
+  }
+  const sizeModeRaw = row.sizeMode ?? row.size_mode
+  const seedAfterRaw = row.seedAfter ?? row.seed_after
+  const follow = typeof row.seedFollow === 'boolean' ? row.seedFollow : typeof row.seed_follow === 'boolean' ? row.seed_follow : null
+  const seedOverrideRaw = row.seedOverride ?? row.seed_override
+  const lorasRaw = row.loras
+  const loras: HiresLora[] = Array.isArray(lorasRaw)
+    ? lorasRaw.flatMap((item) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          return []
+        }
+        const path = typeof (item as { path?: unknown }).path === 'string' ? (item as { path: string }).path.trim() : ''
+        if (!path) {
+          return []
+        }
+        const strength = (item as { strength?: unknown }).strength
+        return [{ path, strength: typeof strength === 'number' && Number.isFinite(strength) ? strength : 1 }]
+      })
+    : []
+  return {
+    enabled: Boolean(row.enabled),
+    scale,
+    sizeMode: isHiresSizeMode(sizeModeRaw) ? sizeModeRaw : 'scale',
+    width: dim(row.width, snapDim(firstW * scale)),
+    height: dim(row.height, snapDim(firstH * scale)),
+    aspect: typeof row.aspect === 'string' && row.aspect ? row.aspect : base.aspect,
+    megapixels: Math.max(0.2, Math.min(4, num(row.megapixels, base.megapixels))),
+    upscaleModel: typeof row.upscaleModel === 'string' ? row.upscaleModel : typeof row.upscale_model === 'string' ? row.upscale_model : base.upscaleModel,
+    upscaleMethod:
+      typeof (row.upscaleMethod ?? row.upscale_method) === 'string' && (row.upscaleMethod ?? row.upscale_method)
+        ? String(row.upscaleMethod ?? row.upscale_method)
+        : base.upscaleMethod,
+    crop: typeof row.crop === 'string' && row.crop ? row.crop : base.crop,
+    steps: Math.max(1, Math.min(150, Math.round(num(row.steps, base.steps)))),
+    cfg: Math.max(1, Math.min(30, num(row.cfg, base.cfg))),
+    sampler: typeof row.sampler === 'string' && row.sampler ? row.sampler : base.sampler,
+    scheduler: typeof row.scheduler === 'string' && row.scheduler ? row.scheduler : base.scheduler,
+    denoise: Math.max(0, Math.min(1, num(row.denoise, base.denoise))),
+    seed: Number.isFinite(num(row.seed, base.seed)) ? Math.round(num(row.seed, base.seed)) : base.seed,
+    seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,
+    seedOverride: typeof seedOverrideRaw === 'boolean' ? seedOverrideRaw : follow == null ? base.seedOverride : !follow,
+    promptOverride: Boolean(row.promptOverride ?? row.prompt_override),
+    prompt: typeof row.prompt === 'string' ? row.prompt : base.prompt,
+    negativeOverride: Boolean(row.negativeOverride ?? row.negative_override),
+    negativePrompt: typeof row.negativePrompt === 'string' ? row.negativePrompt : typeof row.negative_prompt === 'string' ? row.negative_prompt : base.negativePrompt,
+    modelOverride: Boolean(row.modelOverride ?? row.model_override),
+    checkpoint: typeof row.checkpoint === 'string' ? row.checkpoint : base.checkpoint,
+    vae: typeof row.vae === 'string' ? row.vae : base.vae,
+    textEncoder: typeof row.textEncoder === 'string' ? row.textEncoder : typeof row.text_encoder === 'string' ? row.text_encoder : base.textEncoder,
+    loraOverride: Boolean(row.loraOverride ?? row.lora_override),
+    loras,
+    saveBefore: typeof row.saveBefore === 'boolean' ? row.saveBefore : typeof row.save_before === 'boolean' ? row.save_before : base.saveBefore,
+    clearVram: typeof row.clearVram === 'boolean' ? row.clearVram : typeof row.clear_vram === 'boolean' ? row.clear_vram : base.clearVram,
+  }
 }
 
 function mergeExtra(raw: unknown, fallback: ExtraSettings): ExtraSettings {
@@ -113,6 +256,8 @@ export const DEFAULTS = {
   outputGridPath: '',
   outputImageName: '',
   outputGridName: '',
+  outputHiresPath: '',
+  outputHiresName: '',
   outputPathEnabled: false,
   batchSize: 1,
   batchCount: 1,
@@ -122,7 +267,7 @@ export const DEFAULTS = {
   aspect: '2:3',
   megapixels: 1,
   workflow: 'txt2img',
-  hires: { ...DEFAULT_EXTRA } as ExtraSettings,
+  hires: cloneJson(DEFAULT_HIRES),
   adetailer: { ...DEFAULT_EXTRA } as ExtraSettings,
   controlnet: { ...DEFAULT_EXTRA } as ExtraSettings,
   script: '' as GenerateScript,
@@ -150,6 +295,8 @@ export const PARAM_KEYS = [
   'outputGridPath',
   'outputImageName',
   'outputGridName',
+  'outputHiresPath',
+  'outputHiresName',
   'outputPathEnabled',
   'batchSize',
   'batchCount',
@@ -186,6 +333,8 @@ export type TemplateParams = {
   outputGridPath: string
   outputImageName: string
   outputGridName: string
+  outputHiresPath: string
+  outputHiresName: string
   outputPathEnabled: boolean
   batchSize: number
   batchCount: number
@@ -194,7 +343,7 @@ export type TemplateParams = {
   resMode: ResMode
   aspect: string
   megapixels: number
-  hires: ExtraSettings
+  hires: HiresSettings
   adetailer: ExtraSettings
   controlnet: ExtraSettings
   script: GenerateScript
@@ -222,7 +371,9 @@ export function pickParams(source: TemplateParams): TemplateParams {
     outputImagePath: source.outputImagePath,
     outputGridPath: source.outputGridPath,
     outputImageName: source.outputImageName,
-    outputGridName: source.outputGridName,
+    outputGridName: source.outputGridName ?? '',
+    outputHiresPath: source.outputHiresPath ?? '',
+    outputHiresName: source.outputHiresName ?? '',
     outputPathEnabled: source.outputPathEnabled,
     batchSize: source.batchSize,
     batchCount: source.batchCount,
@@ -231,7 +382,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     resMode: source.resMode,
     aspect: source.aspect,
     megapixels: source.megapixels,
-    hires: cloneJson(source.hires),
+    hires: mergeHires(source.hires, source.width, source.height),
     adetailer: cloneJson(source.adetailer),
     controlnet: cloneJson(source.controlnet),
     script: source.script,
@@ -270,7 +421,11 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
         next.script = value
         continue
       }
-      if (key === 'hires' || key === 'adetailer' || key === 'controlnet') {
+      if (key === 'hires') {
+        next.hires = mergeHires(value, next.width, next.height)
+        continue
+      }
+      if (key === 'adetailer' || key === 'controlnet') {
         next[key] = mergeExtra(value, DEFAULT_EXTRA)
         continue
       }
@@ -357,7 +512,7 @@ export const APPLY_FIELDS = [
   { id: 'steps', label: 'Steps', keys: ['steps'] },
   { id: 'cfg', label: 'CFG', keys: ['cfg'] },
   { id: 'seed', label: 'Seed', keys: ['seed', 'seedAfter'] },
-  { id: 'outputPath', label: 'Output path', keys: ['outputImagePath', 'outputGridPath', 'outputImageName', 'outputGridName', 'outputPathEnabled'] },
+  { id: 'outputPath', label: 'Output path', keys: ['outputImagePath', 'outputGridPath', 'outputImageName', 'outputGridName', 'outputHiresPath', 'outputHiresName', 'outputPathEnabled'] },
   { id: 'resolution', label: 'Resolution', keys: ['width', 'height', 'resMode', 'aspect', 'megapixels'] },
   { id: 'batchCount', label: 'Batch count', keys: ['batchCount'] },
   { id: 'batchSize', label: 'Batch size', keys: ['batchSize'] },
@@ -605,7 +760,7 @@ type GenerateState = {
   resMode: ResMode
   aspect: string
   megapixels: number
-  hires: ExtraSettings
+  hires: HiresSettings
   adetailer: ExtraSettings
   controlnet: ExtraSettings
   script: GenerateScript
@@ -622,6 +777,8 @@ type GenerateState = {
   outputGridPath: string
   outputImageName: string
   outputGridName: string
+  outputHiresPath: string
+  outputHiresName: string
   outputPathEnabled: boolean
   modelTileStyle: ModelTileStyle
   vae: string
@@ -644,6 +801,8 @@ type GenerateState = {
   setOutputGridPath: (value: string) => void
   setOutputImageName: (value: string) => void
   setOutputGridName: (value: string) => void
+  setOutputHiresPath: (value: string) => void
+  setOutputHiresName: (value: string) => void
   setOutputPathEnabled: (value: boolean) => void
   setModelTileStyle: (value: ModelTileStyle) => void
   setVae: (value: string) => void
@@ -659,7 +818,7 @@ type GenerateState = {
   setResMode: (value: ResMode) => void
   setAspect: (value: string) => void
   setMegapixels: (value: number) => void
-  setHires: (value: Partial<ExtraSettings>) => void
+  setHires: (value: Partial<HiresSettings>) => void
   setAdetailer: (value: Partial<ExtraSettings>) => void
   setControlnet: (value: Partial<ExtraSettings>) => void
   setScript: (value: GenerateScript) => void
@@ -711,6 +870,8 @@ export const useGenerateStore = create<GenerateState>()(
       setOutputGridPath: (outputGridPath) => set({ outputGridPath }),
       setOutputImageName: (outputImageName) => set({ outputImageName }),
       setOutputGridName: (outputGridName) => set({ outputGridName }),
+      setOutputHiresPath: (outputHiresPath) => set({ outputHiresPath }),
+      setOutputHiresName: (outputHiresName) => set({ outputHiresName }),
       setOutputPathEnabled: (outputPathEnabled) => set({ outputPathEnabled }),
       setModelTileStyle: (modelTileStyle) => set({ modelTileStyle: parseModelTileStyle(modelTileStyle) }),
       setVae: (vae) => set((s) => patchWorkflowModels(s, { vae })),

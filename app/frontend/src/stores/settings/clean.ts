@@ -275,8 +275,11 @@ export function cleanSearch(raw: unknown): string {
   return typeof raw === 'string' ? raw.slice(0, 200) : ''
 }
 
-export function cleanModelsTab(raw: unknown): 'Local' | 'CivitAI' {
-  return raw === 'CivitAI' || raw === 'Download' ? 'CivitAI' : 'Local'
+export function cleanModelsTab(raw: unknown): 'Local' | 'CivitAI' | 'Manager' {
+  if (raw === 'CivitAI' || raw === 'Download') {
+    return 'CivitAI'
+  }
+  return raw === 'Manager' ? 'Manager' : 'Local'
 }
 
 export function cleanModelsKind(raw: unknown): 'all' | 'checkpoints' | 'loras' | 'wildcards' | 'other' {
@@ -660,8 +663,10 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     imagePath: cleanPath(patch.imagePath, SETTINGS_DEFAULTS.imagePath),
     gridPath: cleanPath(patch.gridPath, SETTINGS_DEFAULTS.gridPath),
     interruptedPath: cleanPath(patch.interruptedPath, SETTINGS_DEFAULTS.interruptedPath),
+    hiresPath: cleanPath(patch.hiresPath, SETTINGS_DEFAULTS.hiresPath),
     imageName: cleanName(patch.imageName, SETTINGS_DEFAULTS.imageName),
     gridName: cleanName(patch.gridName, SETTINGS_DEFAULTS.gridName),
+    hiresName: cleanName(patch.hiresName, SETTINGS_DEFAULTS.hiresName),
     imageFormat: patch.imageFormat ? cleanImageFormat(patch.imageFormat) : SETTINGS_DEFAULTS.imageFormat,
     gridFormat: patch.gridFormat ? cleanImageFormat(patch.gridFormat, SETTINGS_DEFAULTS.gridFormat) : SETTINGS_DEFAULTS.gridFormat,
     imageQuality: typeof patch.imageQuality === 'number' ? cleanImageQuality(patch.imageQuality) : SETTINGS_DEFAULTS.imageQuality,

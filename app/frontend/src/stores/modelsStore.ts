@@ -11,6 +11,7 @@ const EMPTY: ModelLists = {
   embeddings: [],
   diffusion_models: [],
   text_encoders: [],
+  upscale_models: [],
   wildcards: [],
 }
 
@@ -104,6 +105,7 @@ function apply(lists: Partial<ModelLists>): ModelLists {
     embeddings: asList(lists.embeddings),
     diffusion_models: asList(lists.diffusion_models),
     text_encoders: asList(lists.text_encoders),
+    upscale_models: asList(lists.upscale_models),
     wildcards: asList(lists.wildcards),
   }
 }

@@ -70,6 +70,7 @@ export type ModelLists = {
   embeddings: ModelEntry[]
   diffusion_models: ModelEntry[]
   text_encoders: ModelEntry[]
+  upscale_models: ModelEntry[]
   wildcards: ModelEntry[]
 }
 

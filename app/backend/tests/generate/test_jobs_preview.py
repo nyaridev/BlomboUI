@@ -45,6 +45,28 @@ class PreviewTests(unittest.TestCase):
         shown = [step for step in range(0, 21) if jobs._keep_snapshot(live, step)]
         self.assertEqual(shown, [8, 12, 16, 20])
 
+    def test_hires_stage_advances_and_maps_progress(self) -> None:
+        live = jobs.LiveJob(steps=20)
+        live.stages = {"5": "generation", "20": "upscaling", "18": "hires"}
+        jobs._live.clear()
+        jobs._live["j"] = live
+        jobs._on_live("j", {"node": "5", "value": 10, "max": 20})
+        fields = jobs._live_fields("j")
+        self.assertEqual(fields["progress"]["stage"], "generation")
+        self.assertEqual(fields["progress"]["value"], 16)
+        self.assertEqual(fields["progress"]["step"], 10)
+        self.assertEqual(fields["progress"]["steps"], 20)
+        jobs._on_live("j", {"node": "20"})
+        fields = jobs._live_fields("j")
+        self.assertEqual(fields["progress"]["stage"], "upscaling")
+        self.assertEqual(fields["progress"]["value"], 33)
+        jobs._on_live("j", {"node": "18", "value": 15, "max": 15})
+        fields = jobs._live_fields("j")
+        self.assertEqual(fields["progress"]["stage"], "hires")
+        self.assertEqual(fields["progress"]["value"], 100)
+        jobs._on_live("j", {"node": "5"})
+        self.assertEqual(jobs._live_fields("j")["progress"]["stage"], "hires")
+
     def _live(
         self,
         *,

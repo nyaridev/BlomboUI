@@ -32,6 +32,10 @@ export const SCHEDULERS = [
   'beta',
 ] as const
 
+export const IMAGE_SCALE_METHODS = ['nearest-exact', 'bilinear', 'area', 'bicubic', 'lanczos'] as const
+
+export const IMAGE_SCALE_CROPS = ['disabled', 'center'] as const
+
 export function listedChoices(all: readonly string[], hidden: readonly string[], keep: string) {
   return [...new Set([keep, ...all.filter((item) => !hidden.includes(item))])]
 }
@@ -40,6 +44,12 @@ export type ResMode = 'raw' | 'scaler' | 'set'
 
 export function isResMode(value: unknown): value is ResMode {
   return value === 'raw' || value === 'scaler' || value === 'set'
+}
+
+export type HiresSizeMode = 'scale' | ResMode
+
+export function isHiresSizeMode(value: unknown): value is HiresSizeMode {
+  return value === 'scale' || isResMode(value)
 }
 
 export const DEFAULT_SET_RESOLUTIONS = ['1024x1024', '1152x896', '1216x832', '1344x768', '1536x640']

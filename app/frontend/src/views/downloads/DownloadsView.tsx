@@ -27,6 +27,7 @@ const KIND_LABEL: Record<string, string> = {
   embeddings: 'Embedding',
   wildcards: 'Wildcard',
   text_encoders: 'Text encoder',
+  upscale_models: 'Upscale',
 }
 
 type FileRow =

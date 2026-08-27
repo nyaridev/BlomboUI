@@ -155,7 +155,7 @@ def ksampler_choices() -> dict[str, list[str]]:
 def warmup_model_lists(kind: str | None = None) -> None:
     if not reachable():
         return
-    folders = ("checkpoints", "loras", "vae", "controlnet", "embeddings", "diffusion_models", "text_encoders")
+    folders = ("checkpoints", "loras", "vae", "controlnet", "embeddings", "diffusion_models", "text_encoders", "upscale_models")
     if kind:
         folders = (kind,) if kind in folders else ()
     for folder in folders:
@@ -190,6 +190,10 @@ def _workflow_params(data: Any) -> list[str]:
     for node in _workflow_nodes(data):
         kind = str(node.get("class_type") or "")
         title = str((node.get("_meta") or {}).get("title") or "").lower()
+        if "hires" in title:
+            if kind == "ImageUpscaleWithModel" or "KSampler" in kind:
+                keys.add("hires")
+            continue
         if kind in {"CheckpointLoaderSimple", "UNETLoader"}:
             keys.add("checkpoint")
         elif kind == "CLIPLoader":
@@ -204,10 +208,14 @@ def _workflow_params(data: Any) -> list[str]:
                 keys.add("prompt")
         elif "KSampler" in kind:
             keys.update({"seed", "steps", "cfg", "sampler", "scheduler"})
+            if "hires" in title:
+                keys.add("hires")
         elif kind == "EmptyLatentImage":
             keys.update({"width", "height", "batchSize"})
         elif kind == "Power Lora Loader (rgthree)":
             keys.add("loras")
+        elif kind == "ImageUpscaleWithModel":
+            keys.add("hires")
     if clips >= 2:
         keys.update({"prompt", "negativePrompt"})
     return sorted(keys)
@@ -286,7 +294,7 @@ def output_images(entry: dict[str, Any]) -> list[dict[str, str]]:
     outputs = entry.get("outputs") or {}
     if not isinstance(outputs, dict):
         return found
-    for node_out in outputs.values():
+    for node_id, node_out in outputs.items():
         if not isinstance(node_out, dict):
             continue
         images = node_out.get("images") or []
@@ -301,6 +309,7 @@ def output_images(entry: dict[str, Any]) -> list[dict[str, str]]:
                     "filename": str(image["filename"]),
                     "subfolder": str(image.get("subfolder") or ""),
                     "type": kind,
+                    "node": str(node_id),
                 }
             )
     return found
@@ -438,11 +447,15 @@ def run_prompt(graph: dict[str, Any], client_id: str, on_event: OnEvent, timeout
                 continue
             kind = msg.get("type")
             if kind == "progress":
-                on_event({"value": data.get("value"), "max": data.get("max")})
+                node = data.get("node")
+                on_event({"value": data.get("value"), "max": data.get("max"), "node": None if node is None else str(node)})
             elif kind == "execution_error":
                 raise ComfyError("job_failed", f"ComfyUI job error: {data}", status=502)
             elif kind == "execution_interrupted":
                 return prompt_id, []
-            elif kind == "executing" and data.get("node") is None:
-                return prompt_id, _finish_from_history(prompt_id)
+            elif kind == "executing":
+                node = data.get("node")
+                if node is None:
+                    return prompt_id, _finish_from_history(prompt_id)
+                on_event({"node": str(node)})
     raise ComfyError("job_failed", "Timed out waiting for ComfyUI output", status=504)

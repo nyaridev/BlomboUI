@@ -1,10 +1,11 @@
 import { CivitaiPanel } from '@/views/models/panels/civitai/CivitaiPanel.tsx'
 import { LocalModelsPanel, type LocalKindTab } from '@/views/models/panels/local/LocalModelsPanel.tsx'
+import { ManagerPanel } from '@/views/models/panels/manager/ManagerPanel.tsx'
 import { ChoiceChip } from '@/components/controls/button/ChoiceChip.tsx'
 import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 
-const PAGE_TABS = ['Local', 'CivitAI'] as const
+const PAGE_TABS = ['Local', 'CivitAI', 'Manager'] as const
 const KIND_TABS = [
   { id: 'all', label: 'All' },
   { id: 'checkpoints', label: 'Base Model' },
@@ -35,6 +36,8 @@ export function ModelsView() {
       <div className="flex min-h-0 flex-1 flex-col rounded-b-md rounded-tr-md border border-line bg-panel p-3">
         {page === 'CivitAI' ? (
           <CivitaiPanel />
+        ) : page === 'Manager' ? (
+          <ManagerPanel />
         ) : (
           <div className="flex h-full min-h-0 flex-col">
             <div className="mb-2 flex h-toolbar shrink-0 gap-cluster">

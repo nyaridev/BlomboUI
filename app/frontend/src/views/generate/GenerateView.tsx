@@ -29,6 +29,9 @@ import { GENERATE_TABS, orderedGenerateTabs, type GenerateTab } from '@/views/ge
 import {
   etaSeconds,
   formatDuration,
+  hiresProgressLabel,
+  HIRES_PROGRESS_SEGMENTS,
+  hiresDiffusion,
   idsFromJob,
   jobSeconds,
   progressLabel,
@@ -58,7 +61,11 @@ export function GenerateView() {
   const outputGridPath = useGenerateStore((s) => s.outputGridPath)
   const outputImageName = useGenerateStore((s) => s.outputImageName)
   const outputGridName = useGenerateStore((s) => s.outputGridName)
+  const outputHiresPath = useGenerateStore((s) => s.outputHiresPath)
+  const outputHiresName = useGenerateStore((s) => s.outputHiresName)
   const outputPathEnabled = useGenerateStore((s) => s.outputPathEnabled)
+  const hires = useGenerateStore((s) => s.hires)
+  const setHires = useGenerateStore((s) => s.setHires)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
@@ -94,6 +101,7 @@ export function GenerateView() {
   const wildcardItems = useModelsStore((s) => s.wildcards)
   const vaeItems = useModelsStore((s) => s.vae)
   const textEncoders = useModelsStore((s) => s.text_encoders)
+  const upscaleModels = useModelsStore((s) => s.upscale_models)
 
   const health = useHealthStore((s) => s.health)
 
@@ -207,6 +215,21 @@ export function GenerateView() {
     if (workflowParams.includes('vae') && !vae.trim()) {
       return
     }
+    if (workflowParams.includes('hires') && hires.enabled && !hires.upscaleModel.trim()) {
+      return
+    }
+    if (workflowParams.includes('hires') && hires.enabled && hires.modelOverride && !hires.checkpoint.trim()) {
+      return
+    }
+    if (
+      workflowParams.includes('hires') &&
+      hires.enabled &&
+      hires.modelOverride &&
+      hiresDiffusion(hires.checkpoint, diffusionModels) &&
+      (!hires.vae.trim() || !hires.textEncoder.trim())
+    ) {
+      return
+    }
     setError(null)
     setStarting(true)
     setImageIds([])
@@ -217,6 +240,8 @@ export function GenerateView() {
     const keepMinusOne = Boolean(activeXyPlot?.keepMinusOne && seed < 0)
     const used = keepMinusOne ? seed : usedSeed(seed, seedAfter)
     const previous = seed
+    const previousHiresSeed = hires.seed
+    const hiresUsed = hires.seedOverride ? usedSeed(hires.seed, hires.seedAfter) : hires.seed
     const previousIds = job ? idsFromJob(job) : []
     const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
     const seedSteps = activeXyPlot
@@ -228,6 +253,9 @@ export function GenerateView() {
         : count
     if (!(keepMinusOne && seed < 0)) {
       setSeed(nextSeed(used, seedAfter, seedSteps))
+    }
+    if (hires.enabled && hires.seedOverride) {
+      setHires({ seed: nextSeed(hiresUsed, hires.seedAfter, seedSteps) })
     }
     try {
       const next = await createJob({
@@ -261,6 +289,41 @@ export function GenerateView() {
         output_grid_path: outputPathEnabled ? outputGridPath.trim() || undefined : undefined,
         output_image_name: outputPathEnabled ? outputImageName.trim() || undefined : undefined,
         output_grid_name: outputPathEnabled ? outputGridName.trim() || undefined : undefined,
+        output_hires_path: outputPathEnabled ? outputHiresPath.trim() || undefined : undefined,
+        output_hires_name: outputPathEnabled ? outputHiresName.trim() || undefined : undefined,
+        hires: {
+          enabled: hires.enabled,
+          scale: hires.scale,
+          size_mode: hires.sizeMode,
+          width: hires.width,
+          height: hires.height,
+          aspect: hires.aspect,
+          megapixels: hires.megapixels,
+          upscale_model: hires.upscaleModel,
+          steps: hires.steps,
+          cfg: hires.cfg,
+          sampler: hires.sampler,
+          scheduler: hires.scheduler,
+          denoise: hires.denoise,
+          seed: hires.seedOverride ? hiresUsed : hires.seed,
+          seed_after: hires.seedAfter,
+          seed_override: hires.seedOverride,
+          upscale_method: hires.upscaleMethod,
+          crop: hires.crop,
+          prompt_override: hires.promptOverride,
+          prompt: hires.prompt,
+          negative_override: hires.negativeOverride,
+          negative_prompt: hires.negativePrompt,
+          model_override: hires.modelOverride,
+          checkpoint: hires.checkpoint,
+          vae: hires.vae,
+          text_encoder: hires.textEncoder,
+          kind: hiresDiffusion(hires.checkpoint, diffusionModels) ? 'diffusion_models' : 'checkpoints',
+          lora_override: hires.loraOverride,
+          loras: hires.loras,
+          save_before: hires.saveBefore,
+          clear_vram: hires.clearVram,
+        },
         prompt_matrix: activePromptMatrix
           ? {
               lines: activePromptMatrix.lines,
@@ -302,6 +365,7 @@ export function GenerateView() {
       setImageIds([])
     } catch (err) {
       setSeed(previous)
+      setHires({ seed: previousHiresSeed })
       setImageIds(previousIds)
       setError(err instanceof Error ? err.message : 'Generate failed')
       void useIssuesStore.getState().load()
@@ -421,7 +485,14 @@ export function GenerateView() {
     comfyOk &&
     Boolean(checkpoint.trim()) &&
     (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&
-    (!workflowParams.includes('vae') || Boolean(vae.trim()))
+    (!workflowParams.includes('vae') || Boolean(vae.trim())) &&
+    (!workflowParams.includes('hires') || !hires.enabled || Boolean(hires.upscaleModel.trim())) &&
+    (!workflowParams.includes('hires') || !hires.enabled || !hires.modelOverride || Boolean(hires.checkpoint.trim())) &&
+    (!workflowParams.includes('hires') ||
+      !hires.enabled ||
+      !hires.modelOverride ||
+      !hiresDiffusion(hires.checkpoint, diffusionModels) ||
+      (Boolean(hires.vae.trim()) && Boolean(hires.textEncoder.trim())))
   const payload = job?.payload ?? {}
   const missingLoras = Array.isArray(payload.lora_missing)
     ? payload.lora_missing.filter((item): item is string => typeof item === 'string' && Boolean(item))
@@ -448,15 +519,20 @@ export function GenerateView() {
   const progressMax = progress?.max || 0
   const progressValue = progress?.value || 0
   const progressPct = progressMax > 0 ? Math.min(100, (progressValue / progressMax) * 100) : 0
+  const progressStage = progress?.stage
+  const hiresBar = Boolean(progressStage)
   const jobProg = job?.job_progress
   const jobMax = jobProg?.max || 0
   const jobValue = jobProg?.value || 0
   const jobPct = jobMax > 0 ? Math.min(100, (jobValue / jobMax) * 100) : 0
-  const currentLabel = batched
-    ? progressMax > 0
-      ? `${progressValue} / ${progressMax}`
-      : 'Starting…'
-    : progressLabel(progressPct, etaSeconds(job?.started_at ?? null, progressValue, progressMax))
+  const eta = etaSeconds(job?.started_at ?? null, progressValue, progressMax)
+  const currentLabel = hiresBar
+    ? hiresProgressLabel(progressStage, progressPct, batched ? null : eta, progress?.step, progress?.steps)
+    : batched
+      ? progressMax > 0
+        ? `${progressValue} / ${progressMax}`
+        : 'Starting…'
+      : progressLabel(progressPct, eta)
   const overallLabel = batched
     ? progressLabel(jobPct, etaSeconds(job?.started_at ?? null, jobValue, jobMax))
     : null
@@ -477,11 +553,23 @@ export function GenerateView() {
     const unetSet = new Set(diffusionModels)
     return (item: ModelEntry): keyof ModelLists => (unetSet.has(item) ? 'diffusion_models' : 'checkpoints')
   }, [diffusionModels])
-  const otherItems = useMemo(() => [...vaeItems, ...textEncoders], [textEncoders, vaeItems])
+  const otherItems = useMemo(
+    () => [...vaeItems, ...textEncoders, ...upscaleModels],
+    [textEncoders, upscaleModels, vaeItems],
+  )
   const otherItemKind = useMemo(() => {
     const teSet = new Set(textEncoders)
-    return (item: ModelEntry): keyof ModelLists => (teSet.has(item) ? 'text_encoders' : 'vae')
-  }, [textEncoders])
+    const upscaleSet = new Set(upscaleModels)
+    return (item: ModelEntry): keyof ModelLists => {
+      if (teSet.has(item)) {
+        return 'text_encoders'
+      }
+      if (upscaleSet.has(item)) {
+        return 'upscale_models'
+      }
+      return 'vae'
+    }
+  }, [textEncoders, upscaleModels])
   const otherSelected = [
     ...(showTextEncoder ? [textEncoder] : []),
     ...(showVae ? [vae] : []),
@@ -546,6 +634,7 @@ export function GenerateView() {
         busy={busy}
         progressPct={progressPct}
         currentLabel={currentLabel}
+        progressSegments={hiresBar ? [...HIRES_PROGRESS_SEGMENTS] : undefined}
         jobPct={jobPct}
         overallLabel={overallLabel}
         timing={timing}

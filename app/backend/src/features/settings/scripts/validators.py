@@ -21,6 +21,7 @@ _LOOKUP_KIND_GROUPS = {
     "wildcards": "wildcards",
     "vae": "other",
     "text_encoders": "other",
+    "upscale_models": "other",
     "controlnet": "other",
     "embeddings": "other",
     "other": "other",

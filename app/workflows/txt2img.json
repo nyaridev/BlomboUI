@@ -75,10 +75,20 @@
       "title": "VAE Decode"
     }
   },
-  "11": {
+  "10": {
     "inputs": {
       "filename_prefix": "blombo",
       "images": ["9", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save First Pass"
+    }
+  },
+  "11": {
+    "inputs": {
+      "filename_prefix": "blombo",
+      "images": ["23", 0]
     },
     "class_type": "SaveImage",
     "_meta": {
@@ -97,6 +107,167 @@
     "class_type": "Power Lora Loader (rgthree)",
     "_meta": {
       "title": "Power Lora Loader (rgthree)"
+    }
+  },
+  "18": {
+    "inputs": {
+      "seed": 0,
+      "steps": 15,
+      "cfg": 4,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 0.55,
+      "model": ["12", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["22", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Hires KSampler"
+    }
+  },
+  "19": {
+    "inputs": {
+      "model_name": ""
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Hires Upscale Model"
+    }
+  },
+  "20": {
+    "inputs": {
+      "upscale_model": ["19", 0],
+      "image": ["9", 0]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Hires Upscale Image"
+    }
+  },
+  "21": {
+    "inputs": {
+      "upscale_method": "bilinear",
+      "width": 1248,
+      "height": 1824,
+      "crop": "disabled",
+      "image": ["20", 0]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Scale Image"
+    }
+  },
+  "22": {
+    "inputs": {
+      "pixels": ["21", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Hires VAE Encode"
+    }
+  },
+  "23": {
+    "inputs": {
+      "samples": ["18", 0],
+      "vae": ["1", 2]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Hires VAE Decode"
+    }
+  },
+  "24": {
+    "inputs": {
+      "ckpt_name": ""
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Hires Checkpoint"
+    }
+  },
+  "25": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "➕ Add Lora": "",
+      "model": ["24", 0],
+      "clip": ["24", 1]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Hires Power Lora Loader"
+    }
+  },
+  "26": {
+    "inputs": {
+      "text": "",
+      "clip": ["12", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Hires Positive"
+    }
+  },
+  "27": {
+    "inputs": {
+      "text": "",
+      "clip": ["12", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Hires Negative"
+    }
+  },
+  "28": {
+    "inputs": {
+      "unet_name": "",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "Hires UNET"
+    }
+  },
+  "29": {
+    "inputs": {
+      "clip_name": "",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "Hires CLIP"
+    }
+  },
+  "30": {
+    "inputs": {
+      "vae_name": ""
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "Hires VAE"
+    }
+  },
+  "31": {
+    "inputs": {
+      "anything": ["9", 0]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Before"
+    }
+  },
+  "32": {
+    "inputs": {
+      "anything": ["23", 0]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM After"
     }
   }
 }

@@ -14,6 +14,7 @@ from features.gallery.scripts import cache as gallery_cache
 from infrastructure.comfy import client as comfy
 from shared import pnginfo
 from features.generate.scripts import save_meta, templates
+from features.generate.scripts.comfy_fill import hires_enabled
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
 
@@ -183,6 +184,10 @@ def _output_dir(values: dict[str, Any], kind: str) -> Path:
         override = str(values.get("output_interrupted_path") or "").strip()
         template = override or str(cfg.get("interruptedPath") or settings.INTERRUPTED_PATH_DEFAULT)
         fallback = settings.INTERRUPTED_PATH_DEFAULT
+    elif kind == "hires":
+        override = str(values.get("output_hires_path") or "").strip()
+        template = override or str(cfg.get("hiresPath") or settings.HIRES_PATH_DEFAULT)
+        fallback = settings.HIRES_PATH_DEFAULT
     else:
         override = str(values.get("output_image_path") or "").strip()
         template = override or str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
@@ -204,6 +209,10 @@ def _name_template(values: dict[str, Any], kind: str) -> tuple[str, str]:
         override = str(values.get("output_grid_name") or "").strip()
         raw = override or str(cfg.get("gridName") or settings.GRID_NAME_DEFAULT)
         fallback = settings.GRID_NAME_DEFAULT
+    elif kind == "hires":
+        override = str(values.get("output_hires_name") or "").strip()
+        raw = override or str(cfg.get("hiresName") or settings.HIRES_NAME_DEFAULT)
+        fallback = settings.HIRES_NAME_DEFAULT
     else:
         override = str(values.get("output_image_name") or "").strip()
         raw = override or str(cfg.get("imageName") or settings.IMAGE_NAME_DEFAULT)
@@ -311,18 +320,29 @@ def _image_save_opts() -> tuple[str, int, bool, int]:
     return fmt, quality, sidecar, max_kb
 
 
+def save_kind(values: dict[str, Any], info: dict[str, str], graph: dict[str, Any] | None) -> str:
+    if not hires_enabled(values):
+        return "images"
+    node = graph.get(str(info.get("node") or "")) if graph else None
+    title = str((node.get("_meta") or {}).get("title") or "").lower() if isinstance(node, dict) else ""
+    if "first" in title:
+        return "images"
+    return "hires"
+
+
 def _import_image(
     job_id: str,
     values: dict[str, Any],
     info: dict[str, str],
     graph: dict[str, Any] | None = None,
     persist: bool = True,
-) -> tuple[str, Path]:
+) -> tuple[str, Path, str]:
     raw = comfy.download_image(info)
     folder = None if persist else _xy_temp_dir(job_id)
-    result = _import_bytes(job_id, values, raw, graph, "images", folder)
+    kind = save_kind(values, info, graph) if persist else "images"
+    result = _import_bytes(job_id, values, raw, graph, kind, folder)
     _forget_comfy_file(info)
-    return result
+    return result[0], result[1], kind
 
 
 def _import_preview(

@@ -20,6 +20,7 @@ export function GenerationPanel({
   busy,
   progressPct,
   currentLabel,
+  progressSegments,
   jobPct,
   overallLabel,
   timing,
@@ -39,6 +40,7 @@ export function GenerationPanel({
   busy: boolean
   progressPct: number
   currentLabel: string
+  progressSegments?: string[]
   jobPct: number
   overallLabel: string | null
   timing: string | null
@@ -78,6 +80,7 @@ export function GenerationPanel({
         }
         progressPct={progressPct}
         progressLabel={currentLabel}
+        progressSegments={progressSegments}
         jobProgressPct={jobPct}
         jobProgressLabel={overallLabel}
         timing={timing}

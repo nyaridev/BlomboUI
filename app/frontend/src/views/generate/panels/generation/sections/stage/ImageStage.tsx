@@ -17,6 +17,7 @@ type ImageStageProps = {
   previewUrl: string | null
   progressPct: number
   progressLabel: string
+  progressSegments?: string[]
   jobProgressPct?: number
   jobProgressLabel?: string | null
   timing?: string | null
@@ -30,6 +31,7 @@ export function ImageStage({
   previewUrl,
   progressPct,
   progressLabel,
+  progressSegments,
   jobProgressPct = 0,
   jobProgressLabel = null,
   timing = null,
@@ -120,12 +122,20 @@ export function ImageStage({
       setPreviewReady(false)
       setPreviewFailed(false)
     }
-    if (wasBusy.current && !busy) {
-      setIndex(0)
+  if (wasBusy.current && !busy) {
+      let focus = 0
+      if (gridUrls.length === 0) {
+        images.forEach((id, i) => {
+          if (gallery.find((item) => item.id === id)?.kind === 'hires') {
+            focus = i
+          }
+        })
+      }
+      setIndex(focus)
       setLightbox(false)
     }
     wasBusy.current = busy
-  }, [busy])
+  }, [busy, gallery, gridUrls.length, images])
 
   useEffect(() => {
     if (index >= items.length) {
@@ -236,7 +246,7 @@ export function ImageStage({
         {busy ? (
           <div className="absolute inset-x-0 top-0 z-20 flex flex-col">
             {jobProgressLabel ? <ProgressBar pct={jobProgressPct} label={jobProgressLabel} /> : null}
-            <ProgressBar pct={progressPct} label={progressLabel} />
+            <ProgressBar pct={progressPct} label={progressLabel} segments={progressSegments} />
           </div>
         ) : timing ? (
           <div className="pointer-events-none absolute bottom-2 left-2 z-20">

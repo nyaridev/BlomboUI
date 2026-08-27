@@ -57,7 +57,7 @@ export const LOOKUP_GROUPS = [
   { id: 'checkpoints' as const, label: 'Base Model', kinds: ['checkpoints', 'diffusion_models'] },
   { id: 'loras' as const, label: 'LoRA', kinds: ['loras'] },
   { id: 'wildcards' as const, label: 'Wildcards', kinds: ['wildcards'] },
-  { id: 'other' as const, label: 'Other', kinds: ['vae', 'text_encoders', 'controlnet', 'embeddings'] },
+  { id: 'other' as const, label: 'Other', kinds: ['vae', 'text_encoders', 'upscale_models', 'controlnet', 'embeddings'] },
 ] as const
 export type LookupKind = (typeof LOOKUP_GROUPS)[number]['id']
 export const LOOKUP_KINDS = LOOKUP_GROUPS.map((item) => item.id)
@@ -318,8 +318,10 @@ export const SETTINGS_DEFAULTS = {
   imagePath: '[workflow]/images/[date]',
   gridPath: '[workflow]/grids/[date]',
   interruptedPath: '[workflow]/interrupted/[date]',
+  hiresPath: '[workflow]/hires/[date]',
   imageName: 'blombo_[number]',
   gridName: 'blombo_[number]',
+  hiresName: 'blombo_[number]',
   imageFormat: 'png' as ImageFormat,
   gridFormat: 'jpg' as ImageFormat,
   imageQuality: 100,
@@ -387,7 +389,7 @@ export const SETTINGS_DEFAULTS = {
   lookupKinds: [] as string[],
   lookupModels: [] as string[],
   scopeSearch: '',
-  modelsTab: 'Local' as 'Local' | 'CivitAI',
+  modelsTab: 'Local' as 'Local' | 'CivitAI' | 'Manager',
   modelsKind: 'all' as 'all' | 'checkpoints' | 'loras' | 'wildcards' | 'other',
   civitaiBrowse: { ...CIVITAI_BROWSE_DEFAULT },
   civitaiTabs: [] as CivitaiTab[],

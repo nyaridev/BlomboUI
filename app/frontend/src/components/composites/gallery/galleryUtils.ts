@@ -4,16 +4,17 @@ import { modelLabel } from '@/stores/modelsStore.ts'
 import { identToDisplay, treeDisplayPath } from '@/lib/gallery/tree.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
 
-export const OTHER_KIND_IDS = ['vae', 'text_encoders'] as const
+export const OTHER_KIND_IDS = ['vae', 'text_encoders', 'upscale_models'] as const
 export type OtherKindId = (typeof OTHER_KIND_IDS)[number]
 
 const OTHER_KIND_LABELS: Record<OtherKindId, string> = {
   vae: 'VAE',
   text_encoders: 'Text encoder',
+  upscale_models: 'Upscale',
 }
 
 export function isOtherKind(kind: string): kind is OtherKindId {
-  return kind === 'vae' || kind === 'text_encoders'
+  return (OTHER_KIND_IDS as readonly string[]).includes(kind)
 }
 
 export function otherKindLabel(kind: string) {

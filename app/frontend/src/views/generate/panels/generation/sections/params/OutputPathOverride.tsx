@@ -13,11 +13,15 @@ type OutputPathOverrideProps = {
   gridPath: string
   imageName: string
   gridName: string
+  hiresPath: string
+  hiresName: string
   enabled: boolean
   onImagePath: (value: string) => void
   onGridPath: (value: string) => void
   onImageName: (value: string) => void
   onGridName: (value: string) => void
+  onHiresPath: (value: string) => void
+  onHiresName: (value: string) => void
   onEnabled: (value: boolean) => void
 }
 
@@ -80,17 +84,23 @@ export function OutputPathOverride({
   gridPath,
   imageName,
   gridName,
+  hiresPath,
+  hiresName,
   enabled,
   onImagePath,
   onGridPath,
   onImageName,
   onGridName,
+  onHiresPath,
+  onHiresName,
   onEnabled,
 }: OutputPathOverrideProps) {
   const settingsImagePath = useSettingsStore((s) => s.imagePath)
   const settingsGridPath = useSettingsStore((s) => s.gridPath)
+  const settingsHiresPath = useSettingsStore((s) => s.hiresPath)
   const settingsImageName = useSettingsStore((s) => s.imageName)
   const settingsGridName = useSettingsStore((s) => s.gridName)
+  const settingsHiresName = useSettingsStore((s) => s.hiresName)
   const imageFormat = useSettingsStore((s) => s.imageFormat)
   const gridFormat = useSettingsStore((s) => s.gridFormat)
 
@@ -122,6 +132,19 @@ export function OutputPathOverride({
           folderExample={previewPath(gridPath.trim() || settingsGridPath)}
           onName={onGridName}
           onFolder={onGridPath}
+        />
+        <PathCard
+          title="Hires. fix"
+          nameLabel="Name"
+          folderLabel="Folder"
+          name={hiresName}
+          folder={hiresPath}
+          namePlaceholder={settingsHiresName}
+          folderPlaceholder={settingsHiresPath}
+          nameExample={`${previewPath(hiresName.trim() || settingsHiresName)}.${imageFormat}`}
+          folderExample={previewPath(hiresPath.trim() || settingsHiresPath)}
+          onName={onHiresName}
+          onFolder={onHiresPath}
         />
         <p className="text-xs text-muted">
           Overwrites the Files → Saving folders and names for this generate when this section is on. Empty fields still use

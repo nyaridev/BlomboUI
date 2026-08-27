@@ -7,6 +7,7 @@ import { ChipList } from '@/components/controls/chip-list/ChipList.tsx'
 import { ChipSelect } from '@/components/controls/chip-select/ChipSelect.tsx'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
+import { CheckRow } from '@/components/controls/check-row/CheckRow.tsx'
 import { ExpandSection } from '@/components/controls/expand-section/ExpandSection.tsx'
 import { FolderField } from '@/components/controls/folder-field/FolderField.tsx'
 import { TextField } from '@/components/controls/input/TextField.tsx'
@@ -31,6 +32,7 @@ import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.ts
 import { MetaCard } from '@/components/composites/models/MetaCard.tsx'
 import { TilePreview } from '@/components/composites/models/TilePreview.tsx'
 import { CheckpointField } from '@/components/composites/models/CheckpointField.tsx'
+import { ModelPickTile } from '@/components/composites/models/ModelPickTile.tsx'
 import { ImageDrop } from '@/components/controls/image-drop/ImageDrop.tsx'
 import { SettingsBlock, SettingsCard } from '@/views/settings/panels/content/SettingsBlock.tsx'
 import { useRef, useState } from 'react'
@@ -253,6 +255,11 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
           <SettingsBlock query={query} title="Progress" className="flex flex-col gap-4">
             <SliderControl value={pct} onChange={setPct} min={0} max={100} />
             <ProgressBar pct={pct} label={`${pct}% ETA: ${eta}s`} />
+            <ProgressBar
+              pct={Math.max(0, Math.min(100, pct))}
+              label="Hires. fix · 8 / 15"
+              segments={['Generation', 'Upscaling', 'Hires. fix']}
+            />
             <DownloadMeter pct={pct} label="1.0 GB / 2.2 GB · 18 MB/s" />
           </SettingsBlock>
         </SettingsCard>
@@ -289,12 +296,20 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
               {tab === 'one' ? 'First pane' : 'Second pane'}
             </div>
           </SettingsBlock>
+          <SettingsBlock query={query} title="Check row" className="flex flex-col gap-2">
+            <CheckRow on={hires} onChange={setHires}>
+              <span className="text-sm text-ink">Model override</span>
+            </CheckRow>
+          </SettingsBlock>
           <SettingsBlock query={query} title="Section" className="flex flex-col gap-2">
             <ExpandSection title="Advanced">
               <p className="text-sm text-muted">Extra settings go here.</p>
             </ExpandSection>
             <ExpandSection title="Hires fix" enabled={hires} onEnabled={setHires}>
-              <NumberField value={number} onChange={setNumber} />
+              <div className="flex flex-col gap-stack">
+                <NumberField value={number} onChange={setNumber} />
+                <SelectField value={choice} onChange={setChoice} options={['euler', 'euler_a', 'dpmpp_2m']} />
+              </div>
             </ExpandSection>
           </SettingsBlock>
           <SettingsBlock query={query} title="Pane splitter" className="flex flex-col gap-2">
@@ -320,6 +335,10 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
           </SettingsBlock>
           <SettingsBlock query={query} title="Tile preview" className="w-36">
             <TilePreview label="Example tile" mark="?" eager />
+          </SettingsBlock>
+          <SettingsBlock query={query} title="Model pick tile" className="flex items-end gap-cluster">
+            <ModelPickTile kind="checkpoints" role="Checkpoint" value={checkpoint} onChange={setCheckpoint} chromeKey="primitives-checkpoint" />
+            <ModelPickTile kind="checkpoints" role="Checkpoint" size="tall" value={checkpoint} onChange={setCheckpoint} chromeKey="primitives-checkpoint" />
           </SettingsBlock>
           <SettingsBlock query={query} title="Meta card" className="flex flex-col gap-2 text-xs">
             <MetaCard title="Checkpoint" mono>

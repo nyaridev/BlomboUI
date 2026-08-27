@@ -89,6 +89,7 @@ export function PromptField({
   const loras = useModelsStore((s) => s.loras)
   const wildcards = useModelsStore((s) => s.wildcards)
   const checkpoints = useModelsStore((s) => s.checkpoints)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
   const autocompleteEnabled = useSettingsStore((s) => s.autocompleteEnabled)
   const autocompleteMode = useSettingsStore((s) => s.autocompleteMode)
   const autocompleteTypes = useSettingsStore((s) => s.autocompleteTypes)
@@ -102,9 +103,11 @@ export function PromptField({
   const loraView = useThumbView('loras')
   const wildView = useThumbView('wildcards')
   const modelTypes = useMemo(() => {
-    const item = checkpoints.find((row) => modelPath(row) === checkpoint)
+    const item =
+      checkpoints.find((row) => modelPath(row) === checkpoint) ??
+      diffusionModels.find((row) => modelPath(row) === checkpoint)
     return item?.types ?? []
-  }, [checkpoint, checkpoints])
+  }, [checkpoint, checkpoints, diffusionModels])
   const tagAllowed = autocompleteEnabled && autocompleteApplies(autocompleteMode, autocompleteTypes, modelTypes)
   const onWeightKey = usePromptWeightKey(onChange)
   const area = useRef<HTMLTextAreaElement>(null)
@@ -399,7 +402,7 @@ export function PromptField({
 
   return (
     <>
-      <div className="relative h-full min-w-0 rounded bg-field">
+      <div className="prompt-field relative h-full min-w-0 rounded bg-field">
         <PromptHighlight ref={highlight} text={value} loras={loras} side={side} />
         <textarea
           ref={area}

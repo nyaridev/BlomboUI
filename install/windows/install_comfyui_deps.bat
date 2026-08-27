@@ -58,6 +58,14 @@ call :install_node "comfyui-manager" "https://github.com/Comfy-Org/ComfyUI-Manag
 if errorlevel 1 exit /b 1
 call :install_node "rgthree-comfy" "https://github.com/rgthree/rgthree-comfy"
 if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-KJNodes" "https://github.com/kijai/ComfyUI-KJNodes"
+if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-Easy-Use" "https://github.com/yolain/Comfyui-Easy-Use"
+if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-Impact-Pack" "https://github.com/ltdrdata/ComfyUI-Impact-Pack"
+if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-Impact-Subpack" "https://github.com/ltdrdata/ComfyUI-Impact-Subpack"
+if errorlevel 1 exit /b 1
 
 :: -----------------------------------------------------------------------------
 :: Completion

@@ -8,6 +8,8 @@ from features.settings.scripts.clean import _clean
 from features.settings.scripts.values import (
     GRID_NAME_DEFAULT,
     GRID_PATH_DEFAULT,
+    HIRES_NAME_DEFAULT,
+    HIRES_PATH_DEFAULT,
     IMAGE_NAME_DEFAULT,
     IMAGE_PATH_DEFAULT,
     INTERRUPTED_PATH_DEFAULT,

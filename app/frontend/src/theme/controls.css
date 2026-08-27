@@ -428,9 +428,26 @@ input[type='range'].slider::-moz-range-thumb {
 
 .section-body .number-field,
 .section-body input:not([type='checkbox']):not([type='radio']):not([type='range']),
-.section-body textarea,
+.section-body textarea:not(.prompt-editor),
 .section-body select {
-  background-color: var(--color-bg);
+  background-color: var(--color-panel);
+}
+
+.section-body .field-select {
+	background: var(--color-panel);
+}
+
+.section-body .prompt-field {
+	background-color: var(--color-panel);
+}
+
+.section-body .bg-panel .number-field,
+.section-body .bg-panel input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.section-body .bg-panel textarea:not(.prompt-editor),
+.section-body .bg-panel select,
+.section-body .bg-panel .field-select,
+.section-body .bg-panel .prompt-field {
+	background-color: var(--color-field);
 }
 
 .section-body .field-select input {

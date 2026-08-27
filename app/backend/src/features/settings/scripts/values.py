@@ -5,8 +5,10 @@ import re
 IMAGE_PATH_DEFAULT = "[workflow]/images/[date]"
 GRID_PATH_DEFAULT = "[workflow]/grids/[date]"
 INTERRUPTED_PATH_DEFAULT = "[workflow]/interrupted/[date]"
+HIRES_PATH_DEFAULT = "[workflow]/hires/[date]"
 IMAGE_NAME_DEFAULT = "blombo_[number]"
 GRID_NAME_DEFAULT = "blombo_[number]"
+HIRES_NAME_DEFAULT = "blombo_[number]"
 _SAFE_PATH = re.compile(r"^[A-Za-z0-9._\[\]/-]+$")
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._\[\]-]+$")
 _CSV_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.csv$")
@@ -54,6 +56,8 @@ _KEYS = (
     "imageName",
     "gridPath",
     "gridName",
+    "hiresPath",
+    "hiresName",
     "interruptedPath",
     "imageFormat",
     "gridFormat",

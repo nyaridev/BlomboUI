@@ -17,6 +17,7 @@ type ExpandSectionProps = {
   defaultOpen?: boolean
   open?: boolean
   onOpenChange?: (open: boolean) => void
+  locked?: boolean
 }
 
 export function ExpandSection({
@@ -29,6 +30,7 @@ export function ExpandSection({
   defaultOpen = false,
   open: openProp,
   onOpenChange,
+  locked = false,
 }: ExpandSectionProps) {
   const togglable = onEnabled != null
   const [uncontrolled, setUncontrolled] = useState(() => defaultOpen || (togglable && enabled))
@@ -37,6 +39,7 @@ export function ExpandSection({
   const [height, setHeight] = useState<number | null>(null)
   const bodyRef = useRef<HTMLDivElement>(null)
   const dimmed = togglable && !enabled
+  const inert = dimmed || locked
   const rem = remPx()
   const minH = 4 * rem
   const maxH = 48 * rem
@@ -60,9 +63,11 @@ export function ExpandSection({
   }
 
   return (
-    <div className="rounded border border-line bg-field">
+    <div className={['rounded border border-line bg-field', locked ? 'pointer-events-auto' : ''].filter(Boolean).join(' ')}>
       <div className="flex items-center gap-2 px-2 py-1.5">
-        {togglable ? <CheckboxControl checked={enabled} onChange={(value) => onEnabled?.(value)} /> : null}
+        {togglable ? (
+          <CheckboxControl checked={enabled} onChange={(value) => onEnabled?.(value)} disabled={locked} />
+        ) : null}
         <button
           type="button"
           className={[
@@ -90,7 +95,8 @@ export function ExpandSection({
             className={[
               'section-body p-2',
               fit ? '' : 'overflow-auto pb-5',
-              dimmed ? 'pointer-events-none opacity-40' : '',
+              dimmed ? 'opacity-40' : '',
+              inert ? 'pointer-events-none' : '',
             ].join(' ')}
             style={fit ? undefined : height != null ? { height } : { maxHeight: defaultH }}
           >

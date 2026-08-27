@@ -405,6 +405,7 @@ LOOKUP_KINDS = (
     "loras",
     "vae",
     "text_encoders",
+    "upscale_models",
     "controlnet",
     "embeddings",
     "wildcards",

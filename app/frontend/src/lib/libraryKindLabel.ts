@@ -4,6 +4,7 @@ const LABELS: Record<string, string> = {
   loras: 'LoRA',
   vae: 'VAE',
   text_encoders: 'Text encoder',
+  upscale_models: 'Upscale',
   controlnet: 'ControlNet',
   embeddings: 'Embeddings',
   wildcards: 'Wildcards',

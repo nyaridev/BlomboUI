@@ -52,7 +52,7 @@ export function generateGalleryViewKey(kind?: string) {
   if (kind === 'wildcards') {
     return 'wildcards'
   }
-  if (kind === 'vae' || kind === 'text_encoders' || kind === 'controlnet' || kind === 'embeddings') {
+  if (kind === 'vae' || kind === 'text_encoders' || kind === 'upscale_models' || kind === 'controlnet' || kind === 'embeddings') {
     return 'other'
   }
   return 'checkpoints'

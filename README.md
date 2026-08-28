@@ -9,19 +9,55 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Vite](https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white)](https://vite.dev/)
 [![ComfyUI](https://img.shields.io/badge/Backend-ComfyUI-1F1F1F)](https://github.com/comfyanonymous/ComfyUI)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-informational)](#quick-start)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux-informational)](#installation)
 
 Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the app never shares Comfy’s Torch install.
 
-[Quick Start](#quick-start) · [Features](#features) · [Layout](#layout) · [Config](#configuration) · [Stack](#stack)
+[Installation](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Layout](#layout) · [Config](#configuration) · [Stack](#stack)
 
 </div>
 
 ---
 
+## Installation
+
+**Prerequisites:** [Git](https://git-scm.com/), [Node.js](https://nodejs.org/) LTS, and [uv](https://docs.astral.sh/uv/) on `PATH`.
+
+1. Clone the repo and enter the folder:
+
+   ```bash
+   git clone https://github.com/nyaridev/BlomboUI.git
+   cd BlomboUI
+   ```
+
+2. Start the app.
+
+   **Windows:** optionally edit `webui-user.bat`, then double-click it.
+
+   **Linux:** optionally edit `webui-user.sh`, then run:
+
+   ```bash
+   chmod +x webui-user.sh
+   ./webui-user.sh
+   ```
+
+3. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
+
+4. Open the UI when the launcher finishes.
+
+| Service | URL |
+| --- | --- |
+| UI | http://127.0.0.1:5173 |
+| API | http://127.0.0.1:4173 |
+| ComfyUI | http://127.0.0.1:8188 |
+
+Already have ComfyUI? Set `COMFYUI_PATH` in `webui-user.bat` / `webui-user.sh`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
+
+---
+
 ## Quick start
 
-**Prerequisites:** [Node.js](https://nodejs.org/) LTS and [uv](https://docs.astral.sh/uv/) on `PATH`.
+Already cloned? Launch from the repo root:
 
 <table>
 <tr>
@@ -43,16 +79,6 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
 </td>
 </tr>
 </table>
-
-First launch creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
-
-| Service | URL |
-| --- | --- |
-| UI | http://127.0.0.1:5173 |
-| API | http://127.0.0.1:4173 |
-| ComfyUI | http://127.0.0.1:8188 |
-
-Already have ComfyUI? Set `COMFYUI_PATH` in `webui-user.bat` / `webui-user.sh`. Point models at another folder with `MODELS_ROOT`.
 
 ---
 

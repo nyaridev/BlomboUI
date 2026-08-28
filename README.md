@@ -13,13 +13,34 @@
 
 Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the app never shares Comfy’s Torch install.
 
-[Installation](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Layout](#layout) · [Config](#configuration) · [Stack](#stack)
+[Installation](#installation) · [Windows](#windows) · [Linux](#linux) · [Quick Start](#quick-start) · [Features](#features) · [Layout](#layout) · [Config](#configuration) · [Stack](#stack)
 
 </div>
 
 ---
 
 ## Installation
+
+### Windows
+
+**Prerequisites:** [Git](https://git-scm.com/), [Node.js](https://nodejs.org/) LTS, and [uv](https://docs.astral.sh/uv/) on `PATH`.
+
+1. Clone the repo and enter the folder:
+
+   ```bat
+   git clone https://github.com/nyaridev/BlomboUI.git
+   cd BlomboUI
+   ```
+
+2. Optional: edit `webui-user.bat` (paths, `COMMANDLINE_ARGS`). Already have ComfyUI? Set `COMFYUI_PATH`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
+
+3. Double-click `webui-user.bat`.
+
+4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
+
+5. Open http://127.0.0.1:5173 when the launcher finishes.
+
+### Linux
 
 **Prerequisites:** [Git](https://git-scm.com/), [Node.js](https://nodejs.org/) LTS, and [uv](https://docs.astral.sh/uv/) on `PATH`.
 
@@ -30,28 +51,24 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
    cd BlomboUI
    ```
 
-2. Start the app.
+2. Optional: edit `webui-user.sh` (paths, `COMMANDLINE_ARGS`). Already have ComfyUI? Set `COMFYUI_PATH`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
 
-   **Windows:** optionally edit `webui-user.bat`, then double-click it.
-
-   **Linux:** optionally edit `webui-user.sh`, then run:
+3. Make the launcher executable and run it:
 
    ```bash
    chmod +x webui-user.sh
    ./webui-user.sh
    ```
 
-3. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
+4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
 
-4. Open the UI when the launcher finishes.
+5. Open http://127.0.0.1:5173 when the launcher finishes.
 
 | Service | URL |
 | --- | --- |
 | UI | http://127.0.0.1:5173 |
 | API | http://127.0.0.1:4173 |
 | ComfyUI | http://127.0.0.1:8188 |
-
-Already have ComfyUI? Set `COMFYUI_PATH` in `webui-user.bat` / `webui-user.sh`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
 
 ---
 

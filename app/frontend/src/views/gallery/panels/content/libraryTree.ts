@@ -81,6 +81,7 @@ export function placeIds(items: GalleryLibrary[], parentId: string | null, dragI
 }
 
 export type LibraryDrop = { parentId: string | null; beforeId: string | null }
+export type LibraryDropKind = 'before' | 'after' | 'into'
 
 export function dropOnItem(item: GalleryLibrary, clientY: number, top: number, height: number, nextId: string | null): LibraryDrop {
   const y = clientY - top
@@ -92,4 +93,14 @@ export function dropOnItem(item: GalleryLibrary, clientY: number, top: number, h
     return { parentId: item.parent_id ?? null, beforeId: item.id }
   }
   return { parentId: item.parent_id ?? null, beforeId: nextId }
+}
+
+export function dropKind(item: GalleryLibrary, dest: LibraryDrop): LibraryDropKind | null {
+  if (dest.parentId === item.id) {
+    return 'into'
+  }
+  if (dest.parentId !== (item.parent_id ?? null)) {
+    return null
+  }
+  return dest.beforeId === item.id ? 'before' : 'after'
 }

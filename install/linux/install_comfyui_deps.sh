@@ -80,6 +80,8 @@ install_node "ComfyUI-KJNodes" "https://github.com/kijai/ComfyUI-KJNodes" || exi
 install_node "ComfyUI-Easy-Use" "https://github.com/yolain/Comfyui-Easy-Use" || exit 1
 install_node "ComfyUI-Impact-Pack" "https://github.com/ltdrdata/ComfyUI-Impact-Pack" || exit 1
 install_node "ComfyUI-Impact-Subpack" "https://github.com/ltdrdata/ComfyUI-Impact-Subpack" || exit 1
+install_node "ComfyUI-RMBG" "https://github.com/1038lab/ComfyUI-RMBG" || exit 1
+install_node "ComfyUI-SeedVR2_VideoUpscaler" "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler" || exit 1
 
 echo
 ui_ok "ComfyUI custom nodes are ready."

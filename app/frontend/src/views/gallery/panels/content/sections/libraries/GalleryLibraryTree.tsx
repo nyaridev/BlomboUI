@@ -1,22 +1,24 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import type { GalleryLibrary } from '@/lib/api/gallery.ts'
-import { useRef, useState, type DragEvent, type MouseEvent } from 'react'
+import { Fragment, useRef, useState, type DragEvent, type MouseEvent } from 'react'
 import type { GallerySidebarId } from '@/views/gallery/panels/content/filters.ts'
 import {
   canMove,
   childrenOf,
+  dropKind,
   dropOnItem,
   isFolder,
   placeIds,
   type LibraryDrop,
+  type LibraryDropKind,
 } from '@/views/gallery/panels/content/libraryTree.ts'
 
-function rowClass(on: boolean, over: boolean) {
+function rowClass(on: boolean, into: boolean) {
   return [
     'flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm',
     on ? 'bg-line text-ink' : 'text-muted hover:bg-field hover:text-ink',
-    over ? 'bg-accent/20 text-ink' : '',
+    into ? 'bg-accent/20 text-ink' : '',
   ].join(' ')
 }
 
@@ -42,13 +44,15 @@ export function GalleryLibraryTree({
   const [open, setOpen] = useState<Record<string, boolean>>({})
   const [menu, setMenu] = useState<{ x: number; y: number; library: GalleryLibrary | null } | null>(null)
   const [drag, setDrag] = useState<string | null>(null)
-  const [over, setOver] = useState<string | null>(null)
+  const [over, setOver] = useState<{ id: string; kind: LibraryDropKind | 'root' } | null>(null)
   const dragRef = useRef<string | null>(null)
+  const dragged = useRef(false)
 
   function startDrag(event: DragEvent, ident: string) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', ident)
     dragRef.current = ident
+    dragged.current = false
     setDrag(ident)
   }
 
@@ -73,26 +77,53 @@ export function GalleryLibraryTree({
       const next = rows[index + 1]
       const ident = folder ? `folder:${item.id}` : `library:${item.id}`
       return (
-        <div key={item.id}>
+        <Fragment key={item.id}>
+          {over?.id === item.id && over.kind === 'before' ? (
+            <span className="my-0.5 block h-0.5 rounded-full bg-accent" />
+          ) : null}
           <button
             type="button"
             draggable
-            className={rowClass(nav === ident, over === item.id)}
+            className={[
+              rowClass(nav === ident, over?.id === item.id && over.kind === 'into'),
+              drag === item.id ? 'opacity-20' : '',
+              'cursor-grab active:cursor-grabbing',
+            ].join(' ')}
             style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}
-            onClick={() => onNav(ident)}
+            onClick={() => {
+              if (dragged.current) {
+                return
+              }
+              onNav(ident)
+            }}
             onContextMenu={(event: MouseEvent) => {
               event.preventDefault()
               setMenu({ x: event.clientX, y: event.clientY, library: item })
             }}
             onDragStart={(event) => startDrag(event, item.id)}
+            onDrag={() => {
+              dragged.current = true
+            }}
             onDragEnd={endDrag}
             onDragOver={(event) => {
               event.preventDefault()
               const src = dragRef.current || event.dataTransfer.getData('text/plain')
-              const dest = dropOnItem(item, event.clientY, event.currentTarget.getBoundingClientRect().top, event.currentTarget.getBoundingClientRect().height, next?.id ?? null)
-              const ok = Boolean(src && canMove(libraries, src, dest.parentId))
+              if (!src || src === item.id) {
+                setOver(null)
+                event.dataTransfer.dropEffect = 'none'
+                return
+              }
+              const dest = dropOnItem(
+                item,
+                event.clientY,
+                event.currentTarget.getBoundingClientRect().top,
+                event.currentTarget.getBoundingClientRect().height,
+                next?.id ?? null,
+              )
+              const ok = canMove(libraries, src, dest.parentId)
               event.dataTransfer.dropEffect = ok ? 'move' : 'none'
-              setOver(ok ? item.id : null)
+              const kind = ok ? dropKind(item, dest) : null
+              setOver(kind ? { id: item.id, kind } : null)
             }}
             onDrop={(event) => {
               event.preventDefault()
@@ -119,10 +150,16 @@ export function GalleryLibraryTree({
               <span className="w-4 shrink-0" />
             )}
             <AppIcon id={folder ? 'folder' : 'images'} size={14} />
-            <span className={['min-w-0 truncate', drag === item.id ? 'opacity-40' : ''].join(' ')}>{item.name}</span>
+            <span className="min-w-0 truncate">{item.name}</span>
           </button>
+          {over?.id === item.id && over.kind === 'after' && !(folder && expanded) ? (
+            <span className="my-0.5 block h-0.5 rounded-full bg-accent" />
+          ) : null}
           {folder && expanded ? renderRows(item.id, depth + 1) : null}
-        </div>
+          {over?.id === item.id && over.kind === 'after' && folder && expanded ? (
+            <span className="my-0.5 block h-0.5 rounded-full bg-accent" />
+          ) : null}
+        </Fragment>
       )
     })
   }
@@ -131,7 +168,7 @@ export function GalleryLibraryTree({
     <div className="flex min-h-0 flex-col gap-0.5">
       <button
         type="button"
-        className={rowClass(nav === 'libraries', over === 'root')}
+        className={rowClass(nav === 'libraries', false)}
         onClick={() => onNav('libraries')}
         onContextMenu={(event) => {
           event.preventDefault()
@@ -142,7 +179,7 @@ export function GalleryLibraryTree({
           const src = dragRef.current || event.dataTransfer.getData('text/plain')
           const ok = Boolean(src && canMove(libraries, src, null))
           event.dataTransfer.dropEffect = ok ? 'move' : 'none'
-          setOver(ok ? 'root' : null)
+          setOver(ok ? { id: 'root', kind: 'root' } : null)
         }}
         onDrop={(event) => {
           event.preventDefault()
@@ -156,6 +193,7 @@ export function GalleryLibraryTree({
         <AppIcon id="images" size={14} />
         All
       </button>
+      {over?.kind === 'root' ? <span className="my-0.5 block h-0.5 rounded-full bg-accent" /> : null}
       {renderRows(null, 0)}
       <button type="button" className={rowClass(false, false)} onClick={() => onAdd(null)}>
         <AppIcon id="plus" size={14} />

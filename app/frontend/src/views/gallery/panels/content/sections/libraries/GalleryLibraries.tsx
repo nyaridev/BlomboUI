@@ -3,7 +3,8 @@ import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/Con
 import type { GalleryLibrary } from '@/lib/api/gallery.ts'
 import { useRef, useState, type DragEvent } from 'react'
 import { GalleryCoverCard } from '@/views/gallery/panels/content/sections/home/GalleryCoverCard.tsx'
-import { canMove, childrenOf, dropOnItem, isFolder, placeIds } from '@/views/gallery/panels/content/libraryTree.ts'
+import { canMove, childrenOf, dropKind, dropOnItem, isFolder, placeIds } from '@/views/gallery/panels/content/libraryTree.ts'
+import type { LibraryDropKind } from '@/views/gallery/panels/content/libraryTree.ts'
 
 export function GalleryLibraries({
   items,
@@ -31,14 +32,24 @@ export function GalleryLibraries({
   onDrop: (parentId: string | null, ids: string[]) => void
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number; library: GalleryLibrary } | null>(null)
-  const [over, setOver] = useState<string | null>(null)
+  const [over, setOver] = useState<{ id: string; kind: LibraryDropKind } | null>(null)
+  const [dragging, setDragging] = useState<string | null>(null)
   const dragRef = useRef<string | null>(null)
+  const dragged = useRef(false)
   const shown = childrenOf(items, parentId)
 
   function startDrag(event: DragEvent, ident: string) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', ident)
     dragRef.current = ident
+    dragged.current = false
+    setDragging(ident)
+  }
+
+  function endDrag() {
+    dragRef.current = null
+    setDragging(null)
+    setOver(null)
   }
 
   return (
@@ -66,41 +77,47 @@ export function GalleryLibraries({
               title={item.name}
               subtitle={isFolder(item) ? 'Folder' : item.query || 'Saved search'}
               draggable
-              dropReady={over === item.id}
-              onClick={() => (isFolder(item) ? onOpenFolder(item) : onOpen(item))}
+              dragging={dragging === item.id}
+              dropKind={over?.id === item.id ? over.kind : null}
+              onClick={() => {
+                if (dragged.current) {
+                  return
+                }
+                isFolder(item) ? onOpenFolder(item) : onOpen(item)
+              }}
               onContextMenu={(event) => {
                 event.preventDefault()
                 setMenu({ x: event.clientX, y: event.clientY, library: item })
               }}
               onDragStart={(event) => startDrag(event, item.id)}
-              onDragEnd={() => {
-                dragRef.current = null
-                setOver(null)
+              onDrag={() => {
+                dragged.current = true
               }}
+              onDragEnd={endDrag}
               onDragOver={(event) => {
                 event.preventDefault()
                 const src = dragRef.current || event.dataTransfer.getData('text/plain')
-                const dest = dropOnItem(
-                  item,
-                  event.clientY,
-                  event.currentTarget.getBoundingClientRect().top,
-                  event.currentTarget.getBoundingClientRect().height,
-                  next?.id ?? null,
-                )
-                const ok = Boolean(src && canMove(items, src, dest.parentId))
+                if (!src || src === item.id) {
+                  setOver(null)
+                  event.dataTransfer.dropEffect = 'none'
+                  return
+                }
+                const box = event.currentTarget.getBoundingClientRect()
+                const dest = dropOnItem(item, event.clientX, box.left, box.width, next?.id ?? null)
+                const ok = canMove(items, src, dest.parentId)
                 event.dataTransfer.dropEffect = ok ? 'move' : 'none'
-                setOver(ok ? item.id : null)
+                const kind = ok ? dropKind(item, dest) : null
+                setOver(kind ? { id: item.id, kind } : null)
               }}
               onDrop={(event) => {
                 event.preventDefault()
                 const src = dragRef.current || event.dataTransfer.getData('text/plain')
                 const rect = event.currentTarget.getBoundingClientRect()
-                dragRef.current = null
-                setOver(null)
+                endDrag()
                 if (!src) {
                   return
                 }
-                const dest = dropOnItem(item, event.clientY, rect.top, rect.height, next?.id ?? null)
+                const dest = dropOnItem(item, event.clientX, rect.left, rect.width, next?.id ?? null)
                 if (canMove(items, src, dest.parentId)) {
                   onDrop(dest.parentId, placeIds(items, dest.parentId, src, dest.beforeId))
                 }

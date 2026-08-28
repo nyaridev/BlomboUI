@@ -5,7 +5,7 @@ import { NameDialog } from '@/components/controls/dialog/NameDialog.tsx'
 import { tabTriggerClass } from '@/components/controls/tabs/TabsControl.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
 import { newAdetailerUnit, type AdetailerUnit } from '@/stores/generateStore.ts'
-import { useState } from 'react'
+import { Fragment, useRef, useState } from 'react'
 
 export function AdetailerUnitTabs({
   units,
@@ -24,6 +24,7 @@ export function AdetailerUnitTabs({
   const [slot, setSlot] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; id: string } | null>(null)
   const [rename, setRename] = useState<{ id: string; name: string } | null>(null)
+  const dragged = useRef(false)
 
   function moving() {
     return drag !== null && slot !== null && slot !== drag && slot !== drag + 1
@@ -37,6 +38,11 @@ export function AdetailerUnitTabs({
     const [item] = next.splice(drag, 1)
     next.splice(drag < slot ? slot - 1 : slot, 0, item)
     onChange(next)
+  }
+
+  function clearDrag() {
+    setDrag(null)
+    setSlot(null)
   }
 
   function removeUnit(id: string) {
@@ -70,17 +76,26 @@ export function AdetailerUnitTabs({
   }
 
   return (
-    <div className="flex min-w-0 flex-wrap items-center gap-cluster">
+    <div
+      className="flex min-w-0 flex-wrap items-center gap-cluster"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault()
+        applyDrop()
+      }}
+    >
       {units.map((unit, index) => (
-        <div
-          key={unit.id}
-          role="button"
+        <Fragment key={unit.id}>
+          {moving() && slot === index ? <span className="w-0.5 self-stretch rounded-full bg-accent" /> : null}
+          <div
+            role="button"
           tabIndex={0}
           className={tabTriggerClass(
             unit.id === active,
             [
-              drag === index ? 'opacity-40' : '',
+              drag === index ? 'opacity-20' : '',
               unit.enabled === false && drag !== index ? 'opacity-50' : '',
+              locked ? '' : 'cursor-grab active:cursor-grabbing',
               'gap-1',
             ]
               .filter(Boolean)
@@ -89,7 +104,12 @@ export function AdetailerUnitTabs({
             'pl-2 pr-0.5',
           )}
           draggable={!locked}
-          onClick={() => onActive(unit.id)}
+          onClick={() => {
+            if (dragged.current) {
+              return
+            }
+            onActive(unit.id)
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' || event.key === ' ') {
               event.preventDefault()
@@ -111,11 +131,16 @@ export function AdetailerUnitTabs({
             }
             event.dataTransfer.effectAllowed = 'move'
             event.dataTransfer.setData('text/plain', unit.id)
+            dragged.current = false
             setDrag(index)
             setSlot(index)
           }}
+          onDrag={() => {
+            dragged.current = true
+          }}
           onDragOver={(event) => {
             event.preventDefault()
+            event.stopPropagation()
             if (drag === null) {
               return
             }
@@ -123,12 +148,10 @@ export function AdetailerUnitTabs({
           }}
           onDrop={(event) => {
             event.preventDefault()
+            event.stopPropagation()
             applyDrop()
           }}
-          onDragEnd={() => {
-            setDrag(null)
-            setSlot(null)
-          }}
+          onDragEnd={clearDrag}
         >
           <span
             data-unit-check=""
@@ -173,7 +196,9 @@ export function AdetailerUnitTabs({
             </IconButton>
           ) : null}
         </div>
+        </Fragment>
       ))}
+      {moving() && slot === units.length ? <span className="w-0.5 self-stretch rounded-full bg-accent" /> : null}
       {locked ? null : (
         <IconButton
           aria-label="Add ADetailer unit"

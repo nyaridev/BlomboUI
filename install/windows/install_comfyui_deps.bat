@@ -66,6 +66,10 @@ call :install_node "ComfyUI-Impact-Pack" "https://github.com/ltdrdata/ComfyUI-Im
 if errorlevel 1 exit /b 1
 call :install_node "ComfyUI-Impact-Subpack" "https://github.com/ltdrdata/ComfyUI-Impact-Subpack"
 if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-RMBG" "https://github.com/1038lab/ComfyUI-RMBG"
+if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-SeedVR2_VideoUpscaler" "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler"
+if errorlevel 1 exit /b 1
 
 :: -----------------------------------------------------------------------------
 :: Completion

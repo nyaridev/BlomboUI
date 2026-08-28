@@ -20,6 +20,7 @@ from features.generate.scripts.jobs import (
     preview_bytes,
     preview_media,
 )
+from features.generate.scripts.rembg import save_uploads
 from features.generate.scripts.templates import (
     TemplateError,
     create_template,
@@ -52,6 +53,7 @@ __all__ = [
     "purge_hires_tmp",
     "reachable",
     "reorder_templates",
+    "save_uploads",
     "set_apply",
     "update_template",
 ]

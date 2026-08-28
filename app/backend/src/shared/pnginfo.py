@@ -55,8 +55,9 @@ def embed(
     fmt: str = "png",
     quality: int = 100,
     metadata: dict[str, Any] | None = None,
+    texts: dict[str, str] | None = None,
 ) -> bytes:
-    return write_embed(data, values, graph, fmt, quality, metadata, parameters_text)
+    return write_embed(data, values, graph, fmt, quality, metadata, parameters_text, texts)
 
 
 def parameters_text(values: dict[str, Any], *, raw: bool = False) -> str:

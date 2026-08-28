@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
+from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import FileResponse, Response
+import asyncio
 
 from api.errors import ApiError
 from api.http import image_response
@@ -57,6 +58,14 @@ def delete_template(workflow: str, template_id: str) -> dict:
 @api.get("/comfy/ksampler")
 def comfy_ksampler() -> dict:
     return generate.ksampler_choices()
+
+
+@api.post("/jobs/uploads")
+async def post_job_uploads(files: list[UploadFile] = File(...)) -> dict:
+    blobs: list[tuple[str, bytes]] = []
+    for item in files:
+        blobs.append((item.filename or "image.png", await item.read()))
+    return {"paths": await asyncio.to_thread(generate.save_uploads, blobs)}
 
 
 @api.post("/jobs")

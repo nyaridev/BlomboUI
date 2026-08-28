@@ -22,6 +22,9 @@ function allowed(file: File, accept: string) {
 
 type ImageDropProps = {
   onFile?: (file: File | null) => void
+  onFiles?: (files: File[]) => void
+  files?: File[]
+  multiple?: boolean
   className?: string
   accept?: string
   placeholder?: string
@@ -31,6 +34,9 @@ type ImageDropProps = {
 
 export function ImageDrop({
   onFile,
+  onFiles,
+  files,
+  multiple = false,
   className = 'h-48',
   accept = 'image/*',
   placeholder = 'Drop an image here, or click to pick',
@@ -40,6 +46,7 @@ export function ImageDrop({
   const [src, setSrc] = useState<string | null>(initialSrc)
   const [label, setLabel] = useState<string | null>(initialLabel)
   const [over, setOver] = useState(false)
+  const [thumbs, setThumbs] = useState<string[]>([])
   const input = useRef<HTMLInputElement>(null)
   const dragDepth = useRef(0)
 
@@ -50,6 +57,19 @@ export function ImageDrop({
       }
     }
   }, [src])
+
+  useEffect(() => {
+    if (!multiple) {
+      return
+    }
+    const next = (files ?? []).filter(isImage).map((file) => URL.createObjectURL(file))
+    setThumbs(next)
+    return () => {
+      for (const url of next) {
+        URL.revokeObjectURL(url)
+      }
+    }
+  }, [files, multiple])
 
   function take(file: File | null) {
     setSrc((current) => {
@@ -62,11 +82,17 @@ export function ImageDrop({
     onFile?.(file)
   }
 
-  function fromList(files: FileList | null) {
-    const file = files?.[0]
-    if (file && allowed(file, accept)) {
-      take(file)
+  function fromList(list: FileList | null) {
+    const picked = [...(list ?? [])].filter((file) => allowed(file, accept))
+    if (!picked.length) {
+      return
     }
+    if (multiple) {
+      const next = [...(files ?? []), ...picked]
+      onFiles?.(next)
+      return
+    }
+    take(picked[0] ?? null)
   }
 
   return (
@@ -103,35 +129,66 @@ export function ImageDrop({
         ref={input}
         type="file"
         accept={accept}
+        multiple={multiple}
         className="hidden"
         onChange={(event) => {
           fromList(event.target.files)
           event.target.value = ''
         }}
       />
-      {src || label ? null : (
-        <AppIcon id="upload" size={64} className="pointer-events-none absolute text-muted opacity-20" />
-      )}
-      {src || label ? (
-        <>
-          {src ? <img src={src} alt="Dropped" className="absolute inset-0 h-full w-full object-contain" /> : null}
-          {label ? (
-            <p className="z-10 px-3 text-center text-sm break-all text-ink">{label}</p>
-          ) : null}
-          <button
-            type="button"
-            className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
-            aria-label="Remove file"
-            onClick={(event) => {
-              event.stopPropagation()
-              take(null)
-            }}
-          >
-            <AppIcon id="x" />
-          </button>
-        </>
+      {multiple ? (
+        thumbs.length ? (
+          <div className="flex min-h-48 w-full flex-wrap content-start gap-cluster p-2">
+            {thumbs.map((url, index) => (
+              <div key={`${url}-${index}`} className="relative h-20 w-20 overflow-hidden rounded border border-line bg-bg">
+                <img src={url} alt="" className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
+                  aria-label="Remove file"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onFiles?.((files ?? []).filter((_, item) => item !== index))
+                  }}
+                >
+                  <AppIcon id="x" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <>
+            <AppIcon id="upload" size={64} className="pointer-events-none absolute text-muted opacity-20" />
+            <p className="px-3 text-center text-sm text-muted">{placeholder}</p>
+          </>
+        )
       ) : (
-        <p className="px-3 text-center text-sm text-muted">{placeholder}</p>
+        <>
+          {src || label ? null : (
+            <AppIcon id="upload" size={64} className="pointer-events-none absolute text-muted opacity-20" />
+          )}
+          {src || label ? (
+            <>
+              {src ? <img src={src} alt="Dropped" className="absolute inset-0 h-full w-full object-contain" /> : null}
+              {label ? (
+                <p className="z-10 px-3 text-center text-sm break-all text-ink">{label}</p>
+              ) : null}
+              <button
+                type="button"
+                className="absolute top-1.5 right-1.5 z-10 flex h-7 w-7 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
+                aria-label="Remove file"
+                onClick={(event) => {
+                  event.stopPropagation()
+                  take(null)
+                }}
+              >
+                <AppIcon id="x" />
+              </button>
+            </>
+          ) : (
+            <p className="px-3 text-center text-sm text-muted">{placeholder}</p>
+          )}
+        </>
       )}
     </div>
   )

@@ -177,8 +177,30 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
             <ChoiceChip active>On</ChoiceChip>
             <ChoiceChip>Off</ChoiceChip>
           </SettingsBlock>
-          <SettingsBlock query={query} title="Segment switch" className="flex flex-wrap gap-cluster">
+          <SettingsBlock query={query} title="Segment switch" className="flex flex-col gap-cluster">
+            <div className="flex flex-wrap gap-cluster">
+              <SegmentSwitch
+                value={media}
+                tone="blue"
+                options={[
+                  { id: 'all', label: 'All' },
+                  { id: 'image', label: 'Images' },
+                  { id: 'video', label: 'Videos' },
+                ]}
+                onChange={setMedia}
+              />
+              <SegmentSwitch
+                value={segment}
+                tone="purple"
+                options={[
+                  { id: 'galleries', label: 'Galleries' },
+                  { id: 'images', label: 'Images' },
+                ]}
+                onChange={setSegment}
+              />
+            </div>
             <SegmentSwitch
+              fill
               value={media}
               tone="blue"
               options={[
@@ -187,15 +209,6 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
                 { id: 'video', label: 'Videos' },
               ]}
               onChange={setMedia}
-            />
-            <SegmentSwitch
-              value={segment}
-              tone="purple"
-              options={[
-                { id: 'galleries', label: 'Galleries' },
-                { id: 'images', label: 'Images' },
-              ]}
-              onChange={setSegment}
             />
           </SettingsBlock>
         </SettingsCard>
@@ -364,6 +377,9 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
         <SettingsCard query={query} title="Media">
           <SettingsBlock query={query} title="Image drop">
             <ImageDrop />
+          </SettingsBlock>
+          <SettingsBlock query={query} title="Image drop (multiple)">
+            <ImageDrop multiple placeholder="Drop images here, or click to pick" />
           </SettingsBlock>
           <SettingsBlock query={query} title="Tile preview" className="w-36">
             <TilePreview label="Example tile" mark="?" eager />

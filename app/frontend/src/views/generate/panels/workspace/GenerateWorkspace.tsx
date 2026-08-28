@@ -9,7 +9,7 @@ import { type Job, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
 import { useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
 import type { GenerateTab } from '@/views/generate/panels/workspace/tabs.ts'
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 
 type LoraItem = ModelEntry & {
   auto_apply?: boolean | null
@@ -55,6 +55,7 @@ export function GenerateWorkspace({
   loraAutoApplyDefault,
   wildcardItems,
   onToggleAutoLora,
+  actions,
 }: {
   shownTab: GenerateTab
   visibleTabs: GenerateTab[]
@@ -95,9 +96,12 @@ export function GenerateWorkspace({
   loraAutoApplyDefault: boolean
   wildcardItems: ModelEntry[]
   onToggleAutoLora: (path: string) => void
+  actions?: ReactNode
 }) {
+  const tabs = visibleTabs.length > 1
   return (
     <div className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'flex-1' : ''].join(' ')}>
+      {tabs ? (
       <TabsList
         value={shownTab}
         onValueChange={(value) => {
@@ -114,7 +118,8 @@ export function GenerateWorkspace({
           </TabsTrigger>
         ))}
       </TabsList>
-      <div className={['mb-4 rounded-b-md rounded-tr-md border border-line bg-panel p-3', shownTab !== 'Generation' ? 'flex flex-1 flex-col' : ''].join(' ')}>
+      ) : null}
+      <div className={['mb-4 border border-line bg-panel p-3', tabs ? 'rounded-b-md rounded-tr-md' : 'rounded-md', shownTab !== 'Generation' ? 'flex flex-1 flex-col' : ''].join(' ')}>
         <GenerationPanel
           hidden={shownTab !== 'Generation'}
           genRowRef={genRowRef}
@@ -135,6 +140,7 @@ export function GenerateWorkspace({
           jobPct={jobPct}
           overallLabel={overallLabel}
           timing={timing}
+          actions={actions}
         />
         {shownTab === 'Base Model' ? (
           <BaseModelPanel

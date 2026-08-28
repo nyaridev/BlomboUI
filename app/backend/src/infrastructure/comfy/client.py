@@ -235,6 +235,10 @@ def _workflow_nodes(data: Any) -> list:
 
 
 def _workflow_category(data: Any) -> str:
+    if isinstance(data, dict):
+        raw = str(data.get("category") or "").strip()
+        if raw in {"image", "video", "utility"}:
+            return raw
     kinds = {node.get("class_type") for node in _workflow_nodes(data)}
     if kinds & {"VHS_VideoCombine", "SaveVideo", "ImageToVideo"}:
         return "video"
@@ -275,6 +279,8 @@ def _workflow_params(data: Any) -> list[str]:
             keys.add("loras")
         elif kind == "ImageUpscaleWithModel":
             keys.add("hires")
+        elif kind in {"RMBG", "BiRefNetRMBG"}:
+            keys.add("rembg")
     if clips >= 2:
         keys.update({"prompt", "negativePrompt"})
     extras = data.get("extras") if isinstance(data, dict) else None
@@ -299,10 +305,13 @@ def list_workflows() -> list[dict[str, Any]]:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
             data = {}
+        label = ""
+        if isinstance(data, dict):
+            label = str(data.get("name") or "").strip()
         items.append(
             {
                 "id": path.stem,
-                "name": path.stem,
+                "name": label or path.stem,
                 "category": _workflow_category(data),
                 "params": _workflow_params(data),
             }

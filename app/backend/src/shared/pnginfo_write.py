@@ -16,6 +16,7 @@ def embed(
     quality: int = 100,
     metadata: dict[str, Any] | None = None,
     parameters_text: Callable[..., str] | None = None,
+    texts: dict[str, str] | None = None,
 ) -> bytes:
     from PIL import Image
     from PIL.PngImagePlugin import PngInfo
@@ -26,16 +27,23 @@ def embed(
     except Exception:
         return data
     fmt = "jpg" if fmt in {"jpg", "jpeg"} else fmt
+    copied = {key for key, value in (texts or {}).items() if isinstance(key, str) and isinstance(value, str) and value.strip()}
     if fmt == "png":
         info = PngInfo()
+        skip = {"parameters", "prompt", BLOMBOUI_KEY}
         for key, value in (getattr(image, "text", None) or {}).items():
-            if isinstance(key, str) and isinstance(value, str) and key not in {"parameters", "prompt"}:
+            if isinstance(key, str) and isinstance(value, str) and key not in skip:
                 info.add_text(key, value, zip=True)
-        text = parameters_text(values) if parameters_text else ""
-        info.add_text("parameters", text)
-        if graph:
+        if texts:
+            for key, value in texts.items():
+                if isinstance(key, str) and isinstance(value, str) and value.strip():
+                    info.add_text(key, value, zip=True)
+        if "parameters" not in copied:
+            text = parameters_text(values) if parameters_text else ""
+            info.add_text("parameters", text)
+        if graph and "prompt" not in copied:
             info.add_text("prompt", json.dumps(graph), zip=True)
-        if metadata:
+        if metadata and BLOMBOUI_KEY not in copied:
             info.add_text(BLOMBOUI_KEY, json.dumps(metadata, ensure_ascii=False), zip=True)
         out = BytesIO()
         image.save(out, format="PNG", pnginfo=info)

@@ -13,6 +13,7 @@ import {
   getWorkflows,
   interruptJob,
   postIssueLog,
+  uploadJobImages,
   type Job,
   type ModelEntry,
   type ModelLists,
@@ -67,6 +68,8 @@ export function GenerateView() {
   const setHires = useGenerateStore((s) => s.setHires)
   const adetailer = useGenerateStore((s) => s.adetailer)
   const setAdetailer = useGenerateStore((s) => s.setAdetailer)
+  const rembg = useGenerateStore((s) => s.rembg)
+  const rembgFiles = useGenerateStore((s) => s.rembgFiles)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
@@ -119,6 +122,7 @@ export function GenerateView() {
   const location = useLocation()
   const navigate = useNavigate()
   const workflowParams = workflows.find((item) => item.id === workflow)?.params ?? []
+  const rembgMode = workflowParams.includes('rembg')
 
   useEffect(() => {
     void getWorkflows()
@@ -207,22 +211,32 @@ export function GenerateView() {
   }, [busy, job])
 
   async function generate() {
-    if (!checkpoint.trim()) {
+    const rembgMode = workflowParams.includes('rembg')
+    if (!rembgMode && !checkpoint.trim()) {
       return
     }
-    if (workflowParams.includes('textEncoder') && !textEncoder.trim()) {
+    if (rembgMode) {
+      if (rembg.inputMode === 'files' && !rembgFiles.length) {
+        return
+      }
+      if (rembg.inputMode === 'directory' && !rembg.inputDir.trim()) {
+        return
+      }
+    }
+    if (!rembgMode && workflowParams.includes('textEncoder') && !textEncoder.trim()) {
       return
     }
-    if (workflowParams.includes('vae') && !vae.trim()) {
+    if (!rembgMode && workflowParams.includes('vae') && !vae.trim()) {
       return
     }
-    if (workflowParams.includes('hires') && hires.enabled && !hires.upscaleModel.trim()) {
+    if (!rembgMode && workflowParams.includes('hires') && hires.enabled && !hires.upscaleModel.trim()) {
       return
     }
-    if (adetailer.enabled && adetailer.units.some((unit) => unit.enabled !== false && !unit.detector.trim())) {
+    if (!rembgMode && adetailer.enabled && adetailer.units.some((unit) => unit.enabled !== false && !unit.detector.trim())) {
       return
     }
     if (
+      !rembgMode &&
       adetailer.enabled &&
       adetailer.units.some(
         (unit) =>
@@ -234,10 +248,11 @@ export function GenerateView() {
     ) {
       return
     }
-    if (workflowParams.includes('hires') && hires.enabled && hires.modelOverride && !hires.checkpoint.trim()) {
+    if (!rembgMode && workflowParams.includes('hires') && hires.enabled && hires.modelOverride && !hires.checkpoint.trim()) {
       return
     }
     if (
+      !rembgMode &&
       workflowParams.includes('hires') &&
       hires.enabled &&
       hires.modelOverride &&
@@ -288,6 +303,8 @@ export function GenerateView() {
     }
     try {
       const gen = useGenerateStore.getState()
+      const inputPaths =
+        rembgMode && rembg.inputMode === 'files' ? await uploadJobImages(rembgFiles) : undefined
       const next = await createJob({
         prompt: gen.prompt,
         negative_prompt: gen.negativePrompt,
@@ -302,7 +319,7 @@ export function GenerateView() {
         seed_after: seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
-        batch_grid: activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
+        batch_grid: rembgMode ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
         batch_grid_format: gridFormat,
@@ -315,13 +332,16 @@ export function GenerateView() {
         scheduler,
         workflow,
         template: templateId,
-        output_image_path: outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
+        output_image_path:
+          rembgMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
         output_grid_path: outputPathEnabled ? outputGridPath.trim() || undefined : undefined,
         output_image_name: outputPathEnabled ? outputImageName.trim() || undefined : undefined,
         output_grid_name: outputPathEnabled ? outputGridName.trim() || undefined : undefined,
         output_hires_path: outputPathEnabled ? outputHiresPath.trim() || undefined : undefined,
         output_hires_name: outputPathEnabled ? outputHiresName.trim() || undefined : undefined,
-        hires: {
+        hires: rembgMode
+          ? undefined
+          : {
           enabled: hires.enabled,
           scale: hires.scale,
           size_mode: hires.sizeMode,
@@ -357,19 +377,22 @@ export function GenerateView() {
           save_before: hires.saveBefore,
           clear_vram: hires.clearVram,
         },
-        adetailer: packAdetailerJob(adetailer, adetailerUsed, diffusionModels),
-        prompt_matrix: activePromptMatrix
-          ? {
+        adetailer: rembgMode ? undefined : packAdetailerJob(adetailer, adetailerUsed, diffusionModels),
+        prompt_matrix:
+          rembgMode || !activePromptMatrix
+            ? undefined
+            : {
               lines: activePromptMatrix.lines,
               save_grid: activePromptMatrix.saveGrid,
               use_batch: activePromptMatrix.useBatch,
               mode: activePromptMatrix.mode,
               target: activePromptMatrix.target,
               search: activePromptMatrix.search,
-            }
-          : undefined,
-        xy_plot: activeXyPlot
-          ? {
+            },
+        xy_plot:
+          rembgMode || !activeXyPlot
+            ? undefined
+            : {
               x: activeXyPlot.x,
               y: activeXyPlot.y,
               draw_legend: activeXyPlot.drawLegend,
@@ -378,9 +401,10 @@ export function GenerateView() {
               include_sub_images: activeXyPlot.includeSubImages,
               respect_instant_lora: Boolean(activeXyPlot.respectInstantLora),
               grid_margin: activeXyPlot.gridMargin,
-            }
-          : undefined,
-        auto_loras: activeLoraOrder
+            },
+        auto_loras: rembgMode
+          ? []
+          : activeLoraOrder
           .filter((id) => id.startsWith(autoLoraId('')))
           .map((id) => id.slice(autoLoraId('').length))
           .filter((path) => {
@@ -394,6 +418,26 @@ export function GenerateView() {
             path,
             strength: activeLoraStrengths[path] ?? loraItems.find((row) => row.path === path)?.strength ?? 1,
           })),
+        rembg: rembgMode
+          ? {
+              engine: rembg.engine,
+              rmbg_model: rembg.rmbgModel,
+              birefnet_model: rembg.birefnetModel,
+              sensitivity: rembg.sensitivity,
+              process_res: rembg.processRes,
+              mask_blur: rembg.maskBlur,
+              mask_offset: rembg.maskOffset,
+              invert_output: rembg.invertOutput,
+              refine_foreground: rembg.refineForeground,
+              background: rembg.background,
+              background_color: rembg.backgroundColor,
+              input_mode: rembg.inputMode,
+              input_dir: rembg.inputDir,
+              preserve_metadata: rembg.preserveMetadata,
+            }
+          : undefined,
+        input_dir: rembgMode && rembg.inputMode === 'directory' ? rembg.inputDir.trim() : undefined,
+        input_paths: inputPaths,
       })
       setJob(next)
       setImageIds([])
@@ -473,9 +517,11 @@ export function GenerateView() {
       const digit = digitKey(event)
       if (event.altKey && !event.ctrlKey && !event.metaKey && digit && digit <= GENERATE_TABS.length) {
         event.preventDefault()
-        const tabs = generateTabKeysFollowLayout
-          ? orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
-          : GENERATE_TABS
+        const tabs = rembgMode
+          ? (['Generation'] as GenerateTab[])
+          : generateTabKeysFollowLayout
+            ? orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
+            : GENERATE_TABS
         const id = tabs[digit - 1]
         if (!id || (!generateTabKeysFollowLayout && id !== 'Generation' && hiddenGenerateTabs.includes(id))) {
           return
@@ -509,37 +555,41 @@ export function GenerateView() {
         void restart()
         return
       }
-      if (!busy && checkpoint.trim() && health?.comfy.reachable === true) {
+      if (!busy && health?.comfy.reachable === true && (rembgMode || checkpoint.trim())) {
         void generate()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, restart, swapTarget])
+  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, rembgMode, restart, swapTarget])
 
   const comfyOk = health?.comfy.reachable === true
   const canGenerate =
     comfyOk &&
-    Boolean(checkpoint.trim()) &&
-    (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&
-    (!workflowParams.includes('vae') || Boolean(vae.trim())) &&
-    (!workflowParams.includes('hires') || !hires.enabled || Boolean(hires.upscaleModel.trim())) &&
-    (!workflowParams.includes('hires') || !hires.enabled || !hires.modelOverride || Boolean(hires.checkpoint.trim())) &&
-    (!workflowParams.includes('hires') ||
-      !hires.enabled ||
-      !hires.modelOverride ||
-      !hiresDiffusion(hires.checkpoint, diffusionModels) ||
-      (Boolean(hires.vae.trim()) && Boolean(hires.textEncoder.trim()))) &&
-    (!adetailer.enabled || adetailer.units.filter((unit) => unit.enabled !== false).every((unit) => Boolean(unit.detector.trim()))) &&
-    (!adetailer.enabled ||
-      adetailer.units.every(
-        (unit) =>
-          unit.enabled === false ||
-          !unit.modelOverride ||
-          (Boolean(unit.checkpoint.trim()) &&
-            (!hiresDiffusion(unit.checkpoint, diffusionModels) ||
-              (Boolean(unit.vae.trim()) && Boolean(unit.textEncoder.trim())))),
-      ))
+    (rembgMode
+      ? rembg.inputMode === 'directory'
+        ? Boolean(rembg.inputDir.trim())
+        : rembgFiles.length > 0
+      : Boolean(checkpoint.trim()) &&
+        (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&
+        (!workflowParams.includes('vae') || Boolean(vae.trim())) &&
+        (!workflowParams.includes('hires') || !hires.enabled || Boolean(hires.upscaleModel.trim())) &&
+        (!workflowParams.includes('hires') || !hires.enabled || !hires.modelOverride || Boolean(hires.checkpoint.trim())) &&
+        (!workflowParams.includes('hires') ||
+          !hires.enabled ||
+          !hires.modelOverride ||
+          !hiresDiffusion(hires.checkpoint, diffusionModels) ||
+          (Boolean(hires.vae.trim()) && Boolean(hires.textEncoder.trim()))) &&
+        (!adetailer.enabled || adetailer.units.filter((unit) => unit.enabled !== false).every((unit) => Boolean(unit.detector.trim()))) &&
+        (!adetailer.enabled ||
+          adetailer.units.every(
+            (unit) =>
+              unit.enabled === false ||
+              !unit.modelOverride ||
+              (Boolean(unit.checkpoint.trim()) &&
+                (!hiresDiffusion(unit.checkpoint, diffusionModels) ||
+                  (Boolean(unit.vae.trim()) && Boolean(unit.textEncoder.trim())))),
+          )))
   const payload = job?.payload ?? {}
   const missingLoras = Array.isArray(payload.lora_missing)
     ? payload.lora_missing.filter((item): item is string => typeof item === 'string' && Boolean(item))
@@ -591,7 +641,7 @@ export function GenerateView() {
       : imageCount > 1
         ? `${formatDuration(seconds)} · ${formatDuration(seconds / imageCount)}/img`
         : formatDuration(seconds)
-  const visibleTabs = orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
+  const visibleTabs = rembgMode ? [] : orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
   const showTextEncoder = workflowParams.includes('textEncoder')
   const showVae = workflowParams.includes('vae')
@@ -639,6 +689,7 @@ export function GenerateView() {
         shownTab === 'Generation' ? 'h-full' : '',
       ].join(' ')}
     >
+      {rembgMode ? null : (
       <GenerateChrome
         style={modelTileStyle}
         onOpenTab={setTab}
@@ -654,6 +705,7 @@ export function GenerateView() {
           />
         }
       />
+      )}
 
       <GenerateWorkspace
         shownTab={shownTab}
@@ -707,6 +759,18 @@ export function GenerateView() {
         loraAutoApplyDefault={loraAutoApplyDefault}
         wildcardItems={wildcardItems}
         onToggleAutoLora={toggleAutoLora}
+        actions={
+          rembgMode ? (
+            <GenerateActions
+              layout="bar"
+              label="Process"
+              busy={busy}
+              canGenerate={canGenerate}
+              onGenerate={() => void generate()}
+              onInterrupt={(mode) => void interrupt(mode)}
+            />
+          ) : undefined
+        }
       />
       {error ? (
         <ConfirmDialog

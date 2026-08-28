@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import copy
+from pathlib import Path
 from typing import Any, Callable
 
 from features.generate.scripts.compose import apply_adetailer, apply_hires, _adetailer_units
+from features.generate.scripts.rembg import clean_rembg, is_rembg
 from features.models.scripts import loras as lora_tags
 
 
@@ -922,6 +924,42 @@ def _rewire_adetailer_models(
                     node.setdefault("inputs", {})["clip"] = clip_link
 
 
+def _fill_rembg_node(kind: str, inputs: dict[str, Any], values: dict[str, Any]) -> None:
+    blob = clean_rembg(values.get("rembg"))
+    if kind == "RMBG":
+        inputs["model"] = blob["rmbg_model"]
+        inputs["process_res"] = blob["process_res"]
+    else:
+        inputs["model"] = blob["birefnet_model"]
+    inputs["sensitivity"] = blob["sensitivity"]
+    inputs["mask_blur"] = blob["mask_blur"]
+    inputs["mask_offset"] = blob["mask_offset"]
+    inputs["invert_output"] = blob["invert_output"]
+    inputs["refine_foreground"] = blob["refine_foreground"]
+    inputs["background"] = blob["background"]
+    inputs["background_color"] = blob["background_color"]
+
+
+def _apply_rembg_engine(workflow: dict[str, Any], values: dict[str, Any]) -> None:
+    blob = clean_rembg(values.get("rembg"))
+    keep = "BiRefNetRMBG" if blob["engine"] == "birefnet" else "RMBG"
+    drop = "RMBG" if keep == "BiRefNetRMBG" else "BiRefNetRMBG"
+    keep_id = None
+    for key, node in list(workflow.items()):
+        if not isinstance(node, dict):
+            continue
+        kind = node.get("class_type")
+        if kind == drop:
+            workflow.pop(key, None)
+        elif kind == keep:
+            keep_id = str(key)
+    if not keep_id:
+        return
+    for node in workflow.values():
+        if isinstance(node, dict) and node.get("class_type") == "SaveImage":
+            node.setdefault("inputs", {})["images"] = [keep_id, 0]
+
+
 def fill_txt2img(
     values: dict[str, Any],
     load_workflow: Callable[[str], dict[str, Any]],
@@ -934,9 +972,9 @@ def fill_txt2img(
     values["prompt_clip"] = clip_prompt
     values["negative_clip"] = clip_negative
     loaded = copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img")))
-    if hires_enabled(values):
+    if hires_enabled(values) and not is_rembg(values):
         loaded = apply_hires(loaded, values)
-    if adetailer_enabled(values):
+    if adetailer_enabled(values) and not is_rembg(values):
         loaded = apply_adetailer(loaded, values)
     host_ports = loaded.get("ports") if isinstance(loaded.get("ports"), dict) else {}
     workflow = graph(loaded)
@@ -1012,6 +1050,14 @@ def fill_txt2img(
             inputs["height"] = height
             inputs["upscale_method"] = method
             inputs["crop"] = crop
+        elif kind == "LoadImage":
+            name = Path(str(values.get("input_image") or "")).name
+            if name:
+                inputs["image"] = name
+        elif kind in {"RMBG", "BiRefNetRMBG"}:
+            _fill_rembg_node(kind, inputs, values)
+    if is_rembg(values):
+        _apply_rembg_engine(workflow, values)
     if hires_enabled(values):
         _rewire_hires(workflow, values, filename)
     _apply_hires_saves(workflow, values)

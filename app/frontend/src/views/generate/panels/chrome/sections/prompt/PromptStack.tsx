@@ -3,6 +3,9 @@ import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/Prom
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useLayoutEffect, useRef, useState } from 'react'
 
+const PROMPT_FRAC = 0.11
+const NEGATIVE_FRAC = 0.065
+
 function remPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
 }
@@ -11,37 +14,58 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
 
+function defaultPromptHeights(rootH: number) {
+  const rem = remPx()
+  const minH = 2.5 * rem
+  const maxH = 20 * rem
+  return {
+    prompt: clamp(Math.round(rootH * PROMPT_FRAC), minH, maxH),
+    negative: clamp(Math.round(rootH * NEGATIVE_FRAC), minH, maxH),
+    gap: 0.5 * rem,
+    rem,
+    minH,
+    maxH,
+  }
+}
+
+function rootHeight(el: HTMLElement | null) {
+  const root = el?.closest('[data-generate-root]')
+  return root instanceof HTMLElement ? root.clientHeight : window.innerHeight
+}
+
+export function PromptStackPlaceholder() {
+  const ref = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState(() => {
+    const next = defaultPromptHeights(window.innerHeight)
+    return next.prompt + next.negative + next.gap
+  })
+  useLayoutEffect(() => {
+    const next = defaultPromptHeights(rootHeight(ref.current))
+    setHeight(next.prompt + next.negative + next.gap)
+  }, [PROMPT_FRAC, NEGATIVE_FRAC])
+  return <div ref={ref} className="min-w-0 flex-1" style={{ minHeight: height }} aria-hidden />
+}
+
 export function PromptStack({ negativeDisabled }: { negativeDisabled: boolean }) {
   const prompt = useGenerateStore((s) => s.prompt)
   const negativePrompt = useGenerateStore((s) => s.negativePrompt)
   const onPrompt = useGenerateStore((s) => s.setPrompt)
   const onNegative = useGenerateStore((s) => s.setNegativePrompt)
-  const rem = remPx()
-  const minH = 2.5 * rem
-  const maxH = 20 * rem
+  const fallback = defaultPromptHeights(typeof window === 'undefined' ? 800 : window.innerHeight)
+  const rem = fallback.rem
+  const minH = fallback.minH
+  const maxH = fallback.maxH
   const stackRef = useRef<HTMLDivElement>(null)
-  const ready = useRef(false)
-  const [defaults, setDefaults] = useState({ prompt: Math.round(minH * 2.4), negative: minH })
+  const [defaults, setDefaults] = useState({ prompt: fallback.prompt, negative: fallback.negative })
   const [promptH, setPromptH] = useState(defaults.prompt)
   const [negativeH, setNegativeH] = useState(defaults.negative)
 
   useLayoutEffect(() => {
-    if (ready.current) {
-      return
-    }
-    const root = stackRef.current?.closest('[data-generate-root]')
-    const h = root instanceof HTMLElement ? root.clientHeight : window.innerHeight
-    const box = Math.max(10 * rem, Math.round(h * 0.26))
-    const inner = Math.max(0, box - 8)
-    const next = {
-      prompt: clamp(Math.round(inner * 0.75 * 0.85), minH, maxH),
-      negative: clamp(Math.round(inner * 0.25), minH, maxH),
-    }
-    ready.current = true
-    setDefaults(next)
+    const next = defaultPromptHeights(rootHeight(stackRef.current))
+    setDefaults({ prompt: next.prompt, negative: next.negative })
     setPromptH(next.prompt)
     setNegativeH(next.negative)
-  }, [maxH, minH, rem])
+  }, [PROMPT_FRAC, NEGATIVE_FRAC, maxH, minH, rem])
 
   return (
     <div ref={stackRef} className="flex min-w-0 flex-1 flex-col gap-2">

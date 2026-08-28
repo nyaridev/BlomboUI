@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from config import WORKFLOWS
+from features.generate.scripts import rembg
 from infrastructure.storage.repositories import templates as templates_repo
 
 DEFAULT_ID = "default"
@@ -76,6 +77,7 @@ _APPLY = (
     "hires",
     "adetailer",
     "scripts",
+    "rembg",
 )
 
 _SCRIPTS = ("", "xy-plot", "prompt-matrix")
@@ -195,6 +197,9 @@ def _clean_params(raw: Any) -> dict[str, Any]:
         blob = raw.get(key)
         if isinstance(blob, dict):
             out[key] = dict(blob)
+    rembg_blob = raw.get("rembg")
+    if isinstance(rembg_blob, dict):
+        out["rembg"] = rembg.clean_rembg(rembg_blob)
     order = raw.get("activeLoraOrder")
     if isinstance(order, list):
         seen: list[str] = []

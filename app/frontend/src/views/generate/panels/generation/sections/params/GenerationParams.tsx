@@ -1,4 +1,5 @@
 import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
+import { RembgParams } from '@/views/generate/panels/generation/sections/params/RembgParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { FirstPassParams } from '@/views/generate/panels/generation/sections/params/FirstPassParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
@@ -26,6 +27,7 @@ export function GenerationParams({
   const setAdetailer = useGenerateStore((s) => s.setAdetailer)
   const setControlnet = useGenerateStore((s) => s.setControlnet)
   const showHires = !workflowParams.length || workflowParams.includes('hires')
+  const rembg = workflowParams.includes('rembg')
   const [pass, setPass] = useState<PassTab>('first')
   const shown = pass === 'hires' && !showHires ? 'first' : pass
   const enabled =
@@ -36,6 +38,10 @@ export function GenerationParams({
 
   return (
     <aside className="flex min-w-0 flex-col gap-stack">
+      {rembg ? (
+        <RembgParams />
+      ) : (
+        <>
       <ParamsTabStrip
         value={shown}
         onValueChange={setPass}
@@ -63,6 +69,8 @@ export function GenerationParams({
           <AdetailerParams comfyOk={comfyOk} lastSeed={lastSeed} />
         </div>
       </div>
+        </>
+      )}
       {warning ? <p className="text-xs text-muted">{warning}</p> : null}
     </aside>
   )

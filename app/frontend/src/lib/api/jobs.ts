@@ -202,6 +202,24 @@ export type JobRequest = {
       loras: { path: string; strength: number }[]
     }[]
   }
+  rembg?: {
+    engine: 'rmbg' | 'birefnet'
+    rmbg_model: string
+    birefnet_model: string
+    sensitivity: number
+    process_res: number
+    mask_blur: number
+    mask_offset: number
+    invert_output: boolean
+    refine_foreground: boolean
+    background: 'Alpha' | 'Color'
+    background_color: string
+    input_mode: 'files' | 'directory'
+    input_dir: string
+    preserve_metadata?: boolean
+  }
+  input_dir?: string
+  input_paths?: string[]
 }
 
 export async function createJob(body: JobRequest): Promise<Job> {
@@ -215,6 +233,19 @@ export async function createJob(body: JobRequest): Promise<Job> {
   }
   const data = (await res.json()) as { job: Job }
   return data.job
+}
+
+export async function uploadJobImages(files: File[]): Promise<string[]> {
+  const body = new FormData()
+  for (const file of files) {
+    body.append('files', file)
+  }
+  const res = await fetch(api('/jobs/uploads'), { method: 'POST', body })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { paths: string[] }
+  return data.paths
 }
 
 export async function interruptJob(id: string, mode: 'skip' | 'cancel'): Promise<Job> {

@@ -21,6 +21,7 @@ type ImageStageProps = {
   jobProgressPct?: number
   jobProgressLabel?: string | null
   timing?: string | null
+  hideInfo?: boolean
 }
 
 export function ImageStage({
@@ -35,6 +36,7 @@ export function ImageStage({
   jobProgressPct = 0,
   jobProgressLabel = null,
   timing = null,
+  hideInfo = false,
 }: ImageStageProps) {
   const [index, setIndex] = useState(0)
   const [lightbox, setLightbox] = useState(false)
@@ -255,7 +257,7 @@ export function ImageStage({
         ) : null}
       </div>
       {many && !hideResults ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
-      <GenerationInfo info={genInfo ?? heldInfo.current} />
+      {hideInfo ? null : <GenerationInfo info={genInfo ?? heldInfo.current} />}
       {lightbox && current && !hideResults ? (
         <LightboxView
           src={current.src}

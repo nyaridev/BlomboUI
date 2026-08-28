@@ -1,4 +1,6 @@
+import { FolderField } from '@/components/controls/folder-field/FolderField.tsx'
 import { OutputPathOverride } from '@/views/generate/panels/generation/sections/params/OutputPathOverride.tsx'
+import { RembgFields } from '@/views/generate/panels/generation/sections/params/RembgFields.tsx'
 import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
@@ -52,6 +54,7 @@ export function TemplateParamsForm({
   const visibleApply = templateApplyFields(workflowParams)
   const visibleIds = new Set<string>(visibleApply.map((field) => field.id))
   const none = visibleApply.every((field) => !apply.includes(field.id))
+  const rembg = workflowParams.includes('rembg')
   function set<K extends keyof TemplateParams>(key: K, next: TemplateParams[K]) {
     if (locked) {
       return
@@ -79,6 +82,32 @@ export function TemplateParamsForm({
           {none ? 'Select all' : 'Deselect all'}
         </ButtonControl>
       </div>
+      {rembg ? (
+        <>
+          <ParamSection title="Background removal">
+            <ApplyRow id="rembg" apply={apply} onToggle={toggle} locked={locked}>
+              <RembgFields
+                value={value.rembg}
+                onChange={(rembg) => onChange({ ...value, rembg: { ...value.rembg, ...rembg } })}
+                locked={locked}
+              />
+            </ApplyRow>
+          </ParamSection>
+          <ParamSection title="Output">
+            <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
+              <div className="flex min-w-0 flex-col gap-1">
+                <Label>Output folder</Label>
+                <FolderField
+                  value={value.outputImagePath}
+                  onChange={(outputImagePath) => set('outputImagePath', outputImagePath)}
+                  placeholder="background_removal/[date]"
+                />
+              </div>
+            </ApplyRow>
+          </ParamSection>
+        </>
+      ) : (
+        <>
       <div className="rounded-md border border-line bg-panel p-2.5">
         <TemplateModelFields
           value={value}
@@ -388,6 +417,8 @@ export function TemplateParamsForm({
           />
         </ApplyRow>
       </ParamSection>
+        </>
+      )}
     </div>
   )
 }

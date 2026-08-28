@@ -5,22 +5,27 @@ export function GenerateActions({
   canGenerate,
   onGenerate,
   onInterrupt,
+  label = 'Generate',
+  layout = 'chrome',
 }: {
   busy: boolean
   canGenerate: boolean
   onGenerate: () => void
   onInterrupt: (mode: 'skip' | 'cancel') => void
+  label?: string
+  layout?: 'chrome' | 'bar'
 }) {
+  const bar = layout === 'bar'
   return (
-    <div className="flex w-80 shrink-0 flex-col gap-stack self-stretch">
+    <div className={bar ? 'flex w-full shrink-0 flex-col gap-stack' : 'flex w-80 shrink-0 flex-col gap-stack self-stretch'}>
       <ButtonControl
         tone="generate"
-        size="xl"
-        className="flex-1"
+        size={bar ? 'lg' : 'xl'}
+        className={bar ? '' : 'flex-1'}
         disabled={busy || !canGenerate}
         onClick={onGenerate}
       >
-        Generate
+        {label}
       </ButtonControl>
       <div className="flex gap-stack">
         <ButtonControl tone="muted" size="lg" className="flex-1" disabled={!busy} title="Skip current image" onClick={() => onInterrupt('skip')}>

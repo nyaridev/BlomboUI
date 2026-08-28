@@ -138,6 +138,23 @@ class AdetailerIn(BaseModel):
     units: list[AdetailerUnitIn] = Field(default_factory=list)
 
 
+class RembgIn(BaseModel):
+    engine: Literal["rmbg", "birefnet"] = "rmbg"
+    rmbg_model: str = "RMBG-2.0"
+    birefnet_model: str = "BiRefNet-general"
+    sensitivity: float = Field(default=1, ge=0, le=1)
+    process_res: int = Field(default=1024, ge=256, le=2048)
+    mask_blur: int = Field(default=0, ge=0, le=64)
+    mask_offset: int = Field(default=0, ge=-64, le=64)
+    invert_output: bool = False
+    refine_foreground: bool = False
+    background: Literal["Alpha", "Color"] = "Alpha"
+    background_color: str = "#222222"
+    input_mode: Literal["files", "directory"] = "files"
+    input_dir: str = ""
+    preserve_metadata: bool = False
+
+
 class JobIn(BaseModel):
     prompt: str = ""
     negative_prompt: str = ""
@@ -176,6 +193,9 @@ class JobIn(BaseModel):
     auto_loras: list[str | AutoLoraIn] = Field(default_factory=list)
     prompt_matrix: PromptMatrixIn | None = None
     xy_plot: XyPlotIn | None = None
+    rembg: RembgIn | None = None
+    input_dir: str | None = None
+    input_paths: list[str] = Field(default_factory=list)
 
 
 class InterruptIn(BaseModel):

@@ -54,6 +54,7 @@ from .job_plan import (
 from .comfy_fill import combined_progress, hires_enabled, progress_stage_map, progress_stages, stage_index
 from . import save_meta
 from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
+from .rembg import clean_rembg, input_runs, is_rembg, stage_input
 
 
 class LiveJob:
@@ -425,8 +426,21 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     values["batch_count"] = max(1, int(values.get("batch_count") or 1))
     values["prompt_matrix"] = None if xy else _prompt_matrix_config(values.get("prompt_matrix"))
     values["auto_loras"] = _normalize_auto_loras(values.get("auto_loras"))
+    if is_rembg(values):
+        values["rembg"] = clean_rembg(values.get("rembg"))
+        values["xy_plot"] = None
+        values["prompt_matrix"] = None
+        values["batch_size"] = 1
+        values["batch_count"] = 1
+        values["batch_grid"] = False
+        runs = input_runs(values)
+        if not runs:
+            raise comfy.ComfyError("bad_request", "Drop or pick at least one image.", status=400)
+        values["input_paths"] = [str(run["input_image"]) for run in runs]
+        xy = None
     matrix = values.get("prompt_matrix")
-    values["batch_grid"] = True if xy else (bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True)))
+    if not is_rembg(values):
+        values["batch_grid"] = True if xy else (bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True)))
     values["batch_grid_max"] = max(2, min(100, int(values.get("batch_grid_max") or 36)))
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
     values["batch_grid_format"] = _grid_fmt(values.get("batch_grid_format"))
@@ -449,6 +463,8 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         n = xy_cell_count(xy) if xy else 0
         if n:
             live_count = n
+        elif is_rembg(values):
+            live_count = max(1, len(values.get("input_paths") or []))
         else:
             matrix_lines, matrix_count, _ = _generation_plan(values)
             live_count = len(matrix_lines) * matrix_count
@@ -470,7 +486,9 @@ async def create_job(body: dict[str, Any]) -> dict[str, Any]:
 async def run_job(job_id: str, values: dict[str, Any]) -> None:
     try:
         xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
-        if xy:
+        if is_rembg(values):
+            runs = input_runs(values)
+        elif xy:
             runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
         else:
             mode = _seed_after(values)
@@ -505,9 +523,13 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         canceled = False
         missing_wildcards: list[str] = []
         missing_loras: list[str] = []
-        row = await asyncio.to_thread(hashes.checkpoint_hashes, str(values.get("checkpoint") or ""))
-        values["model_hash"] = row.get("autov2") or ""
-        values["model_hashes"] = row
+        if is_rembg(values):
+            values["model_hash"] = ""
+            values["model_hashes"] = {}
+        else:
+            row = await asyncio.to_thread(hashes.checkpoint_hashes, str(values.get("checkpoint") or ""))
+            values["model_hash"] = row.get("autov2") or ""
+            values["model_hashes"] = row
         for run_i, run_values in enumerate(runs):
             with _live_lock:
                 live = _live.get(job_id)
@@ -565,6 +587,11 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
                 _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
 
+            if is_rembg(run_values):
+                src = run_values.get("input_image") or ""
+                run_values["source_image"] = str(src)
+                staged = await asyncio.to_thread(stage_input, src, job_id, run_i)
+                run_values["input_image"] = staged.name
             graph = await asyncio.to_thread(
                 comfy.fill_txt2img, {**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"}
             )

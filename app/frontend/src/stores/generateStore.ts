@@ -37,6 +37,74 @@ function isSeedAfter(value: unknown): value is SeedAfter {
 
 export type ExtraSettings = { enabled: boolean; [key: string]: unknown }
 
+export type RembgEngine = 'rmbg' | 'birefnet'
+export type RembgInputMode = 'files' | 'directory'
+export type RembgBackground = 'Alpha' | 'Color'
+
+export type RembgSettings = {
+  inputMode: RembgInputMode
+  inputDir: string
+  engine: RembgEngine
+  rmbgModel: string
+  birefnetModel: string
+  sensitivity: number
+  processRes: number
+  maskBlur: number
+  maskOffset: number
+  invertOutput: boolean
+  refineForeground: boolean
+  background: RembgBackground
+  backgroundColor: string
+  preserveMetadata: boolean
+}
+
+export const DEFAULT_REMBG: RembgSettings = {
+  inputMode: 'files',
+  inputDir: '',
+  engine: 'rmbg',
+  rmbgModel: 'RMBG-2.0',
+  birefnetModel: 'BiRefNet-general',
+  sensitivity: 1,
+  processRes: 1024,
+  maskBlur: 0,
+  maskOffset: 0,
+  invertOutput: false,
+  refineForeground: false,
+  background: 'Alpha',
+  backgroundColor: '#222222',
+  preserveMetadata: false,
+}
+
+export function mergeRembg(raw: unknown): RembgSettings {
+  const base = cloneJson(DEFAULT_REMBG)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return base
+  }
+  const row = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback)
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  const engine = text(row.engine, base.engine)
+  const inputMode = text(row.inputMode ?? row.input_mode, base.inputMode)
+  const background = text(row.background, base.background)
+  return {
+    inputMode: inputMode === 'directory' ? 'directory' : 'files',
+    inputDir: text(row.inputDir ?? row.input_dir, base.inputDir),
+    engine: engine === 'birefnet' ? 'birefnet' : 'rmbg',
+    rmbgModel: text(row.rmbgModel ?? row.rmbg_model, base.rmbgModel) || base.rmbgModel,
+    birefnetModel: text(row.birefnetModel ?? row.birefnet_model, base.birefnetModel) || base.birefnetModel,
+    sensitivity: Math.max(0, Math.min(1, num(row.sensitivity, base.sensitivity))),
+    processRes: Math.max(256, Math.min(2048, Math.round(num(row.processRes ?? row.process_res, base.processRes)))),
+    maskBlur: Math.max(0, Math.min(64, Math.round(num(row.maskBlur ?? row.mask_blur, base.maskBlur)))),
+    maskOffset: Math.max(-64, Math.min(64, Math.round(num(row.maskOffset ?? row.mask_offset, base.maskOffset)))),
+    invertOutput: Boolean(row.invertOutput ?? row.invert_output ?? base.invertOutput),
+    refineForeground: Boolean(row.refineForeground ?? row.refine_foreground ?? base.refineForeground),
+    background: background === 'Color' ? 'Color' : 'Alpha',
+    backgroundColor: text(row.backgroundColor ?? row.background_color, base.backgroundColor) || base.backgroundColor,
+    preserveMetadata: Boolean(row.preserveMetadata ?? row.preserve_metadata ?? base.preserveMetadata),
+  }
+}
+
 export const SAM_DETECTION_HINTS = [
   'center-1',
   'horizontal-2',
@@ -506,6 +574,7 @@ export const DEFAULTS = {
   script: '' as GenerateScript,
   promptMatrix: cloneJson(DEFAULT_PROMPT_MATRIX),
   xyPlot: cloneJson(DEFAULT_XY_PLOT),
+  rembg: cloneJson(DEFAULT_REMBG),
   activeLoraOrder: [] as string[],
   activeLoraStrengths: {} as Record<string, number>,
   skippedLoras: [] as string[],
@@ -544,6 +613,7 @@ export const PARAM_KEYS = [
   'script',
   'promptMatrix',
   'xyPlot',
+  'rembg',
   'activeLoraOrder',
   'activeLoraStrengths',
   'skippedLoras',
@@ -582,6 +652,7 @@ export type TemplateParams = {
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotSettings
+  rembg: RembgSettings
   activeLoraOrder: string[]
   activeLoraStrengths: Record<string, number>
   skippedLoras: string[]
@@ -621,6 +692,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     script: source.script,
     promptMatrix: cloneJson(source.promptMatrix),
     xyPlot: cloneJson(source.xyPlot),
+    rembg: mergeRembg(source.rembg),
     activeLoraOrder: [...(source.activeLoraOrder ?? [])],
     activeLoraStrengths: { ...(source.activeLoraStrengths ?? {}) },
     skippedLoras: [...(source.skippedLoras ?? [])],
@@ -672,6 +744,10 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       }
       if (key === 'xyPlot') {
         next.xyPlot = mergeXyPlot(value)
+        continue
+      }
+      if (key === 'rembg') {
+        next.rembg = mergeRembg(value)
         continue
       }
       if (key === 'activeLoraOrder' || key === 'skippedLoras' || key === 'skippedWildcards') {
@@ -757,15 +833,22 @@ export const APPLY_FIELDS = [
   { id: 'hires', label: 'Hires. fix', keys: ['hires'] },
   { id: 'adetailer', label: 'ADetailer', keys: ['adetailer'] },
   { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot'] },
+  { id: 'rembg', label: 'Background removal', keys: ['rembg'] },
 ] as const
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
 
 export const DEFAULT_APPLY = APPLY_FIELDS.map((field) => field.id).filter((id) => !CONTENT_APPLY.has(id))
 
-export function templateApplyFields(_workflowParams: string[]) {
+export function templateApplyFields(workflowParams: string[]) {
+  if (workflowParams.includes('rembg')) {
+    return APPLY_FIELDS.filter((field) => field.id === 'rembg' || field.id === 'outputPath')
+  }
   return APPLY_FIELDS.filter((field) => {
     if (field.id === 'checkpoint' || field.id === 'vae' || field.id === 'textEncoder' || field.id === 'loras') {
+      return false
+    }
+    if (field.id === 'rembg') {
       return false
     }
     return true
@@ -1003,6 +1086,8 @@ type GenerateState = {
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotSettings
+  rembg: RembgSettings
+  rembgFiles: File[]
   workflow: string
   templateId: string
   templateByWorkflow: Record<string, string>
@@ -1061,6 +1146,8 @@ type GenerateState = {
   setScript: (value: GenerateScript) => void
   setPromptMatrix: (value: PromptMatrixSettings) => void
   setXyPlot: (value: XyPlotSettings) => void
+  setRembg: (value: Partial<RembgSettings>) => void
+  setRembgFiles: (value: File[]) => void
   setWorkflow: (value: string) => void
   setTemplateId: (value: string) => void
   setViewedTemplateId: (value: string) => void
@@ -1079,6 +1166,7 @@ export const useGenerateStore = create<GenerateState>()(
       paramsByWorkflow: {},
       modelsByWorkflow: {},
       viewedImageUrl: null,
+      rembgFiles: [],
       modelTileStyle: 'tall',
       vae: '',
       textEncoder: '',
@@ -1147,6 +1235,8 @@ export const useGenerateStore = create<GenerateState>()(
       setScript: (script) => set({ script: isGenerateScript(script) ? script : '' }),
       setPromptMatrix: (promptMatrix) => set({ promptMatrix: mergePromptMatrix(promptMatrix) }),
       setXyPlot: (xyPlot) => set({ xyPlot: mergeXyPlot(xyPlot) }),
+      setRembg: (rembg) => set((s) => ({ rembg: mergeRembg({ ...s.rembg, ...rembg }) })),
+      setRembgFiles: (rembgFiles) => set({ rembgFiles }),
       setWorkflow: (workflow) =>
         set((s) => {
           if (workflow === s.workflow) {
@@ -1199,7 +1289,7 @@ export const useGenerateStore = create<GenerateState>()(
     }),
     {
       name: 'blombo-generate',
-      partialize: ({ viewedImageUrl: _viewed, swapTarget: _swap, ...rest }) => rest,
+      partialize: ({ viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, ...rest }) => rest,
       merge: (persisted, current) => {
         const rest = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
         const activeLoraOrder = cleanActiveLoraOrder(rest.activeLoraOrder)

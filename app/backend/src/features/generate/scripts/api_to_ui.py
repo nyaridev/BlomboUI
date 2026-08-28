@@ -22,6 +22,8 @@ _OUTPUTS: dict[str, list[tuple[str, str]]] = {
     "ImageUpscaleWithModel": [("IMAGE", "IMAGE")],
     "ImageScale": [("IMAGE", "IMAGE")],
     "LoadImage": [("IMAGE", "IMAGE"), ("MASK", "MASK")],
+    "RMBG": [("IMAGE", "IMAGE"), ("MASK", "MASK"), ("IMAGE", "MASK_IMAGE")],
+    "BiRefNetRMBG": [("IMAGE", "IMAGE"), ("MASK", "MASK"), ("IMAGE", "MASK_IMAGE")],
     "easy cleanGpuUsed": [("*", "*")],
     "UltralyticsDetectorProvider": [("BBOX_DETECTOR", "BBOX_DETECTOR"), ("SEGM_DETECTOR", "SEGM_DETECTOR")],
     "SAMLoader": [("SAM_MODEL", "SAM_MODEL")],

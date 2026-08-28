@@ -15,7 +15,7 @@ from features.settings import service as settings
 from features.gallery.scripts import cache as gallery_cache
 from infrastructure.comfy import client as comfy
 from shared import pnginfo
-from features.generate.scripts import save_meta, templates
+from features.generate.scripts import rembg, save_meta, templates
 from features.generate.scripts.comfy_fill import hires_enabled
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
@@ -190,6 +190,15 @@ def _output_dir(values: dict[str, Any], kind: str) -> Path:
         override = str(values.get("output_hires_path") or "").strip()
         template = override or str(cfg.get("hiresPath") or settings.HIRES_PATH_DEFAULT)
         fallback = settings.HIRES_PATH_DEFAULT
+    elif rembg.is_rembg(values):
+        override = str(values.get("output_image_path") or "").strip()
+        if override:
+            path = Path(override)
+            if path.is_absolute():
+                path.mkdir(parents=True, exist_ok=True)
+                return path
+            return _expand_path(override, values, rembg.PATH_DEFAULT)
+        return _expand_path(rembg.PATH_DEFAULT, values, rembg.PATH_DEFAULT)
     else:
         override = str(values.get("output_image_path") or "").strip()
         template = override or str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
@@ -303,7 +312,9 @@ def _alloc_named(folder: Path, ext: str, values: dict[str, Any], kind: str, star
             return dest
 
 
-def _image_save_opts() -> tuple[str, int, bool, int]:
+def _image_save_opts(values: dict[str, Any] | None = None) -> tuple[str, int, bool, int]:
+    if values and rembg.is_rembg(values):
+        return "png", 100, False, 4096
     cfg = settings.load()
     fmt = str(cfg.get("imageFormat") or "png").lower()
     if fmt == "jpeg":
@@ -436,8 +447,21 @@ def _import_bytes(
     folder: Path | None = None,
     index: bool | None = None,
 ) -> tuple[str, Path]:
-    fmt, quality, sidecar, max_kb = _image_save_opts()
-    packed = save_meta.pack_params(values, graph, kind=kind)
+    fmt, quality, sidecar, max_kb = _image_save_opts(values)
+    texts = None
+    src_meta = None
+    if rembg.is_rembg(values):
+        packed = rembg.empty_params()
+        graph = None
+        if rembg.preserve_metadata(values):
+            source = rembg.source_path(values)
+            if source is not None:
+                texts = rembg.source_texts(source)
+                src_meta = rembg.source_envelope(source)
+                if src_meta:
+                    packed = dict(src_meta.get("params") or packed)
+    else:
+        packed = save_meta.pack_params(values, graph, kind=kind)
     if kind == "interrupted":
         packed["interrupted"] = True
     persist = folder is None
@@ -446,8 +470,10 @@ def _import_bytes(
         index = persist
     created_at = _now()
     asset_kind = "interrupted" if kind == "interrupted" else "image"
-    metadata = save_meta.envelope(job_id, values, packed, asset_kind, created_at)
-    data = pnginfo.embed(raw, packed, graph, fmt=fmt, quality=quality, metadata=metadata)
+    metadata = dict(src_meta) if src_meta else save_meta.envelope(job_id, values, packed, asset_kind, created_at)
+    if src_meta and kind == "interrupted":
+        metadata["params"] = packed
+    data = pnginfo.embed(raw, packed, graph, fmt=fmt, quality=quality, metadata=metadata, texts=texts)
     dest = _save_image(folder, data, fmt, values, kind)
     if sidecar and fmt != "jpg" and dest.stat().st_size > max_kb * 1024:
         try:

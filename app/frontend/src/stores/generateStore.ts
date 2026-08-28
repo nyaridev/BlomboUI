@@ -37,6 +37,145 @@ function isSeedAfter(value: unknown): value is SeedAfter {
 
 export type ExtraSettings = { enabled: boolean; [key: string]: unknown }
 
+export const SAM_DETECTION_HINTS = [
+  'center-1',
+  'horizontal-2',
+  'vertical-2',
+  'rect-4',
+  'diamond-4',
+  'mask-area',
+  'mask-points',
+  'mask-point-bbox',
+  'none',
+] as const
+
+export const SAM_MASK_NEGATIVES = ['False', 'Small', 'Outter'] as const
+export const SAM_DEVICE_MODES = ['Prefer GPU', 'Prefer CPU', 'CPU'] as const
+
+export type AdetailerUnit = {
+  id: string
+  name: string
+  enabled: boolean
+  detector: string
+  samModel: string
+  guideSize: number
+  guideSizeFor: boolean
+  maxSize: number
+  steps: number
+  cfg: number
+  cfgOverride: boolean
+  denoise: number
+  sampler: string
+  samplerOverride: boolean
+  scheduler: string
+  schedulerOverride: boolean
+  seed: number
+  seedAfter: SeedAfter
+  seedOverride: boolean
+  promptOverride: boolean
+  prompt: string
+  negativeOverride: boolean
+  negativePrompt: string
+  fromHires: boolean
+  advancedOverride: boolean
+  feather: number
+  noiseMask: boolean
+  forceInpaint: boolean
+  bboxThreshold: number
+  bboxDilation: number
+  bboxCropFactor: number
+  samDetectionHint: string
+  samDilation: number
+  samThreshold: number
+  samBboxExpansion: number
+  samMaskHintThreshold: number
+  samMaskHintUseNegative: string
+  dropSize: number
+  cycle: number
+  inpaintModel: boolean
+  noiseMaskFeather: number
+  tiledEncode: boolean
+  tiledDecode: boolean
+  deviceMode: string
+  modelOverride: boolean
+  checkpoint: string
+  vae: string
+  textEncoder: string
+  loraOverride: boolean
+  loras: HiresLora[]
+}
+
+export type AdetailerSettings = {
+  enabled: boolean
+  units: AdetailerUnit[]
+}
+
+export const DEFAULT_ADETAILER_UNIT: AdetailerUnit = {
+  id: 'adetailer-1',
+  name: 'ADetailer 1',
+  enabled: true,
+  detector: '',
+  samModel: '',
+  guideSize: 512,
+  guideSizeFor: true,
+  maxSize: 1024,
+  steps: 20,
+  cfg: 4,
+  cfgOverride: false,
+  denoise: 0.5,
+  sampler: 'euler_ancestral',
+  samplerOverride: false,
+  scheduler: 'sgm_uniform',
+  schedulerOverride: false,
+  seed: -1,
+  seedAfter: 'randomize',
+  seedOverride: false,
+  promptOverride: false,
+  prompt: '',
+  negativeOverride: false,
+  negativePrompt: '',
+  fromHires: true,
+  advancedOverride: false,
+  feather: 5,
+  noiseMask: true,
+  forceInpaint: true,
+  bboxThreshold: 0.5,
+  bboxDilation: 10,
+  bboxCropFactor: 3,
+  samDetectionHint: 'center-1',
+  samDilation: 0,
+  samThreshold: 0.93,
+  samBboxExpansion: 0,
+  samMaskHintThreshold: 0.7,
+  samMaskHintUseNegative: 'False',
+  dropSize: 10,
+  cycle: 1,
+  inpaintModel: false,
+  noiseMaskFeather: 20,
+  tiledEncode: false,
+  tiledDecode: false,
+  deviceMode: 'Prefer GPU',
+  modelOverride: false,
+  checkpoint: '',
+  vae: '',
+  textEncoder: '',
+  loraOverride: false,
+  loras: [],
+}
+
+export function newAdetailerUnit(name = 'ADetailer'): AdetailerUnit {
+  return {
+    ...cloneJson(DEFAULT_ADETAILER_UNIT),
+    id: crypto.randomUUID(),
+    name,
+  }
+}
+
+export const DEFAULT_ADETAILER: AdetailerSettings = {
+  enabled: false,
+  units: [cloneJson(DEFAULT_ADETAILER_UNIT)],
+}
+
 export type HiresLora = { path: string; strength: number }
 
 export type HiresSettings = {
@@ -109,7 +248,7 @@ export const DEFAULT_HIRES: HiresSettings = {
   textEncoder: '',
   loraOverride: false,
   loras: [],
-  saveBefore: true,
+  saveBefore: false,
   clearVram: false,
 }
 
@@ -125,6 +264,23 @@ function sameParam(a: unknown, b: unknown) {
     return false
   }
   return JSON.stringify(a) === JSON.stringify(b)
+}
+
+function parseHiresLoras(raw: unknown): HiresLora[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      return []
+    }
+    const path = typeof (item as { path?: unknown }).path === 'string' ? (item as { path: string }).path.trim() : ''
+    if (!path) {
+      return []
+    }
+    const strength = (item as { strength?: unknown }).strength
+    return [{ path, strength: typeof strength === 'number' && Number.isFinite(strength) ? strength : 1 }]
+  })
 }
 
 function mergeHires(raw: unknown, firstW = 832, firstH = 1216): HiresSettings {
@@ -147,20 +303,7 @@ function mergeHires(raw: unknown, firstW = 832, firstH = 1216): HiresSettings {
   const seedAfterRaw = row.seedAfter ?? row.seed_after
   const follow = typeof row.seedFollow === 'boolean' ? row.seedFollow : typeof row.seed_follow === 'boolean' ? row.seed_follow : null
   const seedOverrideRaw = row.seedOverride ?? row.seed_override
-  const lorasRaw = row.loras
-  const loras: HiresLora[] = Array.isArray(lorasRaw)
-    ? lorasRaw.flatMap((item) => {
-        if (!item || typeof item !== 'object' || Array.isArray(item)) {
-          return []
-        }
-        const path = typeof (item as { path?: unknown }).path === 'string' ? (item as { path: string }).path.trim() : ''
-        if (!path) {
-          return []
-        }
-        const strength = (item as { strength?: unknown }).strength
-        return [{ path, strength: typeof strength === 'number' && Number.isFinite(strength) ? strength : 1 }]
-      })
-    : []
+  const loras = parseHiresLoras(row.loras)
   return {
     enabled: Boolean(row.enabled),
     scale,
@@ -206,6 +349,87 @@ function mergeExtra(raw: unknown, fallback: ExtraSettings): ExtraSettings {
     return cloneJson(fallback)
   }
   return { ...(raw as ExtraSettings), enabled: Boolean((raw as ExtraSettings).enabled) }
+}
+
+function mergeAdetailerUnit(raw: unknown, index: number, parentFromHires = true): AdetailerUnit {
+  const base = cloneJson(DEFAULT_ADETAILER_UNIT)
+  const row = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {}
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  const flag = (a: unknown, b: unknown) => Boolean(a ?? b)
+  const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback)
+  const seedAfterRaw = row.seedAfter ?? row.seed_after
+  return {
+    id: text(row.id, '') || `adetailer-${index + 1}`,
+    name: text(row.name, '') || `ADetailer ${index + 1}`,
+    enabled: 'enabled' in row ? Boolean(row.enabled) : true,
+    detector: text(row.detector, base.detector),
+    samModel: text(row.samModel ?? row.sam_model, base.samModel),
+    guideSize: Math.max(64, Math.min(4096, num(row.guideSize ?? row.guide_size, base.guideSize))),
+    guideSizeFor: typeof (row.guideSizeFor ?? row.guide_size_for) === 'boolean' ? Boolean(row.guideSizeFor ?? row.guide_size_for) : base.guideSizeFor,
+    maxSize: Math.max(64, Math.min(4096, num(row.maxSize ?? row.max_size, base.maxSize))),
+    steps: Math.max(1, Math.min(150, Math.round(num(row.steps, base.steps)))),
+    cfg: Math.max(1, Math.min(30, num(row.cfg, base.cfg))),
+    cfgOverride: flag(row.cfgOverride, row.cfg_override),
+    denoise: Math.max(0, Math.min(1, num(row.denoise, base.denoise))),
+    sampler: text(row.sampler, base.sampler) || base.sampler,
+    samplerOverride: flag(row.samplerOverride, row.sampler_override),
+    scheduler: text(row.scheduler, base.scheduler) || base.scheduler,
+    schedulerOverride: flag(row.schedulerOverride, row.scheduler_override),
+    seed: Math.round(num(row.seed, base.seed)),
+    seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,
+    seedOverride: flag(row.seedOverride, row.seed_override),
+    promptOverride: flag(row.promptOverride, row.prompt_override),
+    prompt: text(row.prompt, base.prompt),
+    negativeOverride: flag(row.negativeOverride, row.negative_override),
+    negativePrompt: text(row.negativePrompt ?? row.negative_prompt, base.negativePrompt),
+    fromHires:
+      'fromHires' in row || 'from_hires' in row
+        ? row.fromHires !== false && row.from_hires !== false
+        : parentFromHires,
+    advancedOverride: flag(row.advancedOverride, row.advanced_override),
+    feather: Math.max(0, Math.min(100, Math.round(num(row.feather, base.feather)))),
+    noiseMask: typeof (row.noiseMask ?? row.noise_mask) === 'boolean' ? Boolean(row.noiseMask ?? row.noise_mask) : base.noiseMask,
+    forceInpaint: typeof (row.forceInpaint ?? row.force_inpaint) === 'boolean' ? Boolean(row.forceInpaint ?? row.force_inpaint) : base.forceInpaint,
+    bboxThreshold: Math.max(0, Math.min(1, num(row.bboxThreshold ?? row.bbox_threshold, base.bboxThreshold))),
+    bboxDilation: Math.max(-512, Math.min(512, Math.round(num(row.bboxDilation ?? row.bbox_dilation, base.bboxDilation)))),
+    bboxCropFactor: Math.max(1, Math.min(10, num(row.bboxCropFactor ?? row.bbox_crop_factor, base.bboxCropFactor))),
+    samDetectionHint: text(row.samDetectionHint ?? row.sam_detection_hint, base.samDetectionHint) || base.samDetectionHint,
+    samDilation: Math.max(-512, Math.min(512, Math.round(num(row.samDilation ?? row.sam_dilation, base.samDilation)))),
+    samThreshold: Math.max(0, Math.min(1, num(row.samThreshold ?? row.sam_threshold, base.samThreshold))),
+    samBboxExpansion: Math.max(0, Math.min(1000, Math.round(num(row.samBboxExpansion ?? row.sam_bbox_expansion, base.samBboxExpansion)))),
+    samMaskHintThreshold: Math.max(0, Math.min(1, num(row.samMaskHintThreshold ?? row.sam_mask_hint_threshold, base.samMaskHintThreshold))),
+    samMaskHintUseNegative: text(row.samMaskHintUseNegative ?? row.sam_mask_hint_use_negative, base.samMaskHintUseNegative) || base.samMaskHintUseNegative,
+    dropSize: Math.max(1, Math.min(4096, Math.round(num(row.dropSize ?? row.drop_size, base.dropSize)))),
+    cycle: Math.max(1, Math.min(10, Math.round(num(row.cycle, base.cycle)))),
+    inpaintModel: flag(row.inpaintModel, row.inpaint_model),
+    noiseMaskFeather: Math.max(0, Math.min(100, Math.round(num(row.noiseMaskFeather ?? row.noise_mask_feather, base.noiseMaskFeather)))),
+    tiledEncode: flag(row.tiledEncode, row.tiled_encode),
+    tiledDecode: flag(row.tiledDecode, row.tiled_decode),
+    deviceMode: text(row.deviceMode ?? row.device_mode, base.deviceMode) || base.deviceMode,
+    modelOverride: flag(row.modelOverride, row.model_override),
+    checkpoint: text(row.checkpoint, base.checkpoint),
+    vae: text(row.vae, base.vae),
+    textEncoder: text(row.textEncoder ?? row.text_encoder, base.textEncoder),
+    loraOverride: flag(row.loraOverride, row.lora_override),
+    loras: parseHiresLoras(row.loras),
+  }
+}
+
+function mergeAdetailer(raw: unknown): AdetailerSettings {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return cloneJson(DEFAULT_ADETAILER)
+  }
+  const row = raw as Record<string, unknown>
+  const unitsRaw = row.units
+  const parentFromHires = row.fromHires !== false && row.from_hires !== false
+  const units = Array.isArray(unitsRaw) && unitsRaw.length
+    ? unitsRaw.map((item, index) => mergeAdetailerUnit(item, index, parentFromHires))
+    : cloneJson(DEFAULT_ADETAILER.units)
+  return {
+    enabled: Boolean(row.enabled),
+    units,
+  }
 }
 
 function mergePromptMatrix(raw: unknown): PromptMatrixSettings {
@@ -277,7 +501,7 @@ export const DEFAULTS = {
   megapixels: 1,
   workflow: 'txt2img',
   hires: cloneJson(DEFAULT_HIRES),
-  adetailer: { ...DEFAULT_EXTRA } as ExtraSettings,
+  adetailer: cloneJson(DEFAULT_ADETAILER),
   controlnet: { ...DEFAULT_EXTRA } as ExtraSettings,
   script: '' as GenerateScript,
   promptMatrix: cloneJson(DEFAULT_PROMPT_MATRIX),
@@ -314,9 +538,9 @@ export const PARAM_KEYS = [
   'resMode',
   'aspect',
   'megapixels',
+  'controlnet',
   'hires',
   'adetailer',
-  'controlnet',
   'script',
   'promptMatrix',
   'xyPlot',
@@ -353,7 +577,7 @@ export type TemplateParams = {
   aspect: string
   megapixels: number
   hires: HiresSettings
-  adetailer: ExtraSettings
+  adetailer: AdetailerSettings
   controlnet: ExtraSettings
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
@@ -392,7 +616,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     aspect: source.aspect,
     megapixels: source.megapixels,
     hires: mergeHires(source.hires, source.width, source.height),
-    adetailer: cloneJson(source.adetailer),
+    adetailer: mergeAdetailer(source.adetailer),
     controlnet: cloneJson(source.controlnet),
     script: source.script,
     promptMatrix: cloneJson(source.promptMatrix),
@@ -434,7 +658,11 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
         next.hires = mergeHires(value, next.width, next.height)
         continue
       }
-      if (key === 'adetailer' || key === 'controlnet') {
+      if (key === 'adetailer') {
+        next.adetailer = mergeAdetailer(value)
+        continue
+      }
+      if (key === 'controlnet') {
         next[key] = mergeExtra(value, DEFAULT_EXTRA)
         continue
       }
@@ -525,9 +753,9 @@ export const APPLY_FIELDS = [
   { id: 'resolution', label: 'Resolution', keys: ['width', 'height', 'resMode', 'aspect', 'megapixels'] },
   { id: 'batchCount', label: 'Batch count', keys: ['batchCount'] },
   { id: 'batchSize', label: 'Batch size', keys: ['batchSize'] },
+  { id: 'controlnet', label: 'ControlNet', keys: ['controlnet'] },
   { id: 'hires', label: 'Hires. fix', keys: ['hires'] },
   { id: 'adetailer', label: 'ADetailer', keys: ['adetailer'] },
-  { id: 'controlnet', label: 'ControlNet', keys: ['controlnet'] },
   { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot'] },
 ] as const
 
@@ -770,7 +998,7 @@ type GenerateState = {
   aspect: string
   megapixels: number
   hires: HiresSettings
-  adetailer: ExtraSettings
+  adetailer: AdetailerSettings
   controlnet: ExtraSettings
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
@@ -828,7 +1056,7 @@ type GenerateState = {
   setAspect: (value: string) => void
   setMegapixels: (value: number) => void
   setHires: (value: Partial<HiresSettings>) => void
-  setAdetailer: (value: Partial<ExtraSettings>) => void
+  setAdetailer: (value: Partial<AdetailerSettings>) => void
   setControlnet: (value: Partial<ExtraSettings>) => void
   setScript: (value: GenerateScript) => void
   setPromptMatrix: (value: PromptMatrixSettings) => void
@@ -914,7 +1142,7 @@ export const useGenerateStore = create<GenerateState>()(
       setAspect: (aspect) => set({ aspect }),
       setMegapixels: (megapixels) => set({ megapixels }),
       setHires: (hires) => set((s) => ({ hires: { ...s.hires, ...hires } })),
-      setAdetailer: (adetailer) => set((s) => ({ adetailer: { ...s.adetailer, ...adetailer } })),
+      setAdetailer: (adetailer) => set((s) => ({ adetailer: mergeAdetailer({ ...s.adetailer, ...adetailer }) })),
       setControlnet: (controlnet) => set((s) => ({ controlnet: { ...s.controlnet, ...controlnet } })),
       setScript: (script) => set({ script: isGenerateScript(script) ? script : '' }),
       setPromptMatrix: (promptMatrix) => set({ promptMatrix: mergePromptMatrix(promptMatrix) }),

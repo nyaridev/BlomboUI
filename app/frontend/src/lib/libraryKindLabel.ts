@@ -5,6 +5,8 @@ const LABELS: Record<string, string> = {
   vae: 'VAE',
   text_encoders: 'Text encoder',
   upscale_models: 'Upscale',
+  sams: 'SAM',
+  ultralytics: 'Ultralytics',
   controlnet: 'ControlNet',
   embeddings: 'Embeddings',
   wildcards: 'Wildcards',

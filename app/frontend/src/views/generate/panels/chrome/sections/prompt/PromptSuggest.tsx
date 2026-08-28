@@ -8,6 +8,7 @@ import {
   caretBox,
   completeInsert,
   completeToken,
+  filterTagHits,
   loraInsert,
   suggestLoraHits,
   suggestWildcardHits,
@@ -312,6 +313,12 @@ export function PromptField({
     if (cache.current?.key === key && token?.mode === 'tag') {
       setHits(cache.current.tags)
       return
+    }
+    if (token?.mode === 'tag') {
+      const filtered = filterTagHits(cache.current?.tags ?? hitsRef.current, query)
+      if (filtered.length) {
+        setHits(filtered)
+      }
     }
     if (token?.mode === 'wildcard' || token?.mode === 'lora') {
       const prefix = token.mode === 'wildcard' ? '__' : '<lora:'

@@ -11,6 +11,8 @@ MODEL_SUBDIRS = (
     "text_encoders",
     "diffusion_models",
     "upscale_models",
+    "sams",
+    "ultralytics",
     "vae_approx",
     "clip_vision",
     "hypernetworks",

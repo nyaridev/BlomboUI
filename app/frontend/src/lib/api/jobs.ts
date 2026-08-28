@@ -146,6 +146,62 @@ export type JobRequest = {
   auto_loras?: AutoLoraRequest[]
   prompt_matrix?: PromptMatrixRequest
   xy_plot?: XyPlotRequest
+  adetailer?: {
+    enabled: boolean
+    units: {
+      id: string
+      name: string
+      enabled: boolean
+      detector: string
+      sam_model: string
+      guide_size: number
+      guide_size_for: boolean
+      max_size: number
+      steps: number
+      cfg: number
+      cfg_override: boolean
+      denoise: number
+      sampler: string
+      sampler_override: boolean
+      scheduler: string
+      scheduler_override: boolean
+      seed: number
+      seed_after: 'randomize' | 'fixed' | 'increment' | 'decrement'
+      seed_override: boolean
+      prompt_override: boolean
+      prompt: string
+      negative_override: boolean
+      negative_prompt: string
+      from_hires: boolean
+      advanced_override: boolean
+      feather: number
+      noise_mask: boolean
+      force_inpaint: boolean
+      bbox_threshold: number
+      bbox_dilation: number
+      bbox_crop_factor: number
+      sam_detection_hint: string
+      sam_dilation: number
+      sam_threshold: number
+      sam_bbox_expansion: number
+      sam_mask_hint_threshold: number
+      sam_mask_hint_use_negative: string
+      drop_size: number
+      cycle: number
+      inpaint_model: boolean
+      noise_mask_feather: number
+      tiled_encode: boolean
+      tiled_decode: boolean
+      device_mode: string
+      model_override: boolean
+      checkpoint: string
+      vae: string
+      text_encoder: string
+      kind: string
+      lora_override: boolean
+      loras: { path: string; strength: number }[]
+    }[]
+  }
 }
 
 export async function createJob(body: JobRequest): Promise<Job> {

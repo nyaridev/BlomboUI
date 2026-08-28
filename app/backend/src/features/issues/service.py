@@ -206,7 +206,7 @@ def _directory_issues() -> list[dict[str, Any]]:
             name = item["name"]
             ident = item["id"]
             path = item["path"]
-            locked = ident in {dirs.LOCAL_ID, "output"}
+            locked = ident in {dirs.LOCAL_ID, dirs.COMFY_ID, "output"}
             key_name = name.lower()
             name_dup = key_name in seen_names
             if name_dup:

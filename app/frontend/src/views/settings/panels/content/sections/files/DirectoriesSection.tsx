@@ -1,6 +1,6 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { FolderField } from '@/components/controls/folder-field/FolderField.tsx'
-import { FolderList, LOCAL_ID, OUTPUT_ID } from '@/components/controls/folder-list/FolderList.tsx'
+import { FolderList, LOCAL_ID, OUTPUT_ID, COMFY_ID } from '@/components/controls/folder-list/FolderList.tsx'
 import { getAppPaths, reloadComfy, setOutputPath, type AppPaths } from '@/lib/api.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
@@ -92,8 +92,8 @@ export function DirectoriesSection({ query = '' }: { query?: string }) {
           items={modelDirs}
           onChange={setModelDirs}
           prefix="Models"
-          lockedId={LOCAL_ID}
-          livePaths={{ [LOCAL_ID]: paths?.models || '' }}
+          lockedIds={[LOCAL_ID, COMFY_ID]}
+          livePaths={{ [LOCAL_ID]: paths?.models || '', [COMFY_ID]: paths?.comfyModels || '' }}
         />
         <div className="flex flex-wrap items-center gap-2">
           <button

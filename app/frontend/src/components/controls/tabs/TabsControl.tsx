@@ -1,13 +1,21 @@
 import { PrimitiveTabStrip, PrimitiveTabsTrigger } from '@/components/primitives/PrimitiveTabs.tsx'
 import { PrimitiveButton } from '@/components/primitives/PrimitiveButton.tsx'
+import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
-export function tabTriggerClass(active: boolean, extra = '', flush: 'panel' | 'page' = 'panel') {
+export function tabTriggerClass(active: boolean, extra = '', flush: 'panel' | 'page' = 'panel', pad = 'px-3') {
   const on =
     flush === 'page'
       ? 'border-line border-b-bg bg-bg text-ink'
       : 'border-line border-b-panel bg-panel text-ink'
-  return [extra, '-mb-px rounded-t-md border px-3 py-1.5 text-sm', active ? on : 'border-transparent text-muted hover:text-ink'].join(' ')
+  return [
+    '-mb-px inline-flex items-center rounded-t-md border py-1.5 text-sm leading-none',
+    pad,
+    active ? on : 'border-transparent text-muted hover:text-ink',
+    extra,
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 export function TabsList({
@@ -33,15 +41,32 @@ export function TabsTrigger({
   active,
   extra,
   children,
+  checked,
+  onCheckedChange,
 }: {
   value: string
   active: boolean
   extra?: string
   children: ReactNode
+  checked?: boolean
+  onCheckedChange?: (checked: boolean) => void
 }) {
   return (
     <PrimitiveTabsTrigger value={value} className={tabTriggerClass(active, extra)}>
-      {children}
+      {onCheckedChange ? (
+        <span className="inline-flex items-center gap-stack">
+          <span
+            className="inline-flex"
+            onPointerDown={(event) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <CheckboxControl checked={Boolean(checked)} onChange={onCheckedChange} />
+          </span>
+          {children}
+        </span>
+      ) : (
+        children
+      )}
     </PrimitiveTabsTrigger>
   )
 }

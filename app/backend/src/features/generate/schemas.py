@@ -74,8 +74,68 @@ class HiresIn(BaseModel):
     kind: str = ""
     lora_override: bool = False
     loras: list[HiresLoraIn] = Field(default_factory=list)
-    save_before: bool = True
+    save_before: bool = False
     clear_vram: bool = False
+
+
+class AdetailerUnitIn(BaseModel):
+    id: str = ""
+    name: str = ""
+    enabled: bool = True
+    detector: str = ""
+    sam_model: str = ""
+    guide_size: float = Field(default=512, ge=64, le=4096)
+    guide_size_for: bool = True
+    max_size: float = Field(default=1024, ge=64, le=4096)
+    steps: int = Field(default=20, ge=1, le=150)
+    cfg: float = Field(default=4, ge=1, le=30)
+    cfg_override: bool = False
+    denoise: float = Field(default=0.5, ge=0, le=1)
+    sampler: str = ""
+    sampler_override: bool = False
+    scheduler: str = ""
+    scheduler_override: bool = False
+    seed: int = -1
+    seed_after: Literal["randomize", "fixed", "increment", "decrement"] = "randomize"
+    seed_override: bool = False
+    prompt_override: bool = False
+    prompt: str = ""
+    negative_override: bool = False
+    negative_prompt: str = ""
+    from_hires: bool = True
+    advanced_override: bool = False
+    feather: int = Field(default=5, ge=0, le=100)
+    noise_mask: bool = True
+    force_inpaint: bool = True
+    bbox_threshold: float = Field(default=0.5, ge=0, le=1)
+    bbox_dilation: int = Field(default=10, ge=-512, le=512)
+    bbox_crop_factor: float = Field(default=3, ge=1, le=10)
+    sam_detection_hint: str = "center-1"
+    sam_dilation: int = Field(default=0, ge=-512, le=512)
+    sam_threshold: float = Field(default=0.93, ge=0, le=1)
+    sam_bbox_expansion: int = Field(default=0, ge=0, le=1000)
+    sam_mask_hint_threshold: float = Field(default=0.7, ge=0, le=1)
+    sam_mask_hint_use_negative: str = "False"
+    drop_size: int = Field(default=10, ge=1, le=4096)
+    cycle: int = Field(default=1, ge=1, le=10)
+    inpaint_model: bool = False
+    noise_mask_feather: int = Field(default=20, ge=0, le=100)
+    tiled_encode: bool = False
+    tiled_decode: bool = False
+    device_mode: str = "Prefer GPU"
+    model_override: bool = False
+    checkpoint: str = ""
+    vae: str = ""
+    text_encoder: str = ""
+    kind: str = ""
+    lora_override: bool = False
+    loras: list[HiresLoraIn] = Field(default_factory=list)
+
+
+class AdetailerIn(BaseModel):
+    enabled: bool = False
+    from_hires: bool = True
+    units: list[AdetailerUnitIn] = Field(default_factory=list)
 
 
 class JobIn(BaseModel):
@@ -112,6 +172,7 @@ class JobIn(BaseModel):
     output_hires_path: str | None = None
     output_hires_name: str | None = None
     hires: HiresIn | None = None
+    adetailer: AdetailerIn | None = None
     auto_loras: list[str | AutoLoraIn] = Field(default_factory=list)
     prompt_matrix: PromptMatrixIn | None = None
     xy_plot: XyPlotIn | None = None

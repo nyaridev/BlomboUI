@@ -117,6 +117,8 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setCivitaiDownload: (value: Partial<CivitaiDownloadSettings>) => void
   setDownloadQueue: (value: boolean) => void
   setDownloadQueueParallel: (value: number) => void
+  setManagerQueueParallel: (value: number) => void
+  setManagerDownloadDirId: (value: string) => void
   setRemovedAfterHours: (value: number) => void
   setRemovedMaxGb: (value: number) => void
   setAutocompleteEnabled: (value: boolean) => void
@@ -242,6 +244,8 @@ const KEYS = [
   'civitaiDownload',
   'downloadQueue',
   'downloadQueueParallel',
+  'managerQueueParallel',
+  'managerDownloadDirId',
   'removedAfterHours',
   'removedMaxGb',
   'autocompleteEnabled',

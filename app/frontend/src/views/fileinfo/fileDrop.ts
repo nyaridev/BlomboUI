@@ -32,7 +32,13 @@ type HashModel = { kind?: string; hashes?: Record<string, string> }
 
 export function pngModels(meta: Record<string, unknown> | null) {
   const params = meta?.params as
-    | { prompt?: string; prompt_raw?: string; models?: HashModel[]; hires?: { models?: HashModel[] } }
+    | {
+        prompt?: string
+        prompt_raw?: string
+        models?: HashModel[]
+        hires?: { models?: HashModel[] }
+        adetailer?: { units?: { models?: HashModel[] }[]; models?: HashModel[] }
+      }
     | undefined
   const ok =
     meta?.version === 2 &&
@@ -42,5 +48,20 @@ export function pngModels(meta: Record<string, unknown> | null) {
   if (!ok || !params) {
     return { models: [] as HashModel[], extra: [] as HashModel[] }
   }
-  return { models: params.models || [], extra: Array.isArray(params.hires?.models) ? params.hires.models : [] }
+  const extra: HashModel[] = []
+  if (Array.isArray(params.hires?.models)) {
+    extra.push(...params.hires.models)
+  }
+  const units = params.adetailer?.units
+  if (Array.isArray(units)) {
+    for (const unit of units) {
+      if (Array.isArray(unit?.models)) {
+        extra.push(...unit.models)
+      }
+    }
+  }
+  if (Array.isArray(params.adetailer?.models)) {
+    extra.push(...params.adetailer.models)
+  }
+  return { models: params.models || [], extra }
 }

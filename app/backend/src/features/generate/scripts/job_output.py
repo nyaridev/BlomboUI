@@ -341,7 +341,7 @@ def _hires_save_before(values: dict[str, Any]) -> bool:
         if raw is None:
             raw = blob.get("saveBefore")
         return bool(raw)
-    return True
+    return False
 
 
 def tmp_first_pass(values: dict[str, Any], kind: str) -> bool:

@@ -1,4 +1,4 @@
-import { LOCAL_ID } from '@/components/controls/folder-list/FolderList.tsx'
+import { LOCAL_ID, COMFY_ID } from '@/components/controls/folder-list/FolderList.tsx'
 import { defaultHiddenModelTypes } from '@/lib/modelTypes.ts'
 import { GENERATE_TABS, type GenerateTab } from '@/views/generate/panels/workspace/tabs.ts'
 import {
@@ -57,7 +57,7 @@ export const LOOKUP_GROUPS = [
   { id: 'checkpoints' as const, label: 'Base Model', kinds: ['checkpoints', 'diffusion_models'] },
   { id: 'loras' as const, label: 'LoRA', kinds: ['loras'] },
   { id: 'wildcards' as const, label: 'Wildcards', kinds: ['wildcards'] },
-  { id: 'other' as const, label: 'Other', kinds: ['vae', 'text_encoders', 'upscale_models', 'controlnet', 'embeddings'] },
+  { id: 'other' as const, label: 'Other', kinds: ['vae', 'text_encoders', 'upscale_models', 'controlnet', 'embeddings', 'sams', 'ultralytics'] },
 ] as const
 export type LookupKind = (typeof LOOKUP_GROUPS)[number]['id']
 export const LOOKUP_KINDS = LOOKUP_GROUPS.map((item) => item.id)
@@ -366,12 +366,17 @@ export const SETTINGS_DEFAULTS = {
   loraSliderMax: 5,
   loraAutoApply: true,
   loraApplyAt: 'start' as 'start' | 'end',
-  modelDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
+  modelDirs: [
+    { id: LOCAL_ID, name: 'Local', path: '' },
+    { id: COMFY_ID, name: 'ComfyUI', path: '' },
+  ] as FolderDir[],
   wildcardDirs: [{ id: LOCAL_ID, name: 'Local', path: '' }] as FolderDir[],
   galleryDirs: [] as FolderDir[],
   civitaiDownload: { ...CIVITAI_DOWNLOAD_DEFAULT },
   downloadQueue: true,
   downloadQueueParallel: 10,
+  managerQueueParallel: 10,
+  managerDownloadDirId: LOCAL_ID,
   removedAfterHours: 48,
   removedMaxGb: 100,
   autocompleteEnabled: true,

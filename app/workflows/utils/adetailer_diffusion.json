@@ -1,0 +1,192 @@
+{
+  "ports": {
+    "IMAGE": ["3", 0]
+  },
+  "1": {
+    "inputs": {
+      "model_name": ""
+    },
+    "class_type": "UltralyticsDetectorProvider",
+    "_meta": {
+      "title": "ADetailer Detector"
+    }
+  },
+  "2": {
+    "inputs": {
+      "model_name": "",
+      "device_mode": "Prefer GPU"
+    },
+    "class_type": "SAMLoader",
+    "_meta": {
+      "title": "ADetailer SAM"
+    }
+  },
+  "3": {
+    "inputs": {
+      "guide_size": 512,
+      "guide_size_for": true,
+      "max_size": 1024,
+      "seed": 0,
+      "steps": 20,
+      "cfg": 4,
+      "sampler_name": "euler_ancestral",
+      "scheduler": "sgm_uniform",
+      "denoise": 0.5,
+      "feather": 5,
+      "noise_mask": true,
+      "force_inpaint": true,
+      "bbox_threshold": 0.5,
+      "bbox_dilation": 10,
+      "bbox_crop_factor": 3,
+      "sam_detection_hint": "center-1",
+      "sam_dilation": 0,
+      "sam_threshold": 0.93,
+      "sam_bbox_expansion": 0,
+      "sam_mask_hint_threshold": 0.7,
+      "sam_mask_hint_use_negative": "False",
+      "drop_size": 10,
+      "wildcard": "",
+      "cycle": 1,
+      "inpaint_model": false,
+      "noise_mask_feather": 20,
+      "tiled_encode": false,
+      "tiled_decode": false,
+      "image": ["6", 0],
+      "model": ["7", 0],
+      "clip": ["8", 0],
+      "vae": ["9", 0],
+      "positive": ["4", 0],
+      "negative": ["5", 0],
+      "bbox_detector": ["1", 0],
+      "sam_model_opt": ["2", 0],
+      "segm_detector_opt": ["1", 1]
+    },
+    "class_type": "FaceDetailer",
+    "_meta": {
+      "title": "ADetailer FaceDetailer"
+    }
+  },
+  "4": {
+    "inputs": {
+      "text": "",
+      "clip": ["8", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "ADetailer Positive"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": "",
+      "clip": ["8", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "ADetailer Negative"
+    }
+  },
+  "6": {
+    "inputs": {
+      "image": "example.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "PORT:IMAGE"
+    }
+  },
+  "7": {
+    "inputs": {
+      "ckpt_name": ""
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "PORT:MODEL"
+    }
+  },
+  "8": {
+    "inputs": {
+      "clip_name": "",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "PORT:CLIP"
+    }
+  },
+  "9": {
+    "inputs": {
+      "vae_name": ""
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "PORT:VAE"
+    }
+  },
+  "10": {
+    "inputs": {
+      "text": "",
+      "clip": ["8", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "PORT:POSITIVE"
+    }
+  },
+  "11": {
+    "inputs": {
+      "text": "",
+      "clip": ["8", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "PORT:NEGATIVE"
+    }
+  },
+  "12": {
+    "inputs": {
+      "unet_name": "",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": {
+      "title": "ADetailer UNET"
+    }
+  },
+  "13": {
+    "inputs": {
+      "clip_name": "",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "ADetailer CLIP"
+    }
+  },
+  "14": {
+    "inputs": {
+      "vae_name": ""
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "ADetailer VAE"
+    }
+  },
+  "15": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "➕ Add Lora": "",
+      "model": ["7", 0],
+      "clip": ["8", 0]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "ADetailer Power Lora Loader"
+    }
+  }
+}

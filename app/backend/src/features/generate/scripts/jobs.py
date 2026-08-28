@@ -51,7 +51,7 @@ from .job_plan import (
     _run_seed,
     _seed_after,
 )
-from .comfy_fill import combined_progress, hires_enabled, progress_stage_map, stage_index
+from .comfy_fill import combined_progress, hires_enabled, progress_stage_map, progress_stages, stage_index
 from . import save_meta
 from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 
@@ -72,6 +72,7 @@ class LiveJob:
             _preview_opts()
         )
         self.stages: dict[str, str] | None = None
+        self.stage_list: tuple[str, ...] = ("generation",)
         self.stage = "generation"
 
 
@@ -122,6 +123,34 @@ def _expand_hires_prompts(run_values: dict[str, Any], rng: random.Random) -> Non
         blob["negative_prompt"] = wildcard_tags.expand(
             str(blob.get("negative_prompt") or blob.get("negativePrompt") or ""), rng, missing
         )
+
+
+def _expand_adetailer_prompts(run_values: dict[str, Any], rng: random.Random) -> None:
+    blob = run_values.get("adetailer")
+    if not isinstance(blob, dict):
+        return
+    rows = blob.get("units")
+    if not isinstance(rows, list):
+        return
+    missing = run_values.get("wildcard_missing")
+    if not isinstance(missing, list):
+        missing = []
+        run_values["wildcard_missing"] = missing
+    for unit in rows:
+        if not isinstance(unit, dict):
+            continue
+        prompt_on = bool(
+            unit.get("prompt_override") if unit.get("prompt_override") is not None else unit.get("promptOverride")
+        )
+        negative_on = bool(
+            unit.get("negative_override") if unit.get("negative_override") is not None else unit.get("negativeOverride")
+        )
+        if prompt_on:
+            unit["prompt"] = wildcard_tags.expand(str(unit.get("prompt") or ""), rng, missing)
+        if negative_on:
+            unit["negative_prompt"] = wildcard_tags.expand(
+                str(unit.get("negative_prompt") or unit.get("negativePrompt") or ""), rng, missing
+            )
 
 
 def _preview_opts() -> tuple[bool, int, int, bool, bool]:
@@ -178,7 +207,7 @@ def _on_live(job_id: str, event: dict[str, Any]) -> None:
         node = event.get("node")
         if node is not None and live.stages:
             stage = live.stages.get(str(node))
-            if stage is not None and stage_index(stage) >= stage_index(live.stage):
+            if stage is not None and stage_index(stage, live.stage_list) >= stage_index(live.stage, live.stage_list):
                 if stage != live.stage:
                     live.value = 0
                     live.max = 0
@@ -210,7 +239,7 @@ def _live_fields(job_id: str) -> dict[str, Any]:
                 "preview_rev": 0,
             }
         if live.stages:
-            pct = combined_progress(live.stage, live.value, live.max)
+            pct = combined_progress(live.stage, live.value, live.max, live.stage_list)
             current_max = 100
             current_value = pct
             progress: dict[str, Any] = {
@@ -497,6 +526,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             run_values["negative_prompt_raw"] = raw_negative
             await asyncio.to_thread(wildcard_tags.apply, run_values, rng)
             _expand_hires_prompts(run_values, rng)
+            _expand_adetailer_prompts(run_values, rng)
             used: list[str] = []
             for blob in (raw_prompt, raw_negative):
                 for match in wildcard_tags.TAG.finditer(blob):
@@ -541,7 +571,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             with _live_lock:
                 live = _live.get(job_id)
                 if live:
-                    live.stages = progress_stage_map(graph) if hires_enabled(run_values) else None
+                    stages = progress_stages(run_values)
+                    live.stage_list = stages
+                    live.stages = progress_stage_map(graph) if len(stages) > 1 else None
                     live.stage = "generation"
                     live.value = 0
                     live.max = int(run_values.get("steps") or live.max or 0)

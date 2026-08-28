@@ -21,6 +21,7 @@ class HiresTmpFirstTests(unittest.TestCase):
         self.assertFalse(tmp_first_pass({"hires": {"enabled": True, "save_before": True}}, "images"))
         self.assertFalse(tmp_first_pass({"hires": {"enabled": False, "save_before": False}}, "images"))
         self.assertTrue(tmp_first_pass({"hires": {"enabled": True, "saveBefore": False}}, "images"))
+        self.assertTrue(tmp_first_pass({"hires": {"enabled": True}}, "images"))
 
     def test_tmp_path_is_temp_kind_and_allowed(self) -> None:
         root = Path(tempfile.mkdtemp())

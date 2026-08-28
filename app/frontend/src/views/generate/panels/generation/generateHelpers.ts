@@ -1,7 +1,7 @@
 import type { Job, ModelEntry } from '@/lib/api.ts'
 import { loraNameMatches, parseLoraHits } from '@/lib/prompt/loraTags.ts'
 import { parseWildcardTags, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
-import { autoLoraId, type ModelSwap } from '@/stores/generateStore.ts'
+import { autoLoraId, type AdetailerSettings, type ModelSwap } from '@/stores/generateStore.ts'
 import { modelPath } from '@/stores/modelsStore.ts'
 
 export function idsFromJob(job: Job): string[] {
@@ -140,11 +140,27 @@ export function progressLabel(pct: number, eta: number | null): string {
 }
 
 export const HIRES_PROGRESS_SEGMENTS = ['Generation', 'Upscaling', 'Hires. fix'] as const
+export const ADETAILER_PROGRESS_SEGMENT = 'ADetailer'
 
-const HIRES_STAGE_LABEL: Record<string, string> = {
+const STAGE_LABEL: Record<string, string> = {
   generation: 'Generation',
   upscaling: 'Upscaling',
   hires: 'Hires. fix',
+  adetailer: 'ADetailer',
+}
+
+export function progressSegments(hiresOn: boolean, adetailerOn: boolean): string[] | undefined {
+  if (!hiresOn && !adetailerOn) {
+    return undefined
+  }
+  const out: string[] = [HIRES_PROGRESS_SEGMENTS[0]]
+  if (hiresOn) {
+    out.push(HIRES_PROGRESS_SEGMENTS[1], HIRES_PROGRESS_SEGMENTS[2])
+  }
+  if (adetailerOn) {
+    out.push(ADETAILER_PROGRESS_SEGMENT)
+  }
+  return out
 }
 
 export function hiresProgressLabel(
@@ -154,7 +170,7 @@ export function hiresProgressLabel(
   step?: number,
   steps?: number,
 ): string {
-  const name = (stage && HIRES_STAGE_LABEL[stage]) || 'Generation'
+  const name = (stage && STAGE_LABEL[stage]) || 'Generation'
   const counted = typeof step === 'number' && typeof steps === 'number' && steps > 0
   if (pct <= 0 && stage === 'generation') {
     return 'Starting…'
@@ -184,4 +200,67 @@ export function tabForSwap(swap: ModelSwap | null) {
 
 export function hiresDiffusion(checkpoint: string, diffusionModels: ModelEntry[]) {
   return diffusionModels.some((item) => modelPath(item) === checkpoint)
+}
+
+export function packAdetailerJob(
+  adetailer: AdetailerSettings,
+  usedSeeds: number[],
+  diffusionModels: ModelEntry[] = [],
+) {
+  return {
+    enabled: adetailer.enabled,
+    units: adetailer.units.map((unit, index) => ({
+      id: unit.id,
+      name: unit.name,
+      enabled: unit.enabled !== false,
+      detector: unit.detector,
+      sam_model: unit.samModel,
+      guide_size: unit.guideSize,
+      guide_size_for: unit.guideSizeFor,
+      max_size: unit.maxSize,
+      steps: unit.steps,
+      cfg: unit.cfg,
+      cfg_override: unit.cfgOverride,
+      denoise: unit.denoise,
+      sampler: unit.sampler,
+      sampler_override: unit.samplerOverride,
+      scheduler: unit.scheduler,
+      scheduler_override: unit.schedulerOverride,
+      seed: unit.seedOverride ? (usedSeeds[index] ?? unit.seed) : unit.seed,
+      seed_after: unit.seedAfter,
+      seed_override: unit.seedOverride,
+      prompt_override: unit.promptOverride,
+      prompt: unit.prompt,
+      negative_override: unit.negativeOverride,
+      negative_prompt: unit.negativePrompt,
+      from_hires: unit.fromHires !== false,
+      advanced_override: unit.advancedOverride,
+      feather: unit.feather,
+      noise_mask: unit.noiseMask,
+      force_inpaint: unit.forceInpaint,
+      bbox_threshold: unit.bboxThreshold,
+      bbox_dilation: unit.bboxDilation,
+      bbox_crop_factor: unit.bboxCropFactor,
+      sam_detection_hint: unit.samDetectionHint,
+      sam_dilation: unit.samDilation,
+      sam_threshold: unit.samThreshold,
+      sam_bbox_expansion: unit.samBboxExpansion,
+      sam_mask_hint_threshold: unit.samMaskHintThreshold,
+      sam_mask_hint_use_negative: unit.samMaskHintUseNegative,
+      drop_size: unit.dropSize,
+      cycle: unit.cycle,
+      inpaint_model: unit.inpaintModel,
+      noise_mask_feather: unit.noiseMaskFeather,
+      tiled_encode: unit.tiledEncode,
+      tiled_decode: unit.tiledDecode,
+      device_mode: unit.deviceMode,
+      model_override: unit.modelOverride,
+      checkpoint: unit.checkpoint,
+      vae: unit.vae,
+      text_encoder: unit.textEncoder,
+      kind: hiresDiffusion(unit.checkpoint, diffusionModels) ? 'diffusion_models' : 'checkpoints',
+      lora_override: unit.loraOverride,
+      loras: unit.loras,
+    })),
+  }
 }

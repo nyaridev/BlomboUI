@@ -58,11 +58,14 @@ def take_params(raw: Any) -> dict[str, Any] | None:
     hires = raw.get("hires")
     if isinstance(hires, dict):
         out["hires"] = hires
+    adetailer = raw.get("adetailer")
+    if isinstance(adetailer, dict):
+        out["adetailer"] = adetailer
     return out
 
 
 def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kind: str = "") -> dict[str, Any]:
-    from features.generate.scripts.comfy_fill import hires_enabled
+    from features.generate.scripts.comfy_fill import adetailer_enabled, hires_enabled
 
     out: dict[str, Any] = {
         "prompt": str(values.get("prompt") or ""),
@@ -86,6 +89,8 @@ def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kin
         out["interrupted"] = True
     if kind == "hires" and hires_enabled(values):
         out["hires"] = pack_hires(values)
+    if adetailer_enabled(values) and not (hires_enabled(values) and kind == "images"):
+        out["adetailer"] = pack_adetailer(values)
     return out
 
 
@@ -118,6 +123,53 @@ def pack_hires(values: dict[str, Any]) -> dict[str, Any]:
                 add("loras", _hashes_for("loras", name), strength)
     out["models"] = models
     return out
+
+
+def pack_adetailer(values: dict[str, Any]) -> dict[str, Any]:
+    from features.generate.scripts.comfy_fill import (
+        adetailer_meta_fields,
+        _adetailer_kind_diffusion,
+        _adetailer_unit_for_fill,
+        _flag,
+    )
+    from features.generate.scripts.compose import _adetailer_units
+
+    units: list[dict[str, Any]] = []
+    for raw in _adetailer_units(values):
+        unit = _adetailer_unit_for_fill(raw, values)
+        snap = adetailer_meta_fields(unit, values)
+        models: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        _push_model(models, seen, "ultralytics", _hashes_for("ultralytics", str(unit.get("detector") or "")))
+        _push_model(
+            models,
+            seen,
+            "sams",
+            _hashes_for("sams", str(unit.get("sam_model") or unit.get("samModel") or "")),
+        )
+        if _flag(unit, "model_override", "modelOverride"):
+            ckpt = str(unit.get("checkpoint") or "")
+            if _adetailer_kind_diffusion(unit):
+                _push_model(models, seen, "diffusion_models", _hashes_for("diffusion_models", ckpt))
+            else:
+                kind, row = _hash_named(ckpt, ("checkpoints", "diffusion_models"))
+                _push_model(models, seen, kind or "checkpoints", row)
+            _push_model(models, seen, "vae", _hashes_for("vae", str(unit.get("vae") or "")))
+            _push_model(
+                models,
+                seen,
+                "text_encoders",
+                _hashes_for("text_encoders", str(unit.get("text_encoder") or unit.get("textEncoder") or "")),
+            )
+        if _flag(unit, "lora_override", "loraOverride"):
+            rows = unit.get("loras")
+            if isinstance(rows, list):
+                for item in rows:
+                    name, strength = _lora_ref(item)
+                    _push_model(models, seen, "loras", _hashes_for("loras", name), strength)
+        snap["models"] = models
+        units.append(snap)
+    return {"units": units}
 
 
 def envelope(
@@ -168,6 +220,12 @@ def _hires_node(node: dict[str, Any]) -> bool:
     return "hires" in str((node.get("_meta") or {}).get("title") or "").lower()
 
 
+def _adetailer_node(node: dict[str, Any], key: str = "") -> bool:
+    if str(key).startswith("adetailer/"):
+        return True
+    return "adetailer" in str((node.get("_meta") or {}).get("title") or "").lower()
+
+
 def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -186,8 +244,8 @@ def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) 
             name, strength = _lora_ref(item)
             add("loras", _hashes_for("loras", name), strength)
     if isinstance(graph, dict):
-        for node in graph.values():
-            if not isinstance(node, dict) or _hires_node(node):
+        for key, node in graph.items():
+            if not isinstance(node, dict) or _hires_node(node) or _adetailer_node(node, str(key)):
                 continue
             cls = str(node.get("class_type") or "")
             inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}

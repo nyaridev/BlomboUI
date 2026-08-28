@@ -200,6 +200,60 @@ class SaveMetaTests(unittest.TestCase):
         self.assertIsNotNone(taken)
         self.assertEqual(taken["hires"]["cfg"], 4)
 
+    def test_pack_params_keeps_adetailer(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "width": 16,
+            "height": 16,
+            "checkpoint": "first.safetensors",
+            "adetailer": {
+                "enabled": True,
+                "units": [
+                    {
+                        "detector": "bbox/face.pt",
+                        "sam_model": "sam.pt",
+                        "steps": 20,
+                        "cfg": 4,
+                        "cfg_override": True,
+                        "denoise": 0.5,
+                        "sampler_override": True,
+                        "sampler": "dpmpp_2m",
+                        "scheduler_override": True,
+                        "scheduler": "karras",
+                    }
+                ],
+            },
+        }
+        with self._hash_patches():
+            packed = save_meta.pack_params(values, None, kind="images")
+        blob = packed["adetailer"]
+        unit = blob["units"][0]
+        self.assertNotIn("enabled", blob)
+        self.assertNotIn("detector", unit)
+        self.assertEqual(unit["steps"], 20)
+        self.assertEqual(unit["cfg"], 4)
+        self.assertEqual(unit["sampler"], "dpmpp_2m")
+        self.assertEqual(unit["scheduler"], "karras")
+        self.assertEqual(unit["denoise"], 0.5)
+        self.assertNotIn("seed", unit)
+        self.assertNotIn("prompt", unit)
+        kinds = {item["kind"] for item in unit["models"]}
+        self.assertEqual(kinds, {"ultralytics", "sams"})
+        dump = json.dumps(packed)
+        self.assertNotIn(".pt", dump)
+        self.assertNotIn("bbox/", dump)
+        taken = save_meta.take_params(packed)
+        self.assertIsNotNone(taken)
+        self.assertEqual(taken["adetailer"]["units"][0]["sampler"], "dpmpp_2m")
+
     def test_pack_hires_off_and_first_pass_have_no_hires_key(self) -> None:
         values = {
             "prompt": "cat",
@@ -221,6 +275,136 @@ class SaveMetaTests(unittest.TestCase):
             first = save_meta.pack_params(values, None, kind="images")
         self.assertNotIn("hires", packed)
         self.assertNotIn("hires", first)
+
+    def test_pack_adetailer_skips_first_pass_when_hires_on(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "width": 16,
+            "height": 16,
+            "checkpoint": "first.safetensors",
+            "hires": {"enabled": True, "upscale_model": "4x.pth"},
+            "adetailer": {"enabled": True, "units": [{"detector": "face.pt"}]},
+        }
+        with self._hash_patches():
+            first = save_meta.pack_params(values, None, kind="images")
+            final = save_meta.pack_params(values, None, kind="hires")
+        self.assertNotIn("adetailer", first)
+        self.assertIn("adetailer", final)
+        self.assertIn("hires", final)
+
+    def test_pack_adetailer_skips_graph_models(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "width": 16,
+            "height": 16,
+            "checkpoint": "first.safetensors",
+            "adetailer": {"enabled": True, "units": [{"detector": "face.pt"}]},
+        }
+        graph = {
+            "1": {
+                "class_type": "CheckpointLoaderSimple",
+                "_meta": {"title": "Load Checkpoint"},
+                "inputs": {"ckpt_name": "first.safetensors"},
+            },
+            "adetailer/0/2": {
+                "class_type": "UltralyticsDetectorProvider",
+                "_meta": {"title": "ADetailer Detector"},
+                "inputs": {"model_name": "face.pt"},
+            },
+        }
+        with self._hash_patches():
+            packed = save_meta.pack_params(values, graph, kind="images")
+        kinds = {item["kind"] for item in packed["models"]}
+        self.assertEqual(kinds, {"checkpoints"})
+        unit_kinds = {item["kind"] for item in packed["adetailer"]["units"][0]["models"]}
+        self.assertIn("ultralytics", unit_kinds)
+
+    def test_pack_adetailer_sampler_follows_first_pass_when_override_off(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7.5,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "sgm_uniform",
+            "width": 64,
+            "height": 64,
+            "checkpoint": "first.safetensors",
+            "adetailer": {
+                "enabled": True,
+                "units": [
+                    {
+                        "detector": "face.pt",
+                        "steps": 8,
+                        "cfg": 2,
+                        "denoise": 0.3,
+                        "sampler": "dpmpp_2m",
+                        "sampler_override": False,
+                        "scheduler": "karras",
+                        "scheduler_override": False,
+                    }
+                ],
+            },
+        }
+        with self._hash_patches():
+            packed = save_meta.pack_params(values, None, kind="images")
+        unit = packed["adetailer"]["units"][0]
+        self.assertEqual(unit["cfg"], 7.5)
+        self.assertEqual(unit["sampler"], "euler")
+        self.assertEqual(unit["scheduler"], "sgm_uniform")
+        self.assertEqual(unit["denoise"], 0.3)
+
+    def test_pack_adetailer_from_hires_uses_hires_overrides(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "width": 16,
+            "height": 16,
+            "checkpoint": "first.safetensors",
+            "hires": {
+                "enabled": True,
+                "upscale_model": "4x.pth",
+                "sampler_override": True,
+                "sampler": "dpmpp_2m",
+                "cfg_override": True,
+                "cfg": 3.5,
+            },
+            "adetailer": {
+                "enabled": True,
+                "units": [{"detector": "face.pt", "from_hires": True, "sampler": "heun", "cfg": 2}],
+            },
+        }
+        with self._hash_patches():
+            packed = save_meta.pack_params(values, None, kind="hires")
+        unit = packed["adetailer"]["units"][0]
+        self.assertEqual(unit["sampler"], "dpmpp_2m")
+        self.assertEqual(unit["cfg"], 3.5)
 
     def test_pack_hires_sampler_follows_first_pass_when_override_off(self) -> None:
         values = {

@@ -99,6 +99,8 @@ _KEYS = (
     "civitaiDownload",
     "downloadQueue",
     "downloadQueueParallel",
+    "managerQueueParallel",
+    "managerDownloadDirId",
     "removedAfterHours",
     "removedMaxGb",
     "autocompleteEnabled",

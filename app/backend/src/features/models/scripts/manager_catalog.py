@@ -37,6 +37,9 @@ _TYPE_FOLDERS = {
     "embeddings": "embeddings",
     "unet": "diffusion_models",
     "diffusion_model": "diffusion_models",
+    "sam": "sams",
+    "sams": "sams",
+    "ultralytics": "ultralytics",
 }
 
 
@@ -83,6 +86,16 @@ def dest_path(root: Path, item: dict[str, Any]) -> Path:
     return dest
 
 
+def install_root() -> Path:
+    from features.settings import service as settings
+
+    ident = str(settings.load().get("managerDownloadDirId") or "local").strip() or "local"
+    for item in dirs.listed_dirs("modelDirs"):
+        if item["id"] == ident:
+            return Path(item["path"])
+    return models_root()
+
+
 def install(name: str, filename: str, save_path: str = "") -> dict[str, Any]:
     rows = _catalog_rows()
     item = find_item(rows, name, filename, save_path)
@@ -92,7 +105,7 @@ def install(name: str, filename: str, save_path: str = "") -> dict[str, Any]:
     if not url:
         raise CatalogError("bad_request", "catalog entry has no download url", 400)
     dirs.write_extra_model_paths()
-    dest = dest_path(models_root(), item)
+    dest = dest_path(install_root(), item)
     if dest.is_file():
         model_lists.refresh_models()
         return {"ok": True, "path": str(dest)}

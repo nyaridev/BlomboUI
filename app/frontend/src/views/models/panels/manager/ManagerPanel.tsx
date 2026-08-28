@@ -2,6 +2,7 @@ import { ButtonControl } from '@/components/controls/button/ButtonControl.tsx'
 import { listManagerModels, installManagerModel, type ManagerModel } from '@/lib/api/manager.ts'
 import { useDownloadsStore } from '@/stores/downloadsStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
+import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { ManagerErrorState } from '@/views/models/panels/manager/sections/ManagerErrorState.tsx'
 import { ManagerFilters } from '@/views/models/panels/manager/sections/ManagerFilters.tsx'
 import { ManagerTable, rowKey } from '@/views/models/panels/manager/sections/ManagerTable.tsx'
@@ -17,10 +18,25 @@ function matchesQuery(item: ManagerModel, query: string) {
   return SEARCH_KEYS.some((key) => String(item[key] || '').toLowerCase().includes(needle))
 }
 
+async function mapPool<T>(items: T[], limit: number, fn: (item: T) => Promise<void>) {
+  const pending = [...items]
+  const workers = Array.from({ length: Math.max(1, Math.min(20, limit)) }, async () => {
+    while (pending.length) {
+      const item = pending.shift()
+      if (!item) {
+        return
+      }
+      await fn(item)
+    }
+  })
+  await Promise.all(workers)
+}
+
 export function ManagerPanel() {
   const pull = useModelsStore((state) => state.pull)
   const active = useDownloadsStore((state) => state.active)
   const loadDownloads = useDownloadsStore((state) => state.load)
+  const managerQueueParallel = useSettingsStore((state) => state.managerQueueParallel)
   const [items, setItems] = useState<ManagerModel[]>([])
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
@@ -121,10 +137,7 @@ export function ManagerPanel() {
   }
 
   async function installSelected() {
-    const pending = visibleSelected
-    for (const item of pending) {
-      await installOne(item)
-    }
+    await mapPool(visibleSelected, managerQueueParallel, installOne)
   }
 
   if (error && !items.length) {

@@ -11,6 +11,10 @@ HIRES_UTILS = {
     "checkpoints": "hiresfix_checkpoint",
     "diffusion_models": "hiresfix_diffusion",
 }
+ADETAILER_UTILS = {
+    "checkpoints": "adetailer_checkpoint",
+    "diffusion_models": "adetailer_diffusion",
+}
 _DIFFUSION_KINDS = {"diffusion_models", "diffusion", "unet"}
 _META_KEYS = {"apply", "extras", "ports", "attach"}
 
@@ -121,7 +125,11 @@ def apply_stage(host: dict[str, Any], util: dict[str, Any], prefix: str) -> dict
     image = out.get("IMAGE") or out.get("image")
     if _is_link(image):
         src = str(image[0])
-        _rewire_final_save(workflow, [id_map.get(src, src), image[1]])
+        dest = [id_map.get(src, src), image[1]]
+        _rewire_final_save(workflow, dest)
+        ports = workflow.get("ports")
+        if isinstance(ports, dict):
+            ports["IMAGE"] = dest
     return workflow
 
 
@@ -129,3 +137,31 @@ def apply_hires(workflow: dict[str, Any], values: dict[str, Any]) -> dict[str, A
     raw = values.get("hires")
     blob = raw if isinstance(raw, dict) else {}
     return apply_stage(workflow, load_util(hires_util_stem(blob)), "hires")
+
+
+def _adetailer_units(values: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = values.get("adetailer")
+    blob = raw if isinstance(raw, dict) else {}
+    if not blob.get("enabled"):
+        return []
+    rows = blob.get("units")
+    if not isinstance(rows, list):
+        return []
+    return [item for item in rows if isinstance(item, dict) and item.get("enabled", True)]
+
+
+def adetailer_util_stem(unit: dict[str, Any]) -> str:
+    kind = str(unit.get("kind") or unit.get("model_kind") or "").strip().lower()
+    if kind in _DIFFUSION_KINDS:
+        return ADETAILER_UTILS["diffusion_models"]
+    return ADETAILER_UTILS["checkpoints"]
+
+
+def apply_adetailer(workflow: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    units = _adetailer_units(values)
+    if not units:
+        return workflow
+    out = workflow
+    for index, unit in enumerate(units):
+        out = apply_stage(out, load_util(adetailer_util_stem(unit)), f"adetailer/{index}")
+    return out

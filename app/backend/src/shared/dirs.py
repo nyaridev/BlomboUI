@@ -9,12 +9,13 @@ import threading
 from pathlib import Path
 
 from features.settings import service as settings
-from config import RUNTIME, launcher_env, models_root, outputs_root, wildcards_root
+from config import RUNTIME, launcher_env, models_root, outputs_root, wildcards_root, comfy_models_root
 from shared.extra_model_paths import write_file as write_extra_model_paths_file
 
 _PICK_LOCK = threading.Lock()
-_RESERVED = {"local", "output"}
+_RESERVED = {"local", "output", "comfyui"}
 LOCAL_ID = "local"
+COMFY_ID = "comfyui"
 
 
 def stored_dirs(key: str) -> list[dict[str, str]]:
@@ -47,8 +48,14 @@ def extra_dirs(key: str) -> list[dict[str, str]]:
         folder = norm_dir(str(root))
         if folder:
             paths.add(folder)
+    if key == "modelDirs":
+        folder = norm_dir(str(comfy_models_root()))
+        if folder and folder not in paths:
+            paths.add(folder)
+            names.add("comfyui")
+            out.append({"id": COMFY_ID, "name": "ComfyUI", "path": str(comfy_models_root().resolve())})
     for item in stored_dirs(key):
-        if item["id"] == LOCAL_ID or item["name"].lower() in _RESERVED:
+        if item["id"] in {LOCAL_ID, COMFY_ID} or item["name"].lower() in _RESERVED:
             continue
         key_name = item["name"].lower()
         if key_name in names:
@@ -75,7 +82,8 @@ def extra_named(key: str) -> dict[str, Path]:
 
 def listed_dirs(key: str) -> list[dict[str, str]]:
     if key == "modelDirs":
-        return _with_locked(stored_dirs(key), LOCAL_ID, "Local", models_root())
+        rows = _with_locked(stored_dirs(key), LOCAL_ID, "Local", models_root())
+        return _with_locked(rows, COMFY_ID, "ComfyUI", comfy_models_root(), default_index=1)
     if key == "wildcardDirs":
         return _with_locked(stored_dirs(key), LOCAL_ID, "Local", wildcards_root())
     if key == "galleryDirs":
@@ -129,7 +137,7 @@ def _local_root(key: str) -> Path | None:
 
 def resolved() -> dict[str, str]:
     return {
-        "models": str(models_root().resolve()),
+        "comfyModels": str(comfy_models_root().resolve()),
         "wildcards": str(wildcards_root().resolve()),
         "output": str(outputs_root().resolve()),
         "userName": getpass.getuser() or "User",
@@ -153,6 +161,8 @@ def write_extra_model_paths() -> Path:
     dest = RUNTIME / "data" / "extra_model_paths.yaml"
     roots: list[tuple[str, Path]] = [("blomboui", models_root())]
     for item in extra_dirs("modelDirs"):
+        if item["id"] == COMFY_ID:
+            continue
         folder = Path(item["path"]) if item["path"] else None
         if folder is None or not folder.is_dir():
             continue
@@ -324,10 +334,13 @@ def allowed_file(path: Path) -> bool:
     return False
 
 
-def _with_locked(rows: list[dict[str, str]], ident: str, name: str, root: Path) -> list[dict[str, str]]:
+def _with_locked(
+    rows: list[dict[str, str]], ident: str, name: str, root: Path, default_index: int = 0
+) -> list[dict[str, str]]:
     locked = {"id": ident, "name": name, "path": str(root.resolve())}
     extras = [item for item in rows if item["id"] != ident]
     for index, item in enumerate(rows):
         if item["id"] == ident:
             return [*rows[:index], locked, *rows[index + 1 :]]
-    return [locked, *extras]
+    insert = max(0, min(default_index, len(extras)))
+    return [*extras[:insert], locked, *extras[insert:]]

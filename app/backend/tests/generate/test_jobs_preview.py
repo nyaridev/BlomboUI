@@ -48,6 +48,7 @@ class PreviewTests(unittest.TestCase):
     def test_hires_stage_advances_and_maps_progress(self) -> None:
         live = jobs.LiveJob(steps=20)
         live.stages = {"5": "generation", "20": "upscaling", "18": "hires"}
+        live.stage_list = ("generation", "upscaling", "hires")
         jobs._live.clear()
         jobs._live["j"] = live
         jobs._on_live("j", {"node": "5", "value": 10, "max": 20})

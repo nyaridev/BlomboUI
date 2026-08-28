@@ -64,6 +64,7 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
   const [card, setCard] = useState('on')
   const [switched, setSwitched] = useState(true)
   const [tab, setTab] = useState('one')
+  const [hiresTab, setHiresTab] = useState(true)
   const [segment, setSegment] = useState<'galleries' | 'images'>('galleries')
   const [media, setMedia] = useState<'all' | 'image' | 'video'>('all')
   const splitterRef = useRef<HTMLDivElement>(null)
@@ -294,6 +295,29 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
             </TabsList>
             <div className="rounded-b-md rounded-tr-md border border-line bg-panel p-3 text-sm text-muted">
               {tab === 'one' ? 'First pane' : 'Second pane'}
+            </div>
+          </SettingsBlock>
+          <SettingsBlock query={query} title="Tabs with checkbox" className="flex flex-col gap-2">
+            <TabsList value={tab} onValueChange={setTab} className="flex gap-cluster">
+              <TabsTrigger value="one" active={tab === 'one'}>
+                First Pass
+              </TabsTrigger>
+              <TabsTrigger
+                value="two"
+                active={tab === 'two'}
+                checked={hiresTab}
+                onCheckedChange={(on) => {
+                  setHiresTab(on)
+                  if (on) {
+                    setTab('two')
+                  }
+                }}
+              >
+                Hires. fix
+              </TabsTrigger>
+            </TabsList>
+            <div className="rounded-b-md rounded-tr-md border border-line bg-panel p-3 text-sm text-muted">
+              {tab === 'one' ? 'First pass' : 'Hires. fix'}
             </div>
           </SettingsBlock>
           <SettingsBlock query={query} title="Check row" className="flex flex-col gap-2">

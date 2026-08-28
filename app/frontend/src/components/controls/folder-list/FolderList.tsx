@@ -6,6 +6,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react'
 
 export const LOCAL_ID = 'local'
 export const OUTPUT_ID = 'output'
+export const COMFY_ID = 'comfyui'
 
 export type FolderEntry = {
   id: string
@@ -79,13 +80,15 @@ export function FolderList({
   onChange,
   prefix,
   lockedId,
+  lockedIds,
   livePaths = {},
   pinLocked = false,
 }: {
   items: FolderEntry[]
   onChange: (items: FolderEntry[]) => void
   prefix: string
-  lockedId: string
+  lockedId?: string
+  lockedIds?: string[]
   livePaths?: Record<string, string>
   pinLocked?: boolean
 }) {
@@ -93,8 +96,9 @@ export function FolderList({
   const [slot, setSlot] = useState<number | null>(null)
   const [exists, setExists] = useState<Record<string, boolean>>({})
   const liveIds = useMemo(() => new Set(Object.keys(livePaths)), [livePaths])
-  const extras = items.filter((item) => item.id !== lockedId)
-  const locked = items.find((item) => item.id === lockedId)
+  const lockedSet = useMemo(() => new Set(lockedIds ?? (lockedId ? [lockedId] : [])), [lockedId, lockedIds])
+  const extras = items.filter((item) => !lockedSet.has(item.id))
+  const lockedRows = items.filter((item) => lockedSet.has(item.id))
   const rows = pinLocked ? extras : items
   const problems = folderProblems(
     items.map((item) => ({ ...item, path: livePaths[item.id] || item.path })),
@@ -129,7 +133,7 @@ export function FolderList({
     const nextRows = [...rows]
     const [item] = nextRows.splice(drag, 1)
     nextRows.splice(drag < slot ? slot - 1 : slot, 0, item)
-    onChange(pinLocked && locked ? [locked, ...nextRows] : nextRows)
+    onChange(pinLocked ? [...lockedRows, ...nextRows] : nextRows)
   }
 
   function patch(id: string, part: Partial<FolderEntry>) {
@@ -146,7 +150,7 @@ export function FolderList({
   }
 
   function renderRow(item: FolderEntry, index: number, draggable: boolean) {
-    const lockedRow = item.id === lockedId
+    const lockedRow = lockedSet.has(item.id)
     const path = livePaths[item.id] || item.path
     return (
       <div
@@ -215,7 +219,11 @@ export function FolderList({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {pinLocked && locked ? renderRow(locked, -1, false) : null}
+      {pinLocked
+        ? lockedRows.map((item) => (
+            <Fragment key={item.id}>{renderRow(item, -1, false)}</Fragment>
+          ))
+        : null}
       <div
         className="flex flex-col gap-1.5"
         onDragOver={(event) => event.preventDefault()}

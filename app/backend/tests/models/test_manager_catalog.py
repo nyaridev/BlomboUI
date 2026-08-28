@@ -59,6 +59,20 @@ class ManagerCatalogTests(unittest.TestCase):
                 catalog._mark_installed(rows)
         self.assertEqual(rows[0]["installed"], "True")
 
+    def test_install_root_uses_manager_download_dir_id(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "picked"
+            dest.mkdir()
+            rows = [
+                {"id": "local", "name": "Local", "path": str(Path(tmp) / "local")},
+                {"id": "comfyui", "name": "ComfyUI", "path": str(dest)},
+            ]
+            with (
+                patch.object(catalog.dirs, "listed_dirs", return_value=rows),
+                patch("features.settings.service.load", return_value={"managerDownloadDirId": "comfyui"}),
+            ):
+                self.assertEqual(catalog.install_root(), dest)
+
 
 if __name__ == "__main__":
     unittest.main()

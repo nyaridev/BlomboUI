@@ -68,3 +68,23 @@ class TagCompleteTests(unittest.TestCase):
         hits = tag_complete._catalog_hits([index], "light")
         self.assertEqual(len(hits), tag_complete.LIMIT)
         self.assertNotIn("sunlight", hits)
+
+    def test_prefix_stops_at_limit(self) -> None:
+        rows = [(f"aa_{i:03d}", f"aa_{i:03d}", None) for i in range(tag_complete.LIMIT + 20)]
+        index = tag_complete._FileIndex("t.csv", 0, 0)
+        index.posts = {tag: 1 for tag, _, _ in rows}
+        index.buckets = {"a": rows}
+        hits = tag_complete._catalog_hits([index], "aa")
+        self.assertEqual(len(hits), tag_complete.LIMIT)
+        self.assertNotIn("aa_099", hits)
+
+    def test_skips_contains_for_one_char_prefix(self) -> None:
+        index = tag_complete._FileIndex("t.csv", 0, 0)
+        index.posts = {"sun": 10, "box": 200}
+        index.buckets = {
+            "s": [("sun", "sun", None)],
+            "b": [("box", "box", None)],
+        }
+        hits = tag_complete._catalog_hits([index], "s")
+        self.assertIn("sun", hits)
+        self.assertNotIn("box", hits)

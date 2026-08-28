@@ -24,6 +24,20 @@ _SMI_TTL = 2.0
 OnEvent = Callable[[dict[str, Any]], None]
 _smi_lock = threading.Lock()
 _smi_cache: tuple[float, dict[str, Any]] | None = None
+_MODEL_FOLDERS = (
+    "checkpoints",
+    "loras",
+    "vae",
+    "controlnet",
+    "embeddings",
+    "diffusion_models",
+    "text_encoders",
+    "upscale_models",
+    "sams",
+    "ultralytics",
+)
+_names_lock = threading.Lock()
+_model_names: dict[str, list[str]] = {}
 
 
 class ComfyError(Exception):
@@ -155,14 +169,59 @@ def ksampler_choices() -> dict[str, list[str]]:
 def warmup_model_lists(kind: str | None = None) -> None:
     if not reachable():
         return
-    folders = ("checkpoints", "loras", "vae", "controlnet", "embeddings", "diffusion_models", "text_encoders", "upscale_models")
+    folders = _MODEL_FOLDERS
     if kind:
-        folders = (kind,) if kind in folders else ()
+        folders = (kind,) if kind in _MODEL_FOLDERS else ()
     for folder in folders:
-        try:
-            _request("GET", f"/models/{folder}", timeout=5)
-        except ComfyError:
-            continue
+        _fetch_model_list(folder)
+
+
+def _parse_model_list(raw: bytes) -> list[str]:
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
+        return []
+    if not isinstance(data, list):
+        return []
+    return [str(item) for item in data if isinstance(item, (str, int, float))]
+
+
+def _fetch_model_list(folder: str) -> list[str]:
+    try:
+        rows = _parse_model_list(_request("GET", f"/models/{folder}", timeout=5))
+    except ComfyError:
+        rows = []
+    with _names_lock:
+        _model_names[folder] = rows
+    return rows
+
+
+def _ensure_model_names() -> dict[str, list[str]]:
+    with _names_lock:
+        if _model_names:
+            return {folder: list(rows) for folder, rows in _model_names.items()}
+    if not reachable():
+        return {}
+    for folder in _MODEL_FOLDERS:
+        _fetch_model_list(folder)
+    with _names_lock:
+        return {folder: list(rows) for folder, rows in _model_names.items()}
+
+
+_SLASH_FOLDERS = {"ultralytics", "sams"}
+
+
+def _listed_name(wanted: str) -> str | None:
+    key = wanted.replace("\\", "/")
+    if not key:
+        return None
+    for folder, rows in _ensure_model_names().items():
+        for item in rows:
+            raw = str(item)
+            if raw.replace("\\", "/") != key:
+                continue
+            return raw.replace("\\", "/") if folder in _SLASH_FOLDERS else raw
+    return None
 
 
 def _comfy_graph(data: Any) -> dict[str, Any]:
@@ -266,7 +325,8 @@ def comfy_filename(name: str) -> str:
     extras = dirs.extra_named("modelDirs")
     if parts and parts[0] in extras:
         parts = parts[1:]
-    return os.sep.join(parts)
+    joined = "/".join(parts)
+    return _listed_name(joined) or joined
 
 
 def _fill_power_loras(inputs: dict[str, Any], values: dict[str, Any]) -> None:

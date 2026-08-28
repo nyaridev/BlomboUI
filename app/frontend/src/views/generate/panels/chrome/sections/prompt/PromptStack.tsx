@@ -1,5 +1,6 @@
 import { ResizeGrip } from '@/components/controls/resizable-panel/ResizeGrip.tsx'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
+import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useLayoutEffect, useRef, useState } from 'react'
 
 function remPx() {
@@ -10,21 +11,11 @@ function clamp(value: number, min: number, max: number) {
   return Math.max(min, Math.min(max, value))
 }
 
-type PromptStackProps = {
-  prompt: string
-  negativePrompt: string
-  onPrompt: (value: string) => void
-  onNegative: (value: string) => void
-  negativeDisabled: boolean
-}
-
-export function PromptStack({
-  prompt,
-  negativePrompt,
-  onPrompt,
-  onNegative,
-  negativeDisabled,
-}: PromptStackProps) {
+export function PromptStack({ negativeDisabled }: { negativeDisabled: boolean }) {
+  const prompt = useGenerateStore((s) => s.prompt)
+  const negativePrompt = useGenerateStore((s) => s.negativePrompt)
+  const onPrompt = useGenerateStore((s) => s.setPrompt)
+  const onNegative = useGenerateStore((s) => s.setNegativePrompt)
   const rem = remPx()
   const minH = 2.5 * rem
   const maxH = 20 * rem

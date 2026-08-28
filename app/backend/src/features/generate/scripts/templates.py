@@ -72,14 +72,14 @@ _APPLY = (
     "resolution",
     "batchCount",
     "batchSize",
+    "controlnet",
     "hires",
     "adetailer",
-    "controlnet",
     "scripts",
 )
 
 _SCRIPTS = ("", "xy-plot", "prompt-matrix")
-_BLOBS = ("hires", "adetailer", "controlnet")
+_BLOBS = ("controlnet", "hires", "adetailer")
 
 
 _CONTENT_APPLY = ("prompt", "negativePrompt", "checkpoint", "vae", "textEncoder", "loras")

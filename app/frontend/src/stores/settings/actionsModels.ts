@@ -10,13 +10,13 @@ import {
   cleanRemovedMaxGb,
 } from './clean.ts'
 import { AUTOCOMPLETE_LIST_DEFAULT, autocompleteListRule } from './constants.ts'
-import { ensureLocal } from './clean.ts'
+import { ensureLocal, ensureModelDirs } from './clean.ts'
 
 export function createModelActions(set: SettingsSet, persist: () => void): Partial<SettingsState> {
   return {
     setModelDirs: (modelDirs) => {
       set((state) => {
-        const nextDirs = ensureLocal(cleanDirs(modelDirs))
+        const nextDirs = ensureModelDirs(cleanDirs(modelDirs))
         return {
           modelDirs: nextDirs,
           civitaiDownload: cleanCivitaiDownload(state.civitaiDownload, nextDirs, state.wildcardDirs),
@@ -54,6 +54,18 @@ export function createModelActions(set: SettingsSet, persist: () => void): Parti
     },
     setDownloadQueueParallel: (downloadQueueParallel) => {
       set({ downloadQueueParallel: cleanDownloadQueueParallel(downloadQueueParallel) })
+      persist()
+    },
+    setManagerQueueParallel: (managerQueueParallel) => {
+      set({ managerQueueParallel: cleanDownloadQueueParallel(managerQueueParallel) })
+      persist()
+    },
+    setManagerDownloadDirId: (managerDownloadDirId) => {
+      set((state) => ({
+        managerDownloadDirId: state.modelDirs.some((item) => item.id === managerDownloadDirId)
+          ? managerDownloadDirId
+          : 'local',
+      }))
       persist()
     },
     setRemovedAfterHours: (removedAfterHours) => {

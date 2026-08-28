@@ -42,6 +42,7 @@ type SavedParams = {
   interrupted?: boolean
   models?: SavedModel[]
   hires?: SavedParams
+  adetailer?: { units?: SavedParams[] }
 }
 
 type BlomboMeta = {
@@ -296,6 +297,8 @@ function v2Rows(
     text_encoders: 'Text encoder',
     upscale_models: 'Upscale',
     controlnet: 'ControlNet',
+    ultralytics: 'Detector',
+    sams: 'SAM',
   }
   for (const item of params.models || []) {
     const label = labels[item.kind]
@@ -362,6 +365,7 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
   const hiresCivitai = hires ? hitFor(ckptOf(hires)?.hashes, hits) : null
   const hiresRows = hires ? v2Rows(hires, hiresCivitai, hits) : []
   const hiresLoras = hires ? v2Loras(hires, hits) : []
+  const adetailerUnits = blob?.params.adetailer?.units?.filter((unit) => unit && typeof unit === 'object') ?? []
   const rawKeys = Object.keys(raw).sort((a, b) => Number(a === 'prompt') - Number(b === 'prompt'))
   const jsonText = blob ? JSON.stringify(blob, null, 2) : ''
 
@@ -392,6 +396,23 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
           />
         </div>
       ) : null}
+      {adetailerUnits.map((unit, index) => {
+        const civitai = hitFor(ckptOf(unit)?.hashes, hits)
+        return (
+          <div key={index} className="flex min-w-0 flex-col gap-2">
+            <h2 className="text-xs text-label">{adetailerUnits.length > 1 ? `ADetailer ${index + 1}` : 'ADetailer'}</h2>
+            <GenMetaPanel
+              prompt={unit.prompt || ''}
+              promptRaw={unit.prompt_raw || ''}
+              negative={unit.negative_prompt || ''}
+              negativeRaw={unit.negative_prompt_raw || ''}
+              rows={v2Rows(unit, civitai, hits)}
+              loras={v2Loras(unit, hits)}
+              loraCivitai={hits}
+            />
+          </div>
+        )
+      })}
       {rawKeys.length ? (
         <ExpandSection title="Raw metadata" defaultOpen trailing={<RawSwitch mode={rawMode} onMode={setRawMode} />}>
           {rawMode === 'json' ? (

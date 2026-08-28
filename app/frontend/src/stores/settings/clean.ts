@@ -38,7 +38,7 @@ import { cleanCivitaiMarks } from '@/lib/civitai/marks.ts'
 import { cleanCivitaiTabId, cleanCivitaiTabs } from '@/lib/civitai/version.ts'
 import { cleanCivitaiDownload } from '@/lib/civitai/download.ts'
 import type { FolderDir, UserSettings } from '@/lib/api.ts'
-import { LOCAL_ID, OUTPUT_ID } from '@/components/controls/folder-list/FolderList.tsx'
+import { COMFY_ID, LOCAL_ID, OUTPUT_ID } from '@/components/controls/folder-list/FolderList.tsx'
 
 const IMAGE_FORMAT_IDS = new Set<string>(IMAGE_FORMATS.map((item) => item.value))
 const SORT_KEYS = new Set<string>(['name', 'added', 'edited', 'path'])
@@ -591,7 +591,11 @@ export function cleanDirs(raw: unknown): FolderDir[] {
       continue
     }
     seen.add(id)
-    out.push({ id, name: id === LOCAL_ID ? 'Local' : name, path: id === LOCAL_ID ? '' : path })
+    out.push({
+      id,
+      name: id === LOCAL_ID ? 'Local' : id === COMFY_ID ? 'ComfyUI' : name,
+      path: id === LOCAL_ID || id === COMFY_ID ? '' : path,
+    })
   }
   return out
 }
@@ -603,8 +607,21 @@ export function ensureLocal(items: FolderDir[]): FolderDir[] {
   return index < 0 ? [local, ...extras] : items.map((item, i) => (i === index ? local : item))
 }
 
+export function ensureModelDirs(items: FolderDir[]): FolderDir[] {
+  const local: FolderDir = { id: LOCAL_ID, name: 'Local', path: '' }
+  const comfy: FolderDir = { id: COMFY_ID, name: 'ComfyUI', path: '' }
+  const mapped = items.map((item) => (item.id === LOCAL_ID ? local : item.id === COMFY_ID ? comfy : item))
+  const withLocal = mapped.some((item) => item.id === LOCAL_ID) ? mapped : [local, ...mapped]
+  if (withLocal.some((item) => item.id === COMFY_ID)) {
+    return withLocal
+  }
+  const localIndex = withLocal.findIndex((item) => item.id === LOCAL_ID)
+  const insert = localIndex >= 0 ? localIndex + 1 : 1
+  return [...withLocal.slice(0, insert), comfy, ...withLocal.slice(insert)]
+}
+
 export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
-  const modelDirs = Array.isArray(patch.modelDirs) ? ensureLocal(cleanDirs(patch.modelDirs)) : SETTINGS_DEFAULTS.modelDirs
+  const modelDirs = Array.isArray(patch.modelDirs) ? ensureModelDirs(cleanDirs(patch.modelDirs)) : SETTINGS_DEFAULTS.modelDirs
   const wildcardDirs = Array.isArray(patch.wildcardDirs) ? ensureLocal(cleanDirs(patch.wildcardDirs)) : SETTINGS_DEFAULTS.wildcardDirs
   const galleryDirs = Array.isArray(patch.galleryDirs)
     ? cleanDirs(patch.galleryDirs).filter((item) => item.id !== LOCAL_ID && item.id !== OUTPUT_ID)
@@ -775,6 +792,14 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       typeof patch.downloadQueueParallel === 'number'
         ? cleanDownloadQueueParallel(patch.downloadQueueParallel)
         : SETTINGS_DEFAULTS.downloadQueueParallel,
+    managerQueueParallel:
+      typeof patch.managerQueueParallel === 'number'
+        ? cleanDownloadQueueParallel(patch.managerQueueParallel)
+        : SETTINGS_DEFAULTS.managerQueueParallel,
+    managerDownloadDirId:
+      typeof patch.managerDownloadDirId === 'string' && modelDirs.some((item) => item.id === patch.managerDownloadDirId)
+        ? patch.managerDownloadDirId
+        : SETTINGS_DEFAULTS.managerDownloadDirId,
     removedAfterHours:
       typeof patch.removedAfterHours === 'number'
         ? cleanRemovedHours(patch.removedAfterHours)

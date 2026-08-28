@@ -354,6 +354,15 @@ def _clean(raw: Any) -> dict[str, Any]:
             out["downloadQueueParallel"] = max(1, min(20, int(raw["downloadQueueParallel"])))
         except (TypeError, ValueError):
             pass
+    if "managerQueueParallel" in raw:
+        try:
+            out["managerQueueParallel"] = max(1, min(20, int(raw["managerQueueParallel"])))
+        except (TypeError, ValueError):
+            pass
+    if "managerDownloadDirId" in raw:
+        ident = str(raw["managerDownloadDirId"] or "").strip()
+        if ident:
+            out["managerDownloadDirId"] = ident
     if "removedAfterHours" in raw:
         try:
             out["removedAfterHours"] = max(1, min(8760, int(raw["removedAfterHours"])))

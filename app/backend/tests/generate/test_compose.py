@@ -5,7 +5,14 @@ import unittest
 
 from config import WORKFLOWS
 from features.generate.scripts.api_to_ui import to_ui_workflow
-from features.generate.scripts.compose import apply_hires, apply_stage, hires_util_stem, load_util
+from features.generate.scripts.compose import (
+    adetailer_util_stem,
+    apply_adetailer,
+    apply_hires,
+    apply_stage,
+    hires_util_stem,
+    load_util,
+)
 from infrastructure.comfy import client as comfy
 
 
@@ -42,6 +49,7 @@ class ComposeTests(unittest.TestCase):
         self.assertNotIn("hires/1", graph)
         self.assertEqual(graph["hires/2"]["inputs"]["samples"], ["9", 0])
         self.assertEqual(graph["11"]["inputs"]["images"], ["hires/2", 0])
+        self.assertEqual(graph["ports"]["IMAGE"], ["hires/2", 0])
 
     def test_missing_host_port_raises(self) -> None:
         host = {"ports": {}, "9": {"class_type": "VAEDecode", "inputs": {}}}
@@ -69,6 +77,50 @@ class ComposeTests(unittest.TestCase):
         self.assertEqual(graph["hires/8"]["class_type"], "ImageUpscaleWithModel")
         self.assertEqual(graph["hires/8"]["inputs"]["image"], ["9", 0])
         self.assertEqual(graph["11"]["inputs"]["images"], ["hires/12", 0])
+        self.assertEqual(graph["ports"]["IMAGE"], ["hires/12", 0])
+
+    def test_apply_adetailer_chains_units_and_rewires_save(self) -> None:
+        host = json.loads((WORKFLOWS / "main" / "txt2img.json").read_text(encoding="utf-8"))
+        graph = apply_adetailer(host, {"adetailer": {"enabled": True, "units": [{}, {}]}})
+        self.assertEqual(graph["adetailer/0/3"]["class_type"], "FaceDetailer")
+        self.assertEqual(graph["adetailer/1/3"]["class_type"], "FaceDetailer")
+        self.assertNotIn("adetailer/0/6", graph)
+        self.assertNotIn("adetailer/1/6", graph)
+        self.assertEqual(graph["adetailer/0/3"]["inputs"]["image"], ["9", 0])
+        self.assertEqual(graph["adetailer/1/3"]["inputs"]["image"], ["adetailer/0/3", 0])
+        self.assertEqual(graph["11"]["inputs"]["images"], ["adetailer/1/3", 0])
+        self.assertEqual(graph["ports"]["IMAGE"], ["adetailer/1/3", 0])
+
+    def test_apply_adetailer_skips_disabled_units(self) -> None:
+        host = json.loads((WORKFLOWS / "main" / "txt2img.json").read_text(encoding="utf-8"))
+        graph = apply_adetailer(
+            host, {"adetailer": {"enabled": True, "units": [{"enabled": False}, {}]}}
+        )
+        self.assertNotIn("adetailer/1/3", graph)
+        self.assertEqual(graph["adetailer/0/3"]["class_type"], "FaceDetailer")
+        self.assertEqual(graph["11"]["inputs"]["images"], ["adetailer/0/3", 0])
+
+    def test_adetailer_kind_picks_diffusion_util(self) -> None:
+        self.assertEqual(adetailer_util_stem({"kind": "diffusion_models"}), "adetailer_diffusion")
+        self.assertEqual(adetailer_util_stem({"kind": "checkpoints"}), "adetailer_checkpoint")
+        self.assertEqual(adetailer_util_stem({}), "adetailer_checkpoint")
+
+    def test_apply_adetailer_diffusion_unit_loads_unet(self) -> None:
+        host = json.loads((WORKFLOWS / "main" / "txt2img.json").read_text(encoding="utf-8"))
+        graph = apply_adetailer(
+            host, {"adetailer": {"enabled": True, "units": [{"kind": "diffusion_models"}]}}
+        )
+        self.assertEqual(graph["adetailer/0/12"]["class_type"], "UNETLoader")
+        self.assertEqual(graph["adetailer/0/13"]["class_type"], "CLIPLoader")
+        self.assertEqual(graph["adetailer/0/14"]["class_type"], "VAELoader")
+
+    def test_apply_hires_then_adetailer_uses_hires_image(self) -> None:
+        host = json.loads((WORKFLOWS / "main" / "txt2img.json").read_text(encoding="utf-8"))
+        hires = apply_hires(host, {"hires": {"enabled": True}})
+        graph = apply_adetailer(hires, {"adetailer": {"enabled": True, "units": [{}]}})
+        self.assertEqual(graph["adetailer/0/3"]["inputs"]["image"], ["hires/12", 0])
+        self.assertEqual(graph["11"]["inputs"]["images"], ["adetailer/0/3", 0])
+        self.assertEqual(graph["ports"]["IMAGE"], ["adetailer/0/3", 0])
 
     def test_api_to_ui_has_nodes_and_links(self) -> None:
         api = json.loads((WORKFLOWS / "main" / "txt2img.json").read_text(encoding="utf-8"))

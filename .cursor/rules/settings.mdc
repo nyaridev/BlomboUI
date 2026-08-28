@@ -13,7 +13,7 @@ Canonical groups in `app/frontend/src/views/settings/panels/content/groups.ts` (
 - **Generate** — Generation, Grids
 - **Files** — Directories, Saving, Temp
 - **Gallery** — Gallery
-- **Models** — Models, Thumbnails
+- **Models** — Models, Manager, Thumbnails
 - **Civitai** — Account, Browse, Labels, Download, Aliases, History, Metadata
 - **Autocomplete** — Behavior, Tag Lists, Frequent Tags
 - **Other** — Shortcuts, Primitives, Trash (not a junk drawer)

@@ -1,5 +1,7 @@
 import { OutputPathOverride } from '@/views/generate/panels/generation/sections/params/OutputPathOverride.tsx'
-import { GenerationExtras } from '@/views/generate/panels/generation/sections/params/GenerationExtras.tsx'
+import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
+import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
+import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
 import { GenerationScripts } from '@/views/generate/panels/generation/sections/params/GenerationScripts.tsx'
 import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
@@ -352,32 +354,26 @@ export function TemplateParamsForm({
         </ApplyRow>
       </ParamSection>
       <ParamSection title="Extras">
+        <ApplyRow id="controlnet" apply={apply} onToggle={toggle} locked={locked}>
+          <ControlnetParams />
+        </ApplyRow>
         <ApplyRow id="hires" apply={apply} onToggle={toggle} locked={locked}>
-          <GenerationExtras
-            value={{ hires: value.hires, adetailer: value.adetailer, controlnet: value.controlnet }}
-            onChange={(patch) => onChange({ ...value, ...patch })}
+          <HiresParams
+            value={value.hires}
+            onChange={(hires) => onChange({ ...value, hires })}
             locked={locked}
-            only="hires"
-            workflowParams={workflowParams}
             comfyOk
             width={value.width}
             height={value.height}
           />
         </ApplyRow>
         <ApplyRow id="adetailer" apply={apply} onToggle={toggle} locked={locked}>
-          <GenerationExtras
-            value={{ hires: value.hires, adetailer: value.adetailer, controlnet: value.controlnet }}
-            onChange={(patch) => onChange({ ...value, ...patch })}
+          <AdetailerParams
+            value={value.adetailer}
+            onChange={(adetailer) => onChange({ ...value, adetailer })}
             locked={locked}
-            only="adetailer"
-          />
-        </ApplyRow>
-        <ApplyRow id="controlnet" apply={apply} onToggle={toggle} locked={locked}>
-          <GenerationExtras
-            value={{ hires: value.hires, adetailer: value.adetailer, controlnet: value.controlnet }}
-            onChange={(patch) => onChange({ ...value, ...patch })}
-            locked={locked}
-            only="controlnet"
+            comfyOk
+            hiresEnabled={value.hires.enabled}
           />
         </ApplyRow>
       </ParamSection>

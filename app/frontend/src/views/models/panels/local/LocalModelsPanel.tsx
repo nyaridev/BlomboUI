@@ -13,6 +13,8 @@ export function LocalModelsPanel({ kind }: { kind: LocalKindTab }) {
   const vaes = useModelsStore((s) => s.vae)
   const textEncoders = useModelsStore((s) => s.text_encoders)
   const upscaleModels = useModelsStore((s) => s.upscale_models)
+  const sams = useModelsStore((s) => s.sams)
+  const ultralytics = useModelsStore((s) => s.ultralytics)
   const items = useMemo(() => {
     if (kind === 'checkpoints') {
       return [...checkpoints, ...diffusionModels]
@@ -24,10 +26,10 @@ export function LocalModelsPanel({ kind }: { kind: LocalKindTab }) {
       return wildcards
     }
     if (kind === 'other') {
-      return [...vaes, ...textEncoders, ...upscaleModels]
+      return [...vaes, ...textEncoders, ...upscaleModels, ...sams, ...ultralytics]
     }
     return [...checkpoints, ...loras, ...wildcards]
-  }, [checkpoints, diffusionModels, kind, loras, textEncoders, upscaleModels, vaes, wildcards])
+  }, [checkpoints, diffusionModels, kind, loras, sams, textEncoders, ultralytics, upscaleModels, vaes, wildcards])
   const itemKind = useMemo(() => {
     if (kind === 'loras' || kind === 'wildcards') {
       return undefined
@@ -37,6 +39,8 @@ export function LocalModelsPanel({ kind }: { kind: LocalKindTab }) {
     const unetSet = new Set(diffusionModels)
     const teSet = new Set(textEncoders)
     const upscaleSet = new Set(upscaleModels)
+    const samSet = new Set(sams)
+    const ultraSet = new Set(ultralytics)
     const vaeSet = new Set(vaes)
     return (item: ModelEntry): keyof ModelLists => {
       if (kind === 'checkpoints') {
@@ -48,6 +52,12 @@ export function LocalModelsPanel({ kind }: { kind: LocalKindTab }) {
         }
         if (upscaleSet.has(item)) {
           return 'upscale_models'
+        }
+        if (samSet.has(item)) {
+          return 'sams'
+        }
+        if (ultraSet.has(item)) {
+          return 'ultralytics'
         }
         return 'vae'
       }
@@ -62,7 +72,7 @@ export function LocalModelsPanel({ kind }: { kind: LocalKindTab }) {
       }
       return 'checkpoints'
     }
-  }, [diffusionModels, kind, loras, textEncoders, upscaleModels, vaes, wildcards])
+  }, [diffusionModels, kind, loras, sams, textEncoders, ultralytics, upscaleModels, vaes, wildcards])
   const viewKind: keyof ModelLists =
     kind === 'all' || kind === 'checkpoints' ? 'checkpoints' : kind === 'other' ? 'vae' : kind
 

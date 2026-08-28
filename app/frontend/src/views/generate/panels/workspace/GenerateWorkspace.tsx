@@ -7,7 +7,7 @@ import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.ts
 import { selectedWildcardPaths } from '@/views/generate/panels/generation/generateHelpers.ts'
 import { type Job, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
-import type { ModelSwap } from '@/stores/generateStore.ts'
+import { useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
 import type { GenerateTab } from '@/views/generate/panels/workspace/tabs.ts'
 import type { RefObject } from 'react'
 
@@ -50,14 +50,10 @@ export function GenerateWorkspace({
   otherItems,
   otherItemKind,
   otherSelected,
-  prompt,
-  negativePrompt,
   loraItems,
   activeLoraOrder,
   loraAutoApplyDefault,
   wildcardItems,
-  onPrompt,
-  onNegativePrompt,
   onToggleAutoLora,
 }: {
   shownTab: GenerateTab
@@ -94,21 +90,12 @@ export function GenerateWorkspace({
   otherItems: ModelEntry[]
   otherItemKind: (item: ModelEntry) => keyof ModelLists
   otherSelected: string[]
-  prompt: string
-  negativePrompt: string
   loraItems: LoraItem[]
   activeLoraOrder: string[]
   loraAutoApplyDefault: boolean
   wildcardItems: ModelEntry[]
-  onPrompt: (value: string) => void
-  onNegativePrompt: (value: string) => void
   onToggleAutoLora: (path: string) => void
 }) {
-  const wildHits = parseWildcardTags(prompt)
-  const wildFocus =
-    swapTarget?.slot === 'wildcard' && swapTarget.index >= 0
-      ? wildcardItems.find((row) => wildcardMatches(row, wildHits[swapTarget.index]?.name ?? ''))?.path
-      : undefined
   return (
     <div className={['flex min-w-0 flex-col', shownTab !== 'Generation' ? 'flex-1' : ''].join(' ')}>
       <TabsList
@@ -164,36 +151,15 @@ export function GenerateWorkspace({
         {shownTab === 'LoRa' ? (
           <LorasPanel
             items={loraItems}
-            prompt={prompt}
-            negativePrompt={negativePrompt}
             activeLoraOrder={activeLoraOrder}
             autoApplyDefault={loraAutoApplyDefault}
             swapTarget={swapTarget}
-            onPrompt={onPrompt}
-            onNegativePrompt={onNegativePrompt}
             onToggleAutoLora={onToggleAutoLora}
             onSwapTarget={onSwapTarget}
           />
         ) : null}
         {shownTab === 'Wildcards' ? (
-          <WildcardsPanel
-            items={wildcardItems}
-            selected={selectedWildcardPaths(prompt, wildcardItems)}
-            focus={wildFocus}
-            onSelect={(path) => {
-              const item = wildcardItems.find((row) => row.path === path)
-              if (!item) {
-                return
-              }
-              if (swapTarget?.slot === 'wildcard' && swapTarget.index >= 0) {
-                onPrompt(replaceWildcardAt(prompt, swapTarget.index, item))
-                onSwapTarget(null)
-                return
-              }
-              onPrompt(toggleWildcard(prompt, item))
-              onSwapTarget(null)
-            }}
-          />
+          <WildcardGallery items={wildcardItems} swapTarget={swapTarget} onSwapTarget={onSwapTarget} />
         ) : null}
         {shownTab === 'Other' ? (
           <OtherPanel
@@ -203,7 +169,7 @@ export function GenerateWorkspace({
             onSelect={(path) => {
               const item = otherItems.find((row) => row.path === path)
               const kind = item ? otherItemKind(item) : 'vae'
-              if (kind === 'upscale_models') {
+              if (kind === 'upscale_models' || kind === 'sams' || kind === 'ultralytics') {
                 return
               }
               const useTextEncoder =
@@ -224,5 +190,43 @@ export function GenerateWorkspace({
         ) : null}
       </div>
     </div>
+  )
+}
+
+function WildcardGallery({
+  items,
+  swapTarget,
+  onSwapTarget,
+}: {
+  items: ModelEntry[]
+  swapTarget: ModelSwap | null
+  onSwapTarget: (target: ModelSwap | null) => void
+}) {
+  const prompt = useGenerateStore((s) => s.prompt)
+  const setPrompt = useGenerateStore((s) => s.setPrompt)
+  const wildHits = parseWildcardTags(prompt)
+  const wildFocus =
+    swapTarget?.slot === 'wildcard' && swapTarget.index >= 0
+      ? items.find((row) => wildcardMatches(row, wildHits[swapTarget.index]?.name ?? ''))?.path
+      : undefined
+  return (
+    <WildcardsPanel
+      items={items}
+      selected={selectedWildcardPaths(prompt, items)}
+      focus={wildFocus}
+      onSelect={(path) => {
+        const item = items.find((row) => row.path === path)
+        if (!item) {
+          return
+        }
+        if (swapTarget?.slot === 'wildcard' && swapTarget.index >= 0) {
+          setPrompt(replaceWildcardAt(prompt, swapTarget.index, item))
+          onSwapTarget(null)
+          return
+        }
+        setPrompt(toggleWildcard(prompt, item))
+        onSwapTarget(null)
+      }}
+    />
   )
 }

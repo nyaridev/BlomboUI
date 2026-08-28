@@ -70,7 +70,14 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertNotIn("ImageUpscaleWithModel", kinds)
 
     def test_workflow_defaults_have_empty_prompt_and_models(self) -> None:
-        for folder, name in ((MAIN, "txt2img.json"), (MAIN, "diffusion.json"), (UTILS, "hiresfix_checkpoint.json"), (UTILS, "hiresfix_diffusion.json")):
+        for folder, name in (
+            (MAIN, "txt2img.json"),
+            (MAIN, "diffusion.json"),
+            (UTILS, "hiresfix_checkpoint.json"),
+            (UTILS, "hiresfix_diffusion.json"),
+            (UTILS, "adetailer_checkpoint.json"),
+            (UTILS, "adetailer_diffusion.json"),
+        ):
             data = json.loads((folder / name).read_text(encoding="utf-8"))
             apply = data.get("apply") or []
             self.assertNotIn("prompt", apply)
@@ -475,9 +482,312 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(stages[ks_id], "hires")
         self.assertEqual(stages[decode_id], "hires")
         self.assertEqual(stages[after_id], "hires")
-        self.assertEqual(comfy_fill.combined_progress("generation", 10, 20), 16)
-        self.assertEqual(comfy_fill.combined_progress("upscaling", 0, 0), 33)
-        self.assertEqual(comfy_fill.combined_progress("hires", 15, 15), 100)
+        hires_stages = ("generation", "upscaling", "hires")
+        self.assertEqual(comfy_fill.combined_progress("generation", 10, 20, hires_stages), 16)
+        self.assertEqual(comfy_fill.combined_progress("upscaling", 0, 0, hires_stages), 33)
+        self.assertEqual(comfy_fill.combined_progress("hires", 15, 15, hires_stages), 100)
+
+    def test_fill_adetailer_detector_sam_and_detailer(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {
+                            "detector": "bbox/face_yolov8m.pt",
+                            "sam_model": "sam_vit_b.pt",
+                            "guide_size": 384,
+                            "steps": 12,
+                            "cfg": 5,
+                            "denoise": 0.4,
+                            "advanced_override": True,
+                            "device_mode": "CPU",
+                            "sampler_override": True,
+                            "sampler": "dpmpp_2m",
+                        }
+                    ],
+                },
+            }
+        )
+        _, detector = find(graph, "UltralyticsDetectorProvider")
+        _, sam = find(graph, "SAMLoader")
+        face_id, face = find(graph, "FaceDetailer")
+        self.assertEqual(detector["inputs"]["model_name"], "bbox/face_yolov8m.pt")
+        self.assertEqual(sam["inputs"]["model_name"], "sam_vit_b.pt")
+        self.assertEqual(sam["inputs"]["device_mode"], "CPU")
+        self.assertEqual(face["inputs"]["guide_size"], 384)
+        self.assertEqual(face["inputs"]["steps"], 12)
+        self.assertEqual(face["inputs"]["cfg"], 4)
+        self.assertEqual(face["inputs"]["denoise"], 0.4)
+        self.assertEqual(face["inputs"]["sampler_name"], "dpmpp_2m")
+        self.assertEqual(face["inputs"]["scheduler"], "sgm_uniform")
+        self.assertEqual(face["inputs"]["seed"], 7)
+        self.assertEqual(face["inputs"]["positive"], ["2", 0])
+        self.assertEqual(face["inputs"]["negative"], ["3", 0])
+        self.assertEqual(graph["11"]["inputs"]["images"], [face_id, 0])
+        self.assertNotIn("10", graph)
+        with self.assertRaises(AssertionError):
+            find(graph, "CheckpointLoaderSimple", "adetailer")
+        with self.assertRaises(AssertionError):
+            find(graph, "Power Lora Loader (rgthree)", "adetailer")
+        stages = comfy_fill.progress_stage_map(graph)
+        self.assertEqual(stages[face_id], "adetailer")
+        self.assertEqual(stages["11"], "adetailer")
+        self.assertEqual(
+            comfy_fill.progress_stages({"adetailer": {"enabled": True, "units": [{}]}}),
+            ("generation", "adetailer"),
+        )
+
+    def test_fill_adetailer_drops_empty_sam(self) -> None:
+        graph = fill({**base_values(), "adetailer": {"enabled": True, "units": [{"detector": "face.pt"}]}})
+        with self.assertRaises(AssertionError):
+            find(graph, "SAMLoader")
+        _, face = find(graph, "FaceDetailer")
+        self.assertNotIn("sam_model_opt", face["inputs"])
+
+    def test_fill_adetailer_prompt_override_keeps_encode(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [{"detector": "face.pt", "prompt_override": True, "prompt": "face closeup"}],
+                },
+            }
+        )
+        encode_id, encode = find(graph, "CLIPTextEncode", "adetailer positive")
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(encode["inputs"]["text"], "face closeup")
+        self.assertEqual(face["inputs"]["positive"], [encode_id, 0])
+
+    def test_fill_hires_then_adetailer_chains_image(self) -> None:
+        graph = fill(
+            {
+                **base_values(scale=1.5),
+                "adetailer": {"enabled": True, "units": [{"detector": "face.pt"}]},
+            }
+        )
+        decode_id, _ = find(graph, "VAEDecode", "hires")
+        face_id, face = find(graph, "FaceDetailer")
+        self.assertEqual(face["inputs"]["image"], [decode_id, 0])
+        self.assertEqual(graph["11"]["inputs"]["images"], [face_id, 0])
+        self.assertEqual(graph["10"]["inputs"]["images"], ["9", 0])
+
+    def test_fill_adetailer_checkpoint_override(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {
+                            "detector": "face.pt",
+                            "model_override": True,
+                            "checkpoint": "other.safetensors",
+                        }
+                    ],
+                },
+            }
+        )
+        ckpt_id, ckpt = find(graph, "CheckpointLoaderSimple", "adetailer checkpoint")
+        lora_id, lora = find(graph, "Power Lora Loader (rgthree)", "adetailer")
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(ckpt["inputs"]["ckpt_name"], "other.safetensors")
+        self.assertEqual(lora["inputs"]["model"], [ckpt_id, 0])
+        self.assertEqual(lora["inputs"]["clip"], [ckpt_id, 1])
+        self.assertEqual(face["inputs"]["model"], [lora_id, 0])
+        self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(face["inputs"]["vae"], [ckpt_id, 2])
+
+    def test_fill_adetailer_diffusion_override(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {
+                            "detector": "face.pt",
+                            "model_override": True,
+                            "kind": "diffusion_models",
+                            "checkpoint": "unet.safetensors",
+                            "text_encoder": "clip.safetensors",
+                            "vae": "vae.safetensors",
+                        }
+                    ],
+                },
+            }
+        )
+        unet_id, unet = find(graph, "UNETLoader", "adetailer")
+        clip_id, clip = find(graph, "CLIPLoader", "adetailer")
+        vae_id, vae = find(graph, "VAELoader", "adetailer")
+        lora_id, lora = find(graph, "Power Lora Loader (rgthree)", "adetailer")
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(unet["inputs"]["unet_name"], "unet.safetensors")
+        self.assertEqual(clip["inputs"]["clip_name"], "clip.safetensors")
+        self.assertEqual(vae["inputs"]["vae_name"], "vae.safetensors")
+        self.assertEqual(lora["inputs"]["model"], [unet_id, 0])
+        self.assertEqual(lora["inputs"]["clip"], [clip_id, 0])
+        self.assertEqual(face["inputs"]["model"], [lora_id, 0])
+        self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(face["inputs"]["vae"], [vae_id, 0])
+
+    def test_fill_adetailer_lora_override(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "loras": [{"path": "job.safetensors", "strength": 0.8}],
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {
+                            "detector": "face.pt",
+                            "lora_override": True,
+                            "loras": [{"path": "face-lora.safetensors", "strength": 0.4}],
+                        }
+                    ],
+                },
+            }
+        )
+        first_lora_id, first_lora = find(graph, "Power Lora Loader (rgthree)", exclude="adetailer")
+        lora_id, lora = find(graph, "Power Lora Loader (rgthree)", "adetailer")
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(first_lora["inputs"]["lora_1"]["lora"], "job.safetensors")
+        self.assertEqual(lora["inputs"]["lora_1"]["lora"], "face-lora.safetensors")
+        self.assertEqual(lora["inputs"]["lora_1"]["strength"], 0.4)
+        self.assertEqual(lora["inputs"]["model"], ["12", 0])
+        self.assertEqual(lora["inputs"]["clip"], ["12", 1])
+        self.assertEqual(face["inputs"]["model"], [lora_id, 0])
+        self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(graph["5"]["inputs"]["model"], [first_lora_id, 0])
+
+    def test_fill_adetailer_advanced_override_off_uses_defaults(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [{"detector": "face.pt", "bbox_threshold": 0.9}],
+                },
+            }
+        )
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(face["inputs"]["bbox_threshold"], 0.5)
+
+    def test_fill_adetailer_advanced_override_on_uses_slots(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {
+                            "detector": "face.pt",
+                            "advanced_override": True,
+                            "bbox_threshold": 0.9,
+                        }
+                    ],
+                },
+            }
+        )
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(face["inputs"]["bbox_threshold"], 0.9)
+
+    def test_fill_adetailer_cfg_override(self) -> None:
+        graph = fill(
+            {
+                **base_values(),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [{"detector": "face.pt", "cfg_override": True, "cfg": 9}],
+                },
+            }
+        )
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(face["inputs"]["cfg"], 9)
+
+    def test_fill_adetailer_from_hires_copies_overrides(self) -> None:
+        graph = fill(
+            {
+                **base_values(
+                    scale=1.5,
+                    sampler_override=True,
+                    sampler="dpmpp_2m",
+                    scheduler_override=True,
+                    scheduler="karras",
+                    cfg_override=True,
+                    cfg=9,
+                    prompt_override=True,
+                    prompt="hires face",
+                ),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [{"detector": "face.pt", "from_hires": True, "sampler": "euler", "cfg": 2, "prompt": "ad prompt"}],
+                },
+            }
+        )
+        _, face = find(graph, "FaceDetailer")
+        encode_id, encode = find(graph, "CLIPTextEncode", "adetailer positive")
+        self.assertEqual(face["inputs"]["sampler_name"], "dpmpp_2m")
+        self.assertEqual(face["inputs"]["scheduler"], "karras")
+        self.assertEqual(face["inputs"]["cfg"], 9)
+        self.assertEqual(encode["inputs"]["text"], "hires face")
+        self.assertEqual(face["inputs"]["positive"], [encode_id, 0])
+
+    def test_fill_adetailer_from_hires_off_keeps_unit(self) -> None:
+        graph = fill(
+            {
+                **base_values(scale=1.5, sampler_override=True, sampler="dpmpp_2m", cfg_override=True, cfg=9),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {
+                            "detector": "face.pt",
+                            "from_hires": False,
+                            "sampler_override": True,
+                            "sampler": "heun",
+                            "cfg_override": True,
+                            "cfg": 3,
+                        }
+                    ],
+                },
+            }
+        )
+        _, face = find(graph, "FaceDetailer")
+        self.assertEqual(face["inputs"]["sampler_name"], "heun")
+        self.assertEqual(face["inputs"]["cfg"], 3)
+
+    def test_fill_adetailer_from_hires_is_per_unit(self) -> None:
+        graph = fill(
+            {
+                **base_values(scale=1.5, sampler_override=True, sampler="dpmpp_2m", cfg_override=True, cfg=9),
+                "adetailer": {
+                    "enabled": True,
+                    "units": [
+                        {"detector": "face.pt", "from_hires": True},
+                        {
+                            "detector": "face.pt",
+                            "from_hires": False,
+                            "sampler_override": True,
+                            "sampler": "heun",
+                            "cfg_override": True,
+                            "cfg": 3,
+                        },
+                    ],
+                },
+            }
+        )
+        faces = [
+            node
+            for node in graph.values()
+            if isinstance(node, dict) and node.get("class_type") == "FaceDetailer"
+        ]
+        self.assertEqual(len(faces), 2)
+        self.assertEqual(faces[0]["inputs"]["sampler_name"], "dpmpp_2m")
+        self.assertEqual(faces[0]["inputs"]["cfg"], 9)
+        self.assertEqual(faces[1]["inputs"]["sampler_name"], "heun")
+        self.assertEqual(faces[1]["inputs"]["cfg"], 3)
 
 
 class ModelKindTests(unittest.TestCase):
@@ -485,6 +795,55 @@ class ModelKindTests(unittest.TestCase):
         self.assertIn("diffusion_models", models.KINDS)
         self.assertIn("text_encoders", models.KINDS)
         self.assertIn("upscale_models", models.KINDS)
+        self.assertIn("sams", models.KINDS)
+        self.assertIn("ultralytics", models.KINDS)
+
+
+class ComfyFilenameTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._saved = {folder: list(rows) for folder, rows in comfy._model_names.items()}
+        comfy._model_names.clear()
+        self._reach = patch.object(comfy, "reachable", return_value=False)
+        self._reach.start()
+        self._extra = patch.object(comfy.dirs, "extra_named", return_value={})
+        self._extra.start()
+
+    def tearDown(self) -> None:
+        self._extra.stop()
+        self._reach.stop()
+        comfy._model_names.clear()
+        comfy._model_names.update(self._saved)
+
+    def test_comfy_filename_matches_checkpoint_backslashes(self) -> None:
+        comfy._model_names["checkpoints"] = [r"Illustrious\Style\foo.safetensors"]
+        self.assertEqual(
+            comfy.comfy_filename("Illustrious/Style/foo.safetensors"),
+            r"Illustrious\Style\foo.safetensors",
+        )
+
+    def test_comfy_filename_matches_ultralytics_slashes(self) -> None:
+        comfy._model_names["ultralytics"] = ["bbox/face_yolov8m.pt"]
+        self.assertEqual(comfy.comfy_filename(r"bbox\face_yolov8m.pt"), "bbox/face_yolov8m.pt")
+        self.assertEqual(comfy.comfy_filename("bbox/face_yolov8m.pt"), "bbox/face_yolov8m.pt")
+
+    def test_comfy_filename_ultralytics_backslash_list_returns_slashes(self) -> None:
+        comfy._model_names["ultralytics"] = [r"bbox\face_yolov8m.pt"]
+        self.assertEqual(comfy.comfy_filename("bbox/face_yolov8m.pt"), "bbox/face_yolov8m.pt")
+        self.assertEqual(comfy.comfy_filename(r"bbox\face_yolov8m.pt"), "bbox/face_yolov8m.pt")
+
+    def test_comfy_filename_falls_back_to_forward_slashes(self) -> None:
+        self.assertEqual(comfy.comfy_filename(r"bbox\face_yolov8m.pt"), "bbox/face_yolov8m.pt")
+        self.assertEqual(
+            comfy.comfy_filename("Illustrious/Style/foo.safetensors"),
+            "Illustrious/Style/foo.safetensors",
+        )
+
+    def test_comfy_filename_no_match_uses_forward_slashes(self) -> None:
+        comfy._model_names["checkpoints"] = [r"other\model.safetensors"]
+        self.assertEqual(
+            comfy.comfy_filename("Illustrious/Style/foo.safetensors"),
+            "Illustrious/Style/foo.safetensors",
+        )
 
 
 class GenerateTabTests(unittest.TestCase):

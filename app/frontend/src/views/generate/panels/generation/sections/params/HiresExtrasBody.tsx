@@ -9,6 +9,7 @@ import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { SEED_AFTER, type HiresSettings, type SeedAfter, useGenerateStore } from '@/stores/generateStore.ts'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { HiresOverrideTiles } from '@/views/generate/panels/generation/sections/params/HiresOverrideTiles.tsx'
+import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import {
   ASPECTS,
   formatSize,
@@ -128,8 +129,8 @@ export function HiresExtrasBody({
 
   return (
     <div className="flex flex-col gap-stack">
-      <div className="flex items-start gap-cluster">
-        <div className={`${BOX} flex flex-col gap-0.5`}>
+      <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-0.5">
           <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Upscale</span>
           <ModelPickTile
             kind="upscale_models"
@@ -141,26 +142,9 @@ export function HiresExtrasBody({
             disabled={locked}
           />
         </div>
-        <HiresOverrideTiles hires={hires} patchHires={patchHires} locked={locked} />
       </div>
-      <div className="grid w-full grid-cols-2 gap-cluster">
-        <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-          <CheckboxControl
-            checked={hires.saveBefore}
-            disabled={locked}
-            onChange={(saveBefore) => patchHires({ saveBefore })}
-          />
-          Save image before hires. fix
-        </label>
-        <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-          <CheckboxControl
-            checked={hires.clearVram}
-            disabled={locked}
-            onChange={(clearVram) => patchHires({ clearVram })}
-          />
-          Clear VRAM before and after hires. fix
-        </label>
-      </div>
+      <ParamSection title="Params">
+        <div className="flex flex-col gap-stack">
       <div className="flex items-center gap-stack">
         <div className="inline-flex rounded border border-line bg-panel text-xs">
           {SIZE_MODES.map((mode, index) => (
@@ -186,116 +170,116 @@ export function HiresExtrasBody({
           </span>
         ) : null}
       </div>
-      <div className="grid grid-cols-3 items-start gap-stack">
-        {hires.sizeMode === 'scale' ? (
-          <SliderField
-            label={`Scale (${scaled.w}x${scaled.h})`}
-            value={hires.scale}
-            onChange={(scale) => patchHires({ scale })}
-            min={1}
-            max={4}
-            step={0.05}
-          />
-        ) : (
-          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-stack">
-            <div className="flex min-w-0 flex-col gap-2">
-              {hires.sizeMode === 'raw' ? (
-                <>
-                  <SliderField
-                    label="Width"
-                    value={hires.width}
-                    onChange={(next) => patchHires({ width: next })}
-                    min={64}
-                    max={4096}
-                    step={8}
+      {hires.sizeMode === 'scale' ? (
+        <SliderField
+          label={`Scale (${scaled.w}x${scaled.h})`}
+          value={hires.scale}
+          onChange={(scale) => patchHires({ scale })}
+          min={1}
+          max={4}
+          step={0.05}
+        />
+      ) : (
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-stack">
+          <div className="flex min-w-0 flex-col gap-2">
+            {hires.sizeMode === 'raw' ? (
+              <>
+                <SliderField
+                  label="Width"
+                  value={hires.width}
+                  onChange={(next) => patchHires({ width: next })}
+                  min={64}
+                  max={4096}
+                  step={8}
+                />
+                <SliderField
+                  label="Height"
+                  value={hires.height}
+                  onChange={(next) => patchHires({ height: next })}
+                  min={64}
+                  max={4096}
+                  step={8}
+                />
+              </>
+            ) : hires.sizeMode === 'set' ? (
+              <div className="flex min-w-0 flex-col gap-2">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-muted">Resolution</span>
+                  <SelectField
+                    value={formatSize({
+                      w: Math.max(hires.width, hires.height),
+                      h: Math.min(hires.width, hires.height),
+                    })}
+                    onChange={onSetSize}
+                    options={[
+                      ...new Set([
+                        formatSize({
+                          w: Math.max(hires.width, hires.height),
+                          h: Math.min(hires.width, hires.height),
+                        }),
+                        ...setResolutions,
+                      ]),
+                    ].map((key) => {
+                      const size = parseSize(key)
+                      return {
+                        value: key,
+                        label: size ? formatSize(orientSize(size, hires.height > hires.width)) : key,
+                      }
+                    })}
                   />
-                  <SliderField
-                    label="Height"
-                    value={hires.height}
-                    onChange={(next) => patchHires({ height: next })}
-                    min={64}
-                    max={4096}
-                    step={8}
-                  />
-                </>
-              ) : hires.sizeMode === 'set' ? (
-                <div className="flex min-w-0 flex-col gap-2">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-xs text-muted">Resolution</span>
-                    <SelectField
-                      value={formatSize({
-                        w: Math.max(hires.width, hires.height),
-                        h: Math.min(hires.width, hires.height),
-                      })}
-                      onChange={onSetSize}
-                      options={[
-                        ...new Set([
-                          formatSize({
-                            w: Math.max(hires.width, hires.height),
-                            h: Math.min(hires.width, hires.height),
-                          }),
-                          ...setResolutions,
-                        ]),
-                      ].map((key) => {
-                        const size = parseSize(key)
-                        return {
-                          value: key,
-                          label: size ? formatSize(orientSize(size, hires.height > hires.width)) : key,
-                        }
-                      })}
-                    />
-                  </div>
-                  <div className="inline-flex self-start rounded border border-line bg-panel text-xs">
-                    <button
-                      type="button"
-                      disabled={locked}
-                      className={[
-                        'rounded-l px-2 py-1',
-                        hires.height <= hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
-                      ].join(' ')}
-                      onClick={() => onOrient(false)}
-                    >
-                      Horizontal
-                    </button>
-                    <button
-                      type="button"
-                      disabled={locked}
-                      className={[
-                        'rounded-r px-2 py-1',
-                        hires.height > hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
-                      ].join(' ')}
-                      onClick={() => onOrient(true)}
-                    >
-                      Vertical
-                    </button>
-                  </div>
                 </div>
-              ) : (
-                <>
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-xs text-muted">Aspect</span>
-                    <SelectField
-                      value={hires.aspect}
-                      onChange={onAspect}
-                      options={ASPECTS.map((item) => ({ value: item.id, label: item.label }))}
-                    />
-                  </div>
-                  <SliderField
-                    label="Megapixels"
-                    value={hires.megapixels}
-                    onChange={onMegapixels}
-                    min={0.2}
-                    max={4}
-                    step={0.05}
+                <div className="inline-flex self-start rounded border border-line bg-panel text-xs">
+                  <button
+                    type="button"
+                    disabled={locked}
+                    className={[
+                      'rounded-l px-2 py-1',
+                      hires.height <= hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                    ].join(' ')}
+                    onClick={() => onOrient(false)}
+                  >
+                    Horizontal
+                  </button>
+                  <button
+                    type="button"
+                    disabled={locked}
+                    className={[
+                      'rounded-r px-2 py-1',
+                      hires.height > hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                    ].join(' ')}
+                    onClick={() => onOrient(true)}
+                  >
+                    Vertical
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-muted">Aspect</span>
+                  <SelectField
+                    value={hires.aspect}
+                    onChange={onAspect}
+                    options={ASPECTS.map((item) => ({ value: item.id, label: item.label }))}
                   />
-                </>
-              )}
-            </div>
-            <IconButton aria-label="Swap width and height" onClick={swapSize} disabled={locked}>
-              <AppIcon id="arrow-up-down" />
-            </IconButton>
+                </div>
+                <SliderField
+                  label="Megapixels"
+                  value={hires.megapixels}
+                  onChange={onMegapixels}
+                  min={0.2}
+                  max={4}
+                  step={0.05}
+                />
+              </>
+            )}
           </div>
-        )}
+          <IconButton aria-label="Swap width and height" onClick={swapSize} disabled={locked}>
+            <AppIcon id="arrow-up-down" />
+          </IconButton>
+        </div>
+      )}
+      <div className="grid grid-cols-2 items-start gap-stack">
         <SliderField label="Steps" value={hires.steps} onChange={(steps) => patchHires({ steps })} min={1} max={150} />
         <SliderField
           label="Denoise"
@@ -320,12 +304,31 @@ export function HiresExtrasBody({
           <SelectField value={hires.crop} onChange={(crop) => patchHires({ crop })} options={[...IMAGE_SCALE_CROPS]} />
         </div>
       </div>
-      <section className="mt-8 flex flex-col gap-2">
-        <div className="flex items-center gap-2">
-          <h2 className="shrink-0 text-xs text-label">Overrides</h2>
-          <div className="min-w-0 flex-1 border-t border-line" />
         </div>
+      </ParamSection>
+      <ParamSection title="Settings">
+        <div className="grid w-full grid-cols-2 gap-cluster">
+          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
+            <CheckboxControl
+              checked={hires.saveBefore}
+              disabled={locked}
+              onChange={(saveBefore) => patchHires({ saveBefore })}
+            />
+            Save image before hires. fix
+          </label>
+          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
+            <CheckboxControl
+              checked={hires.clearVram}
+              disabled={locked}
+              onChange={(clearVram) => patchHires({ clearVram })}
+            />
+            Clear VRAM before and after hires. fix
+          </label>
+        </div>
+      </ParamSection>
+      <ParamSection title="Overrides">
         <div className="flex flex-col gap-stack">
+          <HiresOverrideTiles hires={hires} patchHires={patchHires} locked={locked} />
           <div className="grid grid-cols-3 gap-stack">
             <CheckRow
               on={hires.samplerOverride}
@@ -424,7 +427,7 @@ export function HiresExtrasBody({
             </div>
           </CheckRow>
         </div>
-      </section>
+      </ParamSection>
     </div>
   )
 }

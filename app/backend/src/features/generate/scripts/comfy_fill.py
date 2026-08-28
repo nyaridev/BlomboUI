@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable
 
-from features.generate.scripts.compose import apply_hires
+from features.generate.scripts.compose import apply_adetailer, apply_hires, _adetailer_units
 from features.models.scripts import loras as lora_tags
 
 
@@ -47,6 +47,10 @@ def _is_hires(node: dict[str, Any]) -> bool:
     return "hires" in _title(node)
 
 
+def _is_adetailer(node: dict[str, Any]) -> bool:
+    return "adetailer" in _title(node)
+
+
 def _is_port(node: dict[str, Any]) -> bool:
     return _title(node).startswith("port:")
 
@@ -58,6 +62,93 @@ def _hires_blob(values: dict[str, Any]) -> dict[str, Any]:
 
 def hires_enabled(values: dict[str, Any]) -> bool:
     return bool(_hires_blob(values).get("enabled"))
+
+
+def adetailer_enabled(values: dict[str, Any]) -> bool:
+    return bool(_adetailer_units(values))
+
+
+_HIRES_ON_AD = (
+    ("sampler_override", "samplerOverride"),
+    ("sampler", "sampler"),
+    ("scheduler_override", "schedulerOverride"),
+    ("scheduler", "scheduler"),
+    ("cfg_override", "cfgOverride"),
+    ("cfg", "cfg"),
+    ("seed_override", "seedOverride"),
+    ("seed", "seed"),
+    ("seed_after", "seedAfter"),
+    ("prompt_override", "promptOverride"),
+    ("prompt", "prompt"),
+    ("negative_override", "negativeOverride"),
+    ("negative_prompt", "negativePrompt"),
+    ("model_override", "modelOverride"),
+    ("checkpoint", "checkpoint"),
+    ("vae", "vae"),
+    ("text_encoder", "textEncoder"),
+    ("kind", "kind"),
+    ("lora_override", "loraOverride"),
+    ("loras", "loras"),
+)
+
+_ADETAILER_ADVANCED = (
+    ("guide_size_for", "guideSizeFor", True),
+    ("feather", "feather", 5),
+    ("noise_mask", "noiseMask", True),
+    ("force_inpaint", "forceInpaint", True),
+    ("bbox_threshold", "bboxThreshold", 0.5),
+    ("bbox_dilation", "bboxDilation", 10),
+    ("bbox_crop_factor", "bboxCropFactor", 3.0),
+    ("sam_detection_hint", "samDetectionHint", "center-1"),
+    ("sam_dilation", "samDilation", 0),
+    ("sam_threshold", "samThreshold", 0.93),
+    ("sam_bbox_expansion", "samBboxExpansion", 0),
+    ("sam_mask_hint_threshold", "samMaskHintThreshold", 0.7),
+    ("sam_mask_hint_use_negative", "samMaskHintUseNegative", "False"),
+    ("drop_size", "dropSize", 10),
+    ("cycle", "cycle", 1),
+    ("inpaint_model", "inpaintModel", False),
+    ("noise_mask_feather", "noiseMaskFeather", 20),
+    ("tiled_encode", "tiledEncode", False),
+    ("tiled_decode", "tiledDecode", False),
+    ("device_mode", "deviceMode", "Prefer GPU"),
+)
+
+
+def _adetailer_from_hires(values: dict[str, Any], unit: dict[str, Any] | None = None) -> bool:
+    if isinstance(unit, dict) and ("from_hires" in unit or "fromHires" in unit):
+        raw = unit.get("from_hires")
+        if raw is None:
+            raw = unit.get("fromHires")
+        return bool(raw)
+    blob = values.get("adetailer")
+    if not isinstance(blob, dict):
+        return True
+    if "from_hires" in blob:
+        return bool(blob["from_hires"])
+    if "fromHires" in blob:
+        return bool(blob["fromHires"])
+    return True
+
+
+def _adetailer_unit_for_fill(unit: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    out = dict(unit)
+    if _adetailer_from_hires(values, out) and hires_enabled(values):
+        hires = _hires_blob(values)
+        for snake, camel in _HIRES_ON_AD:
+            if snake in hires:
+                value = hires[snake]
+            elif camel in hires:
+                value = hires[camel]
+            else:
+                continue
+            out[snake] = value
+            out[camel] = value
+    if not _flag(out, "advanced_override", "advancedOverride"):
+        for snake, camel, value in _ADETAILER_ADVANCED:
+            out[snake] = value
+            out[camel] = value
+    return out
 
 
 def round_to_8(value: float) -> int:
@@ -197,6 +288,59 @@ def hires_meta_fields(values: dict[str, Any]) -> dict[str, Any]:
         out["prompt"] = str(blob.get("prompt") or "")
     if _flag(blob, "negative_override", "negativeOverride"):
         out["negative_prompt"] = str(blob.get("negative_prompt") or blob.get("negativePrompt") or "")
+    return out
+
+
+def adetailer_meta_fields(unit: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
+    unit = _adetailer_unit_for_fill(unit, values)
+    first_sampler = str(values.get("sampler") or "euler")
+    first_scheduler = str(values.get("scheduler") or "sgm_uniform")
+    try:
+        first_cfg = float(values.get("cfg") if values.get("cfg") is not None else 4)
+    except (TypeError, ValueError):
+        first_cfg = 4.0
+    sampler = (
+        str(unit.get("sampler") or first_sampler)
+        if _flag(unit, "sampler_override", "samplerOverride")
+        else first_sampler
+    )
+    scheduler = (
+        str(unit.get("scheduler") or first_scheduler)
+        if _flag(unit, "scheduler_override", "schedulerOverride")
+        else first_scheduler
+    )
+    try:
+        steps = int(unit.get("steps") or 20)
+    except (TypeError, ValueError):
+        steps = 20
+    try:
+        if _flag(unit, "cfg_override", "cfgOverride"):
+            cfg = float(unit.get("cfg") if unit.get("cfg") is not None else first_cfg)
+        else:
+            cfg = first_cfg
+    except (TypeError, ValueError):
+        cfg = first_cfg
+    try:
+        denoise = float(unit.get("denoise") if unit.get("denoise") is not None else 0.5)
+    except (TypeError, ValueError):
+        denoise = 0.5
+    out: dict[str, Any] = {
+        "steps": max(1, min(150, steps)),
+        "cfg": cfg,
+        "sampler": sampler,
+        "scheduler": scheduler,
+        "denoise": max(0.0, min(1.0, denoise)),
+    }
+    if _flag(unit, "seed_override", "seedOverride"):
+        try:
+            seed = int(unit.get("seed") if unit.get("seed") is not None else values.get("seed") or 0)
+        except (TypeError, ValueError):
+            seed = int(values.get("seed") or 0)
+        out["seed"] = seed
+    if _flag(unit, "prompt_override", "promptOverride"):
+        out["prompt"] = str(unit.get("prompt") or "")
+    if _flag(unit, "negative_override", "negativeOverride"):
+        out["negative_prompt"] = str(unit.get("negative_prompt") or unit.get("negativePrompt") or "")
     return out
 
 
@@ -427,42 +571,61 @@ def _rewire_hires(workflow: dict[str, Any], values: dict[str, Any], filename: Ca
             node.setdefault("inputs", {})["vae"] = vae
 
 
-PROGRESS_STAGES = ("generation", "upscaling", "hires")
+PROGRESS_STAGES = ("generation", "upscaling", "hires", "adetailer")
 _UPSCALE_KINDS = {"UpscaleModelLoader", "ImageUpscaleWithModel", "ImageScale", "VAEEncode"}
+_ADETAILER_KINDS = {"FaceDetailer", "UltralyticsDetectorProvider", "SAMLoader"}
 
 
-def node_progress_stage(node: dict[str, Any]) -> str:
+def progress_stages(values: dict[str, Any]) -> tuple[str, ...]:
+    stages = ["generation"]
+    if hires_enabled(values):
+        stages.extend(["upscaling", "hires"])
+    if adetailer_enabled(values):
+        stages.append("adetailer")
+    return tuple(stages)
+
+
+def node_progress_stage(node: dict[str, Any], key: str = "", has_adetailer: bool = False) -> str:
     kind = str(node.get("class_type") or "")
     title = _title(node)
+    if str(key).startswith("adetailer/") or kind in _ADETAILER_KINDS or _is_adetailer(node):
+        return "adetailer"
     if kind in _UPSCALE_KINDS:
         return "upscaling"
     if kind == "SaveImage" and "first" in title:
         return "generation"
     if kind == "easy cleanGpuUsed":
         return "upscaling" if "before" in title else "hires"
-    if _is_hires(node) or kind == "SaveImage":
+    if kind == "SaveImage":
+        return "adetailer" if has_adetailer else "hires"
+    if _is_hires(node):
         return "hires"
     return "generation"
 
 
 def progress_stage_map(graph: dict[str, Any]) -> dict[str, str]:
+    has_adetailer = any(
+        isinstance(node, dict) and str(node.get("class_type") or "") in _ADETAILER_KINDS for node in graph.values()
+    )
     out: dict[str, str] = {}
     for key, node in graph.items():
         if isinstance(node, dict) and node.get("class_type"):
-            out[str(key)] = node_progress_stage(node)
+            out[str(key)] = node_progress_stage(node, str(key), has_adetailer)
     return out
 
 
-def stage_index(stage: str) -> int:
+def stage_index(stage: str, stages: tuple[str, ...] | None = None) -> int:
+    order = stages or PROGRESS_STAGES
     try:
-        return PROGRESS_STAGES.index(stage)
+        return order.index(stage)
     except ValueError:
         return 0
 
 
-def combined_progress(stage: str, value: int, maximum: int) -> int:
-    index = stage_index(stage)
-    span = 100.0 / len(PROGRESS_STAGES)
+def combined_progress(stage: str, value: int, maximum: int, stages: tuple[str, ...] | None = None) -> int:
+    order = stages or PROGRESS_STAGES
+    index = stage_index(stage, order)
+    span = 100.0 / len(order)
     frac = (value / maximum) if maximum > 0 else 0.0
     return min(100, int(index * span + max(0.0, min(1.0, frac)) * span))
 
@@ -512,8 +675,251 @@ def _apply_hires_saves(workflow: dict[str, Any], values: dict[str, Any]) -> None
                 upscale.setdefault("inputs", {})["image"] = [before_id, 0]
         if after is not None and hires_id:
             after.setdefault("inputs", {})["anything"] = [hires_id, 0]
-    if not on:
+    if not on and not adetailer_enabled(values):
         _rewire_save_to_first_decode(workflow)
+
+
+def _adetailer_index(key: str) -> int | None:
+    parts = str(key).split("/")
+    if len(parts) < 3 or parts[0] != "adetailer":
+        return None
+    try:
+        return int(parts[1])
+    except ValueError:
+        return None
+
+
+def _adetailer_kind_diffusion(unit: dict[str, Any]) -> bool:
+    kind = str(unit.get("kind") or unit.get("model_kind") or "").strip().lower()
+    return kind in {"diffusion_models", "diffusion", "unet"}
+
+
+def _fill_adetailer(
+    workflow: dict[str, Any],
+    values: dict[str, Any],
+    filename: Callable[[str], str],
+    host_ports: dict[str, Any] | None = None,
+) -> None:
+    units = [_adetailer_unit_for_fill(item, values) for item in _adetailer_units(values)]
+    if not units:
+        return
+    ports = host_ports if isinstance(host_ports, dict) else {}
+    first_sampler = str(values.get("sampler") or "euler")
+    first_scheduler = str(values.get("scheduler") or "sgm_uniform")
+    try:
+        first_seed = int(values.get("seed") or 0)
+    except (TypeError, ValueError):
+        first_seed = 0
+    empty_sam: set[int] = set()
+    for key, node in list(workflow.items()):
+        if not isinstance(node, dict):
+            continue
+        index = _adetailer_index(str(key))
+        if index is None or index >= len(units):
+            continue
+        unit = units[index]
+        kind = node.get("class_type")
+        inputs = node.setdefault("inputs", {})
+        if kind == "UltralyticsDetectorProvider":
+            name = filename(str(unit.get("detector") or ""))
+            if name:
+                inputs["model_name"] = name
+        elif kind == "SAMLoader":
+            name = filename(str(unit.get("sam_model") or unit.get("samModel") or ""))
+            inputs["device_mode"] = str(unit.get("device_mode") or unit.get("deviceMode") or "Prefer GPU")
+            if name:
+                inputs["model_name"] = name
+            else:
+                empty_sam.add(index)
+        elif kind == "FaceDetailer":
+            sampler = str(unit.get("sampler") or first_sampler) if _flag(unit, "sampler_override", "samplerOverride") else first_sampler
+            scheduler = str(unit.get("scheduler") or first_scheduler) if _flag(unit, "scheduler_override", "schedulerOverride") else first_scheduler
+            seed = first_seed
+            if _flag(unit, "seed_override", "seedOverride"):
+                try:
+                    seed = int(unit.get("seed") if unit.get("seed") is not None else first_seed)
+                except (TypeError, ValueError):
+                    seed = first_seed
+            inputs["guide_size"] = float(unit.get("guide_size") if unit.get("guide_size") is not None else unit.get("guideSize") or 512)
+            inputs["guide_size_for"] = bool(unit["guide_size_for"]) if "guide_size_for" in unit else bool(unit.get("guideSizeFor", True))
+            inputs["max_size"] = float(unit.get("max_size") if unit.get("max_size") is not None else unit.get("maxSize") or 1024)
+            inputs["seed"] = seed
+            inputs["steps"] = int(unit.get("steps") or 20)
+            try:
+                first_cfg = float(values.get("cfg") if values.get("cfg") is not None else 4)
+            except (TypeError, ValueError):
+                first_cfg = 4.0
+            try:
+                if _flag(unit, "cfg_override", "cfgOverride"):
+                    cfg = float(unit.get("cfg") if unit.get("cfg") is not None else first_cfg)
+                else:
+                    cfg = first_cfg
+            except (TypeError, ValueError):
+                cfg = first_cfg
+            inputs["cfg"] = cfg
+            inputs["sampler_name"] = sampler
+            inputs["scheduler"] = scheduler
+            inputs["denoise"] = float(unit.get("denoise") if unit.get("denoise") is not None else 0.5)
+            inputs["feather"] = int(unit.get("feather") if unit.get("feather") is not None else 5)
+            inputs["noise_mask"] = bool(unit["noise_mask"]) if "noise_mask" in unit else bool(unit.get("noiseMask", True))
+            inputs["force_inpaint"] = bool(unit["force_inpaint"]) if "force_inpaint" in unit else bool(unit.get("forceInpaint", True))
+            inputs["bbox_threshold"] = float(unit.get("bbox_threshold") if unit.get("bbox_threshold") is not None else unit.get("bboxThreshold") or 0.5)
+            inputs["bbox_dilation"] = int(unit.get("bbox_dilation") if unit.get("bbox_dilation") is not None else unit.get("bboxDilation") or 10)
+            inputs["bbox_crop_factor"] = float(unit.get("bbox_crop_factor") if unit.get("bbox_crop_factor") is not None else unit.get("bboxCropFactor") or 3)
+            inputs["sam_detection_hint"] = str(unit.get("sam_detection_hint") or unit.get("samDetectionHint") or "center-1")
+            inputs["sam_dilation"] = int(unit.get("sam_dilation") if unit.get("sam_dilation") is not None else unit.get("samDilation") or 0)
+            inputs["sam_threshold"] = float(unit.get("sam_threshold") if unit.get("sam_threshold") is not None else unit.get("samThreshold") or 0.93)
+            inputs["sam_bbox_expansion"] = int(unit.get("sam_bbox_expansion") if unit.get("sam_bbox_expansion") is not None else unit.get("samBboxExpansion") or 0)
+            inputs["sam_mask_hint_threshold"] = float(
+                unit.get("sam_mask_hint_threshold") if unit.get("sam_mask_hint_threshold") is not None else unit.get("samMaskHintThreshold") or 0.7
+            )
+            inputs["sam_mask_hint_use_negative"] = str(unit.get("sam_mask_hint_use_negative") or unit.get("samMaskHintUseNegative") or "False")
+            inputs["drop_size"] = int(unit.get("drop_size") if unit.get("drop_size") is not None else unit.get("dropSize") or 10)
+            inputs["wildcard"] = ""
+            inputs["cycle"] = int(unit.get("cycle") or 1)
+            inputs["inpaint_model"] = _flag(unit, "inpaint_model", "inpaintModel")
+            inputs["noise_mask_feather"] = int(unit.get("noise_mask_feather") if unit.get("noise_mask_feather") is not None else unit.get("noiseMaskFeather") or 20)
+            inputs["tiled_encode"] = _flag(unit, "tiled_encode", "tiledEncode")
+            inputs["tiled_decode"] = _flag(unit, "tiled_decode", "tiledDecode")
+            if not _flag(unit, "prompt_override", "promptOverride"):
+                port = ports.get("POSITIVE") or ports.get("positive")
+                if isinstance(port, (list, tuple)) and len(port) == 2:
+                    inputs["positive"] = [port[0], port[1]]
+            if not _flag(unit, "negative_override", "negativeOverride"):
+                port = ports.get("NEGATIVE") or ports.get("negative")
+                if isinstance(port, (list, tuple)) and len(port) == 2:
+                    inputs["negative"] = [port[0], port[1]]
+        elif kind == "CheckpointLoaderSimple":
+            if _flag(unit, "model_override", "modelOverride"):
+                name = filename(str(unit.get("checkpoint") or ""))
+                if name:
+                    inputs["ckpt_name"] = name
+        elif kind == "UNETLoader":
+            if _flag(unit, "model_override", "modelOverride"):
+                name = filename(str(unit.get("checkpoint") or ""))
+                if name:
+                    inputs["unet_name"] = name
+        elif kind == "CLIPLoader":
+            if _flag(unit, "model_override", "modelOverride"):
+                name = filename(str(unit.get("text_encoder") or unit.get("textEncoder") or ""))
+                if name:
+                    inputs["clip_name"] = name
+        elif kind == "VAELoader":
+            if _flag(unit, "model_override", "modelOverride"):
+                name = filename(str(unit.get("vae") or ""))
+                if name:
+                    inputs["vae_name"] = name
+        elif kind == "CLIPTextEncode":
+            title = _title(node)
+            if "positive" in title:
+                text = str(unit.get("prompt") or "") if _flag(unit, "prompt_override", "promptOverride") else str(values.get("prompt_clip") or values.get("prompt") or "")
+                inputs["text"] = text
+            elif "negative" in title:
+                text = (
+                    str(unit.get("negative_prompt") or unit.get("negativePrompt") or "")
+                    if _flag(unit, "negative_override", "negativeOverride")
+                    else str(values.get("negative_clip") or values.get("negative_prompt") or "")
+                )
+                inputs["text"] = text
+    _rewire_adetailer_models(workflow, units, values, filename)
+    for key, node in list(workflow.items()):
+        index = _adetailer_index(str(key))
+        if index is None or not isinstance(node, dict):
+            continue
+        kind = node.get("class_type")
+        unit = units[index] if index < len(units) else {}
+        model_on = _flag(unit, "model_override", "modelOverride")
+        use_lora = model_on or _flag(unit, "lora_override", "loraOverride") or _flag(unit, "prompt_override", "promptOverride")
+        if not model_on and kind in {"CheckpointLoaderSimple", "UNETLoader", "CLIPLoader", "VAELoader"}:
+            workflow.pop(key, None)
+            continue
+        if not use_lora and kind == "Power Lora Loader (rgthree)":
+            workflow.pop(key, None)
+            continue
+        if index in empty_sam and kind == "SAMLoader":
+            workflow.pop(key, None)
+        elif index in empty_sam and kind == "FaceDetailer":
+            node.setdefault("inputs", {}).pop("sam_model_opt", None)
+
+
+def _rewire_adetailer_models(
+    workflow: dict[str, Any],
+    units: list[dict[str, Any]],
+    values: dict[str, Any],
+    filename: Callable[[str], str],
+) -> None:
+    by_index: dict[int, dict[str, str]] = {}
+    for key, node in workflow.items():
+        if not isinstance(node, dict):
+            continue
+        index = _adetailer_index(str(key))
+        if index is None or index >= len(units):
+            continue
+        slot = by_index.setdefault(index, {})
+        kind = node.get("class_type")
+        if kind == "FaceDetailer":
+            slot["face"] = str(key)
+        elif kind == "CheckpointLoaderSimple":
+            slot["ckpt"] = str(key)
+        elif kind == "UNETLoader":
+            slot["unet"] = str(key)
+        elif kind == "CLIPLoader":
+            slot["clip"] = str(key)
+        elif kind == "VAELoader":
+            slot["vae"] = str(key)
+        elif kind == "Power Lora Loader (rgthree)":
+            slot["lora"] = str(key)
+        elif kind == "CLIPTextEncode":
+            title = _title(node)
+            if "positive" in title:
+                slot["pos"] = str(key)
+            elif "negative" in title:
+                slot["neg"] = str(key)
+    for index, unit in enumerate(units):
+        keys = by_index.get(index) or {}
+        face = workflow.get(keys.get("face") or "")
+        if not isinstance(face, dict):
+            continue
+        inputs = face.setdefault("inputs", {})
+        model_on = _flag(unit, "model_override", "modelOverride")
+        lora_on = _flag(unit, "lora_override", "loraOverride")
+        prompt_on = _flag(unit, "prompt_override", "promptOverride")
+        lora_key = keys.get("lora") or ""
+        lora_node = workflow.get(lora_key)
+        use_lora = (model_on or lora_on or prompt_on) and isinstance(lora_node, dict)
+        diffusion = _adetailer_kind_diffusion(unit)
+        clip_link = None
+        if use_lora:
+            loader = lora_node.setdefault("inputs", {})
+            fill_power_loras(loader, values, filename, _hires_lora_rows(values, unit, lora_on, prompt_on))
+            if model_on and diffusion and keys.get("unet"):
+                loader["model"] = _link(keys["unet"], 0)
+                if keys.get("clip"):
+                    loader["clip"] = _link(keys["clip"], 0)
+            elif model_on and keys.get("ckpt"):
+                loader["model"] = _link(keys["ckpt"], 0)
+                loader["clip"] = _link(keys["ckpt"], 1)
+            inputs["model"] = _link(lora_key, 0)
+            inputs["clip"] = _link(lora_key, 1)
+            clip_link = _link(lora_key, 1)
+        elif model_on and diffusion and keys.get("unet"):
+            inputs["model"] = _link(keys["unet"], 0)
+            if keys.get("clip"):
+                inputs["clip"] = _link(keys["clip"], 0)
+            clip_link = _link(keys["clip"], 0) if keys.get("clip") else None
+        elif model_on and keys.get("ckpt"):
+            inputs["model"] = _link(keys["ckpt"], 0)
+            inputs["clip"] = _link(keys["ckpt"], 1)
+            clip_link = _link(keys["ckpt"], 1)
+        if model_on and diffusion and keys.get("vae"):
+            inputs["vae"] = _link(keys["vae"], 0)
+        elif model_on and keys.get("ckpt"):
+            inputs["vae"] = _link(keys["ckpt"], 2)
+        if clip_link:
+            for encode_key in (keys.get("pos"), keys.get("neg")):
+                node = workflow.get(encode_key or "")
+                if isinstance(node, dict):
+                    node.setdefault("inputs", {})["clip"] = clip_link
 
 
 def fill_txt2img(
@@ -530,6 +936,9 @@ def fill_txt2img(
     loaded = copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img")))
     if hires_enabled(values):
         loaded = apply_hires(loaded, values)
+    if adetailer_enabled(values):
+        loaded = apply_adetailer(loaded, values)
+    host_ports = loaded.get("ports") if isinstance(loaded.get("ports"), dict) else {}
     workflow = graph(loaded)
     positive_done = False
     batch_size = max(1, int(values.get("batch_size") or 1))
@@ -544,27 +953,27 @@ def fill_txt2img(
         if _is_port(node):
             continue
         if kind == "CheckpointLoaderSimple":
-            if _is_hires(node):
+            if _is_hires(node) or _is_adetailer(node):
                 continue
             inputs["ckpt_name"] = filename(str(values["checkpoint"]))
         elif kind == "UNETLoader":
-            if _is_hires(node):
+            if _is_hires(node) or _is_adetailer(node):
                 continue
             inputs["unet_name"] = filename(str(values.get("checkpoint") or ""))
         elif kind == "CLIPLoader":
-            if _is_hires(node):
+            if _is_hires(node) or _is_adetailer(node):
                 continue
             name = filename(str(values.get("text_encoder") or ""))
             if name:
                 inputs["clip_name"] = name
         elif kind == "VAELoader":
-            if _is_hires(node):
+            if _is_hires(node) or _is_adetailer(node):
                 continue
             name = filename(str(values.get("vae") or ""))
             if name:
                 inputs["vae_name"] = name
         elif kind == "CLIPTextEncode":
-            if _is_hires(node):
+            if _is_hires(node) or _is_adetailer(node):
                 continue
             if "negative" in title:
                 inputs["text"] = clip_negative
@@ -590,7 +999,7 @@ def fill_txt2img(
             prefix = str(values.get("filename_prefix") or "").strip() or "blombo"
             inputs["filename_prefix"] = prefix
         elif kind == "Power Lora Loader (rgthree)":
-            if _is_hires(node):
+            if _is_hires(node) or _is_adetailer(node):
                 continue
             fill_power_loras(inputs, values, filename)
         elif kind == "UpscaleModelLoader":
@@ -606,6 +1015,7 @@ def fill_txt2img(
     if hires_enabled(values):
         _rewire_hires(workflow, values, filename)
     _apply_hires_saves(workflow, values)
+    _fill_adetailer(workflow, values, filename, host_ports)
     latent = workflow.get("7")
     if isinstance(latent, dict):
         latent.setdefault("inputs", {})["batch_size"] = batch_size

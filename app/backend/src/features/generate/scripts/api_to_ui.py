@@ -23,6 +23,9 @@ _OUTPUTS: dict[str, list[tuple[str, str]]] = {
     "ImageScale": [("IMAGE", "IMAGE")],
     "LoadImage": [("IMAGE", "IMAGE"), ("MASK", "MASK")],
     "easy cleanGpuUsed": [("*", "*")],
+    "UltralyticsDetectorProvider": [("BBOX_DETECTOR", "BBOX_DETECTOR"), ("SEGM_DETECTOR", "SEGM_DETECTOR")],
+    "SAMLoader": [("SAM_MODEL", "SAM_MODEL")],
+    "FaceDetailer": [("IMAGE", "IMAGE"), ("IMAGE", "IMAGE"), ("IMAGE", "IMAGE"), ("MASK", "MASK")],
 }
 
 

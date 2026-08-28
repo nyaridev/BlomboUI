@@ -2,7 +2,7 @@ import { GalleryBrowser } from '@/components/composites/gallery/GalleryBrowser.t
 import type { ModelEntry } from '@/lib/api.ts'
 import { loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
 import { selectedLoraPaths } from '@/views/generate/panels/generation/generateHelpers.ts'
-import type { ModelSwap } from '@/stores/generateStore.ts'
+import { useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
 
 type LoraItem = ModelEntry & {
   auto_apply?: boolean | null
@@ -10,27 +10,23 @@ type LoraItem = ModelEntry & {
 
 export function LorasPanel({
   items,
-  prompt,
-  negativePrompt,
   activeLoraOrder,
   autoApplyDefault,
   swapTarget,
-  onPrompt,
-  onNegativePrompt,
   onToggleAutoLora,
   onSwapTarget,
 }: {
   items: LoraItem[]
-  prompt: string
-  negativePrompt: string
   activeLoraOrder: string[]
   autoApplyDefault: boolean
   swapTarget: ModelSwap | null
-  onPrompt: (value: string) => void
-  onNegativePrompt: (value: string) => void
   onToggleAutoLora: (path: string) => void
   onSwapTarget: (target: ModelSwap | null) => void
 }) {
+  const prompt = useGenerateStore((s) => s.prompt)
+  const negativePrompt = useGenerateStore((s) => s.negativePrompt)
+  const onPrompt = useGenerateStore((s) => s.setPrompt)
+  const onNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const loraHits = parseLoraHits(prompt)
   const focus =
     swapTarget?.slot === 'lora' && swapTarget.index >= 0

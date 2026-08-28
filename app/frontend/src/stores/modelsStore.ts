@@ -12,6 +12,8 @@ const EMPTY: ModelLists = {
   diffusion_models: [],
   text_encoders: [],
   upscale_models: [],
+  sams: [],
+  ultralytics: [],
   wildcards: [],
 }
 
@@ -106,6 +108,8 @@ function apply(lists: Partial<ModelLists>): ModelLists {
     diffusion_models: asList(lists.diffusion_models),
     text_encoders: asList(lists.text_encoders),
     upscale_models: asList(lists.upscale_models),
+    sams: asList(lists.sams),
+    ultralytics: asList(lists.ultralytics),
     wildcards: asList(lists.wildcards),
   }
 }
@@ -222,5 +226,9 @@ export function modelPath(item: unknown): string {
 
 export function modelLabel(id: unknown) {
   const path = modelPath(id)
-  return path ? path.replace(/\.[^/.]+$/, '') : ''
+  if (!path) {
+    return ''
+  }
+  const base = path.replace(/\\/g, '/').split('/').pop() || path
+  return base.replace(/\.[^/.]+$/, '')
 }

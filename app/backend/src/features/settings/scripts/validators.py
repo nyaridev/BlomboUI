@@ -22,6 +22,8 @@ _LOOKUP_KIND_GROUPS = {
     "vae": "other",
     "text_encoders": "other",
     "upscale_models": "other",
+    "sams": "other",
+    "ultralytics": "other",
     "controlnet": "other",
     "embeddings": "other",
     "other": "other",

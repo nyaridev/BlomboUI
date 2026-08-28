@@ -30,19 +30,18 @@ import {
   etaSeconds,
   formatDuration,
   hiresProgressLabel,
-  HIRES_PROGRESS_SEGMENTS,
   hiresDiffusion,
   idsFromJob,
   jobSeconds,
+  packAdetailerJob,
   progressLabel,
+  progressSegments,
   promptMatrixLines,
   xyPlotCellCount,
   tabForSwap,
 } from '@/views/generate/panels/generation/generateHelpers.ts'
 
 export function GenerateView() {
-  const prompt = useGenerateStore((s) => s.prompt)
-  const negativePrompt = useGenerateStore((s) => s.negativePrompt)
   const checkpoint = useGenerateStore((s) => s.checkpoint)
   const width = useGenerateStore((s) => s.width)
   const height = useGenerateStore((s) => s.height)
@@ -66,6 +65,8 @@ export function GenerateView() {
   const outputPathEnabled = useGenerateStore((s) => s.outputPathEnabled)
   const hires = useGenerateStore((s) => s.hires)
   const setHires = useGenerateStore((s) => s.setHires)
+  const adetailer = useGenerateStore((s) => s.adetailer)
+  const setAdetailer = useGenerateStore((s) => s.setAdetailer)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
@@ -73,8 +74,6 @@ export function GenerateView() {
   const activeLoraOrder = useGenerateStore((s) => s.activeLoraOrder)
   const activeLoraStrengths = useGenerateStore((s) => s.activeLoraStrengths)
   const toggleAutoLora = useGenerateStore((s) => s.toggleAutoLora)
-  const setPrompt = useGenerateStore((s) => s.setPrompt)
-  const setNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const setCheckpoint = useGenerateStore((s) => s.setCheckpoint)
   const vae = useGenerateStore((s) => s.vae)
   const textEncoder = useGenerateStore((s) => s.textEncoder)
@@ -102,6 +101,8 @@ export function GenerateView() {
   const vaeItems = useModelsStore((s) => s.vae)
   const textEncoders = useModelsStore((s) => s.text_encoders)
   const upscaleModels = useModelsStore((s) => s.upscale_models)
+  const sams = useModelsStore((s) => s.sams)
+  const ultralytics = useModelsStore((s) => s.ultralytics)
 
   const health = useHealthStore((s) => s.health)
 
@@ -218,6 +219,21 @@ export function GenerateView() {
     if (workflowParams.includes('hires') && hires.enabled && !hires.upscaleModel.trim()) {
       return
     }
+    if (adetailer.enabled && adetailer.units.some((unit) => unit.enabled !== false && !unit.detector.trim())) {
+      return
+    }
+    if (
+      adetailer.enabled &&
+      adetailer.units.some(
+        (unit) =>
+          unit.enabled !== false &&
+          unit.modelOverride &&
+          (!unit.checkpoint.trim() ||
+            (hiresDiffusion(unit.checkpoint, diffusionModels) && (!unit.vae.trim() || !unit.textEncoder.trim()))),
+      )
+    ) {
+      return
+    }
     if (workflowParams.includes('hires') && hires.enabled && hires.modelOverride && !hires.checkpoint.trim()) {
       return
     }
@@ -242,6 +258,10 @@ export function GenerateView() {
     const previous = seed
     const previousHiresSeed = hires.seed
     const hiresUsed = hires.seedOverride ? usedSeed(hires.seed, hires.seedAfter) : hires.seed
+    const previousAdetailerSeeds = adetailer.units.map((unit) => unit.seed)
+    const adetailerUsed = adetailer.units.map((unit) =>
+      unit.seedOverride ? usedSeed(unit.seed, unit.seedAfter) : unit.seed,
+    )
     const previousIds = job ? idsFromJob(job) : []
     const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
     const seedSteps = activeXyPlot
@@ -257,10 +277,20 @@ export function GenerateView() {
     if (hires.enabled && hires.seedOverride) {
       setHires({ seed: nextSeed(hiresUsed, hires.seedAfter, seedSteps) })
     }
+    if (adetailer.enabled) {
+      setAdetailer({
+        units: adetailer.units.map((unit, index) =>
+          unit.seedOverride && unit.enabled !== false
+            ? { ...unit, seed: nextSeed(adetailerUsed[index] ?? unit.seed, unit.seedAfter, seedSteps) }
+            : unit,
+        ),
+      })
+    }
     try {
+      const gen = useGenerateStore.getState()
       const next = await createJob({
-        prompt,
-        negative_prompt: negativePrompt,
+        prompt: gen.prompt,
+        negative_prompt: gen.negativePrompt,
         checkpoint,
         vae: vae.trim() || undefined,
         text_encoder: textEncoder.trim() || undefined,
@@ -327,6 +357,7 @@ export function GenerateView() {
           save_before: hires.saveBefore,
           clear_vram: hires.clearVram,
         },
+        adetailer: packAdetailerJob(adetailer, adetailerUsed, diffusionModels),
         prompt_matrix: activePromptMatrix
           ? {
               lines: activePromptMatrix.lines,
@@ -369,6 +400,9 @@ export function GenerateView() {
     } catch (err) {
       setSeed(previous)
       setHires({ seed: previousHiresSeed })
+      setAdetailer({
+        units: adetailer.units.map((unit, index) => ({ ...unit, seed: previousAdetailerSeeds[index] ?? unit.seed })),
+      })
       setImageIds(previousIds)
       setError(err instanceof Error ? err.message : 'Generate failed')
       void useIssuesStore.getState().load()
@@ -495,7 +529,17 @@ export function GenerateView() {
       !hires.enabled ||
       !hires.modelOverride ||
       !hiresDiffusion(hires.checkpoint, diffusionModels) ||
-      (Boolean(hires.vae.trim()) && Boolean(hires.textEncoder.trim())))
+      (Boolean(hires.vae.trim()) && Boolean(hires.textEncoder.trim()))) &&
+    (!adetailer.enabled || adetailer.units.filter((unit) => unit.enabled !== false).every((unit) => Boolean(unit.detector.trim()))) &&
+    (!adetailer.enabled ||
+      adetailer.units.every(
+        (unit) =>
+          unit.enabled === false ||
+          !unit.modelOverride ||
+          (Boolean(unit.checkpoint.trim()) &&
+            (!hiresDiffusion(unit.checkpoint, diffusionModels) ||
+              (Boolean(unit.vae.trim()) && Boolean(unit.textEncoder.trim())))),
+      ))
   const payload = job?.payload ?? {}
   const missingLoras = Array.isArray(payload.lora_missing)
     ? payload.lora_missing.filter((item): item is string => typeof item === 'string' && Boolean(item))
@@ -557,12 +601,14 @@ export function GenerateView() {
     return (item: ModelEntry): keyof ModelLists => (unetSet.has(item) ? 'diffusion_models' : 'checkpoints')
   }, [diffusionModels])
   const otherItems = useMemo(
-    () => [...vaeItems, ...textEncoders, ...upscaleModels],
-    [textEncoders, upscaleModels, vaeItems],
+    () => [...vaeItems, ...textEncoders, ...upscaleModels, ...sams, ...ultralytics],
+    [sams, textEncoders, ultralytics, upscaleModels, vaeItems],
   )
   const otherItemKind = useMemo(() => {
     const teSet = new Set(textEncoders)
     const upscaleSet = new Set(upscaleModels)
+    const samSet = new Set(sams)
+    const ultraSet = new Set(ultralytics)
     return (item: ModelEntry): keyof ModelLists => {
       if (teSet.has(item)) {
         return 'text_encoders'
@@ -570,9 +616,15 @@ export function GenerateView() {
       if (upscaleSet.has(item)) {
         return 'upscale_models'
       }
+      if (samSet.has(item)) {
+        return 'sams'
+      }
+      if (ultraSet.has(item)) {
+        return 'ultralytics'
+      }
       return 'vae'
     }
-  }, [textEncoders, upscaleModels])
+  }, [sams, textEncoders, ultralytics, upscaleModels])
   const otherSelected = [
     ...(showTextEncoder ? [textEncoder] : []),
     ...(showVae ? [vae] : []),
@@ -592,15 +644,7 @@ export function GenerateView() {
         onOpenTab={setTab}
         showTextEncoder={showTextEncoder}
         showVae={showVae}
-        prompt={
-          <PromptStack
-            prompt={prompt}
-            negativePrompt={negativePrompt}
-            onPrompt={setPrompt}
-            onNegative={setNegativePrompt}
-            negativeDisabled={cfg <= 1}
-          />
-        }
+        prompt={<PromptStack negativeDisabled={cfg <= 1} />}
         actions={
           <GenerateActions
             busy={busy}
@@ -637,7 +681,14 @@ export function GenerateView() {
         busy={busy}
         progressPct={progressPct}
         currentLabel={currentLabel}
-        progressSegments={hiresBar ? [...HIRES_PROGRESS_SEGMENTS] : undefined}
+        progressSegments={
+          hiresBar
+            ? progressSegments(
+                Boolean((payload.hires as { enabled?: unknown } | undefined)?.enabled),
+                Boolean((payload.adetailer as { enabled?: unknown } | undefined)?.enabled),
+              )
+            : undefined
+        }
         jobPct={jobPct}
         overallLabel={overallLabel}
         timing={timing}
@@ -651,14 +702,10 @@ export function GenerateView() {
         otherItems={otherItems}
         otherItemKind={otherItemKind}
         otherSelected={otherSelected}
-        prompt={prompt}
-        negativePrompt={negativePrompt}
         loraItems={loraItems}
         activeLoraOrder={activeLoraOrder}
         loraAutoApplyDefault={loraAutoApplyDefault}
         wildcardItems={wildcardItems}
-        onPrompt={setPrompt}
-        onNegativePrompt={setNegativePrompt}
         onToggleAutoLora={toggleAutoLora}
       />
       {error ? (

@@ -71,6 +71,8 @@ export type ModelLists = {
   diffusion_models: ModelEntry[]
   text_encoders: ModelEntry[]
   upscale_models: ModelEntry[]
+  sams: ModelEntry[]
+  ultralytics: ModelEntry[]
   wildcards: ModelEntry[]
 }
 

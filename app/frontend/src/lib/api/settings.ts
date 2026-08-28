@@ -106,6 +106,8 @@ export type UserSettings = {
   }
   downloadQueue?: boolean
   downloadQueueParallel?: number
+  managerQueueParallel?: number
+  managerDownloadDirId?: string
   removedAfterHours?: number
   removedMaxGb?: number
   autocompleteEnabled?: boolean
@@ -165,6 +167,7 @@ export type UserSettings = {
 
 export type AppPaths = {
   models: string
+  comfyModels?: string
   wildcards: string
   output: string
   userName: string

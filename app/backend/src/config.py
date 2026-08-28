@@ -92,6 +92,13 @@ def models_root() -> Path:
     return _follow_install(env.get("models.root"), "models")
 
 
+def comfy_models_root() -> Path:
+    env = launcher_env()
+    raw = env.get("comfyui.path")
+    base = Path(str(raw)) if raw else RUNTIME / "comfyui" / "ComfyUI"
+    return base / "models"
+
+
 def wildcards_root() -> Path:
     env = launcher_env()
     return _follow_install(env.get("wildcards.root"), "wildcards")

@@ -274,6 +274,39 @@ export function suggestLoraHits(query: string, items: ModelEntry[]): SuggestHit[
   return rows.slice(0, LIMIT).map((row) => row.hit)
 }
 
+export function tagNormKey(raw: string) {
+  const text = raw
+    .trim()
+    .toLowerCase()
+    .replaceAll('_', ' ')
+    .replace(/\\+([()])/g, '$1')
+    .split(/\s+/)
+    .filter(Boolean)
+    .join(' ')
+    .replaceAll(' ', '_')
+  return text.replace(/^[(\[]+/, '')
+}
+
+function tagKeyHit(raw: string, prefix: string, compact: string) {
+  const key = tagNormKey(raw)
+  if (key.startsWith(prefix) || (compact && key.replaceAll('_', '').startsWith(compact))) {
+    return true
+  }
+  if (key.includes(prefix)) {
+    return true
+  }
+  return Boolean(compact) && key.replaceAll('_', '').includes(compact)
+}
+
+export function filterTagHits(hits: SuggestHit[], query: string) {
+  const prefix = tagNormKey(query)
+  const compact = prefix.replaceAll('_', '')
+  if (!compact) {
+    return []
+  }
+  return hits.filter((hit) => tagKeyHit(hit.tag, prefix, compact) || (hit.alias ? tagKeyHit(hit.alias, prefix, compact) : false))
+}
+
 export function applyTagUsage(
   hits: SuggestHit[],
   usage: { tag: string; count: number; favorite: boolean }[],

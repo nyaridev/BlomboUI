@@ -7,6 +7,8 @@ import { GallerySection, GALLERY_TAB_QUERY } from '@/views/settings/panels/conte
 import { GridsSection, GRIDS_QUERY } from '@/views/settings/panels/content/sections/generate/GridsSection.tsx'
 import { GenerationSection, GENERATION_QUERY } from '@/views/settings/panels/content/sections/generate/GenerationSection.tsx'
 import { ModelsSection, MODELS_QUERY } from '@/views/settings/panels/content/sections/models/ModelsSection.tsx'
+import { ManagerSection, MANAGER_QUERY } from '@/views/settings/panels/content/sections/models/ManagerSection.tsx'
+import { ThumbnailsSection, THUMBNAILS_QUERY } from '@/views/settings/panels/content/sections/models/ThumbnailsSection.tsx'
 import { BrowseSection, CIVITAI_BROWSE_QUERY } from '@/views/settings/panels/content/sections/civitai/BrowseSection.tsx'
 import { LabelsSection, CIVITAI_LABELS_QUERY } from '@/views/settings/panels/content/sections/civitai/LabelsSection.tsx'
 import { CivitaiAccountSection, CivitaiMetadataSection, CIVITAI_ACCOUNT_QUERY, CIVITAI_QUERY } from '@/views/settings/panels/content/sections/civitai/CivitaiSection.tsx'
@@ -19,7 +21,6 @@ import { TabsSection, TABS_QUERY } from '@/views/settings/panels/content/section
 import { AutocompleteBehaviorSection, AutocompleteSection, AUTOCOMPLETE_GENERAL_QUERY, AUTOCOMPLETE_QUERY } from '@/views/settings/panels/content/sections/autocomplete/AutocompleteSection.tsx'
 import { FrequentTagsSection, FREQUENT_TAGS_QUERY } from '@/views/settings/panels/content/sections/autocomplete/FrequentTagsSection.tsx'
 import { TrashSection, REMOVED_QUERY } from '@/views/settings/panels/content/sections/other/TrashSection.tsx'
-import { ThumbnailsSection, THUMBNAILS_QUERY } from '@/views/settings/panels/content/sections/models/ThumbnailsSection.tsx'
 
 export const GROUPS = [
   {
@@ -53,6 +54,7 @@ export const GROUPS = [
     title: 'Models',
     pages: [
       { id: 'Models', terms: MODELS_QUERY, Panel: ModelsSection },
+      { id: 'Manager', terms: MANAGER_QUERY, Panel: ManagerSection },
       { id: 'Thumbnails', terms: THUMBNAILS_QUERY, Panel: ThumbnailsSection },
     ],
   },

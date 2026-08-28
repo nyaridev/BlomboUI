@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import csv
+import json
 import re
 import sqlite3
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from infrastructure.storage.repositories import prompt_tags as tags_repo
+from infrastructure.storage.repositories import settings as settings_repo
 
 from features.settings import service as settings
 from features.models.scripts import model_meta
@@ -27,6 +30,11 @@ _files: dict[str, "_FileIndex"] = {}
 _pending = False
 _built = False
 _thread: threading.Thread | None = None
+_refresh_at = 0.0
+_count_at = 0.0
+_count_n = 0
+_REFRESH_EVERY = 2.0
+_COUNT_EVERY = 2.0
 
 
 class _FileIndex:
@@ -220,9 +228,22 @@ def _token_tag(inner: str) -> str | None:
     return tag or None
 
 
+def _cached_tag_count() -> int:
+    global _count_at, _count_n
+    now = time.monotonic()
+    if now - _count_at < _COUNT_EVERY:
+        return _count_n
+    try:
+        _count_n = tags_repo.tag_count()
+    except sqlite3.Error:
+        return _count_n
+    _count_at = now
+    return _count_n
+
+
 def star_threshold(unique: int | None = None) -> int:
     if unique is None:
-        unique = tags_repo.tag_count()
+        unique = _cached_tag_count()
     return 2 + max(0, unique) // 250
 
 
@@ -276,9 +297,35 @@ def _applies(rule: dict[str, Any], model_types: list[str]) -> bool:
     return any(item in types for item in model_types)
 
 
-def _applicable(checkpoint: str) -> list[_FileIndex]:
+def _suggest_cfg() -> dict[str, Any]:
+    raw = settings_repo.get_json()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    out: dict[str, Any] = {}
+    if "autocompleteEnabled" in data:
+        out["autocompleteEnabled"] = bool(data["autocompleteEnabled"])
+    mode = data.get("autocompleteMode")
+    if mode in ("exclude", "include"):
+        out["autocompleteMode"] = mode
+    types = data.get("autocompleteTypes")
+    if isinstance(types, list):
+        out["autocompleteTypes"] = [str(item) for item in types]
+    lists = data.get("autocompleteLists")
+    if isinstance(lists, dict):
+        out["autocompleteLists"] = lists
+    if "frequentTagsEnabled" in data:
+        out["frequentTagsEnabled"] = bool(data["frequentTagsEnabled"])
+    return out
+
+
+def _applicable(checkpoint: str, lists: object) -> list[_FileIndex]:
     model_types = model_meta.get_types("checkpoints", checkpoint) if checkpoint.strip() else []
-    lists = settings.load().get("autocompleteLists") or {}
     if not isinstance(lists, dict):
         lists = {}
     with _lock:
@@ -316,6 +363,8 @@ def _collect_catalog(
 ) -> None:
     first = prefix[0]
     for index in files:
+        if len(out) >= LIMIT:
+            return
         seen: set[str] = set()
         groups = index.buckets.items() if contains else [(first, index.buckets.get(first, ()))]
         for _, rows in groups:
@@ -326,13 +375,15 @@ def _collect_catalog(
                 elif not _key_matches(key, prefix, compact):
                     continue
                 _add_catalog_row(out, seen, index, canonical, alias)
+                if len(out) >= LIMIT:
+                    return
 
 
 def _catalog_hits(files: list[_FileIndex], prefix: str) -> dict[str, tuple[int, str | None]]:
     compact = prefix.replace("_", "")
     out: dict[str, tuple[int, str | None]] = {}
     _collect_catalog(files, prefix, compact, out, False)
-    if len(out) < LIMIT:
+    if len(out) < LIMIT and len(compact) > 1:
         _collect_catalog(files, prefix, compact, out, True)
     for tag, (posts, alias) in list(out.items()):
         if not alias:
@@ -364,6 +415,13 @@ def _freq_hits(prefix: str) -> dict[str, int]:
 
 
 def _maybe_refresh() -> None:
+    global _refresh_at
+    now = time.monotonic()
+    with _lock:
+        ready = _built and not _pending
+    if ready and now - _refresh_at < _REFRESH_EVERY:
+        return
+    _refresh_at = now
     root = autocomplete.csv_root()
     with _lock:
         files = dict(_files)
@@ -417,13 +475,11 @@ def suggest(q: str, checkpoint: str) -> list[dict[str, Any]]:
     prefix = _norm_key(q)
     if len(prefix.replace("_", "")) < 1:
         return []
-    cfg = settings.load()
-    if not isinstance(cfg, dict):
-        cfg = {}
+    cfg = _suggest_cfg()
     if not _global_applies(checkpoint, cfg):
         return []
     _maybe_refresh()
-    catalog = _catalog_hits(_applicable(checkpoint), prefix)
+    catalog = _catalog_hits(_applicable(checkpoint, cfg.get("autocompleteLists")), prefix)
     freq = _freq_hits(prefix) if cfg.get("frequentTagsEnabled") is not False else {}
     threshold = star_threshold()
     merged: dict[str, dict[str, Any]] = {}

@@ -23,7 +23,7 @@ def _hide() -> bool:
 
 
 def _base_where(hide_interrupted: bool, media: str) -> tuple[str, list[Any]]:
-    clauses = ["asset_kind != 'grid'"]
+    clauses = ["asset_kind != 'grid'", "asset_kind != 'temp'"]
     params: list[Any] = []
     if hide_interrupted:
         clauses.append("asset_kind != 'interrupted'")
@@ -279,7 +279,7 @@ def home() -> dict[str, Any]:
         SELECT t.tag AS tag, COUNT(*) AS n
         FROM gallery_item_tags t
         JOIN gallery_items i ON i.id = t.item_id
-        WHERE i.asset_kind != 'grid' {interrupted}
+        WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {interrupted}
         GROUP BY t.tag
         ORDER BY n DESC, t.tag ASC
         LIMIT ?
@@ -333,7 +333,7 @@ def browse(kind: str, sort: str = "recent", direction: str = "desc", limit: int 
             f"""
             SELECT checkpoint_name AS name, MAX(created_at) AS recent, COUNT(*) AS works
             FROM gallery_items
-            WHERE asset_kind != 'grid' {interrupted} AND checkpoint_name != ''
+            WHERE asset_kind != 'grid' AND asset_kind != 'temp' {interrupted} AND checkpoint_name != ''
             GROUP BY checkpoint_name
             ORDER BY {'works' if by_works else 'recent'} {order}, name COLLATE NOCASE
             """,
@@ -349,7 +349,7 @@ def browse(kind: str, sort: str = "recent", direction: str = "desc", limit: int 
         SELECT l.name AS name, MAX(i.created_at) AS recent, COUNT(*) AS works
         FROM {table} l
         JOIN gallery_items i ON i.id = l.item_id
-        WHERE i.asset_kind != 'grid' {interrupted}
+        WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {interrupted}
         GROUP BY l.name
         ORDER BY {'works' if by_works else 'recent'} {order}, name COLLATE NOCASE
         """,
@@ -380,7 +380,7 @@ def _previews_for(column: str, names: list[str], hide: bool) -> dict[str, list[d
         f"""
         SELECT {column} AS name, id, media_kind, created_at
         FROM gallery_items
-        WHERE asset_kind != 'grid' {interrupted} AND {column} IN ({marks})
+        WHERE asset_kind != 'grid' AND asset_kind != 'temp' {interrupted} AND {column} IN ({marks})
         ORDER BY created_at DESC
         """,
         names,
@@ -398,7 +398,7 @@ def _join_previews(table: str, names: list[str], hide: bool, column: str = "name
         SELECT l.{column} AS name, i.id AS id, i.media_kind AS media_kind, i.created_at AS created_at
         FROM {table} l
         JOIN gallery_items i ON i.id = l.item_id
-        WHERE i.asset_kind != 'grid' {interrupted} AND l.{column} IN ({marks})
+        WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {interrupted} AND l.{column} IN ({marks})
         ORDER BY i.created_at DESC
         """,
         names,

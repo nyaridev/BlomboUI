@@ -49,10 +49,13 @@ class HiresIn(BaseModel):
     aspect: str = ""
     megapixels: float = Field(default=1, ge=0.2, le=4)
     upscale_model: str = ""
-    steps: int = Field(default=15, ge=1, le=150)
+    steps: int = Field(default=25, ge=1, le=150)
     cfg: float = Field(default=4, ge=1, le=30)
+    cfg_override: bool = False
     sampler: str = ""
+    sampler_override: bool = False
     scheduler: str = ""
+    scheduler_override: bool = False
     denoise: float = Field(default=0.55, ge=0, le=1)
     seed: int = -1
     seed_after: Literal["randomize", "fixed", "increment", "decrement"] = "randomize"

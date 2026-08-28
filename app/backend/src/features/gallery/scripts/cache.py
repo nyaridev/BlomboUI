@@ -13,7 +13,7 @@ from features.gallery.scripts import index as gallery_index
 from features.generate.scripts import save_meta
 from shared import dirs
 from shared import pnginfo
-from config import outputs_root
+from config import RUNTIME, outputs_root
 
 IMAGE_EXTS = gallery_index.IMAGE_EXTS
 VIDEO_EXTS = gallery_index.VIDEO_EXTS
@@ -67,7 +67,17 @@ def _iter_media(root: Path) -> list[Path]:
         return []
 
 
+def _under_runtime_tmp(path: Path) -> bool:
+    try:
+        path.resolve().relative_to((RUNTIME / "tmp").resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
 def _asset_kind(path: Path, root: Path | None = None) -> str:
+    if _under_runtime_tmp(path):
+        return "temp"
     parts = {part.casefold() for part in path.parts}
     if root is not None and canonical(outputs_root()) == root and ("grids" in parts or "grid" in parts):
         return "grid"
@@ -155,8 +165,10 @@ def _row_values(path: Path, root: Path, ident: str | None = None) -> dict[str, A
         size = 0
         mtime_ns = 0
     kind = str(params.get("asset_kind") or _asset_kind(path, root))
-    if kind not in {"image", "interrupted", "grid"}:
+    if kind not in {"image", "interrupted", "grid", "temp"}:
         kind = _asset_kind(path, root)
+    if _under_runtime_tmp(path):
+        kind = "temp"
     return {
         "id": ident or item_id(path),
         "path": str(path),
@@ -343,7 +355,7 @@ def sync() -> None:
 
 def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
     cap = max(1, min(200, int(limit)))
-    clauses = ["asset_kind != 'grid'"]
+    clauses = ["asset_kind != 'grid'", "asset_kind != 'temp'"]
     if hide_interrupted:
         clauses.append("asset_kind != 'interrupted'")
     return gallery_repo.list_items(" AND ".join(clauses), (cap,))
@@ -354,7 +366,7 @@ def list_since(created_at: str, hide_interrupted: bool = True, limit: int = 60) 
     if not stamp:
         return []
     cap = max(1, min(60, int(limit)))
-    clauses = ["asset_kind != 'grid'", "created_at > ?"]
+    clauses = ["asset_kind != 'grid'", "asset_kind != 'temp'", "created_at > ?"]
     params: list[Any] = [stamp, cap]
     if hide_interrupted:
         clauses.insert(1, "asset_kind != 'interrupted'")
@@ -407,3 +419,17 @@ def path_for_id(ident: str) -> Path | None:
         return None
     path = Path(str(cached["path"]))
     return path if dirs.allowed_file(path) else None
+
+
+def forget_paths(paths: list[str]) -> None:
+    keys: list[str] = []
+    for raw in paths:
+        text = str(raw)
+        _OUTPUT_CACHE.pop(text, None)
+        try:
+            keys.append(str(canonical(Path(text))))
+        except OSError:
+            keys.append(text)
+        if text not in keys:
+            keys.append(text)
+    gallery_repo.delete_paths(keys)

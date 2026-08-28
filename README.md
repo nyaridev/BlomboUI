@@ -64,7 +64,7 @@ Already have ComfyUI? Set `COMFYUI_PATH` in `webui-user.bat` / `webui-user.sh`. 
 | **Models** | local browser, Civitai download, thumbnails, scopes |
 | **Gallery** | output browser, PNG info, file ops |
 | **Wildcards** | YAML / text editors with tree + fold |
-| **Workflows** | load Comfy graphs saved as API format into `app/workflows/` |
+| **Workflows** | Comfy graphs in `app/workflows/main/` (API + droppable `*_raw.json`); optional stages in `app/workflows/utils/`. See [docs/workflows.md](docs/workflows.md). |
 
 ---
 
@@ -120,7 +120,7 @@ Optional CUDA builds live in `install/windows/torch` and `install/linux/torch`. 
 
 ### Comfy node editor
 
-Close BlomboUI, then run `install/comfyui.bat` or `install/comfyui.sh`. Save graphs as **API Format** into `app/workflows/`.
+Close BlomboUI, then run `install/comfyui.bat` or `install/comfyui.sh`. Save the UI workflow as `name_raw.json` and **API Format** as `name.json` under `app/workflows/main/` (or `utils/` for extras). See [docs/workflows.md](docs/workflows.md).
 
 ---
 

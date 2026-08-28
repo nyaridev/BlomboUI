@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from infrastructure.storage.repositories import jobs as jobs_repo
+from infrastructure.storage.repositories import gallery as gallery_repo
 
 from features.settings import service as settings
 from features.gallery.scripts import cache as gallery_cache
@@ -330,6 +332,66 @@ def save_kind(values: dict[str, Any], info: dict[str, str], graph: dict[str, Any
     return "hires"
 
 
+def _hires_save_before(values: dict[str, Any]) -> bool:
+    blob = values.get("hires")
+    if not isinstance(blob, dict):
+        return True
+    if "save_before" in blob or "saveBefore" in blob:
+        raw = blob.get("save_before")
+        if raw is None:
+            raw = blob.get("saveBefore")
+        return bool(raw)
+    return True
+
+
+def tmp_first_pass(values: dict[str, Any], kind: str) -> bool:
+    return hires_enabled(values) and kind == "images" and not _hires_save_before(values)
+
+
+def _hires_first_tmp_dir(job_id: str) -> Path:
+    ident = Path(str(job_id)).name
+    if not ident or ident in {".", ".."}:
+        ident = "job"
+    folder = RUNTIME / "tmp" / "hires-first" / ident
+    folder.mkdir(parents=True, exist_ok=True)
+    return folder
+
+
+def _hires_temp_after_days() -> int:
+    try:
+        return max(1, min(365, int(settings.load().get("hiresTempAfterDays") or 7)))
+    except (TypeError, ValueError):
+        return 7
+
+
+def purge_hires_tmp() -> None:
+    root = RUNTIME / "tmp" / "hires-first"
+    cutoff = time.time() - _hires_temp_after_days() * 86400
+    gone: list[str] = []
+    if root.is_dir():
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            try:
+                if path.stat().st_mtime > cutoff:
+                    continue
+                path.unlink()
+                gone.append(str(path))
+            except OSError:
+                continue
+        for folder in sorted((p for p in root.rglob("*") if p.is_dir()), key=lambda p: len(p.parts), reverse=True):
+            try:
+                folder.rmdir()
+            except OSError:
+                pass
+    stale = gallery_repo.query("SELECT path FROM gallery_items WHERE asset_kind = 'temp'")
+    for row in stale:
+        path = Path(str(row["path"]))
+        if not path.is_file():
+            gone.append(str(path))
+    gallery_cache.forget_paths(gone)
+
+
 def _import_image(
     job_id: str,
     values: dict[str, Any],
@@ -338,9 +400,17 @@ def _import_image(
     persist: bool = True,
 ) -> tuple[str, Path, str]:
     raw = comfy.download_image(info)
-    folder = None if persist else _xy_temp_dir(job_id)
     kind = save_kind(values, info, graph) if persist else "images"
-    result = _import_bytes(job_id, values, raw, graph, kind, folder)
+    if not persist:
+        folder = _xy_temp_dir(job_id)
+        index = False
+    elif tmp_first_pass(values, kind):
+        folder = _hires_first_tmp_dir(job_id)
+        index = True
+    else:
+        folder = None
+        index = True
+    result = _import_bytes(job_id, values, raw, graph, kind, folder, index=index)
     _forget_comfy_file(info)
     return result[0], result[1], kind
 
@@ -364,13 +434,16 @@ def _import_bytes(
     graph: dict[str, Any] | None,
     kind: str,
     folder: Path | None = None,
+    index: bool | None = None,
 ) -> tuple[str, Path]:
     fmt, quality, sidecar, max_kb = _image_save_opts()
-    packed = save_meta.pack_params(values, graph)
+    packed = save_meta.pack_params(values, graph, kind=kind)
     if kind == "interrupted":
         packed["interrupted"] = True
     persist = folder is None
     folder = folder or _output_dir(values, kind)
+    if index is None:
+        index = persist
     created_at = _now()
     asset_kind = "interrupted" if kind == "interrupted" else "image"
     metadata = save_meta.envelope(job_id, values, packed, asset_kind, created_at)
@@ -391,7 +464,7 @@ def _import_bytes(
         except Exception:
             pass
     ident = gallery_cache.item_id(dest)
-    if persist:
+    if index:
         gallery_cache.ingest(dest, ident)
     return ident, dest
 

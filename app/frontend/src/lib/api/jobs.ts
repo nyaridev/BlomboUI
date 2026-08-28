@@ -118,8 +118,11 @@ export type JobRequest = {
     upscale_model: string
     steps: number
     cfg: number
+    cfg_override: boolean
     sampler: string
+    sampler_override: boolean
     scheduler: string
+    scheduler_override: boolean
     denoise: number
     seed: number
     seed_after: 'randomize' | 'fixed' | 'increment' | 'decrement'

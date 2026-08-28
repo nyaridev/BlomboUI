@@ -170,6 +170,14 @@ export function cleanRemovedHours(raw: unknown) {
   return Math.max(1, Math.min(8760, Math.round(n)))
 }
 
+export function cleanHiresTempAfterDays(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.hiresTempAfterDays
+  }
+  return Math.max(1, Math.min(365, Math.round(n)))
+}
+
 export function cleanRemovedMaxGb(raw: unknown) {
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(n)) {
@@ -667,6 +675,10 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     imageName: cleanName(patch.imageName, SETTINGS_DEFAULTS.imageName),
     gridName: cleanName(patch.gridName, SETTINGS_DEFAULTS.gridName),
     hiresName: cleanName(patch.hiresName, SETTINGS_DEFAULTS.hiresName),
+    hiresTempAfterDays:
+      typeof patch.hiresTempAfterDays === 'number'
+        ? cleanHiresTempAfterDays(patch.hiresTempAfterDays)
+        : SETTINGS_DEFAULTS.hiresTempAfterDays,
     imageFormat: patch.imageFormat ? cleanImageFormat(patch.imageFormat) : SETTINGS_DEFAULTS.imageFormat,
     gridFormat: patch.gridFormat ? cleanImageFormat(patch.gridFormat, SETTINGS_DEFAULTS.gridFormat) : SETTINGS_DEFAULTS.gridFormat,
     imageQuality: typeof patch.imageQuality === 'number' ? cleanImageQuality(patch.imageQuality) : SETTINGS_DEFAULTS.imageQuality,

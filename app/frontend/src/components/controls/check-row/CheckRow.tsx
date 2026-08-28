@@ -8,6 +8,7 @@ export function CheckRow({
   children,
   className = '',
   align = 'center',
+  tone = 'panel',
 }: {
   on: boolean
   onChange: (on: boolean) => void
@@ -15,11 +16,13 @@ export function CheckRow({
   children: ReactNode
   className?: string
   align?: 'center' | 'start'
+  tone?: 'panel' | 'field'
 }) {
   return (
     <div
       className={[
-        'flex gap-cluster rounded-md border border-line bg-panel p-2.5',
+        'flex gap-cluster rounded-md border border-line p-2.5',
+        tone === 'field' ? 'bg-field' : 'bg-panel',
         align === 'start' ? 'items-start' : 'items-center',
         className,
       ]

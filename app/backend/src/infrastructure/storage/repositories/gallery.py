@@ -38,7 +38,7 @@ def list_items(where_sql: str, params: tuple | list) -> list[Any]:
 
 def latest_non_grid() -> Any | None:
     return cache.query_one(
-        "SELECT * FROM gallery_items WHERE asset_kind != 'grid' "
+        "SELECT * FROM gallery_items WHERE asset_kind != 'grid' AND asset_kind != 'temp' "
         "ORDER BY created_at DESC LIMIT 1"
     )
 
@@ -181,3 +181,15 @@ def delete_stale_seen(conn: Any, disk: set[str]) -> None:
         return
     marks = ",".join("?" for _ in disk)
     conn.execute(f"DELETE FROM gallery_seen WHERE path NOT IN ({marks})", tuple(disk))
+
+
+def delete_paths(paths: list[str]) -> None:
+    if not paths:
+        return
+
+    def write(conn: Any) -> None:
+        for path in paths:
+            conn.execute("DELETE FROM gallery_items WHERE path = ?", (path,))
+            conn.execute("DELETE FROM gallery_seen WHERE path = ?", (path,))
+
+    cache.transaction(write)

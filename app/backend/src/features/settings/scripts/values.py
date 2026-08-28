@@ -58,6 +58,7 @@ _KEYS = (
     "gridName",
     "hiresPath",
     "hiresName",
+    "hiresTempAfterDays",
     "interruptedPath",
     "imageFormat",
     "gridFormat",

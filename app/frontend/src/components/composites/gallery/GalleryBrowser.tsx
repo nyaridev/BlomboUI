@@ -69,6 +69,7 @@ type GalleryViewProps = {
   fileOps?: boolean
   tileScale?: number
   itemKind?: (item: ModelEntry) => keyof ModelLists
+  autoCheckpoint?: string
 }
 
 export function GalleryBrowser({
@@ -83,6 +84,7 @@ export function GalleryBrowser({
   fileOps = true,
   tileScale: tileScaleOverride,
   itemKind,
+  autoCheckpoint,
 }: GalleryViewProps) {
   const navigate = useNavigate()
   const viewKey = chromeKey || kind
@@ -108,10 +110,12 @@ export function GalleryBrowser({
   const parentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
   const modelDirs = useSettingsStore((s) => s.modelDirs)
   const wildcardDirs = useSettingsStore((s) => s.wildcardDirs)
-  const typeFilter = useSettingsStore((s) => s.galleryTypes[filterKey] ?? EMPTY_TYPES)
+  const storedTypes = useSettingsStore((s) => s.galleryTypes[filterKey] ?? EMPTY_TYPES)
   const setGalleryTypes = useSettingsStore((s) => s.setGalleryTypes)
   const autoType = useSettingsStore((s) => generate && s.galleryAutoTypes[filterKey] !== false)
   const setGalleryAutoTypes = useSettingsStore((s) => s.setGalleryAutoTypes)
+  const overlayTypes = useGalleryAutoTypes(generate, filterKey, autoType, setGalleryTypes, autoCheckpoint)
+  const typeFilter = overlayTypes ?? storedTypes
   const query = useSettingsStore((s) => s.galleryQuery[modeKey] ?? '')
   const setGalleryQuery = useSettingsStore((s) => s.setGalleryQuery)
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes)
@@ -130,7 +134,6 @@ export function GalleryBrowser({
       ),
     [hiddenModelTypes, otherGallery, typeFilter],
   )
-  useGalleryAutoTypes(generate, filterKey, autoType, setGalleryTypes)
   const extraNames = useMemo(() => {
     const rows = itemKind ? [...modelDirs, ...wildcardDirs] : kind === 'wildcards' ? wildcardDirs : modelDirs
     const names: string[] = []

@@ -1,4 +1,4 @@
-import { MediaCarousel } from '@/components/composites/models/MediaCarousel.tsx'
+import { MediaCarousel, type MediaCarouselItem } from '@/components/composites/models/MediaCarousel.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import type { CivitaiImage, CivitaiVersion } from '@/lib/api.ts'
 import { openInCivitaiPanel } from '@/lib/civitai/openTab.ts'
@@ -74,7 +74,7 @@ function authorImages(info: CivitaiVersion): CivitaiImage[] {
 export function CivitaiSection({
   info,
   status,
-  preview,
+  items,
   previewAlt = 'Dropped image',
   onPick,
   onClear,
@@ -83,10 +83,11 @@ export function CivitaiSection({
   sending,
   onReplacePreview,
   replacing,
+  onSlide,
 }: {
   info: CivitaiVersion | null
   status: Status
-  preview?: string | null
+  items?: MediaCarouselItem[]
   previewAlt?: string
   onPick?: () => void
   onClear?: () => void
@@ -95,28 +96,36 @@ export function CivitaiSection({
   sending?: boolean
   onReplacePreview?: (url: string) => void
   replacing?: boolean
+  onSlide?: (url: string) => void
 }) {
   const [currentUrl, setCurrentUrl] = useState('')
   const [menu, setMenu] = useState<{ x: number; y: number; href: string } | null>(null)
   const navigate = useNavigate()
+  const local = Boolean(items?.length)
+  function noteCurrent(url: string) {
+    setCurrentUrl(url)
+    if (local) {
+      onSlide?.(url)
+    }
+  }
   let body: ReactNode
   let fail = false
   let framed = true
-  if (preview) {
+  if (local && items) {
     framed = false
     body = (
       <MediaCarousel
-        key={preview}
-        items={[{ url: preview }]}
+        key={items.map((item) => item.url).join('\n')}
+        items={items}
         alt={previewAlt}
-        onCurrent={setCurrentUrl}
+        onCurrent={noteCurrent}
         openHotkey="f"
       />
     )
   } else if (status === 'idle') {
     body = (
       <Message onClick={onPick}>
-        <p className="text-sm text-muted">Drop an image or .safetensors file, or click to pick</p>
+        <p className="text-sm text-muted">Drop images, videos, or a .safetensors file, or click to pick</p>
       </Message>
     )
   } else if (status === 'looking') {
@@ -142,7 +151,7 @@ export function CivitaiSection({
         key={images.map((image) => image.url).join('\n')}
         items={images.map((image) => ({ url: image.url as string, type: image.type }))}
         alt={name}
-        onCurrent={setCurrentUrl}
+        onCurrent={noteCurrent}
         openHotkey="f"
       />
     )
@@ -151,12 +160,12 @@ export function CivitaiSection({
   const links = status === 'found' && info ? info : null
   const gallery = links ? authorImages(links) : []
   const current = gallery.find((image) => image.url === currentUrl) ?? gallery[0]
-  const currentMeta = !preview && current?.meta && typeof current.meta === 'object' ? current.meta : null
+  const currentMeta = !local && current?.meta && typeof current.meta === 'object' ? current.meta : null
   const com = links ? civitaiUrl('civitai.com', links) : ''
   const red = links ? civitaiUrl('civitai.red', links) : ''
   const civitaiBtns = Boolean(com && red)
   const otherBtns = Boolean(onClear || onGenerate || onReplacePreview)
-  const canReplace = Boolean(onReplacePreview && currentUrl && !preview && status === 'found')
+  const canReplace = Boolean(onReplacePreview && currentUrl && !local && status === 'found')
 
   return (
     <div className="flex min-w-0 flex-col gap-2">

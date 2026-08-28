@@ -186,112 +186,126 @@ export function HiresExtrasBody({
           </span>
         ) : null}
       </div>
-      {hires.sizeMode === 'scale' ? (
+      <div className="grid grid-cols-3 items-start gap-stack">
+        {hires.sizeMode === 'scale' ? (
+          <SliderField
+            label={`Scale (${scaled.w}x${scaled.h})`}
+            value={hires.scale}
+            onChange={(scale) => patchHires({ scale })}
+            min={1}
+            max={4}
+            step={0.05}
+          />
+        ) : (
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-stack">
+            <div className="flex min-w-0 flex-col gap-2">
+              {hires.sizeMode === 'raw' ? (
+                <>
+                  <SliderField
+                    label="Width"
+                    value={hires.width}
+                    onChange={(next) => patchHires({ width: next })}
+                    min={64}
+                    max={4096}
+                    step={8}
+                  />
+                  <SliderField
+                    label="Height"
+                    value={hires.height}
+                    onChange={(next) => patchHires({ height: next })}
+                    min={64}
+                    max={4096}
+                    step={8}
+                  />
+                </>
+              ) : hires.sizeMode === 'set' ? (
+                <div className="flex min-w-0 flex-col gap-2">
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-xs text-muted">Resolution</span>
+                    <SelectField
+                      value={formatSize({
+                        w: Math.max(hires.width, hires.height),
+                        h: Math.min(hires.width, hires.height),
+                      })}
+                      onChange={onSetSize}
+                      options={[
+                        ...new Set([
+                          formatSize({
+                            w: Math.max(hires.width, hires.height),
+                            h: Math.min(hires.width, hires.height),
+                          }),
+                          ...setResolutions,
+                        ]),
+                      ].map((key) => {
+                        const size = parseSize(key)
+                        return {
+                          value: key,
+                          label: size ? formatSize(orientSize(size, hires.height > hires.width)) : key,
+                        }
+                      })}
+                    />
+                  </div>
+                  <div className="inline-flex self-start rounded border border-line bg-panel text-xs">
+                    <button
+                      type="button"
+                      disabled={locked}
+                      className={[
+                        'rounded-l px-2 py-1',
+                        hires.height <= hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                      ].join(' ')}
+                      onClick={() => onOrient(false)}
+                    >
+                      Horizontal
+                    </button>
+                    <button
+                      type="button"
+                      disabled={locked}
+                      className={[
+                        'rounded-r px-2 py-1',
+                        hires.height > hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
+                      ].join(' ')}
+                      onClick={() => onOrient(true)}
+                    >
+                      Vertical
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-xs text-muted">Aspect</span>
+                    <SelectField
+                      value={hires.aspect}
+                      onChange={onAspect}
+                      options={ASPECTS.map((item) => ({ value: item.id, label: item.label }))}
+                    />
+                  </div>
+                  <SliderField
+                    label="Megapixels"
+                    value={hires.megapixels}
+                    onChange={onMegapixels}
+                    min={0.2}
+                    max={4}
+                    step={0.05}
+                  />
+                </>
+              )}
+            </div>
+            <IconButton aria-label="Swap width and height" onClick={swapSize} disabled={locked}>
+              <AppIcon id="arrow-up-down" />
+            </IconButton>
+          </div>
+        )}
+        <SliderField label="Steps" value={hires.steps} onChange={(steps) => patchHires({ steps })} min={1} max={150} />
         <SliderField
-          label={`Scale (${scaled.w}x${scaled.h})`}
-          value={hires.scale}
-          onChange={(scale) => patchHires({ scale })}
-          min={1}
-          max={4}
+          label="Denoise"
+          value={hires.denoise}
+          onChange={(denoise) => patchHires({ denoise })}
+          min={0}
+          max={1}
           step={0.05}
         />
-      ) : (
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-stack">
-          <div className="flex min-w-0 flex-col gap-2">
-            {hires.sizeMode === 'raw' ? (
-              <>
-                <SliderField
-                  label="Width"
-                  value={hires.width}
-                  onChange={(next) => patchHires({ width: next })}
-                  min={64}
-                  max={4096}
-                  step={8}
-                />
-                <SliderField
-                  label="Height"
-                  value={hires.height}
-                  onChange={(next) => patchHires({ height: next })}
-                  min={64}
-                  max={4096}
-                  step={8}
-                />
-              </>
-            ) : hires.sizeMode === 'set' ? (
-              <div className="flex min-w-0 flex-col gap-2">
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-xs text-muted">Resolution</span>
-                  <SelectField
-                    value={formatSize({ w: Math.max(hires.width, hires.height), h: Math.min(hires.width, hires.height) })}
-                    onChange={onSetSize}
-                    options={[
-                      ...new Set([
-                        formatSize({
-                          w: Math.max(hires.width, hires.height),
-                          h: Math.min(hires.width, hires.height),
-                        }),
-                        ...setResolutions,
-                      ]),
-                    ].map((key) => {
-                      const size = parseSize(key)
-                      return {
-                        value: key,
-                        label: size ? formatSize(orientSize(size, hires.height > hires.width)) : key,
-                      }
-                    })}
-                  />
-                </div>
-                <div className="inline-flex self-start rounded border border-line bg-panel text-xs">
-                  <button
-                    type="button"
-                    disabled={locked}
-                    className={[
-                      'rounded-l px-2 py-1',
-                      hires.height <= hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
-                    ].join(' ')}
-                    onClick={() => onOrient(false)}
-                  >
-                    Horizontal
-                  </button>
-                  <button
-                    type="button"
-                    disabled={locked}
-                    className={[
-                      'rounded-r px-2 py-1',
-                      hires.height > hires.width ? 'bg-line text-ink' : 'text-muted hover:text-ink',
-                    ].join(' ')}
-                    onClick={() => onOrient(true)}
-                  >
-                    Vertical
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-xs text-muted">Aspect</span>
-                  <SelectField
-                    value={hires.aspect}
-                    onChange={onAspect}
-                    options={ASPECTS.map((item) => ({ value: item.id, label: item.label }))}
-                  />
-                </div>
-                <SliderField
-                  label="Megapixels"
-                  value={hires.megapixels}
-                  onChange={onMegapixels}
-                  min={0.2}
-                  max={4}
-                  step={0.05}
-                />
-              </>
-            )}
-          </div>
-          <IconButton aria-label="Swap width and height" onClick={swapSize} disabled={locked}>
-            <AppIcon id="arrow-up-down" />
-          </IconButton>
-        </div>
-      )}
+      </div>
       <div className="grid grid-cols-2 gap-stack">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-xs text-muted">Method</span>
@@ -306,91 +320,111 @@ export function HiresExtrasBody({
           <SelectField value={hires.crop} onChange={(crop) => patchHires({ crop })} options={[...IMAGE_SCALE_CROPS]} />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-stack">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted">Sampler</span>
-          <SelectField
-            value={hires.sampler}
-            onChange={(sampler) => patchHires({ sampler })}
-            options={listedChoices(samplers, hiddenSamplers, hires.sampler)}
-          />
+      <section className="mt-8 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <h2 className="shrink-0 text-xs text-label">Overrides</h2>
+          <div className="min-w-0 flex-1 border-t border-line" />
         </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted">Scheduler</span>
-          <SelectField
-            value={hires.scheduler}
-            onChange={(scheduler) => patchHires({ scheduler })}
-            options={listedChoices(schedulers, hiddenSchedulers, hires.scheduler)}
-          />
-        </div>
-        <SliderField label="Steps" value={hires.steps} onChange={(steps) => patchHires({ steps })} min={1} max={150} />
-      </div>
-      <SliderField label="CFG" value={hires.cfg} onChange={(cfg) => patchHires({ cfg })} min={1} max={30} step={0.5} />
-      <SliderField
-        label="Denoise"
-        value={hires.denoise}
-        onChange={(denoise) => patchHires({ denoise })}
-        min={0}
-        max={1}
-        step={0.05}
-      />
-      <CheckRow on={hires.seedOverride} onChange={(seedOverride) => patchHires({ seedOverride })} locked={locked}>
-        <div className="flex items-end gap-stack">
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-xs text-muted">Seed</span>
-            <NumberField value={hires.seed} onChange={(seed) => patchHires({ seed })} />
-          </label>
-          <div className="flex w-32 shrink-0 flex-col gap-1">
-            <span className="text-xs text-muted">After generation</span>
-            <SelectField
-              value={hires.seedAfter}
-              onChange={(value) => {
-                const seedAfter = value as SeedAfter
-                if (seedAfter === 'randomize') {
-                  patchHires({ seedAfter, seed: -1 })
-                  return
-                }
-                if (hires.seedAfter === 'randomize' && lastSeed != null) {
-                  patchHires({ seedAfter, seed: lastSeed })
-                  return
-                }
-                patchHires({ seedAfter })
-              }}
-              options={[...SEED_AFTER]}
-            />
+        <div className="flex flex-col gap-stack">
+          <div className="grid grid-cols-3 gap-stack">
+            <CheckRow
+              on={hires.samplerOverride}
+              onChange={(samplerOverride) => patchHires({ samplerOverride })}
+              locked={locked}
+            >
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs text-muted">Sampler</span>
+                <SelectField
+                  value={hires.sampler}
+                  onChange={(sampler) => patchHires({ sampler })}
+                  options={listedChoices(samplers, hiddenSamplers, hires.sampler)}
+                />
+              </div>
+            </CheckRow>
+            <CheckRow
+              on={hires.schedulerOverride}
+              onChange={(schedulerOverride) => patchHires({ schedulerOverride })}
+              locked={locked}
+            >
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs text-muted">Scheduler</span>
+                <SelectField
+                  value={hires.scheduler}
+                  onChange={(scheduler) => patchHires({ scheduler })}
+                  options={listedChoices(schedulers, hiddenSchedulers, hires.scheduler)}
+                />
+              </div>
+            </CheckRow>
+            <CheckRow on={hires.cfgOverride} onChange={(cfgOverride) => patchHires({ cfgOverride })} locked={locked}>
+              <SliderField
+                label="CFG"
+                value={hires.cfg}
+                onChange={(cfg) => patchHires({ cfg })}
+                min={1}
+                max={30}
+                step={0.5}
+              />
+            </CheckRow>
           </div>
+          <CheckRow on={hires.seedOverride} onChange={(seedOverride) => patchHires({ seedOverride })} locked={locked}>
+            <div className="flex items-end gap-stack">
+              <label className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="text-xs text-muted">Seed</span>
+                <NumberField value={hires.seed} onChange={(seed) => patchHires({ seed })} />
+              </label>
+              <div className="flex w-32 shrink-0 flex-col gap-1">
+                <span className="text-xs text-muted">After generation</span>
+                <SelectField
+                  value={hires.seedAfter}
+                  onChange={(value) => {
+                    const seedAfter = value as SeedAfter
+                    if (seedAfter === 'randomize') {
+                      patchHires({ seedAfter, seed: -1 })
+                      return
+                    }
+                    if (hires.seedAfter === 'randomize' && lastSeed != null) {
+                      patchHires({ seedAfter, seed: lastSeed })
+                      return
+                    }
+                    patchHires({ seedAfter })
+                  }}
+                  options={[...SEED_AFTER]}
+                />
+              </div>
+            </div>
+          </CheckRow>
+          <CheckRow on={hires.promptOverride} onChange={(promptOverride) => patchHires({ promptOverride })} locked={locked}>
+            <div className="h-24 min-w-0">
+              <PromptField
+                value={hires.prompt}
+                onChange={(prompt) => patchHires({ prompt })}
+                placeholder="Positive"
+                side="prompt"
+                checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
+                companionNegative={hires.negativePrompt}
+                onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
+              />
+            </div>
+          </CheckRow>
+          <CheckRow
+            on={hires.negativeOverride}
+            onChange={(negativeOverride) => patchHires({ negativeOverride })}
+            locked={locked}
+          >
+            <div className="h-20 min-w-0">
+              <PromptField
+                value={hires.negativePrompt}
+                onChange={(negativePrompt) => patchHires({ negativePrompt })}
+                placeholder="Negative"
+                side="negative"
+                checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
+                companionNegative={hires.negativePrompt}
+                onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
+              />
+            </div>
+          </CheckRow>
         </div>
-      </CheckRow>
-      <CheckRow on={hires.promptOverride} onChange={(promptOverride) => patchHires({ promptOverride })} locked={locked}>
-        <div className="h-24 min-w-0">
-          <PromptField
-            value={hires.prompt}
-            onChange={(prompt) => patchHires({ prompt })}
-            placeholder="Positive"
-            side="prompt"
-            checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
-            companionNegative={hires.negativePrompt}
-            onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
-          />
-        </div>
-      </CheckRow>
-      <CheckRow
-        on={hires.negativeOverride}
-        onChange={(negativeOverride) => patchHires({ negativeOverride })}
-        locked={locked}
-      >
-        <div className="h-20 min-w-0">
-          <PromptField
-            value={hires.negativePrompt}
-            onChange={(negativePrompt) => patchHires({ negativePrompt })}
-            placeholder="Negative"
-            side="negative"
-            checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
-            companionNegative={hires.negativePrompt}
-            onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
-          />
-        </div>
-      </CheckRow>
+      </section>
     </div>
   )
 }

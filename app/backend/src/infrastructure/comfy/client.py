@@ -190,8 +190,8 @@ def _workflow_params(data: Any) -> list[str]:
     for node in _workflow_nodes(data):
         kind = str(node.get("class_type") or "")
         title = str((node.get("_meta") or {}).get("title") or "").lower()
-        if "hires" in title:
-            if kind == "ImageUpscaleWithModel" or "KSampler" in kind:
+        if title.startswith("port:") or "hires" in title:
+            if "hires" in title and (kind == "ImageUpscaleWithModel" or "KSampler" in kind):
                 keys.add("hires")
             continue
         if kind in {"CheckpointLoaderSimple", "UNETLoader"}:
@@ -218,14 +218,24 @@ def _workflow_params(data: Any) -> list[str]:
             keys.add("hires")
     if clips >= 2:
         keys.update({"prompt", "negativePrompt"})
+    extras = data.get("extras") if isinstance(data, dict) else None
+    if isinstance(extras, list):
+        keys.update(str(item) for item in extras if item)
     return sorted(keys)
+
+
+def _main_dir() -> Path:
+    return WORKFLOWS / "main"
 
 
 def list_workflows() -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    if not WORKFLOWS.is_dir():
+    folder = _main_dir()
+    if not folder.is_dir():
         return items
-    for path in sorted(WORKFLOWS.glob("*.json")):
+    for path in sorted(folder.glob("*.json")):
+        if path.stem.endswith("_raw"):
+            continue
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
@@ -243,9 +253,9 @@ def list_workflows() -> list[dict[str, Any]]:
 
 def load_workflow(name: str) -> dict[str, Any]:
     stem = Path(name).stem
-    if not stem or stem in {".", ".."}:
+    if not stem or stem in {".", ".."} or stem.endswith("_raw"):
         raise ComfyError("not_found", "workflow not found", status=404)
-    path = WORKFLOWS / f"{stem}.json"
+    path = _main_dir() / f"{stem}.json"
     if not path.is_file():
         raise ComfyError("not_found", f"workflow not found: {stem}", status=404)
     return json.loads(path.read_text(encoding="utf-8"))

@@ -35,8 +35,13 @@ type SavedParams = {
   scheduler?: string
   width?: number
   height?: number
+  denoise?: number
+  upscale_method?: string
+  crop?: string
+  scale?: number
   interrupted?: boolean
   models?: SavedModel[]
+  hires?: SavedParams
 }
 
 type BlomboMeta = {
@@ -241,6 +246,12 @@ function hashOf(row?: SavedHashes) {
   return row?.autov2 || row?.sha256 || row?.autov3 || row?.autov1 || ''
 }
 
+function ckptOf(params: SavedParams) {
+  return (params.models || []).find(
+    (item) => item.kind === 'checkpoints' || item.kind === 'diffusion_models' || item.kind === 'checkpoint',
+  )
+}
+
 function hitFor(hashes: SavedHashes | undefined, hits: Record<string, CivitaiVersion | null>) {
   for (const key of ['autov2', 'sha256', 'autov3', 'autov1'] as const) {
     const digest = hashes?.[key]?.toLowerCase()
@@ -256,7 +267,7 @@ function v2Rows(
   civitai: CivitaiVersion | null,
   hits: Record<string, CivitaiVersion | null>,
 ): MetaRow[] {
-  const ckpt = (params.models || []).find((item) => item.kind === 'checkpoints' || item.kind === 'diffusion_models' || item.kind === 'checkpoint')
+  const ckpt = ckptOf(params)
   const ckptHash = hashOf(ckpt?.hashes)
   const modelName = civitai?.model?.name || ckptHash
   const rows: MetaRow[] = [
@@ -264,11 +275,15 @@ function v2Rows(
     { label: 'Sampler', value: params.sampler || '' },
     { label: 'Scheduler', value: params.scheduler || '' },
     { label: 'CFG', value: params.cfg != null ? String(params.cfg) : '' },
+    { label: 'Denoise', value: params.denoise != null ? String(params.denoise) : '' },
     { label: 'Seed', value: params.seed != null ? String(params.seed) : '' },
     {
       label: 'Size',
       value: params.width != null && params.height != null ? `${params.width}x${params.height}` : '',
     },
+    { label: 'Scale', value: params.scale != null ? String(params.scale) : '' },
+    { label: 'Method', value: params.upscale_method || '' },
+    { label: 'Crop', value: params.crop || '' },
     { label: 'Model', value: modelName, version: civitai || undefined },
     { label: 'Model hash', value: ckptHash },
     { label: 'Interrupted', value: params.interrupted ? 'True' : '' },
@@ -333,7 +348,7 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
     return <p className="text-sm text-muted">Reading…</p>
   }
   if (!text && !Object.keys(raw).length) {
-    return <p className="text-sm text-muted">Drop an image or .safetensors file</p>
+    return <p className="text-sm text-muted">Drop images, videos, or a .safetensors file</p>
   }
   const blob = isV2(metadata) ? metadata : null
   const hits = loraCivitai || {}
@@ -343,6 +358,10 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
   const promptRaw = blob ? blob.params.prompt_raw || '' : ''
   const negative = blob ? blob.params.negative_prompt || '' : ''
   const negativeRaw = blob ? blob.params.negative_prompt_raw || '' : ''
+  const hires = blob?.params.hires
+  const hiresCivitai = hires ? hitFor(ckptOf(hires)?.hashes, hits) : null
+  const hiresRows = hires ? v2Rows(hires, hiresCivitai, hits) : []
+  const hiresLoras = hires ? v2Loras(hires, hits) : []
   const rawKeys = Object.keys(raw).sort((a, b) => Number(a === 'prompt') - Number(b === 'prompt'))
   const jsonText = blob ? JSON.stringify(blob, null, 2) : ''
 
@@ -358,6 +377,20 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
           loras={loras}
           loraCivitai={hits}
         />
+      ) : null}
+      {hires ? (
+        <div className="flex min-w-0 flex-col gap-2">
+          <h2 className="text-xs text-label">Hires. fix</h2>
+          <GenMetaPanel
+            prompt={hires.prompt || ''}
+            promptRaw={hires.prompt_raw || ''}
+            negative={hires.negative_prompt || ''}
+            negativeRaw={hires.negative_prompt_raw || ''}
+            rows={hiresRows}
+            loras={hiresLoras}
+            loraCivitai={hits}
+          />
+        </div>
       ) : null}
       {rawKeys.length ? (
         <ExpandSection title="Raw metadata" defaultOpen trailing={<RawSwitch mode={rawMode} onMode={setRawMode} />}>

@@ -45,6 +45,7 @@ export type UserSettings = {
   imageName?: string
   gridName?: string
   hiresName?: string
+  hiresTempAfterDays?: number
   imageFormat?: string
   gridFormat?: string
   imageQuality?: number

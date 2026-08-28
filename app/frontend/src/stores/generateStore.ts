@@ -52,8 +52,11 @@ export type HiresSettings = {
   crop: string
   steps: number
   cfg: number
+  cfgOverride: boolean
   sampler: string
+  samplerOverride: boolean
   scheduler: string
+  schedulerOverride: boolean
   denoise: number
   seed: number
   seedAfter: SeedAfter
@@ -85,10 +88,13 @@ export const DEFAULT_HIRES: HiresSettings = {
   upscaleModel: '',
   upscaleMethod: 'bilinear',
   crop: 'disabled',
-  steps: 15,
+  steps: 25,
   cfg: 4,
+  cfgOverride: false,
   sampler: 'euler',
+  samplerOverride: false,
   scheduler: 'sgm_uniform',
+  schedulerOverride: false,
   denoise: 0.55,
   seed: -1,
   seedAfter: 'randomize',
@@ -171,8 +177,11 @@ function mergeHires(raw: unknown, firstW = 832, firstH = 1216): HiresSettings {
     crop: typeof row.crop === 'string' && row.crop ? row.crop : base.crop,
     steps: Math.max(1, Math.min(150, Math.round(num(row.steps, base.steps)))),
     cfg: Math.max(1, Math.min(30, num(row.cfg, base.cfg))),
+    cfgOverride: Boolean(row.cfgOverride ?? row.cfg_override),
     sampler: typeof row.sampler === 'string' && row.sampler ? row.sampler : base.sampler,
+    samplerOverride: Boolean(row.samplerOverride ?? row.sampler_override),
     scheduler: typeof row.scheduler === 'string' && row.scheduler ? row.scheduler : base.scheduler,
+    schedulerOverride: Boolean(row.schedulerOverride ?? row.scheduler_override),
     denoise: Math.max(0, Math.min(1, num(row.denoise, base.denoise))),
     seed: Number.isFinite(num(row.seed, base.seed)) ? Math.round(num(row.seed, base.seed)) : base.seed,
     seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,

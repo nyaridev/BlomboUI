@@ -17,6 +17,7 @@ type FloatingModelsViewProps = {
   chromeKey?: string
   dismissOutside?: boolean
   closeOnSelect?: boolean
+  autoCheckpoint?: string
 }
 
 export function FloatingModelsView({
@@ -31,6 +32,7 @@ export function FloatingModelsView({
   chromeKey,
   dismissOutside = true,
   closeOnSelect = true,
+  autoCheckpoint,
 }: FloatingModelsViewProps) {
   const stored = useModelsStore((s) => s[kind])
   const items = itemsProp ?? stored
@@ -94,6 +96,7 @@ export function FloatingModelsView({
         fill
         fileOps={false}
         tileScale={galleryTileScale * 0.5}
+        autoCheckpoint={autoCheckpoint}
       />
     </div>,
     document.body,

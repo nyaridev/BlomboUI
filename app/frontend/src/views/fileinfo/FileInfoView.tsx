@@ -1,3 +1,4 @@
+import { type MediaCarouselItem } from '@/components/composites/models/MediaCarousel.tsx'
 import {
   fetchCivitaiImage,
   getCivitaiByHash,
@@ -21,18 +22,7 @@ import { ImageInfo } from '@/views/fileinfo/panels/image/ImageInfo.tsx'
 import { applyPngInfo, parsePngInfo, pngInfoSendable } from '@/views/fileinfo/panels/image/sections/parse.ts'
 import { SafetensorsInfo } from '@/views/fileinfo/panels/safetensors/SafetensorsInfo.tsx'
 import { embeddedHashes, readSafetensorsMetadata, type SafetensorsMeta } from '@/views/fileinfo/panels/safetensors/safetensors.ts'
-
-function isSafetensors(file: File) {
-  return file.name.toLowerCase().endsWith('.safetensors')
-}
-
-function isImage(file: File) {
-  return file.type.startsWith('image/')
-}
-
-function allowed(file: File) {
-  return isImage(file) || isSafetensors(file)
-}
+import { allowed, isMedia, isSafetensors, mediaItem, pngModels, revokeItems } from '@/views/fileinfo/fileDrop.ts'
 
 async function lookupCivitai(hashes: string[]): Promise<CivitaiVersion | null> {
   const seen = new Set<string>()
@@ -63,7 +53,8 @@ export function FileInfoView() {
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
   const [over, setOver] = useState(false)
-  const [preview, setPreview] = useState<string | null>(null)
+  const [previewItems, setPreviewItems] = useState<MediaCarouselItem[]>([])
+  const mediaFiles = useRef<File[]>([])
   const [library, setLibrary] = useState<{ kind: keyof ModelLists; path: string } | null>(null)
   const [replacing, setReplacing] = useState(false)
   const seq = useRef(0)
@@ -141,7 +132,8 @@ export function FileInfoView() {
     setError(null)
     setCivitai(null)
     setLoraCivitai({})
-    setPreview(null)
+    setPreviewItems([])
+    mediaFiles.current = []
     setLibrary({ kind: modelKind, path })
     setBusy(true)
     setCivitaiStatus('looking')
@@ -181,6 +173,33 @@ export function FileInfoView() {
     void openLibrary(incoming.kind, incoming.path)
   }, [location.pathname, location.key])
 
+  async function applyPngMeta(id: number, file: File) {
+    try {
+      const info = await readPngInfo(file)
+      if (id !== seq.current) {
+        return
+      }
+      setText(info.text)
+      setRaw(info.raw)
+      setPngMeta(info.metadata)
+      const { models, extra } = pngModels(info.metadata)
+      const ckpt = models.find((item) => item.kind === 'checkpoints' || item.kind === 'diffusion_models' || item.kind === 'checkpoint')
+      const all = [...models, ...extra].flatMap((item) => Object.values(item.hashes || {}).filter(Boolean))
+      const ckptHashes = Object.values(ckpt?.hashes || {}).filter(Boolean)
+      await Promise.all([loadCivitai(id, ckptHashes), loadLoraCivitai(id, all)])
+    } catch (err) {
+      if (id !== seq.current) {
+        return
+      }
+      setText(err instanceof Error ? err.message : 'Could not read metadata')
+      setRaw({})
+      setPngMeta(null)
+      setCivitai(null)
+      setLoraCivitai({})
+      setCivitaiStatus('idle')
+    }
+  }
+
   async function onFile(file: File | null) {
     const id = ++seq.current
     if (!file) {
@@ -194,7 +213,8 @@ export function FileInfoView() {
       setLoraCivitai({})
       setCivitaiStatus('idle')
       setBusy(false)
-      setPreview(null)
+      setPreviewItems([])
+      mediaFiles.current = []
       setLibrary(null)
       return
     }
@@ -204,7 +224,8 @@ export function FileInfoView() {
     setLoraCivitai({})
     setCivitaiStatus('idle')
     setLibrary(null)
-    setPreview(isImage(file) ? URL.createObjectURL(file) : null)
+    setPreviewItems([])
+    mediaFiles.current = []
     if (isSafetensors(file)) {
       setKind('safetensors')
       setText('')
@@ -235,32 +256,42 @@ export function FileInfoView() {
     setKind('image')
     setMeta(null)
     setPngMeta(null)
-    try {
-      const info = await readPngInfo(file)
-      if (id !== seq.current) {
-        return
-      }
-      setText(info.text)
-      setRaw(info.raw)
-      setPngMeta(info.metadata)
-      const params = info.metadata.params as { prompt?: string; prompt_raw?: string; models?: { kind?: string; hashes?: Record<string, string> }[] } | undefined
-      const models = info.metadata.version === 2 && typeof params?.prompt === 'string' && typeof params?.prompt_raw === 'string' && Array.isArray(params.models) ? params.models : []
-      const ckpt = models.find((item) => item.kind === 'checkpoints' || item.kind === 'diffusion_models' || item.kind === 'checkpoint')
-      const all = models.flatMap((item) => Object.values(item.hashes || {}).filter(Boolean))
-      const ckptHashes = Object.values(ckpt?.hashes || {}).filter(Boolean)
-      await Promise.all([loadCivitai(id, ckptHashes), loadLoraCivitai(id, all)])
-    } catch (err) {
-      if (id !== seq.current) {
-        return
-      }
-      setText(err instanceof Error ? err.message : 'Could not read metadata')
-      setRaw({})
-      setPngMeta(null)
-    } finally {
+    setText('')
+    setRaw({})
+    mediaFiles.current = [file]
+    setPreviewItems([mediaItem(file)])
+  }
+
+  function onMedia(files: File[]) {
+    seq.current += 1
+    setBusy(true)
+    setError(null)
+    setCivitai(null)
+    setLoraCivitai({})
+    setCivitaiStatus('idle')
+    setLibrary(null)
+    setKind('image')
+    setMeta(null)
+    setText('')
+    setRaw({})
+    setPngMeta(null)
+    mediaFiles.current = files
+    setPreviewItems(files.map(mediaItem))
+  }
+
+  function onSlide(url: string) {
+    const index = previewItems.findIndex((item) => item.url === url)
+    const file = mediaFiles.current[index]
+    if (!file) {
+      return
+    }
+    const id = seq.current
+    setBusy(true)
+    void applyPngMeta(id, file).finally(() => {
       if (id === seq.current) {
         setBusy(false)
       }
-    }
+    })
   }
 
   async function sendToGenerate() {
@@ -330,24 +361,19 @@ export function FileInfoView() {
   }
 
   useEffect(() => {
-    if (!preview?.startsWith('blob:')) {
-      return
-    }
-    return () => URL.revokeObjectURL(preview)
-  }, [preview])
-
-  function takeFile(file: File | null) {
-    if (file && !allowed(file)) {
-      return
-    }
-    void onFile(file)
-  }
+    return () => revokeItems(previewItems)
+  }, [previewItems])
 
   function fromList(files: FileList | null) {
-    const file = files?.[0]
-    if (file) {
-      takeFile(file)
+    const list = [...(files || [])].filter(allowed)
+    if (!list.length) {
+      return
     }
+    if (isSafetensors(list[0])) {
+      void onFile(list[0])
+      return
+    }
+    void onMedia(list.filter(isMedia))
   }
 
   function onDragEnter(event: DragEvent) {
@@ -391,7 +417,8 @@ export function FileInfoView() {
       <input
         ref={picker}
         type="file"
-        accept="image/*,.safetensors"
+        multiple
+        accept="image/*,video/*,.safetensors"
         className="hidden"
         onChange={(event) => {
           fromList(event.target.files)
@@ -404,14 +431,15 @@ export function FileInfoView() {
           className="flex min-h-full w-full flex-1 cursor-pointer items-center justify-center px-6"
           onClick={() => picker.current?.click()}
         >
-          <p className="text-sm text-muted">Drop an image or .safetensors file, or click to pick</p>
+          <p className="text-sm text-muted">Drop images, videos, or a .safetensors file, or click to pick</p>
         </button>
       ) : (
         <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-4 overflow-x-clip px-10 py-4">
           <CivitaiSection
             info={civitai}
             status={kind === 'safetensors' ? civitaiStatus : 'idle'}
-            preview={kind === 'image' ? preview : null}
+            items={kind === 'image' ? previewItems : undefined}
+            onSlide={kind === 'image' ? onSlide : undefined}
             onPick={() => picker.current?.click()}
             onClear={() => void onFile(null)}
             onGenerate={canSend ? () => void sendToGenerate() : undefined}

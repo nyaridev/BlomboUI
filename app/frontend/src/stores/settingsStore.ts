@@ -77,6 +77,7 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setImageName: (value: string) => void
   setGridName: (value: string) => void
   setHiresName: (value: string) => void
+  setHiresTempAfterDays: (value: number) => void
   setImageFormat: (value: ImageFormat) => void
   setGridFormat: (value: ImageFormat) => void
   setImageQuality: (value: number) => void
@@ -200,6 +201,7 @@ const KEYS = [
   'imageName',
   'gridName',
   'hiresName',
+  'hiresTempAfterDays',
   'imageFormat',
   'gridFormat',
   'imageQuality',

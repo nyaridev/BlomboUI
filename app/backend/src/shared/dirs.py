@@ -315,6 +315,9 @@ def allowed_file(path: Path) -> bool:
         return False
     if not real.is_file():
         return False
+    tmp = (RUNTIME / "tmp").resolve()
+    if real == tmp or tmp in real.parents:
+        return True
     for root in gallery_roots():
         if real == root or root in real.parents:
             return True

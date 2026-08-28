@@ -23,6 +23,7 @@ import {
   cleanLargeJpegMaxKb,
   cleanHistoryLimit,
   cleanGalleryPageSize,
+  cleanHiresTempAfterDays,
 } from './clean.ts'
 import {
   GALLERY_BROWSE_DIR_DEFAULT,
@@ -235,6 +236,10 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     },
     setHiresName: (hiresName) => {
       set({ hiresName })
+      persist()
+    },
+    setHiresTempAfterDays: (hiresTempAfterDays) => {
+      set({ hiresTempAfterDays: cleanHiresTempAfterDays(hiresTempAfterDays) })
       persist()
     },
     setImageFormat: (imageFormat) => {

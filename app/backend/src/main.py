@@ -29,6 +29,7 @@ async def lifespan(_app: FastAPI):
     complete.schedule_rebuild()
     models.start()
     threading.Thread(target=_warm_hashes, daemon=True, name="hash-warm").start()
+    threading.Thread(target=_purge_hires_tmp, daemon=True, name="hires-temp-purge").start()
     try:
         await asyncio.to_thread(gallery.purge_expired)
     except OSError:
@@ -39,6 +40,13 @@ async def lifespan(_app: FastAPI):
 
 def _warm_hashes() -> None:
     models.warm(models.hash_files())
+
+
+def _purge_hires_tmp() -> None:
+    try:
+        generate.purge_hires_tmp()
+    except OSError:
+        pass
 
 
 app = FastAPI(title="BlomboUI", lifespan=lifespan)

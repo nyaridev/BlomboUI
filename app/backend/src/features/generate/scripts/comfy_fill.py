@@ -3,6 +3,7 @@ from __future__ import annotations
 import copy
 from typing import Any, Callable
 
+from features.generate.scripts.compose import apply_hires
 from features.models.scripts import loras as lora_tags
 
 
@@ -44,6 +45,10 @@ def _title(node: dict[str, Any]) -> str:
 
 def _is_hires(node: dict[str, Any]) -> bool:
     return "hires" in _title(node)
+
+
+def _is_port(node: dict[str, Any]) -> bool:
+    return _title(node).startswith("port:")
 
 
 def _hires_blob(values: dict[str, Any]) -> dict[str, Any]:
@@ -128,25 +133,71 @@ def _hires_seed(values: dict[str, Any], blob: dict[str, Any]) -> int:
 def _fill_hires_sampler(inputs: dict[str, Any], values: dict[str, Any]) -> None:
     blob = _hires_blob(values)
     try:
-        steps = int(blob.get("steps") if blob.get("steps") is not None else values["steps"])
+        steps = int(blob.get("steps") if blob.get("steps") is not None else 25)
     except (TypeError, ValueError):
-        steps = int(values["steps"])
+        steps = 25
     try:
-        cfg = float(blob.get("cfg") if blob.get("cfg") is not None else values["cfg"])
+        if _flag(blob, "cfg_override", "cfgOverride"):
+            cfg = float(blob.get("cfg") if blob.get("cfg") is not None else values["cfg"])
+        else:
+            cfg = float(values["cfg"])
     except (TypeError, ValueError):
         cfg = float(values["cfg"])
     try:
         denoise = float(blob.get("denoise") if blob.get("denoise") is not None else 0.55)
     except (TypeError, ValueError):
         denoise = 0.55
-    sampler = str(blob.get("sampler") or values.get("sampler") or "")
-    scheduler = str(blob.get("scheduler") or values.get("scheduler") or "")
+    first_sampler = str(values.get("sampler") or "")
+    first_scheduler = str(values.get("scheduler") or "")
+    sampler = (
+        str(blob.get("sampler") or first_sampler)
+        if _flag(blob, "sampler_override", "samplerOverride")
+        else first_sampler
+    )
+    scheduler = (
+        str(blob.get("scheduler") or first_scheduler)
+        if _flag(blob, "scheduler_override", "schedulerOverride")
+        else first_scheduler
+    )
     inputs["seed"] = _hires_seed(values, blob)
     inputs["steps"] = max(1, min(150, steps))
     inputs["cfg"] = cfg
     inputs["sampler_name"] = sampler
     inputs["scheduler"] = scheduler
     inputs["denoise"] = max(0.0, min(1.0, denoise))
+
+
+def hires_meta_fields(values: dict[str, Any]) -> dict[str, Any]:
+    blob = _hires_blob(values)
+    inputs: dict[str, Any] = {}
+    _fill_hires_sampler(inputs, values)
+    method, crop = _hires_scale_opts(blob)
+    width, height = hires_target_size(values)
+    out: dict[str, Any] = {
+        "steps": inputs["steps"],
+        "cfg": inputs["cfg"],
+        "sampler": inputs["sampler_name"],
+        "scheduler": inputs["scheduler"],
+        "denoise": inputs["denoise"],
+        "width": width,
+        "height": height,
+        "upscale_method": method,
+        "crop": crop,
+    }
+    mode = str(blob.get("size_mode") or blob.get("sizeMode") or "scale").strip().lower()
+    if mode not in {"raw", "scaler", "set"}:
+        try:
+            scale = float(blob.get("scale") if blob.get("scale") is not None else 1.5)
+        except (TypeError, ValueError):
+            scale = 1.5
+        out["scale"] = max(1.0, min(8.0, scale))
+    if _seed_override(blob):
+        out["seed"] = inputs["seed"]
+    if _flag(blob, "prompt_override", "promptOverride"):
+        out["prompt"] = str(blob.get("prompt") or "")
+    if _flag(blob, "negative_override", "negativeOverride"):
+        out["negative_prompt"] = str(blob.get("negative_prompt") or blob.get("negativePrompt") or "")
+    return out
 
 
 def _find_node(
@@ -157,6 +208,8 @@ def _find_node(
 ) -> tuple[str, dict[str, Any]] | tuple[None, None]:
     for key, node in workflow.items():
         if not isinstance(node, dict) or node.get("class_type") != kind:
+            continue
+        if _is_port(node):
             continue
         if contains is not None and contains not in _title(node):
             continue
@@ -172,6 +225,8 @@ def _typed_nodes(workflow: dict[str, Any], kind: str, hires: bool | None = None)
     out: list[tuple[str, dict[str, Any]]] = []
     for key, node in workflow.items():
         if not isinstance(node, dict) or node.get("class_type") != kind:
+            continue
+        if _is_port(node):
             continue
         if hires is True and not _is_hires(node):
             continue
@@ -432,7 +487,6 @@ def _rewire_save_to_first_decode(workflow: dict[str, Any]) -> None:
 def _apply_hires_saves(workflow: dict[str, Any], values: dict[str, Any]) -> None:
     blob = _hires_blob(values)
     on = hires_enabled(values)
-    save_before = on and _flag(blob, "save_before", "saveBefore", True)
     clear_vram = on and _flag(blob, "clear_vram", "clearVram", False)
     first_id, _ = _find_node(workflow, "VAEDecode", hires=False)
     hires_id, _ = _find_node(workflow, "VAEDecode", hires=True)
@@ -440,11 +494,10 @@ def _apply_hires_saves(workflow: dict[str, Any], values: dict[str, Any]) -> None
     first_save_id, first_save = _find_node(workflow, "SaveImage", contains="first")
     before_id, before = _find_node(workflow, "easy cleanGpuUsed", contains="before")
     after_id, after = _find_node(workflow, "easy cleanGpuUsed", contains="after")
-    if not save_before:
-        if first_save_id:
-            workflow.pop(first_save_id, None)
-    elif first_save is not None and first_id:
+    if on and first_save is not None and first_id:
         first_save.setdefault("inputs", {})["images"] = [first_id, 0]
+    elif not on and first_save_id:
+        workflow.pop(first_save_id, None)
     if not clear_vram:
         if before_id:
             workflow.pop(before_id, None)
@@ -474,7 +527,10 @@ def fill_txt2img(
     clip_negative = lora_tags.strip_tags(str(values.get("negative_prompt") or ""))
     values["prompt_clip"] = clip_prompt
     values["negative_clip"] = clip_negative
-    workflow = graph(copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img"))))
+    loaded = copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img")))
+    if hires_enabled(values):
+        loaded = apply_hires(loaded, values)
+    workflow = graph(loaded)
     positive_done = False
     batch_size = max(1, int(values.get("batch_size") or 1))
     blob = _hires_blob(values)
@@ -485,6 +541,8 @@ def fill_txt2img(
         kind = node.get("class_type")
         inputs = node.setdefault("inputs", {})
         title = _title(node)
+        if _is_port(node):
+            continue
         if kind == "CheckpointLoaderSimple":
             if _is_hires(node):
                 continue

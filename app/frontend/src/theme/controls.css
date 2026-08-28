@@ -450,6 +450,15 @@ input[type='range'].slider::-moz-range-thumb {
 	background-color: var(--color-field);
 }
 
+.section-body .bg-field .number-field,
+.section-body .bg-field input:not([type='checkbox']):not([type='radio']):not([type='range']),
+.section-body .bg-field textarea:not(.prompt-editor),
+.section-body .bg-field select,
+.section-body .bg-field .field-select,
+.section-body .bg-field .prompt-field {
+	background-color: var(--color-panel);
+}
+
 .section-body .field-select input {
   background: transparent;
 }

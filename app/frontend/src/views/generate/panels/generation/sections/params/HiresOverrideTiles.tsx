@@ -41,10 +41,12 @@ export function HiresOverrideTiles({
   const teView = useThumbView('text_encoders')
   const vaeView = useThumbView('vae')
   const loraView = useThumbView('loras')
+  const generateCheckpoint = useGenerateStore((s) => s.checkpoint)
   const baseModels = useMemo(() => [...checkpoints, ...diffusionModels], [checkpoints, diffusionModels])
   const unetSet = useMemo(() => new Set(diffusionModels), [diffusionModels])
   const diffusion = hiresDiffusion(hires.checkpoint, diffusionModels)
-  const checkpointItem = baseModels.find((item) => modelPath(item) === hires.checkpoint)
+  const typeSource = hires.modelOverride ? hires.checkpoint : generateCheckpoint
+  const checkpointItem = baseModels.find((item) => modelPath(item) === typeSource)
   const [hoverLoras, setHoverLoras] = useState(false)
   const taken = hires.loras.map((row) => row.path)
 
@@ -156,6 +158,7 @@ export function HiresOverrideTiles({
                   disabled={locked}
                   warn={typeMismatch}
                   hideLabel
+                  autoCheckpoint={typeSource}
                   strengthControl={
                     <LoraStrengthSlider
                       label={displayName(item, row.path)}
@@ -180,6 +183,7 @@ export function HiresOverrideTiles({
               onChange={addLora}
               disabled={locked}
               hideLabel
+              autoCheckpoint={typeSource}
             />
           </div>
         </div>
@@ -204,6 +208,7 @@ function PickTile({
   hideLabel,
   strengthControl,
   showStrengthControl,
+  autoCheckpoint,
 }: {
   role: string
   kind: keyof ModelLists
@@ -220,6 +225,7 @@ function PickTile({
   hideLabel?: boolean
   strengthControl?: ReactNode
   showStrengthControl?: boolean
+  autoCheckpoint?: string
 }) {
   const style = useGenerateStore((s) => s.modelTileStyle)
   const spec = modelTileSpec(style)
@@ -275,6 +281,7 @@ function PickTile({
             setOpen(false)
           }}
           onClose={() => setOpen(false)}
+          autoCheckpoint={autoCheckpoint}
         />
       ) : null}
     </div>

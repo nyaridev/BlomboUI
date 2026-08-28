@@ -300,6 +300,9 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
             <CheckRow on={hires} onChange={setHires}>
               <span className="text-sm text-ink">Model override</span>
             </CheckRow>
+            <CheckRow on={hires} onChange={setHires} tone="field">
+              <span className="text-sm text-ink">Field tone</span>
+            </CheckRow>
           </SettingsBlock>
           <SettingsBlock query={query} title="Section" className="flex flex-col gap-2">
             <ExpandSection title="Advanced">
@@ -311,6 +314,11 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
                 <SelectField value={choice} onChange={setChoice} options={['euler', 'euler_a', 'dpmpp_2m']} />
               </div>
             </ExpandSection>
+            <div className="rounded border border-line bg-field p-2">
+              <ExpandSection title="Overrides" tone="inset" defaultOpen>
+                <p className="text-sm text-muted">Nested well: panel header, bg body.</p>
+              </ExpandSection>
+            </div>
           </SettingsBlock>
           <SettingsBlock query={query} title="Pane splitter" className="flex flex-col gap-2">
             <div ref={splitterRef} className="flex h-24 min-w-0 items-stretch rounded border border-line bg-field">

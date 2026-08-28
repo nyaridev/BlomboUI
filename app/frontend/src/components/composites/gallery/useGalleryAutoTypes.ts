@@ -31,18 +31,26 @@ export function useGalleryAutoTypes(
   filterKey: string,
   autoType: boolean,
   setGalleryTypes: (key: string, value: string[]) => void,
-) {
-  const checkpoint = useGenerateStore((s) => (generate ? s.checkpoint : ''))
+  checkpointOverride?: string,
+): string[] | null {
+  const storeCheckpoint = useGenerateStore((s) => (generate ? s.checkpoint : ''))
+  const checkpoint = checkpointOverride ?? storeCheckpoint
+  const persist = checkpointOverride == null
   const checkpoints = useModelsStore((s) => (generate ? s.checkpoints : EMPTY_MODELS))
   const diffusionModels = useModelsStore((s) => (generate ? s.diffusion_models : EMPTY_MODELS))
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes)
+  const storedTypes = useSettingsStore((s) => s.galleryTypes[filterKey] ?? EMPTY_TYPES)
   const checkpointTypes = useMemo(() => {
     const item = [...checkpoints, ...diffusionModels].find((row) => modelPath(row) === checkpoint)
     return item?.types ?? EMPTY_TYPES
   }, [checkpoint, checkpoints, diffusionModels])
+  const overlay = useMemo(
+    () => [...storedTypes.filter(isOtherKind), ...autoArchTypes(checkpointTypes, hiddenModelTypes)],
+    [checkpointTypes, hiddenModelTypes, storedTypes],
+  )
 
   useEffect(() => {
-    if (!generate || !autoType) {
+    if (!generate || !autoType || !persist) {
       return
     }
     const current = useSettingsStore.getState().galleryTypes[filterKey] ?? EMPTY_TYPES
@@ -52,5 +60,10 @@ export function useGalleryAutoTypes(
       return
     }
     setGalleryTypes(filterKey, next)
-  }, [autoType, checkpointTypes, filterKey, generate, hiddenModelTypes, setGalleryTypes])
+  }, [autoType, checkpointTypes, filterKey, generate, hiddenModelTypes, persist, setGalleryTypes])
+
+  if (!generate || !autoType || persist) {
+    return null
+  }
+  return overlay
 }

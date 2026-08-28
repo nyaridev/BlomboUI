@@ -180,6 +180,11 @@ def _clean(raw: Any) -> dict[str, Any]:
     hires_name = _name_template(raw.get("hiresName"), HIRES_NAME_DEFAULT) if "hiresName" in raw else None
     if hires_name:
         out["hiresName"] = hires_name
+    if "hiresTempAfterDays" in raw:
+        try:
+            out["hiresTempAfterDays"] = max(1, min(365, int(raw["hiresTempAfterDays"])))
+        except (TypeError, ValueError):
+            pass
     if "imageFormat" in raw:
         name = str(raw["imageFormat"]).lower()
         if name == "jpeg":

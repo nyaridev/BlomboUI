@@ -9,6 +9,7 @@ from infrastructure.comfy.client import (
     list_workflows,
     reachable,
 )
+from features.generate.scripts.job_output import purge_hires_tmp
 from features.generate.scripts.jobs import (
     create_job,
     get_job,
@@ -48,6 +49,7 @@ __all__ = [
     "list_workflows",
     "preview_bytes",
     "preview_media",
+    "purge_hires_tmp",
     "reachable",
     "reorder_templates",
     "set_apply",

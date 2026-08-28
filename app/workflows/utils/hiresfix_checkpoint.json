@@ -1,0 +1,196 @@
+{
+  "attach": "after_decode",
+  "ports": {
+    "IMAGE": ["12", 0]
+  },
+  "1": {
+    "inputs": {
+      "image": "example.png",
+      "upload": "image"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "PORT:IMAGE"
+    }
+  },
+  "2": {
+    "inputs": {
+      "ckpt_name": ""
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "PORT:MODEL"
+    }
+  },
+  "3": {
+    "inputs": {
+      "clip_name": "",
+      "type": "stable_diffusion",
+      "device": "default"
+    },
+    "class_type": "CLIPLoader",
+    "_meta": {
+      "title": "PORT:CLIP"
+    }
+  },
+  "4": {
+    "inputs": {
+      "vae_name": ""
+    },
+    "class_type": "VAELoader",
+    "_meta": {
+      "title": "PORT:VAE"
+    }
+  },
+  "5": {
+    "inputs": {
+      "text": "",
+      "clip": ["3", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "PORT:POSITIVE"
+    }
+  },
+  "6": {
+    "inputs": {
+      "text": "",
+      "clip": ["3", 0]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "PORT:NEGATIVE"
+    }
+  },
+  "7": {
+    "inputs": {
+      "model_name": ""
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Hires Upscale Model"
+    }
+  },
+  "8": {
+    "inputs": {
+      "upscale_model": ["7", 0],
+      "image": ["1", 0]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Hires Upscale Image"
+    }
+  },
+  "9": {
+    "inputs": {
+      "upscale_method": "bilinear",
+      "width": 1248,
+      "height": 1824,
+      "crop": "disabled",
+      "image": ["8", 0]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Scale Image"
+    }
+  },
+  "10": {
+    "inputs": {
+      "pixels": ["9", 0],
+      "vae": ["4", 0]
+    },
+    "class_type": "VAEEncode",
+    "_meta": {
+      "title": "Hires VAE Encode"
+    }
+  },
+  "11": {
+    "inputs": {
+      "seed": 0,
+      "steps": 25,
+      "cfg": 4,
+      "sampler_name": "euler",
+      "scheduler": "sgm_uniform",
+      "denoise": 0.55,
+      "model": ["2", 0],
+      "positive": ["5", 0],
+      "negative": ["6", 0],
+      "latent_image": ["10", 0]
+    },
+    "class_type": "KSampler",
+    "_meta": {
+      "title": "Hires KSampler"
+    }
+  },
+  "12": {
+    "inputs": {
+      "samples": ["11", 0],
+      "vae": ["4", 0]
+    },
+    "class_type": "VAEDecode",
+    "_meta": {
+      "title": "Hires VAE Decode"
+    }
+  },
+  "13": {
+    "inputs": {
+      "ckpt_name": ""
+    },
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {
+      "title": "Hires Checkpoint"
+    }
+  },
+  "14": {
+    "inputs": {
+      "PowerLoraLoaderHeaderWidget": {
+        "type": "PowerLoraLoaderHeaderWidget"
+      },
+      "➕ Add Lora": "",
+      "model": ["13", 0],
+      "clip": ["13", 1]
+    },
+    "class_type": "Power Lora Loader (rgthree)",
+    "_meta": {
+      "title": "Hires Power Lora Loader"
+    }
+  },
+  "15": {
+    "inputs": {
+      "text": "",
+      "clip": ["14", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Hires Positive"
+    }
+  },
+  "16": {
+    "inputs": {
+      "text": "",
+      "clip": ["14", 1]
+    },
+    "class_type": "CLIPTextEncode",
+    "_meta": {
+      "title": "Hires Negative"
+    }
+  },
+  "17": {
+    "inputs": {
+      "anything": ["1", 0]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM Before"
+    }
+  },
+  "18": {
+    "inputs": {
+      "anything": ["12", 0]
+    },
+    "class_type": "easy cleanGpuUsed",
+    "_meta": {
+      "title": "Clean VRAM After"
+    }
+  }
+}

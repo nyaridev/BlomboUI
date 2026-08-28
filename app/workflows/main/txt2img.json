@@ -1,4 +1,21 @@
 {
+  "apply": [
+    "sampler",
+    "scheduler",
+    "steps",
+    "cfg",
+    "seed",
+    "outputPath"
+  ],
+  "extras": ["hires"],
+  "ports": {
+    "IMAGE": ["9", 0],
+    "MODEL": ["12", 0],
+    "CLIP": ["12", 1],
+    "VAE": ["1", 2],
+    "POSITIVE": ["2", 0],
+    "NEGATIVE": ["3", 0]
+  },
   "1": {
     "inputs": {
       "ckpt_name": ""
@@ -11,10 +28,7 @@
   "2": {
     "inputs": {
       "text": "",
-      "clip": [
-        "15",
-        1
-      ]
+      "clip": ["12", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -24,10 +38,7 @@
   "3": {
     "inputs": {
       "text": "",
-      "clip": [
-        "15",
-        1
-      ]
+      "clip": ["12", 1]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -42,49 +53,20 @@
       "sampler_name": "euler",
       "scheduler": "sgm_uniform",
       "denoise": 1,
-      "model": [
-        "15",
-        0
-      ],
-      "positive": [
-        "2",
-        0
-      ],
-      "negative": [
-        "3",
-        0
-      ],
-      "latent_image": [
-        "7",
-        0
-      ]
+      "model": ["12", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["7", 0]
     },
     "class_type": "KSampler",
     "_meta": {
       "title": "KSampler"
     }
   },
-  "6": {
-    "inputs": {
-      "aspect_ratio": "3:4 (Portrait Standard)",
-      "megapixels": 1,
-      "multiple": 8
-    },
-    "class_type": "ResolutionSelector",
-    "_meta": {
-      "title": "Resolution Selector"
-    }
-  },
   "7": {
     "inputs": {
-      "width": [
-        "6",
-        0
-      ],
-      "height": [
-        "6",
-        1
-      ],
+      "width": 832,
+      "height": 1216,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -94,47 +76,42 @@
   },
   "9": {
     "inputs": {
-      "samples": [
-        "5",
-        0
-      ],
-      "vae": [
-        "1",
-        2
-      ]
+      "samples": ["5", 0],
+      "vae": ["1", 2]
     },
     "class_type": "VAEDecode",
     "_meta": {
       "title": "VAE Decode"
     }
   },
+  "10": {
+    "inputs": {
+      "filename_prefix": "blombo",
+      "images": ["9", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save First Pass"
+    }
+  },
   "11": {
     "inputs": {
-      "filename_prefix": "ComfyUI",
-      "images": [
-        "9",
-        0
-      ]
+      "filename_prefix": "blombo",
+      "images": ["9", 0]
     },
     "class_type": "SaveImage",
     "_meta": {
       "title": "Save Image"
     }
   },
-  "15": {
+  "12": {
     "inputs": {
       "PowerLoraLoaderHeaderWidget": {
         "type": "PowerLoraLoaderHeaderWidget"
       },
       "➕ Add Lora": "",
-      "model": [
-        "1",
-        0
-      ],
-      "clip": [
-        "1",
-        1
-      ]
+      "model": ["1", 0],
+      "clip": ["1", 1]
     },
     "class_type": "Power Lora Loader (rgthree)",
     "_meta": {

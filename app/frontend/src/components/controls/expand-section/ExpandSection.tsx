@@ -18,6 +18,7 @@ type ExpandSectionProps = {
   open?: boolean
   onOpenChange?: (open: boolean) => void
   locked?: boolean
+  tone?: 'field' | 'inset'
 }
 
 export function ExpandSection({
@@ -31,6 +32,7 @@ export function ExpandSection({
   open: openProp,
   onOpenChange,
   locked = false,
+  tone = 'field',
 }: ExpandSectionProps) {
   const togglable = onEnabled != null
   const [uncontrolled, setUncontrolled] = useState(() => defaultOpen || (togglable && enabled))
@@ -63,7 +65,15 @@ export function ExpandSection({
   }
 
   return (
-    <div className={['rounded border border-line bg-field', locked ? 'pointer-events-auto' : ''].filter(Boolean).join(' ')}>
+    <div
+      className={[
+        'rounded border border-line',
+        tone === 'inset' ? 'bg-panel' : 'bg-field',
+        locked ? 'pointer-events-auto' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="flex items-center gap-2 px-2 py-1.5">
         {togglable ? (
           <CheckboxControl checked={enabled} onChange={(value) => onEnabled?.(value)} disabled={locked} />
@@ -89,7 +99,7 @@ export function ExpandSection({
         </button>
       </div>
       {open ? (
-        <div className="relative border-t border-line">
+        <div className={['relative border-t border-line', tone === 'inset' ? 'bg-bg' : ''].join(' ')}>
           <div
             ref={bodyRef}
             className={[

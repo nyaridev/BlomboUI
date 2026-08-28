@@ -13,6 +13,7 @@ import { CivitaiAccountSection, CivitaiMetadataSection, CIVITAI_ACCOUNT_QUERY, C
 import { PrimitivesSection } from '@/views/settings/panels/content/sections/other/PrimitivesSection.tsx'
 import { DirectoriesSection, DIRECTORIES_QUERY } from '@/views/settings/panels/content/sections/files/DirectoriesSection.tsx'
 import { SavingSection, SAVING_QUERY } from '@/views/settings/panels/content/sections/files/SavingSection.tsx'
+import { TempSection, TEMP_QUERY } from '@/views/settings/panels/content/sections/files/TempSection.tsx'
 import { ShortcutsSection, SHORTCUTS_QUERY } from '@/views/settings/panels/content/sections/other/ShortcutsSection.tsx'
 import { TabsSection, TABS_QUERY } from '@/views/settings/panels/content/sections/general/TabsSection.tsx'
 import { AutocompleteBehaviorSection, AutocompleteSection, AUTOCOMPLETE_GENERAL_QUERY, AUTOCOMPLETE_QUERY } from '@/views/settings/panels/content/sections/autocomplete/AutocompleteSection.tsx'
@@ -41,6 +42,7 @@ export const GROUPS = [
     pages: [
       { id: 'Directories', terms: DIRECTORIES_QUERY, Panel: DirectoriesSection },
       { id: 'Output', label: 'Saving', terms: SAVING_QUERY, Panel: SavingSection },
+      { id: 'Temp', terms: TEMP_QUERY, Panel: TempSection },
     ],
   },
   {

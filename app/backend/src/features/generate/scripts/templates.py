@@ -108,7 +108,7 @@ def default_apply(workflow: str = "") -> list[str]:
     stem = Path(workflow).stem
     if not stem or not _SAFE_WORKFLOW.fullmatch(stem):
         return _plain_apply()
-    path = WORKFLOWS / f"{stem}.json"
+    path = WORKFLOWS / "main" / f"{stem}.json"
     if not path.is_file():
         return _plain_apply()
     try:

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from contextlib import ExitStack, contextmanager
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
@@ -98,6 +99,163 @@ class SaveMetaTests(unittest.TestCase):
             self.assertNotIn("name", item)
         wait.assert_not_called()
         request.assert_not_called()
+
+    @contextmanager
+    def _hash_patches(self):
+        def fake_file(kind: str, name: str) -> Path:
+            return Path(f"/models/{kind}/{name}")
+
+        def fake_entry(path: Path) -> dict[str, str]:
+            stem = path.stem
+            return {"autov1": f"{stem}1", "autov2": f"{stem}2", "autov3": f"{stem}3", "sha256": f"{stem}s"}
+
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(models, "model_file", side_effect=fake_file))
+            stack.enter_context(patch.object(hashes, "wait"))
+            stack.enter_context(patch.object(hashes, "request"))
+            stack.enter_context(patch.object(hashes, "entry", side_effect=fake_entry))
+            yield
+
+    def test_pack_hires_snapshot_and_skips_hires_graph_models(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "width": 512,
+            "height": 512,
+            "checkpoint": "first.safetensors",
+            "loras": [{"lora": "base.safetensors", "strength": 0.5}],
+            "hires": {
+                "enabled": True,
+                "scale": 1.5,
+                "size_mode": "scale",
+                "upscale_model": "4x.pth",
+                "steps": 12,
+                "cfg": 4,
+                "cfg_override": True,
+                "sampler": "dpmpp_2m",
+                "sampler_override": True,
+                "scheduler": "karras",
+                "scheduler_override": True,
+                "denoise": 0.4,
+                "upscale_method": "lanczos",
+                "crop": "center",
+                "model_override": True,
+                "checkpoint": "hires.safetensors",
+                "lora_override": True,
+                "loras": [{"path": "detail.safetensors", "strength": 0.8}],
+            },
+        }
+        graph = {
+            "1": {
+                "class_type": "CheckpointLoaderSimple",
+                "_meta": {"title": "Load Checkpoint"},
+                "inputs": {"ckpt_name": "first.safetensors"},
+            },
+            "2": {
+                "class_type": "CheckpointLoaderSimple",
+                "_meta": {"title": "Hires Checkpoint"},
+                "inputs": {"ckpt_name": "hires.safetensors"},
+            },
+            "3": {
+                "class_type": "UpscaleModelLoader",
+                "_meta": {"title": "Hires Upscale"},
+                "inputs": {"model_name": "4x.pth"},
+            },
+        }
+        with self._hash_patches():
+            first = save_meta.pack_params(values, graph, kind="images")
+            hires = save_meta.pack_params(values, graph, kind="hires")
+        self.assertNotIn("hires", first)
+        kinds = {item["kind"] for item in first["models"]}
+        self.assertEqual(kinds, {"checkpoints", "loras"})
+        self.assertEqual(first["models"][0]["hashes"]["autov2"], "first2")
+        blob = hires["hires"]
+        self.assertEqual(blob["cfg"], 4)
+        self.assertEqual(blob["sampler"], "dpmpp_2m")
+        self.assertEqual(blob["scheduler"], "karras")
+        self.assertEqual(blob["denoise"], 0.4)
+        self.assertEqual(blob["steps"], 12)
+        self.assertEqual(blob["width"], 768)
+        self.assertEqual(blob["height"], 768)
+        self.assertEqual(blob["scale"], 1.5)
+        self.assertEqual(blob["upscale_method"], "lanczos")
+        self.assertEqual(blob["crop"], "center")
+        self.assertNotIn("seed", blob)
+        self.assertNotIn("prompt", blob)
+        hires_kinds = {item["kind"] for item in blob["models"]}
+        self.assertEqual(hires_kinds, {"upscale_models", "checkpoints", "loras"})
+        top_kinds = {item["kind"] for item in hires["models"]}
+        self.assertEqual(top_kinds, {"checkpoints", "loras"})
+        self.assertEqual(hires["models"][0]["hashes"]["autov2"], "first2")
+        self.assertTrue(any(item["kind"] == "upscale_models" for item in blob["models"]))
+        self.assertFalse(any(item["kind"] == "upscale_models" for item in hires["models"]))
+        taken = save_meta.take_params(hires)
+        self.assertIsNotNone(taken)
+        self.assertEqual(taken["hires"]["cfg"], 4)
+
+    def test_pack_hires_off_and_first_pass_have_no_hires_key(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "normal",
+            "width": 16,
+            "height": 16,
+            "checkpoint": "first.safetensors",
+            "hires": {"enabled": False, "upscale_model": "4x.pth", "cfg_override": True, "cfg": 4},
+        }
+        with self._hash_patches():
+            packed = save_meta.pack_params(values, None, kind="hires")
+            first = save_meta.pack_params(values, None, kind="images")
+        self.assertNotIn("hires", packed)
+        self.assertNotIn("hires", first)
+
+    def test_pack_hires_sampler_follows_first_pass_when_override_off(self) -> None:
+        values = {
+            "prompt": "cat",
+            "prompt_raw": "cat",
+            "negative_prompt": "",
+            "negative_prompt_raw": "",
+            "steps": 20,
+            "cfg": 7.5,
+            "seed": 1,
+            "sampler": "euler",
+            "scheduler": "sgm_uniform",
+            "width": 64,
+            "height": 64,
+            "checkpoint": "first.safetensors",
+            "hires": {
+                "enabled": True,
+                "upscale_model": "4x.pth",
+                "steps": 8,
+                "cfg": 2,
+                "cfg_override": False,
+                "sampler": "dpmpp_2m",
+                "sampler_override": False,
+                "scheduler": "karras",
+                "scheduler_override": False,
+                "denoise": 0.3,
+            },
+        }
+        with self._hash_patches():
+            packed = save_meta.pack_params(values, None, kind="hires")
+        blob = packed["hires"]
+        self.assertEqual(blob["cfg"], 7.5)
+        self.assertEqual(blob["sampler"], "euler")
+        self.assertEqual(blob["scheduler"], "sgm_uniform")
+        self.assertEqual({item["kind"] for item in blob["models"]}, {"upscale_models"})
 
     def test_embed_round_trip_and_grid_matches_first_image(self) -> None:
         packed = _packed()

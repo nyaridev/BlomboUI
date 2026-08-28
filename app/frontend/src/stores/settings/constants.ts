@@ -183,6 +183,15 @@ export function galleryModeKey(viewKey: string): GalleryModeKey {
   if (viewKey.startsWith('gallery-create-')) {
     return 'gallery-create-checkpoints'
   }
+  if (viewKey === 'generate-hires-loras') {
+    return 'loras'
+  }
+  if (viewKey === 'generate-hires-checkpoint') {
+    return 'checkpoints'
+  }
+  if (viewKey === 'generate-hires-text_encoders' || viewKey === 'generate-hires-vae') {
+    return 'other'
+  }
   return 'checkpoints'
 }
 
@@ -322,6 +331,7 @@ export const SETTINGS_DEFAULTS = {
   imageName: 'blombo_[number]',
   gridName: 'blombo_[number]',
   hiresName: 'blombo_[number]',
+  hiresTempAfterDays: 7,
   imageFormat: 'png' as ImageFormat,
   gridFormat: 'jpg' as ImageFormat,
   imageQuality: 100,

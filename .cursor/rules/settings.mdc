@@ -11,7 +11,7 @@ Canonical groups in `app/frontend/src/views/settings/panels/content/groups.ts` (
 
 - **General** — Appearance, Tabs, Pickers
 - **Generate** — Generation, Grids
-- **Files** — Directories, Saving
+- **Files** — Directories, Saving, Temp
 - **Gallery** — Gallery
 - **Models** — Models, Thumbnails
 - **Civitai** — Account, Browse, Labels, Download, Aliases, History, Metadata

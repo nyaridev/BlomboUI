@@ -55,10 +55,15 @@ def take_params(raw: Any) -> dict[str, Any] | None:
     out = {key: raw[key] for key in PARAM_FIELDS if key in raw}
     if raw.get("interrupted"):
         out["interrupted"] = True
+    hires = raw.get("hires")
+    if isinstance(hires, dict):
+        out["hires"] = hires
     return out
 
 
-def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None) -> dict[str, Any]:
+def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kind: str = "") -> dict[str, Any]:
+    from features.generate.scripts.comfy_fill import hires_enabled
+
     out: dict[str, Any] = {
         "prompt": str(values.get("prompt") or ""),
         "negative_prompt": str(values.get("negative_prompt") or ""),
@@ -79,6 +84,39 @@ def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None) -> 
     }
     if values.get("interrupted"):
         out["interrupted"] = True
+    if kind == "hires" and hires_enabled(values):
+        out["hires"] = pack_hires(values)
+    return out
+
+
+def pack_hires(values: dict[str, Any]) -> dict[str, Any]:
+    from features.generate.scripts.comfy_fill import _flag, _hires_blob, _hires_kind_diffusion, hires_meta_fields
+
+    out = hires_meta_fields(values)
+    blob = _hires_blob(values)
+    models: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def add(kind: str, row: dict[str, str], strength: float | None = None) -> None:
+        _push_model(models, seen, kind, row, strength)
+
+    add("upscale_models", _hashes_for("upscale_models", str(blob.get("upscale_model") or blob.get("upscaleModel") or "")))
+    if _flag(blob, "model_override", "modelOverride"):
+        ckpt = str(blob.get("checkpoint") or "")
+        if _hires_kind_diffusion(blob):
+            add("diffusion_models", _hashes_for("diffusion_models", ckpt))
+        else:
+            kind, row = _hash_named(ckpt, ("checkpoints", "diffusion_models"))
+            add(kind or "checkpoints", row)
+        add("vae", _hashes_for("vae", str(blob.get("vae") or "")))
+        add("text_encoders", _hashes_for("text_encoders", str(blob.get("text_encoder") or blob.get("textEncoder") or "")))
+    if _flag(blob, "lora_override", "loraOverride"):
+        rows = blob.get("loras")
+        if isinstance(rows, list):
+            for item in rows:
+                name, strength = _lora_ref(item)
+                add("loras", _hashes_for("loras", name), strength)
+    out["models"] = models
     return out
 
 
@@ -107,21 +145,35 @@ def envelope(
     return meta
 
 
+def _push_model(
+    out: list[dict[str, Any]],
+    seen: set[str],
+    kind: str,
+    row: dict[str, str],
+    strength: float | None = None,
+) -> None:
+    if not row:
+        return
+    key = row.get("sha256") or row.get("autov2") or ""
+    if not key or key in seen:
+        return
+    seen.add(key)
+    item: dict[str, Any] = {"kind": kind, "hashes": row}
+    if strength is not None:
+        item["strength"] = strength
+    out.append(item)
+
+
+def _hires_node(node: dict[str, Any]) -> bool:
+    return "hires" in str((node.get("_meta") or {}).get("title") or "").lower()
+
+
 def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
     def add(kind: str, row: dict[str, str], strength: float | None = None) -> None:
-        if not row:
-            return
-        key = row.get("sha256") or row.get("autov2") or ""
-        if not key or key in seen:
-            return
-        seen.add(key)
-        item: dict[str, Any] = {"kind": kind, "hashes": row}
-        if strength is not None:
-            item["strength"] = strength
-        out.append(item)
+        _push_model(out, seen, kind, row, strength)
 
     ckpt = str(values.get("checkpoint") or "")
     kind, row = _hash_named(ckpt, ("checkpoints", "diffusion_models"))
@@ -135,7 +187,7 @@ def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) 
             add("loras", _hashes_for("loras", name), strength)
     if isinstance(graph, dict):
         for node in graph.values():
-            if not isinstance(node, dict):
+            if not isinstance(node, dict) or _hires_node(node):
                 continue
             cls = str(node.get("class_type") or "")
             inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}

@@ -80,6 +80,18 @@ def extra_named(key: str) -> dict[str, Path]:
     return out
 
 
+def extra_root(key: str, name: str) -> Path | None:
+    extras = extra_named(key)
+    hit = extras.get(name)
+    if hit is not None:
+        return hit
+    want = name.casefold()
+    for label, path in extras.items():
+        if label.casefold() == want:
+            return path
+    return None
+
+
 def listed_dirs(key: str) -> list[dict[str, str]]:
     if key == "modelDirs":
         rows = _with_locked(stored_dirs(key), LOCAL_ID, "Local", models_root())

@@ -17,17 +17,14 @@ export function AdetailerParams({
   locked = false,
   comfyOk = false,
   lastSeed = null,
-  hiresEnabled,
 }: {
   value?: AdetailerSettings
   onChange?: (next: AdetailerSettings) => void
   locked?: boolean
   comfyOk?: boolean
   lastSeed?: number | null
-  hiresEnabled?: boolean
 }) {
   const store = useGenerateStore((s) => s.adetailer)
-  const storeHires = useGenerateStore((s) => s.hires)
   const setAdetailer = useGenerateStore((s) => s.setAdetailer)
   const adetailer = value ?? store
   const units = adetailer.units?.length ? adetailer.units : DEFAULT_ADETAILER.units
@@ -102,7 +99,6 @@ export function AdetailerParams({
           schedulers={schedulers}
           hiddenSamplers={hiddenSamplers}
           hiddenSchedulers={hiddenSchedulers}
-          inheritHires={unit.fromHires !== false && (hiresEnabled ?? storeHires.enabled)}
         />
       </div>
     </div>

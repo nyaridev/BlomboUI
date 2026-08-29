@@ -162,7 +162,14 @@ export function GalleryBrowser({
   const [infoItem, setInfoItem] = useState<ModelEntry | null>(null)
   const [fsRoots, setFsRoots] = useState<ReturnType<typeof toDisplayRoots>>([])
   const [dragIdent, setDragIdent] = useState<string | null>(null)
-  const [tileMenu, setTileMenu] = useState<{ x: number; y: number; path: string; name: string; fileTile: boolean } | null>(null)
+  const [tileMenu, setTileMenu] = useState<{
+    x: number
+    y: number
+    path: string
+    name: string
+    fileTile: boolean
+    kind: keyof ModelLists
+  } | null>(null)
   const thumbView = useThumbView(sortKind, scopeKey)
   const shownSortKey = gallerySortKey
   const shownSortDir = gallerySortDir
@@ -459,7 +466,10 @@ export function GalleryBrowser({
         onClickFile={clickFile}
         onMove={requestMove}
         onRename={(path, name) => setRenaming({ path: displayToIdent(path), name })}
-        onReveal={(path) => void revealEntry(displayToIdent(path))}
+        onReveal={(path) => {
+          const item = byTree.get(path)
+          void revealEntry(displayToIdent(path), item ? kindOf(item) : undefined)
+        }}
         onRemove={(path) => setPendingRemove(displayToIdent(path))}
         onAdd={(folder) => setCreating({ folder: displayToIdent(folder), name: '' })}
         onOpenManager={
@@ -483,7 +493,14 @@ export function GalleryBrowser({
           }
           event.preventDefault()
           const path = filePath(item)
-          setTileMenu({ x: event.clientX, y: event.clientY, path, name: fileName(path), fileTile: isFileTile(item) })
+          setTileMenu({
+            x: event.clientX,
+            y: event.clientY,
+            path,
+            name: fileName(path),
+            fileTile: isFileTile(item),
+            kind: kindOf(item),
+          })
         }}
         filling={filling}
         onDownload={(path, itemKind) => void downloadCivitai(path, itemKind)}
@@ -527,8 +544,8 @@ export function GalleryBrowser({
           setRenaming({ path, name })
           setTileMenu(null)
         }}
-        onTileReveal={(path) => {
-          void revealEntry(path)
+        onTileReveal={(path, fileKind) => {
+          void revealEntry(displayToIdent(path), fileKind)
           setTileMenu(null)
         }}
         onTileOpenManager={(path) => {

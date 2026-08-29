@@ -27,10 +27,10 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
 
 1. Clone the repo and enter the folder:
 
-   ```bat
-   git clone https://github.com/nyaridev/BlomboUI.git
-   cd BlomboUI
-   ```
+    ```bat
+    git clone https://github.com/nyaridev/BlomboUI.git
+    cd BlomboUI
+    ```
 
 2. Optional: edit `webui-user.bat` (paths, `COMMANDLINE_ARGS`). Already have ComfyUI? Set `COMFYUI_PATH`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
 
@@ -46,28 +46,28 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
 
 1. Clone the repo and enter the folder:
 
-   ```bash
-   git clone https://github.com/nyaridev/BlomboUI.git
-   cd BlomboUI
-   ```
+    ```bash
+    git clone https://github.com/nyaridev/BlomboUI.git
+    cd BlomboUI
+    ```
 
 2. Optional: edit `webui-user.sh` (paths, `COMMANDLINE_ARGS`). Already have ComfyUI? Set `COMFYUI_PATH`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
 
 3. Make the launcher executable and run it:
 
-   ```bash
-   chmod +x webui-user.sh
-   ./webui-user.sh
-   ```
+    ```bash
+    chmod +x webui-user.sh
+    ./webui-user.sh
+    ```
 
 4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
 
 5. Open http://127.0.0.1:5173 when the launcher finishes.
 
-| Service | URL |
-| --- | --- |
-| UI | http://127.0.0.1:5173 |
-| API | http://127.0.0.1:4173 |
+| Service | URL                   |
+| ------- | --------------------- |
+| UI      | http://127.0.0.1:5173 |
+| API     | http://127.0.0.1:4173 |
 | ComfyUI | http://127.0.0.1:8188 |
 
 ---
@@ -101,13 +101,13 @@ Already cloned? Launch from the repo root:
 
 ## Features
 
-| | |
-| --- | --- |
-| **Generate** | txt2img-style workflow, LoRAs, wildcards, prompt matrix, templates |
-| **Models** | local browser, Civitai download, thumbnails, scopes |
-| **Gallery** | output browser, PNG info, file ops |
-| **Wildcards** | YAML / text editors with tree + fold |
-| **Workflows** | Comfy graphs in `app/workflows/main/` (API + droppable `*_raw.json`); optional stages in `app/workflows/utils/`. See [docs/workflows.md](docs/workflows.md). |
+|               |                                                                                                                                                              |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Generate**  | Checkpoint and diffusion workflows, LoRAs, wildcards, prompt matrix, templates                                                                                |
+| **Models**    | local browser, Civitai download, thumbnails, scopes                                                                                                          |
+| **Gallery**   | output browser, PNG info, file ops                                                                                                                           |
+| **Wildcards** | YAML / text editors with tree + fold                                                                                                                         |
+| **Workflows** | Comfy graphs in `app/workflows/image_checkpoint/` and `image_diffusion/` (API + droppable `*_raw.json`); picker utilities in `app/workflows/utils/`; compose stages in each family’s `utils/`. See [docs/workflows.md](docs/workflows.md). |
 
 ---
 
@@ -134,24 +134,27 @@ Edit `webui-user.bat` or `webui-user.sh`. Do not edit the files under `install/`
 
 ### Paths
 
-| Variable | Default |
-| --- | --- |
-| `COMFYUI_PATH` | `runtime/comfyui/ComfyUI` |
-| `MODELS_ROOT` | `./user/models` |
-| `OUTPUTS_ROOT` | `./user/output` |
-| `WILDCARDS_ROOT` | `./user/wildcards` |
-| `VENV_DIR` | `runtime/.venv` |
+| Variable         | Default                   |
+| ---------------- | ------------------------- |
+| `COMFYUI_PATH`   | `runtime/comfyui/ComfyUI` |
+| `COMFYUI_REF`    | latest default branch     |
+| `MODELS_ROOT`    | `./user/models`           |
+| `OUTPUTS_ROOT`   | `./user/output`           |
+| `WILDCARDS_ROOT` | `./user/wildcards`        |
+| `VENV_DIR`       | `runtime/.venv`           |
+
+`COMFYUI_REF` is used only when Blombo clones bundled ComfyUI (no `COMFYUI_PATH`, folder missing). Example: `set COMFYUI_REF=v0.3.60`.
 
 ### App flags (`COMMANDLINE_ARGS`)
 
-| Flag | Effect |
-| --- | --- |
-| `--uv` | use uv for the project environment (always used by the installer) |
-| `--port N` | UI port (default `5173`) |
-| `--hot_reload_vite` | reload the frontend when UI files change |
-| `--comfyui-window` | start ComfyUI in a separate console |
-| `--dev_debug` | show Comfy setup and startup logs |
-| `--api-pings` | show backend access logs |
+| Flag                | Effect                                                            |
+| ------------------- | ----------------------------------------------------------------- |
+| `--uv`              | use uv for the project environment (always used by the installer) |
+| `--port N`          | UI port (default `5173`)                                          |
+| `--hot_reload_vite` | reload the frontend when UI files change                          |
+| `--comfyui-window`  | start ComfyUI in a separate console                               |
+| `--dev_debug`       | show Comfy setup and startup logs                                 |
+| `--api-pings`       | show backend access logs                                          |
 
 ### ComfyUI (`COMFYUI_ARGS`)
 
@@ -163,15 +166,15 @@ Optional CUDA builds live in `install/windows/torch` and `install/linux/torch`. 
 
 ### Comfy node editor
 
-Close BlomboUI, then run `install/comfyui.bat` or `install/comfyui.sh`. Save the UI workflow as `name_raw.json` and **API Format** as `name.json` under `app/workflows/main/` (or `utils/` for extras). See [docs/workflows.md](docs/workflows.md).
+Close BlomboUI, then run `install/comfyui.bat` or `install/comfyui.sh`. Save the UI workflow as `name_raw.json` and **API Format** as `name.json` under `app/workflows/image_checkpoint/` or `image_diffusion/` (`utils/` for picker utilities, or that family’s `utils/` for extras). See [docs/workflows.md](docs/workflows.md).
 
 ---
 
 ## Stack
 
-| Layer | Tech |
-| --- | --- |
-| UI | React 19, TypeScript, Vite 8, Tailwind 4, Zustand |
-| API | Python 3.12+, FastAPI, Uvicorn, SQLite |
-| Generate | ComfyUI (separate Python + Torch) |
-| Install | uv, Node.js / npm |
+| Layer    | Tech                                              |
+| -------- | ------------------------------------------------- |
+| UI       | React 19, TypeScript, Vite 8, Tailwind 4, Zustand |
+| API      | Python 3.12+, FastAPI, Uvicorn, SQLite            |
+| Generate | ComfyUI (separate Python + Torch)                 |
+| Install  | uv, Node.js / npm                                 |

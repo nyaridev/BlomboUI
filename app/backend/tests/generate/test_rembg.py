@@ -16,7 +16,7 @@ from infrastructure.comfy import client as comfy
 from infrastructure.storage import user as db
 from shared import pnginfo
 
-MAIN = WORKFLOWS / "main"
+MAIN = WORKFLOWS / "utils"
 
 
 def load_main(name: str) -> dict:
@@ -31,7 +31,7 @@ def find(graph: dict, kind: str) -> tuple[str, dict]:
 
 
 def fill(values: dict) -> dict:
-    data = load_main(f"{values.get('workflow') or 'txt2img'}.json")
+    data = load_main(f"{values.get('workflow') or 'sd15'}.json")
     with patch.object(comfy_fill.lora_tags, "apply"):
         return comfy_fill.fill_txt2img(values, lambda _: data, lambda name: name, comfy._comfy_graph)
 
@@ -142,7 +142,7 @@ class RembgOutputTests(unittest.TestCase):
         self.assertTrue(dest.is_dir())
 
     def test_txt2img_relative_escape_stays_in_root(self) -> None:
-        folder = job_output._output_dir({"workflow": "txt2img", "output_image_path": "../escape"}, "image")
+        folder = job_output._output_dir({"workflow": "sd15", "output_image_path": "../escape"}, "image")
         self.assertTrue(str(folder.resolve()).startswith(str(self.out.resolve())))
 
 
@@ -234,7 +234,7 @@ class RembgMetaTests(unittest.TestCase):
             "height": 16,
             "models": [],
         }
-        meta = save_meta.envelope("orig", {"workflow": "txt2img"}, packed, "image", "2026-01-01T00:00:00Z")
+        meta = save_meta.envelope("orig", {"workflow": "sd15"}, packed, "image", "2026-01-01T00:00:00Z")
         src = self.tmp / "src.png"
         src.write_bytes(pnginfo.embed(_png(), packed, None, metadata=meta))
         folder = self.tmp / "out"

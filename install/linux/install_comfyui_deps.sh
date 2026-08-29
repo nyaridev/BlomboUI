@@ -19,14 +19,15 @@ install_node() {
   local NODE_URL="$2"
   local NODE_DIR="$COMFY_DIR/custom_nodes/$NODE_NAME"
 
-  if [ ! -d "$NODE_DIR" ]; then
-    ui_info "Downloading $NODE_NAME..."
-    if ! "$GIT" clone "$NODE_URL" "$NODE_DIR"; then
-      ui_error "$NODE_NAME download failed."
-      return 1
-    fi
-  else
-    ui_ok "$NODE_NAME already exists. Skipping download."
+  if [ -d "$NODE_DIR" ]; then
+    ui_ok "$NODE_NAME already exists. Skipping."
+    return 0
+  fi
+
+  ui_info "Downloading $NODE_NAME..."
+  if ! "$GIT" clone "$NODE_URL" "$NODE_DIR"; then
+    ui_error "$NODE_NAME download failed."
+    return 1
   fi
 
   if [ -s "$NODE_DIR/requirements.txt" ]; then
@@ -82,6 +83,7 @@ install_node "ComfyUI-Impact-Pack" "https://github.com/ltdrdata/ComfyUI-Impact-P
 install_node "ComfyUI-Impact-Subpack" "https://github.com/ltdrdata/ComfyUI-Impact-Subpack" || exit 1
 install_node "ComfyUI-RMBG" "https://github.com/1038lab/ComfyUI-RMBG" || exit 1
 install_node "ComfyUI-SeedVR2_VideoUpscaler" "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler" || exit 1
+install_node "ComfyUI-GGUF" "https://github.com/city96/ComfyUI-GGUF" || exit 1
 
 echo
 ui_ok "ComfyUI custom nodes are ready."

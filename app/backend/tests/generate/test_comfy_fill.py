@@ -10,12 +10,16 @@ from features.models.scripts import models
 from features.settings import service as settings
 from infrastructure.comfy import client as comfy
 
-MAIN = WORKFLOWS / "main"
-UTILS = WORKFLOWS / "utils"
+CHECKPOINT = WORKFLOWS / "image_checkpoint"
+DIFFUSION = WORKFLOWS / "image_diffusion"
 
 
 def load_main(name: str) -> dict:
-    return json.loads((MAIN / name).read_text(encoding="utf-8"))
+    for folder in (CHECKPOINT, DIFFUSION):
+        path = folder / name
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    raise FileNotFoundError(name)
 
 
 def find(graph: dict, kind: str, contains: str | None = None, exclude: str | None = None) -> tuple[str, dict]:
@@ -32,7 +36,7 @@ def find(graph: dict, kind: str, contains: str | None = None, exclude: str | Non
 
 
 def fill(values: dict, data: dict | None = None) -> dict:
-    name = f"{values.get('workflow') or 'txt2img'}.json"
+    name = f"{values.get('workflow') or 'sd15'}.json"
     data = data if data is not None else load_main(name)
     with patch.object(comfy_fill.lora_tags, "apply"):
         return comfy_fill.fill_txt2img(values, lambda _: data, lambda name: name, comfy._comfy_graph)
@@ -40,7 +44,7 @@ def fill(values: dict, data: dict | None = None) -> dict:
 
 def base_values(**hires: object) -> dict:
     values: dict = {
-        "workflow": "txt2img",
+        "workflow": "sd15",
         "prompt": "cat",
         "negative_prompt": "",
         "checkpoint": "model.safetensors",
@@ -60,7 +64,7 @@ def base_values(**hires: object) -> dict:
 
 class DiffusionFillTests(unittest.TestCase):
     def test_workflow_file_has_no_resolution_selector(self) -> None:
-        data = load_main("diffusion.json")
+        data = load_main("anima.json")
         kinds = {node.get("class_type") for node in data.values() if isinstance(node, dict)}
         self.assertNotIn("ResolutionSelector", kinds)
         self.assertIn("UNETLoader", kinds)
@@ -71,12 +75,16 @@ class DiffusionFillTests(unittest.TestCase):
 
     def test_workflow_defaults_have_empty_prompt_and_models(self) -> None:
         for folder, name in (
-            (MAIN, "txt2img.json"),
-            (MAIN, "diffusion.json"),
-            (UTILS, "hiresfix_checkpoint.json"),
-            (UTILS, "hiresfix_diffusion.json"),
-            (UTILS, "adetailer_checkpoint.json"),
-            (UTILS, "adetailer_diffusion.json"),
+            (CHECKPOINT, "sd15.json"),
+            (CHECKPOINT, "sdxl.json"),
+            (CHECKPOINT, "illustrious.json"),
+            (CHECKPOINT, "noobai.json"),
+            (DIFFUSION, "anima.json"),
+            (DIFFUSION, "krea2.json"),
+            (CHECKPOINT / "utils", "hiresfix.json"),
+            (DIFFUSION / "utils", "hiresfix.json"),
+            (CHECKPOINT / "utils", "adetailer.json"),
+            (DIFFUSION / "utils", "adetailer.json"),
         ):
             data = json.loads((folder / name).read_text(encoding="utf-8"))
             apply = data.get("apply") or []
@@ -103,7 +111,7 @@ class DiffusionFillTests(unittest.TestCase):
     def test_fill_sets_unet_clip_vae_and_size(self) -> None:
         graph = fill(
             {
-                "workflow": "diffusion",
+                "workflow": "anima",
                 "prompt": "cat",
                 "negative_prompt": "blur",
                 "checkpoint": "Anima/model.safetensors",
@@ -129,29 +137,154 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(graph["7"]["inputs"]["batch_size"], 2)
         self.assertEqual(graph["2"]["inputs"]["text"], "cat")
         self.assertEqual(graph["3"]["inputs"]["text"], "blur")
+        self.assertEqual(graph["18"]["inputs"]["type"], "stable_diffusion")
+
+    def test_fill_promotes_gguf_unet_and_clip_loaders(self) -> None:
+        graph = fill(
+            {
+                "workflow": "anima",
+                "prompt": "cat",
+                "negative_prompt": "",
+                "checkpoint": "flux.Q4_0.gguf",
+                "text_encoder": "t5xxl.Q5_K_M.gguf",
+                "vae": "ae.safetensors",
+                "seed": 7,
+                "steps": 12,
+                "cfg": 3.5,
+                "sampler": "euler",
+                "scheduler": "sgm_uniform",
+                "width": 640,
+                "height": 960,
+                "batch_size": 1,
+            }
+        )
+        self.assertEqual(graph["19"]["class_type"], "UnetLoaderGGUF")
+        self.assertEqual(graph["19"]["inputs"]["unet_name"], "flux.Q4_0.gguf")
+        self.assertNotIn("weight_dtype", graph["19"]["inputs"])
+        self.assertEqual(graph["18"]["class_type"], "CLIPLoaderGGUF")
+        self.assertEqual(graph["18"]["inputs"]["clip_name"], "t5xxl.Q5_K_M.gguf")
+        self.assertEqual(graph["17"]["class_type"], "VAELoader")
+
+    def test_fill_keeps_safetensors_unet_and_clip_loaders(self) -> None:
+        graph = fill(
+            {
+                "workflow": "anima",
+                "prompt": "cat",
+                "negative_prompt": "",
+                "checkpoint": "flux.safetensors",
+                "text_encoder": "clip.safetensors",
+                "vae": "ae.safetensors",
+                "seed": 7,
+                "steps": 12,
+                "cfg": 3.5,
+                "sampler": "euler",
+                "scheduler": "sgm_uniform",
+                "width": 640,
+                "height": 960,
+                "batch_size": 1,
+            }
+        )
+        self.assertEqual(graph["19"]["class_type"], "UNETLoader")
+        self.assertIn("weight_dtype", graph["19"]["inputs"])
+        self.assertEqual(graph["18"]["class_type"], "CLIPLoader")
+        self.assertEqual(graph["18"]["inputs"]["type"], "stable_diffusion")
+
+    def test_anima_and_krea2_clip_types(self) -> None:
+        anima_defaults = comfy._workflow_defaults(load_main("anima.json"))
+        self.assertEqual(anima_defaults["clipType"], "stable_diffusion")
+        self.assertEqual(anima_defaults["clipDevice"], "default")
+        krea_defaults = comfy._workflow_defaults(load_main("krea2.json"))
+        self.assertEqual(krea_defaults["clipType"], "krea2")
+        graph = fill(
+            {
+                "workflow": "krea2",
+                "prompt": "cat",
+                "negative_prompt": "",
+                "checkpoint": "krea.safetensors",
+                "text_encoder": "clip.safetensors",
+                "vae": "vae.safetensors",
+                "clip_type": "krea2",
+                "clip_device": "cpu",
+                "seed": 7,
+                "steps": 12,
+                "cfg": 3.5,
+                "sampler": "euler",
+                "scheduler": "sgm_uniform",
+                "width": 640,
+                "height": 960,
+                "batch_size": 1,
+            }
+        )
+        _, clip = find(graph, "CLIPLoader")
+        self.assertEqual(clip["inputs"]["type"], "krea2")
+        self.assertEqual(clip["inputs"]["device"], "cpu")
 
     def test_workflow_params_include_hires(self) -> None:
-        for name in ("diffusion.json", "txt2img.json"):
+        for name in ("anima.json", "sd15.json"):
             data = load_main(name)
             self.assertIn("hires", comfy._workflow_params(data))
             kinds = {node["class_type"] for node in data.values() if isinstance(node, dict) and "class_type" in node}
             self.assertNotIn("ImageScale", kinds)
-        util = json.loads((UTILS / "hiresfix_checkpoint.json").read_text(encoding="utf-8"))
+        util = json.loads((CHECKPOINT / "utils" / "hiresfix.json").read_text(encoding="utf-8"))
         kinds = {node["class_type"] for node in util.values() if isinstance(node, dict) and "class_type" in node}
         self.assertIn("ImageScale", kinds)
         self.assertNotIn("ImageScaleToMaxDimension", kinds)
 
     def test_workflow_params_include_vae_and_text_encoder(self) -> None:
-        params = comfy._workflow_params(load_main("diffusion.json"))
+        params = comfy._workflow_params(load_main("anima.json"))
         self.assertIn("checkpoint", params)
         self.assertIn("textEncoder", params)
         self.assertIn("vae", params)
+        self.assertIn("clipType", params)
+        self.assertIn("clipDevice", params)
 
-    def test_txt2img_params_omit_vae_and_text_encoder(self) -> None:
-        params = comfy._workflow_params(load_main("txt2img.json"))
+    def test_checkpoint_params_omit_vae_and_text_encoder(self) -> None:
+        params = comfy._workflow_params(load_main("sd15.json"))
         self.assertIn("checkpoint", params)
         self.assertNotIn("textEncoder", params)
         self.assertNotIn("vae", params)
+
+    def test_sd15_params_include_clip_skip(self) -> None:
+        params = comfy._workflow_params(load_main("sd15.json"))
+        self.assertIn("clipSkip", params)
+        self.assertIn("checkpoint", params)
+        defaults = comfy._workflow_defaults(load_main("sd15.json"))
+        self.assertEqual(defaults["steps"], 28)
+        self.assertEqual(defaults["sampler"], "dpmpp_sde")
+        self.assertEqual(defaults["scheduler"], "karras")
+        self.assertEqual(defaults["width"], 512)
+        self.assertEqual(defaults["height"], 768)
+        self.assertEqual(defaults["clipSkip"], 2)
+        self.assertEqual(defaults["cfg"], 7)
+
+    def test_xl_family_workflow_defaults(self) -> None:
+        sdxl = comfy._workflow_defaults(load_main("sdxl.json"))
+        self.assertEqual(sdxl["steps"], 30)
+        self.assertEqual(sdxl["sampler"], "dpmpp_2m_sde")
+        self.assertEqual(sdxl["scheduler"], "karras")
+        self.assertEqual(sdxl["width"], 832)
+        self.assertEqual(sdxl["height"], 1216)
+        self.assertEqual(sdxl["cfg"], 7)
+        self.assertEqual(sdxl["clipSkip"], 2)
+        illustrious = comfy._workflow_defaults(load_main("illustrious.json"))
+        self.assertEqual(illustrious["steps"], 24)
+        self.assertEqual(illustrious["sampler"], "euler_ancestral")
+        self.assertEqual(illustrious["scheduler"], "sgm_uniform")
+        self.assertEqual(illustrious["width"], 832)
+        self.assertEqual(illustrious["height"], 1216)
+        noobai = comfy._workflow_defaults(load_main("noobai.json"))
+        self.assertEqual(noobai["steps"], 24)
+        self.assertEqual(noobai["sampler"], "euler_ancestral")
+        self.assertEqual(noobai["width"], 832)
+        self.assertEqual(noobai["height"], 1216)
+        graph = fill({**base_values(), "workflow": "sd15", "clip_skip": 2})
+        _, skip = find(graph, "CLIPSetLastLayer")
+        self.assertEqual(skip["inputs"]["stop_at_clip_layer"], -2)
+        self.assertEqual(graph["2"]["inputs"]["clip"], ["13", 0])
+        self.assertEqual(graph["3"]["inputs"]["clip"], ["13", 0])
+        graph = fill({**base_values(), "workflow": "sd15", "clip_skip": 7})
+        _, skip = find(graph, "CLIPSetLastLayer")
+        self.assertEqual(skip["inputs"]["stop_at_clip_layer"], -7)
 
     def test_fill_hires_sampler_and_scale_size(self) -> None:
         graph = fill(
@@ -384,7 +517,7 @@ class DiffusionFillTests(unittest.TestCase):
     def test_fill_hires_checkpoint_override_on_diffusion(self) -> None:
         graph = fill(
             {
-                "workflow": "diffusion",
+                "workflow": "anima",
                 "prompt": "cat",
                 "negative_prompt": "",
                 "checkpoint": "unet.safetensors",
@@ -462,7 +595,7 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(graph["11"]["inputs"]["images"], [decode_id, 0])
 
     def test_progress_stages_map_txt2img_nodes(self) -> None:
-        graph = comfy._comfy_graph(load_main("txt2img.json"))
+        graph = comfy._comfy_graph(load_main("sd15.json"))
         stages = comfy_fill.progress_stage_map(graph)
         self.assertEqual(stages["5"], "generation")
         self.assertEqual(stages["9"], "generation")
@@ -657,7 +790,7 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(lora["inputs"]["lora_1"]["lora"], "face-lora.safetensors")
         self.assertEqual(lora["inputs"]["lora_1"]["strength"], 0.4)
         self.assertEqual(lora["inputs"]["model"], ["12", 0])
-        self.assertEqual(lora["inputs"]["clip"], ["12", 1])
+        self.assertEqual(lora["inputs"]["clip"], ["13", 0])
         self.assertEqual(face["inputs"]["model"], [lora_id, 0])
         self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
         self.assertEqual(graph["5"]["inputs"]["model"], [first_lora_id, 0])

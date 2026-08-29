@@ -1,6 +1,6 @@
 {
-  "last_node_id": 12,
-  "last_link_id": 12,
+  "last_node_id": 13,
+  "last_link_id": 13,
   "nodes": [
     {
       "id": 1,
@@ -180,9 +180,9 @@
       },
       "widgets_values": [
         0,
-        20,
-        4,
-        "euler",
+        24,
+        7,
+        "euler_ancestral",
         "sgm_uniform",
         1
       ],
@@ -365,8 +365,7 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            1,
-            2
+            13
           ],
           "slot_index": 1
         }
@@ -381,21 +380,61 @@
         ""
       ],
       "title": "Power Lora Loader (rgthree)"
+    },
+    {
+      "id": 13,
+      "type": "CLIPSetLastLayer",
+      "pos": [
+        320,
+        360
+      ],
+      "size": [
+        280,
+        100
+      ],
+      "flags": {},
+      "order": 9,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "clip",
+          "type": "CLIP",
+          "link": 13
+        }
+      ],
+      "outputs": [
+        {
+          "name": "CLIP",
+          "type": "CLIP",
+          "links": [
+            1,
+            2
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CLIPSetLastLayer"
+      },
+      "widgets_values": [
+        -2
+      ],
+      "title": "CLIP Set Last Layer"
     }
   ],
   "links": [
     [
       1,
-      12,
-      1,
+      13,
+      0,
       2,
       0,
       "CLIP"
     ],
     [
       2,
-      12,
-      1,
+      13,
+      0,
       3,
       0,
       "CLIP"
@@ -478,6 +517,14 @@
       1,
       12,
       1,
+      "CLIP"
+    ],
+    [
+      13,
+      12,
+      1,
+      13,
+      0,
       "CLIP"
     ]
   ],

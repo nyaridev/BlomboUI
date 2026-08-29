@@ -183,8 +183,7 @@ def _is_root(kind: str, rel: str) -> bool:
     name = str(rel or "").replace("\\", "/").strip("/")
     if not name:
         return True
-    extras = dirs.extra_named("modelDirs")
-    return name in extras and "/" not in name
+    return dirs.extra_root("modelDirs", name) is not None and "/" not in name
 
 
 def _parent_rel(rel: str) -> str:
@@ -232,12 +231,11 @@ def _resolve(kind: str, rel: str) -> Path | None:
     name = str(rel or "").replace("\\", "/").strip().lstrip("/")
     if ".." in Path(name).parts:
         return None
-    extras = dirs.extra_named("modelDirs")
     root = models_root() / kind
     if not name:
         return root
     first, _, rest = name.partition("/")
-    extra = extras.get(first)
+    extra = dirs.extra_root("modelDirs", first)
     if extra is not None:
         base = extra / kind
         return base / rest if rest else base

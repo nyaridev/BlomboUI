@@ -55,7 +55,7 @@ export const CIVITAI_BROWSE_LIMIT_DEFAULT = 20
 
 export const CIVITAI_BROWSE_DEFAULT = {
   query: '',
-  sort: 'Newest' as CivitaiSort,
+  sort: 'Most Downloaded' as CivitaiSort,
   period: 'AllTime' as CivitaiPeriod,
   types: [] as string[],
   baseModels: [] as string[],

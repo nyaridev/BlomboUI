@@ -4,7 +4,7 @@ import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
-import { getKSamplerChoices } from '@/lib/api.ts'
+import { getKSamplerChoices, getWorkflows } from '@/lib/api.ts'
 import { SAMPLERS, SCHEDULERS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { SettingsBlock, SettingsCard } from '@/views/settings/panels/content/SettingsBlock.tsx'
 import { SettingsField, SettingsReset } from '@/views/settings/panels/content/SettingsReset.tsx'
@@ -12,13 +12,19 @@ import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState } from 'react'
 
 export const GENERATION_QUERY =
-  'generation preview every last batch first sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention auto apply instant trigger start end resolution set custom width height'
+  'generation preview every last batch first sampling samplers schedulers ksampler generate lora strength slider min max prompt weight step attention auto apply instant trigger start end resolution set custom width height vram unload krea2 workflow clip'
 
 export function GenerationSection({ query = '' }: { query?: string }) {
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers) ?? []
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers) ?? []
   const setHiddenSamplers = useSettingsStore((s) => s.setHiddenSamplers)
   const setHiddenSchedulers = useSettingsStore((s) => s.setHiddenSchedulers)
+  const vramUnloadWorkflows = useSettingsStore((s) => s.vramUnloadWorkflows)
+  const vramUnloadOnPrompt = useSettingsStore((s) => s.vramUnloadOnPrompt)
+  const vramUnloadOnWeights = useSettingsStore((s) => s.vramUnloadOnWeights)
+  const setVramUnloadWorkflows = useSettingsStore((s) => s.setVramUnloadWorkflows)
+  const setVramUnloadOnPrompt = useSettingsStore((s) => s.setVramUnloadOnPrompt)
+  const setVramUnloadOnWeights = useSettingsStore((s) => s.setVramUnloadOnWeights)
   const loraStrengthMin = useSettingsStore((s) => s.loraStrengthMin)
   const loraStrengthMax = useSettingsStore((s) => s.loraStrengthMax)
   const loraSliderMin = useSettingsStore((s) => s.loraSliderMin)
@@ -47,6 +53,7 @@ export function GenerationSection({ query = '' }: { query?: string }) {
   const setSetResolutions = useSettingsStore((s) => s.setSetResolutions)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
+  const [workflows, setWorkflows] = useState<{ id: string; name: string }[]>([{ id: 'krea2', name: 'Krea2' }])
 
   useEffect(() => {
     void getKSamplerChoices()
@@ -56,6 +63,13 @@ export function GenerationSection({ query = '' }: { query?: string }) {
         }
         if (data.schedulers.length) {
           setSchedulers(data.schedulers)
+        }
+      })
+      .catch(() => {})
+    void getWorkflows()
+      .then((rows) => {
+        if (rows.length) {
+          setWorkflows(rows.map((row) => ({ id: row.id, name: row.name || row.id })))
         }
       })
       .catch(() => {})
@@ -117,6 +131,34 @@ export function GenerationSection({ query = '' }: { query?: string }) {
           />
           <p className="text-xs text-muted">Selected schedulers are removed from the generate picker.</p>
         </SettingsBlock>
+      </SettingsCard>
+      <SettingsCard query={query} title="VRAM unload" terms="vram unload krea2 workflow clip prompt lora attention model">
+        <SettingsBlock query={query} title="Workflows" terms="krea2 listed unload" setting="vramUnloadWorkflows">
+          <ChipSelect
+            options={[...new Set([...workflows.map((row) => row.id), ...vramUnloadWorkflows])]}
+            value={vramUnloadWorkflows}
+            onChange={setVramUnloadWorkflows}
+            chipLabel={(id) => workflows.find((row) => row.id === id)?.name ?? id}
+            placeholder="Select workflows…"
+          />
+          <p className="text-xs text-muted">
+            Comfy unloads all models before generate on these workflows only. Switching to a listed workflow also
+            unloads so a previous model cannot sit in VRAM.
+          </p>
+        </SettingsBlock>
+        <SettingsField setting="vramUnloadOnPrompt">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <CheckboxControl checked={vramUnloadOnPrompt} onChange={setVramUnloadOnPrompt} />
+            Unload when prompt changes
+          </label>
+        </SettingsField>
+        <SettingsField setting="vramUnloadOnWeights">
+          <label className="flex items-center gap-2 text-sm text-ink">
+            <CheckboxControl checked={vramUnloadOnWeights} onChange={setVramUnloadOnWeights} />
+            Unload when model / LoRA / attention changes
+          </label>
+        </SettingsField>
+        <p className="text-xs text-muted">Both call the same Comfy unload-all. Use them to test prompt vs weights.</p>
       </SettingsCard>
       <SettingsCard query={query} title="Set resolutions" terms="set custom resolution width height generate" setting="setResolutions">
         <ChipInput value={setResolutions} onChange={setSetResolutions} placeholder="1024x1024" />

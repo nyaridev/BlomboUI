@@ -120,7 +120,7 @@ def list_models(
     query: str = "",
     types: list[str] | None = None,
     base_models: list[str] | None = None,
-    sort: str = "Newest",
+    sort: str = "Most Downloaded",
     period: str = "AllTime",
     page: int = 1,
     limit: int = 20,

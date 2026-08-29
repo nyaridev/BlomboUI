@@ -8,7 +8,7 @@ import type { CivitaiVersion, ModelEntry, ModelLists } from '@/lib/api.ts'
 type NameState = { folder: string; name: string }
 type RenameState = { path: string; name: string }
 type MoveState = { path: string; folder: string; from: string; to: string }
-type TileMenuState = { x: number; y: number; path: string; name: string; fileTile: boolean }
+type TileMenuState = { x: number; y: number; path: string; name: string; fileTile: boolean; kind: keyof ModelLists }
 type FillConfirm = { path: string; hit: CivitaiVersion; kind: keyof ModelLists }
 
 export function GalleryOverlays({
@@ -74,7 +74,7 @@ export function GalleryOverlays({
   tileMenu: TileMenuState | null
   onTileClose: () => void
   onTileRename: (path: string, name: string) => void
-  onTileReveal: (path: string) => void
+  onTileReveal: (path: string, fileKind: keyof ModelLists) => void
   onTileOpenManager: (path: string) => void
   onTileRemove: (path: string) => void
 }) {
@@ -152,7 +152,7 @@ export function GalleryOverlays({
           {tileMenu.fileTile ? (
             <ContextMenuItem label="Rename" onClick={() => onTileRename(tileMenu.path, tileMenu.name)} />
           ) : null}
-          <ContextMenuItem label="Show in Explorer" onClick={() => onTileReveal(tileMenu.path)} />
+          <ContextMenuItem label="Show in Explorer" onClick={() => onTileReveal(tileMenu.path, tileMenu.kind)} />
           {kind === 'wildcards' ? (
             <ContextMenuItem icon="file-pen" label="Open in Wildcard Manager" onClick={() => onTileOpenManager(tileMenu.path)} />
           ) : null}

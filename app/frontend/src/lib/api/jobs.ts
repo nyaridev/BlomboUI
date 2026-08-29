@@ -84,6 +84,9 @@ export type JobRequest = {
   height: number
   steps: number
   cfg: number
+  clip_skip?: number
+  clip_type?: string
+  clip_device?: string
   seed: number
   seed_after?: string
   batch_size: number
@@ -142,6 +145,10 @@ export type JobRequest = {
     loras: { path: string; strength: number }[]
     save_before: boolean
     clear_vram: boolean
+    attention_override: boolean
+    attention_engine: 'sage' | 'flash'
+    sage_attention: string
+    allow_compile: boolean
   }
   auto_loras?: AutoLoraRequest[]
   prompt_matrix?: PromptMatrixRequest
@@ -200,6 +207,10 @@ export type JobRequest = {
       kind: string
       lora_override: boolean
       loras: { path: string; strength: number }[]
+      attention_override: boolean
+      attention_engine: 'sage' | 'flash'
+      sage_attention: string
+      allow_compile: boolean
     }[]
   }
   rembg?: {
@@ -217,6 +228,12 @@ export type JobRequest = {
     input_mode: 'files' | 'directory'
     input_dir: string
     preserve_metadata?: boolean
+  }
+  attention?: {
+    enabled: boolean
+    engine: 'sage' | 'flash'
+    sage_attention: string
+    allow_compile: boolean
   }
   input_dir?: string
   input_paths?: string[]

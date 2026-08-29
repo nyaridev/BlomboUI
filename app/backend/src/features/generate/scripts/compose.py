@@ -8,12 +8,12 @@ from typing import Any
 from config import WORKFLOWS
 
 HIRES_UTILS = {
-    "checkpoints": "hiresfix_checkpoint",
-    "diffusion_models": "hiresfix_diffusion",
+    "checkpoints": ("image_checkpoint", "hiresfix"),
+    "diffusion_models": ("image_diffusion", "hiresfix"),
 }
 ADETAILER_UTILS = {
-    "checkpoints": "adetailer_checkpoint",
-    "diffusion_models": "adetailer_diffusion",
+    "checkpoints": ("image_checkpoint", "adetailer"),
+    "diffusion_models": ("image_diffusion", "adetailer"),
 }
 _DIFFUSION_KINDS = {"diffusion_models", "diffusion", "unet"}
 _META_KEYS = {"apply", "extras", "ports", "attach"}
@@ -45,22 +45,26 @@ def _safe_stem(name: str) -> str:
     return stem
 
 
-def load_util(name: str) -> dict[str, Any]:
-    stem = _safe_stem(name)
-    path = WORKFLOWS / "utils" / f"{stem}.json"
+def load_util(family: str, stem: str) -> dict[str, Any]:
+    ident = _safe_stem(stem)
+    path = WORKFLOWS / family / "utils" / f"{ident}.json"
     if not path.is_file():
-        raise FileNotFoundError(f"util not found: {stem}")
+        raise FileNotFoundError(f"util not found: {family}/{ident}")
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise FileNotFoundError(f"util not found: {stem}")
+        raise FileNotFoundError(f"util not found: {family}/{ident}")
     return data
 
 
-def hires_util_stem(blob: dict[str, Any]) -> str:
+def hires_util_ref(blob: dict[str, Any]) -> tuple[str, str]:
     kind = str(blob.get("kind") or blob.get("model_kind") or "").strip().lower()
     if kind in _DIFFUSION_KINDS:
         return HIRES_UTILS["diffusion_models"]
     return HIRES_UTILS["checkpoints"]
+
+
+def hires_util_stem(blob: dict[str, Any]) -> str:
+    return hires_util_ref(blob)[1]
 
 
 def _rewire_consumers(workflow: dict[str, Any], src: str, dest: list[Any]) -> None:
@@ -136,7 +140,7 @@ def apply_stage(host: dict[str, Any], util: dict[str, Any], prefix: str) -> dict
 def apply_hires(workflow: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
     raw = values.get("hires")
     blob = raw if isinstance(raw, dict) else {}
-    return apply_stage(workflow, load_util(hires_util_stem(blob)), "hires")
+    return apply_stage(workflow, load_util(*hires_util_ref(blob)), "hires")
 
 
 def _adetailer_units(values: dict[str, Any]) -> list[dict[str, Any]]:
@@ -150,11 +154,15 @@ def _adetailer_units(values: dict[str, Any]) -> list[dict[str, Any]]:
     return [item for item in rows if isinstance(item, dict) and item.get("enabled", True)]
 
 
-def adetailer_util_stem(unit: dict[str, Any]) -> str:
+def adetailer_util_ref(unit: dict[str, Any]) -> tuple[str, str]:
     kind = str(unit.get("kind") or unit.get("model_kind") or "").strip().lower()
     if kind in _DIFFUSION_KINDS:
         return ADETAILER_UTILS["diffusion_models"]
     return ADETAILER_UTILS["checkpoints"]
+
+
+def adetailer_util_stem(unit: dict[str, Any]) -> str:
+    return adetailer_util_ref(unit)[1]
 
 
 def apply_adetailer(workflow: dict[str, Any], values: dict[str, Any]) -> dict[str, Any]:
@@ -163,5 +171,5 @@ def apply_adetailer(workflow: dict[str, Any], values: dict[str, Any]) -> dict[st
         return workflow
     out = workflow
     for index, unit in enumerate(units):
-        out = apply_stage(out, load_util(adetailer_util_stem(unit)), f"adetailer/{index}")
+        out = apply_stage(out, load_util(*adetailer_util_ref(unit)), f"adetailer/{index}")
     return out

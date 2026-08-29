@@ -6,6 +6,7 @@ from infrastructure.comfy.client import (
     free,
     gpu_stats,
     ksampler_choices,
+    clip_loader_choices,
     list_workflows,
     reachable,
 )
@@ -44,6 +45,7 @@ __all__ = [
     "grid_path",
     "interrupt_job",
     "ksampler_choices",
+    "clip_loader_choices",
     "latest_generation",
     "latest_job",
     "list_templates",

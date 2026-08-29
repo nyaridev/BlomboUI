@@ -14,6 +14,7 @@ import {
 } from '@/stores/generateStore.ts'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { AdetailerModelTiles } from '@/views/generate/panels/generation/sections/params/AdetailerModelTiles.tsx'
+import { AttentionFields, useAttentionCaps } from '@/views/generate/panels/generation/sections/params/AttentionFields.tsx'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import { listedChoices } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 
@@ -28,7 +29,6 @@ export function AdetailerUnitBody({
   schedulers,
   hiddenSamplers,
   hiddenSchedulers,
-  inheritHires,
 }: {
   unit: AdetailerUnit
   patch: (next: Partial<AdetailerUnit>) => void
@@ -38,8 +38,8 @@ export function AdetailerUnitBody({
   schedulers: string[]
   hiddenSamplers: string[]
   hiddenSchedulers: string[]
-  inheritHires: boolean
 }) {
+  const { any: attentionInstalled } = useAttentionCaps()
   return (
     <div className="flex flex-col gap-stack">
       <div className="flex items-stretch justify-center gap-cluster">
@@ -49,6 +49,7 @@ export function AdetailerUnitBody({
             kind="ultralytics"
             role="BBox"
             size="tall"
+            chromeKey="generate-detector"
             value={unit.detector}
             onChange={(detector) => patch({ detector })}
             onClear={locked ? undefined : () => patch({ detector: '' })}
@@ -62,6 +63,7 @@ export function AdetailerUnitBody({
             kind="sams"
             role="SAM"
             size="tall"
+            chromeKey="generate-sam"
             value={unit.samModel}
             onChange={(samModel) => patch({ samModel })}
             onClear={locked ? undefined : () => patch({ samModel: '' })}
@@ -110,10 +112,37 @@ export function AdetailerUnitBody({
           </label>
         </div>
       </ParamSection>
-      {inheritHires ? null : (
       <ParamSection title="Overrides">
         <div className="flex flex-col gap-stack">
           <AdetailerModelTiles unit={unit} patch={patch} locked={locked} />
+          <CheckRow on={unit.promptOverride} onChange={(promptOverride) => patch({ promptOverride })} locked={locked}>
+            <div className="h-24 min-w-0">
+              <PromptField
+                value={unit.prompt}
+                onChange={(prompt) => patch({ prompt })}
+                placeholder="Positive"
+                side="prompt"
+                companionNegative={unit.negativePrompt}
+                onCompanionNegative={(negativePrompt) => patch({ negativePrompt })}
+              />
+            </div>
+          </CheckRow>
+          <CheckRow
+            on={unit.negativeOverride}
+            onChange={(negativeOverride) => patch({ negativeOverride })}
+            locked={locked}
+          >
+            <div className="h-20 min-w-0">
+              <PromptField
+                value={unit.negativePrompt}
+                onChange={(negativePrompt) => patch({ negativePrompt })}
+                placeholder="Negative"
+                side="negative"
+                companionNegative={unit.negativePrompt}
+                onCompanionNegative={(negativePrompt) => patch({ negativePrompt })}
+              />
+            </div>
+          </CheckRow>
           <div className="grid grid-cols-3 gap-stack">
             <CheckRow
               on={unit.samplerOverride}
@@ -155,63 +184,56 @@ export function AdetailerUnitBody({
             </CheckRow>
           </div>
           <CheckRow on={unit.seedOverride} onChange={(seedOverride) => patch({ seedOverride })} locked={locked}>
-              <div className="flex items-end gap-stack">
-                <label className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-xs text-muted">Seed</span>
-                  <NumberField value={unit.seed} onChange={(seed) => patch({ seed })} />
-                </label>
-                <div className="flex w-28 shrink-0 flex-col gap-1">
-                  <span className="text-xs text-muted">After</span>
-                  <SelectField
-                    value={unit.seedAfter}
-                    onChange={(value) => {
-                      const seedAfter = value as SeedAfter
-                      if (seedAfter === 'randomize') {
-                        patch({ seedAfter, seed: -1 })
-                        return
-                      }
-                      if (unit.seedAfter === 'randomize' && lastSeed != null) {
-                        patch({ seedAfter, seed: lastSeed })
-                        return
-                      }
-                      patch({ seedAfter })
-                    }}
-                    options={[...SEED_AFTER]}
-                  />
-                </div>
+            <div className="flex items-end gap-stack">
+              <label className="flex min-w-0 flex-1 flex-col gap-1">
+                <span className="text-xs text-muted">Seed</span>
+                <NumberField value={unit.seed} onChange={(seed) => patch({ seed })} />
+              </label>
+              <div className="flex w-28 shrink-0 flex-col gap-1">
+                <span className="text-xs text-muted">After</span>
+                <SelectField
+                  value={unit.seedAfter}
+                  onChange={(value) => {
+                    const seedAfter = value as SeedAfter
+                    if (seedAfter === 'randomize') {
+                      patch({ seedAfter, seed: -1 })
+                      return
+                    }
+                    if (unit.seedAfter === 'randomize' && lastSeed != null) {
+                      patch({ seedAfter, seed: lastSeed })
+                      return
+                    }
+                    patch({ seedAfter })
+                  }}
+                  options={[...SEED_AFTER]}
+                />
               </div>
+            </div>
+          </CheckRow>
+          {attentionInstalled ? (
+            <CheckRow
+              on={unit.attentionOverride}
+              onChange={(attentionOverride) => patch({ attentionOverride })}
+              locked={locked}
+              align="start"
+            >
+              <AttentionFields
+                engine={unit.attentionEngine}
+                sageAttention={unit.sageAttention}
+                allowCompile={unit.allowCompile}
+                onChange={(next) =>
+                  patch({
+                    ...(next.engine != null ? { attentionEngine: next.engine } : {}),
+                    ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
+                    ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
+                  })
+                }
+                locked={locked}
+              />
             </CheckRow>
-          <CheckRow on={unit.promptOverride} onChange={(promptOverride) => patch({ promptOverride })} locked={locked}>
-            <div className="h-24 min-w-0">
-              <PromptField
-                value={unit.prompt}
-                onChange={(prompt) => patch({ prompt })}
-                placeholder="Positive"
-                side="prompt"
-                companionNegative={unit.negativePrompt}
-                onCompanionNegative={(negativePrompt) => patch({ negativePrompt })}
-              />
-            </div>
-          </CheckRow>
-          <CheckRow
-            on={unit.negativeOverride}
-            onChange={(negativeOverride) => patch({ negativeOverride })}
-            locked={locked}
-          >
-            <div className="h-20 min-w-0">
-              <PromptField
-                value={unit.negativePrompt}
-                onChange={(negativePrompt) => patch({ negativePrompt })}
-                placeholder="Negative"
-                side="negative"
-                companionNegative={unit.negativePrompt}
-                onCompanionNegative={(negativePrompt) => patch({ negativePrompt })}
-              />
-            </div>
-          </CheckRow>
+          ) : null}
         </div>
       </ParamSection>
-      )}
       <ParamSection title="Advanced">
         <CheckRow
           on={unit.advancedOverride}

@@ -17,8 +17,8 @@ KINDS = {
     "vae": (".safetensors", ".ckpt", ".pt", ".pth"),
     "controlnet": (".safetensors", ".ckpt", ".pt", ".pth", ".bin"),
     "embeddings": (".safetensors", ".pt", ".bin", ".pth"),
-    "diffusion_models": (".safetensors", ".ckpt", ".pt", ".pth", ".sft"),
-    "text_encoders": (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".bin"),
+    "diffusion_models": (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf"),
+    "text_encoders": (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".bin", ".gguf"),
     "upscale_models": (".safetensors", ".ckpt", ".pt", ".pth", ".bin", ".onnx"),
     "sams": (".pt", ".pth"),
     "ultralytics": (".pt", ".pth", ".onnx"),
@@ -205,8 +205,7 @@ def model_file(kind: str, rel: str) -> Path | None:
     if not name or ".." in Path(name).parts:
         return None
     first, _, rest = name.partition("/")
-    extras = dirs.extra_named("wildcardDirs" if kind == "wildcards" else "modelDirs")
-    extra = extras.get(first)
+    extra = dirs.extra_root("wildcardDirs" if kind == "wildcards" else "modelDirs", first)
     if extra is not None:
         path = extra / rest if kind == "wildcards" else extra / kind / rest
         return path if path.is_file() else None

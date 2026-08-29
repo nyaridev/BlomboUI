@@ -168,7 +168,7 @@ export function TemplatePicker({
             <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{selected?.name ?? 'Template'}</span>
             {locked ? <span className="shrink-0 text-[10px] font-medium uppercase tracking-wide text-muted">Default</span> : null}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+          <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
             <TemplateParamsForm
               value={editor}
               apply={apply}

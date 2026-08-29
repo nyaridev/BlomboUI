@@ -119,16 +119,24 @@ if errorlevel 1 (
     exit /b 1
 )
 
-if defined DEV_DEBUG (
-    call "%ROOT%\install\windows\_ui.bat" section "ComfyUI custom nodes"
-    call "%ROOT%\install\windows\install_comfyui_deps.bat"
-    if errorlevel 1 exit /b 1
-) else (
-    call "%ROOT%\install\windows\install_comfyui_deps.bat" > "%COMFYUI_LOG%" 2>&1
-    if errorlevel 1 (
-        type "%COMFYUI_LOG%"
-        exit /b 1
+set "NEED_COMFY_DEPS="
+for %%N in (comfyui-manager rgthree-comfy ComfyUI-KJNodes ComfyUI-Easy-Use ComfyUI-Impact-Pack ComfyUI-Impact-Subpack ComfyUI-RMBG ComfyUI-SeedVR2_VideoUpscaler ComfyUI-GGUF) do (
+    if not exist "%COMFY_DIR%\custom_nodes\%%N\" set "NEED_COMFY_DEPS=1"
+)
+if defined NEED_COMFY_DEPS (
+    if defined DEV_DEBUG (
+        call "%ROOT%\install\windows\_ui.bat" section "ComfyUI custom nodes"
+        call "%ROOT%\install\windows\install_comfyui_deps.bat"
+        if errorlevel 1 exit /b 1
+    ) else (
+        call "%ROOT%\install\windows\install_comfyui_deps.bat" > "%COMFYUI_LOG%" 2>&1
+        if errorlevel 1 (
+            type "%COMFYUI_LOG%"
+            exit /b 1
+        )
     )
+) else if defined DEV_DEBUG (
+    call "%ROOT%\install\windows\_ui.bat" ok "ComfyUI custom nodes are already installed."
 )
 
 if not defined COMFYUI_PATH (
@@ -136,7 +144,7 @@ if not defined COMFYUI_PATH (
     "%COMFY_PYTHON%" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >nul 2>&1
     if errorlevel 1 (
         call "%ROOT%\install\windows\_ui.bat" warn "CUDA Torch was not found. Installing the default CUDA Torch..."
-        call "%ROOT%\install\windows\torch\2.10.0+cu130 (default).bat"
+        call "%ROOT%\install\windows\torch\2.11.0+cu130 (default).bat"
         if errorlevel 1 exit /b 1
     ) else if defined DEV_DEBUG (
         call "%ROOT%\install\windows\_ui.bat" ok "CUDA Torch is available."

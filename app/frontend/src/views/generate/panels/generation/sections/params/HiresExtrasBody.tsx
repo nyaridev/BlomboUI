@@ -9,6 +9,7 @@ import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { SEED_AFTER, type HiresSettings, type SeedAfter, useGenerateStore } from '@/stores/generateStore.ts'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { HiresOverrideTiles } from '@/views/generate/panels/generation/sections/params/HiresOverrideTiles.tsx'
+import { AttentionFields, useAttentionCaps } from '@/views/generate/panels/generation/sections/params/AttentionFields.tsx'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import {
   ASPECTS,
@@ -65,6 +66,7 @@ export function HiresExtrasBody({
   setResolutions: string[]
 }) {
   const checkpoint = useGenerateStore((s) => s.checkpoint)
+  const { any: attentionInstalled } = useAttentionCaps()
   const scaled = scaledSize(width, height, hires.scale)
   const current = hires.sizeMode === 'scale' ? scaled : { w: hires.width, h: hires.height }
 
@@ -136,6 +138,7 @@ export function HiresExtrasBody({
             kind="upscale_models"
             role="Upscale"
             size="tall"
+            chromeKey="generate-upscale"
             value={hires.upscaleModel}
             onChange={(upscaleModel) => patchHires({ upscaleModel })}
             onClear={locked ? undefined : () => patchHires({ upscaleModel: '' })}
@@ -329,6 +332,36 @@ export function HiresExtrasBody({
       <ParamSection title="Overrides">
         <div className="flex flex-col gap-stack">
           <HiresOverrideTiles hires={hires} patchHires={patchHires} locked={locked} />
+          <CheckRow on={hires.promptOverride} onChange={(promptOverride) => patchHires({ promptOverride })} locked={locked}>
+            <div className="h-24 min-w-0">
+              <PromptField
+                value={hires.prompt}
+                onChange={(prompt) => patchHires({ prompt })}
+                placeholder="Positive"
+                side="prompt"
+                checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
+                companionNegative={hires.negativePrompt}
+                onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
+              />
+            </div>
+          </CheckRow>
+          <CheckRow
+            on={hires.negativeOverride}
+            onChange={(negativeOverride) => patchHires({ negativeOverride })}
+            locked={locked}
+          >
+            <div className="h-20 min-w-0">
+              <PromptField
+                value={hires.negativePrompt}
+                onChange={(negativePrompt) => patchHires({ negativePrompt })}
+                placeholder="Negative"
+                side="negative"
+                checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
+                companionNegative={hires.negativePrompt}
+                onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
+              />
+            </div>
+          </CheckRow>
           <div className="grid grid-cols-3 gap-stack">
             <CheckRow
               on={hires.samplerOverride}
@@ -396,36 +429,28 @@ export function HiresExtrasBody({
               </div>
             </div>
           </CheckRow>
-          <CheckRow on={hires.promptOverride} onChange={(promptOverride) => patchHires({ promptOverride })} locked={locked}>
-            <div className="h-24 min-w-0">
-              <PromptField
-                value={hires.prompt}
-                onChange={(prompt) => patchHires({ prompt })}
-                placeholder="Positive"
-                side="prompt"
-                checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
-                companionNegative={hires.negativePrompt}
-                onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
+          {attentionInstalled ? (
+            <CheckRow
+              on={hires.attentionOverride}
+              onChange={(attentionOverride) => patchHires({ attentionOverride })}
+              locked={locked}
+              align="start"
+            >
+              <AttentionFields
+                engine={hires.attentionEngine}
+                sageAttention={hires.sageAttention}
+                allowCompile={hires.allowCompile}
+                onChange={(next) =>
+                  patchHires({
+                    ...(next.engine != null ? { attentionEngine: next.engine } : {}),
+                    ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
+                    ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
+                  })
+                }
+                locked={locked}
               />
-            </div>
-          </CheckRow>
-          <CheckRow
-            on={hires.negativeOverride}
-            onChange={(negativeOverride) => patchHires({ negativeOverride })}
-            locked={locked}
-          >
-            <div className="h-20 min-w-0">
-              <PromptField
-                value={hires.negativePrompt}
-                onChange={(negativePrompt) => patchHires({ negativePrompt })}
-                placeholder="Negative"
-                side="negative"
-                checkpoint={hires.modelOverride ? hires.checkpoint : checkpoint}
-                companionNegative={hires.negativePrompt}
-                onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
-              />
-            </div>
-          </CheckRow>
+            </CheckRow>
+          ) : null}
         </div>
       </ParamSection>
     </div>

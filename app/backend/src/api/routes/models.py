@@ -8,9 +8,18 @@ from fastapi.responses import FileResponse
 from api.errors import ApiError
 from api.http import file_response, resolve_view, thumb_meta
 from features.models import service as models
-from features.models.schemas import ModelInfoUpdate, ScopeIn
+from features.models.schemas import ModelFolderIn, ModelInfoUpdate, ModelMoveIn, ModelPathIn, ModelRenameIn, ScopeIn
 
 api = APIRouter()
+
+
+def _file_kind(kind: str) -> None:
+    if kind not in models.KINDS:
+        raise ApiError("bad_request", f"unknown model kind: {kind}", 400)
+
+
+def _file_error(exc: models.ModelFileError) -> ApiError:
+    return ApiError("not_found" if exc.status == 404 else "bad_request", str(exc), exc.status)
 
 
 @api.get("/user-models")
@@ -155,6 +164,52 @@ def delete_model_thumb(kind: str, path: str, context: str = "", all_contexts: bo
     except ValueError as exc:
         raise ApiError("bad_request", str(exc), 400) from exc
     return {"thumb": 0}
+
+
+@api.get("/user-models/{kind}/tree")
+def get_model_tree(kind: str) -> dict:
+    _file_kind(kind)
+    try:
+        return models.tree(kind)
+    except models.ModelFileError as exc:
+        raise _file_error(exc) from exc
+
+
+@api.post("/user-models/{kind}/folder")
+def post_model_folder(kind: str, body: ModelFolderIn) -> dict:
+    _file_kind(kind)
+    try:
+        return models.create_folder(kind, body.folder, body.name)
+    except models.ModelFileError as exc:
+        raise _file_error(exc) from exc
+
+
+@api.post("/user-models/{kind}/open")
+def open_model_file(kind: str, body: ModelPathIn) -> dict:
+    _file_kind(kind)
+    try:
+        models.reveal(kind, body.path)
+    except models.ModelFileError as exc:
+        raise _file_error(exc) from exc
+    return {"ok": True}
+
+
+@api.post("/user-models/{kind}/move")
+def move_model_file(kind: str, body: ModelMoveIn) -> dict:
+    _file_kind(kind)
+    try:
+        return models.move_entry(kind, body.path, body.folder)
+    except models.ModelFileError as exc:
+        raise _file_error(exc) from exc
+
+
+@api.post("/user-models/{kind}/rename")
+def rename_model_file(kind: str, body: ModelRenameIn) -> dict:
+    _file_kind(kind)
+    try:
+        return models.rename_entry(kind, body.path, body.name)
+    except models.ModelFileError as exc:
+        raise _file_error(exc) from exc
 
 
 @api.get("/user-thumbs")

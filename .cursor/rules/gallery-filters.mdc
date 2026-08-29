@@ -11,7 +11,7 @@ Keys live in [`stores/settings/constants.ts`](app/frontend/src/stores/settings/c
 
 | Surface | Globe label | Share pack | Per-view local pack |
 |---|---|---|---|
-| Generate galleries | Generate galleries | `thumbScopeIds` (`'global'`) for scopes; `'global'` for type/sort | `checkpoints` / `loras` / `wildcards` / `other` |
+| Generate galleries | Generate galleries | `thumbScopeIds` (`'global'`) for scopes; `'global'` for type/sort | `checkpoints` / `loras` / `wildcards` / `other` / `generate-upscale` / `generate-detector` / `generate-sam` |
 | Models Local | Models galleries | `galleryLocalScopes.models` | `models-all` / `models-loras` / … |
 | Templates picker | Templates | `galleryLocalScopes.template` | `template-loras` / … |
 | Gallery filter tiles | Gallery search | `galleryLocalScopes['gallery-search']` | `gallery-search-loras` / … |

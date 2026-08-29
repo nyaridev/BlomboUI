@@ -53,19 +53,19 @@ export function GenerationParams({
         onAdetailer={(next) => setAdetailer({ enabled: next })}
         onControlnet={(next) => setControlnet({ enabled: next })}
       />
-      <div className={enabled ? '' : 'pointer-events-none opacity-50'}>
-        <div className={shown === 'first' ? '' : 'hidden'}>
+      <div className={['relative', enabled ? '' : 'pointer-events-none opacity-50'].filter(Boolean).join(' ')}>
+        <div className={shown === 'first' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
           <FirstPassParams comfyOk={comfyOk} lastSeed={lastSeed} workflowParams={workflowParams} />
         </div>
-        <div className={shown === 'controlnet' ? '' : 'hidden'}>
+        <div className={shown === 'controlnet' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
           <ControlnetParams />
         </div>
         {showHires ? (
-          <div className={shown === 'hires' ? '' : 'hidden'}>
+          <div className={shown === 'hires' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
             <HiresParams comfyOk={comfyOk} lastSeed={lastSeed} />
           </div>
         ) : null}
-        <div className={shown === 'adetailer' ? '' : 'hidden'}>
+        <div className={shown === 'adetailer' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
           <AdetailerParams comfyOk={comfyOk} lastSeed={lastSeed} />
         </div>
       </div>

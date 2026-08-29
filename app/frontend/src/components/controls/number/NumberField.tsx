@@ -1,7 +1,7 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { PrimitiveButton } from '@/components/primitives/PrimitiveButton.tsx'
 import { PrimitiveInput } from '@/components/primitives/PrimitiveInput.tsx'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type NumberFieldProps = {
   value: number
@@ -19,11 +19,18 @@ function draftValue(raw: string) {
 export function NumberField({ value, onChange, min, max, step = 1, suffix }: NumberFieldProps) {
   const decimals = String(step).split('.')[1]?.length ?? 0
   const [text, setText] = useState<string | null>(null)
+  const focused = useRef(false)
   const shown = text ?? String(value)
 
   useEffect(() => {
-    setText(null)
+    if (!focused.current) {
+      setText(null)
+    }
   }, [value])
+
+  function inRange(next: number) {
+    return (min == null || next >= min) && (max == null || next <= max)
+  }
 
   function commit(next: number) {
     if (min != null) {
@@ -34,6 +41,18 @@ export function NumberField({ value, onChange, min, max, step = 1, suffix }: Num
     }
     onChange(next)
     setText(null)
+  }
+
+  function finish() {
+    focused.current = false
+    if (text == null) {
+      return
+    }
+    if (draftValue(text) || !Number.isFinite(Number(text))) {
+      setText(null)
+      return
+    }
+    commit(Number(text))
   }
 
   function nudge(dir: 1 | -1) {
@@ -52,6 +71,9 @@ export function NumberField({ value, onChange, min, max, step = 1, suffix }: Num
         autoComplete="off"
         spellCheck={false}
         value={shown}
+        onFocus={() => {
+          focused.current = true
+        }}
         onChange={(e) => {
           const raw = e.target.value
           if (draftValue(raw)) {
@@ -62,9 +84,17 @@ export function NumberField({ value, onChange, min, max, step = 1, suffix }: Num
           if (!Number.isFinite(next)) {
             return
           }
-          commit(next)
+          setText(raw)
+          if (inRange(next)) {
+            onChange(next)
+          }
         }}
-        onBlur={() => setText(null)}
+        onBlur={finish}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.currentTarget.blur()
+          }
+        }}
       />
       {suffix ? (
         <span className="pointer-events-none absolute inset-y-0 left-2 right-7 flex items-center text-sm">

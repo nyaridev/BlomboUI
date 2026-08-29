@@ -259,12 +259,13 @@ export function useGalleryFileOps({
     }
   }
 
-  async function revealEntry(path: string) {
+  async function revealEntry(path: string, fileKind?: keyof ModelLists) {
     try {
-      if (kind === 'wildcards') {
+      const openKind = fileKind ?? kind
+      if (kind === 'wildcards' || openKind === 'wildcards') {
         await revealWildcardFile(path)
       } else {
-        await revealModelFile(kind, path)
+        await revealModelFile(openKind, path)
       }
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not open folder', 'error')

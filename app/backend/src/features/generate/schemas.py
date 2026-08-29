@@ -40,6 +40,13 @@ class HiresLoraIn(BaseModel):
     strength: float = 1.0
 
 
+class AttentionIn(BaseModel):
+    enabled: bool = False
+    engine: Literal["sage", "flash"] = "sage"
+    sage_attention: str = "auto"
+    allow_compile: bool = False
+
+
 class HiresIn(BaseModel):
     enabled: bool = False
     scale: float = Field(default=1.5, ge=1, le=8)
@@ -76,6 +83,10 @@ class HiresIn(BaseModel):
     loras: list[HiresLoraIn] = Field(default_factory=list)
     save_before: bool = False
     clear_vram: bool = False
+    attention_override: bool = False
+    attention_engine: Literal["sage", "flash"] = "sage"
+    sage_attention: str = "auto"
+    allow_compile: bool = False
 
 
 class AdetailerUnitIn(BaseModel):
@@ -130,6 +141,10 @@ class AdetailerUnitIn(BaseModel):
     kind: str = ""
     lora_override: bool = False
     loras: list[HiresLoraIn] = Field(default_factory=list)
+    attention_override: bool = False
+    attention_engine: Literal["sage", "flash"] = "sage"
+    sage_attention: str = "auto"
+    allow_compile: bool = False
 
 
 class AdetailerIn(BaseModel):
@@ -165,6 +180,9 @@ class JobIn(BaseModel):
     height: int | None = Field(default=None, ge=64, le=4096)
     steps: int | None = Field(default=None, ge=1, le=150)
     cfg: float | None = Field(default=None, ge=1, le=30)
+    clip_skip: int | None = Field(default=None, ge=1, le=10)
+    clip_type: str | None = None
+    clip_device: str | None = None
     seed: int | None = None
     seed_after: str | None = None
     batch_size: int = Field(default=1, ge=1, le=8)
@@ -194,6 +212,7 @@ class JobIn(BaseModel):
     prompt_matrix: PromptMatrixIn | None = None
     xy_plot: XyPlotIn | None = None
     rembg: RembgIn | None = None
+    attention: AttentionIn | None = None
     input_dir: str | None = None
     input_paths: list[str] = Field(default_factory=list)
 

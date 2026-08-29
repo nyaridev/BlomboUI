@@ -261,6 +261,10 @@ export function packAdetailerJob(
       kind: hiresDiffusion(unit.checkpoint, diffusionModels) ? 'diffusion_models' : 'checkpoints',
       lora_override: unit.loraOverride,
       loras: unit.loras,
+      attention_override: unit.attentionOverride,
+      attention_engine: unit.attentionEngine,
+      sage_attention: unit.sageAttention,
+      allow_compile: unit.allowCompile,
     })),
   }
 }

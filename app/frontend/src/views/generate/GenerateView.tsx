@@ -20,7 +20,7 @@ import {
   type WorkflowInfo,
 } from '@/lib/api.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { autoLoraId, nextSeed, usedSeed, useGenerateStore } from '@/stores/generateStore.ts'
+import { autoLoraId, nextSeed, usedSeed, useGenerateStore, workflowHasPack } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
@@ -48,6 +48,7 @@ export function GenerateView() {
   const height = useGenerateStore((s) => s.height)
   const steps = useGenerateStore((s) => s.steps)
   const cfg = useGenerateStore((s) => s.cfg)
+  const clipSkip = useGenerateStore((s) => s.clipSkip)
   const seed = useGenerateStore((s) => s.seed)
   const seedAfter = useGenerateStore((s) => s.seedAfter)
   const setSeed = useGenerateStore((s) => s.setSeed)
@@ -126,7 +127,22 @@ export function GenerateView() {
 
   useEffect(() => {
     void getWorkflows()
-      .then(setWorkflows)
+      .then((items) => {
+        setWorkflows(items)
+        const state = useGenerateStore.getState()
+        const listed = items.some((item) => item.id === state.workflow)
+        const id = listed ? state.workflow : items.some((item) => item.id === 'sd15') ? 'sd15' : items[0]?.id
+        if (!id) {
+          return
+        }
+        const item = items.find((row) => row.id === id)
+        if (!item) {
+          return
+        }
+        if (id !== state.workflow || !workflowHasPack(state.paramsByWorkflow, state.modelsByWorkflow, id)) {
+          state.setWorkflow(id, item.defaults)
+        }
+      })
       .catch(() => setWorkflows([]))
   }, [])
 
@@ -315,6 +331,9 @@ export function GenerateView() {
         height,
         steps,
         cfg: Math.max(1, cfg),
+        clip_skip: Math.max(1, Math.min(10, Math.round(clipSkip))),
+        clip_type: gen.clipType,
+        clip_device: gen.clipDevice,
         seed: used,
         seed_after: seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
@@ -376,8 +395,20 @@ export function GenerateView() {
           loras: hires.loras,
           save_before: hires.saveBefore,
           clear_vram: hires.clearVram,
+          attention_override: hires.attentionOverride,
+          attention_engine: hires.attentionEngine,
+          sage_attention: hires.sageAttention,
+          allow_compile: hires.allowCompile,
         },
         adetailer: rembgMode ? undefined : packAdetailerJob(adetailer, adetailerUsed, diffusionModels),
+        attention: rembgMode
+          ? undefined
+          : {
+              enabled: gen.attention.enabled,
+              engine: gen.attention.engine,
+              sage_attention: gen.attention.sageAttention,
+              allow_compile: gen.attention.allowCompile,
+            },
         prompt_matrix:
           rembgMode || !activePromptMatrix
             ? undefined

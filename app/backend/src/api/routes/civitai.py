@@ -40,7 +40,7 @@ def civitai_models(
         "Most Images",
         "Newest",
         "Oldest",
-    ] = "Newest",
+    ] = "Most Downloaded",
     period: Literal["AllTime", "Year", "Month", "Week", "Day"] = "AllTime",
     page: int = 1,
     limit: int = 20,

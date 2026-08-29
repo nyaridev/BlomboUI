@@ -9,9 +9,16 @@ from config import WORKFLOWS
 _OUTPUTS: dict[str, list[tuple[str, str]]] = {
     "CheckpointLoaderSimple": [("MODEL", "MODEL"), ("CLIP", "CLIP"), ("VAE", "VAE")],
     "UNETLoader": [("MODEL", "MODEL")],
+    "UnetLoaderGGUF": [("MODEL", "MODEL")],
     "CLIPLoader": [("CLIP", "CLIP")],
+    "CLIPLoaderGGUF": [("CLIP", "CLIP")],
+    "DualCLIPLoader": [("CLIP", "CLIP")],
+    "DualCLIPLoaderGGUF": [("CLIP", "CLIP")],
+    "TripleCLIPLoader": [("CLIP", "CLIP")],
+    "TripleCLIPLoaderGGUF": [("CLIP", "CLIP")],
     "VAELoader": [("VAE", "VAE")],
     "CLIPTextEncode": [("CONDITIONING", "CONDITIONING")],
+    "CLIPSetLastLayer": [("CLIP", "CLIP")],
     "KSampler": [("LATENT", "LATENT")],
     "EmptyLatentImage": [("LATENT", "LATENT")],
     "VAEDecode": [("IMAGE", "IMAGE")],
@@ -28,6 +35,8 @@ _OUTPUTS: dict[str, list[tuple[str, str]]] = {
     "UltralyticsDetectorProvider": [("BBOX_DETECTOR", "BBOX_DETECTOR"), ("SEGM_DETECTOR", "SEGM_DETECTOR")],
     "SAMLoader": [("SAM_MODEL", "SAM_MODEL")],
     "FaceDetailer": [("IMAGE", "IMAGE"), ("IMAGE", "IMAGE"), ("IMAGE", "IMAGE"), ("MASK", "MASK")],
+    "PathchSageAttentionKJ": [("MODEL", "MODEL")],
+    "PatchFlashAttentionKJ": [("MODEL", "MODEL")],
 }
 
 
@@ -149,16 +158,24 @@ def write_raw_beside(path: Path) -> Path:
     return dest
 
 
+def _write_dir_raw(root: Path) -> list[Path]:
+    if not root.is_dir():
+        return []
+    written: list[Path] = []
+    for path in sorted(root.glob("*.json")):
+        if path.stem.endswith("_raw"):
+            continue
+        written.append(write_raw_beside(path))
+    return written
+
+
 def write_all_raw() -> list[Path]:
     written: list[Path] = []
-    for folder in ("main", "utils"):
-        root = WORKFLOWS / folder
-        if not root.is_dir():
-            continue
-        for path in sorted(root.glob("*.json")):
-            if path.stem.endswith("_raw"):
-                continue
-            written.append(write_raw_beside(path))
+    for family in ("image_checkpoint", "image_diffusion"):
+        root = WORKFLOWS / family
+        written.extend(_write_dir_raw(root))
+        written.extend(_write_dir_raw(root / "utils"))
+    written.extend(_write_dir_raw(WORKFLOWS / "utils"))
     return written
 
 

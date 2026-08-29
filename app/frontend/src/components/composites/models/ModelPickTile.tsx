@@ -3,7 +3,10 @@ import { FloatingModelsView } from '@/components/composites/models/FloatingModel
 import { TilePreview } from '@/components/composites/models/TilePreview.tsx'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
+import { galleryScopeKey } from '@/stores/settings/constants.ts'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
+import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 type ModelPickTileProps = {
@@ -36,6 +39,8 @@ export function ModelPickTile({
   const empty = !value
   const unresolved = Boolean(value) && !item
   const name = empty ? role : modelLabel(value) || value
+  const scopeKey = useSettingsStore((s) => (chromeKey ? galleryScopeKey(chromeKey, s) : undefined))
+  const view = useThumbView(kind, scopeKey)
 
   useEffect(() => {
     void load()
@@ -85,7 +90,7 @@ export function ModelPickTile({
             onClick={() => (open ? setOpen(false) : show())}
           >
             <TilePreview
-              src={empty || unresolved || !item ? null : modelThumbSrc(kind, item)}
+              src={empty || unresolved || !item ? null : modelThumbSrc(kind, item, view)}
               mark={empty ? '' : unresolved ? '?' : ''}
               label={!empty ? name : undefined}
               eager
@@ -122,7 +127,7 @@ export function ModelPickTile({
         >
           <span className="relative w-10 shrink-0">
             <TilePreview
-              src={item ? modelThumbSrc(kind, item) : null}
+              src={item ? modelThumbSrc(kind, item, view) : null}
               mark={empty ? '' : unresolved ? '?' : ''}
               eager
               className="w-10"

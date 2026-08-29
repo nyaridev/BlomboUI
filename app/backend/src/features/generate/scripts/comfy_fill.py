@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from features.generate.scripts.compose import apply_adetailer, apply_hires, _adetailer_units
+from features.generate.scripts.attention import apply_attention, attention_meta, stage_attention
 from features.generate.scripts.rembg import clean_rembg, is_rembg
 from features.models.scripts import loras as lora_tags
 
@@ -57,6 +58,17 @@ def _is_port(node: dict[str, Any]) -> bool:
     return _title(node).startswith("port:")
 
 
+def _clip_skip_layer(values: dict[str, Any]) -> int:
+    raw = values.get("clip_skip")
+    if raw is None:
+        raw = values.get("clipSkip")
+    try:
+        n = abs(int(raw))
+    except (TypeError, ValueError):
+        n = 2
+    return -max(1, min(10, n or 2))
+
+
 def _hires_blob(values: dict[str, Any]) -> dict[str, Any]:
     raw = values.get("hires")
     return raw if isinstance(raw, dict) else {}
@@ -70,27 +82,13 @@ def adetailer_enabled(values: dict[str, Any]) -> bool:
     return bool(_adetailer_units(values))
 
 
-_HIRES_ON_AD = (
-    ("sampler_override", "samplerOverride"),
-    ("sampler", "sampler"),
-    ("scheduler_override", "schedulerOverride"),
-    ("scheduler", "scheduler"),
-    ("cfg_override", "cfgOverride"),
-    ("cfg", "cfg"),
-    ("seed_override", "seedOverride"),
-    ("seed", "seed"),
-    ("seed_after", "seedAfter"),
-    ("prompt_override", "promptOverride"),
-    ("prompt", "prompt"),
-    ("negative_override", "negativeOverride"),
-    ("negative_prompt", "negativePrompt"),
-    ("model_override", "modelOverride"),
-    ("checkpoint", "checkpoint"),
-    ("vae", "vae"),
-    ("text_encoder", "textEncoder"),
-    ("kind", "kind"),
-    ("lora_override", "loraOverride"),
-    ("loras", "loras"),
+_HIRES_ON_AD_GROUPS = (
+    (("sampler_override", "samplerOverride"), (("sampler", "sampler"),)),
+    (("scheduler_override", "schedulerOverride"), (("scheduler", "scheduler"),)),
+    (("cfg_override", "cfgOverride"), (("cfg", "cfg"),)),
+    (("seed_override", "seedOverride"), (("seed", "seed"), ("seed_after", "seedAfter"))),
+    (("prompt_override", "promptOverride"), (("prompt", "prompt"),)),
+    (("negative_override", "negativeOverride"), (("negative_prompt", "negativePrompt"),)),
 )
 
 _ADETAILER_ADVANCED = (
@@ -137,15 +135,22 @@ def _adetailer_unit_for_fill(unit: dict[str, Any], values: dict[str, Any]) -> di
     out = dict(unit)
     if _adetailer_from_hires(values, out) and hires_enabled(values):
         hires = _hires_blob(values)
-        for snake, camel in _HIRES_ON_AD:
-            if snake in hires:
-                value = hires[snake]
-            elif camel in hires:
-                value = hires[camel]
-            else:
+        for (flag_snake, flag_camel), fields in _HIRES_ON_AD_GROUPS:
+            if _flag(out, flag_snake, flag_camel):
                 continue
-            out[snake] = value
-            out[camel] = value
+            if not _flag(hires, flag_snake, flag_camel):
+                continue
+            out[flag_snake] = True
+            out[flag_camel] = True
+            for snake, camel in fields:
+                if snake in hires:
+                    value = hires[snake]
+                elif camel in hires:
+                    value = hires[camel]
+                else:
+                    continue
+                out[snake] = value
+                out[camel] = value
     if not _flag(out, "advanced_override", "advancedOverride"):
         for snake, camel, value in _ADETAILER_ADVANCED:
             out[snake] = value
@@ -290,6 +295,9 @@ def hires_meta_fields(values: dict[str, Any]) -> dict[str, Any]:
         out["prompt"] = str(blob.get("prompt") or "")
     if _flag(blob, "negative_override", "negativeOverride"):
         out["negative_prompt"] = str(blob.get("negative_prompt") or blob.get("negativePrompt") or "")
+    attn = stage_attention(values, "hires") if hires_enabled(values) else None
+    if attn:
+        out["attention"] = attention_meta(attn)
     return out
 
 
@@ -343,6 +351,9 @@ def adetailer_meta_fields(unit: dict[str, Any], values: dict[str, Any]) -> dict[
         out["prompt"] = str(unit.get("prompt") or "")
     if _flag(unit, "negative_override", "negativeOverride"):
         out["negative_prompt"] = str(unit.get("negative_prompt") or unit.get("negativePrompt") or "")
+    attn = stage_attention(values, "adetailer", unit)
+    if attn:
+        out["attention"] = attention_meta(attn)
     return out
 
 
@@ -449,6 +460,7 @@ def _rewire_hires(workflow: dict[str, Any], values: dict[str, Any], filename: Ca
     first_ckpt = _typed_nodes(workflow, "CheckpointLoaderSimple", False)
     first_unet = _typed_nodes(workflow, "UNETLoader", False)
     first_clip = _typed_nodes(workflow, "CLIPLoader", False)
+    first_skip = _typed_nodes(workflow, "CLIPSetLastLayer", False)
     first_lora = _typed_nodes(workflow, "Power Lora Loader (rgthree)", False)
     first_pos = [(k, n) for k, n in _typed_nodes(workflow, "CLIPTextEncode", False) if "negative" not in _title(n)]
     first_neg = [(k, n) for k, n in _typed_nodes(workflow, "CLIPTextEncode", False) if "negative" in _title(n)]
@@ -461,9 +473,12 @@ def _rewire_hires(workflow: dict[str, Any], values: dict[str, Any], filename: Ca
     hires_pos = [(k, n) for k, n in _typed_nodes(workflow, "CLIPTextEncode", True) if "negative" not in _title(n)]
     hires_neg = [(k, n) for k, n in _typed_nodes(workflow, "CLIPTextEncode", True) if "negative" in _title(n)]
     base_model = first_lora[0][0] if first_lora else (first_unet[0][0] if first_unet else (first_ckpt[0][0] if first_ckpt else ""))
-    base_clip = first_lora[0][0] if first_lora else (first_clip[0][0] if first_clip else (first_ckpt[0][0] if first_ckpt else ""))
     base_model_slot = 0
-    base_clip_slot = 1 if first_lora or first_ckpt else 0
+    if first_skip:
+        base_clip, base_clip_slot = first_skip[0][0], 0
+    else:
+        base_clip = first_lora[0][0] if first_lora else (first_clip[0][0] if first_clip else (first_ckpt[0][0] if first_ckpt else ""))
+        base_clip_slot = 1 if first_lora or first_ckpt else 0
     hires_model_key = ""
     hires_clip_key = ""
     hires_model_slot = 0
@@ -960,6 +975,31 @@ def _apply_rembg_engine(workflow: dict[str, Any], values: dict[str, Any]) -> Non
             node.setdefault("inputs", {})["images"] = [keep_id, 0]
 
 
+def _gguf_name(*names: Any) -> bool:
+    return any(str(name or "").replace("\\", "/").lower().endswith(".gguf") for name in names)
+
+
+def _promote_gguf_loaders(workflow: dict[str, Any]) -> None:
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        kind = node.get("class_type")
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        if kind == "UNETLoader" and _gguf_name(inputs.get("unet_name")):
+            node["class_type"] = "UnetLoaderGGUF"
+            inputs.pop("weight_dtype", None)
+        elif kind == "CLIPLoader" and _gguf_name(inputs.get("clip_name")):
+            node["class_type"] = "CLIPLoaderGGUF"
+        elif kind == "DualCLIPLoader" and _gguf_name(inputs.get("clip_name1"), inputs.get("clip_name2")):
+            node["class_type"] = "DualCLIPLoaderGGUF"
+        elif kind == "TripleCLIPLoader" and _gguf_name(
+            inputs.get("clip_name1"), inputs.get("clip_name2"), inputs.get("clip_name3")
+        ):
+            node["class_type"] = "TripleCLIPLoaderGGUF"
+
+
 def fill_txt2img(
     values: dict[str, Any],
     load_workflow: Callable[[str], dict[str, Any]],
@@ -971,7 +1011,7 @@ def fill_txt2img(
     clip_negative = lora_tags.strip_tags(str(values.get("negative_prompt") or ""))
     values["prompt_clip"] = clip_prompt
     values["negative_clip"] = clip_negative
-    loaded = copy.deepcopy(load_workflow(str(values.get("workflow") or "txt2img")))
+    loaded = copy.deepcopy(load_workflow(str(values.get("workflow") or "sd15")))
     if hires_enabled(values) and not is_rembg(values):
         loaded = apply_hires(loaded, values)
     if adetailer_enabled(values) and not is_rembg(values):
@@ -1004,6 +1044,12 @@ def fill_txt2img(
             name = filename(str(values.get("text_encoder") or ""))
             if name:
                 inputs["clip_name"] = name
+            clip_type = str(values.get("clip_type") or values.get("clipType") or "").strip()
+            if clip_type:
+                inputs["type"] = clip_type
+            clip_device = str(values.get("clip_device") or values.get("clipDevice") or "").strip()
+            if clip_device:
+                inputs["device"] = clip_device
         elif kind == "VAELoader":
             if _is_hires(node) or _is_adetailer(node):
                 continue
@@ -1020,6 +1066,8 @@ def fill_txt2img(
                 positive_done = True
             else:
                 inputs["text"] = clip_negative
+        elif kind == "CLIPSetLastLayer":
+            inputs["stop_at_clip_layer"] = _clip_skip_layer(values)
         elif kind == "KSampler":
             if _is_hires(node):
                 _fill_hires_sampler(inputs, values)
@@ -1062,7 +1110,9 @@ def fill_txt2img(
         _rewire_hires(workflow, values, filename)
     _apply_hires_saves(workflow, values)
     _fill_adetailer(workflow, values, filename, host_ports)
+    apply_attention(workflow, values)
     latent = workflow.get("7")
     if isinstance(latent, dict):
         latent.setdefault("inputs", {})["batch_size"] = batch_size
+    _promote_gguf_loaders(workflow)
     return workflow

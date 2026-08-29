@@ -29,7 +29,9 @@ async def lifespan(_app: FastAPI):
     complete.schedule_rebuild()
     models.start()
     threading.Thread(target=_warm_hashes, daemon=True, name="hash-warm").start()
-    threading.Thread(target=_purge_hires_tmp, daemon=True, name="hires-temp-purge").start()
+    threading.Thread(
+        target=_purge_hires_tmp, daemon=True, name="hires-temp-purge"
+    ).start()
     try:
         await asyncio.to_thread(gallery.purge_expired)
     except OSError:

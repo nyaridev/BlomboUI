@@ -10,7 +10,7 @@ from features.models.scripts import hashes
 from features.models.scripts import loras as lora_tags
 
 DEFAULTS = {
-    "checkpoint": "waiIllustriousSDXL_v140.safetensors",
+    "checkpoint": "",
     "width": 832,
     "height": 1216,
     "steps": 20,
@@ -20,7 +20,7 @@ DEFAULTS = {
     "batch_count": 1,
     "sampler": "euler",
     "scheduler": "sgm_uniform",
-    "workflow": "txt2img",
+    "workflow": "sd15",
     "template": "default",
 }
 

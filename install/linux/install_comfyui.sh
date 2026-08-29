@@ -79,38 +79,53 @@ if [ ! -d "$COMFY_DIR" ]; then
     ui_error "ComfyUI download failed."
     exit 1
   fi
+  if [ -n "${COMFYUI_REF:-}" ]; then
+    ui_info "Checking out ComfyUI $COMFYUI_REF..."
+    if ! "$GIT" -C "$COMFY_DIR" fetch --tags origin; then
+      ui_error "ComfyUI tag fetch failed."
+      exit 1
+    fi
+    if ! "$GIT" -C "$COMFY_DIR" checkout "$COMFYUI_REF"; then
+      ui_error "ComfyUI checkout of $COMFYUI_REF failed."
+      exit 1
+    fi
+  fi
 else
   ui_ok "ComfyUI folder already exists. Skipping download."
 fi
 
 if [ -x "$PYTHON_CMD" ]; then
-  ui_ok "Embedded Python already exists. Skipping download."
-else
-  BASE_PYTHON312="$(find_python312 || true)"
-  if [ -z "$BASE_PYTHON312" ]; then
-    ui_error "Python 3.12 was not found."
-    ui_info "Install Python 3.12 (python3.12 on PATH) and run again."
-    exit 1
-  fi
+  ui_ok "Embedded Python already exists. Skipping download, requirements, and Torch."
+  echo
+  ui_ok "ComfyUI files are ready at $COMFY_ROOT"
+  ui_info "Other Torch packages can be installed with the scripts in install/linux/torch."
+  exit 0
+fi
 
-  ui_info "Using existing Python 3.12 for a local venv: $BASE_PYTHON312"
-  mkdir -p "$PYTHON_DIR"
-  if ! "$BASE_PYTHON312" -m venv "$PYTHON_DIR"; then
-    ui_error "Failed to create Python 3.12 virtual environment."
-    exit 1
-  fi
-  create_python_wrappers
+BASE_PYTHON312="$(find_python312 || true)"
+if [ -z "$BASE_PYTHON312" ]; then
+  ui_error "Python 3.12 was not found."
+  ui_info "Install Python 3.12 (python3.12 on PATH) and run again."
+  exit 1
+fi
 
-  if [ ! -x "$PYTHON_CMD" ]; then
-    ui_error "Embedded Python executable was not found after setup."
-    exit 1
-  fi
+ui_info "Using existing Python 3.12 for a local venv: $BASE_PYTHON312"
+mkdir -p "$PYTHON_DIR"
+if ! "$BASE_PYTHON312" -m venv "$PYTHON_DIR"; then
+  ui_error "Failed to create Python 3.12 virtual environment."
+  exit 1
+fi
+create_python_wrappers
 
-  ui_info "Installing uv..."
-  if ! "$PYTHON_CMD" -I -m pip install uv $PIP_ARGS; then
-    ui_error "uv installation failed."
-    exit 1
-  fi
+if [ ! -x "$PYTHON_CMD" ]; then
+  ui_error "Embedded Python executable was not found after setup."
+  exit 1
+fi
+
+ui_info "Installing uv..."
+if ! "$PYTHON_CMD" -I -m pip install uv $PIP_ARGS; then
+  ui_error "uv installation failed."
+  exit 1
 fi
 
 if [ ! -f "$COMFY_DIR/requirements.txt" ]; then
@@ -125,7 +140,7 @@ if ! "$PYTHON_CMD" -I -m uv pip install -r "$COMFY_DIR/requirements.txt" $UV_ARG
 fi
 
 ui_info "Installing default CUDA Torch..."
-if ! "$ROOT/install/linux/torch/2.10.0+cu130 (default).sh"; then
+if ! "$ROOT/install/linux/torch/2.11.0+cu130 (default).sh"; then
   ui_error "Default CUDA Torch installation failed."
   exit 1
 fi

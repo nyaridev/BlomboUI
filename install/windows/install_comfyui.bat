@@ -62,6 +62,19 @@ if not exist "%COMFY_DIR%\" (
         call "%ROOT%\install\windows\_ui.bat" error "ComfyUI download failed."
         exit /b 1
     )
+    if not "%COMFYUI_REF%"=="" (
+        call "%ROOT%\install\windows\_ui.bat" info "Checking out ComfyUI %COMFYUI_REF%..."
+        "%GIT_EXE%" -C "%COMFY_DIR%" fetch --tags origin
+        if errorlevel 1 (
+            call "%ROOT%\install\windows\_ui.bat" error "ComfyUI tag fetch failed."
+            exit /b 1
+        )
+        "%GIT_EXE%" -C "%COMFY_DIR%" checkout "%COMFYUI_REF%"
+        if errorlevel 1 (
+            call "%ROOT%\install\windows\_ui.bat" error "ComfyUI checkout of %COMFYUI_REF% failed."
+            exit /b 1
+        )
+    )
 ) else (
     call "%ROOT%\install\windows\_ui.bat" ok "ComfyUI folder already exists. Skipping download."
 )
@@ -71,8 +84,11 @@ if not exist "%COMFY_DIR%\" (
 :: -----------------------------------------------------------------------------
 
 if exist "%PYTHON_EXE%" (
-    call "%ROOT%\install\windows\_ui.bat" ok "Embedded Python already exists. Skipping download."
-    goto :install_comfyui_requirements
+    call "%ROOT%\install\windows\_ui.bat" ok "Embedded Python already exists. Skipping download, requirements, and Torch."
+    echo.
+    call "%ROOT%\install\windows\_ui.bat" ok "ComfyUI files are ready at %COMFY_ROOT%"
+    call "%ROOT%\install\windows\_ui.bat" info "Other Torch packages can be installed with the scripts in install\windows\torch."
+    exit /b 0
 )
 
 if not exist "%PYTHON_DIR%\" mkdir "%PYTHON_DIR%"
@@ -181,7 +197,7 @@ if errorlevel 1 (
 :: -----------------------------------------------------------------------------
 
 call "%ROOT%\install\windows\_ui.bat" info "Installing default CUDA Torch..."
-call "%ROOT%\install\windows\torch\2.10.0+cu130 (default).bat"
+call "%ROOT%\install\windows\torch\2.11.0+cu130 (default).bat"
 if errorlevel 1 (
     call "%ROOT%\install\windows\_ui.bat" error "Default CUDA Torch installation failed."
     exit /b 1

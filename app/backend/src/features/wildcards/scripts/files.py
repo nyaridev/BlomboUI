@@ -265,8 +265,9 @@ def _is_root(rel: str) -> bool:
     name = str(rel or "").replace("\\", "/").strip("/")
     if not name:
         return True
-    extras = dirs.extra_named("wildcardDirs")
-    return name in extras and "/" not in name
+    if not name:
+        return True
+    return dirs.extra_root("wildcardDirs", name) is not None and "/" not in name
 
 
 def _parent_rel(rel: str) -> str:
@@ -314,11 +315,12 @@ def _resolve(rel: str) -> Path | None:
     name = str(rel or "").replace("\\", "/").strip().lstrip("/")
     if ".." in Path(name).parts:
         return None
-    extras = dirs.extra_named("wildcardDirs")
+    if ".." in Path(name).parts:
+        return None
     if not name:
         return wildcards_root()
     first, _, rest = name.partition("/")
-    extra = extras.get(first)
+    extra = dirs.extra_root("wildcardDirs", first)
     if extra is not None:
         return extra / rest if rest else extra
     return wildcards_root() / name

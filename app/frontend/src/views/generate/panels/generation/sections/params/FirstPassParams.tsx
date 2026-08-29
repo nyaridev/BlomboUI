@@ -1,11 +1,13 @@
 import { OutputPathOverride } from '@/views/generate/panels/generation/sections/params/OutputPathOverride.tsx'
 import { GenerationScripts } from '@/views/generate/panels/generation/sections/params/GenerationScripts.tsx'
+import { AttentionFields, useAttentionCaps } from '@/views/generate/panels/generation/sections/params/AttentionFields.tsx'
+import { ExpandSection } from '@/components/controls/expand-section/ExpandSection.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
 import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
-import { getKSamplerChoices } from '@/lib/api.ts'
+import { getClipLoaderChoices, getKSamplerChoices } from '@/lib/api.ts'
 import { useGenerateStore, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState, type ReactNode } from 'react'
@@ -52,8 +54,12 @@ export function FirstPassParams({
   const height = useGenerateStore((s) => s.height)
   const steps = useGenerateStore((s) => s.steps)
   const cfg = useGenerateStore((s) => s.cfg)
+  const clipSkip = useGenerateStore((s) => s.clipSkip)
+  const clipType = useGenerateStore((s) => s.clipType)
+  const clipDevice = useGenerateStore((s) => s.clipDevice)
   const seed = useGenerateStore((s) => s.seed)
   const seedAfter = useGenerateStore((s) => s.seedAfter)
+  const attention = useGenerateStore((s) => s.attention)
   const batchSize = useGenerateStore((s) => s.batchSize)
   const batchCount = useGenerateStore((s) => s.batchCount)
   const sampler = useGenerateStore((s) => s.sampler)
@@ -65,8 +71,13 @@ export function FirstPassParams({
   const setHeight = useGenerateStore((s) => s.setHeight)
   const setSteps = useGenerateStore((s) => s.setSteps)
   const setCfg = useGenerateStore((s) => s.setCfg)
+  const setClipSkip = useGenerateStore((s) => s.setClipSkip)
+  const setClipType = useGenerateStore((s) => s.setClipType)
+  const setClipDevice = useGenerateStore((s) => s.setClipDevice)
   const setSeed = useGenerateStore((s) => s.setSeed)
   const setSeedAfter = useGenerateStore((s) => s.setSeedAfter)
+  const setAttention = useGenerateStore((s) => s.setAttention)
+  const { any: attentionInstalled } = useAttentionCaps()
   const setBatchSize = useGenerateStore((s) => s.setBatchSize)
   const setBatchCount = useGenerateStore((s) => s.setBatchCount)
   const setSampler = useGenerateStore((s) => s.setSampler)
@@ -94,6 +105,9 @@ export function FirstPassParams({
   const setResolutions = useSettingsStore((s) => s.setResolutions)
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
+  const [clipTypes, setClipTypes] = useState<string[]>(['stable_diffusion', 'krea2'])
+  const [clipDevices, setClipDevices] = useState<string[]>(['default', 'cpu'])
+  const showClipLoader = workflowParams.includes('clipType')
 
   useEffect(() => {
     if (!comfyOk) {
@@ -110,6 +124,22 @@ export function FirstPassParams({
       })
       .catch(() => {})
   }, [comfyOk])
+
+  useEffect(() => {
+    if (!comfyOk || !showClipLoader) {
+      return
+    }
+    void getClipLoaderChoices()
+      .then((data) => {
+        if (data.types.length) {
+          setClipTypes(data.types)
+        }
+        if (data.devices.length) {
+          setClipDevices(data.devices)
+        }
+      })
+      .catch(() => {})
+  }, [comfyOk, showClipLoader])
 
   function onResMode(mode: ResMode) {
     if (mode === 'scaler') {
@@ -298,7 +328,40 @@ export function FirstPassParams({
           <SliderField label="Batch size" value={batchSize} onChange={setBatchSize} min={1} max={8} />
         </div>
       </div>
-      <SliderField label="CFG" value={cfg} onChange={setCfg} min={1} max={30} step={0.5} />
+      {showClipLoader ? (
+        <div className="flex min-w-0 items-end gap-stack">
+          <div className="min-w-0 flex-1">
+            <FieldLabel>CLIP Type</FieldLabel>
+            <SelectField
+              value={clipType}
+              onChange={setClipType}
+              options={listedChoices(clipTypes, [], clipType)}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <FieldLabel>CLIP Device</FieldLabel>
+            <SelectField
+              value={clipDevice}
+              onChange={setClipDevice}
+              options={listedChoices(clipDevices, [], clipDevice)}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <SliderField label="CFG" value={cfg} onChange={setCfg} min={1} max={30} step={0.5} />
+          </div>
+        </div>
+      ) : workflowParams.includes('clipSkip') ? (
+        <div className="flex min-w-0 items-end gap-stack">
+          <div className="min-w-0 flex-1">
+            <SliderField label="Clip skip" value={clipSkip} onChange={setClipSkip} min={1} max={10} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <SliderField label="CFG" value={cfg} onChange={setCfg} min={1} max={30} step={0.5} />
+          </div>
+        </div>
+      ) : (
+        <SliderField label="CFG" value={cfg} onChange={setCfg} min={1} max={30} step={0.5} />
+      )}
       <div className="flex items-end gap-stack">
         <label className="flex min-w-0 flex-1 flex-col gap-1">
           <span className="text-xs text-muted">Seed</span>
@@ -313,6 +376,21 @@ export function FirstPassParams({
           />
         </div>
       </div>
+      {attentionInstalled ? (
+        <ExpandSection
+          title="Attention"
+          enabled={attention.enabled}
+          onEnabled={(enabled) => setAttention({ enabled })}
+          fit
+        >
+          <AttentionFields
+            engine={attention.engine}
+            sageAttention={attention.sageAttention}
+            allowCompile={attention.allowCompile}
+            onChange={setAttention}
+          />
+        </ExpandSection>
+      ) : null}
       <ParamSection title="Other">
         <OutputPathOverride
           key={`output-${workflow}`}

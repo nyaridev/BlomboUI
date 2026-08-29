@@ -164,14 +164,35 @@ if ! "$VENV_PYTHON" -m bootstrap; then
   exit 1
 fi
 
-if [ -n "${DEV_DEBUG:-}" ]; then
-  ui_section "ComfyUI custom nodes"
-  "$ROOT/install/linux/install_comfyui_deps.sh" || exit 1
-else
-  if ! "$ROOT/install/linux/install_comfyui_deps.sh" > "$COMFYUI_LOG" 2>&1; then
-    cat "$COMFYUI_LOG"
-    exit 1
+need_comfy_deps=0
+for node_name in \
+  comfyui-manager \
+  rgthree-comfy \
+  ComfyUI-KJNodes \
+  ComfyUI-Easy-Use \
+  ComfyUI-Impact-Pack \
+  ComfyUI-Impact-Subpack \
+  ComfyUI-RMBG \
+  ComfyUI-SeedVR2_VideoUpscaler \
+  ComfyUI-GGUF
+do
+  if [ ! -d "$COMFY_DIR/custom_nodes/$node_name" ]; then
+    need_comfy_deps=1
+    break
   fi
+done
+if [ "$need_comfy_deps" = 1 ]; then
+  if [ -n "${DEV_DEBUG:-}" ]; then
+    ui_section "ComfyUI custom nodes"
+    "$ROOT/install/linux/install_comfyui_deps.sh" || exit 1
+  else
+    if ! "$ROOT/install/linux/install_comfyui_deps.sh" > "$COMFYUI_LOG" 2>&1; then
+      cat "$COMFYUI_LOG"
+      exit 1
+    fi
+  fi
+elif [ -n "${DEV_DEBUG:-}" ]; then
+  ui_ok "ComfyUI custom nodes are already installed."
 fi
 
 if [ -z "${COMFYUI_PATH:-}" ]; then
@@ -180,7 +201,7 @@ if [ -z "${COMFYUI_PATH:-}" ]; then
   fi
   if ! "$COMFY_PYTHON" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
     ui_warn "CUDA Torch was not found. Installing the default CUDA Torch..."
-    "$ROOT/install/linux/torch/2.10.0+cu130 (default).sh" || exit 1
+    "$ROOT/install/linux/torch/2.11.0+cu130 (default).sh" || exit 1
   elif [ -n "${DEV_DEBUG:-}" ]; then
     ui_ok "CUDA Torch is available."
   fi

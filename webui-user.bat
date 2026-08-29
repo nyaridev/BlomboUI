@@ -22,9 +22,15 @@ set COMMANDLINE_ARGS=--uv --hot_reload_vite
 :: --api-pings -> show backend access logs (status polls and other API hits).
 :: --hot_reload_vite -> reload the frontend when UI files change.
 
-set COMFYUI_ARGS=
+:: -----------------------------------------------------------------------------
+:: ComfyUI
+:: -----------------------------------------------------------------------------
+
+:: COMFYUI_REF is a git tag, branch, or commit for the bundled clone (empty = latest). Example: v0.3.60
+set COMFYUI_REF=
 
 :: Extra arguments forwarded to ComfyUI (main.py).
+set COMFYUI_ARGS=
 
 :: -----------------------------------------------------------------------------
 :: Launch

@@ -1,13 +1,17 @@
 {
+  "name": "Krea2",
   "apply": [
     "sampler",
     "scheduler",
     "steps",
+    "clipType",
+    "clipDevice",
     "cfg",
     "seed",
     "outputPath"
   ],
   "extras": ["hires"],
+  "defaults": { "resMode": "scaler", "aspect": "3:4", "megapixels": 1.5 },
   "ports": {
     "IMAGE": ["9", 0],
     "MODEL": ["15", 0],
@@ -39,10 +43,10 @@
   "5": {
     "inputs": {
       "seed": 0,
-      "steps": 20,
-      "cfg": 4,
+      "steps": 8,
+      "cfg": 1,
       "sampler_name": "euler",
-      "scheduler": "sgm_uniform",
+      "scheduler": "simple",
       "denoise": 1,
       "model": ["15", 0],
       "positive": ["2", 0],
@@ -56,8 +60,8 @@
   },
   "7": {
     "inputs": {
-      "width": 832,
-      "height": 1216,
+      "width": 1064,
+      "height": 1416,
       "batch_size": 1
     },
     "class_type": "EmptyLatentImage",
@@ -121,7 +125,7 @@
   "18": {
     "inputs": {
       "clip_name": "",
-      "type": "stable_diffusion",
+      "type": "krea2",
       "device": "default"
     },
     "class_type": "CLIPLoader",

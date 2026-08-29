@@ -63,6 +63,9 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   rememberCivitaiMarks: (names: string[]) => void
   setHiddenSamplers: (value: string[]) => void
   setHiddenSchedulers: (value: string[]) => void
+  setVramUnloadWorkflows: (value: string[]) => void
+  setVramUnloadOnPrompt: (value: boolean) => void
+  setVramUnloadOnWeights: (value: boolean) => void
   setTheme: (value: Theme) => void
   setCivitaiSite: (value: CivitaiSite) => void
   setCivitaiApiKey: (value: string) => void
@@ -189,6 +192,9 @@ const KEYS = [
   'modelInfoLayout',
   'hiddenSamplers',
   'hiddenSchedulers',
+  'vramUnloadWorkflows',
+  'vramUnloadOnPrompt',
+  'vramUnloadOnWeights',
   'theme',
   'civitaiSite',
   'civitaiApiKey',

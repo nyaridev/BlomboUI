@@ -32,6 +32,8 @@ export type Health = {
     mode: string | null
     path: string | null
     url?: string
+    sage?: boolean
+    flash?: boolean
   }
 }
 
@@ -74,11 +76,17 @@ export type KSamplerChoices = {
   schedulers: string[]
 }
 
+export type ClipLoaderChoices = {
+  types: string[]
+  devices: string[]
+}
+
 export type WorkflowInfo = {
   id: string
   name: string
   category?: string
   params?: string[]
+  defaults?: Record<string, unknown>
 }
 
 export async function getWorkflows(): Promise<WorkflowInfo[]> {
@@ -188,4 +196,12 @@ export async function getKSamplerChoices(): Promise<KSamplerChoices> {
     throw new Error(await readError(res))
   }
   return (await res.json()) as KSamplerChoices
+}
+
+export async function getClipLoaderChoices(): Promise<ClipLoaderChoices> {
+  const res = await fetch(api('/comfy/clip-loader'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as ClipLoaderChoices
 }

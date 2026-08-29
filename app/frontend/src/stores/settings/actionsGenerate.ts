@@ -182,6 +182,18 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
       set({ hiddenSchedulers: cleanNames(hiddenSchedulers) })
       persist()
     },
+    setVramUnloadWorkflows: (vramUnloadWorkflows) => {
+      set({ vramUnloadWorkflows: cleanNames(vramUnloadWorkflows) })
+      persist()
+    },
+    setVramUnloadOnPrompt: (vramUnloadOnPrompt) => {
+      set({ vramUnloadOnPrompt })
+      persist()
+    },
+    setVramUnloadOnWeights: (vramUnloadOnWeights) => {
+      set({ vramUnloadOnWeights })
+      persist()
+    },
     setTheme: (theme) => {
       set({ theme: cleanTheme(theme) })
       persist()

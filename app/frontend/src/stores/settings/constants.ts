@@ -83,6 +83,12 @@ export const GENERATE_FILTER_VIEWS = [
   { key: 'other', label: 'Other' },
 ] as const
 
+export const GENERATE_PICKER_FILTER_VIEWS = [
+  { key: 'generate-upscale', label: 'Upscale' },
+  { key: 'generate-detector', label: 'Detector' },
+  { key: 'generate-sam', label: 'SAM' },
+] as const
+
 export const MODELS_FILTER_VIEWS = [
   { key: 'models-all', label: 'All' },
   { key: 'models-checkpoints', label: 'Base Model' },
@@ -113,6 +119,7 @@ export const GALLERY_CREATE_FILTER_VIEWS = [
 
 export const GALLERY_MODE_KEYS = [
   ...GENERATE_FILTER_VIEWS.map((item) => item.key),
+  ...GENERATE_PICKER_FILTER_VIEWS.map((item) => item.key),
   ...MODELS_FILTER_VIEWS.map((item) => item.key),
   ...TEMPLATE_FILTER_VIEWS.map((item) => item.key),
   ...GALLERY_SEARCH_FILTER_VIEWS.map((item) => item.key),
@@ -148,6 +155,7 @@ export const LOCAL_SCOPE_DEFAULT: GalleryLocalScope = {
 
 export const GALLERY_LOCAL_KEYS = new Set<string>([
   ...GENERATE_FILTER_VIEWS.map((item) => item.key),
+  ...GENERATE_PICKER_FILTER_VIEWS.map((item) => item.key),
   GALLERY_SHARE_MODELS,
   GALLERY_SHARE_TEMPLATE,
   GALLERY_SHARE_GALLERY,
@@ -317,6 +325,9 @@ export const SETTINGS_DEFAULTS = {
   modelInfoLayout: 'horizontal' as 'horizontal' | 'vertical',
   hiddenSamplers: [] as string[],
   hiddenSchedulers: [] as string[],
+  vramUnloadWorkflows: ['krea2'] as string[],
+  vramUnloadOnPrompt: true,
+  vramUnloadOnWeights: true,
   theme: 'darker' as Theme,
   civitaiSite: 'red' as CivitaiSite,
   civitaiApiKey: '',

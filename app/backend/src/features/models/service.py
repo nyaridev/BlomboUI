@@ -6,8 +6,17 @@ from features.models.scripts.model_thumbs import drop_scope, list_saved, resolve
 from features.models.scripts.manager_catalog import CatalogError as ManagerCatalogError
 from features.models.scripts.manager_catalog import install as install_manager_model
 from features.models.scripts.manager_catalog import list_models as list_manager_models
+from features.models.scripts.model_files import (
+    ModelFileError,
+    create_folder,
+    move_entry,
+    rename_entry,
+    reveal,
+    tree,
+)
 from features.models.scripts.models import (
     ALL_KINDS,
+    KINDS,
     hash_files,
     list_models,
     model_file,
@@ -29,10 +38,13 @@ from features.models.scripts.thumbnail_scopes import (
 
 __all__ = [
     "ManagerCatalogError",
+    "ModelFileError",
     "ALL_KINDS",
     "GLOBAL_ID",
+    "KINDS",
     "auto_ids",
     "context_key",
+    "create_folder",
     "create_scope",
     "delete_scope",
     "delete_thumb",
@@ -45,6 +57,9 @@ __all__ = [
     "list_scopes",
     "model_file",
     "model_info",
+    "move_entry",
+    "rename_entry",
+    "reveal",
     "parse_context",
     "read_safetensors",
     "read_thumb_meta",
@@ -56,6 +71,7 @@ __all__ = [
     "stop",
     "thumb_media",
     "thumb_mtime",
+    "tree",
     "update_scope",
     "warm",
 ]

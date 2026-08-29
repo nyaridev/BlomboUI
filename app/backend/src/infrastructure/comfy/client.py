@@ -21,9 +21,13 @@ TIMEOUT = 30
 PREVIEW_IMAGE = 1
 PREVIEW_IMAGE_WITH_METADATA = 4
 _SMI_TTL = 2.0
+_STATS_TTL = 8.0
+_STATS_TIMEOUT = 5.0
 OnEvent = Callable[[dict[str, Any]], None]
 _smi_lock = threading.Lock()
 _smi_cache: tuple[float, dict[str, Any]] | None = None
+_stats_lock = threading.Lock()
+_stats_cache: tuple[float, dict[str, Any]] | None = None
 _MODEL_FOLDERS = (
     "checkpoints",
     "loras",
@@ -70,12 +74,23 @@ def reachable() -> bool:
 
 
 def system_stats() -> dict[str, Any] | None:
+    global _stats_cache
+    now = time.monotonic()
+    data: dict[str, Any] | None = None
     try:
-        raw = _request("GET", "/system_stats", timeout=1.5)
-        data = json.loads(raw.decode("utf-8"))
+        raw = _request("GET", "/system_stats", timeout=_STATS_TIMEOUT)
+        parsed = json.loads(raw.decode("utf-8"))
+        if isinstance(parsed, dict):
+            data = parsed
+            with _stats_lock:
+                _stats_cache = (now, data)
+            return data
     except (ComfyError, json.JSONDecodeError):
-        return None
-    return data if isinstance(data, dict) else None
+        pass
+    cached = _stats_cache
+    if cached and now - cached[0] < _STATS_TTL:
+        return cached[1]
+    return None
 
 
 def gpu_stats() -> dict[str, Any]:
@@ -163,6 +178,20 @@ def ksampler_choices() -> dict[str, list[str]]:
     return {
         "samplers": _combo(info, "KSampler", "sampler_name"),
         "schedulers": _combo(info, "KSampler", "scheduler"),
+    }
+
+
+def clip_loader_choices() -> dict[str, list[str]]:
+    try:
+        raw = _request("GET", "/object_info/CLIPLoader", timeout=5)
+    except ComfyError:
+        return {"types": [], "devices": []}
+    info = json.loads(raw.decode("utf-8"))
+    if not isinstance(info, dict):
+        return {"types": [], "devices": []}
+    return {
+        "types": _combo(info, "CLIPLoader", "type"),
+        "devices": _combo(info, "CLIPLoader", "device"),
     }
 
 
@@ -257,10 +286,12 @@ def _workflow_params(data: Any) -> list[str]:
             if "hires" in title and (kind == "ImageUpscaleWithModel" or "KSampler" in kind):
                 keys.add("hires")
             continue
-        if kind in {"CheckpointLoaderSimple", "UNETLoader"}:
+        if kind in {"CheckpointLoaderSimple", "UNETLoader", "UnetLoaderGGUF"}:
             keys.add("checkpoint")
-        elif kind == "CLIPLoader":
+        elif kind in {"CLIPLoader", "CLIPLoaderGGUF", "DualCLIPLoader", "DualCLIPLoaderGGUF", "TripleCLIPLoader", "TripleCLIPLoaderGGUF"}:
             keys.add("textEncoder")
+            if kind in {"CLIPLoader", "CLIPLoaderGGUF"}:
+                keys.update({"clipType", "clipDevice"})
         elif kind == "VAELoader":
             keys.add("vae")
         elif kind == "CLIPTextEncode":
@@ -279,6 +310,8 @@ def _workflow_params(data: Any) -> list[str]:
             keys.add("loras")
         elif kind == "ImageUpscaleWithModel":
             keys.add("hires")
+        elif kind == "CLIPSetLastLayer":
+            keys.add("clipSkip")
         elif kind in {"RMBG", "BiRefNetRMBG"}:
             keys.add("rembg")
     if clips >= 2:
@@ -289,42 +322,119 @@ def _workflow_params(data: Any) -> list[str]:
     return sorted(keys)
 
 
-def _main_dir() -> Path:
-    return WORKFLOWS / "main"
+def _workflow_defaults(data: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for node in _workflow_nodes(data):
+        kind = str(node.get("class_type") or "")
+        title = str((node.get("_meta") or {}).get("title") or "").lower()
+        if title.startswith("port:") or "hires" in title:
+            continue
+        inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
+        if kind == "KSampler":
+            try:
+                out["steps"] = int(inputs.get("steps"))
+            except (TypeError, ValueError):
+                pass
+            try:
+                cfg = float(inputs.get("cfg"))
+            except (TypeError, ValueError):
+                cfg = None
+            if cfg is not None and 1 <= cfg <= 30:
+                out["cfg"] = cfg
+            sampler = inputs.get("sampler_name")
+            if isinstance(sampler, str) and sampler:
+                out["sampler"] = sampler
+            scheduler = inputs.get("scheduler")
+            if isinstance(scheduler, str) and scheduler:
+                out["scheduler"] = scheduler
+        elif kind == "EmptyLatentImage":
+            try:
+                width = int(inputs.get("width"))
+                height = int(inputs.get("height"))
+            except (TypeError, ValueError):
+                continue
+            if width >= 64:
+                out["width"] = width
+            if height >= 64:
+                out["height"] = height
+        elif kind in {"CLIPLoader", "CLIPLoaderGGUF"}:
+            clip_type = inputs.get("type")
+            if isinstance(clip_type, str) and clip_type:
+                out["clipType"] = clip_type
+            device = inputs.get("device")
+            if isinstance(device, str) and device:
+                out["clipDevice"] = device
+        elif kind == "CLIPSetLastLayer":
+            try:
+                layer = abs(int(inputs.get("stop_at_clip_layer") or 2))
+            except (TypeError, ValueError):
+                layer = 2
+            out["clipSkip"] = max(1, min(10, layer))
+    extra = data.get("defaults") if isinstance(data, dict) else None
+    if isinstance(extra, dict):
+        mode = extra.get("resMode")
+        if mode in {"raw", "scaler", "set"}:
+            out["resMode"] = mode
+        aspect = extra.get("aspect")
+        if isinstance(aspect, str) and aspect.strip():
+            out["aspect"] = aspect.strip()
+        try:
+            megapixels = float(extra.get("megapixels"))
+        except (TypeError, ValueError):
+            megapixels = None
+        if megapixels is not None and 0.2 <= megapixels <= 4:
+            out["megapixels"] = megapixels
+    return out
+
+
+_FAMILIES = ("image_checkpoint", "image_diffusion")
+_PICKERS = (*_FAMILIES, "utils")
+
+
+def workflow_file(stem: str) -> Path | None:
+    ident = Path(stem).stem
+    if not ident or ident in {".", ".."} or ident.endswith("_raw"):
+        return None
+    for folder in _PICKERS:
+        path = WORKFLOWS / folder / f"{ident}.json"
+        if path.is_file():
+            return path
+    return None
 
 
 def list_workflows() -> list[dict[str, Any]]:
     items: list[dict[str, Any]] = []
-    folder = _main_dir()
-    if not folder.is_dir():
-        return items
-    for path in sorted(folder.glob("*.json")):
-        if path.stem.endswith("_raw"):
+    for folder in _PICKERS:
+        folder = WORKFLOWS / folder
+        if not folder.is_dir():
             continue
-        try:
-            data = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            data = {}
-        label = ""
-        if isinstance(data, dict):
-            label = str(data.get("name") or "").strip()
-        items.append(
-            {
-                "id": path.stem,
-                "name": label or path.stem,
-                "category": _workflow_category(data),
-                "params": _workflow_params(data),
-            }
-        )
+        for path in sorted(folder.glob("*.json")):
+            if path.stem.endswith("_raw"):
+                continue
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                data = {}
+            label = ""
+            if isinstance(data, dict):
+                label = str(data.get("name") or "").strip()
+            items.append(
+                {
+                    "id": path.stem,
+                    "name": label or path.stem,
+                    "category": _workflow_category(data),
+                    "params": _workflow_params(data),
+                    "defaults": _workflow_defaults(data),
+                }
+            )
+    items.sort(key=lambda row: str(row["id"]))
     return items
 
 
 def load_workflow(name: str) -> dict[str, Any]:
-    stem = Path(name).stem
-    if not stem or stem in {".", ".."} or stem.endswith("_raw"):
-        raise ComfyError("not_found", "workflow not found", status=404)
-    path = _main_dir() / f"{stem}.json"
-    if not path.is_file():
+    path = workflow_file(name)
+    if path is None:
+        stem = Path(name).stem
         raise ComfyError("not_found", f"workflow not found: {stem}", status=404)
     return json.loads(path.read_text(encoding="utf-8"))
 

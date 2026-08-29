@@ -15,6 +15,9 @@ PARAM_FIELDS = (
     "negative_prompt_raw",
     "steps",
     "cfg",
+    "clip_skip",
+    "clip_type",
+    "clip_device",
     "seed",
     "sampler",
     "scheduler",
@@ -27,10 +30,14 @@ _LOADERS: dict[str, tuple[str, tuple[str, ...]]] = {
     "CheckpointLoader": ("checkpoints", ("ckpt_name",)),
     "ImageOnlyCheckpointLoader": ("checkpoints", ("ckpt_name",)),
     "UNETLoader": ("diffusion_models", ("unet_name",)),
+    "UnetLoaderGGUF": ("diffusion_models", ("unet_name",)),
     "VAELoader": ("vae", ("vae_name",)),
     "CLIPLoader": ("text_encoders", ("clip_name",)),
+    "CLIPLoaderGGUF": ("text_encoders", ("clip_name",)),
     "DualCLIPLoader": ("text_encoders", ("clip_name1", "clip_name2")),
+    "DualCLIPLoaderGGUF": ("text_encoders", ("clip_name1", "clip_name2")),
     "TripleCLIPLoader": ("text_encoders", ("clip_name1", "clip_name2", "clip_name3")),
+    "TripleCLIPLoaderGGUF": ("text_encoders", ("clip_name1", "clip_name2", "clip_name3")),
     "LoraLoader": ("loras", ("lora_name",)),
     "LoraLoaderModelOnly": ("loras", ("lora_name",)),
     "ControlNetLoader": ("controlnet", ("control_net_name",)),
@@ -65,6 +72,7 @@ def take_params(raw: Any) -> dict[str, Any] | None:
 
 
 def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kind: str = "") -> dict[str, Any]:
+    from features.generate.scripts.attention import attention_meta, stage_attention
     from features.generate.scripts.comfy_fill import adetailer_enabled, hires_enabled
 
     out: dict[str, Any] = {
@@ -78,6 +86,9 @@ def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kin
         ),
         "steps": values.get("steps"),
         "cfg": values.get("cfg"),
+        "clip_skip": values.get("clip_skip"),
+        "clip_type": values.get("clip_type") or values.get("clipType"),
+        "clip_device": values.get("clip_device") or values.get("clipDevice"),
         "seed": values.get("seed"),
         "sampler": str(values.get("sampler") or ""),
         "scheduler": str(values.get("scheduler") or ""),
@@ -85,6 +96,9 @@ def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kin
         "height": values.get("height"),
         "models": collect_models(values, graph),
     }
+    attn = stage_attention(values, "first")
+    if attn:
+        out["attention"] = attention_meta(attn)
     if values.get("interrupted"):
         out["interrupted"] = True
     if kind == "hires" and hires_enabled(values):

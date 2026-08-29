@@ -11,14 +11,20 @@ import {
 import { DEFAULT_XY_PLOT, type XyPlotSettings } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
 import { isHiresSizeMode, isResMode, snapDim, type HiresSizeMode, type ResMode } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import {
-  applyWorkflowModels,
   AUTO_LORA_PREFIX,
-  emptyWorkflowModels,
   parseModelsByWorkflow,
   patchWorkflowModels,
   snapshotWorkflowModels,
   type WorkflowModels,
 } from '@/stores/workflowModels.ts'
+import {
+  applySetWorkflow,
+  GENERATE_PERSIST_VERSION,
+  hydrateFromPacks,
+  migrateGeneratePersist,
+  remapWorkflowId,
+  workflowHasPack,
+} from '@/stores/generatePersist.ts'
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
@@ -105,6 +111,63 @@ export function mergeRembg(raw: unknown): RembgSettings {
   }
 }
 
+export const SAGE_ATTENTION_MODES = [
+  'auto',
+  'sageattn_qk_int8_pv_fp16_cuda',
+  'sageattn_qk_int8_pv_fp16_triton',
+  'sageattn_qk_int8_pv_fp8_cuda',
+  'sageattn_qk_int8_pv_fp8_cuda++',
+  'sageattn3',
+  'sageattn3_per_block_mean',
+] as const
+
+export type AttentionEngine = 'sage' | 'flash'
+
+export type AttentionSettings = {
+  enabled: boolean
+  engine: AttentionEngine
+  sageAttention: string
+  allowCompile: boolean
+}
+
+export const DEFAULT_ATTENTION: AttentionSettings = {
+  enabled: false,
+  engine: 'sage',
+  sageAttention: 'auto',
+  allowCompile: false,
+}
+
+function isAttentionEngine(value: unknown): value is AttentionEngine {
+  return value === 'sage' || value === 'flash'
+}
+
+function attentionFields(row: Record<string, unknown>, base = DEFAULT_ATTENTION) {
+  const engine = row.attentionEngine ?? row.attention_engine ?? row.engine
+  const sage = row.sageAttention ?? row.sage_attention
+  return {
+    attentionEngine: isAttentionEngine(engine) ? engine : base.engine,
+    sageAttention: typeof sage === 'string' && sage ? sage : base.sageAttention,
+    allowCompile: typeof (row.allowCompile ?? row.allow_compile) === 'boolean'
+      ? Boolean(row.allowCompile ?? row.allow_compile)
+      : base.allowCompile,
+  }
+}
+
+export function mergeAttention(raw: unknown): AttentionSettings {
+  const base = cloneJson(DEFAULT_ATTENTION)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return base
+  }
+  const row = raw as Record<string, unknown>
+  const fields = attentionFields(row, base)
+  return {
+    enabled: Boolean(row.enabled),
+    engine: fields.attentionEngine,
+    sageAttention: fields.sageAttention,
+    allowCompile: fields.allowCompile,
+  }
+}
+
 export const SAM_DETECTION_HINTS = [
   'center-1',
   'horizontal-2',
@@ -171,6 +234,10 @@ export type AdetailerUnit = {
   textEncoder: string
   loraOverride: boolean
   loras: HiresLora[]
+  attentionOverride: boolean
+  attentionEngine: AttentionEngine
+  sageAttention: string
+  allowCompile: boolean
 }
 
 export type AdetailerSettings = {
@@ -229,6 +296,10 @@ export const DEFAULT_ADETAILER_UNIT: AdetailerUnit = {
   textEncoder: '',
   loraOverride: false,
   loras: [],
+  attentionOverride: false,
+  attentionEngine: 'sage',
+  sageAttention: 'auto',
+  allowCompile: false,
 }
 
 export function newAdetailerUnit(name = 'ADetailer'): AdetailerUnit {
@@ -280,6 +351,10 @@ export type HiresSettings = {
   loras: HiresLora[]
   saveBefore: boolean
   clearVram: boolean
+  attentionOverride: boolean
+  attentionEngine: AttentionEngine
+  sageAttention: string
+  allowCompile: boolean
 }
 
 const DEFAULT_EXTRA: ExtraSettings = { enabled: false }
@@ -318,6 +393,10 @@ export const DEFAULT_HIRES: HiresSettings = {
   loras: [],
   saveBefore: false,
   clearVram: false,
+  attentionOverride: false,
+  attentionEngine: 'sage',
+  sageAttention: 'auto',
+  allowCompile: false,
 }
 
 function cloneJson<T>(value: T): T {
@@ -409,6 +488,8 @@ function mergeHires(raw: unknown, firstW = 832, firstH = 1216): HiresSettings {
     loras,
     saveBefore: typeof row.saveBefore === 'boolean' ? row.saveBefore : typeof row.save_before === 'boolean' ? row.save_before : base.saveBefore,
     clearVram: typeof row.clearVram === 'boolean' ? row.clearVram : typeof row.clear_vram === 'boolean' ? row.clear_vram : base.clearVram,
+    attentionOverride: Boolean(row.attentionOverride ?? row.attention_override),
+    ...attentionFields(row, DEFAULT_ATTENTION),
   }
 }
 
@@ -481,6 +562,8 @@ function mergeAdetailerUnit(raw: unknown, index: number, parentFromHires = true)
     textEncoder: text(row.textEncoder ?? row.text_encoder, base.textEncoder),
     loraOverride: flag(row.loraOverride, row.lora_override),
     loras: parseHiresLoras(row.loras),
+    attentionOverride: flag(row.attentionOverride, row.attention_override),
+    ...attentionFields(row, DEFAULT_ATTENTION),
   }
 }
 
@@ -542,15 +625,18 @@ function mergeXyPlot(raw: unknown): XyPlotSettings {
 }
 
 export const DEFAULTS = {
-  prompt: '1girl, black hair',
+  prompt: '',
   negativePrompt: '',
-  checkpoint: 'waiIllustriousSDXL_v140.safetensors',
+  checkpoint: '',
   vae: '',
   textEncoder: '',
   width: 832,
   height: 1216,
   steps: 20,
   cfg: 4,
+  clipSkip: 2,
+  clipType: 'stable_diffusion',
+  clipDevice: 'default',
   seed: -1,
   seedAfter: 'randomize' as SeedAfter,
   outputImagePath: '',
@@ -567,7 +653,7 @@ export const DEFAULTS = {
   resMode: 'raw' as ResMode,
   aspect: '2:3',
   megapixels: 1,
-  workflow: 'txt2img',
+  workflow: 'sd15',
   hires: cloneJson(DEFAULT_HIRES),
   adetailer: cloneJson(DEFAULT_ADETAILER),
   controlnet: { ...DEFAULT_EXTRA } as ExtraSettings,
@@ -575,6 +661,7 @@ export const DEFAULTS = {
   promptMatrix: cloneJson(DEFAULT_PROMPT_MATRIX),
   xyPlot: cloneJson(DEFAULT_XY_PLOT),
   rembg: cloneJson(DEFAULT_REMBG),
+  attention: cloneJson(DEFAULT_ATTENTION),
   activeLoraOrder: [] as string[],
   activeLoraStrengths: {} as Record<string, number>,
   skippedLoras: [] as string[],
@@ -591,6 +678,9 @@ export const PARAM_KEYS = [
   'height',
   'steps',
   'cfg',
+  'clipSkip',
+  'clipType',
+  'clipDevice',
   'seed',
   'seedAfter',
   'outputImagePath',
@@ -614,6 +704,7 @@ export const PARAM_KEYS = [
   'promptMatrix',
   'xyPlot',
   'rembg',
+  'attention',
   'activeLoraOrder',
   'activeLoraStrengths',
   'skippedLoras',
@@ -630,6 +721,9 @@ export type TemplateParams = {
   height: number
   steps: number
   cfg: number
+  clipSkip: number
+  clipType: string
+  clipDevice: string
   seed: number
   seedAfter: SeedAfter
   outputImagePath: string
@@ -653,6 +747,7 @@ export type TemplateParams = {
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotSettings
   rembg: RembgSettings
+  attention: AttentionSettings
   activeLoraOrder: string[]
   activeLoraStrengths: Record<string, number>
   skippedLoras: string[]
@@ -670,6 +765,9 @@ export function pickParams(source: TemplateParams): TemplateParams {
     height: source.height,
     steps: source.steps,
     cfg: source.cfg,
+    clipSkip: source.clipSkip,
+    clipType: source.clipType,
+    clipDevice: source.clipDevice,
     seed: source.seed,
     seedAfter: source.seedAfter,
     outputImagePath: source.outputImagePath,
@@ -693,6 +791,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     promptMatrix: cloneJson(source.promptMatrix),
     xyPlot: cloneJson(source.xyPlot),
     rembg: mergeRembg(source.rembg),
+    attention: mergeAttention(source.attention),
     activeLoraOrder: [...(source.activeLoraOrder ?? [])],
     activeLoraStrengths: { ...(source.activeLoraStrengths ?? {}) },
     skippedLoras: [...(source.skippedLoras ?? [])],
@@ -750,6 +849,10 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
         next.rembg = mergeRembg(value)
         continue
       }
+      if (key === 'attention') {
+        next.attention = mergeAttention(value)
+        continue
+      }
       if (key === 'activeLoraOrder' || key === 'skippedLoras' || key === 'skippedWildcards') {
         next[key] = Array.isArray(value)
           ? [...new Set(value.filter((item): item is string => typeof item === 'string' && Boolean(item)))]
@@ -770,10 +873,31 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       ;(next as Record<string, unknown>)[key] = value
     }
   }
+  if (typeof next.clipSkip === 'number' && Number.isFinite(next.clipSkip)) {
+    next.clipSkip = Math.max(1, Math.min(10, Math.round(next.clipSkip)))
+  } else {
+    next.clipSkip = DEFAULTS.clipSkip
+  }
   if (!raw || raw.seedAfter == null) {
     next.seedAfter = next.seed < 0 ? 'randomize' : 'fixed'
   }
   return next
+}
+
+export { workflowHasPack }
+
+function parseIdMap(raw: unknown): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    const name = key.trim()
+    if (name && typeof value === 'string') {
+      out[name] = value
+    }
+  }
+  return out
 }
 
 function parseParamsByWorkflow(raw: unknown): Record<string, TemplateParams> {
@@ -823,8 +947,12 @@ export const APPLY_FIELDS = [
   { id: 'sampler', label: 'Sampler', keys: ['sampler'] },
   { id: 'scheduler', label: 'Scheduler', keys: ['scheduler'] },
   { id: 'steps', label: 'Steps', keys: ['steps'] },
+  { id: 'clipSkip', label: 'Clip skip', keys: ['clipSkip'] },
+  { id: 'clipType', label: 'CLIP type', keys: ['clipType'] },
+  { id: 'clipDevice', label: 'CLIP device', keys: ['clipDevice'] },
   { id: 'cfg', label: 'CFG', keys: ['cfg'] },
   { id: 'seed', label: 'Seed', keys: ['seed', 'seedAfter'] },
+  { id: 'attention', label: 'Attention', keys: ['attention'] },
   { id: 'outputPath', label: 'Output path', keys: ['outputImagePath', 'outputGridPath', 'outputImageName', 'outputGridName', 'outputHiresPath', 'outputHiresName', 'outputPathEnabled'] },
   { id: 'resolution', label: 'Resolution', keys: ['width', 'height', 'resMode', 'aspect', 'megapixels'] },
   { id: 'batchCount', label: 'Batch count', keys: ['batchCount'] },
@@ -850,6 +978,12 @@ export function templateApplyFields(workflowParams: string[]) {
     }
     if (field.id === 'rembg') {
       return false
+    }
+    if (field.id === 'clipSkip') {
+      return workflowParams.includes('clipSkip')
+    }
+    if (field.id === 'clipType' || field.id === 'clipDevice') {
+      return workflowParams.includes(field.id)
     }
     return true
   })
@@ -944,6 +1078,7 @@ export function mixParams(current: TemplateParams, incoming: TemplateParams, app
     }
   }
   next.cfg = Math.max(1, next.cfg)
+  next.clipSkip = Math.max(1, Math.min(10, Math.round(next.clipSkip)))
   return next
 }
 
@@ -1037,17 +1172,6 @@ function cleanActiveLoraOrder(raw: unknown): string[] {
     : []
 }
 
-function cleanActiveLoraStrengths(raw: unknown): Record<string, number> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {}
-  }
-  return Object.fromEntries(
-    Object.entries(raw).filter(
-      ([path, value]) => Boolean(path) && typeof value === 'number' && Number.isFinite(value),
-    ),
-  )
-}
-
 export function reorderActiveLoras(order: string[], draggedId: string, targetId: string, before = true): string[] | null {
   const from = order.indexOf(draggedId)
   const target = order.indexOf(targetId)
@@ -1072,6 +1196,9 @@ type GenerateState = {
   height: number
   steps: number
   cfg: number
+  clipSkip: number
+  clipType: string
+  clipDevice: string
   seed: number
   batchSize: number
   batchCount: number
@@ -1088,6 +1215,7 @@ type GenerateState = {
   xyPlot: XyPlotSettings
   rembg: RembgSettings
   rembgFiles: File[]
+  attention: AttentionSettings
   workflow: string
   templateId: string
   templateByWorkflow: Record<string, string>
@@ -1117,6 +1245,9 @@ type GenerateState = {
   setHeight: (value: number) => void
   setSteps: (value: number) => void
   setCfg: (value: number) => void
+  setClipSkip: (value: number) => void
+  setClipType: (value: string) => void
+  setClipDevice: (value: string) => void
   setSeed: (value: number) => void
   setSeedAfter: (value: SeedAfter, lastSeed?: number | null) => void
   setOutputImagePath: (value: string) => void
@@ -1148,7 +1279,8 @@ type GenerateState = {
   setXyPlot: (value: XyPlotSettings) => void
   setRembg: (value: Partial<RembgSettings>) => void
   setRembgFiles: (value: File[]) => void
-  setWorkflow: (value: string) => void
+  setAttention: (value: Partial<AttentionSettings>) => void
+  setWorkflow: (value: string, defaults?: Partial<TemplateParams> | Record<string, unknown>) => void
   setTemplateId: (value: string) => void
   setViewedTemplateId: (value: string) => void
   applyParams: (params: TemplateParams) => void
@@ -1180,6 +1312,9 @@ export const useGenerateStore = create<GenerateState>()(
       setHeight: (height) => set({ height }),
       setSteps: (steps) => set({ steps }),
       setCfg: (cfg) => set({ cfg: Math.max(1, cfg) }),
+      setClipSkip: (clipSkip) => set({ clipSkip: Math.max(1, Math.min(10, Math.round(clipSkip))) }),
+      setClipType: (clipType) => set({ clipType }),
+      setClipDevice: (clipDevice) => set({ clipDevice }),
       setSeed: (seed) => set({ seed }),
       setSeedAfter: (seedAfter, lastSeed) =>
         set((s) => {
@@ -1237,31 +1372,14 @@ export const useGenerateStore = create<GenerateState>()(
       setXyPlot: (xyPlot) => set({ xyPlot: mergeXyPlot(xyPlot) }),
       setRembg: (rembg) => set((s) => ({ rembg: mergeRembg({ ...s.rembg, ...rembg }) })),
       setRembgFiles: (rembgFiles) => set({ rembgFiles }),
-      setWorkflow: (workflow) =>
-        set((s) => {
-          if (workflow === s.workflow) {
-            return s
-          }
-          const paramsByWorkflow = {
-            ...s.paramsByWorkflow,
-            [s.workflow]: pickParams(s),
-          }
-          const modelsByWorkflow = {
-            ...s.modelsByWorkflow,
-            [s.workflow]: snapshotWorkflowModels(s),
-          }
-          const incomingModels = modelsByWorkflow[workflow] ?? emptyWorkflowModels(DEFAULTS.checkpoint)
-          const incomingParams = paramsByWorkflow[workflow] ?? DEFAULT_PARAMS
-          return {
-            ...incomingParams,
-            ...applyWorkflowModels(incomingModels),
-            workflow,
-            templateId: s.templateByWorkflow?.[workflow] ?? 'default',
-            paramsByWorkflow,
-            modelsByWorkflow,
-            swapTarget: null,
-          }
-        }),
+      setAttention: (attention) => set((s) => ({ attention: mergeAttention({ ...s.attention, ...attention }) })),
+      setWorkflow: (workflow, defaults) =>
+        set((s) =>
+          applySetWorkflow(s, workflow, defaults, {
+            pickParams,
+            mergeParams: (raw) => mergeParams(raw as Partial<TemplateParams> | Record<string, unknown> | undefined),
+          }),
+        ),
       setTemplateId: (templateId) =>
         set((s) => ({
           templateId,
@@ -1289,46 +1407,48 @@ export const useGenerateStore = create<GenerateState>()(
     }),
     {
       name: 'blombo-generate',
-      partialize: ({ viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, ...rest }) => rest,
+      version: GENERATE_PERSIST_VERSION,
+      migrate: (persisted, from) => {
+        if (from >= GENERATE_PERSIST_VERSION) {
+          return persisted as Record<string, unknown>
+        }
+        return migrateGeneratePersist(persisted, parseParamsByWorkflow)
+      },
+      partialize: (s) => {
+        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, ...rest } = s
+        return {
+          ...rest,
+          paramsByWorkflow: { ...s.paramsByWorkflow, [s.workflow]: pickParams(s) },
+          modelsByWorkflow: { ...s.modelsByWorkflow, [s.workflow]: snapshotWorkflowModels(s) },
+        }
+      },
       merge: (persisted, current) => {
         const rest = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
-        const activeLoraOrder = cleanActiveLoraOrder(rest.activeLoraOrder)
-        const activeLoraStrengths = cleanActiveLoraStrengths(rest.activeLoraStrengths)
-        const checkpoint = typeof rest.checkpoint === 'string' ? rest.checkpoint : current.checkpoint
-        const vae = typeof rest.vae === 'string' ? rest.vae : current.vae
-        const textEncoder = typeof rest.textEncoder === 'string' ? rest.textEncoder : current.textEncoder
-        const workflow = typeof rest.workflow === 'string' && rest.workflow ? rest.workflow : current.workflow
-        const modelsByWorkflow = {
-          ...parseModelsByWorkflow(rest.modelsByWorkflow, DEFAULTS.checkpoint),
-          [workflow]: snapshotWorkflowModels({
-            checkpoint,
-            vae,
-            textEncoder,
-            activeLoraOrder,
-            activeLoraStrengths,
-          }),
-        }
+        const rawWorkflow = typeof rest.workflow === 'string' && rest.workflow ? rest.workflow : current.workflow
+        const workflow = remapWorkflowId(rawWorkflow, DEFAULTS.workflow)
         const paramsByWorkflow = parseParamsByWorkflow(rest.paramsByWorkflow)
-        paramsByWorkflow[workflow] = mergeParams({
-          ...paramsByWorkflow[workflow],
-          ...rest,
-          checkpoint,
-          vae,
-          textEncoder,
-        })
-        return {
-          ...current,
-          ...rest,
-          ...paramsByWorkflow[workflow],
-          modelTileStyle: parseModelTileStyle(rest.modelTileStyle),
-          outputPathEnabled: typeof rest.outputPathEnabled === 'boolean' ? rest.outputPathEnabled : current.outputPathEnabled,
-          activeLoraOrder,
-          activeLoraStrengths,
-          skippedLoras: cleanActiveLoraOrder(rest.skippedLoras),
-          skippedWildcards: cleanActiveLoraOrder(rest.skippedWildcards),
-          modelsByWorkflow,
-          paramsByWorkflow,
+        const modelsByWorkflow = parseModelsByWorkflow(rest.modelsByWorkflow, '')
+        if (rawWorkflow !== workflow) {
+          if (!paramsByWorkflow[workflow] && paramsByWorkflow[rawWorkflow]) {
+            paramsByWorkflow[workflow] = paramsByWorkflow[rawWorkflow]
+          }
+          if (!modelsByWorkflow[workflow] && modelsByWorkflow[rawWorkflow]) {
+            modelsByWorkflow[workflow] = modelsByWorkflow[rawWorkflow]
+          }
         }
+        const templateByWorkflow = parseIdMap(rest.templateByWorkflow)
+        const viewedTemplateByWorkflow = parseIdMap(rest.viewedTemplateByWorkflow)
+        if (rawWorkflow !== workflow && templateByWorkflow[rawWorkflow] && !templateByWorkflow[workflow]) {
+          templateByWorkflow[workflow] = templateByWorkflow[rawWorkflow]
+        }
+        return hydrateFromPacks(current, rest, paramsByWorkflow, modelsByWorkflow, workflow, {
+          templateByWorkflow,
+          viewedTemplateByWorkflow,
+          templateId: templateByWorkflow[workflow] ?? 'default',
+          modelTileStyle: parseModelTileStyle(rest.modelTileStyle),
+          outputPathEnabled:
+            typeof rest.outputPathEnabled === 'boolean' ? rest.outputPathEnabled : current.outputPathEnabled,
+        })
       },
     },
   ),

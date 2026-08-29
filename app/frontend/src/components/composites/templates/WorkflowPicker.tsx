@@ -61,7 +61,7 @@ export function WorkflowPicker() {
   }, [open])
 
   function pick(id: string) {
-    setWorkflow(id)
+    setWorkflow(id, items.find((item) => item.id === id)?.defaults)
     setOpen(false)
   }
 

@@ -53,6 +53,7 @@ from .job_plan import (
 )
 from .comfy_fill import combined_progress, hires_enabled, progress_stage_map, progress_stages, stage_index
 from . import save_meta
+from .vram import maybe_unload
 from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 from .rembg import clean_rembg, input_runs, is_rembg, stage_input
 
@@ -592,6 +593,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 run_values["source_image"] = str(src)
                 staged = await asyncio.to_thread(stage_input, src, job_id, run_i)
                 run_values["input_image"] = staged.name
+            await asyncio.to_thread(maybe_unload, run_values)
             graph = await asyncio.to_thread(
                 comfy.fill_txt2img, {**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"}
             )

@@ -5,15 +5,19 @@ import { AdetailerParams } from '@/views/generate/panels/generation/sections/par
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
 import { GenerationScripts } from '@/views/generate/panels/generation/sections/params/GenerationScripts.tsx'
+import { AttentionFields, useAttentionCaps } from '@/views/generate/panels/generation/sections/params/AttentionFields.tsx'
+import { ExpandSection } from '@/components/controls/expand-section/ExpandSection.tsx'
 import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { ButtonControl } from '@/components/controls/button/ButtonControl.tsx'
+import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.tsx'
 import { ApplyRow, TemplateModelFields } from '@/components/composites/templates/TemplateModelFields.tsx'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { templateApplyFields, type TemplateParams, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, snapToSet } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import type { ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
+import { getClipLoaderChoices } from '@/lib/api.ts'
 
 function Label({ children }: { children: string }) {
   return <span className="text-xs text-muted">{children}</span>
@@ -48,8 +52,29 @@ export function TemplateParamsForm({
   locked = false,
   workflowParams = [],
 }: TemplateParamsFormProps) {
+  const [tab, setTab] = useState<'generation' | 'controlnet' | 'hires' | 'adetailer'>('generation')
+  const [clipTypes, setClipTypes] = useState<string[]>(['stable_diffusion', 'krea2'])
+  const [clipDevices, setClipDevices] = useState<string[]>(['default', 'cpu'])
+  const showClipLoader = workflowParams.includes('clipType')
+
+  useEffect(() => {
+    if (!showClipLoader) {
+      return
+    }
+    void getClipLoaderChoices()
+      .then((data) => {
+        if (data.types.length) {
+          setClipTypes(data.types)
+        }
+        if (data.devices.length) {
+          setClipDevices(data.devices)
+        }
+      })
+      .catch(() => {})
+  }, [showClipLoader])
   const hiddenSamplers = useSettingsStore((s) => s.hiddenSamplers)
   const hiddenSchedulers = useSettingsStore((s) => s.hiddenSchedulers)
+  const { any: attentionInstalled } = useAttentionCaps()
   const setResolutions = useSettingsStore((s) => s.setResolutions)
   const visibleApply = templateApplyFields(workflowParams)
   const visibleIds = new Set<string>(visibleApply.map((field) => field.id))
@@ -66,8 +91,8 @@ export function TemplateParamsForm({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-stack">
-      <div className="flex justify-end">
+    <div className="mx-auto flex h-full min-h-0 w-full max-w-4xl flex-col gap-stack">
+      <div className="flex shrink-0 justify-end">
         <ButtonControl
           size="sm"
           tone="ghost"
@@ -83,7 +108,7 @@ export function TemplateParamsForm({
         </ButtonControl>
       </div>
       {rembg ? (
-        <>
+        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
           <ParamSection title="Background removal">
             <ApplyRow id="rembg" apply={apply} onToggle={toggle} locked={locked}>
               <RembgFields
@@ -105,9 +130,29 @@ export function TemplateParamsForm({
               </div>
             </ApplyRow>
           </ParamSection>
-        </>
+        </div>
       ) : (
         <>
+      <TabsList
+        value={tab}
+        onValueChange={(next) => setTab(next as typeof tab)}
+        className="flex shrink-0 gap-cluster"
+      >
+        <TabsTrigger value="generation" active={tab === 'generation'}>
+          Generation
+        </TabsTrigger>
+        <TabsTrigger value="controlnet" active={tab === 'controlnet'}>
+          ControlNet
+        </TabsTrigger>
+        <TabsTrigger value="hires" active={tab === 'hires'}>
+          Hires. fix
+        </TabsTrigger>
+        <TabsTrigger value="adetailer" active={tab === 'adetailer'}>
+          ADetailer
+        </TabsTrigger>
+      </TabsList>
+      <div className="relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+        <div className={tab === 'generation' ? 'flex flex-col gap-stack' : 'pointer-events-none invisible absolute inset-x-0 top-0 flex flex-col gap-stack'}>
       <div className="rounded-md border border-line bg-panel p-2.5">
         <TemplateModelFields
           value={value}
@@ -182,13 +227,66 @@ export function TemplateParamsForm({
               <NumberField value={value.steps} onChange={(steps) => set('steps', steps)} min={1} max={150} />
             </label>
           </ApplyRow>
-          <ApplyRow id="cfg" apply={apply} onToggle={toggle} locked={locked}>
-            <label className="flex min-w-0 flex-col gap-1">
-              <Label>CFG</Label>
-              <NumberField value={value.cfg} onChange={(cfg) => set('cfg', Math.max(1, cfg))} min={1} max={30} step={0.5} />
-            </label>
-          </ApplyRow>
+          {workflowParams.includes('clipSkip') || workflowParams.includes('clipType') ? null : (
+            <ApplyRow id="cfg" apply={apply} onToggle={toggle} locked={locked}>
+              <label className="flex min-w-0 flex-col gap-1">
+                <Label>CFG</Label>
+                <NumberField value={value.cfg} onChange={(cfg) => set('cfg', Math.max(1, cfg))} min={1} max={30} step={0.5} />
+              </label>
+            </ApplyRow>
+          )}
         </div>
+        {workflowParams.includes('clipType') ? (
+          <div className="grid grid-cols-3 gap-stack">
+            <ApplyRow id="clipType" apply={apply} onToggle={toggle} locked={locked}>
+              <label className="flex min-w-0 flex-col gap-1">
+                <Label>CLIP Type</Label>
+                <SelectField
+                  value={value.clipType}
+                  onChange={(clipType) => set('clipType', clipType)}
+                  options={listedChoices(clipTypes, [], value.clipType)}
+                />
+              </label>
+            </ApplyRow>
+            <ApplyRow id="clipDevice" apply={apply} onToggle={toggle} locked={locked}>
+              <label className="flex min-w-0 flex-col gap-1">
+                <Label>CLIP Device</Label>
+                <SelectField
+                  value={value.clipDevice}
+                  onChange={(clipDevice) => set('clipDevice', clipDevice)}
+                  options={listedChoices(clipDevices, [], value.clipDevice)}
+                />
+              </label>
+            </ApplyRow>
+            <ApplyRow id="cfg" apply={apply} onToggle={toggle} locked={locked}>
+              <label className="flex min-w-0 flex-col gap-1">
+                <Label>CFG</Label>
+                <NumberField value={value.cfg} onChange={(cfg) => set('cfg', Math.max(1, cfg))} min={1} max={30} step={0.5} />
+              </label>
+            </ApplyRow>
+          </div>
+        ) : null}
+        {workflowParams.includes('clipSkip') ? (
+          <div className="grid grid-cols-2 gap-stack">
+            <ApplyRow id="clipSkip" apply={apply} onToggle={toggle} locked={locked}>
+              <label className="flex min-w-0 flex-col gap-1">
+                <Label>Clip skip</Label>
+                <NumberField
+                  value={value.clipSkip}
+                  onChange={(clipSkip) => set('clipSkip', Math.max(1, Math.min(10, Math.round(clipSkip))))}
+                  min={1}
+                  max={10}
+                />
+              </label>
+            </ApplyRow>
+            <ApplyRow id="cfg" apply={apply} onToggle={toggle} locked={locked}>
+              <label className="flex min-w-0 flex-col gap-1">
+                <Label>CFG</Label>
+                <NumberField value={value.cfg} onChange={(cfg) => set('cfg', Math.max(1, cfg))} min={1} max={30} step={0.5} />
+              </label>
+            </ApplyRow>
+          </div>
+        ) : null}
       </ParamSection>
       <ParamSection title="Seed">
         <ApplyRow id="seed" apply={apply} onToggle={toggle} locked={locked}>
@@ -214,6 +312,35 @@ export function TemplateParamsForm({
           </div>
         </ApplyRow>
       </ParamSection>
+      {attentionInstalled ? (
+        <ApplyRow id="attention" apply={apply} onToggle={toggle} locked={locked}>
+          <ExpandSection
+            title="Attention"
+            enabled={value.attention.enabled}
+            onEnabled={(enabled) => onChange({ ...value, attention: { ...value.attention, enabled } })}
+            fit
+            locked={locked}
+          >
+            <AttentionFields
+              engine={value.attention.engine}
+              sageAttention={value.attention.sageAttention}
+              allowCompile={value.attention.allowCompile}
+              locked={locked}
+              onChange={(next) =>
+                onChange({
+                  ...value,
+                  attention: {
+                    ...value.attention,
+                    ...(next.engine != null ? { engine: next.engine } : {}),
+                    ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
+                    ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
+                  },
+                })
+              }
+            />
+          </ExpandSection>
+        </ApplyRow>
+      ) : null}
       <ParamSection title="Size">
         <ApplyRow id="resolution" apply={apply} onToggle={toggle} locked={locked}>
           <div className="flex flex-col gap-stack">
@@ -382,30 +509,6 @@ export function TemplateParamsForm({
           />
         </ApplyRow>
       </ParamSection>
-      <ParamSection title="Extras">
-        <ApplyRow id="controlnet" apply={apply} onToggle={toggle} locked={locked}>
-          <ControlnetParams />
-        </ApplyRow>
-        <ApplyRow id="hires" apply={apply} onToggle={toggle} locked={locked}>
-          <HiresParams
-            value={value.hires}
-            onChange={(hires) => onChange({ ...value, hires })}
-            locked={locked}
-            comfyOk
-            width={value.width}
-            height={value.height}
-          />
-        </ApplyRow>
-        <ApplyRow id="adetailer" apply={apply} onToggle={toggle} locked={locked}>
-          <AdetailerParams
-            value={value.adetailer}
-            onChange={(adetailer) => onChange({ ...value, adetailer })}
-            locked={locked}
-            comfyOk
-            hiresEnabled={value.hires.enabled}
-          />
-        </ApplyRow>
-      </ParamSection>
       <ParamSection title="Scripts">
         <ApplyRow id="scripts" apply={apply} onToggle={toggle} locked={locked}>
           <GenerationScripts
@@ -417,6 +520,35 @@ export function TemplateParamsForm({
           />
         </ApplyRow>
       </ParamSection>
+        </div>
+        <div className={tab === 'controlnet' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
+          <ApplyRow id="controlnet" apply={apply} onToggle={toggle} locked={locked}>
+            <ControlnetParams />
+          </ApplyRow>
+        </div>
+        <div className={tab === 'hires' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
+          <ApplyRow id="hires" apply={apply} onToggle={toggle} locked={locked}>
+            <HiresParams
+              value={value.hires}
+              onChange={(hires) => onChange({ ...value, hires })}
+              locked={locked}
+              comfyOk
+              width={value.width}
+              height={value.height}
+            />
+          </ApplyRow>
+        </div>
+        <div className={tab === 'adetailer' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
+          <ApplyRow id="adetailer" apply={apply} onToggle={toggle} locked={locked}>
+            <AdetailerParams
+              value={value.adetailer}
+              onChange={(adetailer) => onChange({ ...value, adetailer })}
+              locked={locked}
+              comfyOk
+            />
+          </ApplyRow>
+        </div>
+      </div>
         </>
       )}
     </div>

@@ -5,8 +5,9 @@ import re
 from pathlib import Path
 from typing import Any
 
-from config import WORKFLOWS
+from infrastructure.comfy.client import workflow_file
 from features.generate.scripts import rembg
+from features.generate.scripts.attention import clean_attention
 from infrastructure.storage.repositories import templates as templates_repo
 
 DEFAULT_ID = "default"
@@ -35,9 +36,12 @@ _KEYS = {
     "checkpoint": str,
     "vae": str,
     "textEncoder": str,
+    "clipType": str,
+    "clipDevice": str,
     "width": int,
     "height": int,
     "steps": int,
+    "clipSkip": int,
     "cfg": float,
     "seed": int,
     "seedAfter": str,
@@ -63,10 +67,13 @@ _APPLY = (
     "checkpoint",
     "vae",
     "textEncoder",
+    "clipType",
+    "clipDevice",
     "loras",
     "sampler",
     "scheduler",
     "steps",
+    "clipSkip",
     "cfg",
     "seed",
     "outputPath",
@@ -78,6 +85,7 @@ _APPLY = (
     "adetailer",
     "scripts",
     "rembg",
+    "attention",
 )
 
 _SCRIPTS = ("", "xy-plot", "prompt-matrix")
@@ -110,8 +118,8 @@ def default_apply(workflow: str = "") -> list[str]:
     stem = Path(workflow).stem
     if not stem or not _SAFE_WORKFLOW.fullmatch(stem):
         return _plain_apply()
-    path = WORKFLOWS / "main" / f"{stem}.json"
-    if not path.is_file():
+    path = workflow_file(stem)
+    if path is None:
         return _plain_apply()
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -200,6 +208,15 @@ def _clean_params(raw: Any) -> dict[str, Any]:
     rembg_blob = raw.get("rembg")
     if isinstance(rembg_blob, dict):
         out["rembg"] = rembg.clean_rembg(rembg_blob)
+    attention_blob = raw.get("attention")
+    if isinstance(attention_blob, dict):
+        packed = clean_attention(attention_blob)
+        out["attention"] = {
+            "enabled": packed["enabled"],
+            "engine": packed["engine"],
+            "sageAttention": packed["sageAttention"],
+            "allowCompile": packed["allowCompile"],
+        }
     order = raw.get("activeLoraOrder")
     if isinstance(order, list):
         seen: list[str] = []

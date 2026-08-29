@@ -19,8 +19,8 @@ const PATH_SECTIONS: { title: string; tokens: PathToken[] }[] = [
   {
     title: 'Names',
     tokens: [
-      { token: '[workflow]', hint: 'Workflow id', example: 'txt2img' },
-      { token: '[workflow_name]', hint: 'Same as [workflow]', example: 'txt2img' },
+      { token: '[workflow]', hint: 'Workflow id', example: 'sd15' },
+      { token: '[workflow_name]', hint: 'Same as [workflow]', example: 'sd15' },
       { token: '[template]', hint: 'Current template name', example: 'Default' },
       { token: '[template_name]', hint: 'Same as [template]', example: 'Default' },
       { token: '[model]', hint: 'Checkpoint name without extension', example: 'waiIllustriousSDXL_v140' },

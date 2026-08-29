@@ -70,6 +70,8 @@ call :install_node "ComfyUI-RMBG" "https://github.com/1038lab/ComfyUI-RMBG"
 if errorlevel 1 exit /b 1
 call :install_node "ComfyUI-SeedVR2_VideoUpscaler" "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler"
 if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-GGUF" "https://github.com/city96/ComfyUI-GGUF"
+if errorlevel 1 exit /b 1
 
 :: -----------------------------------------------------------------------------
 :: Completion
@@ -88,15 +90,16 @@ set "NODE_NAME=%~1"
 set "NODE_URL=%~2"
 set "NODE_DIR=%COMFY_DIR%\custom_nodes\%NODE_NAME%"
 
-if not exist "%NODE_DIR%\" (
-    call "%ROOT%\install\windows\_ui.bat" info "Downloading %NODE_NAME%..."
-    "%GIT_EXE%" clone "%NODE_URL%" "%NODE_DIR%"
-    if errorlevel 1 (
-        call "%ROOT%\install\windows\_ui.bat" error "%NODE_NAME% download failed."
-        exit /b 1
-    )
-) else (
-    call "%ROOT%\install\windows\_ui.bat" ok "%NODE_NAME% already exists. Skipping download."
+if exist "%NODE_DIR%\" (
+    call "%ROOT%\install\windows\_ui.bat" ok "%NODE_NAME% already exists. Skipping."
+    exit /b 0
+)
+
+call "%ROOT%\install\windows\_ui.bat" info "Downloading %NODE_NAME%..."
+"%GIT_EXE%" clone "%NODE_URL%" "%NODE_DIR%"
+if errorlevel 1 (
+    call "%ROOT%\install\windows\_ui.bat" error "%NODE_NAME% download failed."
+    exit /b 1
 )
 
 if exist "%NODE_DIR%\requirements.txt" (

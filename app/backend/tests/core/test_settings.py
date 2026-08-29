@@ -107,6 +107,10 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(result["galleryLocalScopes"]["gallery-create"]["ids"], ["dddddddddddd"])
         self.assertEqual(result["galleryLocalScopes"]["template-loras"]["ids"], ["cccccccccccc"])
 
+    def test_gallery_auto_types_keeps_true_drops_false(self) -> None:
+        result = settings._clean({"galleryAutoTypes": {"loras": True, "checkpoints": False, "nope": True}})
+        self.assertEqual(result["galleryAutoTypes"], {"loras": True})
+
 
 if __name__ == "__main__":
     unittest.main()

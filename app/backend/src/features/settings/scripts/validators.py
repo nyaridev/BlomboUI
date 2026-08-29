@@ -369,6 +369,18 @@ def _gallery_pin_selected(raw: Any) -> dict[str, bool]:
     return out
 
 
+def _gallery_auto_types(raw: Any) -> dict[str, bool]:
+    out: dict[str, bool] = {}
+    if not isinstance(raw, dict):
+        return out
+    for key, value in raw.items():
+        name = str(key).strip()
+        if (name != "global" and name not in _GALLERY_LOCAL_KEYS) or value is not True:
+            continue
+        out[name] = True
+    return out
+
+
 def _gallery_local_scopes(raw: Any) -> dict[str, dict[str, Any]]:
     from features.models.scripts.thumbnail_scopes import ordered_ids
 

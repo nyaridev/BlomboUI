@@ -358,6 +358,19 @@ export function cleanGalleryPinSelected(raw: unknown): Record<string, boolean> {
   return out
 }
 
+export function cleanGalleryAutoTypes(raw: unknown): Record<string, boolean> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {}
+  }
+  const out: Record<string, boolean> = {}
+  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (GALLERY_FILTER_KEYS.has(key) && value === true) {
+      out[key] = true
+    }
+  }
+  return out
+}
+
 export function emptyLocalScope(pack: GalleryLocalScope) {
   return pack.ids.length === 0 && pack.optionalIds.length === 0 && !pack.auto && pack.mode === 'likely' && pack.fallback
 }
@@ -898,7 +911,7 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
         : SETTINGS_DEFAULTS.galleryFilterMode,
     galleryAutoTypes:
       patch.galleryAutoTypes && typeof patch.galleryAutoTypes === 'object'
-        ? cleanGalleryPinSelected(patch.galleryAutoTypes)
+        ? cleanGalleryAutoTypes(patch.galleryAutoTypes)
         : SETTINGS_DEFAULTS.galleryAutoTypes,
     galleryPinSelected:
       patch.galleryPinSelected && typeof patch.galleryPinSelected === 'object'

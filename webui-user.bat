@@ -32,3 +32,4 @@ set COMFYUI_ARGS=
 
 if defined BLOMBO_LOAD_SETTINGS_ONLY exit /b 0
 call "%~dp0install\webui.bat"
+PAUSE

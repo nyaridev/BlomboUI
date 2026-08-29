@@ -31,6 +31,7 @@ from features.settings.scripts.validators import (
     _gallery_map,
     _gallery_mode_map,
     _gallery_pin_selected,
+    _gallery_auto_types,
     _gallery_query,
     _gallery_browse_dir,
     _gallery_browse_sort,
@@ -462,7 +463,7 @@ def _clean(raw: Any) -> dict[str, Any]:
     if "galleryFilterMode" in raw and isinstance(raw["galleryFilterMode"], dict):
         out["galleryFilterMode"] = _gallery_mode_map(raw["galleryFilterMode"])
     if "galleryAutoTypes" in raw and isinstance(raw["galleryAutoTypes"], dict):
-        out["galleryAutoTypes"] = _gallery_pin_selected(raw["galleryAutoTypes"])
+        out["galleryAutoTypes"] = _gallery_auto_types(raw["galleryAutoTypes"])
     if "galleryPinSelected" in raw and isinstance(raw["galleryPinSelected"], dict):
         out["galleryPinSelected"] = _gallery_pin_selected(raw["galleryPinSelected"])
     if "galleryBrowseSort" in raw and isinstance(raw["galleryBrowseSort"], dict):

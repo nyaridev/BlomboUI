@@ -228,9 +228,9 @@ export function createScopeActions(set: SettingsSet, persist: () => void): Parti
       set((state) => {
         const galleryAutoTypes = { ...state.galleryAutoTypes }
         if (value) {
-          delete galleryAutoTypes[name]
+          galleryAutoTypes[name] = true
         } else {
-          galleryAutoTypes[name] = false
+          delete galleryAutoTypes[name]
         }
         return { galleryAutoTypes }
       })

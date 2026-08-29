@@ -112,7 +112,7 @@ export function GalleryBrowser({
   const wildcardDirs = useSettingsStore((s) => s.wildcardDirs)
   const storedTypes = useSettingsStore((s) => s.galleryTypes[filterKey] ?? EMPTY_TYPES)
   const setGalleryTypes = useSettingsStore((s) => s.setGalleryTypes)
-  const autoType = useSettingsStore((s) => generate && s.galleryAutoTypes[filterKey] !== false)
+  const autoType = useSettingsStore((s) => generate && s.galleryAutoTypes[filterKey] === true)
   const setGalleryAutoTypes = useSettingsStore((s) => s.setGalleryAutoTypes)
   const overlayTypes = useGalleryAutoTypes(generate, filterKey, autoType, setGalleryTypes, autoCheckpoint)
   const typeFilter = overlayTypes ?? storedTypes

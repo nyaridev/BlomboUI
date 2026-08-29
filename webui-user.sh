@@ -28,4 +28,7 @@ export PYTHON GIT VENV_DIR COMFYUI_PATH MODELS_ROOT OUTPUTS_ROOT WILDCARDS_ROOT
 if [ "${BLOMBO_LOAD_SETTINGS_ONLY:-}" = 1 ]; then
   return 0 2>/dev/null || exit 0
 fi
-exec "$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/install/webui.sh" "$@"
+"$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)/install/webui.sh" "$@"
+printf 'Press any key to continue . . . '
+read -r -n 1
+echo

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=_ui.sh
@@ -8,6 +12,10 @@ ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 PYTHON_EXE="${COMFY_PYTHON:-$ROOT/runtime/comfyui/python_embeded/python}"
 PIP_ARGS="--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10 --use-pep517"
 FLASH_BASE="https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.13"
+
+# -----------------------------------------------------------------------------
+# Preflight
+# -----------------------------------------------------------------------------
 
 if [ ! -x "$PYTHON_EXE" ]; then
   ui_error "ComfyUI's embedded Python was not found."
@@ -43,6 +51,10 @@ if [ -z "$FLASH_WHL" ]; then
   ui_info "Supported: Python 3.12 with Torch 2.7/2.8 + CUDA 12.8, or Torch 2.9/2.10 + CUDA 13.0."
   exit 1
 fi
+
+# -----------------------------------------------------------------------------
+# Install
+# -----------------------------------------------------------------------------
 
 ui_section "FlashAttention"
 if ! "$PYTHON_EXE" -I -c "import triton" >/dev/null 2>&1; then

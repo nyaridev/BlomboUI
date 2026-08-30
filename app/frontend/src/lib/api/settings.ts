@@ -31,9 +31,6 @@ export type UserSettings = {
   modelInfoLayout?: 'horizontal' | 'vertical'
   hiddenSamplers?: string[]
   hiddenSchedulers?: string[]
-  vramUnloadWorkflows?: string[]
-  vramUnloadOnPrompt?: boolean
-  vramUnloadOnWeights?: boolean
   theme?: string
   civitaiSite?: string
   civitaiApiKey?: string

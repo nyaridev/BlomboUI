@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=_ui.sh
@@ -17,6 +21,10 @@ PIP_ARGS="--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10"
 export GIT_TERMINAL_PROMPT=0
 export GIT_ASKPASS=echo
 export GIT_LFS_SKIP_SMUDGE=1
+
+# -----------------------------------------------------------------------------
+# Helpers
+# -----------------------------------------------------------------------------
 
 create_python_wrappers() {
   cat > "$PYTHON_DIR/python" << 'EOL'
@@ -62,16 +70,28 @@ find_python312() {
   return 1
 }
 
+# -----------------------------------------------------------------------------
+# Git
+# -----------------------------------------------------------------------------
+
 "$ROOT/install/linux/install_git.sh" quiet || exit 1
 if ! command -v "$GIT" >/dev/null 2>&1; then
   ui_error "Git was not found. Install Git or set GIT to its executable path."
   exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# Paths
+# -----------------------------------------------------------------------------
+
 mkdir -p "$COMFY_ROOT" || {
   ui_error "Could not create the ComfyUI runtime directory."
   exit 1
 }
+
+# -----------------------------------------------------------------------------
+# ComfyUI clone
+# -----------------------------------------------------------------------------
 
 if [ ! -d "$COMFY_DIR" ]; then
   ui_info "Downloading ComfyUI..."
@@ -93,6 +113,10 @@ if [ ! -d "$COMFY_DIR" ]; then
 else
   ui_ok "ComfyUI folder already exists. Skipping download."
 fi
+
+# -----------------------------------------------------------------------------
+# Embedded Python
+# -----------------------------------------------------------------------------
 
 if [ -x "$PYTHON_CMD" ]; then
   ui_ok "Embedded Python already exists. Skipping download, requirements, and Torch."
@@ -128,6 +152,10 @@ if ! "$PYTHON_CMD" -I -m pip install uv $PIP_ARGS; then
   exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# Requirements
+# -----------------------------------------------------------------------------
+
 if [ ! -f "$COMFY_DIR/requirements.txt" ]; then
   ui_error "ComfyUI requirements.txt was not found."
   exit 1
@@ -139,11 +167,19 @@ if ! "$PYTHON_CMD" -I -m uv pip install -r "$COMFY_DIR/requirements.txt" $UV_ARG
   exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# Default CUDA Torch
+# -----------------------------------------------------------------------------
+
 ui_info "Installing default CUDA Torch..."
 if ! "$ROOT/install/linux/torch/2.11.0+cu130 (default).sh"; then
   ui_error "Default CUDA Torch installation failed."
   exit 1
 fi
+
+# -----------------------------------------------------------------------------
+# Completion
+# -----------------------------------------------------------------------------
 
 echo
 ui_ok "ComfyUI files are ready at $COMFY_ROOT"

@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=_ui.sh
@@ -10,6 +14,10 @@ GIT="${GIT:-git}"
 if [ -z "${VENV_DIR:-}" ]; then
   VENV_DIR="$ROOT/runtime/.venv"
 fi
+
+# -----------------------------------------------------------------------------
+# Tool checks
+# -----------------------------------------------------------------------------
 
 if ! command -v uv >/dev/null 2>&1; then
   ui_error "uv was not found on PATH."
@@ -23,6 +31,10 @@ if ! cd "$ROOT/app/backend"; then
   ui_error "Backend project directory was not found."
   exit 1
 fi
+
+# -----------------------------------------------------------------------------
+# Environment creation
+# -----------------------------------------------------------------------------
 
 if [ -f "$VENV_DIR/pyvenv.cfg" ] && grep -qi "python_embedded" "$VENV_DIR/pyvenv.cfg"; then
   ui_info "Replacing the previous embedded Python environment..."
@@ -42,11 +54,19 @@ else
   ui_ok "Existing virtual environment found."
 fi
 
+# -----------------------------------------------------------------------------
+# Dependency sync
+# -----------------------------------------------------------------------------
+
 ui_info "Installing locked backend dependencies..."
 if ! uv sync --frozen; then
   ui_error "Project environment setup failed."
   exit 1
 fi
+
+# -----------------------------------------------------------------------------
+# Completion
+# -----------------------------------------------------------------------------
 
 cd "$ROOT" || exit 1
 

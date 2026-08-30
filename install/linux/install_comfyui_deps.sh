@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
 ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=_ui.sh
@@ -13,6 +17,10 @@ UV_ARGS="--no-cache --link-mode=copy"
 export GIT_TERMINAL_PROMPT=0
 export GIT_ASKPASS=echo
 export GIT_LFS_SKIP_SMUDGE=1
+
+# -----------------------------------------------------------------------------
+# Node installer
+# -----------------------------------------------------------------------------
 
 install_node() {
   local NODE_NAME="$1"
@@ -52,6 +60,10 @@ install_node() {
   return 0
 }
 
+# -----------------------------------------------------------------------------
+# Preflight
+# -----------------------------------------------------------------------------
+
 if [ ! -d "$COMFY_DIR" ]; then
   ui_error "ComfyUI was not found."
   ui_info "Run install/linux/install_comfyui.sh first."
@@ -75,6 +87,11 @@ if ! command -v "$GIT" >/dev/null 2>&1; then
   exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# Custom nodes
+# Add another node by adding one call below.
+# -----------------------------------------------------------------------------
+
 install_node "comfyui-manager" "https://github.com/Comfy-Org/ComfyUI-Manager" || exit 1
 install_node "rgthree-comfy" "https://github.com/rgthree/rgthree-comfy" || exit 1
 install_node "ComfyUI-KJNodes" "https://github.com/kijai/ComfyUI-KJNodes" || exit 1
@@ -84,6 +101,10 @@ install_node "ComfyUI-Impact-Subpack" "https://github.com/ltdrdata/ComfyUI-Impac
 install_node "ComfyUI-RMBG" "https://github.com/1038lab/ComfyUI-RMBG" || exit 1
 install_node "ComfyUI-SeedVR2_VideoUpscaler" "https://github.com/numz/ComfyUI-SeedVR2_VideoUpscaler" || exit 1
 install_node "ComfyUI-GGUF" "https://github.com/city96/ComfyUI-GGUF" || exit 1
+
+# -----------------------------------------------------------------------------
+# Completion
+# -----------------------------------------------------------------------------
 
 echo
 ui_ok "ComfyUI custom nodes are ready."

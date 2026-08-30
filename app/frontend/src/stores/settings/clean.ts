@@ -685,13 +685,6 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
     modelInfoLayout: patch.modelInfoLayout === 'vertical' ? 'vertical' : SETTINGS_DEFAULTS.modelInfoLayout,
     hiddenSamplers: patch.hiddenSamplers ? cleanNames(patch.hiddenSamplers) : SETTINGS_DEFAULTS.hiddenSamplers,
     hiddenSchedulers: patch.hiddenSchedulers ? cleanNames(patch.hiddenSchedulers) : SETTINGS_DEFAULTS.hiddenSchedulers,
-    vramUnloadWorkflows: Array.isArray(patch.vramUnloadWorkflows)
-      ? cleanNames(patch.vramUnloadWorkflows)
-      : SETTINGS_DEFAULTS.vramUnloadWorkflows,
-    vramUnloadOnPrompt:
-      typeof patch.vramUnloadOnPrompt === 'boolean' ? patch.vramUnloadOnPrompt : SETTINGS_DEFAULTS.vramUnloadOnPrompt,
-    vramUnloadOnWeights:
-      typeof patch.vramUnloadOnWeights === 'boolean' ? patch.vramUnloadOnWeights : SETTINGS_DEFAULTS.vramUnloadOnWeights,
     theme: patch.theme ? cleanTheme(patch.theme) : SETTINGS_DEFAULTS.theme,
     civitaiSite: patch.civitaiSite ? cleanCivitaiSite(patch.civitaiSite) : SETTINGS_DEFAULTS.civitaiSite,
     civitaiApiKey: typeof patch.civitaiApiKey === 'string' ? patch.civitaiApiKey.trim() : SETTINGS_DEFAULTS.civitaiApiKey,

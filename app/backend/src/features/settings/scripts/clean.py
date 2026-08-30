@@ -131,12 +131,6 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["hiddenSamplers"] = _unique_names(raw["hiddenSamplers"])
     if "hiddenSchedulers" in raw and isinstance(raw["hiddenSchedulers"], list):
         out["hiddenSchedulers"] = _unique_names(raw["hiddenSchedulers"])
-    if "vramUnloadWorkflows" in raw and isinstance(raw["vramUnloadWorkflows"], list):
-        out["vramUnloadWorkflows"] = _unique_names(raw["vramUnloadWorkflows"])
-    if "vramUnloadOnPrompt" in raw and isinstance(raw["vramUnloadOnPrompt"], bool):
-        out["vramUnloadOnPrompt"] = raw["vramUnloadOnPrompt"]
-    if "vramUnloadOnWeights" in raw and isinstance(raw["vramUnloadOnWeights"], bool):
-        out["vramUnloadOnWeights"] = raw["vramUnloadOnWeights"]
     if "theme" in raw:
         name = str(raw["theme"])
         if name == "default":

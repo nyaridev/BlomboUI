@@ -41,6 +41,64 @@ function isSeedAfter(value: unknown): value is SeedAfter {
   return SEED_AFTER.some((item) => item.value === value)
 }
 
+export const SEED_U32_MAX = 2 ** 32 - 1
+const SEED_U32_SPAN = SEED_U32_MAX + 1
+
+export function wrapSeed32(seed: number) {
+  if (seed < 0) {
+    return seed
+  }
+  return ((Math.round(seed) % SEED_U32_SPAN) + SEED_U32_SPAN) % SEED_U32_SPAN
+}
+
+export function randomSeed() {
+  return Math.floor(Math.random() * (2 ** 53))
+}
+
+export function randomSeed32() {
+  return Math.floor(Math.random() * SEED_U32_SPAN)
+}
+
+export function usedSeed(seed: number, mode: SeedAfter) {
+  if (mode === 'randomize' || seed < 0) {
+    return randomSeed()
+  }
+  return seed
+}
+
+export function usedSeed32(seed: number, mode: SeedAfter) {
+  if (mode === 'randomize' || seed < 0) {
+    return randomSeed32()
+  }
+  return wrapSeed32(seed)
+}
+
+export function nextSeed(used: number, mode: SeedAfter, steps = 1) {
+  if (mode === 'randomize') {
+    return -1
+  }
+  if (mode === 'increment') {
+    return used + steps
+  }
+  if (mode === 'decrement') {
+    return used - steps
+  }
+  return used
+}
+
+export function nextSeed32(used: number, mode: SeedAfter, steps = 1) {
+  if (mode === 'randomize') {
+    return -1
+  }
+  if (mode === 'increment') {
+    return wrapSeed32(used + steps)
+  }
+  if (mode === 'decrement') {
+    return wrapSeed32(used - steps)
+  }
+  return wrapSeed32(used)
+}
+
 export type ExtraSettings = { enabled: boolean; [key: string]: unknown }
 
 export type RembgEngine = 'rmbg' | 'birefnet'
@@ -127,7 +185,9 @@ export type ImageUpscaleSettings = {
   upscaleMethod: string
   crop: string
   seed: number
+  seedAfter: SeedAfter
   colorCorrection: string
+  resolution: number
   maxResolution: number
   maxResolutionOverride: boolean
   batchSize: number
@@ -179,7 +239,9 @@ export const DEFAULT_IMAGE_UPSCALE: ImageUpscaleSettings = {
   upscaleMethod: 'bilinear',
   crop: 'disabled',
   seed: 42,
+  seedAfter: 'fixed',
   colorCorrection: 'lab',
+  resolution: 4096,
   maxResolution: 4096,
   maxResolutionOverride: false,
   batchSize: 1,
@@ -231,6 +293,7 @@ export function mergeImageUpscale(raw: unknown): ImageUpscaleSettings {
   const sizeMode = text(row.sizeMode ?? row.size_mode, base.sizeMode)
   const method = text(row.upscaleMethod ?? row.upscale_method, base.upscaleMethod)
   const crop = text(row.crop, base.crop)
+  const seedAfterRaw = row.seedAfter ?? row.seed_after
   return {
     inputMode: inputMode === 'directory' ? 'directory' : 'files',
     inputDir: text(row.inputDir ?? row.input_dir, base.inputDir),
@@ -244,8 +307,10 @@ export function mergeImageUpscale(raw: unknown): ImageUpscaleSettings {
     megapixels: Math.max(0.2, Math.min(4, num(row.megapixels, base.megapixels))),
     upscaleMethod: method || base.upscaleMethod,
     crop: crop || base.crop,
-    seed: Math.round(num(row.seed, base.seed)),
+    seed: wrapSeed32(Math.round(num(row.seed, base.seed))),
+    seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,
     colorCorrection: text(row.colorCorrection ?? row.color_correction, base.colorCorrection) || base.colorCorrection,
+    resolution: Math.max(64, Math.min(8192, Math.round(num(row.resolution, base.resolution)))),
     maxResolution: Math.max(64, Math.min(8192, Math.round(num(row.maxResolution ?? row.max_resolution, base.maxResolution)))),
     maxResolutionOverride: Boolean(row.maxResolutionOverride ?? row.max_resolution_override ?? base.maxResolutionOverride),
     batchSize: Math.max(1, Math.min(64, Math.round(num(row.batchSize ?? row.batch_size, base.batchSize)))),
@@ -1118,7 +1183,52 @@ export function paramsOf(item: { builtin?: boolean; params?: Record<string, unkn
   return mergeParams(item.params)
 }
 
-export const APPLY_FIELDS = [
+type ApplyField = {
+  id: string
+  label: string
+  keys: readonly (keyof TemplateParams)[]
+  nested?: readonly string[]
+}
+
+function rembgApply(id: string, label: string, nested: readonly (keyof RembgSettings)[]): ApplyField {
+  return { id, label, keys: ['rembg'], nested }
+}
+
+function upscaleApply(id: string, label: string, nested: readonly (keyof ImageUpscaleSettings)[]): ApplyField {
+  return { id, label, keys: ['imageUpscale'], nested }
+}
+
+const UPSCALE_ADVANCED_KEYS = [
+  'temporalOverlap',
+  'prependFrames',
+  'offloadDevice',
+  'enableDebug',
+  'ditDevice',
+  'blocksToSwap',
+  'swapIoComponents',
+  'ditOffloadDevice',
+  'ditCacheModel',
+  'attentionMode',
+  'vaeDevice',
+  'encodeTiled',
+  'encodeTileSize',
+  'encodeTileOverlap',
+  'decodeTiled',
+  'decodeTileSize',
+  'decodeTileOverlap',
+  'tileDebug',
+  'vaeOffloadDevice',
+  'vaeCacheModel',
+  'allowCompile',
+  'compileBackend',
+  'compileMode',
+  'compileFullgraph',
+  'compileDynamic',
+  'dynamoCacheSizeLimit',
+  'dynamoRecompileLimit',
+] as const satisfies readonly (keyof ImageUpscaleSettings)[]
+
+export const APPLY_FIELDS: readonly ApplyField[] = [
   { id: 'prompt', label: 'Prompt', keys: ['prompt'] },
   { id: 'negativePrompt', label: 'Negative', keys: ['negativePrompt'] },
   { id: 'checkpoint', label: 'Checkpoint', keys: ['checkpoint'] },
@@ -1142,26 +1252,55 @@ export const APPLY_FIELDS = [
   { id: 'hires', label: 'Hires. fix', keys: ['hires'] },
   { id: 'adetailer', label: 'ADetailer', keys: ['adetailer'] },
   { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot'] },
-  { id: 'rembg', label: 'Background removal', keys: ['rembg'] },
-  { id: 'upscale', label: 'Image upscale', keys: ['imageUpscale'] },
-] as const
+  rembgApply('rembgEngine', 'Engine', ['engine']),
+  rembgApply('rembgModel', 'Model', ['rmbgModel', 'birefnetModel']),
+  rembgApply('rembgSensitivity', 'Sensitivity', ['sensitivity']),
+  rembgApply('rembgProcessRes', 'Process resolution', ['processRes']),
+  rembgApply('rembgMaskBlur', 'Mask blur', ['maskBlur']),
+  rembgApply('rembgMaskOffset', 'Mask offset', ['maskOffset']),
+  rembgApply('rembgBackground', 'Background', ['background', 'backgroundColor']),
+  rembgApply('rembgInvert', 'Invert output', ['invertOutput']),
+  rembgApply('rembgRefine', 'Refine foreground', ['refineForeground']),
+  rembgApply('rembgPreserve', 'Preserve metadata', ['preserveMetadata']),
+  upscaleApply('upscaleEngine', 'Engine', ['engine']),
+  upscaleApply('upscaleModel', 'Upscale model', ['upscaleModel']),
+  upscaleApply('upscaleDitModel', 'DiT model', ['ditModel']),
+  upscaleApply('upscaleVaeModel', 'VAE model', ['vaeModel']),
+  upscaleApply('upscaleSize', 'Size', ['sizeMode', 'scale', 'width', 'height', 'aspect', 'megapixels']),
+  upscaleApply('upscaleMethod', 'Method', ['upscaleMethod']),
+  upscaleApply('upscaleCrop', 'Crop', ['crop']),
+  upscaleApply('upscaleResolution', 'Resolution', ['resolution']),
+  upscaleApply('upscaleMaxResolution', 'Max resolution', ['maxResolution', 'maxResolutionOverride']),
+  upscaleApply('upscaleColor', 'Color correction', ['colorCorrection']),
+  upscaleApply('upscaleInputNoise', 'Input noise', ['inputNoiseScale']),
+  upscaleApply('upscaleLatentNoise', 'Latent noise', ['latentNoiseScale']),
+  upscaleApply('upscaleSeed', 'Seed', ['seed', 'seedAfter']),
+  upscaleApply('upscaleAdvanced', 'Advanced', UPSCALE_ADVANCED_KEYS),
+]
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
+const UTILITY_APPLY = new Set(APPLY_FIELDS.filter((field) => field.nested).map((field) => field.id))
+const LEGACY_APPLY: Record<string, string[]> = {
+  rembg: APPLY_FIELDS.filter((field) => field.keys[0] === 'rembg').map((field) => field.id),
+  upscale: APPLY_FIELDS.filter((field) => field.keys[0] === 'imageUpscale').map((field) => field.id),
+}
 
-export const DEFAULT_APPLY = APPLY_FIELDS.map((field) => field.id).filter((id) => !CONTENT_APPLY.has(id))
+export const DEFAULT_APPLY = APPLY_FIELDS.map((field) => field.id).filter(
+  (id) => !CONTENT_APPLY.has(id) && !UTILITY_APPLY.has(id),
+)
 
 export function templateApplyFields(workflowParams: string[]) {
   if (workflowParams.includes('rembg')) {
-    return APPLY_FIELDS.filter((field) => field.id === 'rembg' || field.id === 'outputPath')
+    return APPLY_FIELDS.filter((field) => field.keys[0] === 'rembg' || field.id === 'outputPath')
   }
   if (workflowParams.includes('upscale')) {
-    return APPLY_FIELDS.filter((field) => field.id === 'upscale' || field.id === 'outputPath')
+    return APPLY_FIELDS.filter((field) => field.keys[0] === 'imageUpscale' || field.id === 'outputPath')
   }
   return APPLY_FIELDS.filter((field) => {
     if (field.id === 'checkpoint' || field.id === 'vae' || field.id === 'textEncoder' || field.id === 'loras') {
       return false
     }
-    if (field.id === 'rembg' || field.id === 'upscale') {
+    if (field.nested) {
       return false
     }
     if (field.id === 'clipSkip') {
@@ -1206,36 +1345,27 @@ export function stackLayers(items: TemplateLayer[]): ApplyLayer[] {
   return layers
 }
 
-export function randomSeed() {
-  return Math.floor(Math.random() * (2 ** 53))
-}
-
-export function usedSeed(seed: number, mode: SeedAfter) {
-  if (mode === 'randomize' || seed < 0) {
-    return randomSeed()
-  }
-  return seed
-}
-
-export function nextSeed(used: number, mode: SeedAfter, steps = 1) {
-  if (mode === 'randomize') {
-    return -1
-  }
-  if (mode === 'increment') {
-    return used + steps
-  }
-  if (mode === 'decrement') {
-    return used - steps
-  }
-  return used
-}
-
 export function applyOf(raw?: string[] | null): string[] {
   if (raw == null) {
     return [...DEFAULT_APPLY]
   }
   const known = new Set<string>(APPLY_FIELDS.map((field) => field.id))
-  return raw.filter((id) => known.has(id))
+  const seen: string[] = []
+  for (const id of raw) {
+    const expanded = LEGACY_APPLY[id]
+    if (expanded) {
+      for (const child of expanded) {
+        if (!seen.includes(child)) {
+          seen.push(child)
+        }
+      }
+      continue
+    }
+    if (known.has(id) && !seen.includes(id)) {
+      seen.push(id)
+    }
+  }
+  return seen
 }
 
 export function applyEqual(a: string[], b: string[]): boolean {
@@ -1244,6 +1374,49 @@ export function applyEqual(a: string[], b: string[]): boolean {
   }
   const set = new Set(a)
   return b.every((id) => set.has(id))
+}
+
+function nestedSame(from: TemplateParams, to: TemplateParams, field: ApplyField) {
+  const nested = field.nested
+  if (!nested?.length) {
+    return field.keys.every((key) => sameParam(from[key], to[key]))
+  }
+  const key = field.keys[0]
+  const left = from[key] as Record<string, unknown> | undefined
+  const right = to[key] as Record<string, unknown> | undefined
+  return nested.every((name) => sameParam(left?.[name], right?.[name]))
+}
+
+function nestedFormat(params: TemplateParams, field: ApplyField) {
+  const nested = field.nested
+  if (!nested?.length) {
+    return field.keys.map((key) => formatParamValue(params[key])).join(', ')
+  }
+  const blob = params[field.keys[0]] as Record<string, unknown> | undefined
+  return nested.map((name) => formatParamValue(blob?.[name])).join(', ')
+}
+
+function assignNested(next: TemplateParams, source: TemplateParams, field: ApplyField) {
+  const nested = field.nested
+  if (!nested?.length) {
+    for (const key of field.keys) {
+      const value = source[key]
+      ;(next as Record<string, unknown>)[key] = typeof value === 'object' && value != null ? cloneJson(value) : value
+    }
+    return
+  }
+  const key = field.keys[0]
+  const current = next[key]
+  const incoming = source[key]
+  if (typeof current !== 'object' || current == null || typeof incoming !== 'object' || incoming == null) {
+    return
+  }
+  const blob = cloneJson(current) as Record<string, unknown>
+  const src = incoming as Record<string, unknown>
+  for (const name of nested) {
+    blob[name] = src[name]
+  }
+  ;(next as Record<string, unknown>)[key] = blob
 }
 
 export function mixParams(current: TemplateParams, incoming: TemplateParams, apply: string[]): TemplateParams {
@@ -1257,10 +1430,7 @@ export function mixParams(current: TemplateParams, incoming: TemplateParams, app
     if (field.id === 'loras' && !source.activeLoraOrder.some((id) => id.startsWith(AUTO_LORA_PREFIX))) {
       continue
     }
-    for (const key of field.keys) {
-      const value = source[key]
-      ;(next as Record<string, unknown>)[key] = typeof value === 'object' && value != null ? cloneJson(value) : value
-    }
+    assignNested(next, source, field)
   }
   next.cfg = Math.max(1, next.cfg)
   next.clipSkip = Math.max(1, Math.min(10, Math.round(next.clipSkip)))
@@ -1292,14 +1462,14 @@ function formatParamValue(value: unknown) {
 export function diffParams(from: TemplateParams, to: TemplateParams): ParamDiff[] {
   const diffs: ParamDiff[] = []
   for (const field of APPLY_FIELDS) {
-    if (field.keys.every((key) => sameParam(from[key], to[key]))) {
+    if (nestedSame(from, to, field)) {
       continue
     }
     diffs.push({
       id: field.id,
       label: field.label,
-      from: field.id === 'scripts' ? formatParamValue(from.script) : field.keys.map((key) => formatParamValue(from[key])).join(', '),
-      to: field.id === 'scripts' ? formatParamValue(to.script) : field.keys.map((key) => formatParamValue(to[key])).join(', '),
+      from: field.id === 'scripts' ? formatParamValue(from.script) : nestedFormat(from, field),
+      to: field.id === 'scripts' ? formatParamValue(to.script) : nestedFormat(to, field),
     })
   }
   return diffs
@@ -1311,10 +1481,8 @@ export function paramsEqualApply(a: TemplateParams, b: TemplateParams, apply: st
     if (!enabled.has(field.id)) {
       continue
     }
-    for (const key of field.keys) {
-      if (!sameParam(a[key], b[key])) {
-        return false
-      }
+    if (!nestedSame(a, b, field)) {
+      return false
     }
   }
   return true

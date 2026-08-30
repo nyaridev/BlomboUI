@@ -168,7 +168,7 @@ class RembgTemplateTests(unittest.TestCase):
 
     def test_default_apply_from_workflow_json(self) -> None:
         apply = templates.default_apply("background_removal")
-        self.assertEqual(apply, ["rembg", "outputPath"])
+        self.assertEqual(apply, list(templates._REMBG_APPLY) + ["outputPath"])
 
     def test_clean_params_keeps_rembg_blob(self) -> None:
         created = templates.create_template(

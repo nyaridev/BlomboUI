@@ -15,6 +15,7 @@ BlomboUI stays a thin GUI over ComfyUI. Prefer the smallest design that is still
 - `views/settings/panels/content/sections/other/PrimitivesSection.tsx` is the live catalog of existing controls. Check it and `style-frontend.mdc` / `dev-frontend.mdc` before adding UI.
 - Do not add layers, services, or "core" packages for one caller.
 - A new feature is usually one small module plus the screen that uses it — not a new architecture.
+- Workflow `apply` / `extras` must match template params. See `workflow-templates.mdc`.
 
 ## File size and one job
 

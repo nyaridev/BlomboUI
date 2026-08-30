@@ -22,17 +22,24 @@ export function ApplyRow({
   apply,
   onToggle,
   locked,
+  flush = false,
   children,
 }: {
   id: string
   apply: string[]
   onToggle: (id: string) => void
   locked?: boolean
+  flush?: boolean
   children: ReactNode
 }) {
   const on = apply.includes(id)
   return (
-    <div className="flex items-center gap-cluster rounded-md border border-line bg-panel p-2.5">
+    <div
+      className={[
+        'flex gap-cluster',
+        flush ? 'items-start' : 'items-center rounded-md border border-line bg-panel p-2.5',
+      ].join(' ')}
+    >
       <div className={['min-w-0 flex-1', on ? '' : 'opacity-50', locked ? 'pointer-events-none' : ''].join(' ')}>{children}</div>
       <div className="flex shrink-0 items-center">
         <CheckboxControl checked={on} onChange={() => onToggle(id)} />

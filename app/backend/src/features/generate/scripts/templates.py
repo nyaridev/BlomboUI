@@ -62,6 +62,34 @@ _KEYS = {
     "megapixels": float,
 }
 
+_REMBG_APPLY = (
+    "rembgEngine",
+    "rembgModel",
+    "rembgSensitivity",
+    "rembgProcessRes",
+    "rembgMaskBlur",
+    "rembgMaskOffset",
+    "rembgBackground",
+    "rembgInvert",
+    "rembgRefine",
+    "rembgPreserve",
+)
+_UPSCALE_APPLY = (
+    "upscaleEngine",
+    "upscaleModel",
+    "upscaleDitModel",
+    "upscaleVaeModel",
+    "upscaleSize",
+    "upscaleMethod",
+    "upscaleCrop",
+    "upscaleResolution",
+    "upscaleMaxResolution",
+    "upscaleColor",
+    "upscaleInputNoise",
+    "upscaleLatentNoise",
+    "upscaleSeed",
+    "upscaleAdvanced",
+)
 _APPLY = (
     "prompt",
     "negativePrompt",
@@ -85,16 +113,18 @@ _APPLY = (
     "hires",
     "adetailer",
     "scripts",
-    "rembg",
-    "upscale",
+    *_REMBG_APPLY,
+    *_UPSCALE_APPLY,
     "attention",
 )
+_LEGACY_APPLY = {"rembg": _REMBG_APPLY, "upscale": _UPSCALE_APPLY}
 
 _SCRIPTS = ("", "xy-plot", "prompt-matrix")
 _BLOBS = ("controlnet", "hires", "adetailer")
 
 
 _CONTENT_APPLY = ("prompt", "negativePrompt", "checkpoint", "vae", "textEncoder", "loras")
+_UTILITY_APPLY = _REMBG_APPLY + _UPSCALE_APPLY
 
 
 def _all_apply() -> list[str]:
@@ -102,7 +132,7 @@ def _all_apply() -> list[str]:
 
 
 def _plain_apply() -> list[str]:
-    return [item for item in _APPLY if item not in _CONTENT_APPLY]
+    return [item for item in _APPLY if item not in _CONTENT_APPLY and item not in _UTILITY_APPLY]
 
 
 def _clean_apply(raw: Any, fallback: list[str] | None = None) -> list[str]:
@@ -111,6 +141,12 @@ def _clean_apply(raw: Any, fallback: list[str] | None = None) -> list[str]:
     seen: list[str] = []
     for item in raw:
         ident = str(item)
+        expanded = _LEGACY_APPLY.get(ident)
+        if expanded is not None:
+            for child in expanded:
+                if child not in seen:
+                    seen.append(child)
+            continue
         if ident in _APPLY and ident not in seen:
             seen.append(ident)
     return seen
@@ -376,7 +412,7 @@ def create_template(workflow: str, name: str, params: Any) -> dict[str, Any]:
         "name": ident,
         "params": _clean_params(params),
         "icon": dict(CUSTOM_ICON),
-        "apply": _all_apply(),
+        "apply": default_apply(workflow),
         "enabled": True,
     }
     items.append(item)

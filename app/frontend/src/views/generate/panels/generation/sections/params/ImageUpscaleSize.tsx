@@ -69,7 +69,7 @@ export function ImageUpscaleSize({
   return (
     <div className="flex flex-col gap-stack">
       <div className="flex items-center gap-stack">
-        <div className="inline-flex rounded border border-line bg-panel text-xs">
+        <div className="flex min-w-0 rounded border border-line bg-panel text-xs">
           {SIZE_MODES.map((mode, index) => (
             <button
               key={mode.id}

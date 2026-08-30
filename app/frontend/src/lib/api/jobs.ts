@@ -244,6 +244,7 @@ export type JobRequest = {
     crop: 'disabled' | 'center'
     seed: number
     color_correction: string
+    resolution: number
     max_resolution: number
     max_resolution_override: boolean
     batch_size: number

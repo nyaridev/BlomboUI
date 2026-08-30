@@ -1,17 +1,17 @@
-import { CheckRow } from '@/components/controls/check-row/CheckRow.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
 import { ExpandSection } from '@/components/controls/expand-section/ExpandSection.tsx'
 import { ModelPickTile } from '@/components/composites/models/ModelPickTile.tsx'
+import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { getSeedvr2Models } from '@/lib/api.ts'
-import { SEED_AFTER, type ImageUpscaleSettings, type SeedAfter, useGenerateStore } from '@/stores/generateStore.ts'
+import { SEED_AFTER, SEED_U32_MAX, wrapSeed32, type ImageUpscaleSettings, type SeedAfter } from '@/stores/generateStore.ts'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import { ImageUpscaleSize } from '@/views/generate/panels/generation/sections/params/ImageUpscaleSize.tsx'
 import { IMAGE_SCALE_CROPS, IMAGE_SCALE_METHODS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 const BOX = 'rounded-md border border-line bg-panel p-2.5'
 const COLOR = ['lab', 'none', 'wavelet']
@@ -27,26 +27,29 @@ function withCurrent(current: string, listed: string[]) {
 export function ImageUpscaleFields({
   value,
   files,
+  selectedIndex = 0,
   onChange,
   lastSeed = null,
+  flushModels = false,
+  wrap,
 }: {
   value: ImageUpscaleSettings
   files: File[]
+  selectedIndex?: number
   onChange: (next: Partial<ImageUpscaleSettings>) => void
   lastSeed?: number | null
+  flushModels?: boolean
+  wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const setResolutions = useSettingsStore((s) => s.setResolutions)
-  const seed = useGenerateStore((s) => s.seed)
-  const seedAfter = useGenerateStore((s) => s.seedAfter)
-  const setSeed = useGenerateStore((s) => s.setSeed)
-  const setSeedAfter = useGenerateStore((s) => s.setSeedAfter)
   const [source, setSource] = useState({ w: 512, h: 512 })
   const [seedvr2Models, setSeedvr2Models] = useState<string[]>([])
   const seedvr2 = value.engine === 'seedvr2'
 
   useEffect(() => {
-    const file = files[0]
+    const file = files[selectedIndex] ?? files[0]
     if (!file) {
+      setSource({ w: 512, h: 512 })
       return
     }
     const url = URL.createObjectURL(file)
@@ -58,7 +61,7 @@ export function ImageUpscaleFields({
     image.onerror = () => URL.revokeObjectURL(url)
     image.src = url
     return () => URL.revokeObjectURL(url)
-  }, [files])
+  }, [files, selectedIndex])
 
   useEffect(() => {
     if (!seedvr2) {
@@ -70,104 +73,203 @@ export function ImageUpscaleFields({
   }, [seedvr2])
 
   const sizeBlock = <ImageUpscaleSize value={value} source={source} setResolutions={setResolutions} onChange={onChange} />
+  function box(id: string, node: ReactNode) {
+    return wrap ? wrap(id, node) : node
+  }
 
   return (
-    <div className="flex flex-col gap-stack">
-      {seedvr2 ? null : (
-        <div className="flex justify-center">
-          <div className="flex flex-col items-center gap-0.5">
-            <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Upscale</span>
-            <ModelPickTile
-              kind="upscale_models"
-              role="Upscale"
-              size="tall"
-              chromeKey="generate-upscale"
-              value={value.upscaleModel}
-              onChange={(upscaleModel) => onChange({ upscaleModel })}
-              onClear={() => onChange({ upscaleModel: '' })}
-            />
-          </div>
-        </div>
-      )}
-      <ParamSection title="Params">
+    <div className="flex min-w-0 w-full flex-col gap-stack">
+      <ParamSection title="Models" spaced={!flushModels}>
         <div className="flex flex-col gap-stack">
-          {sizeBlock}
+          {box(
+            'upscaleEngine',
+            <SegmentSwitch
+              fill
+              value={value.engine}
+              tone="blue"
+              options={[
+                { id: 'model', label: 'Upscale model' },
+                { id: 'seedvr2', label: 'SeedVR2' },
+              ]}
+              onChange={(engine) => onChange({ engine })}
+            />,
+          )}
           {seedvr2 ? (
-            <>
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs text-muted">Color correction</span>
-                <SelectField
-                  value={COLOR.includes(value.colorCorrection) ? value.colorCorrection : COLOR[0]}
-                  onChange={(colorCorrection) => onChange({ colorCorrection })}
-                  options={COLOR}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-stack">
-                <SliderField
-                  label="Input noise"
-                  value={value.inputNoiseScale}
-                  onChange={(inputNoiseScale) => onChange({ inputNoiseScale })}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                />
-                <SliderField
-                  label="Latent noise"
-                  value={value.latentNoiseScale}
-                  onChange={(latentNoiseScale) => onChange({ latentNoiseScale })}
-                  min={0}
-                  max={1}
-                  step={0.01}
-                />
-              </div>
-            </>
-          ) : (
             <div className="grid grid-cols-2 gap-stack">
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs text-muted">Method</span>
-                <SelectField
-                  value={value.upscaleMethod}
-                  onChange={(upscaleMethod) => onChange({ upscaleMethod })}
-                  options={[...IMAGE_SCALE_METHODS]}
-                />
-              </div>
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs text-muted">Crop</span>
-                <SelectField value={value.crop} onChange={(crop) => onChange({ crop })} options={[...IMAGE_SCALE_CROPS]} />
-              </div>
+              {box(
+                'upscaleDitModel',
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-muted">DiT model</span>
+                  <SelectField
+                    value={value.ditModel}
+                    onChange={(ditModel) => onChange({ ditModel })}
+                    options={withCurrent(value.ditModel, seedvr2Models)}
+                  />
+                </div>,
+              )}
+              {box(
+                'upscaleVaeModel',
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-muted">VAE model</span>
+                  <SelectField
+                    value={value.vaeModel}
+                    onChange={(vaeModel) => onChange({ vaeModel })}
+                    options={withCurrent(value.vaeModel, seedvr2Models)}
+                  />
+                </div>,
+              )}
             </div>
+          ) : (
+            box(
+              'upscaleModel',
+              <div className="flex justify-center">
+                <div className="flex flex-col items-center gap-0.5">
+                  <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Upscale</span>
+                  <ModelPickTile
+                    kind="upscale_models"
+                    role="Upscale"
+                    size="tall"
+                    chromeKey="generate-upscale"
+                    value={value.upscaleModel}
+                    onChange={(upscaleModel) => onChange({ upscaleModel })}
+                    onClear={() => onChange({ upscaleModel: '' })}
+                  />
+                </div>
+              </div>,
+            )
           )}
         </div>
       </ParamSection>
-      <div className="flex items-end gap-stack">
-        <label className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="text-xs text-muted">Seed</span>
-          <NumberField value={seed} onChange={setSeed} />
-        </label>
-        <div className="flex w-32 shrink-0 flex-col gap-1">
-          <span className="text-xs text-muted">After generation</span>
-          <SelectField
-            value={seedAfter}
-            onChange={(next) => setSeedAfter(next as SeedAfter, lastSeed)}
-            options={[...SEED_AFTER]}
-          />
-        </div>
-      </div>
-      {seedvr2 ? (
-        <ExpandSection title="Advanced" fit>
-          <div className="flex flex-col gap-stack">
-            <CheckRow on={value.maxResolutionOverride} onChange={(maxResolutionOverride) => onChange({ maxResolutionOverride })}>
-              <div className="flex min-w-0 flex-col gap-1">
-                <span className="text-xs text-muted">Max resolution</span>
-                <NumberField
-                  value={value.maxResolution}
-                  onChange={(maxResolution) => onChange({ maxResolution: Math.round(maxResolution) })}
-                  min={64}
-                  max={8192}
-                  step={8}
-                />
+      <ParamSection title="Params">
+        <div className="flex flex-col gap-stack">
+          {seedvr2 ? (
+            <>
+              <div className="grid grid-cols-2 gap-stack">
+                {box(
+                  'upscaleResolution',
+                  <SliderField
+                    label="Resolution"
+                    value={value.resolution}
+                    onChange={(resolution) => onChange({ resolution: Math.round(resolution) })}
+                    min={64}
+                    max={8192}
+                    step={8}
+                  />,
+                )}
+                {box(
+                  'upscaleMaxResolution',
+                  <SliderField
+                    label="Max resolution"
+                    value={value.maxResolution}
+                    onChange={(maxResolution) => onChange({ maxResolution: Math.round(maxResolution) })}
+                    min={64}
+                    max={8192}
+                    step={8}
+                  />,
+                )}
               </div>
-            </CheckRow>
+              {box(
+                'upscaleColor',
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-muted">Color correction</span>
+                  <SelectField
+                    value={COLOR.includes(value.colorCorrection) ? value.colorCorrection : COLOR[0]}
+                    onChange={(colorCorrection) => onChange({ colorCorrection })}
+                    options={COLOR}
+                  />
+                </div>,
+              )}
+              <div className="grid grid-cols-2 gap-stack">
+                {box(
+                  'upscaleInputNoise',
+                  <SliderField
+                    label="Input noise"
+                    value={value.inputNoiseScale}
+                    onChange={(inputNoiseScale) => onChange({ inputNoiseScale })}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                  />,
+                )}
+                {box(
+                  'upscaleLatentNoise',
+                  <SliderField
+                    label="Latent noise"
+                    value={value.latentNoiseScale}
+                    onChange={(latentNoiseScale) => onChange({ latentNoiseScale })}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                  />,
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              {box('upscaleSize', sizeBlock)}
+              <div className="grid grid-cols-2 gap-stack">
+                {box(
+                  'upscaleMethod',
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-xs text-muted">Method</span>
+                    <SelectField
+                      value={value.upscaleMethod}
+                      onChange={(upscaleMethod) => onChange({ upscaleMethod })}
+                      options={[...IMAGE_SCALE_METHODS]}
+                    />
+                  </div>,
+                )}
+                {box(
+                  'upscaleCrop',
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <span className="text-xs text-muted">Crop</span>
+                    <SelectField value={value.crop} onChange={(crop) => onChange({ crop })} options={[...IMAGE_SCALE_CROPS]} />
+                  </div>,
+                )}
+              </div>
+            </>
+          )}
+        </div>
+      </ParamSection>
+      {box(
+        'upscaleSeed',
+        <div className="flex items-end gap-stack">
+          <label className="flex min-w-0 flex-1 flex-col gap-1">
+            <span className="text-xs text-muted">Seed</span>
+            <NumberField
+              value={value.seed}
+              onChange={(seed) => onChange({ seed: Math.round(seed) })}
+              min={value.seed < 0 ? -1 : 0}
+              max={SEED_U32_MAX}
+            />
+          </label>
+          <div className="flex w-32 shrink-0 flex-col gap-1">
+            <span className="text-xs text-muted">After generation</span>
+            <SelectField
+              value={value.seedAfter ?? 'fixed'}
+              onChange={(next) => {
+                const seedAfter = next as SeedAfter
+                if (seedAfter === 'randomize') {
+                  onChange({ seedAfter, seed: -1 })
+                  return
+                }
+                if (value.seedAfter === 'randomize' && lastSeed != null) {
+                  onChange({ seedAfter, seed: wrapSeed32(lastSeed) })
+                  return
+                }
+                onChange({ seedAfter })
+              }}
+              options={[...SEED_AFTER]}
+            />
+          </div>
+        </div>,
+      )}
+      {seedvr2 ? (
+        <ParamSection title="Other">
+          {box(
+            'upscaleAdvanced',
+            <ExpandSection title="Advanced" fit>
+          <div className="flex flex-col gap-stack">
             <SliderField label="Temporal overlap" value={value.temporalOverlap} onChange={(temporalOverlap) => onChange({ temporalOverlap })} min={0} max={16} step={1} />
             <SliderField label="Prepend frames" value={value.prependFrames} onChange={(prependFrames) => onChange({ prependFrames })} min={0} max={16} step={1} />
             <div className="flex min-w-0 flex-col gap-1">
@@ -178,14 +280,6 @@ export function ImageUpscaleFields({
               <CheckboxControl checked={value.enableDebug} onChange={(enableDebug) => onChange({ enableDebug })} />
               Debug
             </label>
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-muted">DiT model</span>
-              <SelectField
-                value={value.ditModel}
-                onChange={(ditModel) => onChange({ ditModel })}
-                options={withCurrent(value.ditModel, seedvr2Models)}
-              />
-            </div>
             <div className="flex min-w-0 flex-col gap-1">
               <span className="text-xs text-muted">DiT device</span>
               <SelectField value={value.ditDevice} onChange={(ditDevice) => onChange({ ditDevice })} options={DEVICES} />
@@ -210,14 +304,6 @@ export function ImageUpscaleFields({
             <div className="flex min-w-0 flex-col gap-1">
               <span className="text-xs text-muted">Attention</span>
               <SelectField value={value.attentionMode} onChange={(attentionMode) => onChange({ attentionMode })} options={ATTENTION} />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-muted">VAE model</span>
-              <SelectField
-                value={value.vaeModel}
-                onChange={(vaeModel) => onChange({ vaeModel })}
-                options={withCurrent(value.vaeModel, seedvr2Models)}
-              />
             </div>
             <div className="flex min-w-0 flex-col gap-1">
               <span className="text-xs text-muted">VAE device</span>
@@ -306,7 +392,9 @@ export function ImageUpscaleFields({
               </>
             ) : null}
           </div>
-        </ExpandSection>
+            </ExpandSection>,
+          )}
+        </ParamSection>
       ) : null}
     </div>
   )

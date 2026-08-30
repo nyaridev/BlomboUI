@@ -84,7 +84,7 @@ export function ModelPickTile({
             disabled={disabled}
             title={empty ? `Add ${role}` : name}
             className={[
-              'relative block transition duration-150 ease-out',
+              'relative block w-28 overflow-hidden transition duration-150 ease-out',
               disabled ? 'cursor-default' : 'hover:brightness-110',
             ].join(' ')}
             onClick={() => (open ? setOpen(false) : show())}

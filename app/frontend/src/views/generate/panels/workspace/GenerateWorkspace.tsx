@@ -119,7 +119,7 @@ export function GenerateWorkspace({
         ))}
       </TabsList>
       ) : null}
-      <div className={['mb-4 border border-line bg-panel p-3', tabs ? 'rounded-b-md rounded-tr-md' : 'rounded-md', shownTab !== 'Generation' ? 'flex flex-1 flex-col' : ''].join(' ')}>
+      <div className={['mb-4 min-w-0 w-full border border-line bg-panel p-3', tabs ? 'rounded-b-md rounded-tr-md' : 'rounded-md', shownTab !== 'Generation' ? 'flex flex-1 flex-col' : ''].join(' ')}>
         <GenerationPanel
           hidden={shownTab !== 'Generation'}
           genRowRef={genRowRef}

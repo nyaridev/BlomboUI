@@ -25,6 +25,8 @@ type ImageDropProps = {
   onFiles?: (files: File[]) => void
   files?: File[]
   multiple?: boolean
+  selectedIndex?: number
+  onSelect?: (index: number) => void
   className?: string
   accept?: string
   placeholder?: string
@@ -37,6 +39,8 @@ export function ImageDrop({
   onFiles,
   files,
   multiple = false,
+  selectedIndex,
+  onSelect,
   className = 'h-48',
   accept = 'image/*',
   placeholder = 'Drop an image here, or click to pick',
@@ -98,7 +102,7 @@ export function ImageDrop({
   return (
     <div
       className={[
-        'relative flex cursor-pointer items-center justify-center overflow-hidden rounded border bg-field',
+        'relative flex min-w-0 w-full cursor-pointer items-center justify-center overflow-hidden rounded border bg-field',
         className,
         over ? 'border-accent' : 'border-line',
       ].join(' ')}
@@ -138,13 +142,30 @@ export function ImageDrop({
       />
       {multiple ? (
         thumbs.length ? (
-          <div className="flex min-h-48 w-full flex-wrap content-start gap-cluster p-2">
+          <div className="grid min-h-48 w-full min-w-0 grid-cols-[repeat(auto-fill,5rem)] content-start gap-cluster p-2">
             {thumbs.map((url, index) => (
-              <div key={`${url}-${index}`} className="relative h-20 w-20 overflow-hidden rounded border border-line bg-bg">
-                <img src={url} alt="" className="h-full w-full object-cover" />
+              <div
+                key={`${url}-${index}`}
+                className="relative h-20 w-20"
+                onClick={(event) => {
+                  if (!onSelect) {
+                    return
+                  }
+                  event.stopPropagation()
+                  onSelect(index)
+                }}
+              >
+                <div
+                  className={[
+                    'h-full w-full overflow-hidden rounded border-2 bg-bg',
+                    selectedIndex === index ? 'border-blue' : 'border-line',
+                  ].join(' ')}
+                >
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                </div>
                 <button
                   type="button"
-                  className="absolute top-0.5 right-0.5 flex h-5 w-5 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
+                  className="absolute top-0.5 right-0.5 z-10 flex h-5 w-5 items-center justify-center rounded bg-bg/80 text-muted hover:text-ink"
                   aria-label="Remove file"
                   onClick={(event) => {
                     event.stopPropagation()

@@ -82,7 +82,7 @@ export function WorkflowPicker() {
         <span className="text-muted">
           <AppIcon id={catIcon(current?.category)} />
         </span>
-        {workflow}
+        {current?.name || workflow}
         <span className="text-muted">
           <AppIcon id="chevron-down" size={12} />
         </span>

@@ -5,6 +5,7 @@ import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import { type RembgSettings } from '@/stores/generateStore.ts'
+import { type ReactNode } from 'react'
 
 const BOX = 'rounded-md border border-line bg-panel p-2.5'
 
@@ -31,138 +32,175 @@ export function RembgFields({
   value,
   onChange,
   locked = false,
+  wrap,
 }: {
   value: RembgSettings
   onChange: (next: Partial<RembgSettings>) => void
   locked?: boolean
+  wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const models = value.engine === 'birefnet' ? BIREFNET_MODELS : RMBG_MODELS
   const model = value.engine === 'birefnet' ? value.birefnetModel : value.rmbgModel
+  const boxed = wrap == null
   function set(next: Partial<RembgSettings>) {
     if (!locked) {
       onChange(next)
     }
   }
+  function box(id: string, node: ReactNode) {
+    return wrap ? wrap(id, node) : node
+  }
+  const flagClass = `${boxed ? BOX : ''} flex min-w-0 items-center gap-2 text-sm text-ink`
   return (
     <>
       <ParamSection title="Model">
         <div className="flex flex-col gap-stack">
-          <SegmentSwitch
-            fill
-            disabled={locked}
-            value={value.engine}
-            tone="blue"
-            options={[
-              { id: 'rmbg', label: 'RMBG' },
-              { id: 'birefnet', label: 'BiRefNet' },
-            ]}
-            onChange={(engine) => set({ engine })}
-          />
-          <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs text-muted">Model</span>
-            <SelectField
-              value={models.includes(model) ? model : models[0]}
-              onChange={(next) => set(value.engine === 'birefnet' ? { birefnetModel: next } : { rmbgModel: next })}
-              options={models}
-            />
-          </div>
-          <SliderField
-            label="Sensitivity"
-            value={value.sensitivity}
-            onChange={(sensitivity) => set({ sensitivity })}
-            min={0}
-            max={1}
-            step={0.01}
-          />
-          {value.engine === 'rmbg' ? (
-            <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-muted">Process resolution</span>
-              <NumberField
-                value={value.processRes}
-                onChange={(processRes) => set({ processRes })}
-                min={256}
-                max={2048}
-                step={128}
+          {box(
+            'rembgEngine',
+            <SegmentSwitch
+              fill
+              disabled={locked}
+              value={value.engine}
+              tone="blue"
+              options={[
+                { id: 'rmbg', label: 'RMBG' },
+                { id: 'birefnet', label: 'BiRefNet' },
+              ]}
+              onChange={(engine) => set({ engine })}
+            />,
+          )}
+          {box(
+            'rembgModel',
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-xs text-muted">Model</span>
+              <SelectField
+                value={models.includes(model) ? model : models[0]}
+                onChange={(next) => set(value.engine === 'birefnet' ? { birefnetModel: next } : { rmbgModel: next })}
+                options={models}
               />
-            </label>
-          ) : null}
+            </div>,
+          )}
+          {box(
+            'rembgSensitivity',
+            <SliderField
+              label="Sensitivity"
+              value={value.sensitivity}
+              onChange={(sensitivity) => set({ sensitivity })}
+              min={0}
+              max={1}
+              step={0.01}
+            />,
+          )}
+          {value.engine === 'rmbg'
+            ? box(
+                'rembgProcessRes',
+                <label className="flex min-w-0 flex-col gap-1">
+                  <span className="text-xs text-muted">Process resolution</span>
+                  <NumberField
+                    value={value.processRes}
+                    onChange={(processRes) => set({ processRes })}
+                    min={256}
+                    max={2048}
+                    step={128}
+                  />
+                </label>,
+              )
+            : null}
           <div className="grid grid-cols-2 gap-cluster">
-            <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-muted">Mask blur</span>
-              <NumberField value={value.maskBlur} onChange={(maskBlur) => set({ maskBlur })} min={0} max={64} />
-            </label>
-            <label className="flex min-w-0 flex-col gap-1">
-              <span className="text-xs text-muted">Mask offset</span>
-              <NumberField
-                value={value.maskOffset}
-                onChange={(maskOffset) => set({ maskOffset })}
-                min={value.engine === 'birefnet' ? -20 : -64}
-                max={value.engine === 'birefnet' ? 20 : 64}
-              />
-            </label>
+            {box(
+              'rembgMaskBlur',
+              <label className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs text-muted">Mask blur</span>
+                <NumberField value={value.maskBlur} onChange={(maskBlur) => set({ maskBlur })} min={0} max={64} />
+              </label>,
+            )}
+            {box(
+              'rembgMaskOffset',
+              <label className="flex min-w-0 flex-col gap-1">
+                <span className="text-xs text-muted">Mask offset</span>
+                <NumberField
+                  value={value.maskOffset}
+                  onChange={(maskOffset) => set({ maskOffset })}
+                  min={value.engine === 'birefnet' ? -20 : -64}
+                  max={value.engine === 'birefnet' ? 20 : 64}
+                />
+              </label>,
+            )}
           </div>
         </div>
       </ParamSection>
       <ParamSection title="Background">
-        <div className="flex flex-col gap-stack">
-          <SegmentSwitch
-            fill
-            disabled={locked}
-            value={value.background}
-            tone="blue"
-            options={[
-              { id: 'Alpha', label: 'Alpha' },
-              { id: 'Color', label: 'Color' },
-            ]}
-            onChange={(background) => set({ background })}
-          />
-          {value.background === 'Color' ? (
-            <label className="flex min-w-0 items-center gap-cluster">
-              <span className="text-xs text-muted">Background</span>
-              <input
-                type="color"
-                className="h-toolbar w-10 shrink-0 rounded border border-line bg-field"
-                value={value.backgroundColor}
-                disabled={locked}
-                onChange={(event) => set({ backgroundColor: event.target.value })}
-              />
-              <input
-                className={FIELD}
-                value={value.backgroundColor}
-                disabled={locked}
-                spellCheck={false}
-                onChange={(event) => set({ backgroundColor: event.target.value })}
-              />
-            </label>
-          ) : null}
-        </div>
+        {box(
+          'rembgBackground',
+          <div className="flex flex-col gap-stack">
+            <SegmentSwitch
+              fill
+              disabled={locked}
+              value={value.background}
+              tone="blue"
+              options={[
+                { id: 'Alpha', label: 'Alpha' },
+                { id: 'Color', label: 'Color' },
+              ]}
+              onChange={(background) => set({ background })}
+            />
+            {value.background === 'Color' ? (
+              <label className="flex min-w-0 items-center gap-cluster">
+                <span className="text-xs text-muted">Background</span>
+                <input
+                  type="color"
+                  className="h-toolbar w-10 shrink-0 rounded border border-line bg-field"
+                  value={value.backgroundColor}
+                  disabled={locked}
+                  onChange={(event) => set({ backgroundColor: event.target.value })}
+                />
+                <input
+                  className={FIELD}
+                  value={value.backgroundColor}
+                  disabled={locked}
+                  spellCheck={false}
+                  onChange={(event) => set({ backgroundColor: event.target.value })}
+                />
+              </label>
+            ) : null}
+          </div>,
+        )}
       </ParamSection>
       <ParamSection title="Settings">
         <div className="grid w-full grid-cols-3 gap-cluster">
-          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-            <CheckboxControl
-              checked={value.invertOutput}
-              disabled={locked}
-              onChange={(invertOutput) => set({ invertOutput })}
-            />
-            Invert output
-          </label>
-          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-            <CheckboxControl
-              checked={value.refineForeground}
-              disabled={locked}
-              onChange={(refineForeground) => set({ refineForeground })}
-            />
-            Refine foreground
-          </label>
-          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-            <CheckboxControl
-              checked={value.preserveMetadata}
-              disabled={locked}
-              onChange={(preserveMetadata) => set({ preserveMetadata })}
-            />
-            Preserve metadata
-          </label>
+          {box(
+            'rembgInvert',
+            <label className={flagClass}>
+              <CheckboxControl
+                checked={value.invertOutput}
+                disabled={locked}
+                onChange={(invertOutput) => set({ invertOutput })}
+              />
+              Invert output
+            </label>,
+          )}
+          {box(
+            'rembgRefine',
+            <label className={flagClass}>
+              <CheckboxControl
+                checked={value.refineForeground}
+                disabled={locked}
+                onChange={(refineForeground) => set({ refineForeground })}
+              />
+              Refine foreground
+            </label>,
+          )}
+          {box(
+            'rembgPreserve',
+            <label className={flagClass}>
+              <CheckboxControl
+                checked={value.preserveMetadata}
+                disabled={locked}
+                onChange={(preserveMetadata) => set({ preserveMetadata })}
+              />
+              Preserve metadata
+            </label>,
+          )}
         </div>
       </ParamSection>
     </>

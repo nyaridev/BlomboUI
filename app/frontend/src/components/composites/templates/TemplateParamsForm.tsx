@@ -1,6 +1,7 @@
 import { FolderField } from '@/components/controls/folder-field/FolderField.tsx'
 import { OutputPathOverride } from '@/views/generate/panels/generation/sections/params/OutputPathOverride.tsx'
 import { RembgFields } from '@/views/generate/panels/generation/sections/params/RembgFields.tsx'
+import { ImageUpscaleFields } from '@/views/generate/panels/generation/sections/params/ImageUpscaleFields.tsx'
 import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
@@ -80,6 +81,7 @@ export function TemplateParamsForm({
   const visibleIds = new Set<string>(visibleApply.map((field) => field.id))
   const none = visibleApply.every((field) => !apply.includes(field.id))
   const rembg = workflowParams.includes('rembg')
+  const upscale = workflowParams.includes('upscale')
   function set<K extends keyof TemplateParams>(key: K, next: TemplateParams[K]) {
     if (locked) {
       return
@@ -109,15 +111,16 @@ export function TemplateParamsForm({
       </div>
       {rembg ? (
         <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
-          <ParamSection title="Background removal">
-            <ApplyRow id="rembg" apply={apply} onToggle={toggle} locked={locked}>
-              <RembgFields
-                value={value.rembg}
-                onChange={(rembg) => onChange({ ...value, rembg: { ...value.rembg, ...rembg } })}
-                locked={locked}
-              />
-            </ApplyRow>
-          </ParamSection>
+          <RembgFields
+            value={value.rembg}
+            onChange={(rembg) => onChange({ ...value, rembg: { ...value.rembg, ...rembg } })}
+            locked={locked}
+            wrap={(id, node) => (
+              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                {node}
+              </ApplyRow>
+            )}
+          />
           <ParamSection title="Output">
             <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
               <div className="flex min-w-0 flex-col gap-1">
@@ -126,6 +129,32 @@ export function TemplateParamsForm({
                   value={value.outputImagePath}
                   onChange={(outputImagePath) => set('outputImagePath', outputImagePath)}
                   placeholder="background_removal/[date]"
+                />
+              </div>
+            </ApplyRow>
+          </ParamSection>
+        </div>
+      ) : upscale ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
+          <ImageUpscaleFields
+            value={value.imageUpscale}
+            files={[]}
+            flushModels
+            onChange={(imageUpscale) => onChange({ ...value, imageUpscale: { ...value.imageUpscale, ...imageUpscale } })}
+            wrap={(id, node) => (
+              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                {node}
+              </ApplyRow>
+            )}
+          />
+          <ParamSection title="Output">
+            <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
+              <div className="flex min-w-0 flex-col gap-1">
+                <Label>Output folder</Label>
+                <FolderField
+                  value={value.outputImagePath}
+                  onChange={(outputImagePath) => set('outputImagePath', outputImagePath)}
+                  placeholder="image_upscale/[date]"
                 />
               </div>
             </ApplyRow>

@@ -20,7 +20,7 @@ import {
   type WorkflowInfo,
 } from '@/lib/api.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { autoLoraId, nextSeed, usedSeed, useGenerateStore, workflowHasPack } from '@/stores/generateStore.ts'
+import { autoLoraId, nextSeed, nextSeed32, usedSeed, usedSeed32, useGenerateStore, workflowHasPack } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
@@ -73,6 +73,7 @@ export function GenerateView() {
   const rembgFiles = useGenerateStore((s) => s.rembgFiles)
   const imageUpscale = useGenerateStore((s) => s.imageUpscale)
   const imageUpscaleFiles = useGenerateStore((s) => s.imageUpscaleFiles)
+  const setImageUpscale = useGenerateStore((s) => s.setImageUpscale)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
@@ -296,8 +297,13 @@ export function GenerateView() {
     const xyCells = xyCellCount(xyPlot)
     const activeXyPlot = script === 'xy-plot' && xyCells ? xyPlot : null
     const keepMinusOne = Boolean(activeXyPlot?.keepMinusOne && seed < 0)
-    const used = keepMinusOne ? seed : usedSeed(seed, seedAfter)
+    const used = upscaleMode
+      ? usedSeed32(imageUpscale.seed, imageUpscale.seedAfter)
+      : keepMinusOne
+        ? seed
+        : usedSeed(seed, seedAfter)
     const previous = seed
+    const previousUpscaleSeed = imageUpscale.seed
     const previousHiresSeed = hires.seed
     const hiresUsed = hires.seedOverride ? usedSeed(hires.seed, hires.seedAfter) : hires.seed
     const previousAdetailerSeeds = adetailer.units.map((unit) => unit.seed)
@@ -313,7 +319,9 @@ export function GenerateView() {
           ? activeLines.length * count
           : activeLines.length
         : count
-    if (!(keepMinusOne && seed < 0)) {
+    if (upscaleMode) {
+      setImageUpscale({ seed: nextSeed32(used, imageUpscale.seedAfter, seedSteps) })
+    } else if (!(keepMinusOne && seed < 0)) {
       setSeed(nextSeed(used, seedAfter, seedSteps))
     }
     if (hires.enabled && hires.seedOverride) {
@@ -349,7 +357,7 @@ export function GenerateView() {
         clip_type: gen.clipType,
         clip_device: gen.clipDevice,
         seed: used,
-        seed_after: seedAfter,
+        seed_after: upscaleMode ? imageUpscale.seedAfter : seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
         batch_grid: fileUtility ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
@@ -497,6 +505,7 @@ export function GenerateView() {
               crop: imageUpscale.crop as 'disabled' | 'center',
               seed: used,
               color_correction: imageUpscale.colorCorrection,
+              resolution: imageUpscale.resolution,
               max_resolution: imageUpscale.maxResolution,
               max_resolution_override: imageUpscale.maxResolutionOverride,
               batch_size: 1,
@@ -541,6 +550,7 @@ export function GenerateView() {
       setImageIds([])
     } catch (err) {
       setSeed(previous)
+      setImageUpscale({ seed: previousUpscaleSeed })
       setHires({ seed: previousHiresSeed })
       setAdetailer({
         units: adetailer.units.map((unit, index) => ({ ...unit, seed: previousAdetailerSeeds[index] ?? unit.seed })),
@@ -788,7 +798,7 @@ export function GenerateView() {
     <div
       data-generate-root
       className={[
-        'flex min-h-full flex-col gap-3',
+        'flex min-h-full min-w-0 flex-col gap-3',
         shownTab === 'Generation' ? 'h-full' : '',
       ].join(' ')}
     >

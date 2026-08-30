@@ -85,9 +85,6 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
                 "source_image": str(src),
                 "upscale": {
                     "engine": "seedvr2",
-                    "size_mode": "set",
-                    "width": 1024,
-                    "height": 768,
                     "seed": 7,
                     "color_correction": "lab",
                     "dit_model": "dit.safetensors",
@@ -101,8 +98,8 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
         self.assertNotIn("SeedVR2TorchCompileSettings", kinds)
         node = find(graph, "SeedVR2VideoUpscaler")[1]
         self.assertEqual(node["inputs"]["seed"], 7)
-        self.assertEqual(node["inputs"]["resolution"], 1024)
-        self.assertEqual(node["inputs"]["max_resolution"], 1024)
+        self.assertEqual(node["inputs"]["resolution"], 4096)
+        self.assertEqual(node["inputs"]["max_resolution"], 4096)
         dit = find(graph, "SeedVR2LoadDiTModel")[1]
         self.assertEqual(dit["inputs"]["model"], "dit.safetensors")
         self.assertNotIn("torch_compile_args", dit["inputs"])
@@ -111,6 +108,18 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
         save = find(graph, "SaveImage")[1]
         self.assertEqual(save["inputs"]["images"][0], find(graph, "SeedVR2VideoUpscaler")[0])
         shutil.rmtree(src.parent, ignore_errors=True)
+
+    def test_fill_seedvr2_writes_resolution_pair(self) -> None:
+        graph = fill(
+            {
+                "workflow": "image_upscale",
+                "input_image": "x.png",
+                "upscale": {"engine": "seedvr2", "resolution": 2048, "max_resolution": 1536},
+            }
+        )
+        node = find(graph, "SeedVR2VideoUpscaler")[1]
+        self.assertEqual(node["inputs"]["resolution"], 2048)
+        self.assertEqual(node["inputs"]["max_resolution"], 1536)
 
     def test_fill_seedvr2_keeps_compile_when_allowed(self) -> None:
         graph = fill(
@@ -124,6 +133,41 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
         self.assertIn("SeedVR2TorchCompileSettings", kinds)
         compile_id = find(graph, "SeedVR2TorchCompileSettings")[0]
         self.assertEqual(find(graph, "SeedVR2LoadDiTModel")[1]["inputs"]["torch_compile_args"][0], compile_id)
+
+    def test_clean_upscale_default_seed_is_42(self) -> None:
+        blob = upscale.clean_upscale({})
+        self.assertEqual(blob["seed"], 42)
+        self.assertEqual(blob["resolution"], 4096)
+        self.assertEqual(blob["max_resolution"], 4096)
+
+    def test_fill_seedvr2_wraps_overflow_seed(self) -> None:
+        overflow = 4586839000023720
+        graph = fill(
+            {
+                "workflow": "image_upscale",
+                "input_image": "x.png",
+                "seed": overflow,
+                "upscale": {"engine": "seedvr2", "seed": overflow},
+            }
+        )
+        seed = find(graph, "SeedVR2VideoUpscaler")[1]["inputs"]["seed"]
+        self.assertEqual(seed, overflow % upscale.SEED_SPAN)
+        self.assertGreaterEqual(seed, 0)
+        self.assertLessEqual(seed, upscale.SEED_MAX)
+
+    def test_fill_seedvr2_randomizes_negative_seed(self) -> None:
+        graph = fill(
+            {
+                "workflow": "image_upscale",
+                "input_image": "x.png",
+                "seed": -1,
+                "upscale": {"engine": "seedvr2", "seed": -1},
+            }
+        )
+        seed = find(graph, "SeedVR2VideoUpscaler")[1]["inputs"]["seed"]
+        self.assertIsInstance(seed, int)
+        self.assertGreaterEqual(seed, 0)
+        self.assertLessEqual(seed, upscale.SEED_MAX)
 
 
 class ImageUpscaleOutputTests(unittest.TestCase):
@@ -164,7 +208,7 @@ class ImageUpscaleTemplateTests(unittest.TestCase):
 
     def test_default_apply_from_workflow_json(self) -> None:
         apply = templates.default_apply("image_upscale")
-        self.assertEqual(apply, ["upscale", "outputPath"])
+        self.assertEqual(apply, list(templates._UPSCALE_APPLY) + ["outputPath"])
 
     def test_clean_params_keeps_upscale_blob(self) -> None:
         created = templates.create_template(

@@ -73,8 +73,14 @@ export function GenerationPanel({
     />
   )
   return (
-    <div ref={genRowRef} className={hidden ? 'hidden' : 'flex min-w-0'}>
-      <div className="min-w-0 shrink-0" style={{ width: paramsWidth ?? `${PARAMS_RATIO * 100}%` }}>
+    <div ref={genRowRef} className={hidden ? 'hidden' : 'flex w-full min-w-0'}>
+      <div
+        className="min-w-0 overflow-hidden [contain:inline-size]"
+        style={{
+          flex: `0 0 ${paramsWidth != null ? `${paramsWidth}px` : `${PARAMS_RATIO * 100}%`}`,
+          width: paramsWidth != null ? `${paramsWidth}px` : `${PARAMS_RATIO * 100}%`,
+        }}
+      >
         <GenerationParams
           warning={warning}
           comfyOk={comfyOk}

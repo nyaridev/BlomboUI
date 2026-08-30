@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,8 @@ from config import comfy_models_root, models_root
 from features.generate.scripts.workflow.rembg import source_path
 
 PATH_DEFAULT = "image_upscale/[date]"
+SEED_MAX = 2**32 - 1
+SEED_SPAN = SEED_MAX + 1
 _ENGINES = {"model", "seedvr2"}
 _SIZE_MODES = {"scale", "raw", "scaler", "set"}
 _IMAGE_SCALE_METHODS = frozenset({"nearest-exact", "bilinear", "area", "bicubic", "lanczos"})
@@ -98,6 +101,19 @@ def _float(src: dict[str, Any], *keys: str, default: float = 0.0) -> float:
     return default
 
 
+def wrap_seed(raw: int) -> int:
+    if raw < 0:
+        return random.randint(0, SEED_MAX)
+    return raw % SEED_SPAN
+
+
+def _clean_seed(src: dict[str, Any]) -> int:
+    seed = _int(src, "seed", default=42)
+    if seed < 0:
+        return -1
+    return seed % SEED_SPAN
+
+
 def _round_to_8(value: float) -> int:
     return max(8, int(math.ceil(float(value) / 8.0)) * 8)
 
@@ -145,8 +161,9 @@ def clean_upscale(raw: Any) -> dict[str, Any]:
         "megapixels": max(0.2, min(4.0, megapixels)),
         "upscale_method": method,
         "crop": crop,
-        "seed": _int(src, "seed", default=42),
+        "seed": _clean_seed(src),
         "color_correction": color,
+        "resolution": max(64, min(8192, _int(src, "resolution", default=4096))),
         "max_resolution": max(64, min(8192, _int(src, "max_resolution", "maxResolution", default=4096))),
         "max_resolution_override": _flag(src, "max_resolution_override", "maxResolutionOverride"),
         "batch_size": 1,
@@ -257,16 +274,16 @@ def apply_upscale(workflow: dict[str, Any], values: dict[str, Any], filename: An
             inputs["upscale_method"] = blob["upscale_method"]
             inputs["crop"] = blob["crop"]
         elif kind == "SeedVR2VideoUpscaler":
-            resolution = max(width, height)
             try:
-                seed = int(values.get("seed"))
+                seed = int(blob.get("seed"))
             except (TypeError, ValueError):
-                seed = blob["seed"]
-            if seed < 0:
-                seed = blob["seed"] if blob["seed"] >= 0 else 42
-            inputs["seed"] = seed
-            inputs["resolution"] = resolution
-            inputs["max_resolution"] = blob["max_resolution"] if blob["max_resolution_override"] else resolution
+                try:
+                    seed = int(values.get("seed"))
+                except (TypeError, ValueError):
+                    seed = 42
+            inputs["seed"] = wrap_seed(seed)
+            inputs["resolution"] = blob["resolution"]
+            inputs["max_resolution"] = blob["max_resolution"]
             inputs["batch_size"] = 1
             inputs["uniform_batch_size"] = False
             inputs["color_correction"] = blob["color_correction"]

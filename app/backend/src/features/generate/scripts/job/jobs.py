@@ -56,7 +56,7 @@ from ..workflow.compose import hires_enabled
 from .. import save_meta
 from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 from ..workflow.rembg import clean_rembg, input_runs, is_rembg, stage_input
-from ..workflow.upscale import clean_upscale, is_file_utility, is_image_upscale
+from ..workflow.upscale import SEED_MAX, clean_upscale, is_file_utility, is_image_upscale, wrap_seed
 
 
 class LiveJob:
@@ -422,7 +422,10 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     xy = values.get("xy_plot")
     keep_minus_one = isinstance(xy, dict) and bool(xy.get("keep_minus_one"))
     if seed < 0 and not keep_minus_one:
-        seed = random.randint(0, 2**53 - 1)
+        if is_image_upscale(values):
+            seed = random.randint(0, SEED_MAX)
+        else:
+            seed = random.randint(0, 2**53 - 1)
         values["seed"] = seed
     values["batch_size"] = max(1, int(values.get("batch_size") or 1))
     values["batch_count"] = max(1, int(values.get("batch_count") or 1))
@@ -434,6 +437,9 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         if is_image_upscale(values):
             values["upscale"] = clean_upscale(values.get("upscale"))
             blob = values["upscale"]
+            if blob["engine"] == "seedvr2":
+                values["seed"] = wrap_seed(int(values["seed"]))
+                blob["seed"] = values["seed"]
             if blob["engine"] == "model" and not str(blob.get("upscale_model") or "").strip():
                 raise comfy.ComfyError("bad_request", "Pick an upscale model.", status=400)
         values["xy_plot"] = None

@@ -1,7 +1,23 @@
 {
   "name": "Image Upscale",
   "category": "utility",
-  "apply": ["upscale", "outputPath"],
+  "apply": [
+    "upscaleEngine",
+    "upscaleModel",
+    "upscaleDitModel",
+    "upscaleVaeModel",
+    "upscaleSize",
+    "upscaleMethod",
+    "upscaleCrop",
+    "upscaleResolution",
+    "upscaleMaxResolution",
+    "upscaleColor",
+    "upscaleInputNoise",
+    "upscaleLatentNoise",
+    "upscaleSeed",
+    "upscaleAdvanced",
+    "outputPath"
+  ],
   "extras": ["upscale"],
   "1": {
     "inputs": {

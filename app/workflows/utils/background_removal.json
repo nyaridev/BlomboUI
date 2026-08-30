@@ -1,7 +1,19 @@
 {
   "name": "Background Removal",
   "category": "utility",
-  "apply": ["rembg", "outputPath"],
+  "apply": [
+    "rembgEngine",
+    "rembgModel",
+    "rembgSensitivity",
+    "rembgProcessRes",
+    "rembgMaskBlur",
+    "rembgMaskOffset",
+    "rembgBackground",
+    "rembgInvert",
+    "rembgRefine",
+    "rembgPreserve",
+    "outputPath"
+  ],
   "extras": ["rembg"],
   "1": {
     "inputs": {

@@ -41,7 +41,7 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(items[1]["name"], "Portrait")
         self.assertEqual(items[1]["params"]["prompt"], "close portrait")
         self.assertEqual(items[1]["icon"]["kind"], "emoji")
-        self.assertEqual(items[1]["apply"], list(templates._APPLY))
+        self.assertEqual(items[1]["apply"], templates.default_apply("txt2img"))
         self.assertTrue(items[1]["enabled"])
 
     def test_default_apply_skips_prompt_and_models(self) -> None:
@@ -94,6 +94,31 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(params["activeLoraStrengths"]["foo.safetensors"], 0.8)
         self.assertEqual(params["activeLoraStrengths"]["bar.safetensors"], 0.5)
         self.assertNotIn("", params["activeLoraStrengths"])
+
+    def test_image_upscale_default_apply_and_create(self) -> None:
+        expected = list(templates._UPSCALE_APPLY) + ["outputPath"]
+        self.assertEqual(templates.default_apply("image_upscale"), expected)
+        items, apply = templates.list_templates("image_upscale")
+        self.assertEqual(apply, expected)
+        self.assertEqual(items[0]["apply"], expected)
+        created = templates.create_template("image_upscale", "4x", {"outputImagePath": "out"})
+        self.assertEqual(created["apply"], expected)
+
+    def test_clean_apply_expands_legacy_rembg(self) -> None:
+        expanded = templates._clean_apply(["rembg", "outputPath"])
+        self.assertEqual(expanded, list(templates._REMBG_APPLY) + ["outputPath"])
+        self.assertNotIn("rembg", expanded)
+
+    def test_nested_mix_sensitivity_keeps_engine(self) -> None:
+        from features.generate.scripts.workflow import rembg
+
+        current = rembg.clean_rembg({"engine": "rmbg", "sensitivity": 1, "rmbgModel": "RMBG-2.0"})
+        incoming = rembg.clean_rembg({"engine": "birefnet", "sensitivity": 0.4, "rmbgModel": "BEN"})
+        mixed = dict(current)
+        mixed["sensitivity"] = incoming["sensitivity"]
+        self.assertEqual(mixed["sensitivity"], 0.4)
+        self.assertEqual(mixed["engine"], "rmbg")
+        self.assertEqual(mixed["rmbg_model"], "RMBG-2.0")
 
     def test_migrate_copies_shared_apply_onto_customs(self) -> None:
         db.connect()

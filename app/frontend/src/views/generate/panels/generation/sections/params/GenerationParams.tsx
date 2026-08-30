@@ -39,7 +39,7 @@ export function GenerationParams({
     (shown === 'controlnet' && controlnet.enabled)
 
   return (
-    <aside className="flex min-w-0 flex-col gap-stack">
+    <aside className="flex min-w-0 w-full flex-col gap-stack">
       {rembg ? (
         <RembgParams />
       ) : upscale ? (

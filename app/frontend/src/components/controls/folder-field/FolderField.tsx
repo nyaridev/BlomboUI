@@ -42,7 +42,7 @@ export function FolderField({
   }
 
   return (
-    <div className="flex h-8 min-w-0 flex-1 items-center gap-1">
+    <div className="flex h-8 w-full min-w-0 items-center gap-1">
       <input
         className={FIELD}
         value={value}

@@ -3,6 +3,7 @@ import { ImageDrop } from '@/components/controls/image-drop/ImageDrop.tsx'
 import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { ImageUpscaleFields } from '@/views/generate/panels/generation/sections/params/ImageUpscaleFields.tsx'
 import { useGenerateStore } from '@/stores/generateStore.ts'
+import { useEffect, useState } from 'react'
 
 export function ImageUpscaleParams({ lastSeed = null }: { lastSeed?: number | null }) {
   const imageUpscale = useGenerateStore((s) => s.imageUpscale)
@@ -11,9 +12,18 @@ export function ImageUpscaleParams({ lastSeed = null }: { lastSeed?: number | nu
   const setImageUpscale = useGenerateStore((s) => s.setImageUpscale)
   const setImageUpscaleFiles = useGenerateStore((s) => s.setImageUpscaleFiles)
   const setOutputImagePath = useGenerateStore((s) => s.setOutputImagePath)
+  const [selectedIndex, setSelectedIndex] = useState(0)
+
+  useEffect(() => {
+    if (!imageUpscaleFiles.length) {
+      setSelectedIndex(0)
+      return
+    }
+    setSelectedIndex((index) => Math.max(0, Math.min(index, imageUpscaleFiles.length - 1)))
+  }, [imageUpscaleFiles])
 
   return (
-    <div className="flex flex-col gap-stack">
+    <div className="flex min-w-0 w-full flex-col gap-stack">
       <SegmentSwitch
         fill
         value={imageUpscale.inputMode}
@@ -25,7 +35,7 @@ export function ImageUpscaleParams({ lastSeed = null }: { lastSeed?: number | nu
         onChange={(inputMode) => setImageUpscale({ inputMode })}
       />
       {imageUpscale.inputMode === 'directory' ? (
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className="flex w-full min-w-0 flex-col gap-1 overflow-hidden">
           <span className="text-xs text-muted">Input folder</span>
           <FolderField
             value={imageUpscale.inputDir}
@@ -37,8 +47,10 @@ export function ImageUpscaleParams({ lastSeed = null }: { lastSeed?: number | nu
         <ImageDrop
           multiple
           files={imageUpscaleFiles}
+          selectedIndex={selectedIndex}
+          onSelect={setSelectedIndex}
           onFiles={setImageUpscaleFiles}
-          className="min-h-48"
+          className="min-h-48 w-full min-w-0 max-w-full"
           placeholder="Drop images here, or click to pick"
         />
       )}
@@ -50,17 +62,13 @@ export function ImageUpscaleParams({ lastSeed = null }: { lastSeed?: number | nu
           placeholder="image_upscale/[date]"
         />
       </div>
-      <SegmentSwitch
-        fill
-        value={imageUpscale.engine}
-        tone="blue"
-        options={[
-          { id: 'model', label: 'Upscale model' },
-          { id: 'seedvr2', label: 'SeedVR2' },
-        ]}
-        onChange={(engine) => setImageUpscale({ engine })}
+      <ImageUpscaleFields
+        value={imageUpscale}
+        files={imageUpscaleFiles}
+        selectedIndex={selectedIndex}
+        onChange={setImageUpscale}
+        lastSeed={lastSeed}
       />
-      <ImageUpscaleFields value={imageUpscale} files={imageUpscaleFiles} onChange={setImageUpscale} lastSeed={lastSeed} />
     </div>
   )
 }

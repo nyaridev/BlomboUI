@@ -379,7 +379,7 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
             <ImageDrop />
           </SettingsBlock>
           <SettingsBlock query={query} title="Image drop (multiple)">
-            <ImageDrop multiple placeholder="Drop images here, or click to pick" />
+            <ImageDrop multiple selectedIndex={0} placeholder="Drop images here, or click to pick" />
           </SettingsBlock>
           <SettingsBlock query={query} title="Tile preview" className="w-36">
             <TilePreview label="Example tile" mark="?" eager />

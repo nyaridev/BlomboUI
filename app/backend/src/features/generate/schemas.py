@@ -185,6 +185,7 @@ class UpscaleIn(BaseModel):
     crop: Literal["disabled", "center"] = "disabled"
     seed: int = 42
     color_correction: str = "lab"
+    resolution: int = Field(default=4096, ge=64, le=8192)
     max_resolution: int = Field(default=4096, ge=64, le=8192)
     max_resolution_override: bool = False
     batch_size: int = Field(default=1, ge=1, le=64)

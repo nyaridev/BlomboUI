@@ -5,8 +5,8 @@ import unittest
 from unittest.mock import patch
 
 from config import WORKFLOWS
-from features.generate.scripts import comfy_fill
-from features.generate.scripts.attention import FLASH_CLASS, SAGE_CLASS
+from features.generate.scripts.workflow import comfy_fill
+from features.generate.scripts.workflow.attention import FLASH_CLASS, SAGE_CLASS
 from infrastructure.comfy import client as comfy
 
 CHECKPOINT = WORKFLOWS / "image_checkpoint"
@@ -39,7 +39,7 @@ def fill(values: dict, data: dict | None = None, packages: tuple[bool, bool] = (
     data = data if data is not None else load_main(name)
     with (
         patch.object(comfy_fill.lora_tags, "apply"),
-        patch("features.generate.scripts.attention.installed", return_value=packages),
+        patch("features.generate.scripts.workflow.attention.installed", return_value=packages),
     ):
         return comfy_fill.fill_txt2img(values, lambda _: data, lambda name: name, comfy._comfy_graph)
 

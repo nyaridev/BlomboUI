@@ -51,10 +51,11 @@ from .job_plan import (
     _run_seed,
     _seed_after,
 )
-from .comfy_fill import combined_progress, hires_enabled, progress_stage_map, progress_stages, stage_index
-from . import save_meta
-from .xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
-from .rembg import clean_rembg, input_runs, is_rembg, stage_input
+from ..workflow.comfy_fill import combined_progress, progress_stage_map, progress_stages, stage_index
+from ..workflow.compose import hires_enabled
+from .. import save_meta
+from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
+from ..workflow.rembg import clean_rembg, input_runs, is_rembg, stage_input
 
 
 class LiveJob:

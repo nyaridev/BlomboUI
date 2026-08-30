@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 from infrastructure.storage import user as db
 from infrastructure.storage.repositories import error_log as error_log_repo
-from features.generate.scripts import jobs
+from features.generate.scripts.job import jobs
 from infrastructure.comfy import client as comfy
 
 

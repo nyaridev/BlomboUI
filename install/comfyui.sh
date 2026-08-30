@@ -56,7 +56,9 @@ if [ -z "${COMFY_DIR:-}" ]; then
   if [ -n "${COMFYUI_PATH:-}" ]; then
     COMFY_DIR="$COMFYUI_PATH"
   else
-    COMFY_DIR="$COMFY_ROOT/ComfyUI"
+    # shellcheck source=linux/comfyui/_pick_slot.sh
+    . "$ROOT/install/linux/comfyui/_pick_slot.sh"
+    pick_comfy_slot selected || exit 1
   fi
 fi
 if [ -z "${COMFY_PYTHON:-}" ]; then
@@ -91,13 +93,13 @@ fi
 
 if [ ! -x "$COMFY_PYTHON" ]; then
   ui_error "ComfyUI's Python was not found."
-  ui_info "Run webui-user.sh first, or install/linux/install_comfyui.sh."
+  ui_info "Run webui-user.sh first, or install/linux/comfyui/install_comfyui.sh."
   exit 1
 fi
 
 if [ ! -f "$COMFY_DIR/main.py" ]; then
   ui_error "ComfyUI was not found."
-  ui_info "Run webui-user.sh first, or install/linux/install_comfyui.sh."
+  ui_info "Run webui-user.sh first, or install/linux/comfyui/install_comfyui.sh."
   exit 1
 fi
 

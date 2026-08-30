@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 
 from config import WORKFLOWS, comfy_base
 from shared import dirs
-from features.generate.scripts.comfy_fill import fill_power_loras, fill_txt2img as fill_workflow
+from features.generate.scripts.workflow.comfy_fill import fill_power_loras, fill_txt2img as fill_workflow
 
 TIMEOUT = 30
 PREVIEW_IMAGE = 1

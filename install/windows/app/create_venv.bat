@@ -5,7 +5,7 @@ setlocal EnableExtensions
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..\..") do set "ROOT=%%~fI"
 call "%ROOT%\install\windows\_ui.bat"
 
 if not defined PYTHON set "PYTHON=python"

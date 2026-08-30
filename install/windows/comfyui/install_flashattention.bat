@@ -5,9 +5,11 @@ setlocal EnableExtensions EnableDelayedExpansion
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..\..") do set "ROOT=%%~fI"
 call "%ROOT%\install\windows\_ui.bat"
-if not defined COMFY_PYTHON set "COMFY_PYTHON=%ROOT%\runtime\comfyui\python_embeded\python.exe"
+call "%ROOT%\install\windows\comfyui\_pick_slot.bat"
+if errorlevel 1 exit /b 1
+if not defined COMFY_PYTHON set "COMFY_PYTHON=%ROOT%\runtime\comfyui\%COMFY_SLOT%\python_embeded\python.exe"
 set "PYTHON_EXE=%COMFY_PYTHON%"
 set "PIP_ARGS=--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10 --use-pep517"
 
@@ -17,7 +19,7 @@ set "PIP_ARGS=--no-cache-dir --no-warn-script-location --timeout=1000 --retries 
 
 if not exist "%PYTHON_EXE%" (
     call "%ROOT%\install\windows\_ui.bat" error "ComfyUI's embedded Python was not found."
-    call "%ROOT%\install\windows\_ui.bat" info "Run install\windows\install_comfyui.bat first."
+    call "%ROOT%\install\windows\_ui.bat" info "Run install\windows\comfyui\install_comfyui.bat first."
     exit /b 1
 )
 

@@ -61,6 +61,11 @@ function snap8(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, snapped))
 }
 
+function ceil8(value: number, min: number, max: number) {
+  const snapped = Math.ceil(value / 8) * 8
+  return Math.min(max, Math.max(min, snapped))
+}
+
 export function snapDim(value: number) {
   return snap8(value, 64, 4096)
 }
@@ -129,8 +134,8 @@ export function sizeFromScaler(aspectId: string, megapixels: number) {
   const height = Math.sqrt(pixels * (aspect.h / aspect.w))
   const width = height * (aspect.w / aspect.h)
   return {
-    width: snap8(width, 64, 4096),
-    height: snap8(height, 64, 4096),
+    width: ceil8(width, 64, 4096),
+    height: ceil8(height, 64, 4096),
   }
 }
 

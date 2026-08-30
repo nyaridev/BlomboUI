@@ -21,6 +21,17 @@ RESTART_FLAG = RUNTIME / "tmp" / "restart"
 COMFY_RESTART_FLAG = RUNTIME / "tmp" / "comfy-restart"
 
 
+def bundled_comfy() -> Path:
+    selected = RUNTIME / "comfyui" / "selected"
+    try:
+        slot = selected.read_text(encoding="utf-8").splitlines()[0].strip()
+    except OSError:
+        slot = ""
+    if slot:
+        return RUNTIME / "comfyui" / slot / "ComfyUI"
+    return COMFY_BUNDLED
+
+
 def env_path(name: str) -> Path | None:
     raw = os.environ.get(name, "").strip().strip('"')
     if not raw:
@@ -44,18 +55,18 @@ def python_kind() -> str:
 
 
 def comfy_python(comfy_path: Path) -> Path | None:
-    bundled = RUNTIME / "comfyui" / "python_embeded"
     sibling = comfy_path.parent / "python_embeded"
+    bundled = RUNTIME / "comfyui" / "python_embeded"
     return _first_existing(
         [
-            bundled / "python.exe",
-            bundled / "python",
             sibling / "python.exe",
             sibling / "python",
             comfy_path / "venv" / "Scripts" / "python.exe",
             comfy_path / "venv" / "bin" / "python",
             comfy_path / ".venv" / "Scripts" / "python.exe",
             comfy_path / ".venv" / "bin" / "python",
+            bundled / "python.exe",
+            bundled / "python",
         ]
     )
 
@@ -98,14 +109,18 @@ def ensure_dirs() -> None:
 
 
 def resolve() -> dict[str, str | None]:
-    comfy = env_path("COMFYUI_PATH") or COMFY_BUNDLED
+    comfy = env_path("COMFYUI_PATH") or bundled_comfy()
     models = env_path("MODELS_ROOT") or (USER / "models")
     wildcards = env_path("WILDCARDS_ROOT") or (USER / "wildcards")
     outputs = env_path("OUTPUTS_ROOT") or kept_output() or (USER / "output")
     py = comfy_python(comfy)
+    bundled = bundled_comfy()
 
     if (comfy / "main.py").is_file():
-        mode = "bundled" if comfy.resolve() == COMFY_BUNDLED.resolve() else "external"
+        try:
+            mode = "bundled" if comfy.resolve() == bundled.resolve() else "external"
+        except OSError:
+            mode = "external"
     else:
         mode = "missing"
 

@@ -58,11 +58,8 @@ set "COMFY_RESTART_FLAG=%ROOT%\runtime\tmp\comfy-restart"
 
 if defined COMFYUI_PATH (
     for %%I in (%COMFYUI_PATH%) do set "COMFY_DIR=%%~fI"
-) else (
-    set "COMFY_DIR=%COMFY_ROOT%\ComfyUI"
+    call :resolve_comfy_python
 )
-
-call :resolve_comfy_python
 
 :: -----------------------------------------------------------------------------
 :: Provisioning
@@ -74,7 +71,7 @@ call "%ROOT%\install\windows\install_git.bat"
 if errorlevel 1 exit /b %errorlevel%
 
 call "%ROOT%\install\windows\_ui.bat" section "Project environment"
-call "%ROOT%\install\windows\create_venv.bat"
+call "%ROOT%\install\windows\app\create_venv.bat"
 if errorlevel 1 exit /b %errorlevel%
 
 if not exist "%MODELS_DIR%\" (
@@ -88,6 +85,13 @@ if not exist "%MODELS_DIR%\" (
 call "%ROOT%\install\windows\_ui.bat" ok "Models directory: %MODELS_DIR%"
 if not defined MODELS_ROOT set "MODELS_ROOT=%MODELS_DIR%"
 
+if not defined COMFYUI_PATH (
+    call "%ROOT%\install\windows\_ui.bat" section "ComfyUI version"
+    call "%ROOT%\install\windows\comfyui\_pick_slot.bat"
+    if errorlevel 1 exit /b 1
+    call :resolve_comfy_python
+)
+
 if not exist "%COMFY_DIR%\main.py" (
     if defined COMFYUI_PATH (
         call "%ROOT%\install\windows\_ui.bat" error "COMFYUI_PATH does not contain ComfyUI."
@@ -96,9 +100,8 @@ if not exist "%COMFY_DIR%\main.py" (
     )
     call "%ROOT%\install\windows\_ui.bat" section "ComfyUI install"
     call "%ROOT%\install\windows\_ui.bat" info "ComfyUI was not found. Installing..."
-    call "%ROOT%\install\windows\install_comfyui.bat"
+    call "%ROOT%\install\windows\comfyui\install_comfyui.bat"
     if errorlevel 1 exit /b 1
-    set "COMFY_DIR=%COMFY_ROOT%\ComfyUI"
     call :resolve_comfy_python
 ) else if defined DEV_DEBUG (
     call "%ROOT%\install\windows\_ui.bat" ok "ComfyUI is already installed."
@@ -106,12 +109,13 @@ if not exist "%COMFY_DIR%\main.py" (
 
 if not defined COMFY_PYTHON (
     call "%ROOT%\install\windows\_ui.bat" error "ComfyUI Python was not found."
-    call "%ROOT%\install\windows\_ui.bat" info "Run install\windows\install_comfyui.bat, or point COMFYUI_PATH at a portable ComfyUI."
+    call "%ROOT%\install\windows\_ui.bat" info "Run install\windows\comfyui\install_comfyui.bat, or point COMFYUI_PATH at a portable ComfyUI."
     exit /b 1
 )
 
 if not exist "%ROOT%\runtime\tmp\" mkdir "%ROOT%\runtime\tmp"
 if not exist "%COMFY_OUT%\" mkdir "%COMFY_OUT%"
+if not defined COMFYUI_PATH set "COMFYUI_PATH=%COMFY_DIR%"
 
 "%VENV_PYTHON%" -m bootstrap
 if errorlevel 1 (
@@ -126,10 +130,10 @@ for %%N in (comfyui-manager rgthree-comfy ComfyUI-KJNodes ComfyUI-Easy-Use Comfy
 if defined NEED_COMFY_DEPS (
     if defined DEV_DEBUG (
         call "%ROOT%\install\windows\_ui.bat" section "ComfyUI custom nodes"
-        call "%ROOT%\install\windows\install_comfyui_deps.bat"
+        call "%ROOT%\install\windows\comfyui\install_deps.bat"
         if errorlevel 1 exit /b 1
     ) else (
-        call "%ROOT%\install\windows\install_comfyui_deps.bat" > "%COMFYUI_LOG%" 2>&1
+        call "%ROOT%\install\windows\comfyui\install_deps.bat" > "%COMFYUI_LOG%" 2>&1
         if errorlevel 1 (
             type "%COMFYUI_LOG%"
             exit /b 1
@@ -143,8 +147,10 @@ if not defined COMFYUI_PATH (
     if defined DEV_DEBUG call "%ROOT%\install\windows\_ui.bat" section "CUDA Torch"
     "%COMFY_PYTHON%" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >nul 2>&1
     if errorlevel 1 (
-        call "%ROOT%\install\windows\_ui.bat" warn "CUDA Torch was not found. Installing the default CUDA Torch..."
-        call "%ROOT%\install\windows\torch\2.11.0+cu130 (default).bat"
+        call "%ROOT%\install\windows\_ui.bat" warn "CUDA Torch was not found. Installing CUDA Torch %COMFY_TORCH%..."
+        set "TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH% (default).bat"
+        if not exist "%TORCH_BAT%" set "TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH%.bat"
+        call "%TORCH_BAT%"
         if errorlevel 1 exit /b 1
     ) else if defined DEV_DEBUG (
         call "%ROOT%\install\windows\_ui.bat" ok "CUDA Torch is available."

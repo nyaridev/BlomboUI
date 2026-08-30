@@ -15,8 +15,9 @@ from features.settings import service as settings
 from features.gallery.scripts import cache as gallery_cache
 from infrastructure.comfy import client as comfy
 from shared import pnginfo
-from features.generate.scripts import rembg, save_meta, templates
-from features.generate.scripts.comfy_fill import hires_enabled
+from features.generate.scripts import save_meta, templates
+from features.generate.scripts.workflow import rembg
+from features.generate.scripts.workflow.compose import hires_enabled
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
 
@@ -564,7 +565,7 @@ def _maybe_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> None:
     dests: list[str] = []
     folder = _output_dir(values, "grids")
     try:
-        from features.generate.scripts.grid import save_contact_sheet
+        from features.generate.scripts.grid.grid import save_contact_sheet
 
         for i in range(0, len(paths), max_n):
             chunk = paths[i : i + max_n]
@@ -603,8 +604,8 @@ def _maybe_xy_grid(job_id: str, values: dict[str, Any], paths: list[Path]) -> No
     fmt = _grid_fmt(values.get("batch_grid_format"))
     folder = _output_dir(values, "grids")
     try:
-        from features.generate.scripts.grid import save_xy_sheet
-        from features.generate.scripts.xy_plot import xy_labels, xy_shape
+        from features.generate.scripts.grid.grid import save_xy_sheet
+        from features.generate.scripts.grid.xy_plot import xy_labels, xy_shape
 
         cols, rows = xy_shape(xy)
         x_labels, y_labels = xy_labels(xy)

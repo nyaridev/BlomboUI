@@ -5,15 +5,22 @@
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
-# shellcheck source=_ui.sh
+ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# shellcheck source=../_ui.sh
 . "$ROOT/install/linux/_ui.sh"
+# shellcheck source=_pick_slot.sh
+. "$ROOT/install/linux/comfyui/_pick_slot.sh"
+pick_comfy_slot || exit 1
+if [ -z "${COMFY_SLOT:-}" ]; then
+  ui_error "No ComfyUI slot was selected."
+  exit 1
+fi
 
 GIT="${GIT:-git}"
 RUNTIME_DIR="$ROOT/runtime"
 COMFY_ROOT="$RUNTIME_DIR/comfyui"
-COMFY_DIR="$COMFY_ROOT/ComfyUI"
-PYTHON_DIR="$COMFY_ROOT/python_embeded"
+COMFY_DIR="$COMFY_ROOT/$COMFY_SLOT/ComfyUI"
+PYTHON_DIR="$COMFY_ROOT/$COMFY_SLOT/python_embeded"
 PYTHON_CMD="$PYTHON_DIR/python"
 UV_ARGS="--no-cache --link-mode=copy"
 PIP_ARGS="--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10"
@@ -122,7 +129,7 @@ if [ -x "$PYTHON_CMD" ]; then
   ui_ok "Embedded Python already exists. Skipping download, requirements, and Torch."
   echo
   ui_ok "ComfyUI files are ready at $COMFY_ROOT"
-  ui_info "Other Torch packages can be installed with the scripts in install/linux/torch."
+  ui_info "Other Torch packages can be installed with the scripts in install/linux/comfyui/torch."
   exit 0
 fi
 
@@ -171,8 +178,13 @@ fi
 # Default CUDA Torch
 # -----------------------------------------------------------------------------
 
-ui_info "Installing default CUDA Torch..."
-if ! "$ROOT/install/linux/torch/2.11.0+cu130 (default).sh"; then
+ui_info "Installing CUDA Torch ${COMFY_TORCH:-2.10.0+cu130}..."
+TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130} (default).sh"
+if [ ! -f "$TORCH_SH" ]; then
+  TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
+fi
+export COMFY_PYTHON="$PYTHON_CMD"
+if ! "$TORCH_SH"; then
   ui_error "Default CUDA Torch installation failed."
   exit 1
 fi
@@ -183,5 +195,5 @@ fi
 
 echo
 ui_ok "ComfyUI files are ready at $COMFY_ROOT"
-ui_info "Other Torch packages can be installed with the scripts in install/linux/torch."
+  ui_info "Other Torch packages can be installed with the scripts in install/linux/comfyui/torch."
 exit 0

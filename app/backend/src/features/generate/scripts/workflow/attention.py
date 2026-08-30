@@ -5,7 +5,7 @@ import time
 from typing import Any
 
 from config import launcher_env
-from features.generate.scripts.compose import _adetailer_units
+from features.generate.scripts.workflow.compose import _adetailer_units, _flag, _hires_blob, _is_link, _title, hires_enabled
 
 _PROBE = "s=0;f=0\ntry:\n import sageattention\n s=1\nexcept Exception:\n pass\ntry:\n import flash_attn\n f=1\nexcept Exception:\n pass\nprint(s,f)"
 _TTL = 60.0
@@ -62,19 +62,8 @@ SAGE_MODES = (
 )
 
 
-def _flag(blob: dict[str, Any], snake: str, camel: str, default: bool = False) -> bool:
-    if snake in blob or camel in blob:
-        return bool(blob.get(snake) if blob.get(snake) is not None else blob.get(camel))
-    return default
-
-
-def _hires_blob(values: dict[str, Any]) -> dict[str, Any]:
-    raw = values.get("hires")
-    return raw if isinstance(raw, dict) else {}
-
-
 def _hires_on(values: dict[str, Any]) -> bool:
-    return bool(_hires_blob(values).get("enabled"))
+    return hires_enabled(values)
 
 
 def _from_hires(values: dict[str, Any], unit: dict[str, Any] | None) -> bool:
@@ -93,16 +82,8 @@ def _from_hires(values: dict[str, Any], unit: dict[str, Any] | None) -> bool:
     return True
 
 
-def _title(node: dict[str, Any]) -> str:
-    return str((node.get("_meta") or {}).get("title") or "").lower()
-
-
 def _is_hires(node: dict[str, Any]) -> bool:
     return "hires" in _title(node)
-
-
-def _is_link(value: Any) -> bool:
-    return isinstance(value, (list, tuple)) and len(value) == 2 and not isinstance(value[0], (list, dict))
 
 
 def _adetailer_index(key: str) -> int | None:

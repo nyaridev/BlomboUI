@@ -5,16 +5,22 @@ setlocal EnableExtensions
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..\..") do set "ROOT=%%~fI"
 call "%ROOT%\install\windows\_ui.bat"
+call "%ROOT%\install\windows\comfyui\_pick_slot.bat"
+if errorlevel 1 exit /b 1
+if not defined COMFY_SLOT (
+    call "%ROOT%\install\windows\_ui.bat" error "No ComfyUI slot was selected."
+    exit /b 1
+)
 
 if not defined GIT set "GIT=git"
 for %%I in (%GIT%) do set "GIT_EXE=%%~I"
 
 set "RUNTIME_DIR=%ROOT%\runtime"
-set "COMFY_ROOT=%RUNTIME_DIR%\comfyui"
-set "COMFY_DIR=%COMFY_ROOT%\ComfyUI"
-set "PYTHON_DIR=%COMFY_ROOT%\python_embeded"
+set "COMFY_ROOT=%ROOT%\runtime\comfyui"
+set "COMFY_DIR=%COMFY_ROOT%\%COMFY_SLOT%\ComfyUI"
+set "PYTHON_DIR=%COMFY_ROOT%\%COMFY_SLOT%\python_embeded"
 set "PYTHON_EXE=%PYTHON_DIR%\python.exe"
 set "PYTHON_ARCHIVE=python-3.12.10-embed-amd64.zip"
 set "PYTHON_ARCHIVE_PATH=%PYTHON_DIR%\%PYTHON_ARCHIVE%"
@@ -87,7 +93,7 @@ if exist "%PYTHON_EXE%" (
     call "%ROOT%\install\windows\_ui.bat" ok "Embedded Python already exists. Skipping download, requirements, and Torch."
     echo.
     call "%ROOT%\install\windows\_ui.bat" ok "ComfyUI files are ready at %COMFY_ROOT%"
-    call "%ROOT%\install\windows\_ui.bat" info "Other Torch packages can be installed with the scripts in install\windows\torch."
+    call "%ROOT%\install\windows\_ui.bat" info "Other Torch packages can be installed with the scripts in install\windows\comfyui\torch."
     exit /b 0
 )
 
@@ -196,8 +202,11 @@ if errorlevel 1 (
 :: Default CUDA Torch
 :: -----------------------------------------------------------------------------
 
-call "%ROOT%\install\windows\_ui.bat" info "Installing default CUDA Torch..."
-call "%ROOT%\install\windows\torch\2.11.0+cu130 (default).bat"
+call "%ROOT%\install\windows\_ui.bat" info "Installing CUDA Torch %COMFY_TORCH%..."
+set "TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH% (default).bat"
+if not exist "%TORCH_BAT%" set "TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH%.bat"
+set "COMFY_PYTHON=%PYTHON_EXE%"
+call "%TORCH_BAT%"
 if errorlevel 1 (
     call "%ROOT%\install\windows\_ui.bat" error "Default CUDA Torch installation failed."
     exit /b 1
@@ -209,7 +218,7 @@ if errorlevel 1 (
 
 echo.
 call "%ROOT%\install\windows\_ui.bat" ok "ComfyUI files are ready at %COMFY_ROOT%"
-call "%ROOT%\install\windows\_ui.bat" info "Other Torch packages can be installed with the scripts in install\windows\torch."
+call "%ROOT%\install\windows\_ui.bat" info "Other Torch packages can be installed with the scripts in install\windows\comfyui\torch."
 exit /b 0
 
 :: -----------------------------------------------------------------------------
@@ -220,7 +229,7 @@ exit /b 0
 set "DL_URL=%~1"
 set "DL_OUT=%~2"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0_download.ps1" -Url "%DL_URL%" -OutFile "%DL_OUT%"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\_download.ps1" -Url "%DL_URL%" -OutFile "%DL_OUT%"
 if not errorlevel 1 exit /b 0
 
 curl.exe -L --ssl-no-revoke --retry 5 --retry-delay 2 -o "%DL_OUT%" "%DL_URL%"

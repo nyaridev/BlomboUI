@@ -14,7 +14,7 @@ from PIL import Image
 from infrastructure.storage import cache as cache_db
 from infrastructure.storage import cache_gallery as gallery_db
 from features.gallery.scripts import cache as gallery_cache, gallery
-from features.generate.scripts import jobs
+from features.generate.scripts.job import jobs
 from shared import pnginfo
 
 

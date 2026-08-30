@@ -11,7 +11,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from features.generate.scripts import save_meta
-from features.generate.scripts.grid import save_contact_sheet
+from features.generate.scripts.grid.grid import save_contact_sheet
 from features.models.scripts import hashes
 from features.models.scripts import models
 from shared import pnginfo

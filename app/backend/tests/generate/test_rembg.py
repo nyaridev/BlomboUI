@@ -11,7 +11,9 @@ from io import BytesIO
 from PIL import Image
 
 from config import WORKFLOWS
-from features.generate.scripts import comfy_fill, job_output, rembg, save_meta, templates
+from features.generate.scripts import save_meta, templates
+from features.generate.scripts.job import job_output
+from features.generate.scripts.workflow import comfy_fill, rembg
 from infrastructure.comfy import client as comfy
 from infrastructure.storage import user as db
 from shared import pnginfo

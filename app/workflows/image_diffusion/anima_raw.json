@@ -1,6 +1,6 @@
 {
   "last_node_id": 19,
-  "last_link_id": 12,
+  "last_link_id": 11,
   "nodes": [
     {
       "id": 2,
@@ -296,11 +296,6 @@
           "name": "model",
           "type": "MODEL",
           "link": 11
-        },
-        {
-          "name": "clip",
-          "type": "CLIP",
-          "link": 12
         }
       ],
       "outputs": [
@@ -315,10 +310,7 @@
         {
           "name": "CLIP",
           "type": "CLIP",
-          "links": [
-            1,
-            2
-          ],
+          "links": [],
           "slot_index": 1
         }
       ],
@@ -386,7 +378,8 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            12
+            1,
+            2
           ],
           "slot_index": 0
         }
@@ -439,16 +432,16 @@
   "links": [
     [
       1,
-      15,
-      1,
+      18,
+      0,
       2,
       0,
       "CLIP"
     ],
     [
       2,
-      15,
-      1,
+      18,
+      0,
       3,
       0,
       "CLIP"
@@ -524,14 +517,6 @@
       15,
       0,
       "MODEL"
-    ],
-    [
-      12,
-      18,
-      0,
-      15,
-      1,
-      "CLIP"
     ]
   ],
   "groups": [],

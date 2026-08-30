@@ -14,7 +14,7 @@
   "ports": {
     "IMAGE": ["9", 0],
     "MODEL": ["15", 0],
-    "CLIP": ["15", 1],
+    "CLIP": ["18", 0],
     "VAE": ["17", 0],
     "POSITIVE": ["2", 0],
     "NEGATIVE": ["3", 0]
@@ -22,7 +22,7 @@
   "2": {
     "inputs": {
       "text": "",
-      "clip": ["15", 1]
+      "clip": ["18", 0]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -32,7 +32,7 @@
   "3": {
     "inputs": {
       "text": "",
-      "clip": ["15", 1]
+      "clip": ["18", 0]
     },
     "class_type": "CLIPTextEncode",
     "_meta": {
@@ -104,8 +104,7 @@
         "type": "PowerLoraLoaderHeaderWidget"
       },
       "➕ Add Lora": "",
-      "model": ["19", 0],
-      "clip": ["18", 0]
+      "model": ["19", 0]
     },
     "class_type": "Power Lora Loader (rgthree)",
     "_meta": {

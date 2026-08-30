@@ -28,12 +28,10 @@ if not defined MODELS_DIR (
     )
 )
 if not defined COMFY_ROOT set "COMFY_ROOT=%ROOT%\runtime\comfyui"
-if not defined COMFY_DIR (
-    if defined COMFYUI_PATH (
-        for %%I in (%COMFYUI_PATH%) do set "COMFY_DIR=%%~fI"
-    ) else (
-        set "COMFY_DIR=%COMFY_ROOT%\ComfyUI"
-    )
+if defined COMFYUI_PATH (
+    for %%I in (%COMFYUI_PATH%) do set "COMFY_DIR=%%~fI"
+) else if not defined COMFY_DIR (
+    call "%ROOT%\install\windows\comfyui\_pick_slot.bat" /selected
 )
 if not defined COMFY_PYTHON (
     if exist "%COMFY_DIR%\..\python_embeded\python.exe" for %%I in ("%COMFY_DIR%\..\python_embeded\python.exe") do set "COMFY_PYTHON=%%~fI"
@@ -64,18 +62,18 @@ if defined COMFYUI_NO_BROWSER (
 
 if not defined COMFY_PYTHON (
     call "%ROOT%\install\windows\_ui.bat" error "ComfyUI's Python was not found."
-    call "%ROOT%\install\windows\_ui.bat" info "Run webui-user.bat first, or install\windows\install_comfyui.bat."
+    call "%ROOT%\install\windows\_ui.bat" info "Run webui-user.bat first, or install\windows\comfyui\install_comfyui.bat."
     exit /b 1
 )
 if not exist "%COMFY_PYTHON%" (
     call "%ROOT%\install\windows\_ui.bat" error "ComfyUI's Python was not found."
-    call "%ROOT%\install\windows\_ui.bat" info "Run webui-user.bat first, or install\windows\install_comfyui.bat."
+    call "%ROOT%\install\windows\_ui.bat" info "Run webui-user.bat first, or install\windows\comfyui\install_comfyui.bat."
     exit /b 1
 )
 
 if not exist "%COMFY_DIR%\main.py" (
     call "%ROOT%\install\windows\_ui.bat" error "ComfyUI was not found."
-    call "%ROOT%\install\windows\_ui.bat" info "Run webui-user.bat first, or install\windows\install_comfyui.bat."
+    call "%ROOT%\install\windows\_ui.bat" info "Run webui-user.bat first, or install\windows\comfyui\install_comfyui.bat."
     exit /b 1
 )
 

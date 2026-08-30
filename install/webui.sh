@@ -77,12 +77,6 @@ COMFY_OUT="$ROOT/runtime/tmp/comfy-output"
 RESTART_FLAG="$ROOT/runtime/tmp/restart"
 COMFY_RESTART_FLAG="$ROOT/runtime/tmp/comfy-restart"
 
-if [ -n "${COMFYUI_PATH:-}" ]; then
-  COMFY_DIR="$COMFYUI_PATH"
-else
-  COMFY_DIR="$COMFY_ROOT/ComfyUI"
-fi
-
 resolve_comfy_python() {
   COMFY_PYTHON=""
   if [ -x "$COMFY_DIR/../python_embeded/python" ]; then
@@ -96,7 +90,10 @@ resolve_comfy_python() {
   fi
 }
 
-resolve_comfy_python
+if [ -n "${COMFYUI_PATH:-}" ]; then
+  COMFY_DIR="$COMFYUI_PATH"
+  resolve_comfy_python
+fi
 
 BACKEND_PID=""
 FRONTEND_PID=""
@@ -119,7 +116,7 @@ ui_section "BlomboUI setup"
 "$ROOT/install/linux/install_git.sh" || exit $?
 
 ui_section "Project environment"
-"$ROOT/install/linux/create_venv.sh" || exit $?
+"$ROOT/install/linux/app/create_venv.sh" || exit $?
 
 if [ ! -d "$MODELS_DIR" ]; then
   ui_info "Creating models directory..."
@@ -135,6 +132,14 @@ if [ -z "${MODELS_ROOT:-}" ]; then
   export MODELS_ROOT
 fi
 
+if [ -z "${COMFYUI_PATH:-}" ]; then
+  ui_section "ComfyUI version"
+  # shellcheck source=linux/comfyui/_pick_slot.sh
+  . "$ROOT/install/linux/comfyui/_pick_slot.sh"
+  pick_comfy_slot || exit 1
+  resolve_comfy_python
+fi
+
 if [ ! -f "$COMFY_DIR/main.py" ]; then
   if [ -n "${COMFYUI_PATH:-}" ]; then
     ui_error "COMFYUI_PATH does not contain ComfyUI."
@@ -143,8 +148,7 @@ if [ ! -f "$COMFY_DIR/main.py" ]; then
   fi
   ui_section "ComfyUI install"
   ui_info "ComfyUI was not found. Installing..."
-  "$ROOT/install/linux/install_comfyui.sh" || exit 1
-  COMFY_DIR="$COMFY_ROOT/ComfyUI"
+  "$ROOT/install/linux/comfyui/install_comfyui.sh" || exit 1
   resolve_comfy_python
 elif [ -n "${DEV_DEBUG:-}" ]; then
   ui_ok "ComfyUI is already installed."
@@ -152,12 +156,15 @@ fi
 
 if [ -z "$COMFY_PYTHON" ]; then
   ui_error "ComfyUI Python was not found."
-  ui_info "Run install/linux/install_comfyui.sh, or point COMFYUI_PATH at a portable ComfyUI."
+  ui_info "Run install/linux/comfyui/install_comfyui.sh, or point COMFYUI_PATH at a portable ComfyUI."
   exit 1
 fi
 
 mkdir -p "$ROOT/runtime/tmp" "$COMFY_OUT"
-export COMFY_DIR COMFY_PYTHON
+if [ -z "${COMFYUI_PATH:-}" ]; then
+  COMFYUI_PATH="$COMFY_DIR"
+fi
+export COMFY_DIR COMFY_PYTHON COMFYUI_PATH
 
 if ! "$VENV_PYTHON" -m bootstrap; then
   ui_error "Could not write launcher environment files."
@@ -184,9 +191,9 @@ done
 if [ "$need_comfy_deps" = 1 ]; then
   if [ -n "${DEV_DEBUG:-}" ]; then
     ui_section "ComfyUI custom nodes"
-    "$ROOT/install/linux/install_comfyui_deps.sh" || exit 1
+    "$ROOT/install/linux/comfyui/install_deps.sh" || exit 1
   else
-    if ! "$ROOT/install/linux/install_comfyui_deps.sh" > "$COMFYUI_LOG" 2>&1; then
+    if ! "$ROOT/install/linux/comfyui/install_deps.sh" > "$COMFYUI_LOG" 2>&1; then
       cat "$COMFYUI_LOG"
       exit 1
     fi
@@ -200,8 +207,12 @@ if [ -z "${COMFYUI_PATH:-}" ]; then
     ui_section "CUDA Torch"
   fi
   if ! "$COMFY_PYTHON" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
-    ui_warn "CUDA Torch was not found. Installing the default CUDA Torch..."
-    "$ROOT/install/linux/torch/2.11.0+cu130 (default).sh" || exit 1
+    ui_warn "CUDA Torch was not found. Installing CUDA Torch ${COMFY_TORCH:-2.10.0+cu130}..."
+    TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130} (default).sh"
+    if [ ! -f "$TORCH_SH" ]; then
+      TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
+    fi
+    "$TORCH_SH" || exit 1
   elif [ -n "${DEV_DEBUG:-}" ]; then
     ui_ok "CUDA Torch is available."
   fi

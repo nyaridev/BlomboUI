@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from infrastructure.comfy.client import workflow_file
-from features.generate.scripts import rembg
-from features.generate.scripts.attention import clean_attention
+from features.generate.scripts.workflow import rembg
+from features.generate.scripts.workflow.attention import clean_attention
 from infrastructure.storage.repositories import templates as templates_repo
 
 DEFAULT_ID = "default"

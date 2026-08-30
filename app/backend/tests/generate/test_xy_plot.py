@@ -3,7 +3,7 @@ from __future__ import annotations
 from unittest.mock import patch
 import unittest
 
-from features.generate.scripts.xy_plot import (
+from features.generate.scripts.grid.xy_plot import (
     xy_cell_count,
     xy_cells,
     xy_config,
@@ -170,7 +170,7 @@ class XyPlotTests(unittest.TestCase):
             "prompt": "sharp",
             "negative_prompt": "blurry",
         }
-        with patch("features.generate.scripts.xy_plot._lora_meta", return_value=meta):
+        with patch("features.generate.scripts.grid.xy_plot._lora_meta", return_value=meta):
             run = xy_run_values(
                 {"prompt": "1girl", "negative_prompt": "bad", "seed": 1, "auto_loras": []},
                 cfg,
@@ -190,7 +190,7 @@ class XyPlotTests(unittest.TestCase):
         )
         assert cfg is not None
         with patch(
-            "features.generate.scripts.xy_plot._lora_meta",
+            "features.generate.scripts.grid.xy_plot._lora_meta",
             return_value={"instant": True, "strength": 0.4, "prompt": "", "negative_prompt": ""},
         ):
             run = xy_run_values({"prompt": "1girl", "seed": 1, "auto_loras": []}, cfg, {"x": 0, "y": 0})

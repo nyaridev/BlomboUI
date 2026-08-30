@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 from api.errors import ApiError
 from features.generate.schemas import ComfyFreeIn
 from features.generate import service as generate
-from features.generate.scripts.attention import installed
 from features.issues.service import clear_log, dismiss_log, list_issues, record_log
 from features.settings import service as settings
 from features.settings.schemas import OutputPathIn, PathsCheckIn
@@ -65,7 +64,7 @@ async def post_pnginfo(request: Request) -> dict:
 @api.get("/health")
 def health() -> dict:
     env = launcher_env()
-    sage, flash = installed()
+    sage, flash = generate.installed()
     return {
         "ok": True,
         "api": "blombo",

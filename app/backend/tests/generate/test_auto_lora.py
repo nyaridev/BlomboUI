@@ -5,7 +5,7 @@ from unittest.mock import patch
 
 from features.settings import service as settings
 from infrastructure.comfy import client as comfy
-from features.generate.scripts import jobs
+from features.generate.scripts.job import jobs
 from features.models.scripts import loras
 from features.models.scripts import model_meta
 from features.models.scripts import models

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from features.generate.scripts import jobs
+from features.generate.scripts.job import jobs
 
 
 class PromptMatrixTests(unittest.TestCase):

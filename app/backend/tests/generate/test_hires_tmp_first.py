@@ -8,8 +8,8 @@ from pathlib import Path
 from unittest.mock import patch
 
 from features.gallery.scripts import cache as gallery_cache
-from features.generate.scripts import job_output
-from features.generate.scripts.job_output import tmp_first_pass
+from features.generate.scripts.job import job_output
+from features.generate.scripts.job.job_output import tmp_first_pass
 from shared import dirs
 
 

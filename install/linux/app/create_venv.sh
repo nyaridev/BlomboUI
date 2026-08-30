@@ -5,7 +5,7 @@
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
+ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
 # shellcheck source=_ui.sh
 . "$ROOT/install/linux/_ui.sh"
 

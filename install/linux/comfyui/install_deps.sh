@@ -5,13 +5,16 @@
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
-# shellcheck source=_ui.sh
+ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# shellcheck source=../_ui.sh
 . "$ROOT/install/linux/_ui.sh"
+# shellcheck source=_pick_slot.sh
+. "$ROOT/install/linux/comfyui/_pick_slot.sh"
+pick_comfy_slot || exit 1
 
 GIT="${GIT:-git}"
-COMFY_DIR="${COMFY_DIR:-$ROOT/runtime/comfyui/ComfyUI}"
-PYTHON_EXE="${COMFY_PYTHON:-$ROOT/runtime/comfyui/python_embeded/python}"
+COMFY_DIR="${COMFY_DIR:-$ROOT/runtime/comfyui/$COMFY_SLOT/ComfyUI}"
+PYTHON_EXE="${COMFY_PYTHON:-$ROOT/runtime/comfyui/$COMFY_SLOT/python_embeded/python}"
 UV_ARGS="--no-cache --link-mode=copy"
 
 export GIT_TERMINAL_PROMPT=0
@@ -66,13 +69,13 @@ install_node() {
 
 if [ ! -d "$COMFY_DIR" ]; then
   ui_error "ComfyUI was not found."
-  ui_info "Run install/linux/install_comfyui.sh first."
+  ui_info "Run install/linux/comfyui/install_comfyui.sh first."
   exit 1
 fi
 
 if [ ! -x "$PYTHON_EXE" ]; then
   ui_error "ComfyUI's embedded Python was not found."
-  ui_info "Run install/linux/install_comfyui.sh first."
+  ui_info "Run install/linux/comfyui/install_comfyui.sh first."
   exit 1
 fi
 

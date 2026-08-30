@@ -26,10 +26,7 @@ COMMANDLINE_ARGS="--uv --hot_reload_vite"
 # ComfyUI
 # -----------------------------------------------------------------------------
 
-# COMFYUI_REF is a git tag, branch, or commit for the bundled clone (empty = latest). Example: v0.34.0
-COMFYUI_REF=v0.33.1
-
-# Extra arguments forwarded to ComfyUI (main.py).
+# Extra arguments forwarded to ComfyUI (main.py). Used unless the selected slot overrides them.
 COMFYUI_ARGS=""
 
 # -----------------------------------------------------------------------------
@@ -37,7 +34,7 @@ COMFYUI_ARGS=""
 # -----------------------------------------------------------------------------
 
 export COMMANDLINE_ARGS COMFYUI_ARGS
-export PYTHON GIT VENV_DIR COMFYUI_PATH COMFYUI_REF MODELS_ROOT OUTPUTS_ROOT WILDCARDS_ROOT
+export PYTHON GIT VENV_DIR COMFYUI_PATH MODELS_ROOT OUTPUTS_ROOT WILDCARDS_ROOT
 if [ "${BLOMBO_LOAD_SETTINGS_ONLY:-}" = 1 ]; then
   return 0 2>/dev/null || exit 0
 fi

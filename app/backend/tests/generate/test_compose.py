@@ -5,7 +5,7 @@ import unittest
 
 from config import WORKFLOWS
 from features.generate.scripts.api_to_ui import to_ui_workflow
-from features.generate.scripts.compose import (
+from features.generate.scripts.workflow.compose import (
     adetailer_util_stem,
     apply_adetailer,
     apply_hires,

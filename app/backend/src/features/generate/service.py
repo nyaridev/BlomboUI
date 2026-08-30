@@ -10,8 +10,8 @@ from infrastructure.comfy.client import (
     list_workflows,
     reachable,
 )
-from features.generate.scripts.job_output import purge_hires_tmp
-from features.generate.scripts.jobs import (
+from features.generate.scripts.job.job_output import purge_hires_tmp
+from features.generate.scripts.job.jobs import (
     create_job,
     get_job,
     grid_path,
@@ -21,7 +21,8 @@ from features.generate.scripts.jobs import (
     preview_bytes,
     preview_media,
 )
-from features.generate.scripts.rembg import save_uploads
+from features.generate.scripts.workflow.attention import installed
+from features.generate.scripts.workflow.rembg import save_uploads
 from features.generate.scripts.templates import (
     TemplateError,
     create_template,
@@ -43,6 +44,7 @@ __all__ = [
     "get_job",
     "gpu_stats",
     "grid_path",
+    "installed",
     "interrupt_job",
     "ksampler_choices",
     "clip_loader_choices",

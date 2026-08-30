@@ -36,7 +36,7 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
 
 3. Double-click `webui-user.bat`.
 
-4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
+4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui/<slot>/` with its own embedded Python. The launcher asks which slot to use (`latest` or `0.28.0`).
 
 5. Open http://127.0.0.1:5173 when the launcher finishes.
 
@@ -60,7 +60,7 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
     ./webui-user.sh
     ```
 
-4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui` with its own embedded Python.
+4. Wait for first launch. It creates `runtime/.venv`, installs the frontend, and (if needed) clones ComfyUI into `runtime/comfyui/<slot>/` with its own embedded Python. The launcher asks which slot to use (`latest` or `0.28.0`).
 
 5. Open http://127.0.0.1:5173 when the launcher finishes.
 
@@ -134,16 +134,15 @@ Edit `webui-user.bat` or `webui-user.sh`. Do not edit the files under `install/`
 
 ### Paths
 
-| Variable         | Default                   |
-| ---------------- | ------------------------- |
-| `COMFYUI_PATH`   | `runtime/comfyui/ComfyUI` |
-| `COMFYUI_REF`    | latest default branch     |
-| `MODELS_ROOT`    | `./user/models`           |
-| `OUTPUTS_ROOT`   | `./user/output`           |
-| `WILDCARDS_ROOT` | `./user/wildcards`        |
-| `VENV_DIR`       | `runtime/.venv`           |
+| Variable         | Default                                      |
+| ---------------- | -------------------------------------------- |
+| `COMFYUI_PATH`   | bundled slot under `runtime/comfyui/<slot>/` |
+| `MODELS_ROOT`    | `./user/models`                              |
+| `OUTPUTS_ROOT`   | `./user/output`                              |
+| `WILDCARDS_ROOT` | `./user/wildcards`                           |
+| `VENV_DIR`       | `runtime/.venv`                              |
 
-`COMFYUI_REF` is used only when Blombo clones bundled ComfyUI (no `COMFYUI_PATH`, folder missing). Example: `set COMFYUI_REF=v0.3.60`.
+Launch asks which ComfyUI slot to use (`latest`, `0.28.0`, or a folder you add). `latest` is always listed first. Enter repeats the last choice (`runtime/comfyui/selected`). Each slot is `runtime/comfyui/<slot>/ComfyUI` plus that slot’s Python. Copy a file in `install/windows/comfyui/versions` or `install/linux/comfyui/versions` to add a combo (`COMFY_SLOT`, `COMFYUI_REF`, `COMFY_TORCH`, optional `COMFYUI_ARGS`). Uncomment `COMFYUI_ARGS` in a version file to override `webui-user` for that slot. `COMFYUI_PATH` skips the picker and uses an existing install.
 
 ### App flags (`COMMANDLINE_ARGS`)
 
@@ -162,7 +161,7 @@ Forwarded to ComfyUI `main.py` (port, listen, extra switches). Example: `--port 
 
 ### Torch
 
-Optional CUDA builds live in `install/windows/torch` and `install/linux/torch`. They only touch ComfyUI’s Python, never `runtime/.venv`.
+Optional CUDA builds live in `install/windows/comfyui/torch` and `install/linux/comfyui/torch`. They only touch that Comfy slot’s Python, never `runtime/.venv`. Running a Torch script asks which slot to update.
 
 ### Comfy node editor
 

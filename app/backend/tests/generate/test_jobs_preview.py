@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import patch
 
-from features.generate.scripts import jobs
+from features.generate.scripts.job import jobs
 
 
 class PreviewTests(unittest.TestCase):

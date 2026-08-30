@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from features.generate.scripts.grid import _legend_font_px, save_contact_sheet, save_xy_sheet
+from features.generate.scripts.grid.grid import _legend_font_px, save_contact_sheet, save_xy_sheet
 
 
 class GridSaveTests(unittest.TestCase):

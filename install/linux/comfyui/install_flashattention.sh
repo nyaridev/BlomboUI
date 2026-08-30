@@ -5,11 +5,14 @@
 # -----------------------------------------------------------------------------
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../.." && pwd)"
-# shellcheck source=_ui.sh
+ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
+# shellcheck source=../_ui.sh
 . "$ROOT/install/linux/_ui.sh"
+# shellcheck source=_pick_slot.sh
+. "$ROOT/install/linux/comfyui/_pick_slot.sh"
+pick_comfy_slot || exit 1
 
-PYTHON_EXE="${COMFY_PYTHON:-$ROOT/runtime/comfyui/python_embeded/python}"
+PYTHON_EXE="${COMFY_PYTHON:-$ROOT/runtime/comfyui/$COMFY_SLOT/python_embeded/python}"
 PIP_ARGS="--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10 --use-pep517"
 FLASH_BASE="https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.7.13"
 
@@ -19,7 +22,7 @@ FLASH_BASE="https://github.com/mjun0812/flash-attention-prebuild-wheels/releases
 
 if [ ! -x "$PYTHON_EXE" ]; then
   ui_error "ComfyUI's embedded Python was not found."
-  ui_info "Run install/linux/install_comfyui.sh first."
+  ui_info "Run install/linux/comfyui/install_comfyui.sh first."
   exit 1
 fi
 

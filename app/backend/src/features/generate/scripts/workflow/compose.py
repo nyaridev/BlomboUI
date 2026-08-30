@@ -24,7 +24,22 @@ def _is_link(value: Any) -> bool:
 
 
 def _title(node: dict[str, Any]) -> str:
-    return str((node.get("_meta") or {}).get("title") or "")
+    return str((node.get("_meta") or {}).get("title") or "").lower()
+
+
+def _flag(blob: dict[str, Any], snake: str, camel: str, default: bool = False) -> bool:
+    if snake in blob or camel in blob:
+        return bool(blob.get(snake) if blob.get(snake) is not None else blob.get(camel))
+    return default
+
+
+def _hires_blob(values: dict[str, Any]) -> dict[str, Any]:
+    raw = values.get("hires")
+    return raw if isinstance(raw, dict) else {}
+
+
+def hires_enabled(values: dict[str, Any]) -> bool:
+    return bool(_hires_blob(values).get("enabled"))
 
 
 def _port_in(title: str) -> str | None:
@@ -79,6 +94,24 @@ def _rewire_consumers(workflow: dict[str, Any], src: str, dest: list[Any]) -> No
                 inputs[key] = [dest[0], dest[1]]
 
 
+def _rewire_slot(workflow: dict[str, Any], src: str, src_slot: int, dest: list[Any]) -> None:
+    for node in workflow.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs")
+        if not isinstance(inputs, dict):
+            continue
+        for key, value in list(inputs.items()):
+            if not _is_link(value) or str(value[0]) != str(src):
+                continue
+            try:
+                slot = int(value[1])
+            except (TypeError, ValueError):
+                continue
+            if slot == src_slot:
+                inputs[key] = [dest[0], dest[1]]
+
+
 def _remap_util(util: dict[str, Any], prefix: str) -> tuple[dict[str, Any], dict[str, str], dict[str, Any]]:
     nodes: dict[str, Any] = {}
     id_map: dict[str, str] = {}
@@ -103,7 +136,7 @@ def _rewire_final_save(workflow: dict[str, Any], image: list[Any]) -> None:
     for node in workflow.values():
         if not isinstance(node, dict) or node.get("class_type") != "SaveImage":
             continue
-        if "first" in _title(node).lower():
+        if "first" in _title(node):
             continue
         node.setdefault("inputs", {})["images"] = [image[0], image[1]]
 

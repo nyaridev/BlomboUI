@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch
 
 from config import WORKFLOWS
-from features.generate.scripts import comfy_fill
+from features.generate.scripts.workflow import comfy_fill
 from features.models.scripts import models
 from features.settings import service as settings
 from infrastructure.comfy import client as comfy
@@ -219,6 +219,81 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(clip["inputs"]["type"], "krea2")
         self.assertEqual(clip["inputs"]["device"], "cpu")
 
+    def test_diffusion_empty_drops_power_lora_and_encodes_from_clip_loader(self) -> None:
+        for workflow in ("anima", "krea2"):
+            graph = fill(
+                {
+                    "workflow": workflow,
+                    "prompt": "cat",
+                    "negative_prompt": "",
+                    "checkpoint": "model.safetensors",
+                    "text_encoder": "clip.safetensors",
+                    "vae": "vae.safetensors",
+                    "seed": 7,
+                    "steps": 8,
+                    "cfg": 1,
+                    "sampler": "euler",
+                    "scheduler": "simple",
+                    "width": 640,
+                    "height": 960,
+                    "batch_size": 1,
+                }
+            )
+            with self.assertRaises(AssertionError):
+                find(graph, "Power Lora Loader (rgthree)")
+            clip_id, _ = find(graph, "CLIPLoader")
+            unet_id, _ = find(graph, "UNETLoader")
+            self.assertEqual(graph["2"]["inputs"]["clip"], [clip_id, 0])
+            self.assertEqual(graph["3"]["inputs"]["clip"], [clip_id, 0])
+            self.assertEqual(graph["5"]["inputs"]["model"], [unet_id, 0])
+
+    def test_diffusion_loras_are_model_only(self) -> None:
+        graph = fill(
+            {
+                "workflow": "krea2",
+                "prompt": "cat",
+                "negative_prompt": "",
+                "checkpoint": "krea.safetensors",
+                "text_encoder": "clip.safetensors",
+                "vae": "vae.safetensors",
+                "loras": [{"path": "style.safetensors", "strength": 0.8}],
+                "seed": 7,
+                "steps": 8,
+                "cfg": 1,
+                "sampler": "euler",
+                "scheduler": "simple",
+                "width": 640,
+                "height": 960,
+                "batch_size": 1,
+            }
+        )
+        lora_id, lora = find(graph, "Power Lora Loader (rgthree)")
+        clip_id, _ = find(graph, "CLIPLoader")
+        unet_id, _ = find(graph, "UNETLoader")
+        self.assertNotIn("clip", lora["inputs"])
+        self.assertNotIn("PowerLoraLoaderHeaderWidget", lora["inputs"])
+        self.assertEqual(lora["inputs"]["model"], [unet_id, 0])
+        self.assertEqual(lora["inputs"]["lora_1"]["lora"], "style.safetensors")
+        self.assertEqual(lora["inputs"]["lora_1"]["strengthTwo"], 0)
+        self.assertEqual(graph["2"]["inputs"]["clip"], [clip_id, 0])
+        self.assertEqual(graph["5"]["inputs"]["model"], [lora_id, 0])
+
+    def test_checkpoint_empty_drops_power_lora(self) -> None:
+        graph = fill(base_values())
+        with self.assertRaises(AssertionError):
+            find(graph, "Power Lora Loader (rgthree)")
+        self.assertEqual(graph["13"]["inputs"]["clip"], ["1", 1])
+        self.assertEqual(graph["5"]["inputs"]["model"], ["1", 0])
+
+    def test_checkpoint_loras_keep_clip(self) -> None:
+        graph = fill({**base_values(), "loras": [{"path": "job.safetensors", "strength": 0.8}]})
+        lora_id, lora = find(graph, "Power Lora Loader (rgthree)")
+        self.assertEqual(lora["inputs"]["clip"], ["1", 1])
+        self.assertEqual(lora["inputs"]["model"], ["1", 0])
+        self.assertNotIn("strengthTwo", lora["inputs"]["lora_1"])
+        self.assertEqual(graph["13"]["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(graph["5"]["inputs"]["model"], [lora_id, 0])
+
     def test_workflow_params_include_hires(self) -> None:
         for name in ("anima.json", "sd15.json"):
             data = load_main(name)
@@ -322,7 +397,7 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(scale["inputs"]["upscale_method"], "bilinear")
         self.assertEqual(scale["inputs"]["crop"], "disabled")
         self.assertEqual(save["inputs"]["images"], [decode_id, 0])
-        self.assertEqual(hires_ks["inputs"]["model"], ["12", 0])
+        self.assertEqual(hires_ks["inputs"]["model"], ["1", 0])
         self.assertEqual(hires_ks["inputs"]["positive"], ["2", 0])
         self.assertEqual(hires_ks["inputs"]["negative"], ["3", 0])
         self.assertTrue(hires_ks_id.startswith("hires/"))
@@ -387,15 +462,14 @@ class DiffusionFillTests(unittest.TestCase):
         _, hires_ks = find(graph, "KSampler", "hires")
         pos_id, pos = find(graph, "CLIPTextEncode", "hires positive")
         neg_id, neg = find(graph, "CLIPTextEncode", "hires negative")
-        lora_id, _ = find(graph, "Power Lora Loader (rgthree)", "hires")
         self.assertEqual(graph["2"]["inputs"]["text"], "cat")
         self.assertEqual(graph["3"]["inputs"]["text"], "blur")
         self.assertEqual(pos["inputs"]["text"], "dog")
         self.assertEqual(neg["inputs"]["text"], "noise")
         self.assertEqual(hires_ks["inputs"]["positive"], [pos_id, 0])
         self.assertEqual(hires_ks["inputs"]["negative"], [neg_id, 0])
-        self.assertEqual(hires_ks["inputs"]["model"], [lora_id, 0])
-        self.assertEqual(graph["5"]["inputs"]["model"], ["12", 0])
+        self.assertEqual(hires_ks["inputs"]["model"], ["1", 0])
+        self.assertEqual(graph["5"]["inputs"]["model"], ["1", 0])
         self.assertEqual(graph["5"]["inputs"]["positive"], ["2", 0])
 
     def test_fill_hires_model_and_lora_override(self) -> None:
@@ -435,16 +509,16 @@ class DiffusionFillTests(unittest.TestCase):
         _, hires_ks = find(graph, "KSampler", "hires")
         pos_id, pos = find(graph, "CLIPTextEncode", "hires positive")
         neg_id, neg = find(graph, "CLIPTextEncode", "hires negative")
-        lora_id, _ = find(graph, "Power Lora Loader (rgthree)", "hires")
+        ckpt_id, _ = find(graph, "CheckpointLoaderSimple", "hires")
         self.assertEqual(graph["2"]["inputs"]["text"], "cat")
         self.assertEqual(graph["3"]["inputs"]["text"], "blur")
         self.assertEqual(pos["inputs"]["text"], "cat")
         self.assertEqual(neg["inputs"]["text"], "blur")
         self.assertEqual(hires_ks["inputs"]["positive"], [pos_id, 0])
         self.assertEqual(hires_ks["inputs"]["negative"], [neg_id, 0])
-        self.assertEqual(pos["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(pos["inputs"]["clip"], [ckpt_id, 1])
         self.assertEqual(graph["5"]["inputs"]["positive"], ["2", 0])
-        self.assertEqual(graph["5"]["inputs"]["model"], ["12", 0])
+        self.assertEqual(graph["5"]["inputs"]["model"], ["1", 0])
 
     def test_fill_hires_lora_override_keeps_prompt_blocks(self) -> None:
         graph = fill(
@@ -507,7 +581,8 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(clip["inputs"]["clip_name"], "hires-clip.safetensors")
         self.assertEqual(vae["inputs"]["vae_name"], "hires-vae.safetensors")
         self.assertEqual(lora["inputs"]["model"], [unet_id, 0])
-        self.assertEqual(lora["inputs"]["clip"], [clip_id, 0])
+        self.assertNotIn("clip", lora["inputs"])
+        self.assertEqual(lora["inputs"]["lora_1"]["strengthTwo"], 0)
         self.assertEqual(hires_ks["inputs"]["model"], [lora_id, 0])
         self.assertEqual(encode["inputs"]["vae"], [vae_id, 0])
         self.assertEqual(decode["inputs"]["vae"], [vae_id, 0])
@@ -540,15 +615,14 @@ class DiffusionFillTests(unittest.TestCase):
             }
         )
         ckpt_id, ckpt = find(graph, "CheckpointLoaderSimple", "hires")
-        lora_id, lora = find(graph, "Power Lora Loader (rgthree)", "hires")
         _, hires_ks = find(graph, "KSampler", "hires")
         _, encode = find(graph, "VAEEncode", "hires")
         _, decode = find(graph, "VAEDecode", "hires")
+        unet_id, _ = find(graph, "UNETLoader")
         self.assertEqual(graph["19"]["inputs"]["unet_name"], "unet.safetensors")
         self.assertEqual(ckpt["inputs"]["ckpt_name"], "illustrious.safetensors")
-        self.assertEqual(lora["inputs"]["model"], [ckpt_id, 0])
-        self.assertEqual(hires_ks["inputs"]["model"], [lora_id, 0])
-        self.assertEqual(graph["5"]["inputs"]["model"], ["15", 0])
+        self.assertEqual(hires_ks["inputs"]["model"], [ckpt_id, 0])
+        self.assertEqual(graph["5"]["inputs"]["model"], [unet_id, 0])
         self.assertEqual(encode["inputs"]["vae"], [ckpt_id, 2])
         self.assertEqual(decode["inputs"]["vae"], [ckpt_id, 2])
         with self.assertRaises(AssertionError):
@@ -724,13 +798,10 @@ class DiffusionFillTests(unittest.TestCase):
             }
         )
         ckpt_id, ckpt = find(graph, "CheckpointLoaderSimple", "adetailer checkpoint")
-        lora_id, lora = find(graph, "Power Lora Loader (rgthree)", "adetailer")
         _, face = find(graph, "FaceDetailer")
         self.assertEqual(ckpt["inputs"]["ckpt_name"], "other.safetensors")
-        self.assertEqual(lora["inputs"]["model"], [ckpt_id, 0])
-        self.assertEqual(lora["inputs"]["clip"], [ckpt_id, 1])
-        self.assertEqual(face["inputs"]["model"], [lora_id, 0])
-        self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(face["inputs"]["model"], [ckpt_id, 0])
+        self.assertEqual(face["inputs"]["clip"], [ckpt_id, 1])
         self.assertEqual(face["inputs"]["vae"], [ckpt_id, 2])
 
     def test_fill_adetailer_diffusion_override(self) -> None:
@@ -755,15 +826,12 @@ class DiffusionFillTests(unittest.TestCase):
         unet_id, unet = find(graph, "UNETLoader", "adetailer")
         clip_id, clip = find(graph, "CLIPLoader", "adetailer")
         vae_id, vae = find(graph, "VAELoader", "adetailer")
-        lora_id, lora = find(graph, "Power Lora Loader (rgthree)", "adetailer")
         _, face = find(graph, "FaceDetailer")
         self.assertEqual(unet["inputs"]["unet_name"], "unet.safetensors")
         self.assertEqual(clip["inputs"]["clip_name"], "clip.safetensors")
         self.assertEqual(vae["inputs"]["vae_name"], "vae.safetensors")
-        self.assertEqual(lora["inputs"]["model"], [unet_id, 0])
-        self.assertEqual(lora["inputs"]["clip"], [clip_id, 0])
-        self.assertEqual(face["inputs"]["model"], [lora_id, 0])
-        self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
+        self.assertEqual(face["inputs"]["model"], [unet_id, 0])
+        self.assertEqual(face["inputs"]["clip"], [clip_id, 0])
         self.assertEqual(face["inputs"]["vae"], [vae_id, 0])
 
     def test_fill_adetailer_lora_override(self) -> None:
@@ -977,6 +1045,13 @@ class ComfyFilenameTests(unittest.TestCase):
             comfy.comfy_filename("Illustrious/Style/foo.safetensors"),
             "Illustrious/Style/foo.safetensors",
         )
+
+
+class RoundTo8Tests(unittest.TestCase):
+    def test_ceils_to_multiples_of_eight(self) -> None:
+        self.assertEqual(comfy_fill.round_to_8(8), 8)
+        self.assertEqual(comfy_fill.round_to_8(1001), 1008)
+        self.assertEqual(comfy_fill.round_to_8(1224.74), 1232)
 
 
 class GenerateTabTests(unittest.TestCase):

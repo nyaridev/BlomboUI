@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 import copy
+import math
 from pathlib import Path
 from typing import Any, Callable
 
-from features.generate.scripts.compose import apply_adetailer, apply_hires, _adetailer_units
-from features.generate.scripts.attention import apply_attention, attention_meta, stage_attention
-from features.generate.scripts.rembg import clean_rembg, is_rembg
+from features.generate.scripts.workflow.compose import (
+    apply_adetailer,
+    apply_hires,
+    _adetailer_units,
+    _flag,
+    _hires_blob,
+    _is_link,
+    _rewire_slot,
+    _title,
+    hires_enabled,
+)
+from features.generate.scripts.workflow.attention import apply_attention, attention_meta, stage_attention
+from features.generate.scripts.workflow.rembg import clean_rembg, is_rembg
 from features.models.scripts import loras as lora_tags
 
 
@@ -42,10 +53,6 @@ def fill_power_loras(
         index += 1
 
 
-def _title(node: dict[str, Any]) -> str:
-    return str((node.get("_meta") or {}).get("title") or "").lower()
-
-
 def _is_hires(node: dict[str, Any]) -> bool:
     return "hires" in _title(node)
 
@@ -67,15 +74,6 @@ def _clip_skip_layer(values: dict[str, Any]) -> int:
     except (TypeError, ValueError):
         n = 2
     return -max(1, min(10, n or 2))
-
-
-def _hires_blob(values: dict[str, Any]) -> dict[str, Any]:
-    raw = values.get("hires")
-    return raw if isinstance(raw, dict) else {}
-
-
-def hires_enabled(values: dict[str, Any]) -> bool:
-    return bool(_hires_blob(values).get("enabled"))
 
 
 def adetailer_enabled(values: dict[str, Any]) -> bool:
@@ -159,7 +157,7 @@ def _adetailer_unit_for_fill(unit: dict[str, Any], values: dict[str, Any]) -> di
 
 
 def round_to_8(value: float) -> int:
-    return max(8, int(round(float(value) / 8.0)) * 8)
+    return max(8, int(math.ceil(float(value) / 8.0)) * 8)
 
 
 def hires_target_size(values: dict[str, Any]) -> tuple[int, int]:
@@ -197,12 +195,6 @@ def _hires_scale_opts(blob: dict[str, Any]) -> tuple[str, str]:
     if crop not in _IMAGE_SCALE_CROPS:
         crop = "disabled"
     return method, crop
-
-
-def _flag(blob: dict[str, Any], snake: str, camel: str, default: bool = False) -> bool:
-    if snake in blob or camel in blob:
-        return bool(blob.get(snake) if blob.get(snake) is not None else blob.get(camel))
-    return default
 
 
 def _seed_override(blob: dict[str, Any]) -> bool:
@@ -395,6 +387,70 @@ def _typed_nodes(workflow: dict[str, Any], kind: str, hires: bool | None = None)
 
 def _link(key: str, slot: int) -> list[Any]:
     return [key, slot]
+
+
+_POWER_LORA = "Power Lora Loader (rgthree)"
+_UNET_KINDS = {"UNETLoader", "UnetLoaderGGUF"}
+_CLIP_KINDS = {"CLIPLoader", "CLIPLoaderGGUF"}
+_LORA_UI_KEYS = ("PowerLoraLoaderHeaderWidget", "➕ Add Lora")
+
+
+def _stage_prefix(key: str) -> str:
+    parts = str(key).replace("\\", "/").split("/")
+    if len(parts) <= 1:
+        return ""
+    return "/".join(parts[:-1]) + "/"
+
+
+def _kind_at(workflow: dict[str, Any], key: Any) -> str:
+    node = workflow.get(str(key))
+    if isinstance(node, dict):
+        return str(node.get("class_type") or "")
+    return ""
+
+
+def _clip_loader_id(workflow: dict[str, Any], prefix: str) -> str | None:
+    for key, node in workflow.items():
+        if not isinstance(node, dict) or _stage_prefix(str(key)) != prefix:
+            continue
+        if node.get("class_type") in _CLIP_KINDS:
+            return str(key)
+    return None
+
+
+def _strip_lora_ui(inputs: dict[str, Any]) -> None:
+    for key in _LORA_UI_KEYS:
+        inputs.pop(key, None)
+
+
+def _trim_power_loras(workflow: dict[str, Any]) -> None:
+    keys = [str(key) for key, node in list(workflow.items()) if isinstance(node, dict) and node.get("class_type") == _POWER_LORA]
+    keys.sort(key=lambda item: (item.count("/"), item))
+    for key in keys:
+        node = workflow.get(key)
+        if not isinstance(node, dict):
+            continue
+        inputs = node.setdefault("inputs", {})
+        _strip_lora_ui(inputs)
+        model = inputs.get("model")
+        diffusion = _is_link(model) and _kind_at(workflow, model[0]) in _UNET_KINDS
+        if diffusion:
+            clip_id = _clip_loader_id(workflow, _stage_prefix(key))
+            if clip_id:
+                _rewire_slot(workflow, key, 1, [clip_id, 0])
+            inputs.pop("clip", None)
+            for row in inputs.values():
+                if isinstance(row, dict) and "lora" in row:
+                    row["strengthTwo"] = 0
+        if any(str(item).startswith("lora_") for item in inputs):
+            continue
+        model_dest = inputs.get("model")
+        clip_dest = inputs.get("clip")
+        if _is_link(model_dest):
+            _rewire_slot(workflow, key, 0, [model_dest[0], model_dest[1]])
+        if _is_link(clip_dest):
+            _rewire_slot(workflow, key, 1, [clip_dest[0], clip_dest[1]])
+        workflow.pop(key, None)
 
 
 def _hires_kind_diffusion(blob: dict[str, Any]) -> bool:
@@ -1115,4 +1171,5 @@ def fill_txt2img(
     if isinstance(latent, dict):
         latent.setdefault("inputs", {})["batch_size"] = batch_size
     _promote_gguf_loaders(workflow)
+    _trim_power_loras(workflow)
     return workflow

@@ -72,8 +72,9 @@ def take_params(raw: Any) -> dict[str, Any] | None:
 
 
 def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kind: str = "") -> dict[str, Any]:
-    from features.generate.scripts.attention import attention_meta, stage_attention
-    from features.generate.scripts.comfy_fill import adetailer_enabled, hires_enabled
+    from features.generate.scripts.workflow.attention import attention_meta, stage_attention
+    from features.generate.scripts.workflow.comfy_fill import adetailer_enabled
+    from features.generate.scripts.workflow.compose import hires_enabled
 
     out: dict[str, Any] = {
         "prompt": str(values.get("prompt") or ""),
@@ -109,7 +110,8 @@ def pack_params(values: dict[str, Any], graph: dict[str, Any] | None = None, kin
 
 
 def pack_hires(values: dict[str, Any]) -> dict[str, Any]:
-    from features.generate.scripts.comfy_fill import _flag, _hires_blob, _hires_kind_diffusion, hires_meta_fields
+    from features.generate.scripts.workflow.comfy_fill import _hires_kind_diffusion, hires_meta_fields
+    from features.generate.scripts.workflow.compose import _flag, _hires_blob
 
     out = hires_meta_fields(values)
     blob = _hires_blob(values)
@@ -140,13 +142,12 @@ def pack_hires(values: dict[str, Any]) -> dict[str, Any]:
 
 
 def pack_adetailer(values: dict[str, Any]) -> dict[str, Any]:
-    from features.generate.scripts.comfy_fill import (
+    from features.generate.scripts.workflow.comfy_fill import (
         adetailer_meta_fields,
         _adetailer_kind_diffusion,
         _adetailer_unit_for_fill,
-        _flag,
     )
-    from features.generate.scripts.compose import _adetailer_units
+    from features.generate.scripts.workflow.compose import _adetailer_units, _flag
 
     units: list[dict[str, Any]] = []
     for raw in _adetailer_units(values):

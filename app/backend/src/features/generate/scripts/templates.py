@@ -7,6 +7,7 @@ from typing import Any
 
 from infrastructure.comfy.client import workflow_file
 from features.generate.scripts.workflow import rembg
+from features.generate.scripts.workflow import upscale as image_upscale
 from features.generate.scripts.workflow.attention import clean_attention
 from infrastructure.storage.repositories import templates as templates_repo
 
@@ -85,6 +86,7 @@ _APPLY = (
     "adetailer",
     "scripts",
     "rembg",
+    "upscale",
     "attention",
 )
 
@@ -208,6 +210,11 @@ def _clean_params(raw: Any) -> dict[str, Any]:
     rembg_blob = raw.get("rembg")
     if isinstance(rembg_blob, dict):
         out["rembg"] = rembg.clean_rembg(rembg_blob)
+    upscale_blob = raw.get("upscale") or raw.get("imageUpscale")
+    if isinstance(upscale_blob, dict):
+        cleaned = image_upscale.clean_upscale(upscale_blob)
+        out["upscale"] = cleaned
+        out["imageUpscale"] = cleaned
     attention_blob = raw.get("attention")
     if isinstance(attention_blob, dict):
         packed = clean_attention(attention_blob)

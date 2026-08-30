@@ -516,6 +516,8 @@ export function GalleryView() {
                   setFolderView('images')
                 }
                 setFilters((value) => ({ ...value, random: true }))
+                setResults([])
+                setCursor('')
                 setShuffle((value) => value + 1)
               }}
               onContextMenu={(event) => {
@@ -524,6 +526,8 @@ export function GalleryView() {
                   setFolderView('images')
                 }
                 setFilters((value) => ({ ...value, random: true }))
+                setResults([])
+                setCursor('')
                 setShuffle((value) => value + 1)
               }}
             >
@@ -558,6 +562,7 @@ export function GalleryView() {
         <div className={searching ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto'}>
           {searching ? (
             <GalleryResults
+              key={String(shuffle)}
               items={results}
               error={error}
               hasNext={Boolean(cursor)}

@@ -71,6 +71,8 @@ export function GenerateView() {
   const setAdetailer = useGenerateStore((s) => s.setAdetailer)
   const rembg = useGenerateStore((s) => s.rembg)
   const rembgFiles = useGenerateStore((s) => s.rembgFiles)
+  const imageUpscale = useGenerateStore((s) => s.imageUpscale)
+  const imageUpscaleFiles = useGenerateStore((s) => s.imageUpscaleFiles)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
@@ -124,6 +126,8 @@ export function GenerateView() {
   const navigate = useNavigate()
   const workflowParams = workflows.find((item) => item.id === workflow)?.params ?? []
   const rembgMode = workflowParams.includes('rembg')
+  const upscaleMode = workflowParams.includes('upscale')
+  const fileUtility = rembgMode || upscaleMode
 
   useEffect(() => {
     void getWorkflows()
@@ -228,31 +232,38 @@ export function GenerateView() {
 
   async function generate() {
     const rembgMode = workflowParams.includes('rembg')
-    if (!rembgMode && !checkpoint.trim()) {
+    const upscaleMode = workflowParams.includes('upscale')
+    const fileUtility = rembgMode || upscaleMode
+    if (!fileUtility && !checkpoint.trim()) {
       return
     }
-    if (rembgMode) {
-      if (rembg.inputMode === 'files' && !rembgFiles.length) {
+    if (fileUtility) {
+      const input = rembgMode ? rembg : imageUpscale
+      const files = rembgMode ? rembgFiles : imageUpscaleFiles
+      if (input.inputMode === 'files' && !files.length) {
         return
       }
-      if (rembg.inputMode === 'directory' && !rembg.inputDir.trim()) {
+      if (input.inputMode === 'directory' && !input.inputDir.trim()) {
         return
       }
     }
-    if (!rembgMode && workflowParams.includes('textEncoder') && !textEncoder.trim()) {
+    if (upscaleMode && imageUpscale.engine === 'model' && !imageUpscale.upscaleModel.trim()) {
       return
     }
-    if (!rembgMode && workflowParams.includes('vae') && !vae.trim()) {
+    if (!fileUtility && workflowParams.includes('textEncoder') && !textEncoder.trim()) {
       return
     }
-    if (!rembgMode && workflowParams.includes('hires') && hires.enabled && !hires.upscaleModel.trim()) {
+    if (!fileUtility && workflowParams.includes('vae') && !vae.trim()) {
       return
     }
-    if (!rembgMode && adetailer.enabled && adetailer.units.some((unit) => unit.enabled !== false && !unit.detector.trim())) {
+    if (!fileUtility && workflowParams.includes('hires') && hires.enabled && !hires.upscaleModel.trim()) {
+      return
+    }
+    if (!fileUtility && adetailer.enabled && adetailer.units.some((unit) => unit.enabled !== false && !unit.detector.trim())) {
       return
     }
     if (
-      !rembgMode &&
+      !fileUtility &&
       adetailer.enabled &&
       adetailer.units.some(
         (unit) =>
@@ -264,11 +275,11 @@ export function GenerateView() {
     ) {
       return
     }
-    if (!rembgMode && workflowParams.includes('hires') && hires.enabled && hires.modelOverride && !hires.checkpoint.trim()) {
+    if (!fileUtility && workflowParams.includes('hires') && hires.enabled && hires.modelOverride && !hires.checkpoint.trim()) {
       return
     }
     if (
-      !rembgMode &&
+      !fileUtility &&
       workflowParams.includes('hires') &&
       hires.enabled &&
       hires.modelOverride &&
@@ -319,8 +330,11 @@ export function GenerateView() {
     }
     try {
       const gen = useGenerateStore.getState()
+      const inputFiles = rembgMode ? rembgFiles : imageUpscaleFiles
+      const inputMode = rembgMode ? rembg.inputMode : imageUpscale.inputMode
+      const inputDir = rembgMode ? rembg.inputDir : imageUpscale.inputDir
       const inputPaths =
-        rembgMode && rembg.inputMode === 'files' ? await uploadJobImages(rembgFiles) : undefined
+        fileUtility && inputMode === 'files' ? await uploadJobImages(inputFiles) : undefined
       const next = await createJob({
         prompt: gen.prompt,
         negative_prompt: gen.negativePrompt,
@@ -338,7 +352,7 @@ export function GenerateView() {
         seed_after: seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
-        batch_grid: rembgMode ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
+        batch_grid: fileUtility ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
         batch_grid_format: gridFormat,
@@ -352,13 +366,13 @@ export function GenerateView() {
         workflow,
         template: templateId,
         output_image_path:
-          rembgMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
+          rembgMode || upscaleMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
         output_grid_path: outputPathEnabled ? outputGridPath.trim() || undefined : undefined,
         output_image_name: outputPathEnabled ? outputImageName.trim() || undefined : undefined,
         output_grid_name: outputPathEnabled ? outputGridName.trim() || undefined : undefined,
         output_hires_path: outputPathEnabled ? outputHiresPath.trim() || undefined : undefined,
         output_hires_name: outputPathEnabled ? outputHiresName.trim() || undefined : undefined,
-        hires: rembgMode
+        hires: fileUtility
           ? undefined
           : {
           enabled: hires.enabled,
@@ -400,8 +414,8 @@ export function GenerateView() {
           sage_attention: hires.sageAttention,
           allow_compile: hires.allowCompile,
         },
-        adetailer: rembgMode ? undefined : packAdetailerJob(adetailer, adetailerUsed, diffusionModels),
-        attention: rembgMode
+        adetailer: fileUtility ? undefined : packAdetailerJob(adetailer, adetailerUsed, diffusionModels),
+        attention: fileUtility
           ? undefined
           : {
               enabled: gen.attention.enabled,
@@ -410,7 +424,7 @@ export function GenerateView() {
               allow_compile: gen.attention.allowCompile,
             },
         prompt_matrix:
-          rembgMode || !activePromptMatrix
+          fileUtility || !activePromptMatrix
             ? undefined
             : {
               lines: activePromptMatrix.lines,
@@ -421,7 +435,7 @@ export function GenerateView() {
               search: activePromptMatrix.search,
             },
         xy_plot:
-          rembgMode || !activeXyPlot
+          fileUtility || !activeXyPlot
             ? undefined
             : {
               x: activeXyPlot.x,
@@ -433,7 +447,7 @@ export function GenerateView() {
               respect_instant_lora: Boolean(activeXyPlot.respectInstantLora),
               grid_margin: activeXyPlot.gridMargin,
             },
-        auto_loras: rembgMode
+        auto_loras: fileUtility
           ? []
           : activeLoraOrder
           .filter((id) => id.startsWith(autoLoraId('')))
@@ -467,7 +481,60 @@ export function GenerateView() {
               preserve_metadata: rembg.preserveMetadata,
             }
           : undefined,
-        input_dir: rembgMode && rembg.inputMode === 'directory' ? rembg.inputDir.trim() : undefined,
+        upscale: upscaleMode
+          ? {
+              engine: imageUpscale.engine,
+              input_mode: imageUpscale.inputMode,
+              input_dir: imageUpscale.inputDir,
+              upscale_model: imageUpscale.upscaleModel,
+              scale: imageUpscale.scale,
+              size_mode: imageUpscale.sizeMode,
+              width: imageUpscale.width,
+              height: imageUpscale.height,
+              aspect: imageUpscale.aspect,
+              megapixels: imageUpscale.megapixels,
+              upscale_method: imageUpscale.upscaleMethod as 'nearest-exact' | 'bilinear' | 'area' | 'bicubic' | 'lanczos',
+              crop: imageUpscale.crop as 'disabled' | 'center',
+              seed: used,
+              color_correction: imageUpscale.colorCorrection,
+              max_resolution: imageUpscale.maxResolution,
+              max_resolution_override: imageUpscale.maxResolutionOverride,
+              batch_size: 1,
+              uniform_batch_size: false,
+              temporal_overlap: imageUpscale.temporalOverlap,
+              prepend_frames: imageUpscale.prependFrames,
+              input_noise_scale: imageUpscale.inputNoiseScale,
+              latent_noise_scale: imageUpscale.latentNoiseScale,
+              offload_device: imageUpscale.offloadDevice,
+              enable_debug: imageUpscale.enableDebug,
+              dit_model: imageUpscale.ditModel,
+              dit_device: imageUpscale.ditDevice,
+              blocks_to_swap: imageUpscale.blocksToSwap,
+              swap_io_components: imageUpscale.swapIoComponents,
+              dit_offload_device: imageUpscale.ditOffloadDevice,
+              dit_cache_model: imageUpscale.ditCacheModel,
+              attention_mode: imageUpscale.attentionMode,
+              vae_model: imageUpscale.vaeModel,
+              vae_device: imageUpscale.vaeDevice,
+              encode_tiled: imageUpscale.encodeTiled,
+              encode_tile_size: imageUpscale.encodeTileSize,
+              encode_tile_overlap: imageUpscale.encodeTileOverlap,
+              decode_tiled: imageUpscale.decodeTiled,
+              decode_tile_size: imageUpscale.decodeTileSize,
+              decode_tile_overlap: imageUpscale.decodeTileOverlap,
+              tile_debug: imageUpscale.tileDebug,
+              vae_offload_device: imageUpscale.vaeOffloadDevice,
+              vae_cache_model: imageUpscale.vaeCacheModel,
+              allow_compile: imageUpscale.allowCompile,
+              compile_backend: imageUpscale.compileBackend,
+              compile_mode: imageUpscale.compileMode,
+              compile_fullgraph: imageUpscale.compileFullgraph,
+              compile_dynamic: imageUpscale.compileDynamic,
+              dynamo_cache_size_limit: imageUpscale.dynamoCacheSizeLimit,
+              dynamo_recompile_limit: imageUpscale.dynamoRecompileLimit,
+            }
+          : undefined,
+        input_dir: fileUtility && inputMode === 'directory' ? inputDir.trim() : undefined,
         input_paths: inputPaths,
       })
       setJob(next)
@@ -548,7 +615,7 @@ export function GenerateView() {
       const digit = digitKey(event)
       if (event.altKey && !event.ctrlKey && !event.metaKey && digit && digit <= GENERATE_TABS.length) {
         event.preventDefault()
-        const tabs = rembgMode
+        const tabs = fileUtility
           ? (['Generation'] as GenerateTab[])
           : generateTabKeysFollowLayout
             ? orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
@@ -586,21 +653,26 @@ export function GenerateView() {
         void restart()
         return
       }
-      if (!busy && health?.comfy.reachable === true && (rembgMode || checkpoint.trim())) {
+      if (!busy && health?.comfy.reachable === true && (fileUtility || checkpoint.trim())) {
         void generate()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, rembgMode, restart, swapTarget])
+  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, fileUtility, restart, swapTarget])
 
   const comfyOk = health?.comfy.reachable === true
   const canGenerate =
     comfyOk &&
-    (rembgMode
-      ? rembg.inputMode === 'directory'
-        ? Boolean(rembg.inputDir.trim())
-        : rembgFiles.length > 0
+    (fileUtility
+      ? (rembgMode
+          ? rembg.inputMode === 'directory'
+            ? Boolean(rembg.inputDir.trim())
+            : rembgFiles.length > 0
+          : imageUpscale.inputMode === 'directory'
+            ? Boolean(imageUpscale.inputDir.trim())
+            : imageUpscaleFiles.length > 0) &&
+        (!upscaleMode || imageUpscale.engine !== 'model' || Boolean(imageUpscale.upscaleModel.trim()))
       : Boolean(checkpoint.trim()) &&
         (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&
         (!workflowParams.includes('vae') || Boolean(vae.trim())) &&
@@ -672,7 +744,7 @@ export function GenerateView() {
       : imageCount > 1
         ? `${formatDuration(seconds)} · ${formatDuration(seconds / imageCount)}/img`
         : formatDuration(seconds)
-  const visibleTabs = rembgMode ? [] : orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
+  const visibleTabs = fileUtility ? [] : orderedGenerateTabs(generateTabOrder, hiddenGenerateTabs)
   const shownTab = visibleTabs.includes(tab) ? tab : (visibleTabs[0] ?? 'Generation')
   const showTextEncoder = workflowParams.includes('textEncoder')
   const showVae = workflowParams.includes('vae')
@@ -720,7 +792,7 @@ export function GenerateView() {
         shownTab === 'Generation' ? 'h-full' : '',
       ].join(' ')}
     >
-      {rembgMode ? null : (
+      {fileUtility ? null : (
       <GenerateChrome
         style={modelTileStyle}
         onOpenTab={setTab}
@@ -791,7 +863,7 @@ export function GenerateView() {
         wildcardItems={wildcardItems}
         onToggleAutoLora={toggleAutoLora}
         actions={
-          rembgMode ? (
+          fileUtility ? (
             <GenerateActions
               layout="bar"
               label="Process"

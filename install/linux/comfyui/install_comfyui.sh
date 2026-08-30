@@ -179,10 +179,7 @@ fi
 # -----------------------------------------------------------------------------
 
 ui_info "Installing CUDA Torch ${COMFY_TORCH:-2.10.0+cu130}..."
-TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130} (default).sh"
-if [ ! -f "$TORCH_SH" ]; then
-  TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
-fi
+TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
 export COMFY_PYTHON="$PYTHON_CMD"
 if ! "$TORCH_SH"; then
   ui_error "Default CUDA Torch installation failed."
@@ -195,5 +192,5 @@ fi
 
 echo
 ui_ok "ComfyUI files are ready at $COMFY_ROOT"
-  ui_info "Other Torch packages can be installed with the scripts in install/linux/comfyui/torch."
+ui_info "Other Torch packages can be installed with the scripts in install/linux/comfyui/torch."
 exit 0

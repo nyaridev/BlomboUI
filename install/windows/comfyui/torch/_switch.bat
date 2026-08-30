@@ -5,13 +5,13 @@ setlocal EnableExtensions
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..\..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..\..\..") do set ROOT=%%~fI
 call "%ROOT%\install\windows\_ui.bat"
 call "%ROOT%\install\windows\comfyui\_pick_slot.bat"
 if errorlevel 1 exit /b 1
-if not defined COMFY_PYTHON set "COMFY_PYTHON=%ROOT%\runtime\comfyui\%COMFY_SLOT%\python_embeded\python.exe"
-set "PYTHON_EXE=%COMFY_PYTHON%"
-set "PIP_ARGS=--no-cache-dir --no-warn-script-location --no-deps --timeout=1000 --retries 10"
+if not defined COMFY_PYTHON set COMFY_PYTHON=%ROOT%\runtime\comfyui\%COMFY_SLOT%\python_embeded\python.exe
+set PYTHON_EXE=%COMFY_PYTHON%
+set PIP_ARGS=--no-cache-dir --no-warn-script-location --no-deps --timeout=1000 --retries 10
 
 :: -----------------------------------------------------------------------------
 :: Arguments
@@ -22,10 +22,10 @@ if "%~4"=="" (
     exit /b 1
 )
 
-set "TORCH_VERSION=%~1"
-set "TORCHVISION_VERSION=%~2"
-set "TORCHAUDIO_VERSION=%~3"
-set "CUDA_TAG=%~4"
+set TORCH_VERSION=%~1
+set TORCHVISION_VERSION=%~2
+set TORCHAUDIO_VERSION=%~3
+set CUDA_TAG=%~4
 
 :: -----------------------------------------------------------------------------
 :: Validation

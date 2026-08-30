@@ -23,6 +23,7 @@ from features.generate.scripts.job.jobs import (
 )
 from features.generate.scripts.workflow.attention import installed
 from features.generate.scripts.workflow.rembg import save_uploads
+from features.generate.scripts.workflow.upscale import list_seedvr2_models
 from features.generate.scripts.templates import (
     TemplateError,
     create_template,
@@ -52,6 +53,7 @@ __all__ = [
     "latest_job",
     "list_templates",
     "list_workflows",
+    "list_seedvr2_models",
     "preview_bytes",
     "preview_media",
     "purge_hires_tmp",

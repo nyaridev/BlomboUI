@@ -205,3 +205,12 @@ export async function getClipLoaderChoices(): Promise<ClipLoaderChoices> {
   }
   return (await res.json()) as ClipLoaderChoices
 }
+
+export async function getSeedvr2Models(): Promise<string[]> {
+  const res = await fetch(api('/comfy/seedvr2-models'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { models: string[] }
+  return Array.isArray(data.models) ? data.models.filter((item) => typeof item === 'string') : []
+}

@@ -111,6 +111,179 @@ export function mergeRembg(raw: unknown): RembgSettings {
   }
 }
 
+export type ImageUpscaleEngine = 'model' | 'seedvr2'
+
+export type ImageUpscaleSettings = {
+  inputMode: RembgInputMode
+  inputDir: string
+  engine: ImageUpscaleEngine
+  upscaleModel: string
+  scale: number
+  sizeMode: HiresSizeMode
+  width: number
+  height: number
+  aspect: string
+  megapixels: number
+  upscaleMethod: string
+  crop: string
+  seed: number
+  colorCorrection: string
+  maxResolution: number
+  maxResolutionOverride: boolean
+  batchSize: number
+  uniformBatchSize: boolean
+  temporalOverlap: number
+  prependFrames: number
+  inputNoiseScale: number
+  latentNoiseScale: number
+  offloadDevice: string
+  enableDebug: boolean
+  ditModel: string
+  ditDevice: string
+  blocksToSwap: number
+  swapIoComponents: boolean
+  ditOffloadDevice: string
+  ditCacheModel: boolean
+  attentionMode: string
+  vaeModel: string
+  vaeDevice: string
+  encodeTiled: boolean
+  encodeTileSize: number
+  encodeTileOverlap: number
+  decodeTiled: boolean
+  decodeTileSize: number
+  decodeTileOverlap: number
+  tileDebug: string
+  vaeOffloadDevice: string
+  vaeCacheModel: boolean
+  allowCompile: boolean
+  compileBackend: string
+  compileMode: string
+  compileFullgraph: boolean
+  compileDynamic: boolean
+  dynamoCacheSizeLimit: number
+  dynamoRecompileLimit: number
+}
+
+export const DEFAULT_IMAGE_UPSCALE: ImageUpscaleSettings = {
+  inputMode: 'files',
+  inputDir: '',
+  engine: 'model',
+  upscaleModel: '',
+  scale: 2,
+  sizeMode: 'scale',
+  width: 1024,
+  height: 1024,
+  aspect: '2:3',
+  megapixels: 1,
+  upscaleMethod: 'bilinear',
+  crop: 'disabled',
+  seed: 42,
+  colorCorrection: 'lab',
+  maxResolution: 4096,
+  maxResolutionOverride: false,
+  batchSize: 1,
+  uniformBatchSize: false,
+  temporalOverlap: 0,
+  prependFrames: 0,
+  inputNoiseScale: 0,
+  latentNoiseScale: 0,
+  offloadDevice: 'cpu',
+  enableDebug: false,
+  ditModel: 'seedvr2_ema_7b_sharp_fp16.safetensors',
+  ditDevice: 'cuda:0',
+  blocksToSwap: 36,
+  swapIoComponents: false,
+  ditOffloadDevice: 'cpu',
+  ditCacheModel: false,
+  attentionMode: 'sdpa',
+  vaeModel: 'ema_vae_fp16.safetensors',
+  vaeDevice: 'cuda:0',
+  encodeTiled: true,
+  encodeTileSize: 1024,
+  encodeTileOverlap: 128,
+  decodeTiled: true,
+  decodeTileSize: 1024,
+  decodeTileOverlap: 128,
+  tileDebug: 'false',
+  vaeOffloadDevice: 'cpu',
+  vaeCacheModel: false,
+  allowCompile: false,
+  compileBackend: 'inductor',
+  compileMode: 'default',
+  compileFullgraph: false,
+  compileDynamic: false,
+  dynamoCacheSizeLimit: 64,
+  dynamoRecompileLimit: 128,
+}
+
+export function mergeImageUpscale(raw: unknown): ImageUpscaleSettings {
+  const base = cloneJson(DEFAULT_IMAGE_UPSCALE)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return base
+  }
+  const row = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback)
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  const engine = text(row.engine, base.engine)
+  const inputMode = text(row.inputMode ?? row.input_mode, base.inputMode)
+  const sizeMode = text(row.sizeMode ?? row.size_mode, base.sizeMode)
+  const method = text(row.upscaleMethod ?? row.upscale_method, base.upscaleMethod)
+  const crop = text(row.crop, base.crop)
+  return {
+    inputMode: inputMode === 'directory' ? 'directory' : 'files',
+    inputDir: text(row.inputDir ?? row.input_dir, base.inputDir),
+    engine: engine === 'seedvr2' ? 'seedvr2' : 'model',
+    upscaleModel: text(row.upscaleModel ?? row.upscale_model, base.upscaleModel),
+    scale: Math.max(1, Math.min(8, num(row.scale, base.scale))),
+    sizeMode: isHiresSizeMode(sizeMode) ? sizeMode : base.sizeMode,
+    width: Math.max(64, Math.min(4096, Math.round(num(row.width, base.width)))),
+    height: Math.max(64, Math.min(4096, Math.round(num(row.height, base.height)))),
+    aspect: text(row.aspect, base.aspect) || base.aspect,
+    megapixels: Math.max(0.2, Math.min(4, num(row.megapixels, base.megapixels))),
+    upscaleMethod: method || base.upscaleMethod,
+    crop: crop || base.crop,
+    seed: Math.round(num(row.seed, base.seed)),
+    colorCorrection: text(row.colorCorrection ?? row.color_correction, base.colorCorrection) || base.colorCorrection,
+    maxResolution: Math.max(64, Math.min(8192, Math.round(num(row.maxResolution ?? row.max_resolution, base.maxResolution)))),
+    maxResolutionOverride: Boolean(row.maxResolutionOverride ?? row.max_resolution_override ?? base.maxResolutionOverride),
+    batchSize: Math.max(1, Math.min(64, Math.round(num(row.batchSize ?? row.batch_size, base.batchSize)))),
+    uniformBatchSize: Boolean(row.uniformBatchSize ?? row.uniform_batch_size ?? base.uniformBatchSize),
+    temporalOverlap: Math.max(0, Math.min(64, Math.round(num(row.temporalOverlap ?? row.temporal_overlap, base.temporalOverlap)))),
+    prependFrames: Math.max(0, Math.min(64, Math.round(num(row.prependFrames ?? row.prepend_frames, base.prependFrames)))),
+    inputNoiseScale: Math.max(0, Math.min(1, num(row.inputNoiseScale ?? row.input_noise_scale, base.inputNoiseScale))),
+    latentNoiseScale: Math.max(0, Math.min(1, num(row.latentNoiseScale ?? row.latent_noise_scale, base.latentNoiseScale))),
+    offloadDevice: text(row.offloadDevice ?? row.offload_device, base.offloadDevice) || base.offloadDevice,
+    enableDebug: Boolean(row.enableDebug ?? row.enable_debug ?? base.enableDebug),
+    ditModel: text(row.ditModel ?? row.dit_model, base.ditModel) || base.ditModel,
+    ditDevice: text(row.ditDevice ?? row.dit_device, base.ditDevice) || base.ditDevice,
+    blocksToSwap: Math.max(0, Math.min(64, Math.round(num(row.blocksToSwap ?? row.blocks_to_swap, base.blocksToSwap)))),
+    swapIoComponents: Boolean(row.swapIoComponents ?? row.swap_io_components ?? base.swapIoComponents),
+    ditOffloadDevice: text(row.ditOffloadDevice ?? row.dit_offload_device, base.ditOffloadDevice) || base.ditOffloadDevice,
+    ditCacheModel: Boolean(row.ditCacheModel ?? row.dit_cache_model ?? base.ditCacheModel),
+    attentionMode: text(row.attentionMode ?? row.attention_mode, base.attentionMode) || base.attentionMode,
+    vaeModel: text(row.vaeModel ?? row.vae_model, base.vaeModel) || base.vaeModel,
+    vaeDevice: text(row.vaeDevice ?? row.vae_device, base.vaeDevice) || base.vaeDevice,
+    encodeTiled: Boolean(row.encodeTiled ?? row.encode_tiled ?? base.encodeTiled),
+    encodeTileSize: Math.max(64, Math.min(4096, Math.round(num(row.encodeTileSize ?? row.encode_tile_size, base.encodeTileSize)))),
+    encodeTileOverlap: Math.max(0, Math.min(1024, Math.round(num(row.encodeTileOverlap ?? row.encode_tile_overlap, base.encodeTileOverlap)))),
+    decodeTiled: Boolean(row.decodeTiled ?? row.decode_tiled ?? base.decodeTiled),
+    decodeTileSize: Math.max(64, Math.min(4096, Math.round(num(row.decodeTileSize ?? row.decode_tile_size, base.decodeTileSize)))),
+    decodeTileOverlap: Math.max(0, Math.min(1024, Math.round(num(row.decodeTileOverlap ?? row.decode_tile_overlap, base.decodeTileOverlap)))),
+    tileDebug: text(row.tileDebug ?? row.tile_debug, base.tileDebug) || base.tileDebug,
+    vaeOffloadDevice: text(row.vaeOffloadDevice ?? row.vae_offload_device, base.vaeOffloadDevice) || base.vaeOffloadDevice,
+    vaeCacheModel: Boolean(row.vaeCacheModel ?? row.vae_cache_model ?? base.vaeCacheModel),
+    allowCompile: Boolean(row.allowCompile ?? row.allow_compile ?? base.allowCompile),
+    compileBackend: text(row.compileBackend ?? row.compile_backend, base.compileBackend) || base.compileBackend,
+    compileMode: text(row.compileMode ?? row.compile_mode, base.compileMode) || base.compileMode,
+    compileFullgraph: Boolean(row.compileFullgraph ?? row.compile_fullgraph ?? base.compileFullgraph),
+    compileDynamic: Boolean(row.compileDynamic ?? row.compile_dynamic ?? base.compileDynamic),
+    dynamoCacheSizeLimit: Math.max(1, Math.min(256, Math.round(num(row.dynamoCacheSizeLimit ?? row.dynamo_cache_size_limit, base.dynamoCacheSizeLimit)))),
+    dynamoRecompileLimit: Math.max(1, Math.min(512, Math.round(num(row.dynamoRecompileLimit ?? row.dynamo_recompile_limit, base.dynamoRecompileLimit)))),
+  }
+}
+
 export const SAGE_ATTENTION_MODES = [
   'auto',
   'sageattn_qk_int8_pv_fp16_cuda',
@@ -661,6 +834,7 @@ export const DEFAULTS = {
   promptMatrix: cloneJson(DEFAULT_PROMPT_MATRIX),
   xyPlot: cloneJson(DEFAULT_XY_PLOT),
   rembg: cloneJson(DEFAULT_REMBG),
+  imageUpscale: cloneJson(DEFAULT_IMAGE_UPSCALE),
   attention: cloneJson(DEFAULT_ATTENTION),
   activeLoraOrder: [] as string[],
   activeLoraStrengths: {} as Record<string, number>,
@@ -704,6 +878,7 @@ export const PARAM_KEYS = [
   'promptMatrix',
   'xyPlot',
   'rembg',
+  'imageUpscale',
   'attention',
   'activeLoraOrder',
   'activeLoraStrengths',
@@ -747,6 +922,7 @@ export type TemplateParams = {
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotSettings
   rembg: RembgSettings
+  imageUpscale: ImageUpscaleSettings
   attention: AttentionSettings
   activeLoraOrder: string[]
   activeLoraStrengths: Record<string, number>
@@ -791,6 +967,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     promptMatrix: cloneJson(source.promptMatrix),
     xyPlot: cloneJson(source.xyPlot),
     rembg: mergeRembg(source.rembg),
+    imageUpscale: mergeImageUpscale(source.imageUpscale),
     attention: mergeAttention(source.attention),
     activeLoraOrder: [...(source.activeLoraOrder ?? [])],
     activeLoraStrengths: { ...(source.activeLoraStrengths ?? {}) },
@@ -847,6 +1024,10 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       }
       if (key === 'rembg') {
         next.rembg = mergeRembg(value)
+        continue
+      }
+      if (key === 'imageUpscale') {
+        next.imageUpscale = mergeImageUpscale(value)
         continue
       }
       if (key === 'attention') {
@@ -962,6 +1143,7 @@ export const APPLY_FIELDS = [
   { id: 'adetailer', label: 'ADetailer', keys: ['adetailer'] },
   { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot'] },
   { id: 'rembg', label: 'Background removal', keys: ['rembg'] },
+  { id: 'upscale', label: 'Image upscale', keys: ['imageUpscale'] },
 ] as const
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
@@ -972,11 +1154,14 @@ export function templateApplyFields(workflowParams: string[]) {
   if (workflowParams.includes('rembg')) {
     return APPLY_FIELDS.filter((field) => field.id === 'rembg' || field.id === 'outputPath')
   }
+  if (workflowParams.includes('upscale')) {
+    return APPLY_FIELDS.filter((field) => field.id === 'upscale' || field.id === 'outputPath')
+  }
   return APPLY_FIELDS.filter((field) => {
     if (field.id === 'checkpoint' || field.id === 'vae' || field.id === 'textEncoder' || field.id === 'loras') {
       return false
     }
-    if (field.id === 'rembg') {
+    if (field.id === 'rembg' || field.id === 'upscale') {
       return false
     }
     if (field.id === 'clipSkip') {
@@ -1215,6 +1400,8 @@ type GenerateState = {
   xyPlot: XyPlotSettings
   rembg: RembgSettings
   rembgFiles: File[]
+  imageUpscale: ImageUpscaleSettings
+  imageUpscaleFiles: File[]
   attention: AttentionSettings
   workflow: string
   templateId: string
@@ -1279,6 +1466,8 @@ type GenerateState = {
   setXyPlot: (value: XyPlotSettings) => void
   setRembg: (value: Partial<RembgSettings>) => void
   setRembgFiles: (value: File[]) => void
+  setImageUpscale: (value: Partial<ImageUpscaleSettings>) => void
+  setImageUpscaleFiles: (value: File[]) => void
   setAttention: (value: Partial<AttentionSettings>) => void
   setWorkflow: (value: string, defaults?: Partial<TemplateParams> | Record<string, unknown>) => void
   setTemplateId: (value: string) => void
@@ -1299,6 +1488,7 @@ export const useGenerateStore = create<GenerateState>()(
       modelsByWorkflow: {},
       viewedImageUrl: null,
       rembgFiles: [],
+      imageUpscaleFiles: [],
       modelTileStyle: 'tall',
       vae: '',
       textEncoder: '',
@@ -1372,6 +1562,9 @@ export const useGenerateStore = create<GenerateState>()(
       setXyPlot: (xyPlot) => set({ xyPlot: mergeXyPlot(xyPlot) }),
       setRembg: (rembg) => set((s) => ({ rembg: mergeRembg({ ...s.rembg, ...rembg }) })),
       setRembgFiles: (rembgFiles) => set({ rembgFiles }),
+      setImageUpscale: (imageUpscale) =>
+        set((s) => ({ imageUpscale: mergeImageUpscale({ ...s.imageUpscale, ...imageUpscale }) })),
+      setImageUpscaleFiles: (imageUpscaleFiles) => set({ imageUpscaleFiles }),
       setAttention: (attention) => set((s) => ({ attention: mergeAttention({ ...s.attention, ...attention }) })),
       setWorkflow: (workflow, defaults) =>
         set((s) =>
@@ -1415,7 +1608,7 @@ export const useGenerateStore = create<GenerateState>()(
         return migrateGeneratePersist(persisted, parseParamsByWorkflow)
       },
       partialize: (s) => {
-        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, ...rest } = s
+        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, ...rest } = s
         return {
           ...rest,
           paramsByWorkflow: { ...s.paramsByWorkflow, [s.workflow]: pickParams(s) },

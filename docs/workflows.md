@@ -21,6 +21,7 @@ app/workflows/
       adetailer.json
   utils/                        # picker utilities (not compose fragments)
     background_removal.json
+    image_upscale.json
 ```
 
 Each `name.json` keeps `name_raw.json` beside it.
@@ -29,7 +30,7 @@ Each `name.json` keeps `name_raw.json` beside it.
 | --- | --- |
 | `image_checkpoint/` | Checkpoint family. Stem of `name.json` is the workflow id (`sd15`, `sdxl`, …). |
 | `image_diffusion/` | Diffusion family (`anima`, `krea2`). |
-| `utils/` | Standalone picker utilities (`background_removal`). Listed like a main. |
+| `utils/` | Standalone picker utilities (`background_removal`, `image_upscale`). Listed like a main. |
 | `<family>/utils/` | Optional stages. Attached when an extra is on (`hires`, `adetailer`). Never listed. |
 
 `*_raw.json` is never loaded by the app. First launch defaults to **SD 1.5** (`sd15`).

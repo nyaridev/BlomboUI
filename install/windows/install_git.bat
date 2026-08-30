@@ -5,11 +5,11 @@ setlocal EnableExtensions
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..") do set ROOT=%%~fI
 call "%ROOT%\install\windows\_ui.bat"
 
-if not defined GIT set "GIT=git"
-if /i "%~1"=="quiet" set "GIT_QUIET=1"
+if not defined GIT set GIT=git
+if /i "%~1"=="quiet" set GIT_QUIET=1
 
 :: -----------------------------------------------------------------------------
 :: Git check
@@ -43,7 +43,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set "PATH=%PATH%;%ProgramFiles%\Git\cmd;%LocalAppData%\Programs\Git\cmd"
+set PATH=%PATH%;%ProgramFiles%\Git\cmd;%LocalAppData%\Programs\Git\cmd
 
 where.exe "%GIT%" >nul 2>&1
 if errorlevel 1 (
@@ -52,5 +52,5 @@ if errorlevel 1 (
 )
 
 call "%ROOT%\install\windows\_ui.bat" ok "Git is ready."
-endlocal & set "PATH=%PATH%"
+endlocal & set PATH=%PATH%
 exit /b 0

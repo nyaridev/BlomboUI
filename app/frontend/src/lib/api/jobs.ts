@@ -229,6 +229,57 @@ export type JobRequest = {
     input_dir: string
     preserve_metadata?: boolean
   }
+  upscale?: {
+    engine: 'model' | 'seedvr2'
+    input_mode: 'files' | 'directory'
+    input_dir: string
+    upscale_model: string
+    scale: number
+    size_mode: 'scale' | 'raw' | 'scaler' | 'set'
+    width: number
+    height: number
+    aspect: string
+    megapixels: number
+    upscale_method: 'nearest-exact' | 'bilinear' | 'area' | 'bicubic' | 'lanczos'
+    crop: 'disabled' | 'center'
+    seed: number
+    color_correction: string
+    max_resolution: number
+    max_resolution_override: boolean
+    batch_size: number
+    uniform_batch_size: boolean
+    temporal_overlap: number
+    prepend_frames: number
+    input_noise_scale: number
+    latent_noise_scale: number
+    offload_device: string
+    enable_debug: boolean
+    dit_model: string
+    dit_device: string
+    blocks_to_swap: number
+    swap_io_components: boolean
+    dit_offload_device: string
+    dit_cache_model: boolean
+    attention_mode: string
+    vae_model: string
+    vae_device: string
+    encode_tiled: boolean
+    encode_tile_size: number
+    encode_tile_overlap: number
+    decode_tiled: boolean
+    decode_tile_size: number
+    decode_tile_overlap: number
+    tile_debug: string
+    vae_offload_device: string
+    vae_cache_model: boolean
+    allow_compile: boolean
+    compile_backend: string
+    compile_mode: string
+    compile_fullgraph: boolean
+    compile_dynamic: boolean
+    dynamo_cache_size_limit: number
+    dynamo_recompile_limit: number
+  }
   attention?: {
     enabled: boolean
     engine: 'sage' | 'flash'

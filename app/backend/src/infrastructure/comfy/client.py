@@ -308,8 +308,6 @@ def _workflow_params(data: Any) -> list[str]:
             keys.update({"width", "height", "batchSize"})
         elif kind == "Power Lora Loader (rgthree)":
             keys.add("loras")
-        elif kind == "ImageUpscaleWithModel":
-            keys.add("hires")
         elif kind == "CLIPSetLastLayer":
             keys.add("clipSkip")
         elif kind in {"RMBG", "BiRefNetRMBG"}:

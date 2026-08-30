@@ -60,6 +60,11 @@ def comfy_clip_loader() -> dict:
     return generate.clip_loader_choices()
 
 
+@api.get("/comfy/seedvr2-models")
+def seedvr2_models() -> dict:
+    return {"models": generate.list_seedvr2_models()}
+
+
 @api.post("/jobs/uploads")
 async def post_job_uploads(files: list[UploadFile] = File(...)) -> dict:
     blobs: list[tuple[str, bytes]] = []

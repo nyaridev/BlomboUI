@@ -30,7 +30,7 @@ set magenta=%muted%
 set bold=[1m
 
 if not defined BLOMBO_VT (
-    set "BLOMBO_VT=1"
+    set BLOMBO_VT=1
     if not defined WT_SESSION powershell -NoProfile -ExecutionPolicy Bypass -Command "$d='[DllImport(\"kernel32.dll\")]public static extern IntPtr GetStdHandle(int n);[DllImport(\"kernel32.dll\")]public static extern bool GetConsoleMode(IntPtr h,out uint m);[DllImport(\"kernel32.dll\")]public static extern bool SetConsoleMode(IntPtr h,uint m);'; $t=Add-Type -MemberDefinition $d -Name T -PassThru; $h=$t::GetStdHandle(-11); $m=0; [void]$t::GetConsoleMode($h,[ref]$m); [void]$t::SetConsoleMode($h,$m -bor 4)" >nul 2>&1
 )
 
@@ -68,7 +68,7 @@ exit /b 0
 
 :kv
 setlocal EnableDelayedExpansion
-set "K=%~2                "
+set K=%~2                
 echo     %muted%!K:~0,12!%reset% %white%%~3%reset%
 endlocal
 exit /b 0

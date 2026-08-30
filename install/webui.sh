@@ -4,6 +4,10 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 # shellcheck source=linux/_ui.sh
 . "$ROOT/install/linux/_ui.sh"
 
+if [ -n "${COMFYUI_PATH:-}" ]; then
+  COMFY_EXTERNAL=1
+fi
+
 PYTHON="${PYTHON:-python3}"
 GIT="${GIT:-git}"
 VENV_DIR="${VENV_DIR:-$ROOT/runtime/.venv}"
@@ -202,16 +206,13 @@ elif [ -n "${DEV_DEBUG:-}" ]; then
   ui_ok "ComfyUI custom nodes are already installed."
 fi
 
-if [ -z "${COMFYUI_PATH:-}" ]; then
+if [ -z "${COMFY_EXTERNAL:-}" ]; then
   if [ -n "${DEV_DEBUG:-}" ]; then
     ui_section "CUDA Torch"
   fi
   if ! "$COMFY_PYTHON" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
     ui_warn "CUDA Torch was not found. Installing CUDA Torch ${COMFY_TORCH:-2.10.0+cu130}..."
-    TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130} (default).sh"
-    if [ ! -f "$TORCH_SH" ]; then
-      TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
-    fi
+    TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
     "$TORCH_SH" || exit 1
   elif [ -n "${DEV_DEBUG:-}" ]; then
     ui_ok "CUDA Torch is available."
@@ -283,10 +284,19 @@ start_comfy() {
     if [ -n "${DEV_DEBUG:-}" ]; then
       ui_info "Starting ComfyUI in a separate process at $COMFYUI_URL"
     fi
-    nohup "$ROOT/install/comfyui.sh" --no-browser >/dev/null 2>&1 &
-    disown || true
-    COMFY_OWNED=0
-    COMFY_PID=""
+    # shellcheck disable=SC2086
+    extra=( ${COMFYUI_ARGS:-} )
+    bash "$ROOT/install/linux/start_comfy_window.sh" \
+      "$COMFY_PYTHON" "$COMFY_DIR" "$COMFYUI_HOST" "$COMFYUI_PORT" "$COMFY_OUT" \
+      "${YAML:-}" "${MODELS_DIR:-}" "${extra[@]}" &
+    COMFY_PID=$!
+    sleep 0.2
+    if kill -0 "$COMFY_PID" 2>/dev/null; then
+      COMFY_OWNED=1
+    else
+      COMFY_PID=""
+      COMFY_OWNED=0
+    fi
   elif [ -n "${DEV_DEBUG:-}" ]; then
     ui_info "Starting ComfyUI in the background at $COMFYUI_URL"
     "$ROOT/install/comfyui.sh" --no-browser &

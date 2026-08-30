@@ -1,4 +1,5 @@
 import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
+import { ImageUpscaleParams } from '@/views/generate/panels/generation/sections/params/ImageUpscaleParams.tsx'
 import { RembgParams } from '@/views/generate/panels/generation/sections/params/RembgParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { FirstPassParams } from '@/views/generate/panels/generation/sections/params/FirstPassParams.tsx'
@@ -28,6 +29,7 @@ export function GenerationParams({
   const setControlnet = useGenerateStore((s) => s.setControlnet)
   const showHires = !workflowParams.length || workflowParams.includes('hires')
   const rembg = workflowParams.includes('rembg')
+  const upscale = workflowParams.includes('upscale')
   const [pass, setPass] = useState<PassTab>('first')
   const shown = pass === 'hires' && !showHires ? 'first' : pass
   const enabled =
@@ -40,6 +42,8 @@ export function GenerationParams({
     <aside className="flex min-w-0 flex-col gap-stack">
       {rembg ? (
         <RembgParams />
+      ) : upscale ? (
+        <ImageUpscaleParams lastSeed={lastSeed} />
       ) : (
         <>
       <ParamsTabStrip

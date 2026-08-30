@@ -5,7 +5,7 @@ setlocal EnableExtensions
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..\..") do set ROOT=%%~fI
 call "%ROOT%\install\windows\_ui.bat"
 call "%ROOT%\install\windows\comfyui\_pick_slot.bat"
 if errorlevel 1 exit /b 1
@@ -14,25 +14,25 @@ if not defined COMFY_SLOT (
     exit /b 1
 )
 
-if not defined GIT set "GIT=git"
-for %%I in (%GIT%) do set "GIT_EXE=%%~I"
+if not defined GIT set GIT=git
+for %%I in (%GIT%) do set GIT_EXE=%%~I
 
-set "RUNTIME_DIR=%ROOT%\runtime"
-set "COMFY_ROOT=%ROOT%\runtime\comfyui"
-set "COMFY_DIR=%COMFY_ROOT%\%COMFY_SLOT%\ComfyUI"
-set "PYTHON_DIR=%COMFY_ROOT%\%COMFY_SLOT%\python_embeded"
-set "PYTHON_EXE=%PYTHON_DIR%\python.exe"
-set "PYTHON_ARCHIVE=python-3.12.10-embed-amd64.zip"
-set "PYTHON_ARCHIVE_PATH=%PYTHON_DIR%\%PYTHON_ARCHIVE%"
-set "GET_PIP_PATH=%PYTHON_DIR%\get-pip.py"
-set "PYTHON_URL=https://www.python.org/ftp/python/3.12.10/%PYTHON_ARCHIVE%"
-set "GET_PIP_URL=https://bootstrap.pypa.io/get-pip.py"
-set "PIP_ARGS=--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10"
-set "UV_ARGS=--no-cache --link-mode=copy"
+set RUNTIME_DIR=%ROOT%\runtime
+set COMFY_ROOT=%ROOT%\runtime\comfyui
+set COMFY_DIR=%COMFY_ROOT%\%COMFY_SLOT%\ComfyUI
+set PYTHON_DIR=%COMFY_ROOT%\%COMFY_SLOT%\python_embeded
+set PYTHON_EXE=%PYTHON_DIR%\python.exe
+set PYTHON_ARCHIVE=python-3.12.10-embed-amd64.zip
+set PYTHON_ARCHIVE_PATH=%PYTHON_DIR%\%PYTHON_ARCHIVE%
+set GET_PIP_PATH=%PYTHON_DIR%\get-pip.py
+set PYTHON_URL=https://www.python.org/ftp/python/3.12.10/%PYTHON_ARCHIVE%
+set GET_PIP_URL=https://bootstrap.pypa.io/get-pip.py
+set PIP_ARGS=--no-cache-dir --no-warn-script-location --timeout=1000 --retries 10
+set UV_ARGS=--no-cache --link-mode=copy
 
-set "GIT_TERMINAL_PROMPT=0"
-set "GIT_ASKPASS=echo"
-set "GIT_LFS_SKIP_SMUDGE=1"
+set GIT_TERMINAL_PROMPT=0
+set GIT_ASKPASS=echo
+set GIT_LFS_SKIP_SMUDGE=1
 
 :: -----------------------------------------------------------------------------
 :: Git
@@ -185,7 +185,6 @@ popd
 :: Requirements
 :: -----------------------------------------------------------------------------
 
-:install_comfyui_requirements
 if not exist "%COMFY_DIR%\requirements.txt" (
     call "%ROOT%\install\windows\_ui.bat" error "ComfyUI requirements.txt was not found."
     exit /b 1
@@ -203,9 +202,8 @@ if errorlevel 1 (
 :: -----------------------------------------------------------------------------
 
 call "%ROOT%\install\windows\_ui.bat" info "Installing CUDA Torch %COMFY_TORCH%..."
-set "TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH% (default).bat"
-if not exist "%TORCH_BAT%" set "TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH%.bat"
-set "COMFY_PYTHON=%PYTHON_EXE%"
+set TORCH_BAT=%ROOT%\install\windows\comfyui\torch\%COMFY_TORCH%.bat
+set COMFY_PYTHON=%PYTHON_EXE%
 call "%TORCH_BAT%"
 if errorlevel 1 (
     call "%ROOT%\install\windows\_ui.bat" error "Default CUDA Torch installation failed."
@@ -226,8 +224,8 @@ exit /b 0
 :: -----------------------------------------------------------------------------
 
 :download
-set "DL_URL=%~1"
-set "DL_OUT=%~2"
+set DL_URL=%~1
+set DL_OUT=%~2
 
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0..\_download.ps1" -Url "%DL_URL%" -OutFile "%DL_OUT%"
 if not errorlevel 1 exit /b 0

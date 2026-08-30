@@ -12,10 +12,10 @@
 :: set OUTPUTS_ROOT=
 :: set WILDCARDS_ROOT=
 
-set COMMANDLINE_ARGS=--uv --hot_reload_vite
+set COMMANDLINE_ARGS=--uv --hot_reload_vite --comfyui-window
 
 :: --uv -> use uv for the project environment and backend dependencies.
-:: --comfyui-window -> open ComfyUI in a separate console.
+:: --comfyui-window -> open ComfyUI in a separate console (default; remove it to keep ComfyUI in the background).
 :: --port N -> BlomboUI UI port (default 5173).
 
 :: --dev_debug -> show ComfyUI setup and startup logs in this console.

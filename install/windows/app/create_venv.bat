@@ -5,17 +5,17 @@ setlocal EnableExtensions
 :: Configuration
 :: -----------------------------------------------------------------------------
 
-for %%I in ("%~dp0..\..\..") do set "ROOT=%%~fI"
+for %%I in ("%~dp0..\..\..") do set ROOT=%%~fI
 call "%ROOT%\install\windows\_ui.bat"
 
-if not defined PYTHON set "PYTHON=python"
-if not defined GIT set "GIT=git"
-for %%I in (%PYTHON%) do set "PYTHON_EXE=%%~I"
-for %%I in (%GIT%) do set "GIT_EXE=%%~I"
+if not defined PYTHON set PYTHON=python
+if not defined GIT set GIT=git
+for %%I in (%PYTHON%) do set PYTHON_EXE=%%~I
+for %%I in (%GIT%) do set GIT_EXE=%%~I
 if not defined VENV_DIR (
-    set "VENV_DIR=%ROOT%\runtime\.venv"
+    set VENV_DIR=%ROOT%\runtime\.venv
 ) else (
-    for %%I in (%VENV_DIR%) do set "VENV_DIR=%%~fI"
+    for %%I in (%VENV_DIR%) do set VENV_DIR=%%~fI
 )
 
 :: -----------------------------------------------------------------------------
@@ -29,7 +29,7 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set "UV_PROJECT_ENVIRONMENT=%VENV_DIR%"
+set UV_PROJECT_ENVIRONMENT=%VENV_DIR%
 
 pushd "%ROOT%\app\backend"
 if errorlevel 1 (

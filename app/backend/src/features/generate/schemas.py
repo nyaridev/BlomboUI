@@ -170,6 +170,58 @@ class RembgIn(BaseModel):
     preserve_metadata: bool = False
 
 
+class UpscaleIn(BaseModel):
+    engine: Literal["model", "seedvr2"] = "model"
+    input_mode: Literal["files", "directory"] = "files"
+    input_dir: str = ""
+    upscale_model: str = ""
+    scale: float = Field(default=2, ge=1, le=8)
+    size_mode: Literal["scale", "raw", "scaler", "set"] = "scale"
+    width: int = Field(default=1024, ge=64, le=4096)
+    height: int = Field(default=1024, ge=64, le=4096)
+    aspect: str = "2:3"
+    megapixels: float = Field(default=1, ge=0.2, le=4)
+    upscale_method: Literal["nearest-exact", "bilinear", "area", "bicubic", "lanczos"] = "bilinear"
+    crop: Literal["disabled", "center"] = "disabled"
+    seed: int = 42
+    color_correction: str = "lab"
+    max_resolution: int = Field(default=4096, ge=64, le=8192)
+    max_resolution_override: bool = False
+    batch_size: int = Field(default=1, ge=1, le=64)
+    uniform_batch_size: bool = False
+    temporal_overlap: int = Field(default=0, ge=0, le=64)
+    prepend_frames: int = Field(default=0, ge=0, le=64)
+    input_noise_scale: float = Field(default=0, ge=0, le=1)
+    latent_noise_scale: float = Field(default=0, ge=0, le=1)
+    offload_device: str = "cpu"
+    enable_debug: bool = False
+    dit_model: str = "seedvr2_ema_7b_sharp_fp16.safetensors"
+    dit_device: str = "cuda:0"
+    blocks_to_swap: int = Field(default=36, ge=0, le=64)
+    swap_io_components: bool = False
+    dit_offload_device: str = "cpu"
+    dit_cache_model: bool = False
+    attention_mode: str = "sdpa"
+    vae_model: str = "ema_vae_fp16.safetensors"
+    vae_device: str = "cuda:0"
+    encode_tiled: bool = True
+    encode_tile_size: int = Field(default=1024, ge=64, le=4096)
+    encode_tile_overlap: int = Field(default=128, ge=0, le=1024)
+    decode_tiled: bool = True
+    decode_tile_size: int = Field(default=1024, ge=64, le=4096)
+    decode_tile_overlap: int = Field(default=128, ge=0, le=1024)
+    tile_debug: str = "false"
+    vae_offload_device: str = "cpu"
+    vae_cache_model: bool = False
+    allow_compile: bool = False
+    compile_backend: str = "inductor"
+    compile_mode: str = "default"
+    compile_fullgraph: bool = False
+    compile_dynamic: bool = False
+    dynamo_cache_size_limit: int = Field(default=64, ge=1, le=256)
+    dynamo_recompile_limit: int = Field(default=128, ge=1, le=512)
+
+
 class JobIn(BaseModel):
     prompt: str = ""
     negative_prompt: str = ""
@@ -212,6 +264,7 @@ class JobIn(BaseModel):
     prompt_matrix: PromptMatrixIn | None = None
     xy_plot: XyPlotIn | None = None
     rembg: RembgIn | None = None
+    upscale: UpscaleIn | None = None
     attention: AttentionIn | None = None
     input_dir: str | None = None
     input_paths: list[str] = Field(default_factory=list)

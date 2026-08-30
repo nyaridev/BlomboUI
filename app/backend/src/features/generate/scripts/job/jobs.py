@@ -56,6 +56,7 @@ from ..workflow.compose import hires_enabled
 from .. import save_meta
 from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
 from ..workflow.rembg import clean_rembg, input_runs, is_rembg, stage_input
+from ..workflow.upscale import clean_upscale, is_file_utility, is_image_upscale
 
 
 class LiveJob:
@@ -427,8 +428,14 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     values["batch_count"] = max(1, int(values.get("batch_count") or 1))
     values["prompt_matrix"] = None if xy else _prompt_matrix_config(values.get("prompt_matrix"))
     values["auto_loras"] = _normalize_auto_loras(values.get("auto_loras"))
-    if is_rembg(values):
-        values["rembg"] = clean_rembg(values.get("rembg"))
+    if is_file_utility(values):
+        if is_rembg(values):
+            values["rembg"] = clean_rembg(values.get("rembg"))
+        if is_image_upscale(values):
+            values["upscale"] = clean_upscale(values.get("upscale"))
+            blob = values["upscale"]
+            if blob["engine"] == "model" and not str(blob.get("upscale_model") or "").strip():
+                raise comfy.ComfyError("bad_request", "Pick an upscale model.", status=400)
         values["xy_plot"] = None
         values["prompt_matrix"] = None
         values["batch_size"] = 1
@@ -440,7 +447,7 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         values["input_paths"] = [str(run["input_image"]) for run in runs]
         xy = None
     matrix = values.get("prompt_matrix")
-    if not is_rembg(values):
+    if not is_file_utility(values):
         values["batch_grid"] = True if xy else (bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True)))
     values["batch_grid_max"] = max(2, min(100, int(values.get("batch_grid_max") or 36)))
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
@@ -464,7 +471,7 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         n = xy_cell_count(xy) if xy else 0
         if n:
             live_count = n
-        elif is_rembg(values):
+        elif is_file_utility(values):
             live_count = max(1, len(values.get("input_paths") or []))
         else:
             matrix_lines, matrix_count, _ = _generation_plan(values)
@@ -487,7 +494,7 @@ async def create_job(body: dict[str, Any]) -> dict[str, Any]:
 async def run_job(job_id: str, values: dict[str, Any]) -> None:
     try:
         xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
-        if is_rembg(values):
+        if is_file_utility(values):
             runs = input_runs(values)
         elif xy:
             runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
@@ -524,7 +531,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         canceled = False
         missing_wildcards: list[str] = []
         missing_loras: list[str] = []
-        if is_rembg(values):
+        if is_file_utility(values):
             values["model_hash"] = ""
             values["model_hashes"] = {}
         else:
@@ -588,7 +595,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
                 _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
 
-            if is_rembg(run_values):
+            if is_file_utility(run_values):
                 src = run_values.get("input_image") or ""
                 run_values["source_image"] = str(src)
                 staged = await asyncio.to_thread(stage_input, src, job_id, run_i)

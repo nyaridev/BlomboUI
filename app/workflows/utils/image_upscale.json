@@ -1,0 +1,140 @@
+{
+  "name": "Image Upscale",
+  "category": "utility",
+  "apply": ["upscale", "outputPath"],
+  "extras": ["upscale"],
+  "1": {
+    "inputs": {
+      "image": "example.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "2": {
+    "inputs": {
+      "image": ["1", 0],
+      "alpha": ["1", 1]
+    },
+    "class_type": "JoinImageWithAlpha",
+    "_meta": {
+      "title": "Join Image with Alpha"
+    }
+  },
+  "3": {
+    "inputs": {
+      "model_name": "4x_foolhardy_Remacri.pth"
+    },
+    "class_type": "UpscaleModelLoader",
+    "_meta": {
+      "title": "Load Upscale Model"
+    }
+  },
+  "4": {
+    "inputs": {
+      "upscale_model": ["3", 0],
+      "image": ["1", 0]
+    },
+    "class_type": "ImageUpscaleWithModel",
+    "_meta": {
+      "title": "Upscale Image (using Model)"
+    }
+  },
+  "5": {
+    "inputs": {
+      "upscale_method": "bilinear",
+      "width": 1024,
+      "height": 1024,
+      "crop": "disabled",
+      "image": ["4", 0]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Scale Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "backend": "inductor",
+      "mode": "default",
+      "fullgraph": false,
+      "dynamic": false,
+      "dynamo_cache_size_limit": 64,
+      "dynamo_recompile_limit": 128
+    },
+    "class_type": "SeedVR2TorchCompileSettings",
+    "_meta": {
+      "title": "SeedVR2 Torch Compile Settings"
+    }
+  },
+  "7": {
+    "inputs": {
+      "model": "ema_vae_fp16.safetensors",
+      "device": "cuda:0",
+      "encode_tiled": true,
+      "encode_tile_size": 1024,
+      "encode_tile_overlap": 128,
+      "decode_tiled": true,
+      "decode_tile_size": 1024,
+      "decode_tile_overlap": 128,
+      "tile_debug": "false",
+      "offload_device": "cpu",
+      "cache_model": false,
+      "torch_compile_args": ["6", 0]
+    },
+    "class_type": "SeedVR2LoadVAEModel",
+    "_meta": {
+      "title": "SeedVR2 (Down)Load VAE Model"
+    }
+  },
+  "8": {
+    "inputs": {
+      "model": "seedvr2_ema_7b_sharp_fp16.safetensors",
+      "device": "cuda:0",
+      "blocks_to_swap": 36,
+      "swap_io_components": false,
+      "offload_device": "cpu",
+      "cache_model": false,
+      "attention_mode": "sdpa",
+      "torch_compile_args": ["6", 0]
+    },
+    "class_type": "SeedVR2LoadDiTModel",
+    "_meta": {
+      "title": "SeedVR2 (Down)Load DiT Model"
+    }
+  },
+  "9": {
+    "inputs": {
+      "seed": 42,
+      "resolution": 4096,
+      "max_resolution": 4096,
+      "batch_size": 1,
+      "uniform_batch_size": false,
+      "color_correction": "lab",
+      "temporal_overlap": 0,
+      "prepend_frames": 0,
+      "input_noise_scale": 0,
+      "latent_noise_scale": 0,
+      "offload_device": "cpu",
+      "enable_debug": false,
+      "image": ["2", 0],
+      "dit": ["8", 0],
+      "vae": ["7", 0]
+    },
+    "class_type": "SeedVR2VideoUpscaler",
+    "_meta": {
+      "title": "SeedVR2 Video Upscaler"
+    }
+  },
+  "10": {
+    "inputs": {
+      "filename_prefix": "blombo",
+      "images": ["5", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  }
+}

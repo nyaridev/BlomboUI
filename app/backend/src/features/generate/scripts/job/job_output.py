@@ -17,6 +17,7 @@ from infrastructure.comfy import client as comfy
 from shared import pnginfo
 from features.generate.scripts import save_meta, templates
 from features.generate.scripts.workflow import rembg
+from features.generate.scripts.workflow import upscale as image_upscale
 from features.generate.scripts.workflow.compose import hires_enabled
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
@@ -200,6 +201,15 @@ def _output_dir(values: dict[str, Any], kind: str) -> Path:
                 return path
             return _expand_path(override, values, rembg.PATH_DEFAULT)
         return _expand_path(rembg.PATH_DEFAULT, values, rembg.PATH_DEFAULT)
+    elif image_upscale.is_image_upscale(values):
+        override = str(values.get("output_image_path") or "").strip()
+        if override:
+            path = Path(override)
+            if path.is_absolute():
+                path.mkdir(parents=True, exist_ok=True)
+                return path
+            return _expand_path(override, values, image_upscale.PATH_DEFAULT)
+        return _expand_path(image_upscale.PATH_DEFAULT, values, image_upscale.PATH_DEFAULT)
     else:
         override = str(values.get("output_image_path") or "").strip()
         template = override or str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
@@ -461,6 +471,9 @@ def _import_bytes(
                 src_meta = rembg.source_envelope(source)
                 if src_meta:
                     packed = dict(src_meta.get("params") or packed)
+    elif image_upscale.is_image_upscale(values):
+        packed = image_upscale.empty_params()
+        graph = None
     else:
         packed = save_meta.pack_params(values, graph, kind=kind)
     if kind == "interrupted":

@@ -32,6 +32,7 @@ from .job_output import (
     _maybe_xy_grid,
     _template_name,
     _template_snapshot,
+    import_caption_run,
     save_kind,
 )
 from .job_plan import (
@@ -55,8 +56,9 @@ from ..workflow.comfy_fill import combined_progress, progress_stage_map, progres
 from ..workflow.compose import hires_enabled
 from .. import save_meta
 from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
-from ..workflow.rembg import clean_rembg, input_runs, is_rembg, stage_input
+from ..workflow.rembg import clean_rembg, input_runs, is_rembg, list_input_images, stage_input
 from ..workflow.upscale import SEED_MAX, clean_upscale, is_file_utility, is_image_upscale, wrap_seed
+from ..workflow.caption import clean_caption, input_runs as caption_input_runs, is_caption
 
 
 class LiveJob:
@@ -442,15 +444,17 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 blob["seed"] = values["seed"]
             if blob["engine"] == "model" and not str(blob.get("upscale_model") or "").strip():
                 raise comfy.ComfyError("bad_request", "Pick an upscale model.", status=400)
+        if is_caption(values):
+            values["caption"] = clean_caption(values.get("caption"))
         values["xy_plot"] = None
         values["prompt_matrix"] = None
         values["batch_size"] = 1
         values["batch_count"] = 1
         values["batch_grid"] = False
-        runs = input_runs(values)
+        runs = caption_input_runs(values) if is_caption(values) else input_runs(values)
         if not runs:
             raise comfy.ComfyError("bad_request", "Drop or pick at least one image.", status=400)
-        values["input_paths"] = [str(run["input_image"]) for run in runs]
+        values["input_paths"] = [str(path) for path in list_input_images(values)]
         xy = None
     matrix = values.get("prompt_matrix")
     if not is_file_utility(values):
@@ -478,7 +482,7 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         if n:
             live_count = n
         elif is_file_utility(values):
-            live_count = max(1, len(values.get("input_paths") or []))
+            live_count = max(1, len(runs))
         else:
             matrix_lines, matrix_count, _ = _generation_plan(values)
             live_count = len(matrix_lines) * matrix_count
@@ -501,7 +505,7 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
     try:
         xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
         if is_file_utility(values):
-            runs = input_runs(values)
+            runs = caption_input_runs(values) if is_caption(values) else input_runs(values)
         elif xy:
             runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
         else:
@@ -604,8 +608,19 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             if is_file_utility(run_values):
                 src = run_values.get("input_image") or ""
                 run_values["source_image"] = str(src)
-                staged = await asyncio.to_thread(stage_input, src, job_id, run_i)
-                run_values["input_image"] = staged.name
+                if is_caption(run_values):
+                    staged_names: list[str] = []
+                    sources = [str(item) for item in run_values.get("input_images") or [] if str(item).strip()] or [str(src)]
+                    for extra_i, extra in enumerate(sources):
+                        staged = await asyncio.to_thread(stage_input, extra, job_id, f"{run_i}-{extra_i}")
+                        staged_names.append(staged.name)
+                    run_values["source_images"] = sources
+                    run_values["source_image"] = sources[0]
+                    run_values["input_images"] = staged_names
+                    run_values["input_image"] = staged_names[0] if staged_names else ""
+                else:
+                    staged = await asyncio.to_thread(stage_input, src, job_id, run_i)
+                    run_values["input_image"] = staged.name
             graph = await asyncio.to_thread(
                 comfy.fill_txt2img, {**run_values, "filename_prefix": f"blombo/{job_id}-{run_i}"}
             )
@@ -651,6 +666,15 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             if canceled:
                 break
             if skip:
+                continue
+            if is_caption(run_values):
+                texts = await asyncio.to_thread(comfy.prompt_texts, prompt_id)
+                rows = await asyncio.to_thread(import_caption_run, job_id, run_values, images, texts, graph)
+                for ident, path in rows:
+                    if ident:
+                        _record_output(job_id, values, ident, path, "image")
+                        saved.append(path)
+                    had_image = True
                 continue
             for info in images:
                 kind = save_kind(run_values, info, graph)

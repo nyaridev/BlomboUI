@@ -18,6 +18,7 @@ from shared import pnginfo
 from features.generate.scripts import save_meta, templates
 from features.generate.scripts.workflow import rembg
 from features.generate.scripts.workflow import upscale as image_upscale
+from features.generate.scripts.workflow import caption
 from features.generate.scripts.workflow.compose import hires_enabled
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
@@ -152,6 +153,15 @@ def _token_value(name: str, values: dict[str, Any], now: datetime) -> str:
         return now.strftime("%S")
     if key == "datetime":
         return now.strftime("%Y-%m-%d_%H-%M-%S")
+    if key == "index":
+        try:
+            n = int(values.get("run_index") or values.get("file_index") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        return f"{max(0, n):06d}"
+    if key == "filename":
+        raw = str(values.get("source_image") or values.get("input_image") or "")
+        return _safe_segment(Path(raw).stem)
     return ""
 
 
@@ -210,6 +220,15 @@ def _output_dir(values: dict[str, Any], kind: str) -> Path:
                 return path
             return _expand_path(override, values, image_upscale.PATH_DEFAULT)
         return _expand_path(image_upscale.PATH_DEFAULT, values, image_upscale.PATH_DEFAULT)
+    elif caption.is_caption(values):
+        override = str(values.get("output_image_path") or "").strip()
+        if override:
+            path = Path(override)
+            if path.is_absolute():
+                path.mkdir(parents=True, exist_ok=True)
+                return path
+            return _expand_path(override, values, caption.PATH_DEFAULT)
+        return _expand_path(caption.PATH_DEFAULT, values, caption.PATH_DEFAULT)
     else:
         override = str(values.get("output_image_path") or "").strip()
         template = override or str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
@@ -235,6 +254,17 @@ def _name_template(values: dict[str, Any], kind: str) -> tuple[str, str]:
         override = str(values.get("output_hires_name") or "").strip()
         raw = override or str(cfg.get("hiresName") or settings.HIRES_NAME_DEFAULT)
         fallback = settings.HIRES_NAME_DEFAULT
+    elif caption.is_caption(values) and kind not in {"grids", "hires"}:
+        if "output_image_name" in values:
+            raw = str(values.get("output_image_name") or "").strip()
+            if not raw:
+                stem = _safe_segment(Path(str(values.get("source_image") or values.get("input_image") or "")).stem)
+                raw = stem or "blombo"
+            fallback = caption.NAME_DEFAULT
+            return _strip_name_ext(raw) or fallback, fallback
+        raw = caption.NAME_DEFAULT
+        fallback = caption.NAME_DEFAULT
+        return _strip_name_ext(raw) or fallback, fallback
     else:
         override = str(values.get("output_image_name") or "").strip()
         raw = override or str(cfg.get("imageName") or settings.IMAGE_NAME_DEFAULT)
@@ -325,6 +355,8 @@ def _alloc_named(folder: Path, ext: str, values: dict[str, Any], kind: str, star
 
 def _image_save_opts(values: dict[str, Any] | None = None) -> tuple[str, int, bool, int]:
     if values and rembg.is_rembg(values):
+        return "png", 100, False, 4096
+    if values and caption.is_caption(values):
         return "png", 100, False, 4096
     cfg = settings.load()
     fmt = str(cfg.get("imageFormat") or "png").lower()
@@ -474,6 +506,9 @@ def _import_bytes(
     elif image_upscale.is_image_upscale(values):
         packed = image_upscale.empty_params()
         graph = None
+    elif caption.is_caption(values):
+        packed = caption.empty_params()
+        graph = None
     else:
         packed = save_meta.pack_params(values, graph, kind=kind)
     if kind == "interrupted":
@@ -514,6 +549,55 @@ def _save_image(folder: Path, data: bytes, ext: str, values: dict[str, Any], kin
         dest = _alloc_named(folder, ext, values, kind)
         dest.write_bytes(data)
         return dest
+
+
+def import_caption_run(
+    job_id: str,
+    values: dict[str, Any],
+    images: list[dict[str, str]],
+    texts: list[str],
+    graph: dict[str, Any] | None,
+) -> list[tuple[str, Path]]:
+    blob = caption.clean_caption(values.get("caption"))
+    sources = [str(item) for item in values.get("source_images") or values.get("input_images") or [] if str(item).strip()]
+    if not sources:
+        src = str(values.get("source_image") or values.get("input_image") or "")
+        if src:
+            sources = [src]
+    image_infos = [
+        info
+        for info in images
+        if Path(str(info.get("filename") or "")).suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+    ]
+    n = max(len(sources), len(image_infos) if blob["save_image"] else 0, len(texts), 1)
+    try:
+        start = int(values.get("file_index") or 1)
+    except (TypeError, ValueError):
+        start = 1
+    saved: list[tuple[str, Path]] = []
+    for i in range(n):
+        run_values = {
+            **values,
+            "run_index": start + i,
+            "source_image": sources[i] if i < len(sources) else str(values.get("source_image") or ""),
+        }
+        text = caption.format_caption(blob, texts[i] if i < len(texts) else "")
+        if blob["save_image"] and i < len(image_infos):
+            ident, path, _kind = _import_image(job_id, run_values, image_infos[i], graph)
+            path.with_suffix(".txt").write_text(text, encoding="utf-8")
+            saved.append((ident, path))
+            continue
+        folder = _output_dir(run_values, "images")
+        with _save_lock:
+            dest = _alloc_named(folder, "txt", run_values, "images")
+            dest.write_text(text, encoding="utf-8")
+        saved.append(("", dest))
+    for info in image_infos if not blob["save_image"] else []:
+        _forget_comfy_file(info)
+    for info in images:
+        if info not in image_infos:
+            _forget_comfy_file(info)
+    return saved
 
 
 def _grid_values(first: Path, job_values: dict[str, Any]) -> dict[str, Any]:

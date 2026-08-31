@@ -74,6 +74,10 @@ call :install_node "ComfyUI-SeedVR2_VideoUpscaler" "https://github.com/numz/Comf
 if errorlevel 1 exit /b 1
 call :install_node "ComfyUI-GGUF" "https://github.com/city96/ComfyUI-GGUF"
 if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-QwenVL" "https://github.com/1038lab/ComfyUI-QwenVL"
+if errorlevel 1 exit /b 1
+call :install_node "ComfyUI-WD14-Tagger" "https://github.com/pythongosssss/ComfyUI-WD14-Tagger"
+if errorlevel 1 exit /b 1
 
 :: -----------------------------------------------------------------------------
 :: Completion

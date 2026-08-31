@@ -36,6 +36,7 @@ def is_file_utility(values: dict[str, Any]) -> bool:
     return Path(str(values.get("workflow") or values.get("workflow_id") or "")).stem in {
         "background_removal",
         "image_upscale",
+        "image_caption",
     }
 
 

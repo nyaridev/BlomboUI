@@ -281,6 +281,22 @@ export type JobRequest = {
     dynamo_cache_size_limit: number
     dynamo_recompile_limit: number
   }
+  caption?: {
+    engine: 'wd14' | 'qwen'
+    wd14_model: string
+    qwen_model: string
+    quantization: string
+    guidance: string
+    prefix: string
+    suffix: string
+    megapixels: number
+    batch_count: number
+    save_image: boolean
+    threshold: number
+    character_threshold: number
+    input_mode: 'files' | 'directory'
+    input_dir: string
+  }
   attention?: {
     enabled: boolean
     engine: 'sage' | 'flash'

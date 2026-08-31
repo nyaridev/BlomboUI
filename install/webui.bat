@@ -126,7 +126,7 @@ if errorlevel 1 (
 )
 
 set NEED_COMFY_DEPS=
-for %%N in (comfyui-manager rgthree-comfy ComfyUI-KJNodes ComfyUI-Easy-Use ComfyUI-Impact-Pack ComfyUI-Impact-Subpack ComfyUI-RMBG ComfyUI-SeedVR2_VideoUpscaler ComfyUI-GGUF) do (
+for %%N in (comfyui-manager rgthree-comfy ComfyUI-KJNodes ComfyUI-Easy-Use ComfyUI-Impact-Pack ComfyUI-Impact-Subpack ComfyUI-RMBG ComfyUI-SeedVR2_VideoUpscaler ComfyUI-GGUF ComfyUI-QwenVL ComfyUI-WD14-Tagger) do (
     if not exist "%COMFY_DIR%\custom_nodes\%%N\" set NEED_COMFY_DEPS=1
 )
 if defined NEED_COMFY_DEPS (

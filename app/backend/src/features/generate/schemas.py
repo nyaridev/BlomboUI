@@ -170,6 +170,23 @@ class RembgIn(BaseModel):
     preserve_metadata: bool = False
 
 
+class CaptionIn(BaseModel):
+    engine: Literal["wd14", "qwen"] = "wd14"
+    wd14_model: str = "wd-swinv2-tagger-v3"
+    qwen_model: str = "Qwen3-VL-4B-Instruct"
+    quantization: str = "8-bit (Balanced)"
+    guidance: str = ""
+    prefix: str = ""
+    suffix: str = ""
+    megapixels: float = Field(default=1, ge=0.25, le=4)
+    batch_count: int = Field(default=1, ge=1, le=16)
+    save_image: bool = True
+    threshold: float = Field(default=0.35, ge=0, le=1)
+    character_threshold: float = Field(default=0.85, ge=0, le=1)
+    input_mode: Literal["files", "directory"] = "files"
+    input_dir: str = ""
+
+
 class UpscaleIn(BaseModel):
     engine: Literal["model", "seedvr2"] = "model"
     input_mode: Literal["files", "directory"] = "files"
@@ -266,6 +283,7 @@ class JobIn(BaseModel):
     xy_plot: XyPlotIn | None = None
     rembg: RembgIn | None = None
     upscale: UpscaleIn | None = None
+    caption: CaptionIn | None = None
     attention: AttentionIn | None = None
     input_dir: str | None = None
     input_paths: list[str] = Field(default_factory=list)

@@ -22,6 +22,7 @@ app/workflows/
   utils/                        # picker utilities (not compose fragments)
     background_removal.json
     image_upscale.json
+    image_caption.json
 ```
 
 Each `name.json` keeps `name_raw.json` beside it.
@@ -30,7 +31,7 @@ Each `name.json` keeps `name_raw.json` beside it.
 | --- | --- |
 | `image_checkpoint/` | Checkpoint family. Stem of `name.json` is the workflow id (`sd15`, `sdxl`, …). |
 | `image_diffusion/` | Diffusion family (`anima`, `krea2`). |
-| `utils/` | Standalone picker utilities (`background_removal`, `image_upscale`). Listed like a main. |
+| `utils/` | Standalone picker utilities (`background_removal`, `image_upscale`, `image_caption`). Listed like a main. |
 | `<family>/utils/` | Optional stages. Attached when an extra is on (`hires`, `adetailer`). Never listed. |
 
 `*_raw.json` is never loaded by the app. First launch defaults to **SD 1.5** (`sd15`).
@@ -127,7 +128,7 @@ Same pattern for ADetailer (`adetailer.json` under each family’s `utils/`).
 5. Add a Generate extras body only when inferred params are not enough (new widgets, not a new theme).
 6. Custom nodes must be installed in the managed Comfy. Missing nodes fail at submit.
 
-A first-pass-only graph is enough. Optional stages stay in that family’s `utils/` and attach through `extras` + compose. Standalone picker utilities (Background Removal) go in `app/workflows/utils/`.
+A first-pass-only graph is enough. Optional stages stay in that family’s `utils/` and attach through `extras` + compose. Standalone picker utilities (Background Removal, Image Upscale, Image Caption) go in `app/workflows/utils/`.
 
 ## Adding a util (ADetailer, ControlNet, SeedVR2, dataset crop, …)
 

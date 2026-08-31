@@ -171,7 +171,10 @@ def _combo(info: dict[str, Any], node: str, name: str) -> list[str]:
 
 
 def ksampler_choices() -> dict[str, list[str]]:
-    raw = _request("GET", "/object_info/KSampler", timeout=5)
+    try:
+        raw = _request("GET", "/object_info/KSampler", timeout=5)
+    except ComfyError:
+        return {"samplers": [], "schedulers": []}
     info = json.loads(raw.decode("utf-8"))
     if not isinstance(info, dict):
         return {"samplers": [], "schedulers": []}
@@ -312,6 +315,8 @@ def _workflow_params(data: Any) -> list[str]:
             keys.add("clipSkip")
         elif kind in {"RMBG", "BiRefNetRMBG"}:
             keys.add("rembg")
+        elif kind in {"WD14Tagger|pysssss", "AILab_QwenVL"}:
+            keys.add("caption")
     if clips >= 2:
         keys.update({"prompt", "negativePrompt"})
     extras = data.get("extras") if isinstance(data, dict) else None
@@ -500,6 +505,46 @@ def output_images(entry: dict[str, Any]) -> list[dict[str, str]]:
                 }
             )
     return found
+
+
+def _collect_strings(raw: Any) -> list[str]:
+    out: list[str] = []
+    if isinstance(raw, str) and raw.strip():
+        out.append(raw)
+    elif isinstance(raw, list):
+        for item in raw:
+            out.extend(_collect_strings(item))
+    elif isinstance(raw, dict):
+        for item in raw.values():
+            out.extend(_collect_strings(item))
+    return out
+
+
+def output_texts(entry: dict[str, Any]) -> list[str]:
+    tagged: list[str] = []
+    responses: list[str] = []
+    other: list[str] = []
+    outputs = entry.get("outputs") or {}
+    if not isinstance(outputs, dict):
+        return []
+    for node_out in outputs.values():
+        if not isinstance(node_out, dict):
+            continue
+        if "tags" in node_out:
+            tagged.extend(_collect_strings(node_out.get("tags")))
+            continue
+        if "RESPONSE" in node_out:
+            responses.extend(_collect_strings(node_out.get("RESPONSE")))
+            continue
+        for key in ("text", "string"):
+            other.extend(_collect_strings(node_out.get(key)))
+    found = tagged or responses or other
+    return [item.strip() for item in found if str(item).strip()]
+
+
+def prompt_texts(prompt_id: str) -> list[str]:
+    entry = _history_entry(prompt_id)
+    return output_texts(entry) if entry else []
 
 
 def _prompt_finished(entry: dict[str, Any]) -> bool:

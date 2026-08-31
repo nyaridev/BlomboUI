@@ -189,7 +189,7 @@ def comfy_input_root() -> Path:
     return path
 
 
-def stage_input(src: str | Path, job_id: str, run_i: int) -> Path:
+def stage_input(src: str | Path, job_id: str, run_i: int | str) -> Path:
     source = Path(src)
     ext = source.suffix.lower() if source.suffix.lower() in IMAGE_EXTS else ".png"
     ident = Path(str(job_id)).name or "job"

@@ -8,6 +8,7 @@ from typing import Any
 from infrastructure.comfy.client import workflow_file
 from features.generate.scripts.workflow import rembg
 from features.generate.scripts.workflow import upscale as image_upscale
+from features.generate.scripts.workflow import caption
 from features.generate.scripts.workflow.attention import clean_attention
 from infrastructure.storage.repositories import templates as templates_repo
 
@@ -90,6 +91,17 @@ _UPSCALE_APPLY = (
     "upscaleSeed",
     "upscaleAdvanced",
 )
+_CAPTION_APPLY = (
+    "captionEngine",
+    "captionModel",
+    "captionQuantization",
+    "captionMegapixels",
+    "captionBatch",
+    "captionGuidance",
+    "captionPrefix",
+    "captionSuffix",
+    "captionSaveImage",
+)
 _APPLY = (
     "prompt",
     "negativePrompt",
@@ -115,16 +127,17 @@ _APPLY = (
     "scripts",
     *_REMBG_APPLY,
     *_UPSCALE_APPLY,
+    *_CAPTION_APPLY,
     "attention",
 )
-_LEGACY_APPLY = {"rembg": _REMBG_APPLY, "upscale": _UPSCALE_APPLY}
+_LEGACY_APPLY = {"rembg": _REMBG_APPLY, "upscale": _UPSCALE_APPLY, "caption": _CAPTION_APPLY}
 
 _SCRIPTS = ("", "xy-plot", "prompt-matrix")
 _BLOBS = ("controlnet", "hires", "adetailer")
 
 
 _CONTENT_APPLY = ("prompt", "negativePrompt", "checkpoint", "vae", "textEncoder", "loras")
-_UTILITY_APPLY = _REMBG_APPLY + _UPSCALE_APPLY
+_UTILITY_APPLY = _REMBG_APPLY + _UPSCALE_APPLY + _CAPTION_APPLY
 
 
 def _all_apply() -> list[str]:
@@ -251,6 +264,9 @@ def _clean_params(raw: Any) -> dict[str, Any]:
         cleaned = image_upscale.clean_upscale(upscale_blob)
         out["upscale"] = cleaned
         out["imageUpscale"] = cleaned
+    caption_blob = raw.get("caption")
+    if isinstance(caption_blob, dict):
+        out["caption"] = caption.clean_caption(caption_blob)
     attention_blob = raw.get("attention")
     if isinstance(attention_blob, dict):
         packed = clean_attention(attention_blob)

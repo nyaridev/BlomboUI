@@ -104,6 +104,10 @@ class TemplateTests(unittest.TestCase):
         created = templates.create_template("image_upscale", "4x", {"outputImagePath": "out"})
         self.assertEqual(created["apply"], expected)
 
+    def test_image_caption_default_apply(self) -> None:
+        expected = list(templates._CAPTION_APPLY) + ["outputPath"]
+        self.assertEqual(templates.default_apply("image_caption"), expected)
+
     def test_clean_apply_expands_legacy_rembg(self) -> None:
         expanded = templates._clean_apply(["rembg", "outputPath"])
         self.assertEqual(expanded, list(templates._REMBG_APPLY) + ["outputPath"])

@@ -2,6 +2,7 @@ import { FolderField } from '@/components/controls/folder-field/FolderField.tsx'
 import { OutputPathOverride } from '@/views/generate/panels/generation/sections/params/OutputPathOverride.tsx'
 import { RembgFields } from '@/views/generate/panels/generation/sections/params/RembgFields.tsx'
 import { ImageUpscaleFields } from '@/views/generate/panels/generation/sections/params/ImageUpscaleFields.tsx'
+import { CaptionFields } from '@/views/generate/panels/generation/sections/params/CaptionFields.tsx'
 import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
@@ -18,7 +19,7 @@ import { templateApplyFields, type TemplateParams, SEED_AFTER, type SeedAfter } 
 import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, snapToSet } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState, type ReactNode } from 'react'
-import { getClipLoaderChoices } from '@/lib/api.ts'
+import { getClipLoaderChoices, getKSamplerChoices } from '@/lib/api.ts'
 
 function Label({ children }: { children: string }) {
   return <span className="text-xs text-muted">{children}</span>
@@ -54,9 +55,24 @@ export function TemplateParamsForm({
   workflowParams = [],
 }: TemplateParamsFormProps) {
   const [tab, setTab] = useState<'generation' | 'controlnet' | 'hires' | 'adetailer'>('generation')
+  const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
+  const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
   const [clipTypes, setClipTypes] = useState<string[]>(['stable_diffusion', 'krea2'])
   const [clipDevices, setClipDevices] = useState<string[]>(['default', 'cpu'])
   const showClipLoader = workflowParams.includes('clipType')
+
+  useEffect(() => {
+    void getKSamplerChoices()
+      .then((data) => {
+        if (data.samplers.length) {
+          setSamplers(data.samplers)
+        }
+        if (data.schedulers.length) {
+          setSchedulers(data.schedulers)
+        }
+      })
+      .catch(() => {})
+  }, [])
 
   useEffect(() => {
     if (!showClipLoader) {
@@ -82,6 +98,7 @@ export function TemplateParamsForm({
   const none = visibleApply.every((field) => !apply.includes(field.id))
   const rembg = workflowParams.includes('rembg')
   const upscale = workflowParams.includes('upscale')
+  const caption = workflowParams.includes('caption')
   function set<K extends keyof TemplateParams>(key: K, next: TemplateParams[K]) {
     if (locked) {
       return
@@ -160,6 +177,44 @@ export function TemplateParamsForm({
             </ApplyRow>
           </ParamSection>
         </div>
+      ) : caption ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
+          <CaptionFields
+            value={value.caption}
+            onChange={(caption) => onChange({ ...value, caption: { ...value.caption, ...caption } })}
+            locked={locked}
+            wrap={(id, node) => (
+              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                {node}
+              </ApplyRow>
+            )}
+          />
+          <ParamSection title="Output">
+            <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
+              <div className="flex flex-col gap-stack">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Label>Output folder</Label>
+                  <FolderField
+                    value={value.outputImagePath}
+                    onChange={(outputImagePath) => set('outputImagePath', outputImagePath)}
+                    placeholder="image_caption/[date]"
+                  />
+                </div>
+                <div className="flex min-w-0 flex-col gap-1">
+                  <Label>Output name</Label>
+                  <input
+                    className="box-border h-toolbar min-w-0 w-full rounded border border-line bg-field px-2 py-0 font-mono text-sm leading-[1.875rem] text-ink outline-none placeholder:text-muted focus:border-accent"
+                    value={value.outputImageName}
+                    onChange={(event) => set('outputImageName', event.target.value)}
+                    placeholder="[index]"
+                    spellCheck={false}
+                    disabled={locked}
+                  />
+                </div>
+              </div>
+            </ApplyRow>
+          </ParamSection>
+        </div>
       ) : (
         <>
       <TabsList
@@ -234,7 +289,7 @@ export function TemplateParamsForm({
               <SelectField
                 value={value.sampler}
                 onChange={(sampler) => set('sampler', sampler)}
-                options={listedChoices(SAMPLERS, hiddenSamplers, value.sampler)}
+                options={listedChoices(samplers, hiddenSamplers, value.sampler)}
               />
             </div>
           </ApplyRow>
@@ -244,7 +299,7 @@ export function TemplateParamsForm({
               <SelectField
                 value={value.scheduler}
                 onChange={(scheduler) => set('scheduler', scheduler)}
-                options={listedChoices(SCHEDULERS, hiddenSchedulers, value.scheduler)}
+                options={listedChoices(schedulers, hiddenSchedulers, value.scheduler)}
               />
             </div>
           </ApplyRow>

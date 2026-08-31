@@ -55,6 +55,11 @@ def delete_template(workflow: str, template_id: str) -> dict:
     return {"ok": True}
 
 
+@api.get("/comfy/ksampler")
+def comfy_ksampler() -> dict:
+    return generate.ksampler_choices()
+
+
 @api.get("/comfy/clip-loader")
 def comfy_clip_loader() -> dict:
     return generate.clip_loader_choices()

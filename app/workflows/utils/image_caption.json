@@ -1,0 +1,92 @@
+{
+  "name": "Image Caption",
+  "category": "utility",
+  "apply": [
+    "captionEngine",
+    "captionModel",
+    "captionQuantization",
+    "captionMegapixels",
+    "captionBatch",
+    "captionGuidance",
+    "captionPrefix",
+    "captionSuffix",
+    "captionSaveImage",
+    "outputPath"
+  ],
+  "extras": ["caption"],
+  "1": {
+    "inputs": {
+      "image": "example.png"
+    },
+    "class_type": "LoadImage",
+    "_meta": {
+      "title": "Load Image"
+    }
+  },
+  "2": {
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 1024,
+      "height": 1024,
+      "crop": "disabled",
+      "image": ["1", 0]
+    },
+    "class_type": "ImageScale",
+    "_meta": {
+      "title": "Scale Image"
+    }
+  },
+  "3": {
+    "inputs": {
+      "image": ["2", 0],
+      "model": "wd-swinv2-tagger-v3",
+      "threshold": 0.35,
+      "character_threshold": 0.85,
+      "replace_underscore": false,
+      "trailing_comma": false,
+      "exclude_tags": ""
+    },
+    "class_type": "WD14Tagger|pysssss",
+    "_meta": {
+      "title": "WD14 Tagger"
+    }
+  },
+  "4": {
+    "inputs": {
+      "model_name": "Qwen3-VL-4B-Instruct",
+      "quantization": "8-bit (Balanced)",
+      "attention_mode": "auto",
+      "preset_prompt": "🖼️ Detailed Description",
+      "custom_prompt": "",
+      "max_tokens": 512,
+      "keep_model_loaded": true,
+      "seed": 1,
+      "image": ["2", 0]
+    },
+    "class_type": "AILab_QwenVL",
+    "_meta": {
+      "title": "QwenVL"
+    }
+  },
+  "5": {
+    "inputs": {
+      "filename_prefix": "blombo",
+      "images": ["2", 0]
+    },
+    "class_type": "SaveImage",
+    "_meta": {
+      "title": "Save Image"
+    }
+  },
+  "6": {
+    "inputs": {
+      "string": ["4", 0],
+      "filename_prefix": "blombo-caption",
+      "output_folder": "output"
+    },
+    "class_type": "SaveStringKJ",
+    "_meta": {
+      "title": "Save Caption Text"
+    }
+  }
+}

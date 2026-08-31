@@ -73,6 +73,8 @@ export function GenerateView() {
   const rembgFiles = useGenerateStore((s) => s.rembgFiles)
   const imageUpscale = useGenerateStore((s) => s.imageUpscale)
   const imageUpscaleFiles = useGenerateStore((s) => s.imageUpscaleFiles)
+  const caption = useGenerateStore((s) => s.caption)
+  const captionFiles = useGenerateStore((s) => s.captionFiles)
   const setImageUpscale = useGenerateStore((s) => s.setImageUpscale)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
@@ -128,7 +130,8 @@ export function GenerateView() {
   const workflowParams = workflows.find((item) => item.id === workflow)?.params ?? []
   const rembgMode = workflowParams.includes('rembg')
   const upscaleMode = workflowParams.includes('upscale')
-  const fileUtility = rembgMode || upscaleMode
+  const captionMode = workflowParams.includes('caption')
+  const fileUtility = rembgMode || upscaleMode || captionMode
 
   useEffect(() => {
     void getWorkflows()
@@ -234,13 +237,14 @@ export function GenerateView() {
   async function generate() {
     const rembgMode = workflowParams.includes('rembg')
     const upscaleMode = workflowParams.includes('upscale')
-    const fileUtility = rembgMode || upscaleMode
+    const captionMode = workflowParams.includes('caption')
+    const fileUtility = rembgMode || upscaleMode || captionMode
     if (!fileUtility && !checkpoint.trim()) {
       return
     }
     if (fileUtility) {
-      const input = rembgMode ? rembg : imageUpscale
-      const files = rembgMode ? rembgFiles : imageUpscaleFiles
+      const input = rembgMode ? rembg : upscaleMode ? imageUpscale : caption
+      const files = rembgMode ? rembgFiles : upscaleMode ? imageUpscaleFiles : captionFiles
       if (input.inputMode === 'files' && !files.length) {
         return
       }
@@ -338,9 +342,9 @@ export function GenerateView() {
     }
     try {
       const gen = useGenerateStore.getState()
-      const inputFiles = rembgMode ? rembgFiles : imageUpscaleFiles
-      const inputMode = rembgMode ? rembg.inputMode : imageUpscale.inputMode
-      const inputDir = rembgMode ? rembg.inputDir : imageUpscale.inputDir
+      const inputFiles = rembgMode ? rembgFiles : upscaleMode ? imageUpscaleFiles : captionFiles
+      const inputMode = rembgMode ? rembg.inputMode : upscaleMode ? imageUpscale.inputMode : caption.inputMode
+      const inputDir = rembgMode ? rembg.inputDir : upscaleMode ? imageUpscale.inputDir : caption.inputDir
       const inputPaths =
         fileUtility && inputMode === 'files' ? await uploadJobImages(inputFiles) : undefined
       const next = await createJob({
@@ -374,9 +378,13 @@ export function GenerateView() {
         workflow,
         template: templateId,
         output_image_path:
-          rembgMode || upscaleMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
+          rembgMode || upscaleMode || captionMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
         output_grid_path: outputPathEnabled ? outputGridPath.trim() || undefined : undefined,
-        output_image_name: outputPathEnabled ? outputImageName.trim() || undefined : undefined,
+        output_image_name: captionMode
+          ? outputImageName
+          : outputPathEnabled
+            ? outputImageName.trim() || undefined
+            : undefined,
         output_grid_name: outputPathEnabled ? outputGridName.trim() || undefined : undefined,
         output_hires_path: outputPathEnabled ? outputHiresPath.trim() || undefined : undefined,
         output_hires_name: outputPathEnabled ? outputHiresName.trim() || undefined : undefined,
@@ -543,6 +551,24 @@ export function GenerateView() {
               dynamo_recompile_limit: imageUpscale.dynamoRecompileLimit,
             }
           : undefined,
+        caption: captionMode
+          ? {
+              engine: caption.engine,
+              wd14_model: caption.wd14Model,
+              qwen_model: caption.qwenModel,
+              quantization: caption.quantization,
+              guidance: caption.guidance,
+              prefix: caption.prefix,
+              suffix: caption.suffix,
+              megapixels: caption.megapixels,
+              batch_count: caption.batchCount,
+              save_image: caption.saveImage,
+              threshold: caption.threshold,
+              character_threshold: caption.characterThreshold,
+              input_mode: caption.inputMode,
+              input_dir: caption.inputDir,
+            }
+          : undefined,
         input_dir: fileUtility && inputMode === 'directory' ? inputDir.trim() : undefined,
         input_paths: inputPaths,
       })
@@ -679,9 +705,13 @@ export function GenerateView() {
           ? rembg.inputMode === 'directory'
             ? Boolean(rembg.inputDir.trim())
             : rembgFiles.length > 0
-          : imageUpscale.inputMode === 'directory'
-            ? Boolean(imageUpscale.inputDir.trim())
-            : imageUpscaleFiles.length > 0) &&
+          : upscaleMode
+            ? imageUpscale.inputMode === 'directory'
+              ? Boolean(imageUpscale.inputDir.trim())
+              : imageUpscaleFiles.length > 0
+            : caption.inputMode === 'directory'
+              ? Boolean(caption.inputDir.trim())
+              : captionFiles.length > 0) &&
         (!upscaleMode || imageUpscale.engine !== 'model' || Boolean(imageUpscale.upscaleModel.trim()))
       : Boolean(checkpoint.trim()) &&
         (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&

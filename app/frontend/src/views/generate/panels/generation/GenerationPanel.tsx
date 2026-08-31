@@ -69,7 +69,7 @@ export function GenerationPanel({
       jobProgressPct={jobPct}
       jobProgressLabel={overallLabel}
       timing={timing}
-      hideInfo={workflowParams.includes('rembg') || workflowParams.includes('upscale')}
+      hideInfo={workflowParams.includes('rembg') || workflowParams.includes('upscale') || workflowParams.includes('caption')}
     />
   )
   return (

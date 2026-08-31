@@ -169,6 +169,72 @@ export function mergeRembg(raw: unknown): RembgSettings {
   }
 }
 
+export type CaptionEngine = 'wd14' | 'qwen'
+
+export type CaptionSettings = {
+  inputMode: RembgInputMode
+  inputDir: string
+  engine: CaptionEngine
+  wd14Model: string
+  qwenModel: string
+  quantization: string
+  guidance: string
+  prefix: string
+  suffix: string
+  megapixels: number
+  batchCount: number
+  saveImage: boolean
+  threshold: number
+  characterThreshold: number
+}
+
+export const DEFAULT_CAPTION: CaptionSettings = {
+  inputMode: 'files',
+  inputDir: '',
+  engine: 'wd14',
+  wd14Model: 'wd-swinv2-tagger-v3',
+  qwenModel: 'Qwen3-VL-4B-Instruct',
+  quantization: '8-bit (Balanced)',
+  guidance: '',
+  prefix: '',
+  suffix: '',
+  megapixels: 1,
+  batchCount: 1,
+  saveImage: true,
+  threshold: 0.35,
+  characterThreshold: 0.85,
+}
+
+export function mergeCaption(raw: unknown): CaptionSettings {
+  const base = cloneJson(DEFAULT_CAPTION)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return base
+  }
+  const row = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback)
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  const engine = text(row.engine, base.engine)
+  const inputMode = text(row.inputMode ?? row.input_mode, base.inputMode)
+  const saveRaw = row.saveImage ?? row.save_image
+  return {
+    inputMode: inputMode === 'directory' ? 'directory' : 'files',
+    inputDir: text(row.inputDir ?? row.input_dir, base.inputDir),
+    engine: engine === 'qwen' ? 'qwen' : 'wd14',
+    wd14Model: text(row.wd14Model ?? row.wd14_model, base.wd14Model) || base.wd14Model,
+    qwenModel: text(row.qwenModel ?? row.qwen_model, base.qwenModel) || base.qwenModel,
+    quantization: text(row.quantization, base.quantization) || base.quantization,
+    guidance: text(row.guidance, base.guidance),
+    prefix: text(row.prefix, base.prefix),
+    suffix: text(row.suffix, base.suffix),
+    megapixels: Math.max(0.25, Math.min(4, num(row.megapixels, base.megapixels))),
+    batchCount: Math.max(1, Math.min(16, Math.round(num(row.batchCount ?? row.batch_count, base.batchCount)))),
+    saveImage: typeof saveRaw === 'boolean' ? saveRaw : base.saveImage,
+    threshold: Math.max(0, Math.min(1, num(row.threshold, base.threshold))),
+    characterThreshold: Math.max(0, Math.min(1, num(row.characterThreshold ?? row.character_threshold, base.characterThreshold))),
+  }
+}
+
 export type ImageUpscaleEngine = 'model' | 'seedvr2'
 
 export type ImageUpscaleSettings = {
@@ -900,6 +966,7 @@ export const DEFAULTS = {
   xyPlot: cloneJson(DEFAULT_XY_PLOT),
   rembg: cloneJson(DEFAULT_REMBG),
   imageUpscale: cloneJson(DEFAULT_IMAGE_UPSCALE),
+  caption: cloneJson(DEFAULT_CAPTION),
   attention: cloneJson(DEFAULT_ATTENTION),
   activeLoraOrder: [] as string[],
   activeLoraStrengths: {} as Record<string, number>,
@@ -944,6 +1011,7 @@ export const PARAM_KEYS = [
   'xyPlot',
   'rembg',
   'imageUpscale',
+  'caption',
   'attention',
   'activeLoraOrder',
   'activeLoraStrengths',
@@ -988,6 +1056,7 @@ export type TemplateParams = {
   xyPlot: XyPlotSettings
   rembg: RembgSettings
   imageUpscale: ImageUpscaleSettings
+  caption: CaptionSettings
   attention: AttentionSettings
   activeLoraOrder: string[]
   activeLoraStrengths: Record<string, number>
@@ -1033,6 +1102,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     xyPlot: cloneJson(source.xyPlot),
     rembg: mergeRembg(source.rembg),
     imageUpscale: mergeImageUpscale(source.imageUpscale),
+    caption: mergeCaption(source.caption),
     attention: mergeAttention(source.attention),
     activeLoraOrder: [...(source.activeLoraOrder ?? [])],
     activeLoraStrengths: { ...(source.activeLoraStrengths ?? {}) },
@@ -1093,6 +1163,10 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       }
       if (key === 'imageUpscale') {
         next.imageUpscale = mergeImageUpscale(value)
+        continue
+      }
+      if (key === 'caption') {
+        next.caption = mergeCaption(value)
         continue
       }
       if (key === 'attention') {
@@ -1198,6 +1272,10 @@ function upscaleApply(id: string, label: string, nested: readonly (keyof ImageUp
   return { id, label, keys: ['imageUpscale'], nested }
 }
 
+function captionApply(id: string, label: string, nested: readonly (keyof CaptionSettings)[]): ApplyField {
+  return { id, label, keys: ['caption'], nested }
+}
+
 const UPSCALE_ADVANCED_KEYS = [
   'temporalOverlap',
   'prependFrames',
@@ -1276,6 +1354,15 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   upscaleApply('upscaleLatentNoise', 'Latent noise', ['latentNoiseScale']),
   upscaleApply('upscaleSeed', 'Seed', ['seed', 'seedAfter']),
   upscaleApply('upscaleAdvanced', 'Advanced', UPSCALE_ADVANCED_KEYS),
+  captionApply('captionEngine', 'Engine', ['engine']),
+  captionApply('captionModel', 'Model', ['wd14Model', 'qwenModel']),
+  captionApply('captionQuantization', 'Quantization', ['quantization']),
+  captionApply('captionMegapixels', 'Megapixels', ['megapixels']),
+  captionApply('captionBatch', 'Batch count', ['batchCount']),
+  captionApply('captionGuidance', 'Guidance', ['guidance']),
+  captionApply('captionPrefix', 'Prefix', ['prefix']),
+  captionApply('captionSuffix', 'Suffix', ['suffix']),
+  captionApply('captionSaveImage', 'Save image', ['saveImage']),
 ]
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
@@ -1283,6 +1370,7 @@ const UTILITY_APPLY = new Set(APPLY_FIELDS.filter((field) => field.nested).map((
 const LEGACY_APPLY: Record<string, string[]> = {
   rembg: APPLY_FIELDS.filter((field) => field.keys[0] === 'rembg').map((field) => field.id),
   upscale: APPLY_FIELDS.filter((field) => field.keys[0] === 'imageUpscale').map((field) => field.id),
+  caption: APPLY_FIELDS.filter((field) => field.keys[0] === 'caption').map((field) => field.id),
 }
 
 export const DEFAULT_APPLY = APPLY_FIELDS.map((field) => field.id).filter(
@@ -1295,6 +1383,9 @@ export function templateApplyFields(workflowParams: string[]) {
   }
   if (workflowParams.includes('upscale')) {
     return APPLY_FIELDS.filter((field) => field.keys[0] === 'imageUpscale' || field.id === 'outputPath')
+  }
+  if (workflowParams.includes('caption')) {
+    return APPLY_FIELDS.filter((field) => field.keys[0] === 'caption' || field.id === 'outputPath')
   }
   return APPLY_FIELDS.filter((field) => {
     if (field.id === 'checkpoint' || field.id === 'vae' || field.id === 'textEncoder' || field.id === 'loras') {
@@ -1570,6 +1661,8 @@ type GenerateState = {
   rembgFiles: File[]
   imageUpscale: ImageUpscaleSettings
   imageUpscaleFiles: File[]
+  caption: CaptionSettings
+  captionFiles: File[]
   attention: AttentionSettings
   workflow: string
   templateId: string
@@ -1636,6 +1729,8 @@ type GenerateState = {
   setRembgFiles: (value: File[]) => void
   setImageUpscale: (value: Partial<ImageUpscaleSettings>) => void
   setImageUpscaleFiles: (value: File[]) => void
+  setCaption: (value: Partial<CaptionSettings>) => void
+  setCaptionFiles: (value: File[]) => void
   setAttention: (value: Partial<AttentionSettings>) => void
   setWorkflow: (value: string, defaults?: Partial<TemplateParams> | Record<string, unknown>) => void
   setTemplateId: (value: string) => void
@@ -1657,6 +1752,7 @@ export const useGenerateStore = create<GenerateState>()(
       viewedImageUrl: null,
       rembgFiles: [],
       imageUpscaleFiles: [],
+      captionFiles: [],
       modelTileStyle: 'tall',
       vae: '',
       textEncoder: '',
@@ -1733,6 +1829,8 @@ export const useGenerateStore = create<GenerateState>()(
       setImageUpscale: (imageUpscale) =>
         set((s) => ({ imageUpscale: mergeImageUpscale({ ...s.imageUpscale, ...imageUpscale }) })),
       setImageUpscaleFiles: (imageUpscaleFiles) => set({ imageUpscaleFiles }),
+      setCaption: (caption) => set((s) => ({ caption: mergeCaption({ ...s.caption, ...caption }) })),
+      setCaptionFiles: (captionFiles) => set({ captionFiles }),
       setAttention: (attention) => set((s) => ({ attention: mergeAttention({ ...s.attention, ...attention }) })),
       setWorkflow: (workflow, defaults) =>
         set((s) =>
@@ -1776,7 +1874,7 @@ export const useGenerateStore = create<GenerateState>()(
         return migrateGeneratePersist(persisted, parseParamsByWorkflow)
       },
       partialize: (s) => {
-        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, ...rest } = s
+        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, captionFiles: _captionFiles, ...rest } = s
         return {
           ...rest,
           paramsByWorkflow: { ...s.paramsByWorkflow, [s.workflow]: pickParams(s) },

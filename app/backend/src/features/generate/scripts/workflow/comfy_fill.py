@@ -18,6 +18,7 @@ from features.generate.scripts.workflow.compose import (
     hires_enabled,
 )
 from features.generate.scripts.workflow.attention import apply_attention, attention_meta, stage_attention
+from features.generate.scripts.workflow.caption import apply_caption, is_caption
 from features.generate.scripts.workflow.rembg import clean_rembg, is_rembg
 from features.generate.scripts.workflow.upscale import apply_upscale, is_file_utility, is_image_upscale
 from features.models.scripts import loras as lora_tags
@@ -1169,7 +1170,7 @@ def fill_txt2img(
             if upscale:
                 inputs["model_name"] = upscale
         elif kind == "ImageScale":
-            if is_image_upscale(values):
+            if is_image_upscale(values) or is_caption(values):
                 continue
             width, height = hires_target_size(values)
             method, crop = _hires_scale_opts(blob)
@@ -1187,6 +1188,8 @@ def fill_txt2img(
         _apply_rembg_engine(workflow, values)
     if is_image_upscale(values):
         apply_upscale(workflow, values, filename)
+    if is_caption(values):
+        apply_caption(workflow, values)
     if hires_enabled(values):
         _rewire_hires(workflow, values, filename)
     _apply_hires_saves(workflow, values)

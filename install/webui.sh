@@ -185,7 +185,9 @@ for node_name in \
   ComfyUI-Impact-Subpack \
   ComfyUI-RMBG \
   ComfyUI-SeedVR2_VideoUpscaler \
-  ComfyUI-GGUF
+  ComfyUI-GGUF \
+  ComfyUI-QwenVL \
+  ComfyUI-WD14-Tagger
 do
   if [ ! -d "$COMFY_DIR/custom_nodes/$node_name" ]; then
     need_comfy_deps=1

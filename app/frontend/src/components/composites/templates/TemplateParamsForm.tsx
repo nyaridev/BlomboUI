@@ -302,8 +302,8 @@ export function TemplateParamsForm({
                 <Label>Clip skip</Label>
                 <NumberField
                   value={value.clipSkip}
-                  onChange={(clipSkip) => set('clipSkip', Math.max(1, Math.min(10, Math.round(clipSkip))))}
-                  min={1}
+                  onChange={(clipSkip) => set('clipSkip', Math.max(0, Math.min(10, Math.round(clipSkip))))}
+                  min={0}
                   max={10}
                 />
               </label>

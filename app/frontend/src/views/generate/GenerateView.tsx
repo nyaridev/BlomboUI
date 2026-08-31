@@ -353,7 +353,7 @@ export function GenerateView() {
         height,
         steps,
         cfg: Math.max(1, cfg),
-        clip_skip: Math.max(1, Math.min(10, Math.round(clipSkip))),
+        clip_skip: Math.max(0, Math.min(10, Math.round(clipSkip))),
         clip_type: gen.clipType,
         clip_device: gen.clipDevice,
         seed: used,

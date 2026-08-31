@@ -12,6 +12,7 @@ from features.generate.scripts.workflow.compose import (
     _flag,
     _hires_blob,
     _is_link,
+    _rewire_consumers,
     _rewire_slot,
     _title,
     hires_enabled,
@@ -66,15 +67,30 @@ def _is_port(node: dict[str, Any]) -> bool:
     return _title(node).startswith("port:")
 
 
-def _clip_skip_layer(values: dict[str, Any]) -> int:
+def _clip_skip_n(values: dict[str, Any]) -> int:
     raw = values.get("clip_skip")
     if raw is None:
         raw = values.get("clipSkip")
     try:
         n = abs(int(raw))
     except (TypeError, ValueError):
-        n = 2
-    return -max(1, min(10, n or 2))
+        return 2
+    if n == 0:
+        return 0
+    return max(1, min(10, n))
+
+
+def _clip_skip_layer(values: dict[str, Any]) -> int:
+    n = _clip_skip_n(values)
+    return -n if n else -2
+
+
+def _bypass_clip_skip(workflow: dict[str, Any]) -> None:
+    for key, node in _typed_nodes(workflow, "CLIPSetLastLayer"):
+        clip = (node.get("inputs") or {}).get("clip")
+        if _is_link(clip):
+            _rewire_consumers(workflow, str(key), [str(clip[0]), clip[1]])
+        workflow.pop(key, None)
 
 
 def adetailer_enabled(values: dict[str, Any]) -> bool:
@@ -1124,6 +1140,8 @@ def fill_txt2img(
             else:
                 inputs["text"] = clip_negative
         elif kind == "CLIPSetLastLayer":
+            if _clip_skip_n(values) == 0:
+                continue
             inputs["stop_at_clip_layer"] = _clip_skip_layer(values)
         elif kind == "KSampler":
             if _is_hires(node):
@@ -1179,4 +1197,6 @@ def fill_txt2img(
         latent.setdefault("inputs", {})["batch_size"] = batch_size
     _promote_gguf_loaders(workflow)
     _trim_power_loras(workflow)
+    if _clip_skip_n(values) == 0:
+        _bypass_clip_skip(workflow)
     return workflow

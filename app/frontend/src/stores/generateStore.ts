@@ -1120,7 +1120,7 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
     }
   }
   if (typeof next.clipSkip === 'number' && Number.isFinite(next.clipSkip)) {
-    next.clipSkip = Math.max(1, Math.min(10, Math.round(next.clipSkip)))
+    next.clipSkip = Math.max(0, Math.min(10, Math.round(next.clipSkip)))
   } else {
     next.clipSkip = DEFAULTS.clipSkip
   }
@@ -1433,7 +1433,7 @@ export function mixParams(current: TemplateParams, incoming: TemplateParams, app
     assignNested(next, source, field)
   }
   next.cfg = Math.max(1, next.cfg)
-  next.clipSkip = Math.max(1, Math.min(10, Math.round(next.clipSkip)))
+  next.clipSkip = Math.max(0, Math.min(10, Math.round(next.clipSkip)))
   return next
 }
 
@@ -1670,7 +1670,7 @@ export const useGenerateStore = create<GenerateState>()(
       setHeight: (height) => set({ height }),
       setSteps: (steps) => set({ steps }),
       setCfg: (cfg) => set({ cfg: Math.max(1, cfg) }),
-      setClipSkip: (clipSkip) => set({ clipSkip: Math.max(1, Math.min(10, Math.round(clipSkip))) }),
+      setClipSkip: (clipSkip) => set({ clipSkip: Math.max(0, Math.min(10, Math.round(clipSkip))) }),
       setClipType: (clipType) => set({ clipType }),
       setClipDevice: (clipDevice) => set({ clipDevice }),
       setSeed: (seed) => set({ seed }),

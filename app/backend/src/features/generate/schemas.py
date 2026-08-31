@@ -233,7 +233,7 @@ class JobIn(BaseModel):
     height: int | None = Field(default=None, ge=64, le=4096)
     steps: int | None = Field(default=None, ge=1, le=150)
     cfg: float | None = Field(default=None, ge=1, le=30)
-    clip_skip: int | None = Field(default=None, ge=1, le=10)
+    clip_skip: int | None = Field(default=None, ge=0, le=10)
     clip_type: str | None = None
     clip_device: str | None = None
     seed: int | None = None

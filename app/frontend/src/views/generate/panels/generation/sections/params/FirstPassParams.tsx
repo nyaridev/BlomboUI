@@ -353,7 +353,7 @@ export function FirstPassParams({
       ) : workflowParams.includes('clipSkip') ? (
         <div className="flex min-w-0 items-end gap-stack">
           <div className="min-w-0 flex-1">
-            <SliderField label="Clip skip" value={clipSkip} onChange={setClipSkip} min={1} max={10} />
+            <SliderField label="Clip skip" value={clipSkip} onChange={setClipSkip} min={0} max={10} />
           </div>
           <div className="min-w-0 flex-1">
             <SliderField label="CFG" value={cfg} onChange={setCfg} min={1} max={30} step={0.5} />

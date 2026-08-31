@@ -360,6 +360,18 @@ class DiffusionFillTests(unittest.TestCase):
         graph = fill({**base_values(), "workflow": "sd15", "clip_skip": 7})
         _, skip = find(graph, "CLIPSetLastLayer")
         self.assertEqual(skip["inputs"]["stop_at_clip_layer"], -7)
+        graph = fill(
+            {
+                **base_values(),
+                "workflow": "sd15",
+                "clip_skip": 0,
+                "loras": [{"lora": "x.safetensors", "strength": 1}],
+            }
+        )
+        kinds = {node.get("class_type") for node in graph.values() if isinstance(node, dict)}
+        self.assertNotIn("CLIPSetLastLayer", kinds)
+        self.assertEqual(graph["2"]["inputs"]["clip"], ["12", 1])
+        self.assertEqual(graph["3"]["inputs"]["clip"], ["12", 1])
 
     def test_fill_hires_sampler_and_scale_size(self) -> None:
         graph = fill(

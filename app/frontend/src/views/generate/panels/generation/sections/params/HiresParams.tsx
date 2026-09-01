@@ -3,7 +3,7 @@ import { DEFAULT_HIRES, useGenerateStore, type HiresSettings } from '@/stores/ge
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { SAMPLERS, SCHEDULERS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { HiresExtrasBody } from '@/views/generate/panels/generation/sections/params/HiresExtrasBody.tsx'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 export function HiresParams({
   value,
@@ -13,6 +13,7 @@ export function HiresParams({
   width: widthProp,
   height: heightProp,
   lastSeed = null,
+  wrap,
 }: {
   value?: HiresSettings
   onChange?: (next: HiresSettings) => void
@@ -21,6 +22,7 @@ export function HiresParams({
   width?: number
   height?: number
   lastSeed?: number | null
+  wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const storeHires = useGenerateStore((s) => s.hires)
   const storeWidth = useGenerateStore((s) => s.width)
@@ -74,6 +76,7 @@ export function HiresParams({
       hiddenSamplers={hiddenSamplers}
       hiddenSchedulers={hiddenSchedulers}
       setResolutions={setResolutions}
+      wrap={wrap}
     />
   )
 }

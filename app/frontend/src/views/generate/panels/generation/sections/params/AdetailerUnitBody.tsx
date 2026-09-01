@@ -1,5 +1,6 @@
 import { ModelPickTile } from '@/components/composites/models/ModelPickTile.tsx'
 import { CheckRow } from '@/components/controls/check-row/CheckRow.tsx'
+import { ExpandSection } from '@/components/controls/expand-section/ExpandSection.tsx'
 import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
@@ -17,6 +18,7 @@ import { AdetailerModelTiles } from '@/views/generate/panels/generation/sections
 import { AttentionFields, useAttentionCaps } from '@/views/generate/panels/generation/sections/params/AttentionFields.tsx'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import { listedChoices } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
+import type { ReactNode } from 'react'
 
 const BOX = 'rounded-md border border-line bg-panel p-2.5'
 
@@ -29,6 +31,7 @@ export function AdetailerUnitBody({
   schedulers,
   hiddenSamplers,
   hiddenSchedulers,
+  wrap,
 }: {
   unit: AdetailerUnit
   patch: (next: Partial<AdetailerUnit>) => void
@@ -38,84 +41,111 @@ export function AdetailerUnitBody({
   schedulers: string[]
   hiddenSamplers: string[]
   hiddenSchedulers: string[]
+  wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const { any: attentionInstalled } = useAttentionCaps()
+  function box(id: string, node: ReactNode) {
+    return wrap ? wrap(id, node) : node
+  }
   return (
     <div className="flex flex-col gap-stack">
       <div className="flex items-stretch justify-center gap-cluster">
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Detector</span>
-          <ModelPickTile
-            kind="ultralytics"
-            role="BBox"
-            size="tall"
-            chromeKey="generate-detector"
-            value={unit.detector}
-            onChange={(detector) => patch({ detector })}
-            onClear={locked ? undefined : () => patch({ detector: '' })}
-            disabled={locked}
-          />
-        </div>
-        <div className="w-px self-stretch bg-line" />
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">SAM</span>
-          <ModelPickTile
-            kind="sams"
-            role="SAM"
-            size="tall"
-            chromeKey="generate-sam"
-            value={unit.samModel}
-            onChange={(samModel) => patch({ samModel })}
-            onClear={locked ? undefined : () => patch({ samModel: '' })}
-            disabled={locked}
-          />
-        </div>
+        {box(
+          'adetailerDetector',
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Detector</span>
+            <ModelPickTile
+              kind="ultralytics"
+              role="BBox"
+              size="tall"
+              chromeKey="generate-detector"
+              value={unit.detector}
+              onChange={(detector) => patch({ detector })}
+              onClear={locked ? undefined : () => patch({ detector: '' })}
+              disabled={locked}
+            />
+          </div>,
+        )}
+        {wrap ? null : <div className="w-px self-stretch bg-line" />}
+        {box(
+          'adetailerSam',
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">SAM</span>
+            <ModelPickTile
+              kind="sams"
+              role="SAM"
+              size="tall"
+              chromeKey="generate-sam"
+              value={unit.samModel}
+              onChange={(samModel) => patch({ samModel })}
+              onClear={locked ? undefined : () => patch({ samModel: '' })}
+              disabled={locked}
+            />
+          </div>,
+        )}
       </div>
       <ParamSection title="Params">
         <div className="grid grid-cols-2 gap-stack">
-          <SliderField
-            label="Guide size"
-            value={unit.guideSize}
-            onChange={(guideSize) => patch({ guideSize })}
-            min={64}
-            max={2048}
-            step={8}
-          />
-          <SliderField
-            label="Max size"
-            value={unit.maxSize}
-            onChange={(maxSize) => patch({ maxSize })}
-            min={64}
-            max={4096}
-            step={8}
-          />
-          <SliderField label="Steps" value={unit.steps} onChange={(steps) => patch({ steps })} min={1} max={150} />
-          <SliderField
-            label="Denoise"
-            value={unit.denoise}
-            onChange={(denoise) => patch({ denoise })}
-            min={0}
-            max={1}
-            step={0.05}
-          />
+          {box(
+            'adetailerGuideSize',
+            <SliderField
+              label="Guide size"
+              value={unit.guideSize}
+              onChange={(guideSize) => patch({ guideSize })}
+              min={64}
+              max={2048}
+              step={8}
+            />,
+          )}
+          {box(
+            'adetailerMaxSize',
+            <SliderField
+              label="Max size"
+              value={unit.maxSize}
+              onChange={(maxSize) => patch({ maxSize })}
+              min={64}
+              max={4096}
+              step={8}
+            />,
+          )}
+          {box(
+            'adetailerSteps',
+            <SliderField label="Steps" value={unit.steps} onChange={(steps) => patch({ steps })} min={1} max={150} />,
+          )}
+          {box(
+            'adetailerDenoise',
+            <SliderField
+              label="Denoise"
+              value={unit.denoise}
+              onChange={(denoise) => patch({ denoise })}
+              min={0}
+              max={1}
+              step={0.05}
+            />,
+          )}
         </div>
       </ParamSection>
       <ParamSection title="Settings">
         <div className="grid w-full grid-cols-2 gap-cluster">
-          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-            <CheckboxControl
-              checked={unit.fromHires !== false}
-              disabled={locked}
-              onChange={(fromHires) => patch({ fromHires })}
-            />
-            Use Hires. fix overrides if enabled
-          </label>
+          {box(
+            'adetailerFromHires',
+            <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
+              <CheckboxControl
+                checked={unit.fromHires !== false}
+                disabled={locked}
+                onChange={(fromHires) => patch({ fromHires })}
+              />
+              Use Hires. fix overrides if enabled
+            </label>,
+          )}
         </div>
       </ParamSection>
       <ParamSection title="Overrides">
         <div className="flex flex-col gap-stack">
-          <AdetailerModelTiles unit={unit} patch={patch} locked={locked} />
-          <CheckRow on={unit.promptOverride} onChange={(promptOverride) => patch({ promptOverride })} locked={locked}>
+          {box('adetailerModels', <AdetailerModelTiles unit={unit} patch={patch} locked={locked} />)}
+          {box(
+            'adetailerPrompt',
+            <CheckRow on={unit.promptOverride} onChange={(promptOverride) => patch({ promptOverride })} locked={locked}>
             <div className="h-24 min-w-0">
               <PromptField
                 value={unit.prompt}
@@ -126,12 +156,15 @@ export function AdetailerUnitBody({
                 onCompanionNegative={(negativePrompt) => patch({ negativePrompt })}
               />
             </div>
-          </CheckRow>
-          <CheckRow
-            on={unit.negativeOverride}
-            onChange={(negativeOverride) => patch({ negativeOverride })}
-            locked={locked}
-          >
+          </CheckRow>,
+          )}
+          {box(
+            'adetailerNegative',
+            <CheckRow
+              on={unit.negativeOverride}
+              onChange={(negativeOverride) => patch({ negativeOverride })}
+              locked={locked}
+            >
             <div className="h-20 min-w-0">
               <PromptField
                 value={unit.negativePrompt}
@@ -142,13 +175,16 @@ export function AdetailerUnitBody({
                 onCompanionNegative={(negativePrompt) => patch({ negativePrompt })}
               />
             </div>
-          </CheckRow>
+          </CheckRow>,
+          )}
           <div className="grid grid-cols-3 gap-stack">
-            <CheckRow
-              on={unit.samplerOverride}
-              onChange={(samplerOverride) => patch({ samplerOverride })}
-              locked={locked}
-            >
+            {box(
+              'adetailerSampler',
+              <CheckRow
+                on={unit.samplerOverride}
+                onChange={(samplerOverride) => patch({ samplerOverride })}
+                locked={locked}
+              >
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="text-xs text-muted">Sampler</span>
                 <SelectField
@@ -157,12 +193,15 @@ export function AdetailerUnitBody({
                   options={listedChoices(samplers, hiddenSamplers, unit.sampler)}
                 />
               </div>
-            </CheckRow>
-            <CheckRow
-              on={unit.schedulerOverride}
-              onChange={(schedulerOverride) => patch({ schedulerOverride })}
-              locked={locked}
-            >
+            </CheckRow>,
+            )}
+            {box(
+              'adetailerScheduler',
+              <CheckRow
+                on={unit.schedulerOverride}
+                onChange={(schedulerOverride) => patch({ schedulerOverride })}
+                locked={locked}
+              >
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="text-xs text-muted">Scheduler</span>
                 <SelectField
@@ -171,8 +210,11 @@ export function AdetailerUnitBody({
                   options={listedChoices(schedulers, hiddenSchedulers, unit.scheduler)}
                 />
               </div>
-            </CheckRow>
-            <CheckRow on={unit.cfgOverride} onChange={(cfgOverride) => patch({ cfgOverride })} locked={locked}>
+            </CheckRow>,
+            )}
+            {box(
+              'adetailerCfg',
+              <CheckRow on={unit.cfgOverride} onChange={(cfgOverride) => patch({ cfgOverride })} locked={locked}>
               <SliderField
                 label="CFG"
                 value={unit.cfg}
@@ -181,9 +223,12 @@ export function AdetailerUnitBody({
                 max={30}
                 step={0.5}
               />
-            </CheckRow>
+            </CheckRow>,
+            )}
           </div>
-          <CheckRow on={unit.seedOverride} onChange={(seedOverride) => patch({ seedOverride })} locked={locked}>
+          {box(
+            'adetailerSeed',
+            <CheckRow on={unit.seedOverride} onChange={(seedOverride) => patch({ seedOverride })} locked={locked}>
             <div className="flex items-end gap-stack">
               <label className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="text-xs text-muted">Seed</span>
@@ -209,38 +254,39 @@ export function AdetailerUnitBody({
                 />
               </div>
             </div>
-          </CheckRow>
-          {attentionInstalled ? (
-            <CheckRow
-              on={unit.attentionOverride}
-              onChange={(attentionOverride) => patch({ attentionOverride })}
-              locked={locked}
-              align="start"
-            >
-              <AttentionFields
-                engine={unit.attentionEngine}
-                sageAttention={unit.sageAttention}
-                allowCompile={unit.allowCompile}
-                onChange={(next) =>
-                  patch({
-                    ...(next.engine != null ? { attentionEngine: next.engine } : {}),
-                    ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
-                    ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
-                  })
-                }
-                locked={locked}
-              />
-            </CheckRow>
-          ) : null}
+          </CheckRow>,
+          )}
+          {attentionInstalled
+            ? box(
+                'adetailerAttention',
+                <CheckRow
+                  on={unit.attentionOverride}
+                  onChange={(attentionOverride) => patch({ attentionOverride })}
+                  locked={locked}
+                  align="start"
+                >
+                  <AttentionFields
+                    engine={unit.attentionEngine}
+                    sageAttention={unit.sageAttention}
+                    allowCompile={unit.allowCompile}
+                    onChange={(next) =>
+                      patch({
+                        ...(next.engine != null ? { attentionEngine: next.engine } : {}),
+                        ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
+                        ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
+                      })
+                    }
+                    locked={locked}
+                  />
+                </CheckRow>,
+              )
+            : null}
         </div>
       </ParamSection>
-      <ParamSection title="Advanced">
-        <CheckRow
-          on={unit.advancedOverride}
-          onChange={(advancedOverride) => patch({ advancedOverride })}
-          locked={locked}
-          align="start"
-        >
+      <ParamSection title="Other">
+        {box(
+          'adetailerAdvanced',
+          <ExpandSection title="Advanced" fit locked={locked}>
         <div className="flex flex-col gap-stack">
           <div className="grid grid-cols-2 gap-stack">
             <SliderField
@@ -390,7 +436,8 @@ export function AdetailerUnitBody({
             </label>
           </div>
         </div>
-        </CheckRow>
+        </ExpandSection>,
+        )}
       </ParamSection>
     </div>
   )

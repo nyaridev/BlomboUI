@@ -111,6 +111,42 @@ _CAPTION_APPLY = (
     "captionKeepModelLoaded",
     "captionSeed",
 )
+_HIRES_APPLY = (
+    "hiresModel",
+    "hiresSize",
+    "hiresSteps",
+    "hiresDenoise",
+    "hiresMethod",
+    "hiresCrop",
+    "hiresSaveBefore",
+    "hiresClearVram",
+    "hiresModels",
+    "hiresPrompt",
+    "hiresNegative",
+    "hiresSampler",
+    "hiresScheduler",
+    "hiresCfg",
+    "hiresSeed",
+    "hiresAttention",
+)
+_ADETAILER_APPLY = (
+    "adetailerDetector",
+    "adetailerSam",
+    "adetailerGuideSize",
+    "adetailerMaxSize",
+    "adetailerSteps",
+    "adetailerDenoise",
+    "adetailerFromHires",
+    "adetailerModels",
+    "adetailerPrompt",
+    "adetailerNegative",
+    "adetailerSampler",
+    "adetailerScheduler",
+    "adetailerCfg",
+    "adetailerSeed",
+    "adetailerAttention",
+    "adetailerAdvanced",
+)
 _APPLY = (
     "prompt",
     "negativePrompt",
@@ -131,8 +167,8 @@ _APPLY = (
     "batchCount",
     "batchSize",
     "controlnet",
-    "hires",
-    "adetailer",
+    *_HIRES_APPLY,
+    *_ADETAILER_APPLY,
     "scripts",
     *_REMBG_APPLY,
     *_UPSCALE_APPLY,
@@ -162,8 +198,18 @@ def _clean_apply(raw: Any, fallback: list[str] | None = None) -> list[str]:
     seen: list[str] = []
     for item in raw:
         ident = str(item)
-        if ident in _APPLY and ident not in seen:
-            seen.append(ident)
+        ids = (
+            _ADETAILER_APPLY
+            if ident == "adetailer"
+            else _HIRES_APPLY
+            if ident == "hires"
+            else (ident,)
+            if ident in _APPLY
+            else ()
+        )
+        for next_id in ids:
+            if next_id not in seen:
+                seen.append(next_id)
     return seen
 
 

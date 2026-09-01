@@ -875,7 +875,7 @@ class DiffusionFillTests(unittest.TestCase):
         self.assertEqual(face["inputs"]["clip"], [lora_id, 1])
         self.assertEqual(graph["5"]["inputs"]["model"], [first_lora_id, 0])
 
-    def test_fill_adetailer_advanced_override_off_uses_defaults(self) -> None:
+    def test_fill_adetailer_advanced_uses_slots_without_override(self) -> None:
         graph = fill(
             {
                 **base_values(),
@@ -886,7 +886,7 @@ class DiffusionFillTests(unittest.TestCase):
             }
         )
         _, face = find(graph, "FaceDetailer")
-        self.assertEqual(face["inputs"]["bbox_threshold"], 0.5)
+        self.assertEqual(face["inputs"]["bbox_threshold"], 0.9)
 
     def test_fill_adetailer_advanced_override_on_uses_slots(self) -> None:
         graph = fill(

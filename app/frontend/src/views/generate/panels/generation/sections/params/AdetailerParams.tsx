@@ -9,7 +9,7 @@ import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { AdetailerUnitBody } from '@/views/generate/panels/generation/sections/params/AdetailerUnitBody.tsx'
 import { AdetailerUnitTabs } from '@/views/generate/panels/generation/sections/params/AdetailerUnitTabs.tsx'
 import { SAMPLERS, SCHEDULERS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 export function AdetailerParams({
   value,
@@ -17,12 +17,14 @@ export function AdetailerParams({
   locked = false,
   comfyOk = false,
   lastSeed = null,
+  wrap,
 }: {
   value?: AdetailerSettings
   onChange?: (next: AdetailerSettings) => void
   locked?: boolean
   comfyOk?: boolean
   lastSeed?: number | null
+  wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const store = useGenerateStore((s) => s.adetailer)
   const setAdetailer = useGenerateStore((s) => s.setAdetailer)
@@ -99,6 +101,7 @@ export function AdetailerParams({
           schedulers={schedulers}
           hiddenSamplers={hiddenSamplers}
           hiddenSchedulers={hiddenSchedulers}
+          wrap={wrap}
         />
       </div>
     </div>

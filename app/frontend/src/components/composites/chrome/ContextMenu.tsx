@@ -40,7 +40,8 @@ export function ContextMenu({
     <div
       ref={ref}
       data-overlay=""
-      className="fixed z-[70] min-w-52 rounded border border-line bg-panel py-1 shadow-lg"
+      data-context-menu=""
+      className="pointer-events-auto fixed z-[70] min-w-52 rounded border border-line bg-panel py-1 shadow-lg"
       style={{ left, top }}
       onMouseDown={(event) => event.stopPropagation()}
     >
@@ -69,7 +70,11 @@ export function ContextMenuItem({
         'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-line',
         danger ? 'text-red-bright' : 'text-ink',
       ].join(' ')}
-      onClick={onClick}
+      onPointerDown={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onClick()
+      }}
     >
       {mark ? <AppIcon id={mark} size={14} /> : null}
       <span>{label}</span>

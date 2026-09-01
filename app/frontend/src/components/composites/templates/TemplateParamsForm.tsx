@@ -599,26 +599,32 @@ export function TemplateParamsForm({
           </ApplyRow>
         </div>
         <div className={tab === 'hires' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
-          <ApplyRow id="hires" apply={apply} onToggle={toggle} locked={locked}>
-            <HiresParams
-              value={value.hires}
-              onChange={(hires) => onChange({ ...value, hires })}
-              locked={locked}
-              comfyOk
-              width={value.width}
-              height={value.height}
-            />
-          </ApplyRow>
+          <HiresParams
+            value={value.hires}
+            onChange={(hires) => onChange({ ...value, hires })}
+            locked={locked}
+            comfyOk
+            width={value.width}
+            height={value.height}
+            wrap={(id, node) => (
+              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                {node}
+              </ApplyRow>
+            )}
+          />
         </div>
         <div className={tab === 'adetailer' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
-          <ApplyRow id="adetailer" apply={apply} onToggle={toggle} locked={locked}>
-            <AdetailerParams
-              value={value.adetailer}
-              onChange={(adetailer) => onChange({ ...value, adetailer })}
-              locked={locked}
-              comfyOk
-            />
-          </ApplyRow>
+          <AdetailerParams
+            value={value.adetailer}
+            onChange={(adetailer) => onChange({ ...value, adetailer })}
+            locked={locked}
+            comfyOk
+            wrap={(id, node) => (
+              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                {node}
+              </ApplyRow>
+            )}
+          />
         </div>
       </div>
         </>

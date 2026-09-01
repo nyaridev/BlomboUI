@@ -23,6 +23,14 @@ export function workflowHasPack(
   return Object.hasOwn(paramsByWorkflow, id) || Object.hasOwn(modelsByWorkflow, id)
 }
 
+export function touchRecent(ids: string[], id: string, cap = 5): string[] {
+  return [id, ...ids.filter((item) => item !== id)].slice(0, cap)
+}
+
+export function toggleId(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]
+}
+
 export type WorkflowSwitchState<P extends ContentParams> = P & {
   workflow: string
   paramsByWorkflow: Record<string, P>

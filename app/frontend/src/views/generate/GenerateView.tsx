@@ -20,7 +20,7 @@ import {
   type WorkflowInfo,
 } from '@/lib/api.ts'
 import { digitKey, overlayOpen } from '@/lib/hotkeys.ts'
-import { autoLoraId, nextSeed, nextSeed32, usedSeed, usedSeed32, useGenerateStore, workflowHasPack } from '@/stores/generateStore.ts'
+import { autoLoraId, nextSeed, nextSeed32, usedSeed, usedSeed32, useGenerateStore } from '@/stores/generateStore.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
@@ -135,24 +135,42 @@ export function GenerateView() {
   const fileUtility = rembgMode || upscaleMode || captionMode
 
   useEffect(() => {
-    void getWorkflows()
-      .then((items) => {
-        setWorkflows(items)
-        const state = useGenerateStore.getState()
-        const listed = items.some((item) => item.id === state.workflow)
-        const id = listed ? state.workflow : items.some((item) => item.id === 'sd15') ? 'sd15' : items[0]?.id
-        if (!id) {
+    let gone = false
+    let unsubHydrate: (() => void) | undefined
+    function whenHydrated() {
+      if (useGenerateStore.persist.hasHydrated()) {
+        return Promise.resolve()
+      }
+      return new Promise<void>((resolve) => {
+        unsubHydrate = useGenerateStore.persist.onFinishHydration(() => resolve())
+      })
+    }
+    void Promise.all([getWorkflows(), whenHydrated()])
+      .then(([items]) => {
+        if (gone) {
           return
         }
+        setWorkflows(items)
+        const state = useGenerateStore.getState()
+        if (items.some((item) => item.id === state.workflow)) {
+          return
+        }
+        const id = items.some((item) => item.id === 'sd15') ? 'sd15' : items[0]?.id
         const item = items.find((row) => row.id === id)
         if (!item) {
           return
         }
-        if (id !== state.workflow || !workflowHasPack(state.paramsByWorkflow, state.modelsByWorkflow, id)) {
-          state.setWorkflow(id, item.defaults)
+        state.setWorkflow(id, item.defaults)
+      })
+      .catch(() => {
+        if (!gone) {
+          setWorkflows([])
         }
       })
-      .catch(() => setWorkflows([]))
+    return () => {
+      gone = true
+      unsubHydrate?.()
+    }
   }, [])
 
   useEffect(() => {

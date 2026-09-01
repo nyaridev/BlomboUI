@@ -20,12 +20,17 @@ export function PrimitiveDialog({
           className={contentClassName}
           aria-describedby={undefined}
           onPointerDownOutside={(event) => {
-            if (event.target instanceof Element && event.target.closest('[data-models-picker]')) {
+            if (event.target instanceof Element && event.target.closest('[data-models-picker], [data-context-menu]')) {
+              event.preventDefault()
+            }
+          }}
+          onInteractOutside={(event) => {
+            if (event.target instanceof Element && event.target.closest('[data-models-picker], [data-context-menu]')) {
               event.preventDefault()
             }
           }}
           onFocusOutside={(event) => {
-            if (event.target instanceof Element && event.target.closest('[data-models-picker]')) {
+            if (event.target instanceof Element && event.target.closest('[data-models-picker], [data-context-menu]')) {
               event.preventDefault()
             }
           }}

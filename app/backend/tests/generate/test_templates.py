@@ -107,6 +107,20 @@ class TemplateTests(unittest.TestCase):
         expected = list(templates._CAPTION_APPLY) + ["outputPath"]
         self.assertEqual(templates.default_apply("image_caption"), expected)
 
+    def test_clean_apply_expands_legacy_adetailer(self) -> None:
+        self.assertEqual(templates._clean_apply(["adetailer"]), list(templates._ADETAILER_APPLY))
+        self.assertEqual(
+            templates._clean_apply(["steps", "adetailer", "adetailerSteps"]),
+            ["steps", *templates._ADETAILER_APPLY],
+        )
+
+    def test_clean_apply_expands_legacy_hires(self) -> None:
+        self.assertEqual(templates._clean_apply(["hires"]), list(templates._HIRES_APPLY))
+        self.assertEqual(
+            templates._clean_apply(["steps", "hires", "hiresSteps"]),
+            ["steps", *templates._HIRES_APPLY],
+        )
+
     def test_nested_mix_sensitivity_keeps_engine(self) -> None:
         from features.generate.scripts.workflow import rembg
 

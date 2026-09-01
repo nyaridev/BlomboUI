@@ -107,30 +107,6 @@ _HIRES_ON_AD_GROUPS = (
     (("negative_override", "negativeOverride"), (("negative_prompt", "negativePrompt"),)),
 )
 
-_ADETAILER_ADVANCED = (
-    ("guide_size_for", "guideSizeFor", True),
-    ("feather", "feather", 5),
-    ("noise_mask", "noiseMask", True),
-    ("force_inpaint", "forceInpaint", True),
-    ("bbox_threshold", "bboxThreshold", 0.5),
-    ("bbox_dilation", "bboxDilation", 10),
-    ("bbox_crop_factor", "bboxCropFactor", 3.0),
-    ("sam_detection_hint", "samDetectionHint", "center-1"),
-    ("sam_dilation", "samDilation", 0),
-    ("sam_threshold", "samThreshold", 0.93),
-    ("sam_bbox_expansion", "samBboxExpansion", 0),
-    ("sam_mask_hint_threshold", "samMaskHintThreshold", 0.7),
-    ("sam_mask_hint_use_negative", "samMaskHintUseNegative", "False"),
-    ("drop_size", "dropSize", 10),
-    ("cycle", "cycle", 1),
-    ("inpaint_model", "inpaintModel", False),
-    ("noise_mask_feather", "noiseMaskFeather", 20),
-    ("tiled_encode", "tiledEncode", False),
-    ("tiled_decode", "tiledDecode", False),
-    ("device_mode", "deviceMode", "Prefer GPU"),
-)
-
-
 def _adetailer_from_hires(values: dict[str, Any], unit: dict[str, Any] | None = None) -> bool:
     if isinstance(unit, dict) and ("from_hires" in unit or "fromHires" in unit):
         raw = unit.get("from_hires")
@@ -167,10 +143,6 @@ def _adetailer_unit_for_fill(unit: dict[str, Any], values: dict[str, Any]) -> di
                     continue
                 out[snake] = value
                 out[camel] = value
-    if not _flag(out, "advanced_override", "advancedOverride"):
-        for snake, camel, value in _ADETAILER_ADVANCED:
-            out[snake] = value
-            out[camel] = value
     return out
 
 

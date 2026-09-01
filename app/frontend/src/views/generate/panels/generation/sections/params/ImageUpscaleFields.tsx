@@ -135,7 +135,7 @@ export function ImageUpscaleFields({
   )
 
   return (
-    <div className="flex min-w-0 w-full flex-col gap-stack">
+    <>
       <ParamSection title="Models">
         <div className="flex flex-col gap-stack">
           {box(
@@ -399,6 +399,6 @@ export function ImageUpscaleFields({
           )}
         </ParamSection>
       ) : null}
-    </div>
+    </>
   )
 }

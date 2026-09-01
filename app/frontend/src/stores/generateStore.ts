@@ -1259,6 +1259,27 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
 
 export { workflowHasPack }
 
+function parseIdList(raw: unknown, cap?: number): string[] {
+  if (!Array.isArray(raw)) {
+    return []
+  }
+  const out: string[] = []
+  for (const item of raw) {
+    if (typeof item !== 'string') {
+      continue
+    }
+    const id = item.trim()
+    if (!id || out.includes(id)) {
+      continue
+    }
+    out.push(id)
+    if (cap != null && out.length >= cap) {
+      break
+    }
+  }
+  return out
+}
+
 function parseIdMap(raw: unknown): Record<string, string> {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
@@ -1329,6 +1350,22 @@ function captionApply(id: string, label: string, nested: readonly (keyof Caption
   return { id, label, keys: ['caption'], nested }
 }
 
+function adetailerApply(id: string, label: string, nested: readonly (keyof AdetailerUnit)[]): ApplyField {
+  return { id, label, keys: ['adetailer'], nested }
+}
+
+function hiresApply(id: string, label: string, nested: readonly (keyof HiresSettings)[]): ApplyField {
+  return { id, label, keys: ['hires'], nested: ['enabled', ...nested] }
+}
+
+function isAdetailerApply(field: ApplyField) {
+  return field.keys[0] === 'adetailer' && Boolean(field.nested?.length)
+}
+
+function isHiresApply(field: ApplyField) {
+  return field.keys[0] === 'hires' && Boolean(field.nested?.length)
+}
+
 const UPSCALE_ADVANCED_KEYS = [
   'temporalOverlap',
   'prependFrames',
@@ -1359,6 +1396,29 @@ const UPSCALE_ADVANCED_KEYS = [
   'dynamoRecompileLimit',
 ] as const satisfies readonly (keyof ImageUpscaleSettings)[]
 
+const ADETAILER_ADVANCED_KEYS = [
+  'guideSizeFor',
+  'feather',
+  'noiseMask',
+  'forceInpaint',
+  'bboxThreshold',
+  'bboxDilation',
+  'bboxCropFactor',
+  'samDetectionHint',
+  'samDilation',
+  'samThreshold',
+  'samBboxExpansion',
+  'samMaskHintThreshold',
+  'samMaskHintUseNegative',
+  'dropSize',
+  'cycle',
+  'inpaintModel',
+  'noiseMaskFeather',
+  'tiledEncode',
+  'tiledDecode',
+  'deviceMode',
+] as const satisfies readonly (keyof AdetailerUnit)[]
+
 export const APPLY_FIELDS: readonly ApplyField[] = [
   { id: 'prompt', label: 'Prompt', keys: ['prompt'] },
   { id: 'negativePrompt', label: 'Negative', keys: ['negativePrompt'] },
@@ -1380,8 +1440,38 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   { id: 'batchCount', label: 'Batch count', keys: ['batchCount'] },
   { id: 'batchSize', label: 'Batch size', keys: ['batchSize'] },
   { id: 'controlnet', label: 'ControlNet', keys: ['controlnet'] },
-  { id: 'hires', label: 'Hires. fix', keys: ['hires'] },
-  { id: 'adetailer', label: 'ADetailer', keys: ['adetailer'] },
+  hiresApply('hiresModel', 'Upscale model', ['upscaleModel']),
+  hiresApply('hiresSize', 'Size', ['sizeMode', 'scale', 'width', 'height', 'aspect', 'megapixels']),
+  hiresApply('hiresSteps', 'Steps', ['steps']),
+  hiresApply('hiresDenoise', 'Denoise', ['denoise']),
+  hiresApply('hiresMethod', 'Method', ['upscaleMethod']),
+  hiresApply('hiresCrop', 'Crop', ['crop']),
+  hiresApply('hiresSaveBefore', 'Save before', ['saveBefore']),
+  hiresApply('hiresClearVram', 'Clear VRAM', ['clearVram']),
+  hiresApply('hiresModels', 'Models', ['modelOverride', 'checkpoint', 'vae', 'textEncoder', 'loraOverride', 'loras']),
+  hiresApply('hiresPrompt', 'Prompt', ['promptOverride', 'prompt']),
+  hiresApply('hiresNegative', 'Negative', ['negativeOverride', 'negativePrompt']),
+  hiresApply('hiresSampler', 'Sampler', ['samplerOverride', 'sampler']),
+  hiresApply('hiresScheduler', 'Scheduler', ['schedulerOverride', 'scheduler']),
+  hiresApply('hiresCfg', 'CFG', ['cfgOverride', 'cfg']),
+  hiresApply('hiresSeed', 'Seed', ['seedOverride', 'seed', 'seedAfter']),
+  hiresApply('hiresAttention', 'Attention', ['attentionOverride', 'attentionEngine', 'sageAttention', 'allowCompile']),
+  adetailerApply('adetailerDetector', 'Detector', ['detector']),
+  adetailerApply('adetailerSam', 'SAM', ['samModel']),
+  adetailerApply('adetailerGuideSize', 'Guide size', ['guideSize']),
+  adetailerApply('adetailerMaxSize', 'Max size', ['maxSize']),
+  adetailerApply('adetailerSteps', 'Steps', ['steps']),
+  adetailerApply('adetailerDenoise', 'Denoise', ['denoise']),
+  adetailerApply('adetailerFromHires', 'Use Hires. fix', ['fromHires']),
+  adetailerApply('adetailerModels', 'Models', ['modelOverride', 'checkpoint', 'vae', 'textEncoder', 'loraOverride', 'loras']),
+  adetailerApply('adetailerPrompt', 'Prompt', ['promptOverride', 'prompt']),
+  adetailerApply('adetailerNegative', 'Negative', ['negativeOverride', 'negativePrompt']),
+  adetailerApply('adetailerSampler', 'Sampler', ['samplerOverride', 'sampler']),
+  adetailerApply('adetailerScheduler', 'Scheduler', ['schedulerOverride', 'scheduler']),
+  adetailerApply('adetailerCfg', 'CFG', ['cfgOverride', 'cfg']),
+  adetailerApply('adetailerSeed', 'Seed', ['seedOverride', 'seed', 'seedAfter']),
+  adetailerApply('adetailerAttention', 'Attention', ['attentionOverride', 'attentionEngine', 'sageAttention', 'allowCompile']),
+  adetailerApply('adetailerAdvanced', 'Advanced', ADETAILER_ADVANCED_KEYS),
   { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot'] },
   rembgApply('rembgEngine', 'Engine', ['engine']),
   rembgApply('rembgModel', 'Model', ['rmbgModel', 'birefnetModel']),
@@ -1428,7 +1518,13 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
 ]
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
-const UTILITY_APPLY = new Set(APPLY_FIELDS.filter((field) => field.nested).map((field) => field.id))
+const UTILITY_APPLY = new Set(
+  APPLY_FIELDS.filter((field) => field.nested && field.keys[0] !== 'adetailer' && field.keys[0] !== 'hires').map(
+    (field) => field.id,
+  ),
+)
+const ADETAILER_APPLY = APPLY_FIELDS.filter(isAdetailerApply).map((field) => field.id)
+const HIRES_APPLY = APPLY_FIELDS.filter(isHiresApply).map((field) => field.id)
 
 export const DEFAULT_APPLY = APPLY_FIELDS.map((field) => field.id).filter(
   (id) => !CONTENT_APPLY.has(id) && !UTILITY_APPLY.has(id),
@@ -1449,7 +1545,7 @@ export function templateApplyFields(workflowParams: string[]) {
       return false
     }
     if (field.nested) {
-      return false
+      return field.keys[0] === 'adetailer' || field.keys[0] === 'hires'
     }
     if (field.id === 'clipSkip') {
       return workflowParams.includes('clipSkip')
@@ -1500,8 +1596,11 @@ export function applyOf(raw?: string[] | null): string[] {
   const known = new Set<string>(APPLY_FIELDS.map((field) => field.id))
   const seen: string[] = []
   for (const id of raw) {
-    if (known.has(id) && !seen.includes(id)) {
-      seen.push(id)
+    const ids = id === 'adetailer' ? ADETAILER_APPLY : id === 'hires' ? HIRES_APPLY : known.has(id) ? [id] : []
+    for (const next of ids) {
+      if (!seen.includes(next)) {
+        seen.push(next)
+      }
     }
   }
   return seen
@@ -1520,6 +1619,19 @@ function nestedSame(from: TemplateParams, to: TemplateParams, field: ApplyField)
   if (!nested?.length) {
     return field.keys.every((key) => sameParam(from[key], to[key]))
   }
+  if (isAdetailerApply(field)) {
+    const left = from.adetailer
+    const right = to.adetailer
+    if (left.enabled !== right.enabled) {
+      return false
+    }
+    const lu = left.units ?? []
+    const ru = right.units ?? []
+    if (lu.length !== ru.length) {
+      return false
+    }
+    return lu.every((unit, index) => nested.every((name) => sameParam(unit[name], ru[index]?.[name])))
+  }
   const key = field.keys[0]
   const left = from[key] as Record<string, unknown> | undefined
   const right = to[key] as Record<string, unknown> | undefined
@@ -1531,8 +1643,41 @@ function nestedFormat(params: TemplateParams, field: ApplyField) {
   if (!nested?.length) {
     return field.keys.map((key) => formatParamValue(params[key])).join(', ')
   }
+  if (isAdetailerApply(field)) {
+    const blob = params.adetailer
+    const parts = [formatParamValue(blob.enabled)]
+    for (const unit of blob.units ?? []) {
+      for (const name of nested) {
+        parts.push(formatParamValue(unit[name]))
+      }
+    }
+    return parts.join(', ')
+  }
   const blob = params[field.keys[0]] as Record<string, unknown> | undefined
   return nested.map((name) => formatParamValue(blob?.[name])).join(', ')
+}
+
+function assignAdetailer(next: TemplateParams, source: TemplateParams, nested: readonly string[]) {
+  const current = next.adetailer
+  const incoming = source.adetailer
+  const blob = cloneJson(current)
+  blob.enabled = Boolean(incoming.enabled)
+  const srcUnits = incoming.units ?? []
+  const dstUnits = blob.units?.length ? [...blob.units] : []
+  while (dstUnits.length < srcUnits.length) {
+    dstUnits.push(newAdetailerUnit(`ADetailer ${dstUnits.length + 1}`))
+  }
+  for (let index = 0; index < srcUnits.length; index += 1) {
+    const src = srcUnits[index] as Record<string, unknown>
+    const dst = { ...dstUnits[index] } as Record<string, unknown>
+    for (const name of nested) {
+      const value = src[name]
+      dst[name] = typeof value === 'object' && value != null ? cloneJson(value) : value
+    }
+    dstUnits[index] = dst as AdetailerUnit
+  }
+  blob.units = dstUnits
+  next.adetailer = blob
 }
 
 function assignNested(next: TemplateParams, source: TemplateParams, field: ApplyField) {
@@ -1542,6 +1687,10 @@ function assignNested(next: TemplateParams, source: TemplateParams, field: Apply
       const value = source[key]
       ;(next as Record<string, unknown>)[key] = typeof value === 'object' && value != null ? cloneJson(value) : value
     }
+    return
+  }
+  if (isAdetailerApply(field)) {
+    assignAdetailer(next, source, nested)
     return
   }
   const key = field.keys[0]
@@ -1713,6 +1862,8 @@ type GenerateState = {
   captionFiles: File[]
   attention: AttentionSettings
   workflow: string
+  recentWorkflowIds: string[]
+  favoriteWorkflowIds: string[]
   templateId: string
   templateByWorkflow: Record<string, string>
   viewedTemplateByWorkflow: Record<string, string>
@@ -1792,6 +1943,8 @@ export const useGenerateStore = create<GenerateState>()(
   persist(
     (set) => ({
       ...DEFAULTS,
+      recentWorkflowIds: [],
+      favoriteWorkflowIds: [],
       templateId: 'default',
       templateByWorkflow: {},
       viewedTemplateByWorkflow: {},
@@ -1932,6 +2085,8 @@ export const useGenerateStore = create<GenerateState>()(
         return hydrateFromPacks(current, rest, paramsByWorkflow, modelsByWorkflow, workflow, {
           templateByWorkflow,
           viewedTemplateByWorkflow,
+          recentWorkflowIds: parseIdList(rest.recentWorkflowIds, 5),
+          favoriteWorkflowIds: parseIdList(rest.favoriteWorkflowIds),
           templateId: templateByWorkflow[workflow] ?? 'default',
           modelTileStyle: parseModelTileStyle(rest.modelTileStyle),
           outputPathEnabled:

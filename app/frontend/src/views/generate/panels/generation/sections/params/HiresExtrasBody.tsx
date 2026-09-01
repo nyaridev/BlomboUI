@@ -25,6 +25,7 @@ import {
   snapToSet,
   type HiresSizeMode,
 } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
+import type { ReactNode } from 'react'
 
 const SIZE_MODES: { id: HiresSizeMode; label: string }[] = [
   { id: 'scale', label: 'Scale' },
@@ -52,6 +53,7 @@ export function HiresExtrasBody({
   hiddenSamplers,
   hiddenSchedulers,
   setResolutions,
+  wrap,
 }: {
   hires: HiresSettings
   patchHires: (next: Partial<HiresSettings>) => void
@@ -64,11 +66,15 @@ export function HiresExtrasBody({
   hiddenSamplers: string[]
   hiddenSchedulers: string[]
   setResolutions: string[]
+  wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const checkpoint = useGenerateStore((s) => s.checkpoint)
   const { any: attentionInstalled } = useAttentionCaps()
   const scaled = scaledSize(width, height, hires.scale)
   const current = hires.sizeMode === 'scale' ? scaled : { w: hires.width, h: hires.height }
+  function box(id: string, node: ReactNode) {
+    return wrap ? wrap(id, node) : node
+  }
 
   function onSizeMode(mode: HiresSizeMode) {
     if (mode === 'scaler') {
@@ -132,21 +138,27 @@ export function HiresExtrasBody({
   return (
     <div className="flex flex-col gap-stack">
       <div className="flex justify-center">
-        <div className="flex flex-col items-center gap-0.5">
-          <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Upscale</span>
-          <ModelPickTile
-            kind="upscale_models"
-            role="Upscale"
-            size="tall"
-            chromeKey="generate-upscale"
-            value={hires.upscaleModel}
-            onChange={(upscaleModel) => patchHires({ upscaleModel })}
-            onClear={locked ? undefined : () => patchHires({ upscaleModel: '' })}
-            disabled={locked}
-          />
-        </div>
+        {box(
+          'hiresModel',
+          <div className="flex flex-col items-center gap-0.5">
+            <span className="truncate px-0.5 text-[10px] uppercase tracking-wide text-muted">Upscale</span>
+            <ModelPickTile
+              kind="upscale_models"
+              role="Upscale"
+              size="tall"
+              chromeKey="generate-upscale"
+              value={hires.upscaleModel}
+              onChange={(upscaleModel) => patchHires({ upscaleModel })}
+              onClear={locked ? undefined : () => patchHires({ upscaleModel: '' })}
+              disabled={locked}
+            />
+          </div>,
+        )}
       </div>
       <ParamSection title="Params">
+        <div className="flex flex-col gap-stack">
+      {box(
+        'hiresSize',
         <div className="flex flex-col gap-stack">
       <div className="flex items-center gap-stack">
         <div className="inline-flex rounded border border-line bg-panel text-xs">
@@ -282,57 +294,79 @@ export function HiresExtrasBody({
           </IconButton>
         </div>
       )}
+        </div>,
+      )}
       <div className="grid grid-cols-2 items-start gap-stack">
-        <SliderField label="Steps" value={hires.steps} onChange={(steps) => patchHires({ steps })} min={1} max={150} />
-        <SliderField
-          label="Denoise"
-          value={hires.denoise}
-          onChange={(denoise) => patchHires({ denoise })}
-          min={0}
-          max={1}
-          step={0.05}
-        />
+        {box(
+          'hiresSteps',
+          <SliderField label="Steps" value={hires.steps} onChange={(steps) => patchHires({ steps })} min={1} max={150} />,
+        )}
+        {box(
+          'hiresDenoise',
+          <SliderField
+            label="Denoise"
+            value={hires.denoise}
+            onChange={(denoise) => patchHires({ denoise })}
+            min={0}
+            max={1}
+            step={0.05}
+          />,
+        )}
       </div>
       <div className="grid grid-cols-2 gap-stack">
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted">Method</span>
-          <SelectField
-            value={hires.upscaleMethod}
-            onChange={(upscaleMethod) => patchHires({ upscaleMethod })}
-            options={[...IMAGE_SCALE_METHODS]}
-          />
-        </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs text-muted">Crop</span>
-          <SelectField value={hires.crop} onChange={(crop) => patchHires({ crop })} options={[...IMAGE_SCALE_CROPS]} />
-        </div>
+        {box(
+          'hiresMethod',
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs text-muted">Method</span>
+            <SelectField
+              value={hires.upscaleMethod}
+              onChange={(upscaleMethod) => patchHires({ upscaleMethod })}
+              options={[...IMAGE_SCALE_METHODS]}
+            />
+          </div>,
+        )}
+        {box(
+          'hiresCrop',
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-xs text-muted">Crop</span>
+            <SelectField value={hires.crop} onChange={(crop) => patchHires({ crop })} options={[...IMAGE_SCALE_CROPS]} />
+          </div>,
+        )}
       </div>
         </div>
       </ParamSection>
       <ParamSection title="Settings">
         <div className="grid w-full grid-cols-2 gap-cluster">
-          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-            <CheckboxControl
-              checked={hires.saveBefore}
-              disabled={locked}
-              onChange={(saveBefore) => patchHires({ saveBefore })}
-            />
-            Save image before hires. fix
-          </label>
-          <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
-            <CheckboxControl
-              checked={hires.clearVram}
-              disabled={locked}
-              onChange={(clearVram) => patchHires({ clearVram })}
-            />
-            Clear VRAM before and after hires. fix
-          </label>
+          {box(
+            'hiresSaveBefore',
+            <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
+              <CheckboxControl
+                checked={hires.saveBefore}
+                disabled={locked}
+                onChange={(saveBefore) => patchHires({ saveBefore })}
+              />
+              Save image before hires. fix
+            </label>,
+          )}
+          {box(
+            'hiresClearVram',
+            <label className={`${BOX} flex min-w-0 items-center gap-2 text-sm text-ink`}>
+              <CheckboxControl
+                checked={hires.clearVram}
+                disabled={locked}
+                onChange={(clearVram) => patchHires({ clearVram })}
+              />
+              Clear VRAM before and after hires. fix
+            </label>,
+          )}
         </div>
       </ParamSection>
       <ParamSection title="Overrides">
         <div className="flex flex-col gap-stack">
-          <HiresOverrideTiles hires={hires} patchHires={patchHires} locked={locked} />
-          <CheckRow on={hires.promptOverride} onChange={(promptOverride) => patchHires({ promptOverride })} locked={locked}>
+          {box('hiresModels', <HiresOverrideTiles hires={hires} patchHires={patchHires} locked={locked} />)}
+          {box(
+            'hiresPrompt',
+            <CheckRow on={hires.promptOverride} onChange={(promptOverride) => patchHires({ promptOverride })} locked={locked}>
             <div className="h-24 min-w-0">
               <PromptField
                 value={hires.prompt}
@@ -344,12 +378,15 @@ export function HiresExtrasBody({
                 onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
               />
             </div>
-          </CheckRow>
-          <CheckRow
-            on={hires.negativeOverride}
-            onChange={(negativeOverride) => patchHires({ negativeOverride })}
-            locked={locked}
-          >
+          </CheckRow>,
+          )}
+          {box(
+            'hiresNegative',
+            <CheckRow
+              on={hires.negativeOverride}
+              onChange={(negativeOverride) => patchHires({ negativeOverride })}
+              locked={locked}
+            >
             <div className="h-20 min-w-0">
               <PromptField
                 value={hires.negativePrompt}
@@ -361,13 +398,16 @@ export function HiresExtrasBody({
                 onCompanionNegative={(negativePrompt) => patchHires({ negativePrompt })}
               />
             </div>
-          </CheckRow>
+          </CheckRow>,
+          )}
           <div className="grid grid-cols-3 gap-stack">
-            <CheckRow
-              on={hires.samplerOverride}
-              onChange={(samplerOverride) => patchHires({ samplerOverride })}
-              locked={locked}
-            >
+            {box(
+              'hiresSampler',
+              <CheckRow
+                on={hires.samplerOverride}
+                onChange={(samplerOverride) => patchHires({ samplerOverride })}
+                locked={locked}
+              >
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="text-xs text-muted">Sampler</span>
                 <SelectField
@@ -376,12 +416,15 @@ export function HiresExtrasBody({
                   options={listedChoices(samplers, hiddenSamplers, hires.sampler)}
                 />
               </div>
-            </CheckRow>
-            <CheckRow
-              on={hires.schedulerOverride}
-              onChange={(schedulerOverride) => patchHires({ schedulerOverride })}
-              locked={locked}
-            >
+            </CheckRow>,
+            )}
+            {box(
+              'hiresScheduler',
+              <CheckRow
+                on={hires.schedulerOverride}
+                onChange={(schedulerOverride) => patchHires({ schedulerOverride })}
+                locked={locked}
+              >
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="text-xs text-muted">Scheduler</span>
                 <SelectField
@@ -390,8 +433,11 @@ export function HiresExtrasBody({
                   options={listedChoices(schedulers, hiddenSchedulers, hires.scheduler)}
                 />
               </div>
-            </CheckRow>
-            <CheckRow on={hires.cfgOverride} onChange={(cfgOverride) => patchHires({ cfgOverride })} locked={locked}>
+            </CheckRow>,
+            )}
+            {box(
+              'hiresCfg',
+              <CheckRow on={hires.cfgOverride} onChange={(cfgOverride) => patchHires({ cfgOverride })} locked={locked}>
               <SliderField
                 label="CFG"
                 value={hires.cfg}
@@ -400,9 +446,12 @@ export function HiresExtrasBody({
                 max={30}
                 step={0.5}
               />
-            </CheckRow>
+            </CheckRow>,
+            )}
           </div>
-          <CheckRow on={hires.seedOverride} onChange={(seedOverride) => patchHires({ seedOverride })} locked={locked}>
+          {box(
+            'hiresSeed',
+            <CheckRow on={hires.seedOverride} onChange={(seedOverride) => patchHires({ seedOverride })} locked={locked}>
             <div className="flex items-end gap-stack">
               <label className="flex min-w-0 flex-1 flex-col gap-1">
                 <span className="text-xs text-muted">Seed</span>
@@ -428,29 +477,33 @@ export function HiresExtrasBody({
                 />
               </div>
             </div>
-          </CheckRow>
-          {attentionInstalled ? (
-            <CheckRow
-              on={hires.attentionOverride}
-              onChange={(attentionOverride) => patchHires({ attentionOverride })}
-              locked={locked}
-              align="start"
-            >
-              <AttentionFields
-                engine={hires.attentionEngine}
-                sageAttention={hires.sageAttention}
-                allowCompile={hires.allowCompile}
-                onChange={(next) =>
-                  patchHires({
-                    ...(next.engine != null ? { attentionEngine: next.engine } : {}),
-                    ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
-                    ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
-                  })
-                }
-                locked={locked}
-              />
-            </CheckRow>
-          ) : null}
+          </CheckRow>,
+          )}
+          {attentionInstalled
+            ? box(
+                'hiresAttention',
+                <CheckRow
+                  on={hires.attentionOverride}
+                  onChange={(attentionOverride) => patchHires({ attentionOverride })}
+                  locked={locked}
+                  align="start"
+                >
+                  <AttentionFields
+                    engine={hires.attentionEngine}
+                    sageAttention={hires.sageAttention}
+                    allowCompile={hires.allowCompile}
+                    onChange={(next) =>
+                      patchHires({
+                        ...(next.engine != null ? { attentionEngine: next.engine } : {}),
+                        ...(next.sageAttention != null ? { sageAttention: next.sageAttention } : {}),
+                        ...(next.allowCompile != null ? { allowCompile: next.allowCompile } : {}),
+                      })
+                    }
+                    locked={locked}
+                  />
+                </CheckRow>,
+              )
+            : null}
         </div>
       </ParamSection>
     </div>

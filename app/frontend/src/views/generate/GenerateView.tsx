@@ -76,6 +76,7 @@ export function GenerateView() {
   const caption = useGenerateStore((s) => s.caption)
   const captionFiles = useGenerateStore((s) => s.captionFiles)
   const setImageUpscale = useGenerateStore((s) => s.setImageUpscale)
+  const setCaption = useGenerateStore((s) => s.setCaption)
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
@@ -301,13 +302,17 @@ export function GenerateView() {
     const xyCells = xyCellCount(xyPlot)
     const activeXyPlot = script === 'xy-plot' && xyCells ? xyPlot : null
     const keepMinusOne = Boolean(activeXyPlot?.keepMinusOne && seed < 0)
+    const captionUsed = usedSeed32(caption.seed, caption.seedAfter)
     const used = upscaleMode
       ? usedSeed32(imageUpscale.seed, imageUpscale.seedAfter)
-      : keepMinusOne
-        ? seed
-        : usedSeed(seed, seedAfter)
+      : captionMode
+        ? captionUsed
+        : keepMinusOne
+          ? seed
+          : usedSeed(seed, seedAfter)
     const previous = seed
     const previousUpscaleSeed = imageUpscale.seed
+    const previousCaptionSeed = caption.seed
     const previousHiresSeed = hires.seed
     const hiresUsed = hires.seedOverride ? usedSeed(hires.seed, hires.seedAfter) : hires.seed
     const previousAdetailerSeeds = adetailer.units.map((unit) => unit.seed)
@@ -325,6 +330,8 @@ export function GenerateView() {
         : count
     if (upscaleMode) {
       setImageUpscale({ seed: nextSeed32(used, imageUpscale.seedAfter, seedSteps) })
+    } else if (captionMode) {
+      setCaption({ seed: nextSeed32(captionUsed, caption.seedAfter, seedSteps) })
     } else if (!(keepMinusOne && seed < 0)) {
       setSeed(nextSeed(used, seedAfter, seedSteps))
     }
@@ -361,7 +368,7 @@ export function GenerateView() {
         clip_type: gen.clipType,
         clip_device: gen.clipDevice,
         seed: used,
-        seed_after: upscaleMode ? imageUpscale.seedAfter : seedAfter,
+        seed_after: captionMode ? caption.seedAfter : upscaleMode ? imageUpscale.seedAfter : seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
         batch_grid: fileUtility ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
@@ -554,17 +561,29 @@ export function GenerateView() {
         caption: captionMode
           ? {
               engine: caption.engine,
+              qwen_backend: caption.qwenBackend,
               wd14_model: caption.wd14Model,
               qwen_model: caption.qwenModel,
+              qwen_gguf_model: caption.qwenGgufModel,
               quantization: caption.quantization,
               guidance: caption.guidance,
               prefix: caption.prefix,
               suffix: caption.suffix,
               megapixels: caption.megapixels,
-              batch_count: caption.batchCount,
+              batch_size: caption.batchSize,
               save_image: caption.saveImage,
+              override_existing: caption.overrideExisting,
               threshold: caption.threshold,
               character_threshold: caption.characterThreshold,
+              replace_underscore: caption.replaceUnderscore,
+              trailing_comma: caption.trailingComma,
+              exclude_tags: caption.excludeTags,
+              prompt_source: caption.promptSource,
+              preset_prompt: caption.presetPrompt,
+              max_tokens: caption.maxTokens,
+              keep_model_loaded: caption.keepModelLoaded,
+              seed: captionMode ? captionUsed : caption.seed,
+              seed_after: caption.seedAfter,
               input_mode: caption.inputMode,
               input_dir: caption.inputDir,
             }
@@ -577,6 +596,7 @@ export function GenerateView() {
     } catch (err) {
       setSeed(previous)
       setImageUpscale({ seed: previousUpscaleSeed })
+      setCaption({ seed: previousCaptionSeed })
       setHires({ seed: previousHiresSeed })
       setAdetailer({
         units: adetailer.units.map((unit, index) => ({ ...unit, seed: previousAdetailerSeeds[index] ?? unit.seed })),

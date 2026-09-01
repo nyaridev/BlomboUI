@@ -107,6 +107,8 @@ install_node "ComfyUI-GGUF" "https://github.com/city96/ComfyUI-GGUF" || exit 1
 install_node "ComfyUI-QwenVL" "https://github.com/1038lab/ComfyUI-QwenVL" || exit 1
 install_node "ComfyUI-WD14-Tagger" "https://github.com/pythongosssss/ComfyUI-WD14-Tagger" || exit 1
 
+"$ROOT/install/linux/comfyui/install_llamacpp.sh" || exit 1
+
 # -----------------------------------------------------------------------------
 # Completion
 # -----------------------------------------------------------------------------

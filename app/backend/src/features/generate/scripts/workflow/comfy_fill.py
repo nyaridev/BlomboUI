@@ -473,7 +473,7 @@ def _trim_power_loras(workflow: dict[str, Any]) -> None:
 
 def _hires_kind_diffusion(blob: dict[str, Any]) -> bool:
     kind = str(blob.get("kind") or blob.get("model_kind") or "").strip().lower()
-    return kind in {"diffusion_models", "diffusion", "unet"}
+    return kind in {"diffusion_models"}
 
 
 def _prompt_lora_rows(text: str) -> list[dict[str, Any]]:
@@ -782,7 +782,7 @@ def _adetailer_index(key: str) -> int | None:
 
 def _adetailer_kind_diffusion(unit: dict[str, Any]) -> bool:
     kind = str(unit.get("kind") or unit.get("model_kind") or "").strip().lower()
-    return kind in {"diffusion_models", "diffusion", "unet"}
+    return kind in {"diffusion_models"}
 
 
 def _fill_adetailer(

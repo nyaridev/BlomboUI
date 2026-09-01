@@ -69,10 +69,10 @@ export type UserSettings = {
   downloadHistoryLimit?: number
   browseHistoryLimit?: number
   civitaiMarks?: Record<string, { text?: string; icon?: { kind?: string; id?: string; color?: string } }>
-  gallerySortKey?: Record<string, string> | string
-  gallerySortDir?: Record<string, string> | string
+  gallerySortKey?: Record<string, string>
+  gallerySortDir?: Record<string, string>
   galleryTileScale?: number
-  galleryThumbFallback?: boolean | Record<string, boolean>
+  galleryThumbFallback?: boolean
   thumbSaveTo?: 'active' | 'global'
   thumbDisplayMode?: 'likely' | 'exact'
   thumbScopeIds?: string[]

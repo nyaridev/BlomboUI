@@ -221,6 +221,17 @@ if [ -z "${COMFY_EXTERNAL:-}" ]; then
   fi
 fi
 
+if ! "$COMFY_PYTHON" -I -c "from llama_cpp.llama_chat_format import Qwen3VLChatHandler" >/dev/null 2>&1 \
+  && ! "$COMFY_PYTHON" -I -c "from llama_cpp.llama_multimodal import Qwen3VLChatHandler" >/dev/null 2>&1; then
+  if [ -n "${DEV_DEBUG:-}" ]; then
+    ui_section "QwenVL GGUF"
+  fi
+  ui_warn "QwenVL GGUF llama-cpp-python was not found. Installing..."
+  "$ROOT/install/linux/comfyui/install_llamacpp.sh" || exit 1
+elif [ -n "${DEV_DEBUG:-}" ]; then
+  ui_ok "QwenVL GGUF llama-cpp-python is available."
+fi
+
 free_port() {
   local port="$1"
   if command -v fuser >/dev/null 2>&1; then

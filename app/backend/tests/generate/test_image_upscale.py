@@ -75,7 +75,26 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
         self.assertEqual(save["inputs"]["images"][0], find(graph, "ImageScale")[0])
         shutil.rmtree(src.parent, ignore_errors=True)
 
-    def test_fill_seedvr2_drops_model_and_compile(self) -> None:
+    def test_fill_model_max_fits_long_side(self) -> None:
+        src = Path(tempfile.mkdtemp()) / "cat.png"
+        write_png(src, (80, 120))
+        graph = fill(
+            {
+                "workflow": "image_upscale",
+                "input_image": src.name,
+                "source_image": str(src),
+                "upscale": {
+                    "engine": "model",
+                    "upscale_model": "4x.pth",
+                    "size_mode": "max",
+                    "max_resolution": 1536,
+                },
+            }
+        )
+        scale = find(graph, "ImageScale")[1]
+        self.assertEqual(scale["inputs"]["width"], 1024)
+        self.assertEqual(scale["inputs"]["height"], 1536)
+        shutil.rmtree(src.parent, ignore_errors=True)
         src = Path(tempfile.mkdtemp()) / "dog.png"
         write_png(src, (128, 64))
         graph = fill(
@@ -98,8 +117,8 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
         self.assertNotIn("SeedVR2TorchCompileSettings", kinds)
         node = find(graph, "SeedVR2VideoUpscaler")[1]
         self.assertEqual(node["inputs"]["seed"], 7)
-        self.assertEqual(node["inputs"]["resolution"], 4096)
-        self.assertEqual(node["inputs"]["max_resolution"], 4096)
+        self.assertEqual(node["inputs"]["resolution"], 2560)
+        self.assertEqual(node["inputs"]["max_resolution"], 2560)
         dit = find(graph, "SeedVR2LoadDiTModel")[1]
         self.assertEqual(dit["inputs"]["model"], "dit.safetensors")
         self.assertNotIn("torch_compile_args", dit["inputs"])
@@ -137,8 +156,12 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
     def test_clean_upscale_default_seed_is_42(self) -> None:
         blob = upscale.clean_upscale({})
         self.assertEqual(blob["seed"], 42)
-        self.assertEqual(blob["resolution"], 4096)
-        self.assertEqual(blob["max_resolution"], 4096)
+        self.assertEqual(blob["resolution"], 2560)
+        self.assertEqual(blob["max_resolution"], 2560)
+
+    def test_clean_upscale_allows_zero_max_resolution(self) -> None:
+        blob = upscale.clean_upscale({"max_resolution": 0})
+        self.assertEqual(blob["max_resolution"], 0)
 
     def test_fill_seedvr2_wraps_overflow_seed(self) -> None:
         overflow = 4586839000023720

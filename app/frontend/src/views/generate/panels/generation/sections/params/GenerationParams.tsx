@@ -47,7 +47,7 @@ export function GenerationParams({
       ) : upscale ? (
         <ImageUpscaleParams lastSeed={lastSeed} />
       ) : caption ? (
-        <CaptionParams />
+      <CaptionParams lastSeed={lastSeed} />
       ) : (
         <>
       <ParamsTabStrip

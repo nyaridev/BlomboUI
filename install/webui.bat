@@ -158,6 +158,17 @@ if not defined COMFY_EXTERNAL (
     )
 )
 
+"%COMFY_PYTHON%" -I -c "from llama_cpp.llama_chat_format import Qwen3VLChatHandler" >nul 2>&1
+if errorlevel 1 "%COMFY_PYTHON%" -I -c "from llama_cpp.llama_multimodal import Qwen3VLChatHandler" >nul 2>&1
+if errorlevel 1 (
+    if defined DEV_DEBUG call "%ROOT%\install\windows\_ui.bat" section "QwenVL GGUF"
+    call "%ROOT%\install\windows\_ui.bat" warn "QwenVL GGUF llama-cpp-python was not found. Installing..."
+    call "%ROOT%\install\windows\comfyui\install_llamacpp.bat"
+    if errorlevel 1 exit /b 1
+) else if defined DEV_DEBUG (
+    call "%ROOT%\install\windows\_ui.bat" ok "QwenVL GGUF llama-cpp-python is available."
+)
+
 :: -----------------------------------------------------------------------------
 :: Service startup
 :: -----------------------------------------------------------------------------

@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react'
 const NAME =
   'box-border h-toolbar min-w-0 w-full rounded border border-line bg-field px-2 py-0 font-mono text-sm leading-[1.875rem] text-ink outline-none placeholder:text-muted focus:border-accent'
 
-export function CaptionParams() {
+export function CaptionParams({ lastSeed = null }: { lastSeed?: number | null }) {
   const caption = useGenerateStore((s) => s.caption)
   const captionFiles = useGenerateStore((s) => s.captionFiles)
   const outputImagePath = useGenerateStore((s) => s.outputImagePath)
@@ -76,7 +76,7 @@ export function CaptionParams() {
         />
         <span className="text-xs text-muted">Empty uses the original filenames. Tokens: [index], [filename]</span>
       </div>
-      <CaptionFields value={caption} onChange={setCaption} />
+      <CaptionFields value={caption} onChange={setCaption} lastSeed={lastSeed} />
     </div>
   )
 }

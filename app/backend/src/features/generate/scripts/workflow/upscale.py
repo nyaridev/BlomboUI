@@ -12,7 +12,7 @@ PATH_DEFAULT = "image_upscale/[date]"
 SEED_MAX = 2**32 - 1
 SEED_SPAN = SEED_MAX + 1
 _ENGINES = {"model", "seedvr2"}
-_SIZE_MODES = {"scale", "raw", "scaler", "set"}
+_SIZE_MODES = {"scale", "raw", "scaler", "set", "max"}
 _IMAGE_SCALE_METHODS = frozenset({"nearest-exact", "bilinear", "area", "bicubic", "lanczos"})
 _IMAGE_SCALE_CROPS = frozenset({"disabled", "center"})
 _MODEL_KINDS = {"UpscaleModelLoader", "ImageUpscaleWithModel", "ImageScale"}
@@ -164,8 +164,8 @@ def clean_upscale(raw: Any) -> dict[str, Any]:
         "crop": crop,
         "seed": _clean_seed(src),
         "color_correction": color,
-        "resolution": max(64, min(8192, _int(src, "resolution", default=4096))),
-        "max_resolution": max(64, min(8192, _int(src, "max_resolution", "maxResolution", default=4096))),
+        "resolution": max(64, min(8192, _int(src, "resolution", default=2560))),
+        "max_resolution": max(0, min(8192, _int(src, "max_resolution", "maxResolution", default=2560))),
         "max_resolution_override": _flag(src, "max_resolution_override", "maxResolutionOverride"),
         "batch_size": 1,
         "uniform_batch_size": False,
@@ -225,6 +225,10 @@ def target_size(values: dict[str, Any]) -> tuple[int, int]:
     mode = blob["size_mode"]
     base_w, base_h = _source_size(values)
     scaled = (_round_to_8(base_w * blob["scale"]), _round_to_8(base_h * blob["scale"]))
+    if mode == "max":
+        current = max(base_w, base_h)
+        factor = blob["max_resolution"] / max(1, current)
+        return max(64, min(8192, _round_to_8(base_w * factor))), max(64, min(8192, _round_to_8(base_h * factor)))
     if mode not in {"raw", "scaler", "set"}:
         return scaled
     width = blob["width"]

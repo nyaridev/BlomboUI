@@ -12,18 +12,26 @@ import {
   sizeFromScaler,
   snapDim,
   snapToSet,
-  type HiresSizeMode,
+  type UpscaleSizeMode,
 } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 
-const SIZE_MODES: { id: HiresSizeMode; label: string }[] = [
+const SIZE_MODES: { id: UpscaleSizeMode; label: string }[] = [
   { id: 'scale', label: 'Scale' },
   { id: 'raw', label: 'Raw' },
   { id: 'scaler', label: 'Scaler' },
   { id: 'set', label: 'Set' },
+  { id: 'max', label: 'Max' },
 ]
 
 function scaledSize(width: number, height: number, scale: number) {
   const factor = Math.max(1, Math.min(8, scale))
+  return { w: snapDim(width * factor), h: snapDim(height * factor) }
+}
+
+function maxFitSize(width: number, height: number, maxResolution: number) {
+  const long = Math.max(64, Math.min(8192, maxResolution))
+  const current = Math.max(width, height, 1)
+  const factor = long / current
   return { w: snapDim(width * factor), h: snapDim(height * factor) }
 }
 
@@ -39,9 +47,14 @@ export function ImageUpscaleSize({
   onChange: (next: Partial<ImageUpscaleSettings>) => void
 }) {
   const scaled = scaledSize(source.w, source.h, value.scale)
-  const current = value.sizeMode === 'scale' ? scaled : { w: value.width, h: value.height }
+  const fitted = maxFitSize(source.w, source.h, value.maxResolution)
+  const current = value.sizeMode === 'scale' ? scaled : value.sizeMode === 'max' ? fitted : { w: value.width, h: value.height }
 
-  function onSizeMode(mode: HiresSizeMode) {
+  function onSizeMode(mode: UpscaleSizeMode) {
+    if (mode === 'max') {
+      onChange({ sizeMode: 'max' })
+      return
+    }
     if (mode === 'scaler') {
       const inferred = inferScaler(current.w, current.h)
       const size = sizeFromScaler(inferred.aspect, inferred.megapixels)
@@ -86,9 +99,9 @@ export function ImageUpscaleSize({
             </button>
           ))}
         </div>
-        {value.sizeMode === 'scaler' ? (
+        {value.sizeMode === 'scaler' || value.sizeMode === 'max' ? (
           <span className="text-xs text-muted">
-            {value.width} × {value.height}
+            {current.w} × {current.h}
           </span>
         ) : null}
       </div>
@@ -100,6 +113,15 @@ export function ImageUpscaleSize({
           min={1}
           max={4}
           step={0.05}
+        />
+      ) : value.sizeMode === 'max' ? (
+        <SliderField
+          label={`Max resolution (${fitted.w}x${fitted.h})`}
+          value={value.maxResolution}
+          onChange={(maxResolution) => onChange({ maxResolution: Math.round(maxResolution) })}
+          min={64}
+          max={8192}
+          step={8}
         />
       ) : (
         <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-stack">

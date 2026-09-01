@@ -2,9 +2,6 @@ import assert from 'node:assert/strict'
 import {
   applySetWorkflow,
   hydrateFromPacks,
-  migrateGeneratePersist,
-  remapWorkflowId,
-  stripParamsContent,
   workflowHasPack,
   type ContentParams,
 } from './generatePersist.ts'
@@ -24,46 +21,9 @@ function pack(extra: Partial<ContentParams> & { sampler?: string; steps?: number
   return { ...base, sampler: 'euler', steps: 20, ...extra }
 }
 
-assert.equal(remapWorkflowId('txt2img'), 'sd15')
-assert.equal(remapWorkflowId('diffusion'), 'sd15')
-assert.equal(remapWorkflowId('anima'), 'anima')
-
-const stripped = stripParamsContent(base)
-assert.equal(stripped.prompt, '')
-assert.equal(stripped.checkpoint, '')
-assert.deepEqual(stripped.activeLoraOrder, [])
-assert.equal(base.prompt, '1girl, black hair')
-
 assert.equal(workflowHasPack({}, {}, 'sd15'), false)
 assert.equal(workflowHasPack({ sd15: base }, {}, 'sd15'), true)
 assert.equal(workflowHasPack({}, { anima: emptyWorkflowModels('') }, 'anima'), true)
-
-const migrated = migrateGeneratePersist(
-  {
-    prompt: 'keep leaking',
-    checkpoint: 'old.safetensors',
-    activeLoraOrder: ['style.safetensors'],
-    paramsByWorkflow: { sd15: pack({ steps: 28 }), anima: pack({ sampler: 'dpmpp_sde' }) },
-    modelsByWorkflow: { sd15: { checkpoint: 'old.safetensors', vae: '', textEncoder: '', activeLoraOrder: ['x'], activeLoraStrengths: {} } },
-  },
-  (raw) => {
-    if (!raw || typeof raw !== 'object') {
-      return {}
-    }
-    return raw as Record<string, ContentParams>
-  },
-)
-assert.equal(migrated.prompt, '')
-assert.equal(migrated.checkpoint, '')
-assert.deepEqual(migrated.activeLoraOrder, [])
-const sd15Params = (migrated.paramsByWorkflow as Record<string, ContentParams & { steps: number }>).sd15
-assert.equal(sd15Params.prompt, '')
-assert.equal(sd15Params.checkpoint, '')
-assert.deepEqual(sd15Params.activeLoraOrder, [])
-assert.equal(sd15Params.steps, 28)
-const sd15Models = (migrated.modelsByWorkflow as Record<string, { checkpoint: string; activeLoraOrder: string[] }>).sd15
-assert.equal(sd15Models.checkpoint, '')
-assert.deepEqual(sd15Models.activeLoraOrder, [])
 
 type Live = ContentParams & {
   workflow: string

@@ -52,6 +52,12 @@ export function isHiresSizeMode(value: unknown): value is HiresSizeMode {
   return value === 'scale' || isResMode(value)
 }
 
+export type UpscaleSizeMode = HiresSizeMode | 'max'
+
+export function isUpscaleSizeMode(value: unknown): value is UpscaleSizeMode {
+  return isHiresSizeMode(value) || value === 'max'
+}
+
 export const DEFAULT_SET_RESOLUTIONS = ['1024x1024', '1152x896', '1216x832', '1344x768', '1536x640']
 
 export type Size = { w: number; h: number }

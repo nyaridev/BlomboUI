@@ -18,23 +18,12 @@ import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/Prom
 import { templateApplyFields, type TemplateParams, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, snapToSet } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
-import { useEffect, useState, type ReactNode } from 'react'
+import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
+import { useEffect, useState } from 'react'
 import { getClipLoaderChoices, getKSamplerChoices } from '@/lib/api.ts'
 
 function Label({ children }: { children: string }) {
   return <span className="text-xs text-muted">{children}</span>
-}
-
-function ParamSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-stack">
-      <div className="flex items-center gap-2">
-        <h2 className="shrink-0 text-xs text-label">{title}</h2>
-        <div className="min-w-0 flex-1 border-t border-line" />
-      </div>
-      {children}
-    </section>
-  )
 }
 
 type TemplateParamsFormProps = {
@@ -128,16 +117,6 @@ export function TemplateParamsForm({
       </div>
       {rembg ? (
         <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
-          <RembgFields
-            value={value.rembg}
-            onChange={(rembg) => onChange({ ...value, rembg: { ...value.rembg, ...rembg } })}
-            locked={locked}
-            wrap={(id, node) => (
-              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
-                {node}
-              </ApplyRow>
-            )}
-          />
           <ParamSection title="Output">
             <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
               <div className="flex min-w-0 flex-col gap-1">
@@ -150,20 +129,19 @@ export function TemplateParamsForm({
               </div>
             </ApplyRow>
           </ParamSection>
-        </div>
-      ) : upscale ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
-          <ImageUpscaleFields
-            value={value.imageUpscale}
-            files={[]}
-            flushModels
-            onChange={(imageUpscale) => onChange({ ...value, imageUpscale: { ...value.imageUpscale, ...imageUpscale } })}
+          <RembgFields
+            value={value.rembg}
+            onChange={(rembg) => onChange({ ...value, rembg: { ...value.rembg, ...rembg } })}
+            locked={locked}
             wrap={(id, node) => (
               <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
                 {node}
               </ApplyRow>
             )}
           />
+        </div>
+      ) : upscale ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
           <ParamSection title="Output">
             <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
               <div className="flex min-w-0 flex-col gap-1">
@@ -176,19 +154,19 @@ export function TemplateParamsForm({
               </div>
             </ApplyRow>
           </ParamSection>
-        </div>
-      ) : caption ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
-          <CaptionFields
-            value={value.caption}
-            onChange={(caption) => onChange({ ...value, caption: { ...value.caption, ...caption } })}
-            locked={locked}
+          <ImageUpscaleFields
+            value={value.imageUpscale}
+            files={[]}
+            onChange={(imageUpscale) => onChange({ ...value, imageUpscale: { ...value.imageUpscale, ...imageUpscale } })}
             wrap={(id, node) => (
               <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
                 {node}
               </ApplyRow>
             )}
           />
+        </div>
+      ) : caption ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
           <ParamSection title="Output">
             <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
               <div className="flex flex-col gap-stack">
@@ -214,6 +192,16 @@ export function TemplateParamsForm({
               </div>
             </ApplyRow>
           </ParamSection>
+          <CaptionFields
+            value={value.caption}
+            onChange={(caption) => onChange({ ...value, caption: { ...value.caption, ...caption } })}
+            locked={locked}
+            wrap={(id, node) => (
+              <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                {node}
+              </ApplyRow>
+            )}
+          />
         </div>
       ) : (
         <>

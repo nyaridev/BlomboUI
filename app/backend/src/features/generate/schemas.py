@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class PromptMatrixIn(BaseModel):
@@ -172,17 +172,39 @@ class RembgIn(BaseModel):
 
 class CaptionIn(BaseModel):
     engine: Literal["wd14", "qwen"] = "wd14"
-    wd14_model: str = "wd-swinv2-tagger-v3"
+    qwen_backend: Literal["native", "gguf"] = "native"
+    wd14_model: str = "wd-v1-4-moat-tagger-v2"
     qwen_model: str = "Qwen3-VL-4B-Instruct"
+    qwen_gguf_model: str = "Qwen3VL-4B-Instruct-Q8_0.gguf"
     quantization: str = "8-bit (Balanced)"
-    guidance: str = ""
+    guidance: str = (
+        "Mark the subject as `Subject`.\n"
+        "\n"
+        "Caption provided image with following formula:\n"
+        "\n"
+        "[Medium + shot type] of Subject.\n"
+        "[pose / action / expression], [wardrobe], [environment / background],\n"
+        "[lighting], [camera / lens / DoF], [film / texture / color treatment].\n"
+        "\n"
+        "Output only the caption. No comments and notes allowed."
+    )
     prefix: str = ""
     suffix: str = ""
     megapixels: float = Field(default=1, ge=0.25, le=4)
-    batch_count: int = Field(default=1, ge=1, le=16)
+    batch_size: int = Field(default=1, ge=1, le=16, validation_alias=AliasChoices("batch_size", "batch_count"))
     save_image: bool = True
+    override_existing: bool = True
     threshold: float = Field(default=0.35, ge=0, le=1)
     character_threshold: float = Field(default=0.85, ge=0, le=1)
+    replace_underscore: bool = False
+    trailing_comma: bool = False
+    exclude_tags: str = ""
+    prompt_source: Literal["preset", "custom"] = "custom"
+    preset_prompt: str = "🖼️ Detailed Description"
+    max_tokens: int = Field(default=512, ge=16, le=8192)
+    keep_model_loaded: bool = True
+    seed: int = 1
+    seed_after: Literal["randomize", "fixed", "increment", "decrement"] = "fixed"
     input_mode: Literal["files", "directory"] = "files"
     input_dir: str = ""
 
@@ -193,7 +215,7 @@ class UpscaleIn(BaseModel):
     input_dir: str = ""
     upscale_model: str = ""
     scale: float = Field(default=2, ge=1, le=8)
-    size_mode: Literal["scale", "raw", "scaler", "set"] = "scale"
+    size_mode: Literal["scale", "raw", "scaler", "set", "max"] = "scale"
     width: int = Field(default=1024, ge=64, le=4096)
     height: int = Field(default=1024, ge=64, le=4096)
     aspect: str = "2:3"
@@ -202,8 +224,8 @@ class UpscaleIn(BaseModel):
     crop: Literal["disabled", "center"] = "disabled"
     seed: int = 42
     color_correction: str = "lab"
-    resolution: int = Field(default=4096, ge=64, le=8192)
-    max_resolution: int = Field(default=4096, ge=64, le=8192)
+    resolution: int = Field(default=2560, ge=64, le=8192)
+    max_resolution: int = Field(default=2560, ge=0, le=8192)
     max_resolution_override: bool = False
     batch_size: int = Field(default=1, ge=1, le=64)
     uniform_batch_size: bool = False

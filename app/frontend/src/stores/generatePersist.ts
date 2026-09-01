@@ -1,12 +1,9 @@
 import {
   applyWorkflowModels,
   emptyWorkflowModels,
-  parseModelsByWorkflow,
   snapshotWorkflowModels,
   type WorkflowModels,
 } from './workflowModels.ts'
-
-export const GENERATE_PERSIST_VERSION = 2
 
 export type ContentParams = {
   prompt: string
@@ -18,56 +15,12 @@ export type ContentParams = {
   activeLoraStrengths: Record<string, number>
 }
 
-export function remapWorkflowId(id: string, fallback = 'sd15') {
-  return id === 'txt2img' || id === 'diffusion' ? fallback : id
-}
-
 export function workflowHasPack(
   paramsByWorkflow: Record<string, unknown>,
   modelsByWorkflow: Record<string, unknown>,
   id: string,
 ) {
   return Object.hasOwn(paramsByWorkflow, id) || Object.hasOwn(modelsByWorkflow, id)
-}
-
-export function stripParamsContent<T extends ContentParams>(params: T): T {
-  return {
-    ...params,
-    prompt: '',
-    negativePrompt: '',
-    checkpoint: '',
-    vae: '',
-    textEncoder: '',
-    activeLoraOrder: [],
-    activeLoraStrengths: {},
-  }
-}
-
-export function migrateGeneratePersist(
-  raw: unknown,
-  parseParams: (raw: unknown) => Record<string, ContentParams>,
-): Record<string, unknown> {
-  const rest = raw && typeof raw === 'object' && !Array.isArray(raw) ? { ...(raw as Record<string, unknown>) } : {}
-  const paramsByWorkflow: Record<string, ContentParams> = {}
-  for (const [id, pack] of Object.entries(parseParams(rest.paramsByWorkflow))) {
-    paramsByWorkflow[id] = stripParamsContent(pack)
-  }
-  const modelsByWorkflow: Record<string, WorkflowModels> = {}
-  for (const id of Object.keys(parseModelsByWorkflow(rest.modelsByWorkflow, ''))) {
-    modelsByWorkflow[id] = emptyWorkflowModels('')
-  }
-  return {
-    ...rest,
-    prompt: '',
-    negativePrompt: '',
-    checkpoint: '',
-    vae: '',
-    textEncoder: '',
-    activeLoraOrder: [],
-    activeLoraStrengths: {},
-    paramsByWorkflow,
-    modelsByWorkflow,
-  }
 }
 
 export type WorkflowSwitchState<P extends ContentParams> = P & {

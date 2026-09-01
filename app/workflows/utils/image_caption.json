@@ -11,6 +11,15 @@
     "captionPrefix",
     "captionSuffix",
     "captionSaveImage",
+    "captionOverride",
+    "captionThreshold",
+    "captionCharacterThreshold",
+    "captionReplaceUnderscore",
+    "captionTrailingComma",
+    "captionExcludeTags",
+    "captionMaxTokens",
+    "captionKeepModelLoaded",
+    "captionSeed",
     "outputPath"
   ],
   "extras": ["caption"],
@@ -39,7 +48,7 @@
   "3": {
     "inputs": {
       "image": ["2", 0],
-      "model": "wd-swinv2-tagger-v3",
+      "model": "wd-v1-4-moat-tagger-v2",
       "threshold": 0.35,
       "character_threshold": 0.85,
       "replace_underscore": false,
@@ -78,15 +87,28 @@
       "title": "Save Image"
     }
   },
+  "7": {
+    "inputs": {
+      "model_name": "Qwen3VL-4B-Instruct-Q8_0.gguf",
+      "preset_prompt": "🖼️ Detailed Description",
+      "custom_prompt": "",
+      "max_tokens": 512,
+      "keep_model_loaded": true,
+      "seed": 1,
+      "image": ["2", 0]
+    },
+    "class_type": "AILab_QwenVL_GGUF",
+    "_meta": {
+      "title": "QwenVL GGUF"
+    }
+  },
   "6": {
     "inputs": {
-      "string": ["4", 0],
-      "filename_prefix": "blombo-caption",
-      "output_folder": "output"
+      "source": ["4", 0]
     },
-    "class_type": "SaveStringKJ",
+    "class_type": "PreviewAny",
     "_meta": {
-      "title": "Save Caption Text"
+      "title": "Preview Caption"
     }
   }
 }

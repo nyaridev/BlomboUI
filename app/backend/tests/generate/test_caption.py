@@ -58,16 +58,33 @@ class CaptionWorkflowTests(unittest.TestCase):
                 "workflow": "image_caption",
                 "input_image": src.name,
                 "source_image": str(src),
-                "caption": {"engine": "wd14", "wd14_model": "wd-vit-tagger-v3", "prefix": "solo, ", "suffix": ", masterpiece"},
+                "caption": {
+                    "engine": "wd14",
+                    "wd14_model": "wd-vit-tagger-v3",
+                    "prefix": "solo, ",
+                    "suffix": ", masterpiece",
+                    "threshold": 0.4,
+                    "character_threshold": 0.7,
+                    "replace_underscore": True,
+                    "trailing_comma": True,
+                    "exclude_tags": "simple background",
+                },
             }
         )
         kinds = {node.get("class_type") for node in graph.values() if isinstance(node, dict)}
         self.assertIn("WD14Tagger|pysssss", kinds)
         self.assertNotIn("AILab_QwenVL", kinds)
+        self.assertNotIn("AILab_QwenVL_GGUF", kinds)
         self.assertNotIn("SaveStringKJ", kinds)
+        self.assertNotIn("PreviewAny", kinds)
         self.assertEqual(find(graph, "LoadImage")[1]["inputs"]["image"], src.name)
         tagger = find(graph, "WD14Tagger|pysssss")[1]
         self.assertEqual(tagger["inputs"]["model"], "wd-vit-tagger-v3")
+        self.assertEqual(tagger["inputs"]["threshold"], 0.4)
+        self.assertEqual(tagger["inputs"]["character_threshold"], 0.7)
+        self.assertTrue(tagger["inputs"]["replace_underscore"])
+        self.assertTrue(tagger["inputs"]["trailing_comma"])
+        self.assertEqual(tagger["inputs"]["exclude_tags"], "simple background")
         scale = find(graph, "ImageScale")[1]
         width, height = caption.target_size(src, 1.0)
         self.assertEqual(scale["inputs"]["width"], width)
@@ -90,13 +107,45 @@ class CaptionWorkflowTests(unittest.TestCase):
         kinds = {node.get("class_type") for node in graph.values() if isinstance(node, dict)}
         self.assertIn("AILab_QwenVL", kinds)
         self.assertNotIn("WD14Tagger|pysssss", kinds)
+        self.assertNotIn("AILab_QwenVL_GGUF", kinds)
         node = find(graph, "AILab_QwenVL")[1]
         self.assertEqual(node["inputs"]["model_name"], "Qwen3-VL-2B-Instruct")
-        self.assertIn("Focus on clothing.", node["inputs"]["custom_prompt"])
-        self.assertIn("Mark the subject as `Character`.", node["inputs"]["custom_prompt"])
+        self.assertEqual(node["inputs"]["custom_prompt"], "Focus on clothing.")
+        self.assertNotIn("Mark the subject as `Subject`.", node["inputs"]["custom_prompt"])
+        self.assertEqual(node["inputs"]["preset_prompt"], "🖼️ Detailed Description")
+        self.assertEqual(node["inputs"]["max_tokens"], 512)
         self.assertTrue(node["inputs"]["keep_model_loaded"])
-        str_save = find(graph, "SaveStringKJ")[1]
-        self.assertEqual(str_save["inputs"]["string"][0], find(graph, "AILab_QwenVL")[0])
+        self.assertEqual(node["inputs"]["seed"], 1)
+        preview = find(graph, "PreviewAny")[1]
+        self.assertEqual(preview["inputs"]["source"][0], find(graph, "AILab_QwenVL")[0])
+        shutil.rmtree(src.parent, ignore_errors=True)
+
+    def test_fill_keeps_qwen_gguf_and_sets_prompt(self) -> None:
+        src = Path(tempfile.mkdtemp()) / "bird.png"
+        write_png(src, (500, 500))
+        graph = fill(
+            {
+                "workflow": "image_caption",
+                "input_image": src.name,
+                "source_image": str(src),
+                "caption": {
+                    "engine": "qwen",
+                    "qwen_backend": "gguf",
+                    "qwen_gguf_model": "Qwen3VL-4B-Instruct-Q4_K_M.gguf",
+                    "guidance": "Focus on clothing.",
+                },
+            }
+        )
+        kinds = {node.get("class_type") for node in graph.values() if isinstance(node, dict)}
+        self.assertIn("AILab_QwenVL_GGUF", kinds)
+        self.assertNotIn("AILab_QwenVL", kinds)
+        self.assertNotIn("WD14Tagger|pysssss", kinds)
+        node = find(graph, "AILab_QwenVL_GGUF")[1]
+        self.assertEqual(node["inputs"]["model_name"], "Qwen3VL-4B-Instruct-Q4_K_M.gguf")
+        self.assertIn("Focus on clothing.", node["inputs"]["custom_prompt"])
+        self.assertTrue(node["inputs"]["keep_model_loaded"])
+        preview = find(graph, "PreviewAny")[1]
+        self.assertEqual(preview["inputs"]["source"][0], find(graph, "AILab_QwenVL_GGUF")[0])
         shutil.rmtree(src.parent, ignore_errors=True)
 
     def test_fill_drops_save_image_when_unchecked(self) -> None:
@@ -123,7 +172,7 @@ class CaptionWorkflowTests(unittest.TestCase):
                 "input_image": one.name,
                 "input_images": [one.name, two.name],
                 "source_images": [str(one), str(two)],
-                "caption": {"engine": "wd14", "batch_count": 2},
+                "caption": {"engine": "wd14", "batch_size": 2},
             }
         )
         kinds = {node.get("class_type") for node in graph.values() if isinstance(node, dict)}
@@ -135,8 +184,51 @@ class CaptionWorkflowTests(unittest.TestCase):
     def test_format_caption_prefix_suffix(self) -> None:
         blob = caption.clean_caption({"engine": "wd14", "prefix": "solo, ", "suffix": ", masterpiece"})
         self.assertEqual(caption.format_caption(blob, "1girl, smile"), "solo, 1girl, smile, masterpiece")
+        missing = caption.clean_caption({"engine": "wd14", "prefix": "solo", "suffix": "masterpiece"})
+        self.assertEqual(caption.format_caption(missing, "1girl, smile"), "solo, 1girl, smile, masterpiece")
         qwen = caption.clean_caption({"engine": "qwen", "prefix": "x"})
         self.assertEqual(caption.format_caption(qwen, " a cat "), "a cat")
+
+    def test_clean_caption_defaults_wd14_moat(self) -> None:
+        blob = caption.clean_caption({"engine": "wd14"})
+        self.assertEqual(blob["wd14_model"], "wd-v1-4-moat-tagger-v2")
+        self.assertTrue(blob["override_existing"])
+        self.assertFalse(caption.clean_caption({"override_existing": False})["override_existing"])
+        self.assertEqual(caption.clean_caption({"batch_count": 3})["batch_size"], 3)
+        self.assertEqual(caption.clean_caption({"batch_size": 4})["batch_size"], 4)
+
+    def test_qwen_prompt_uses_guidance_or_base(self) -> None:
+        self.assertEqual(caption.qwen_prompt({"guidance": "Focus on clothing."}), "Focus on clothing.")
+        self.assertIn("`Subject`.", caption.qwen_prompt({}))
+        self.assertNotIn("`Character`.", caption.qwen_prompt({}))
+        self.assertEqual(caption.qwen_prompt({"prompt_source": "preset", "guidance": "Focus on clothing."}), "")
+
+    def test_fill_qwen_preset_and_generation(self) -> None:
+        src = Path(tempfile.mkdtemp()) / "hat.png"
+        write_png(src, (200, 200))
+        graph = fill(
+            {
+                "workflow": "image_caption",
+                "input_image": src.name,
+                "source_image": str(src),
+                "caption": {
+                    "engine": "qwen",
+                    "prompt_source": "preset",
+                    "preset_prompt": "🖼️ Tags",
+                    "guidance": "ignored",
+                    "max_tokens": 256,
+                    "keep_model_loaded": False,
+                    "seed": 42,
+                },
+            }
+        )
+        node = find(graph, "AILab_QwenVL")[1]
+        self.assertEqual(node["inputs"]["preset_prompt"], "🖼️ Tags")
+        self.assertEqual(node["inputs"]["custom_prompt"], "")
+        self.assertEqual(node["inputs"]["max_tokens"], 256)
+        self.assertFalse(node["inputs"]["keep_model_loaded"])
+        self.assertEqual(node["inputs"]["seed"], 42)
+        shutil.rmtree(src.parent, ignore_errors=True)
 
 
 class CaptionNamingTests(unittest.TestCase):
@@ -164,6 +256,37 @@ class CaptionNamingTests(unittest.TestCase):
         template, fallback = job_output._name_template(values, "images")
         self.assertEqual(template, "[index]")
         self.assertEqual(fallback, "[index]")
+
+    def test_alloc_filename_overwrites_when_override_on(self) -> None:
+        folder = Path(tempfile.mkdtemp())
+        try:
+            dest = folder / "photo.txt"
+            dest.write_text("old", encoding="utf-8")
+            values = {
+                "workflow": "image_caption",
+                "output_image_name": "",
+                "source_image": "/tmp/photo.png",
+                "caption": {"override_existing": True},
+            }
+            path = job_output._alloc_named(folder, "txt", values, "images")
+            self.assertEqual(path, dest)
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
+
+    def test_alloc_filename_suffixes_when_override_off(self) -> None:
+        folder = Path(tempfile.mkdtemp())
+        try:
+            (folder / "photo.txt").write_text("old", encoding="utf-8")
+            values = {
+                "workflow": "image_caption",
+                "output_image_name": "",
+                "source_image": "/tmp/photo.png",
+                "caption": {"override_existing": False},
+            }
+            path = job_output._alloc_named(folder, "txt", values, "images")
+            self.assertEqual(path.name, "photo_2.txt")
+        finally:
+            shutil.rmtree(folder, ignore_errors=True)
 
 
 class CaptionInputTests(unittest.TestCase):
@@ -201,7 +324,7 @@ class CaptionInputTests(unittest.TestCase):
             {
                 "workflow": "image_caption",
                 "input_paths": [str(one), str(two)],
-                "caption": {"engine": "qwen", "batch_count": 2},
+                "caption": {"engine": "qwen", "batch_size": 2},
             }
         )
         self.assertEqual(len(runs), 2)
@@ -220,6 +343,10 @@ class CaptionHistoryTests(unittest.TestCase):
             }
         )
         self.assertEqual(texts, ["1girl, smile", "1boy, hat"])
+
+    def test_output_texts_reads_preview_any_text(self) -> None:
+        texts = comfy.output_texts({"outputs": {"6": {"text": [" a cat in a hat "]}}})
+        self.assertEqual(texts, ["a cat in a hat"])
 
     def test_output_texts_reads_qwen_response(self) -> None:
         texts = comfy.output_texts({"outputs": {"4": {"RESPONSE": " a cat in a hat "}, "6": {"string": " a cat in a hat "}}})

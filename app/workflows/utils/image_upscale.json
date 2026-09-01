@@ -123,8 +123,8 @@
   "9": {
     "inputs": {
       "seed": 42,
-      "resolution": 4096,
-      "max_resolution": 4096,
+      "resolution": 2560,
+      "max_resolution": 2560,
       "batch_size": 1,
       "uniform_batch_size": false,
       "color_correction": "lab",

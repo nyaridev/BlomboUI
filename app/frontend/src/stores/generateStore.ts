@@ -9,7 +9,7 @@ import {
   type PromptMatrixSettings,
 } from '@/views/generate/panels/generation/sections/params/promptMatrix.ts'
 import { DEFAULT_XY_PLOT, type XyPlotSettings } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
-import { isHiresSizeMode, isResMode, snapDim, type HiresSizeMode, type ResMode } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
+import { isHiresSizeMode, isResMode, isUpscaleSizeMode, snapDim, type HiresSizeMode, type ResMode, type UpscaleSizeMode } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import {
   AUTO_LORA_PREFIX,
   parseModelsByWorkflow,
@@ -19,10 +19,7 @@ import {
 } from '@/stores/workflowModels.ts'
 import {
   applySetWorkflow,
-  GENERATE_PERSIST_VERSION,
   hydrateFromPacks,
-  migrateGeneratePersist,
-  remapWorkflowId,
   workflowHasPack,
 } from '@/stores/generatePersist.ts'
 import { create } from 'zustand'
@@ -170,39 +167,76 @@ export function mergeRembg(raw: unknown): RembgSettings {
 }
 
 export type CaptionEngine = 'wd14' | 'qwen'
+export type CaptionQwenBackend = 'native' | 'gguf'
 
 export type CaptionSettings = {
   inputMode: RembgInputMode
   inputDir: string
   engine: CaptionEngine
+  qwenBackend: CaptionQwenBackend
   wd14Model: string
   qwenModel: string
+  qwenGgufModel: string
   quantization: string
   guidance: string
   prefix: string
   suffix: string
   megapixels: number
-  batchCount: number
+  batchSize: number
   saveImage: boolean
+  overrideExisting: boolean
   threshold: number
   characterThreshold: number
+  replaceUnderscore: boolean
+  trailingComma: boolean
+  excludeTags: string
+  promptSource: 'preset' | 'custom'
+  presetPrompt: string
+  maxTokens: number
+  keepModelLoaded: boolean
+  seed: number
+  seedAfter: SeedAfter
 }
+
+export const CAPTION_QWEN_PROMPT = [
+  'Mark the subject as `Subject`.',
+  '',
+  'Caption provided image with following formula:',
+  '',
+  '[Medium + shot type] of Subject.',
+  '[pose / action / expression], [wardrobe], [environment / background],',
+  '[lighting], [camera / lens / DoF], [film / texture / color treatment].',
+  '',
+  'Output only the caption. No comments and notes allowed.',
+].join('\n')
 
 export const DEFAULT_CAPTION: CaptionSettings = {
   inputMode: 'files',
   inputDir: '',
   engine: 'wd14',
-  wd14Model: 'wd-swinv2-tagger-v3',
+  qwenBackend: 'native',
+  wd14Model: 'wd-v1-4-moat-tagger-v2',
   qwenModel: 'Qwen3-VL-4B-Instruct',
+  qwenGgufModel: 'Qwen3VL-4B-Instruct-Q8_0.gguf',
   quantization: '8-bit (Balanced)',
-  guidance: '',
+  guidance: CAPTION_QWEN_PROMPT,
   prefix: '',
   suffix: '',
   megapixels: 1,
-  batchCount: 1,
+  batchSize: 1,
   saveImage: true,
+  overrideExisting: true,
   threshold: 0.35,
   characterThreshold: 0.85,
+  replaceUnderscore: false,
+  trailingComma: false,
+  excludeTags: '',
+  promptSource: 'custom',
+  presetPrompt: '🖼️ Detailed Description',
+  maxTokens: 512,
+  keepModelLoaded: true,
+  seed: 1,
+  seedAfter: 'fixed',
 }
 
 export function mergeCaption(raw: unknown): CaptionSettings {
@@ -215,23 +249,42 @@ export function mergeCaption(raw: unknown): CaptionSettings {
   const num = (value: unknown, fallback: number) =>
     typeof value === 'number' && Number.isFinite(value) ? value : fallback
   const engine = text(row.engine, base.engine)
+  const qwenBackend = text(row.qwenBackend ?? row.qwen_backend, base.qwenBackend)
   const inputMode = text(row.inputMode ?? row.input_mode, base.inputMode)
   const saveRaw = row.saveImage ?? row.save_image
+  const overrideRaw = row.overrideExisting ?? row.override_existing
+  const underscoreRaw = row.replaceUnderscore ?? row.replace_underscore
+  const commaRaw = row.trailingComma ?? row.trailing_comma
+  const keepRaw = row.keepModelLoaded ?? row.keep_model_loaded
+  const sourceRaw = text(row.promptSource ?? row.prompt_source, base.promptSource)
+  const seedAfterRaw = row.seedAfter ?? row.seed_after
   return {
     inputMode: inputMode === 'directory' ? 'directory' : 'files',
     inputDir: text(row.inputDir ?? row.input_dir, base.inputDir),
     engine: engine === 'qwen' ? 'qwen' : 'wd14',
+    qwenBackend: qwenBackend === 'gguf' ? 'gguf' : 'native',
     wd14Model: text(row.wd14Model ?? row.wd14_model, base.wd14Model) || base.wd14Model,
     qwenModel: text(row.qwenModel ?? row.qwen_model, base.qwenModel) || base.qwenModel,
+    qwenGgufModel: text(row.qwenGgufModel ?? row.qwen_gguf_model, base.qwenGgufModel) || base.qwenGgufModel,
     quantization: text(row.quantization, base.quantization) || base.quantization,
-    guidance: text(row.guidance, base.guidance),
+    guidance: text(row.guidance, base.guidance).trim() || base.guidance,
     prefix: text(row.prefix, base.prefix),
     suffix: text(row.suffix, base.suffix),
     megapixels: Math.max(0.25, Math.min(4, num(row.megapixels, base.megapixels))),
-    batchCount: Math.max(1, Math.min(16, Math.round(num(row.batchCount ?? row.batch_count, base.batchCount)))),
+    batchSize: Math.max(1, Math.min(16, Math.round(num(row.batchSize ?? row.batch_size ?? row.batchCount ?? row.batch_count, base.batchSize)))),
     saveImage: typeof saveRaw === 'boolean' ? saveRaw : base.saveImage,
+    overrideExisting: typeof overrideRaw === 'boolean' ? overrideRaw : base.overrideExisting,
     threshold: Math.max(0, Math.min(1, num(row.threshold, base.threshold))),
     characterThreshold: Math.max(0, Math.min(1, num(row.characterThreshold ?? row.character_threshold, base.characterThreshold))),
+    replaceUnderscore: typeof underscoreRaw === 'boolean' ? underscoreRaw : base.replaceUnderscore,
+    trailingComma: typeof commaRaw === 'boolean' ? commaRaw : base.trailingComma,
+    excludeTags: text(row.excludeTags ?? row.exclude_tags, base.excludeTags),
+    promptSource: sourceRaw === 'preset' ? 'preset' : 'custom',
+    presetPrompt: text(row.presetPrompt ?? row.preset_prompt, base.presetPrompt) || base.presetPrompt,
+    maxTokens: Math.max(16, Math.min(8192, Math.round(num(row.maxTokens ?? row.max_tokens, base.maxTokens)))),
+    keepModelLoaded: typeof keepRaw === 'boolean' ? keepRaw : base.keepModelLoaded,
+    seed: wrapSeed32(Math.round(num(row.seed, base.seed))),
+    seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,
   }
 }
 
@@ -243,7 +296,7 @@ export type ImageUpscaleSettings = {
   engine: ImageUpscaleEngine
   upscaleModel: string
   scale: number
-  sizeMode: HiresSizeMode
+  sizeMode: UpscaleSizeMode
   width: number
   height: number
   aspect: string
@@ -307,8 +360,8 @@ export const DEFAULT_IMAGE_UPSCALE: ImageUpscaleSettings = {
   seed: 42,
   seedAfter: 'fixed',
   colorCorrection: 'lab',
-  resolution: 4096,
-  maxResolution: 4096,
+  resolution: 2560,
+  maxResolution: 2560,
   maxResolutionOverride: false,
   batchSize: 1,
   uniformBatchSize: false,
@@ -366,7 +419,7 @@ export function mergeImageUpscale(raw: unknown): ImageUpscaleSettings {
     engine: engine === 'seedvr2' ? 'seedvr2' : 'model',
     upscaleModel: text(row.upscaleModel ?? row.upscale_model, base.upscaleModel),
     scale: Math.max(1, Math.min(8, num(row.scale, base.scale))),
-    sizeMode: isHiresSizeMode(sizeMode) ? sizeMode : base.sizeMode,
+    sizeMode: isUpscaleSizeMode(sizeMode) ? sizeMode : base.sizeMode,
     width: Math.max(64, Math.min(4096, Math.round(num(row.width, base.width)))),
     height: Math.max(64, Math.min(4096, Math.round(num(row.height, base.height)))),
     aspect: text(row.aspect, base.aspect) || base.aspect,
@@ -377,7 +430,7 @@ export function mergeImageUpscale(raw: unknown): ImageUpscaleSettings {
     seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,
     colorCorrection: text(row.colorCorrection ?? row.color_correction, base.colorCorrection) || base.colorCorrection,
     resolution: Math.max(64, Math.min(8192, Math.round(num(row.resolution, base.resolution)))),
-    maxResolution: Math.max(64, Math.min(8192, Math.round(num(row.maxResolution ?? row.max_resolution, base.maxResolution)))),
+    maxResolution: Math.max(0, Math.min(8192, Math.round(num(row.maxResolution ?? row.max_resolution, base.maxResolution)))),
     maxResolutionOverride: Boolean(row.maxResolutionOverride ?? row.max_resolution_override ?? base.maxResolutionOverride),
     batchSize: Math.max(1, Math.min(64, Math.round(num(row.batchSize ?? row.batch_size, base.batchSize)))),
     uniformBatchSize: Boolean(row.uniformBatchSize ?? row.uniform_batch_size ?? base.uniformBatchSize),
@@ -1344,7 +1397,7 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   upscaleApply('upscaleModel', 'Upscale model', ['upscaleModel']),
   upscaleApply('upscaleDitModel', 'DiT model', ['ditModel']),
   upscaleApply('upscaleVaeModel', 'VAE model', ['vaeModel']),
-  upscaleApply('upscaleSize', 'Size', ['sizeMode', 'scale', 'width', 'height', 'aspect', 'megapixels']),
+  upscaleApply('upscaleSize', 'Size', ['sizeMode', 'scale', 'width', 'height', 'aspect', 'megapixels', 'maxResolution']),
   upscaleApply('upscaleMethod', 'Method', ['upscaleMethod']),
   upscaleApply('upscaleCrop', 'Crop', ['crop']),
   upscaleApply('upscaleResolution', 'Resolution', ['resolution']),
@@ -1354,24 +1407,28 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   upscaleApply('upscaleLatentNoise', 'Latent noise', ['latentNoiseScale']),
   upscaleApply('upscaleSeed', 'Seed', ['seed', 'seedAfter']),
   upscaleApply('upscaleAdvanced', 'Advanced', UPSCALE_ADVANCED_KEYS),
-  captionApply('captionEngine', 'Engine', ['engine']),
-  captionApply('captionModel', 'Model', ['wd14Model', 'qwenModel']),
+  captionApply('captionEngine', 'Engine', ['engine', 'qwenBackend']),
+  captionApply('captionModel', 'Model', ['wd14Model', 'qwenModel', 'qwenGgufModel']),
   captionApply('captionQuantization', 'Quantization', ['quantization']),
   captionApply('captionMegapixels', 'Megapixels', ['megapixels']),
-  captionApply('captionBatch', 'Batch count', ['batchCount']),
-  captionApply('captionGuidance', 'Guidance', ['guidance']),
+  captionApply('captionBatch', 'Batch size', ['batchSize']),
+  captionApply('captionGuidance', 'Prompt', ['promptSource', 'presetPrompt', 'guidance']),
   captionApply('captionPrefix', 'Prefix', ['prefix']),
   captionApply('captionSuffix', 'Suffix', ['suffix']),
   captionApply('captionSaveImage', 'Save image', ['saveImage']),
+  captionApply('captionOverride', 'Override existing', ['overrideExisting']),
+  captionApply('captionThreshold', 'Threshold', ['threshold']),
+  captionApply('captionCharacterThreshold', 'Character threshold', ['characterThreshold']),
+  captionApply('captionReplaceUnderscore', 'Replace underscore', ['replaceUnderscore']),
+  captionApply('captionTrailingComma', 'Trailing comma', ['trailingComma']),
+  captionApply('captionExcludeTags', 'Exclude tags', ['excludeTags']),
+  captionApply('captionMaxTokens', 'Max tokens', ['maxTokens']),
+  captionApply('captionKeepModelLoaded', 'Keep model loaded', ['keepModelLoaded']),
+  captionApply('captionSeed', 'Seed', ['seed', 'seedAfter']),
 ]
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
 const UTILITY_APPLY = new Set(APPLY_FIELDS.filter((field) => field.nested).map((field) => field.id))
-const LEGACY_APPLY: Record<string, string[]> = {
-  rembg: APPLY_FIELDS.filter((field) => field.keys[0] === 'rembg').map((field) => field.id),
-  upscale: APPLY_FIELDS.filter((field) => field.keys[0] === 'imageUpscale').map((field) => field.id),
-  caption: APPLY_FIELDS.filter((field) => field.keys[0] === 'caption').map((field) => field.id),
-}
 
 export const DEFAULT_APPLY = APPLY_FIELDS.map((field) => field.id).filter(
   (id) => !CONTENT_APPLY.has(id) && !UTILITY_APPLY.has(id),
@@ -1443,15 +1500,6 @@ export function applyOf(raw?: string[] | null): string[] {
   const known = new Set<string>(APPLY_FIELDS.map((field) => field.id))
   const seen: string[] = []
   for (const id of raw) {
-    const expanded = LEGACY_APPLY[id]
-    if (expanded) {
-      for (const child of expanded) {
-        if (!seen.includes(child)) {
-          seen.push(child)
-        }
-      }
-      continue
-    }
     if (known.has(id) && !seen.includes(id)) {
       seen.push(id)
     }
@@ -1866,13 +1914,6 @@ export const useGenerateStore = create<GenerateState>()(
     }),
     {
       name: 'blombo-generate',
-      version: GENERATE_PERSIST_VERSION,
-      migrate: (persisted, from) => {
-        if (from >= GENERATE_PERSIST_VERSION) {
-          return persisted as Record<string, unknown>
-        }
-        return migrateGeneratePersist(persisted, parseParamsByWorkflow)
-      },
       partialize: (s) => {
         const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, captionFiles: _captionFiles, ...rest } = s
         return {
@@ -1883,23 +1924,11 @@ export const useGenerateStore = create<GenerateState>()(
       },
       merge: (persisted, current) => {
         const rest = persisted && typeof persisted === 'object' ? (persisted as Record<string, unknown>) : {}
-        const rawWorkflow = typeof rest.workflow === 'string' && rest.workflow ? rest.workflow : current.workflow
-        const workflow = remapWorkflowId(rawWorkflow, DEFAULTS.workflow)
+        const workflow = typeof rest.workflow === 'string' && rest.workflow ? rest.workflow : current.workflow
         const paramsByWorkflow = parseParamsByWorkflow(rest.paramsByWorkflow)
         const modelsByWorkflow = parseModelsByWorkflow(rest.modelsByWorkflow, '')
-        if (rawWorkflow !== workflow) {
-          if (!paramsByWorkflow[workflow] && paramsByWorkflow[rawWorkflow]) {
-            paramsByWorkflow[workflow] = paramsByWorkflow[rawWorkflow]
-          }
-          if (!modelsByWorkflow[workflow] && modelsByWorkflow[rawWorkflow]) {
-            modelsByWorkflow[workflow] = modelsByWorkflow[rawWorkflow]
-          }
-        }
         const templateByWorkflow = parseIdMap(rest.templateByWorkflow)
         const viewedTemplateByWorkflow = parseIdMap(rest.viewedTemplateByWorkflow)
-        if (rawWorkflow !== workflow && templateByWorkflow[rawWorkflow] && !templateByWorkflow[workflow]) {
-          templateByWorkflow[workflow] = templateByWorkflow[rawWorkflow]
-        }
         return hydrateFromPacks(current, rest, paramsByWorkflow, modelsByWorkflow, workflow, {
           templateByWorkflow,
           viewedTemplateByWorkflow,

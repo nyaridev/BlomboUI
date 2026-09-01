@@ -315,7 +315,7 @@ def _workflow_params(data: Any) -> list[str]:
             keys.add("clipSkip")
         elif kind in {"RMBG", "BiRefNetRMBG"}:
             keys.add("rembg")
-        elif kind in {"WD14Tagger|pysssss", "AILab_QwenVL"}:
+        elif kind in {"WD14Tagger|pysssss", "AILab_QwenVL", "AILab_QwenVL_GGUF"}:
             keys.add("caption")
     if clips >= 2:
         keys.update({"prompt", "negativePrompt"})
@@ -511,7 +511,7 @@ def _collect_strings(raw: Any) -> list[str]:
     out: list[str] = []
     if isinstance(raw, str) and raw.strip():
         out.append(raw)
-    elif isinstance(raw, list):
+    elif isinstance(raw, (list, tuple)):
         for item in raw:
             out.extend(_collect_strings(item))
     elif isinstance(raw, dict):

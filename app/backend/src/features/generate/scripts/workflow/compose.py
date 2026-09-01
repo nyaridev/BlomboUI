@@ -15,7 +15,7 @@ ADETAILER_UTILS = {
     "checkpoints": ("image_checkpoint", "adetailer"),
     "diffusion_models": ("image_diffusion", "adetailer"),
 }
-_DIFFUSION_KINDS = {"diffusion_models", "diffusion", "unet"}
+_DIFFUSION_KINDS = {"diffusion_models"}
 _META_KEYS = {"apply", "extras", "ports", "attach"}
 
 

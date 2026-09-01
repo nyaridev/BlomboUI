@@ -79,6 +79,9 @@ if errorlevel 1 exit /b 1
 call :install_node "ComfyUI-WD14-Tagger" "https://github.com/pythongosssss/ComfyUI-WD14-Tagger"
 if errorlevel 1 exit /b 1
 
+call "%ROOT%\install\windows\comfyui\install_llamacpp.bat"
+if errorlevel 1 exit /b 1
+
 :: -----------------------------------------------------------------------------
 :: Completion
 :: -----------------------------------------------------------------------------

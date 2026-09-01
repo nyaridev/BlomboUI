@@ -6,22 +6,12 @@ export const HIDEABLE_GENERATE_TABS = GENERATE_TABS.filter(
   (item): item is Exclude<GenerateTab, 'Generation'> => item !== 'Generation',
 )
 
-function renameGenerateTab(item: string) {
-  if (item === 'Checkpoints') {
-    return 'Base Model'
-  }
-  if (item === 'Lora') {
-    return 'LoRa'
-  }
-  return item
-}
-
 export function generateTabOrderList(order: readonly string[]): GenerateTab[] {
   const allowed = new Set<GenerateTab>(GENERATE_TABS)
   const seen = new Set<GenerateTab>()
   const out: GenerateTab[] = []
   for (const item of order) {
-    const name = renameGenerateTab(item) as GenerateTab
+    const name = item as GenerateTab
     if (allowed.has(name) && !seen.has(name)) {
       out.push(name)
       seen.add(name)
@@ -36,6 +26,6 @@ export function generateTabOrderList(order: readonly string[]): GenerateTab[] {
 }
 
 export function orderedGenerateTabs(order: readonly string[], hidden: readonly string[] = []): GenerateTab[] {
-  const hiddenSet = new Set(hidden.map(renameGenerateTab))
+  const hiddenSet = new Set(hidden)
   return generateTabOrderList(order).filter((item) => item === 'Generation' || !hiddenSet.has(item))
 }

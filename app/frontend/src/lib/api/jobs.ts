@@ -235,7 +235,7 @@ export type JobRequest = {
     input_dir: string
     upscale_model: string
     scale: number
-    size_mode: 'scale' | 'raw' | 'scaler' | 'set'
+    size_mode: 'scale' | 'raw' | 'scaler' | 'set' | 'max'
     width: number
     height: number
     aspect: string
@@ -283,17 +283,29 @@ export type JobRequest = {
   }
   caption?: {
     engine: 'wd14' | 'qwen'
+    qwen_backend: 'native' | 'gguf'
     wd14_model: string
     qwen_model: string
+    qwen_gguf_model: string
     quantization: string
     guidance: string
     prefix: string
     suffix: string
     megapixels: number
-    batch_count: number
+    batch_size: number
     save_image: boolean
+    override_existing: boolean
     threshold: number
     character_threshold: number
+    replace_underscore: boolean
+    trailing_comma: boolean
+    exclude_tags: string
+    prompt_source: 'preset' | 'custom'
+    preset_prompt: string
+    max_tokens: number
+    keep_model_loaded: boolean
+    seed: number
+    seed_after: 'randomize' | 'fixed' | 'increment' | 'decrement'
     input_mode: 'files' | 'directory'
     input_dir: string
   }

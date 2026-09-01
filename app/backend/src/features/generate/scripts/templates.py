@@ -101,6 +101,15 @@ _CAPTION_APPLY = (
     "captionPrefix",
     "captionSuffix",
     "captionSaveImage",
+    "captionOverride",
+    "captionThreshold",
+    "captionCharacterThreshold",
+    "captionReplaceUnderscore",
+    "captionTrailingComma",
+    "captionExcludeTags",
+    "captionMaxTokens",
+    "captionKeepModelLoaded",
+    "captionSeed",
 )
 _APPLY = (
     "prompt",
@@ -130,7 +139,6 @@ _APPLY = (
     *_CAPTION_APPLY,
     "attention",
 )
-_LEGACY_APPLY = {"rembg": _REMBG_APPLY, "upscale": _UPSCALE_APPLY, "caption": _CAPTION_APPLY}
 
 _SCRIPTS = ("", "xy-plot", "prompt-matrix")
 _BLOBS = ("controlnet", "hires", "adetailer")
@@ -154,12 +162,6 @@ def _clean_apply(raw: Any, fallback: list[str] | None = None) -> list[str]:
     seen: list[str] = []
     for item in raw:
         ident = str(item)
-        expanded = _LEGACY_APPLY.get(ident)
-        if expanded is not None:
-            for child in expanded:
-                if child not in seen:
-                    seen.append(child)
-            continue
         if ident in _APPLY and ident not in seen:
             seen.append(ident)
     return seen

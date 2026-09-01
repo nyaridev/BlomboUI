@@ -30,7 +30,6 @@ export function ImageUpscaleFields({
   selectedIndex = 0,
   onChange,
   lastSeed = null,
-  flushModels = false,
   wrap,
 }: {
   value: ImageUpscaleSettings
@@ -38,7 +37,6 @@ export function ImageUpscaleFields({
   selectedIndex?: number
   onChange: (next: Partial<ImageUpscaleSettings>) => void
   lastSeed?: number | null
-  flushModels?: boolean
   wrap?: (id: string, node: ReactNode) => ReactNode
 }) {
   const setResolutions = useSettingsStore((s) => s.setResolutions)
@@ -76,10 +74,69 @@ export function ImageUpscaleFields({
   function box(id: string, node: ReactNode) {
     return wrap ? wrap(id, node) : node
   }
+  const seedBlock = box(
+    'upscaleSeed',
+    <div className="flex items-end gap-stack">
+      <label className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className="text-xs text-muted">Seed</span>
+        <NumberField
+          value={value.seed}
+          onChange={(seed) => onChange({ seed: Math.round(seed) })}
+          min={value.seed < 0 ? -1 : 0}
+          max={SEED_U32_MAX}
+        />
+      </label>
+      <div className="flex w-32 shrink-0 flex-col gap-1">
+        <span className="text-xs text-muted">After generation</span>
+        <SelectField
+          value={value.seedAfter ?? 'fixed'}
+          onChange={(next) => {
+            const seedAfter = next as SeedAfter
+            if (seedAfter === 'randomize') {
+              onChange({ seedAfter, seed: -1 })
+              return
+            }
+            if (value.seedAfter === 'randomize' && lastSeed != null) {
+              onChange({ seedAfter, seed: wrapSeed32(lastSeed) })
+              return
+            }
+            onChange({ seedAfter })
+          }}
+          options={[...SEED_AFTER]}
+        />
+      </div>
+    </div>,
+  )
+  const noiseBlock = (
+    <div className="grid grid-cols-2 gap-stack">
+      {box(
+        'upscaleInputNoise',
+        <SliderField
+          label="Input noise"
+          value={value.inputNoiseScale}
+          onChange={(inputNoiseScale) => onChange({ inputNoiseScale })}
+          min={0}
+          max={1}
+          step={0.01}
+        />,
+      )}
+      {box(
+        'upscaleLatentNoise',
+        <SliderField
+          label="Latent noise"
+          value={value.latentNoiseScale}
+          onChange={(latentNoiseScale) => onChange({ latentNoiseScale })}
+          min={0}
+          max={1}
+          step={0.01}
+        />,
+      )}
+    </div>
+  )
 
   return (
     <div className="flex min-w-0 w-full flex-col gap-stack">
-      <ParamSection title="Models" spaced={!flushModels}>
+      <ParamSection title="Models">
         <div className="flex flex-col gap-stack">
           {box(
             'upscaleEngine',
@@ -162,12 +219,13 @@ export function ImageUpscaleFields({
                     label="Max resolution"
                     value={value.maxResolution}
                     onChange={(maxResolution) => onChange({ maxResolution: Math.round(maxResolution) })}
-                    min={64}
+                    min={0}
                     max={8192}
                     step={8}
                   />,
                 )}
               </div>
+              {noiseBlock}
               {box(
                 'upscaleColor',
                 <div className="flex min-w-0 flex-col gap-1">
@@ -179,30 +237,7 @@ export function ImageUpscaleFields({
                   />
                 </div>,
               )}
-              <div className="grid grid-cols-2 gap-stack">
-                {box(
-                  'upscaleInputNoise',
-                  <SliderField
-                    label="Input noise"
-                    value={value.inputNoiseScale}
-                    onChange={(inputNoiseScale) => onChange({ inputNoiseScale })}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                  />,
-                )}
-                {box(
-                  'upscaleLatentNoise',
-                  <SliderField
-                    label="Latent noise"
-                    value={value.latentNoiseScale}
-                    onChange={(latentNoiseScale) => onChange({ latentNoiseScale })}
-                    min={0}
-                    max={1}
-                    step={0.01}
-                  />,
-                )}
-              </div>
+              {seedBlock}
             </>
           ) : (
             <>
@@ -231,39 +266,7 @@ export function ImageUpscaleFields({
           )}
         </div>
       </ParamSection>
-      {box(
-        'upscaleSeed',
-        <div className="flex items-end gap-stack">
-          <label className="flex min-w-0 flex-1 flex-col gap-1">
-            <span className="text-xs text-muted">Seed</span>
-            <NumberField
-              value={value.seed}
-              onChange={(seed) => onChange({ seed: Math.round(seed) })}
-              min={value.seed < 0 ? -1 : 0}
-              max={SEED_U32_MAX}
-            />
-          </label>
-          <div className="flex w-32 shrink-0 flex-col gap-1">
-            <span className="text-xs text-muted">After generation</span>
-            <SelectField
-              value={value.seedAfter ?? 'fixed'}
-              onChange={(next) => {
-                const seedAfter = next as SeedAfter
-                if (seedAfter === 'randomize') {
-                  onChange({ seedAfter, seed: -1 })
-                  return
-                }
-                if (value.seedAfter === 'randomize' && lastSeed != null) {
-                  onChange({ seedAfter, seed: wrapSeed32(lastSeed) })
-                  return
-                }
-                onChange({ seedAfter })
-              }}
-              options={[...SEED_AFTER]}
-            />
-          </div>
-        </div>,
-      )}
+      {seedvr2 ? null : seedBlock}
       {seedvr2 ? (
         <ParamSection title="Other">
           {box(

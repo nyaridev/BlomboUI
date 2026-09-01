@@ -293,6 +293,12 @@ def _join_name(parts: list[str], number: int | None) -> str:
     return stem[:120]
 
 
+def _overwrite_named(values: dict[str, Any]) -> bool:
+    if not caption.is_caption(values):
+        return False
+    return bool(caption.clean_caption(values.get("caption")).get("override_existing", True))
+
+
 def _max_named(folder: Path, parts: list[str], ext: str) -> int:
     if len(parts) != 2:
         return 0
@@ -333,7 +339,7 @@ def _alloc_named(folder: Path, ext: str, values: dict[str, Any], kind: str, star
     if len(parts) == 1:
         stem = _join_name(parts, None)
         dest = folder / f"{stem}.{ext}"
-        if not dest.exists():
+        if _overwrite_named(values) or not dest.exists():
             return dest
         n = 1
         while True:

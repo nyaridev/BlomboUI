@@ -1,6 +1,6 @@
 {
-  "last_node_id": 6,
-  "last_link_id": 5,
+  "last_node_id": 7,
+  "last_link_id": 6,
   "nodes": [
     {
       "id": 1,
@@ -50,7 +50,7 @@
         {
           "name": "IMAGE",
           "type": "IMAGE",
-          "links": [2, 3, 4],
+          "links": [2, 3, 4, 6],
           "slot_index": 0
         }
       ],
@@ -86,7 +86,7 @@
       "properties": {
         "Node name for S&R": "WD14Tagger|pysssss"
       },
-      "widgets_values": ["wd-swinv2-tagger-v3", 0.35, 0.85, false, false, ""],
+      "widgets_values": ["wd-v1-4-moat-tagger-v2", 0.35, 0.85, false, false, ""],
       "title": "WD14 Tagger"
     },
     {
@@ -135,6 +135,49 @@
       "title": "QwenVL"
     },
     {
+      "id": 7,
+      "type": "AILab_QwenVL_GGUF",
+      "pos": [640, 560],
+      "size": [340, 240],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": 6
+        },
+        {
+          "name": "video",
+          "shape": 7,
+          "type": "IMAGE",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "RESPONSE",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "AILab_QwenVL_GGUF"
+      },
+      "widgets_values": [
+        "Qwen3VL-4B-Instruct-Q8_0.gguf",
+        "🖼️ Detailed Description",
+        "",
+        512,
+        true,
+        1
+      ],
+      "title": "QwenVL GGUF"
+    },
+    {
       "id": 5,
       "type": "SaveImage",
       "pos": [1020, 0],
@@ -158,25 +201,32 @@
     },
     {
       "id": 6,
-      "type": "SaveStringKJ",
+      "type": "PreviewAny",
       "pos": [1020, 240],
-      "size": [280, 140],
+      "size": [280, 100],
       "flags": {},
       "order": 5,
       "mode": 0,
       "inputs": [
         {
-          "name": "string",
-          "type": "STRING",
+          "name": "source",
+          "type": "*",
           "link": 5
         }
       ],
-      "outputs": [],
+      "outputs": [
+        {
+          "name": "STRING",
+          "type": "STRING",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
       "properties": {
-        "Node name for S&R": "SaveStringKJ"
+        "Node name for S&R": "PreviewAny"
       },
-      "widgets_values": ["blombo-caption", "output"],
-      "title": "Save Caption Text"
+      "widgets_values": [],
+      "title": "Preview Caption"
     }
   ],
   "links": [
@@ -184,7 +234,8 @@
     [2, 2, 0, 3, 0, "IMAGE"],
     [3, 2, 0, 4, 0, "IMAGE"],
     [4, 2, 0, 5, 0, "IMAGE"],
-    [5, 4, 0, 6, 0, "STRING"]
+    [5, 4, 0, 6, 0, "STRING"],
+    [6, 2, 0, 7, 0, "IMAGE"]
   ],
   "groups": [],
   "config": {},

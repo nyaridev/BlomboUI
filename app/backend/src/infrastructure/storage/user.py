@@ -148,6 +148,8 @@ CREATE TABLE IF NOT EXISTS user_galleries (
 );
 CREATE INDEX IF NOT EXISTS user_galleries_created
     ON user_galleries (created_at ASC, id ASC);
+CREATE INDEX IF NOT EXISTS user_galleries_parent
+    ON user_galleries (parent_id, position, id);
 """
 
 
@@ -164,69 +166,8 @@ def connect() -> sqlite3.Connection:
             _CONN.execute("PRAGMA foreign_keys = ON")
             _CONN.execute("PRAGMA journal_mode=WAL")
             _CONN.executescript(SCHEMA)
-            _migrate(_CONN)
             _CONN.commit()
         return _CONN
-
-
-def _migrate(conn: sqlite3.Connection) -> None:
-    template_cols = {row[1] for row in conn.execute("PRAGMA table_info(workflow_templates)")}
-    if "apply_json" not in template_cols:
-        conn.execute("ALTER TABLE workflow_templates ADD COLUMN apply_json TEXT")
-    if "enabled" not in template_cols:
-        conn.execute("ALTER TABLE workflow_templates ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
-    states = {
-        str(row["workflow"]): str(row["apply_json"])
-        for row in conn.execute("SELECT workflow, apply_json FROM workflow_template_state")
-    }
-    for row in conn.execute("SELECT workflow, id, apply_json FROM workflow_templates"):
-        if row["apply_json"] is not None:
-            continue
-        shared = states.get(str(row["workflow"]))
-        if not shared:
-            continue
-        conn.execute(
-            "UPDATE workflow_templates SET apply_json = ? WHERE workflow = ? AND id = ?",
-            (shared, row["workflow"], row["id"]),
-        )
-    cols = {row[1] for row in conn.execute("PRAGMA table_info(download_history)")}
-    if "file_name" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN file_name TEXT NOT NULL DEFAULT ''")
-    if "size_bytes" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN size_bytes INTEGER NOT NULL DEFAULT 0")
-    if "base_model" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN base_model TEXT NOT NULL DEFAULT ''")
-    if "tags_json" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'")
-    if "trained_words_json" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN trained_words_json TEXT NOT NULL DEFAULT '[]'")
-    if "description" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN description TEXT NOT NULL DEFAULT ''")
-    if "search_text" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN search_text TEXT NOT NULL DEFAULT ''")
-    if "status" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN status TEXT NOT NULL DEFAULT 'done'")
-    if "error" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN error TEXT NOT NULL DEFAULT ''")
-    if "request_json" not in cols:
-        conn.execute("ALTER TABLE download_history ADD COLUMN request_json TEXT NOT NULL DEFAULT '{}'")
-    gallery_cols = {row[1] for row in conn.execute("PRAGMA table_info(user_galleries)")}
-    if "kind" not in gallery_cols:
-        conn.execute("ALTER TABLE user_galleries ADD COLUMN kind TEXT NOT NULL DEFAULT 'library'")
-    if "parent_id" not in gallery_cols:
-        conn.execute("ALTER TABLE user_galleries ADD COLUMN parent_id TEXT")
-    if "position" not in gallery_cols:
-        conn.execute("ALTER TABLE user_galleries ADD COLUMN position INTEGER NOT NULL DEFAULT 0")
-        rows = conn.execute("SELECT id FROM user_galleries ORDER BY created_at ASC, id ASC").fetchall()
-        for index, row in enumerate(rows):
-            conn.execute("UPDATE user_galleries SET position = ? WHERE id = ?", (index, row["id"]))
-    if "loras_json" not in gallery_cols:
-        conn.execute("ALTER TABLE user_galleries ADD COLUMN loras_json TEXT NOT NULL DEFAULT '[]'")
-    if "wildcards_json" not in gallery_cols:
-        conn.execute("ALTER TABLE user_galleries ADD COLUMN wildcards_json TEXT NOT NULL DEFAULT '[]'")
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS user_galleries_parent ON user_galleries (parent_id, position, id)"
-    )
 
 
 def execute(sql: str, params: tuple | list = ()) -> sqlite3.Cursor:

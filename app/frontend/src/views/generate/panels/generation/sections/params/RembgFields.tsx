@@ -106,7 +106,7 @@ export function RembgFields({
                 </label>,
               )
             : null}
-          <div className="grid grid-cols-2 gap-cluster">
+          <div className="grid grid-cols-2 gap-stack">
             {box(
               'rembgMaskBlur',
               <label className="flex min-w-0 flex-col gap-1">
@@ -167,7 +167,7 @@ export function RembgFields({
         )}
       </ParamSection>
       <ParamSection title="Settings">
-        <div className="grid w-full grid-cols-3 gap-cluster">
+        <div className="grid w-full grid-cols-3 gap-stack">
           {box(
             'rembgInvert',
             <label className={flagClass}>

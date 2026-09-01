@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from features.settings.scripts.values import _CSV_NAME, _GALLERY_VIEWS, _SAFE_NAME, _SAFE_PATH, _SIZE
+from features.settings.scripts.values import _CSV_NAME, _SAFE_NAME, _SAFE_PATH, _SIZE
 
 def _lookup_scope_ids(raw: Any) -> list[str]:
     from features.models.scripts.thumbnail_scopes import GLOBAL_ID, ordered_ids
@@ -507,14 +507,13 @@ def _unique_allowed(raw: list[Any], allowed: tuple[str, ...]) -> list[str]:
     return out
 
 
-def _order_list(raw: Any, allowed: tuple[str, ...], rename: dict[str, str] | None = None) -> list[str] | None:
+def _order_list(raw: Any, allowed: tuple[str, ...]) -> list[str] | None:
     if not isinstance(raw, list):
         return None
-    aliases = rename or {}
     known = set(allowed)
     seen: list[str] = []
     for item in raw:
-        name = aliases.get(str(item), str(item))
+        name = str(item)
         if name in known and name not in seen:
             seen.append(name)
     for name in allowed:
@@ -524,11 +523,6 @@ def _order_list(raw: Any, allowed: tuple[str, ...], rename: dict[str, str] | Non
 
 
 def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, str] | None:
-    if isinstance(raw, str):
-        value = raw if raw in allowed else default
-        if value == default:
-            return {}
-        return {kind: value for kind in _GALLERY_VIEWS}
     if not isinstance(raw, dict):
         return None
     out: dict[str, str] = {}
@@ -544,20 +538,7 @@ def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, 
 
 
 def _gallery_fallback(raw: Any) -> bool:
-    if isinstance(raw, bool):
-        return raw
-    mapped = _bool_gallery_map(raw, False)
-    if not mapped:
-        return False
-    return any(mapped.values())
-
-
-def _bool_gallery_map(raw: Any, default: bool) -> dict[str, bool] | None:
-    if isinstance(raw, bool):
-        return {kind: raw for kind in _GALLERY_VIEWS}
-    if not isinstance(raw, dict):
-        return None
-    return {kind: bool(raw[kind]) if kind in raw else default for kind in _GALLERY_VIEWS}
+    return bool(raw) if isinstance(raw, bool) else False
 
 
 def _path_template(raw: Any, default: str) -> str | None:

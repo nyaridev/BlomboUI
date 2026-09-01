@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import shutil
 import tempfile
 import unittest
@@ -108,11 +107,6 @@ class TemplateTests(unittest.TestCase):
         expected = list(templates._CAPTION_APPLY) + ["outputPath"]
         self.assertEqual(templates.default_apply("image_caption"), expected)
 
-    def test_clean_apply_expands_legacy_rembg(self) -> None:
-        expanded = templates._clean_apply(["rembg", "outputPath"])
-        self.assertEqual(expanded, list(templates._REMBG_APPLY) + ["outputPath"])
-        self.assertNotIn("rembg", expanded)
-
     def test_nested_mix_sensitivity_keeps_engine(self) -> None:
         from features.generate.scripts.workflow import rembg
 
@@ -123,24 +117,6 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(mixed["sensitivity"], 0.4)
         self.assertEqual(mixed["engine"], "rmbg")
         self.assertEqual(mixed["rmbg_model"], "RMBG-2.0")
-
-    def test_migrate_copies_shared_apply_onto_customs(self) -> None:
-        db.connect()
-        db.execute(
-            "INSERT INTO workflow_template_state (workflow, apply_json) VALUES (?, ?)",
-            ("txt2img", json.dumps(["prompt", "steps"])),
-        )
-        db.execute(
-            "INSERT INTO workflow_templates (workflow, id, name, position, params_json) VALUES (?, ?, ?, ?, ?)",
-            ("txt2img", "Old", "Old", 0, json.dumps({"steps": 12})),
-        )
-        if db._CONN is not None:
-            db._CONN.close()
-            db._CONN = None
-
-        items, apply = templates.list_templates("txt2img")
-        self.assertEqual(apply, ["prompt", "steps"])
-        self.assertEqual(items[1]["apply"], ["prompt", "steps"])
 
 
 if __name__ == "__main__":

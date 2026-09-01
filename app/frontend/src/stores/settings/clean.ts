@@ -53,7 +53,7 @@ export function cleanTabs(raw: unknown): GenerateTab[] {
   }
   const out: GenerateTab[] = []
   for (const item of raw) {
-    const name = (item === 'Checkpoints' ? 'Base Model' : item === 'Lora' ? 'LoRa' : String(item)) as GenerateTab
+    const name = String(item) as GenerateTab
     if (name && name !== 'Generation' && !out.includes(name)) {
       out.push(name)
     }
@@ -105,8 +105,7 @@ export function cleanNames(raw: unknown): string[] {
 }
 
 export function cleanImageFormat(raw: unknown, fallback: ImageFormat = SETTINGS_DEFAULTS.imageFormat): ImageFormat {
-  const name = raw === 'jpeg' ? 'jpg' : raw
-  return IMAGE_FORMAT_IDS.has(name as string) ? (name as ImageFormat) : fallback
+  return IMAGE_FORMAT_IDS.has(raw as string) ? (raw as ImageFormat) : fallback
 }
 
 export function cleanImageQuality(raw: unknown, fallback = SETTINGS_DEFAULTS.imageQuality) {
@@ -284,7 +283,7 @@ export function cleanSearch(raw: unknown): string {
 }
 
 export function cleanModelsTab(raw: unknown): 'Local' | 'CivitAI' | 'Manager' {
-  if (raw === 'CivitAI' || raw === 'Download') {
+  if (raw === 'CivitAI') {
     return 'CivitAI'
   }
   return raw === 'Manager' ? 'Manager' : 'Local'
@@ -420,14 +419,7 @@ export function cleanQueryMap(raw: unknown): Record<string, string> {
 }
 
 export function cleanFallback(raw: unknown): boolean {
-  if (typeof raw === 'boolean') {
-    return raw
-  }
-  if (!raw || typeof raw !== 'object') {
-    return SETTINGS_DEFAULTS.galleryThumbFallback
-  }
-  const row = raw as Record<string, unknown>
-  return Boolean(row.checkpoints || row.loras || row.wildcards)
+  return typeof raw === 'boolean' ? raw : SETTINGS_DEFAULTS.galleryThumbFallback
 }
 
 export function cleanAutocompleteLists(raw: unknown): Record<string, AutocompleteListRule> {
@@ -451,8 +443,7 @@ export function cleanAutocompleteLists(raw: unknown): Record<string, Autocomplet
 }
 
 export function cleanTheme(raw: unknown): Theme {
-  const name = raw === 'default' ? 'slate' : raw
-  return THEME_IDS.has(name as string) ? (name as Theme) : SETTINGS_DEFAULTS.theme
+  return THEME_IDS.has(raw as string) ? (raw as Theme) : SETTINGS_DEFAULTS.theme
 }
 
 export function cleanCivitaiSite(raw: unknown) {
@@ -488,10 +479,6 @@ export function cleanSortDir(raw: unknown): GallerySortDir {
 }
 
 export function cleanSortKeyMap(raw: unknown): Record<string, GallerySortKey> {
-  if (typeof raw === 'string') {
-    const value = cleanSortKey(raw)
-    return value === GALLERY_SORT_KEY_DEFAULT ? {} : { checkpoints: value, loras: value, wildcards: value }
-  }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
   }
@@ -507,10 +494,6 @@ export function cleanSortKeyMap(raw: unknown): Record<string, GallerySortKey> {
 }
 
 export function cleanSortDirMap(raw: unknown): Record<string, GallerySortDir> {
-  if (typeof raw === 'string') {
-    const value = cleanSortDir(raw)
-    return value === GALLERY_SORT_DIR_DEFAULT ? {} : { checkpoints: value, loras: value, wildcards: value }
-  }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return {}
   }

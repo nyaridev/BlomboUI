@@ -98,7 +98,7 @@ def _clean(raw: Any) -> dict[str, Any]:
     if "hiddenGenerateTabs" in raw and isinstance(raw["hiddenGenerateTabs"], list):
         tabs: list[str] = []
         for item in raw["hiddenGenerateTabs"]:
-            name = "Base Model" if item == "Checkpoints" else "LoRa" if item == "Lora" else str(item)
+            name = str(item)
             if name and name != "Generation" and name not in tabs:
                 tabs.append(name)
         out["hiddenGenerateTabs"] = tabs
@@ -109,7 +109,7 @@ def _clean(raw: Any) -> dict[str, Any]:
         if ordered:
             out["mainTabOrder"] = ordered
     if "generateTabOrder" in raw:
-        ordered = _order_list(raw["generateTabOrder"], _GENERATE_TABS, rename={"Checkpoints": "Base Model", "Lora": "LoRa"})
+        ordered = _order_list(raw["generateTabOrder"], _GENERATE_TABS)
         if ordered:
             out["generateTabOrder"] = ordered
     if "mainTabKeysFollowLayout" in raw:
@@ -133,8 +133,6 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["hiddenSchedulers"] = _unique_names(raw["hiddenSchedulers"])
     if "theme" in raw:
         name = str(raw["theme"])
-        if name == "default":
-            name = "slate"
         if name in ("darker", "slate", "midnight", "ember", "moss", "light"):
             out["theme"] = name
     if "civitaiSite" in raw:
@@ -188,14 +186,10 @@ def _clean(raw: Any) -> dict[str, Any]:
             pass
     if "imageFormat" in raw:
         name = str(raw["imageFormat"]).lower()
-        if name == "jpeg":
-            name = "jpg"
         if name in _IMAGE_FORMATS:
             out["imageFormat"] = name
     if "gridFormat" in raw:
         name = str(raw["gridFormat"]).lower()
-        if name == "jpeg":
-            name = "jpg"
         if name in _IMAGE_FORMATS:
             out["gridFormat"] = name
     if "imageQuality" in raw:
@@ -220,8 +214,6 @@ def _clean(raw: Any) -> dict[str, Any]:
                 out["thumbMegapixels"] = round(min(2.0, max(0.05, value)) * 20) / 20
     if "thumbFormat" in raw:
         name = str(raw["thumbFormat"]).lower()
-        if name == "jpeg":
-            name = "jpg"
         if name in _IMAGE_FORMATS:
             out["thumbFormat"] = name
     if "thumbQuality" in raw:
@@ -247,8 +239,6 @@ def _clean(raw: Any) -> dict[str, Any]:
                 out["downloadThumbMegapixels"] = round(min(2.0, max(0.05, value)) * 20) / 20
     if "downloadThumbImageFormat" in raw:
         name = str(raw["downloadThumbImageFormat"]).lower()
-        if name == "jpeg":
-            name = "jpg"
         if name in _IMAGE_FORMATS:
             out["downloadThumbImageFormat"] = name
     if "downloadThumbVideoFormat" in raw:
@@ -270,8 +260,6 @@ def _clean(raw: Any) -> dict[str, Any]:
                 out["galleryItemThumbMegapixels"] = round(min(2.0, max(0.05, value)) * 20) / 20
     if "galleryItemThumbFormat" in raw:
         name = str(raw["galleryItemThumbFormat"]).lower()
-        if name == "jpeg":
-            name = "jpg"
         if name in _IMAGE_FORMATS:
             out["galleryItemThumbFormat"] = name
     if "galleryItemThumbVideoFormat" in raw:
@@ -440,7 +428,7 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["lookupModels"] = _lookup_models(raw["lookupModels"])
     if "scopeSearch" in raw and isinstance(raw["scopeSearch"], str):
         out["scopeSearch"] = raw["scopeSearch"][:200]
-    if "modelsTab" in raw and raw["modelsTab"] in ("Local", "Download", "CivitAI", "Manager"):
+    if "modelsTab" in raw and raw["modelsTab"] in ("Local", "CivitAI", "Manager"):
         out["modelsTab"] = raw["modelsTab"]
     if "modelsKind" in raw and raw["modelsKind"] in ("all", "checkpoints", "loras", "wildcards", "other"):
         out["modelsKind"] = raw["modelsKind"]

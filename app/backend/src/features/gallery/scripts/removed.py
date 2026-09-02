@@ -23,6 +23,7 @@ from features.wildcards.scripts import files as wildcard_files
 from config import USER, models_root, wildcards_root
 
 REMOVED = USER / "removed"
+GALLERY_KIND = "gallery"
 _SKIP = {".gitkeep", "desktop.ini"}
 _HOURS_DEFAULT = 48
 _MAX_GB_DEFAULT = 100
@@ -52,6 +53,41 @@ def remove_entry(kind: str, path: str) -> dict[str, Any]:
     return {"ids": ids, "count": len(ids)}
 
 
+def remove_gallery_item(ident: str) -> dict[str, Any]:
+    from features.gallery.scripts import cache as gallery_cache
+
+    row = gallery_cache.row(ident)
+    if not row:
+        raise RemovedError("not found", 404)
+    source = Path(str(row["path"]))
+    if not dirs.allowed_file(source):
+        raise RemovedError("not found", 404)
+    if str(row["asset_kind"] or "image") in {"grid", "temp"}:
+        raise RemovedError("cannot remove this item")
+    uid = str(uuid.uuid4())
+    dest = REMOVED / uid
+    dest.mkdir(parents=True, exist_ok=True)
+    size = int(source.stat().st_size)
+    shutil.move(str(source), str(dest / source.name))
+    try:
+        favorite = int(row["favorite"] or 0)
+    except (TypeError, ValueError, KeyError):
+        favorite = 0
+    man = {
+        "kind": GALLERY_KIND,
+        "ident": str(source),
+        "name": source.name,
+        "removed_at": time.time(),
+        "size": size,
+        "favorite": favorite,
+        "gallery_id": str(row["id"]),
+    }
+    (dest / "manifest.json").write_text(json.dumps(man, indent=2) + "\n", encoding="utf-8")
+    gallery_cache.forget_paths([str(source)])
+    _trim_size()
+    return {"ids": [uid], "count": 1}
+
+
 def list_items() -> list[dict[str, Any]]:
     items = [_read_item(folder) for folder in _folders()]
     items = [item for item in items if item]
@@ -62,6 +98,8 @@ def list_items() -> list[dict[str, Any]]:
 def restore(item_id: str) -> dict[str, str]:
     folder = _item_dir(item_id)
     man = _manifest(folder)
+    if str(man.get("kind") or "") == GALLERY_KIND:
+        return _restore_gallery(folder, man)
     kind = _kind(str(man.get("kind") or ""))
     ident = _ident(str(man.get("ident") or ""))
     name = str(man.get("name") or "")
@@ -83,14 +121,60 @@ def restore(item_id: str) -> dict[str, str]:
     return {"path": ident, "kind": "file"}
 
 
+def _restore_gallery(folder: Path, man: dict[str, Any]) -> dict[str, str]:
+    from features.gallery.scripts import cache as gallery_cache
+
+    dest = _gallery_dest(str(man.get("ident") or ""))
+    src = folder / str(man.get("name") or "")
+    if not src.is_file():
+        raise RemovedError("removed file is missing", 404)
+    if dest.exists():
+        raise RemovedError("a file already occupies that path")
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(src), str(dest))
+    shutil.rmtree(folder, ignore_errors=True)
+    ingested = gallery_cache.ingest(dest)
+    if ingested and man.get("favorite"):
+        gallery_cache.set_favorite(str(ingested["id"]), True)
+    return {"path": str(dest), "kind": GALLERY_KIND}
+
+
+def _gallery_dest(raw: str) -> Path:
+    dest = Path(str(raw or ""))
+    if not dest.is_absolute() or ".." in dest.parts:
+        raise RemovedError("invalid path")
+    try:
+        real = dest.resolve()
+    except OSError as exc:
+        raise RemovedError("invalid path") from exc
+    for root in dirs.gallery_roots():
+        if real == root or root in real.parents:
+            return dest
+    raise RemovedError("original directory is no longer available")
+
+
 def purge_permanent(item_id: str) -> None:
     folder = _item_dir(item_id)
     shutil.rmtree(folder)
 
 
-def purge_all() -> int:
+def purge_all(kind: str | None = None) -> int:
+    wanted = str(kind or "").strip()
     count = 0
     for folder in _folders():
+        if wanted:
+            man = _read_manifest(folder)
+            if not man:
+                continue
+            item_kind = str(man.get("kind") or "")
+            if wanted == GALLERY_KIND:
+                if item_kind != GALLERY_KIND:
+                    continue
+            elif wanted == "models":
+                if item_kind == GALLERY_KIND:
+                    continue
+            elif item_kind != wanted:
+                continue
         shutil.rmtree(folder, ignore_errors=True)
         count += 1
     return count
@@ -119,6 +203,9 @@ def thumb_file(
 ) -> Path | None:
     folder = _item_dir(item_id)
     man = _manifest(folder)
+    if str(man.get("kind") or "") == GALLERY_KIND:
+        path = folder / str(man.get("name") or "")
+        return path if path.is_file() else None
     ident = _ident(str(man.get("ident") or ""))
     thumbs = folder / "thumbs"
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
@@ -351,13 +438,16 @@ def _read_item(folder: Path) -> dict[str, Any] | None:
     if not man:
         return None
     ident = str(man.get("ident") or "")
-    thumbs = folder / "thumbs"
     has_thumb = False
-    if thumbs.is_dir():
-        for path in thumbs.rglob("*"):
-            if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS:
-                has_thumb = True
-                break
+    if str(man.get("kind") or "") == GALLERY_KIND:
+        has_thumb = (folder / str(man.get("name") or "")).is_file()
+    else:
+        thumbs = folder / "thumbs"
+        if thumbs.is_dir():
+            for path in thumbs.rglob("*"):
+                if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS:
+                    has_thumb = True
+                    break
     return {
         "id": folder.name,
         "kind": man.get("kind") or "",

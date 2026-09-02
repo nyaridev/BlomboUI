@@ -37,6 +37,13 @@ def _dim(raw: object) -> int | None:
     return value if value > 0 else None
 
 
+def _fav(raw: object) -> bool:
+    try:
+        return bool(int(raw))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return False
+
+
 def _public(row: object) -> dict[str, Any]:
     data = dict(row)  # type: ignore[arg-type]
     return {
@@ -47,7 +54,15 @@ def _public(row: object) -> dict[str, Any]:
         "checkpoint": str(data.get("checkpoint_name") or ""),
         "width": _dim(data.get("width")),
         "height": _dim(data.get("height")),
+        "favorite": _fav(data.get("favorite")),
     }
+
+
+def set_favorite(ident: str, favorite: bool) -> dict[str, Any]:
+    updated = gallery_cache.set_favorite(ident, favorite)
+    if updated is None:
+        raise KeyError(ident)
+    return _public(updated)
 
 
 def list_items(limit: int = 200) -> list[dict[str, Any]]:

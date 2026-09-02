@@ -17,7 +17,9 @@ import {
   getThumbScopes,
   listGalleryLibraries,
   orderGalleryLibraries,
+  removeGalleryItem,
   searchGallery,
+  setGalleryFavorite,
   updateGalleryLibrary,
   type GalleryBrowseItem,
   type GalleryHome as GalleryHomeData,
@@ -26,10 +28,12 @@ import {
   type ThumbScope,
 } from '@/lib/api.ts'
 import { galleryBrowseKey, useSettingsStore, type GalleryBrowseKind } from '@/stores/settingsStore.ts'
+import { toast } from '@/stores/toastStore.ts'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { GalleryBrowse } from '@/views/gallery/panels/content/sections/browse/GalleryBrowse.tsx'
 import { GalleryFilterTiles } from '@/views/gallery/panels/content/GalleryFilterTiles.tsx'
+import { GalleryImageToolbar } from '@/views/gallery/panels/content/GalleryImageToolbar.tsx'
 import { GallerySearchFilters } from '@/views/gallery/panels/content/GallerySearchFilters.tsx'
 import { GalleryEditDialog } from '@/views/gallery/panels/content/sections/libraries/GalleryEditDialog.tsx'
 import { GalleryHome } from '@/views/gallery/panels/content/sections/home/GalleryHome.tsx'
@@ -55,7 +59,7 @@ function remPx() {
 }
 
 function isBrowse(nav: GallerySidebarId): nav is GalleryBrowseKind {
-  return nav === 'checkpoints' || nav === 'loras' || nav === 'wildcards'
+  return nav === 'checkpoints' || nav === 'loras' || nav === 'wildcards' || nav === 'tags'
 }
 
 function searchArgs(filters: GalleryFilters, pageSize: number, cursor?: string, folder?: string) {
@@ -71,6 +75,7 @@ function searchArgs(filters: GalleryFilters, pageSize: number, cursor?: string, 
     folder: folder || undefined,
     limit: pageSize,
     random: filters.random || undefined,
+    favorite: filters.favorite || undefined,
     ...(cursor ? { cursor } : {}),
   }
 }
@@ -82,6 +87,7 @@ function mergeFront(incoming: GalleryItem[], prev: GalleryItem[]) {
 
 export function GalleryView() {
   const visible = useLocation().pathname === '/gallery'
+  const navigate = useNavigate()
   const rowRef = useRef<HTMLDivElement>(null)
   const [navWidth, setNavWidth] = useState(NAV_REM * 16)
   const [nav, setNav] = useState<GallerySidebarId>('home')
@@ -102,29 +108,28 @@ export function GalleryView() {
   const [renameFolder, setRenameFolder] = useState<GalleryLibrary | null>(null)
   const [folderView, setFolderView] = useState<'galleries' | 'images'>('galleries')
   const [remove, setRemove] = useState<GalleryLibrary | null>(null)
+  const [trashImage, setTrashImage] = useState<GalleryItem | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingMoreRef = useRef(false)
   const folderId = nav.startsWith('folder:') ? nav.slice(7) : ''
   const folderImages = Boolean(folderId) && folderView === 'images'
-  const searching = filtersActive(filters) || nav.startsWith('library:') || folderImages
+  const searching = filtersActive(filters) || nav.startsWith('library:') || folderImages || nav === 'recent'
   const share = useSettingsStore((s) => s.galleryBrowseShare)
   const browseKey = isBrowse(nav) ? galleryBrowseKey(nav, share) : ''
-  const sort = useSettingsStore((s) => (browseKey ? s.galleryBrowseSort[browseKey] ?? 'recent' : 'recent'))
+  const sort = useSettingsStore((s) =>
+    browseKey ? s.galleryBrowseSort[browseKey] ?? (nav === 'tags' && !share ? 'works' : 'recent') : 'recent',
+  )
   const dir = useSettingsStore((s) => (browseKey ? s.galleryBrowseDir[browseKey] ?? 'desc' : 'desc'))
   const pageSize = useSettingsStore((s) => s.galleryPageSize)
   const navRef = useRef(nav)
   const filtersRef = useRef(filters)
   const searchingRef = useRef(searching)
-  const sortRef = useRef(sort)
-  const dirRef = useRef(dir)
   const pageSizeRef = useRef(pageSize)
   const homeRef = useRef(home)
   const folderViewRef = useRef(folderView)
   navRef.current = nav
   filtersRef.current = filters
   searchingRef.current = searching
-  sortRef.current = sort
-  dirRef.current = dir
   pageSizeRef.current = pageSize
   homeRef.current = home
   folderViewRef.current = folderView
@@ -157,31 +162,13 @@ export function GalleryView() {
     if (currentNav === 'home' || homeRef.current.recent.length === 0) {
       void getGalleryHome()
         .then((data) => {
-          setHome(data)
+          setHome((prev) => {
+            const shelves = prev.checkpoints.length || prev.loras.length || prev.wildcards.length || prev.tags.length
+            return shelves ? { ...prev, recent: data.recent } : data
+          })
           setHomeReady(true)
           if (navRef.current === 'home') {
             setError(null)
-          }
-        })
-        .catch(() => undefined)
-      return
-    }
-    if (isBrowse(currentNav)) {
-      void browseGallery(currentNav, sortRef.current, dirRef.current)
-        .then((items) => {
-          if (navRef.current === currentNav) {
-            setBrowse(items)
-            setError(null)
-          }
-        })
-        .catch(() => undefined)
-      return
-    }
-    if (currentNav === 'libraries' || currentNav.startsWith('folder:')) {
-      void listGalleryLibraries()
-        .then((items) => {
-          if (navRef.current === currentNav) {
-            setLibraries(items)
           }
         })
         .catch(() => undefined)
@@ -307,6 +294,23 @@ export function GalleryView() {
       setFilters({ ...EMPTY_FILTERS, loras: [name] })
     } else if (nav === 'wildcards') {
       setFilters({ ...EMPTY_FILTERS, wildcards: [name] })
+    } else if (nav === 'tags') {
+      setFilters({ ...EMPTY_FILTERS, tags: [name], q: name })
+    }
+  }
+
+  function goNav(id: GallerySidebarId) {
+    setNav(id)
+    if (id === 'home' || id === 'libraries' || id === 'recent' || isBrowse(id) || id.startsWith('folder:')) {
+      setFilters(EMPTY_FILTERS)
+      if (id.startsWith('folder:')) {
+        setFolderView('galleries')
+      }
+    } else if (id.startsWith('library:')) {
+      const library = libraries.find((item) => `library:${item.id}` === id)
+      if (library) {
+        applyLibrary(library)
+      }
     }
   }
 
@@ -378,6 +382,61 @@ export function GalleryView() {
     setRemove(null)
   }
 
+  function markFavorite(id: string, favorite: boolean) {
+    const apply = (item: GalleryItem) => (item.id === id ? { ...item, favorite } : item)
+    setResults((prev) => {
+      const next = prev.map(apply)
+      return filters.favorite && !favorite ? next.filter((item) => item.id !== id) : next
+    })
+    setHome((prev) => ({ ...prev, recent: prev.recent.map(apply) }))
+    setPreview((value) => (value ? { ...value, items: value.items.map(apply) } : value))
+  }
+
+  async function onItemFavorite(item: GalleryItem) {
+    const next = !item.favorite
+    markFavorite(item.id, next)
+    try {
+      await setGalleryFavorite(item.id, next)
+    } catch (err) {
+      markFavorite(item.id, Boolean(item.favorite))
+      toast(err instanceof Error ? err.message : 'Could not favorite', 'error')
+    }
+  }
+
+  function dropItem(id: string) {
+    setResults((prev) => prev.filter((item) => item.id !== id))
+    setHome((prev) => ({ ...prev, recent: prev.recent.filter((item) => item.id !== id) }))
+    setPreview((value) => {
+      if (!value) {
+        return value
+      }
+      const items = value.items.filter((item) => item.id !== id)
+      if (!items.length) {
+        return null
+      }
+      return { items, index: Math.min(value.index, items.length - 1) }
+    })
+  }
+
+  async function confirmTrashImage() {
+    if (!trashImage) {
+      return
+    }
+    const id = trashImage.id
+    setTrashImage(null)
+    try {
+      await removeGalleryItem(id)
+      dropItem(id)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not move to trash', 'error')
+    }
+  }
+
+  function onItemFileInfo(item: GalleryItem) {
+    setPreview(null)
+    navigate('/file-info', { state: { galleryId: item.id } })
+  }
+
   async function onDrop(parentId: string | null, ids: string[]) {
     const next = await orderGalleryLibraries(parentId, ids)
     setLibraries(next)
@@ -424,20 +483,7 @@ export function GalleryView() {
         <GallerySidebar
           nav={nav}
           libraries={libraries}
-          onNav={(id) => {
-            setNav(id)
-            if (id === 'home' || id === 'libraries' || isBrowse(id) || id.startsWith('folder:')) {
-              setFilters(EMPTY_FILTERS)
-              if (id.startsWith('folder:')) {
-                setFolderView('galleries')
-              }
-            } else if (id.startsWith('library:')) {
-              const library = libraries.find((item) => `library:${item.id}` === id)
-              if (library) {
-                applyLibrary(library)
-              }
-            }
-          }}
+          onNav={goNav}
           onAdd={(parentId) => openCreate(parentId, 'new')}
           onAddFolder={(parentId) => openCreate(parentId, 'folder')}
           onEdit={(item) => (isFolder(item) ? setRenameFolder(item) : setEdit(item))}
@@ -455,6 +501,20 @@ export function GalleryView() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 pl-4">
         <div className="flex shrink-0 flex-col gap-cluster">
           <div className="flex flex-wrap items-center gap-cluster">
+            <IconButton
+              className="h-toolbar"
+              on={filters.favorite}
+              aria-label={filters.favorite ? 'Show all images' : 'Show favorites'}
+              title={filters.favorite ? 'Favorites on' : 'Favorites'}
+              onClick={() => {
+                if (folderId) {
+                  setFolderView('images')
+                }
+                setFilters((value) => ({ ...value, favorite: !value.favorite }))
+              }}
+            >
+              <AppIcon id="star" className={filters.favorite ? 'fill-current text-yellow' : ''} />
+            </IconButton>
             <div className="relative min-w-48 flex-1">
               <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
                 <AppIcon id="search" size={12} />
@@ -540,7 +600,7 @@ export function GalleryView() {
               disabled={!searching}
               onClick={() => {
                 setFilters(EMPTY_FILTERS)
-                if (nav.startsWith('library:')) {
+                if (nav.startsWith('library:') || nav === 'recent') {
                   setNav('home')
                 } else if (nav.startsWith('folder:')) {
                   setFolderView('galleries')
@@ -568,17 +628,29 @@ export function GalleryView() {
               hasNext={Boolean(cursor)}
               loadingMore={loadingMore}
               onMore={loadMore}
+              onFavorite={onItemFavorite}
+              onRemove={setTrashImage}
+              onFileInfo={onItemFileInfo}
             />
           ) : nav === 'home' ? (
             <GalleryHome
               data={home}
               libraries={libraries}
               onOpen={(item) => setPreview({ items: home.recent, index: home.recent.indexOf(item) })}
+              onRecent={() => goNav('recent')}
+              onTags={() => goNav('tags')}
+              onModels={() => goNav('checkpoints')}
+              onLoras={() => goNav('loras')}
+              onWildcards={() => goNav('wildcards')}
+              onGalleries={() => goNav('libraries')}
               onTag={(tag) => setFilters({ ...EMPTY_FILTERS, q: tag, tags: [tag] })}
               onModel={(name) => setFilters({ ...EMPTY_FILTERS, models: [name] })}
               onLora={(name) => setFilters({ ...EMPTY_FILTERS, loras: [name] })}
               onWildcard={(name) => setFilters({ ...EMPTY_FILTERS, wildcards: [name] })}
               onLibrary={applyLibrary}
+              onFavorite={onItemFavorite}
+              onRemove={setTrashImage}
+              onFileInfo={onItemFileInfo}
             />
           ) : isBrowse(nav) ? (
             <GalleryBrowse kind={nav} items={browse} error={error} onOpen={onBrowseOpen} />
@@ -610,6 +682,14 @@ export function GalleryView() {
           alt="Generated"
           resetKey={current.id}
           many={preview != null && preview.items.length > 1}
+          toolbar={
+            <GalleryImageToolbar
+              favorite={Boolean(current.favorite)}
+              onFileInfo={() => onItemFileInfo(current)}
+              onFavorite={() => void onItemFavorite(current)}
+              onRemove={() => setTrashImage(current)}
+            />
+          }
           onClose={() => setPreview(null)}
           onPrev={() =>
             setPreview((value) =>
@@ -667,6 +747,17 @@ export function GalleryView() {
           actions={[
             { label: 'Cancel', onClick: () => setRemove(null), kind: 'ghost' },
             { label: 'Remove', onClick: () => void confirmRemove(), kind: 'primary', danger: true },
+          ]}
+        />
+      ) : null}
+      {trashImage ? (
+        <ConfirmDialog
+          title="Move to Trash?"
+          body="This can be restored from Settings → Trash."
+          onClose={() => setTrashImage(null)}
+          actions={[
+            { label: 'Cancel', onClick: () => setTrashImage(null), kind: 'ghost' },
+            { label: 'Remove', onClick: () => void confirmTrashImage(), kind: 'primary', danger: true },
           ]}
         />
       ) : null}

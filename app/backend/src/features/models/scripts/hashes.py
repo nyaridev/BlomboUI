@@ -5,6 +5,7 @@ import struct
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
 from pathlib import Path
 
 from infrastructure.storage.repositories import hashes as hashes_repo
@@ -22,6 +23,7 @@ _queue: deque[Path] = deque()
 _queued: set[str] = set()
 _thread: threading.Thread | None = None
 _stop = False
+_listeners: list[Callable[[dict[str, str], Path, list[Path]], None]] = []
 
 
 def start() -> None:
@@ -98,9 +100,24 @@ def warm(paths: list[Path]) -> None:
         request(path, urgent=False)
 
 
+def listen(callback: Callable[[dict[str, str], Path, list[Path]], None]) -> None:
+    if callback not in _listeners:
+        _listeners.append(callback)
+
+
 def find_path(digests: set[str]) -> Path | None:
-    key = hashes_repo.find_path(digests)
-    return Path(key) if key else None
+    live: list[Path] = []
+    for key in hashes_repo.find_paths(digests):
+        path = Path(key)
+        try:
+            if path.is_file():
+                live.append(path.resolve())
+        except OSError:
+            continue
+    if not live:
+        return None
+    rooted = [path for path in live if _under_model_roots(path)]
+    return (rooted or live)[0]
 
 
 def checkpoint_hashes(name: str) -> dict[str, str]:
@@ -119,8 +136,20 @@ def file_hash(path: Path) -> str:
     key = str(path.resolve())
     fields = _digest(path)
     cache = _load()
+    sha = fields["sha256"]
+    old_paths: list[Path] = []
+    for other, raw in list(cache.items()):
+        if other == key or not isinstance(raw, dict):
+            continue
+        if str(raw.get("sha256") or "") != sha:
+            continue
+        if Path(other).is_file():
+            continue
+        old_paths.append(Path(other))
+        del cache[other]
     cache[key] = {"mtime": stat.st_mtime_ns, "size": stat.st_size, **fields}
     _save(cache)
+    _emit(fields, Path(key), old_paths)
     return fields["autov2"]
 
 
@@ -219,6 +248,29 @@ def _worker() -> None:
             pass
         with _cv:
             _cv.notify_all()
+
+
+def _under_model_roots(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    roots = [models_root(), *dirs.extra_named("modelDirs").values()]
+    for root in roots:
+        try:
+            resolved.relative_to(root.resolve())
+        except (OSError, ValueError):
+            continue
+        return True
+    return False
+
+
+def _emit(fields: dict[str, str], path: Path, old_paths: list[Path]) -> None:
+    for callback in list(_listeners):
+        try:
+            callback(fields, path, old_paths)
+        except Exception:
+            pass
 
 
 def _find_checkpoint(name: str) -> Path | None:

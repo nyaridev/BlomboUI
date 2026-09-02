@@ -17,6 +17,7 @@ from api.errors import ApiError, error_json
 from api.router import include_routes
 from features.complete import service as complete
 from features.gallery import service as gallery
+from features.gallery.scripts import relink as gallery_relink
 from features.generate import service as generate
 from features.models import service as models
 from infrastructure.storage import connect as connect_storage
@@ -25,6 +26,7 @@ from infrastructure.storage import connect as connect_storage
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     connect_storage()
+    gallery_relink.install()
     models.list_scopes()
     complete.schedule_rebuild()
     models.start()

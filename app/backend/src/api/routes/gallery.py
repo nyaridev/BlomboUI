@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from api.errors import ApiError
 from api.http import file_response, image_response, removed_error, resolve_view
 from features.gallery import service as gallery
-from features.gallery.schemas import LibraryIn, LibraryOrderIn, RemovedIn
+from features.gallery.schemas import FavoriteIn, LibraryIn, LibraryOrderIn, RemovedIn
 from features.generate import service as generate
 from features.models import service as models
 
@@ -35,8 +35,8 @@ def restore_user_removed(item_id: str) -> dict:
 
 
 @api.delete("/user-removed")
-def delete_all_user_removed() -> dict:
-    return {"ok": True, "count": gallery.purge_all()}
+def delete_all_user_removed(kind: str = "") -> dict:
+    return {"ok": True, "count": gallery.purge_all(kind or None)}
 
 
 @api.delete("/user-removed/{item_id}")
@@ -112,6 +112,7 @@ def search_gallery(
     cursor: str = "",
     limit: int = 200,
     random: bool = False,
+    favorite: bool = False,
 ) -> dict:
     try:
         unions = gallery.folder_unions(folder) if folder else None
@@ -130,6 +131,7 @@ def search_gallery(
         limit=limit,
         order_random=random,
         unions=unions,
+        favorite=favorite,
     )
 
 
@@ -189,6 +191,24 @@ def delete_library(ident: str) -> dict:
 @api.get("/gallery/items/latest")
 def latest_gallery_item() -> dict:
     return {"item": generate.latest_generation()}
+
+
+@api.patch("/gallery/items/{ident}/favorite")
+def patch_gallery_favorite(ident: str, body: FavoriteIn) -> dict:
+    try:
+        return gallery.set_favorite(ident, body.favorite)
+    except KeyError as exc:
+        raise ApiError("not_found", "image not found", 404) from exc
+    except ValueError as exc:
+        raise ApiError("bad_request", str(exc), 400) from exc
+
+
+@api.post("/gallery/items/{ident}/remove")
+def post_gallery_remove(ident: str) -> dict:
+    try:
+        return gallery.remove_gallery_item(ident)
+    except gallery.RemovedError as exc:
+        raise removed_error(exc) from exc
 
 
 @api.get("/gallery/items/{ident}/thumb")

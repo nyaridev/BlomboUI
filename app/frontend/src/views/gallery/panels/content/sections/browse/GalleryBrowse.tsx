@@ -29,7 +29,7 @@ export function GalleryBrowse({
 }) {
   const share = useSettingsStore((s) => s.galleryBrowseShare)
   const key = galleryBrowseKey(kind, share)
-  const sort = useSettingsStore((s) => s.galleryBrowseSort[key] ?? 'recent')
+  const sort = useSettingsStore((s) => s.galleryBrowseSort[key] ?? (kind === 'tags' && !share ? 'works' : 'recent'))
   const dir = useSettingsStore((s) => s.galleryBrowseDir[key] ?? 'desc')
   const setSort = useSettingsStore((s) => s.setGalleryBrowseSort)
   const setDir = useSettingsStore((s) => s.setGalleryBrowseDir)
@@ -50,9 +50,9 @@ export function GalleryBrowse({
           <AppIcon id={dir === 'desc' ? 'arrow-down' : 'arrow-up'} /></IconButton>
         <IconButton
           on={share}
-          aria-label={share ? 'Sharing filters across Models, LoRAs, and Wildcards' : 'Share filters across Models, LoRAs, and Wildcards'}
+          aria-label={share ? 'Sharing filters across Models, LoRAs, Wildcards, and Tags' : 'Share filters across Models, LoRAs, Wildcards, and Tags'}
           aria-pressed={share}
-          title={share ? 'Sharing filters across Models, LoRAs, and Wildcards' : 'Share filters across Models, LoRAs, and Wildcards'}
+          title={share ? 'Sharing filters across Models, LoRAs, Wildcards, and Tags' : 'Share filters across Models, LoRAs, Wildcards, and Tags'}
           onClick={() => setShare(!share)}
         >
           <AppIcon id="globe" />

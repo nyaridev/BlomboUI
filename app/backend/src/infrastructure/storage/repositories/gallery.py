@@ -43,6 +43,17 @@ def latest_non_grid() -> Any | None:
     )
 
 
+def set_favorite(ident: str, favorite: bool) -> Any | None:
+    def write(conn: Any) -> Any | None:
+        conn.execute(
+            "UPDATE gallery_items SET favorite = ? WHERE id = ?",
+            (1 if favorite else 0, ident),
+        )
+        return conn.execute("SELECT * FROM gallery_items WHERE id = ?", (ident,)).fetchone()
+
+    return cache.transaction(write)
+
+
 def upsert(conn: Any, values: dict[str, Any], existing: Any) -> None:
     if existing:
         conn.execute(
@@ -120,11 +131,32 @@ def replace_links(conn: Any, item_id: str, links: dict[str, list[str]]) -> None:
     )
 
 
-def has_links(conn: Any, item_id: str) -> bool:
-    for table in ("gallery_item_tags", "gallery_item_loras", "gallery_item_wildcards"):
-        if conn.execute(f"SELECT 1 FROM {table} WHERE item_id = ? LIMIT 1", (item_id,)).fetchone():
-            return True
-    return False
+def rename_checkpoint(conn: Any, aliases: list[str], name: str) -> None:
+    if not aliases or not name:
+        return
+    marks = ",".join("?" for _ in aliases)
+    conn.execute(
+        f"UPDATE gallery_items SET checkpoint_name = ? WHERE checkpoint_name IN ({marks})",
+        (name, *aliases),
+    )
+
+
+def rename_loras(conn: Any, aliases: list[str], name: str) -> None:
+    if not aliases or not name:
+        return
+    marks = ",".join("?" for _ in aliases)
+    conn.execute(
+        f"""
+        DELETE FROM gallery_item_loras
+        WHERE name IN ({marks})
+          AND item_id IN (SELECT item_id FROM (SELECT item_id FROM gallery_item_loras WHERE name = ?))
+        """,
+        (*aliases, name),
+    )
+    conn.execute(
+        f"UPDATE gallery_item_loras SET name = ? WHERE name IN ({marks})",
+        (name, *aliases),
+    )
 
 
 def tags_for_items(item_ids: list[str]) -> dict[str, set[str]]:

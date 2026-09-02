@@ -30,7 +30,8 @@ function defaultPromptHeights(rootH: number) {
 
 function rootHeight(el: HTMLElement | null) {
   const root = el?.closest('[data-generate-root]')
-  return root instanceof HTMLElement ? root.clientHeight : window.innerHeight
+  const height = root instanceof HTMLElement ? root.clientHeight : 0
+  return height > 0 ? height : window.innerHeight
 }
 
 export function PromptStackPlaceholder() {
@@ -56,15 +57,20 @@ export function PromptStack({ negativeDisabled }: { negativeDisabled: boolean })
   const minH = fallback.minH
   const maxH = fallback.maxH
   const stackRef = useRef<HTMLDivElement>(null)
+  const ready = useRef(false)
   const [defaults, setDefaults] = useState({ prompt: fallback.prompt, negative: fallback.negative })
   const [promptH, setPromptH] = useState(defaults.prompt)
   const [negativeH, setNegativeH] = useState(defaults.negative)
 
   useLayoutEffect(() => {
+    if (ready.current) {
+      return
+    }
     const next = defaultPromptHeights(rootHeight(stackRef.current))
     setDefaults({ prompt: next.prompt, negative: next.negative })
     setPromptH(next.prompt)
     setNegativeH(next.negative)
+    ready.current = true
   }, [PROMPT_FRAC, NEGATIVE_FRAC, maxH, minH, rem])
 
   return (

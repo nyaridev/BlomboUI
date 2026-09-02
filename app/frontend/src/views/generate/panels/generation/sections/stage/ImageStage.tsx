@@ -7,6 +7,7 @@ import {
   galleryItemThumbUrl,
   getWorkflows,
   openFolder,
+  setGalleryFavorite,
   type JobGalleryItem,
 } from '@/lib/api.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
@@ -62,6 +63,7 @@ export function ImageStage({
   const [previewFailed, setPreviewFailed] = useState(false)
   const [thumbFailed, setThumbFailed] = useState(false)
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null)
+  const [stars, setStars] = useState<Record<string, boolean>>({})
   const location = useLocation()
   const generate = location.pathname === '/'
   const setViewedImageUrl = useGenerateStore((s) => s.setViewedImageUrl)
@@ -197,6 +199,24 @@ export function ImageStage({
   const folder = outputDirForCurrent(payload, actionKey)
   const canSend = Boolean(actionSrc) && !busy && !hideResults
   const showActions = Boolean(actionSrc)
+  const favoriteId = actionKey && !actionKey.startsWith('grid-') ? actionKey : null
+  const favorited = Boolean(
+    favoriteId && (stars[favoriteId] ?? gallery.find((item) => item.id === favoriteId)?.favorite),
+  )
+
+  async function toggleFavorite() {
+    if (!favoriteId) {
+      return
+    }
+    const next = !favorited
+    setStars((prev) => ({ ...prev, [favoriteId]: next }))
+    try {
+      await setGalleryFavorite(favoriteId, next)
+    } catch (err) {
+      setStars((prev) => ({ ...prev, [favoriteId]: favorited }))
+      toast(err instanceof Error ? err.message : 'Could not favorite', 'error')
+    }
+  }
 
   async function revealFolder() {
     if (!folder) {
@@ -338,6 +358,12 @@ export function ImageStage({
             <AppIcon id="image-minus" />
             Remove background
           </IconButton>
+          {favoriteId ? (
+            <IconButton label on={favorited} onClick={() => void toggleFavorite()}>
+              <AppIcon id="star" className={favorited ? 'fill-current text-yellow' : ''} />
+              Favorite
+            </IconButton>
+          ) : null}
         </div>
       ) : null}
       {hideInfo ? null : <GenerationInfo info={genInfo ?? heldInfo.current} />}

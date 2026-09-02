@@ -3,7 +3,7 @@ import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/Con
 import type { GalleryLibrary } from '@/lib/api/gallery.ts'
 import { useRef, useState, type DragEvent } from 'react'
 import { GalleryCoverCard } from '@/views/gallery/panels/content/sections/home/GalleryCoverCard.tsx'
-import { canMove, childrenOf, dropKind, dropOnItem, isFolder, placeIds } from '@/views/gallery/panels/content/libraryTree.ts'
+import { canMove, childrenOf, createDragSession, dropKind, dropOnItem, isFolder, orderChanged, placeIds } from '@/views/gallery/panels/content/libraryTree.ts'
 import type { LibraryDropKind } from '@/views/gallery/panels/content/libraryTree.ts'
 
 export function GalleryLibraries({
@@ -35,21 +35,59 @@ export function GalleryLibraries({
   const [over, setOver] = useState<{ id: string; kind: LibraryDropKind } | null>(null)
   const [dragging, setDragging] = useState<string | null>(null)
   const dragRef = useRef<string | null>(null)
-  const dragged = useRef(false)
+  const session = useRef(createDragSession()).current
   const shown = childrenOf(items, parentId)
 
   function startDrag(event: DragEvent, ident: string) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', ident)
     dragRef.current = ident
-    dragged.current = false
+    session.start()
     setDragging(ident)
   }
 
   function endDrag() {
     dragRef.current = null
+    session.end()
     setDragging(null)
     setOver(null)
+  }
+
+  function hover(event: DragEvent<HTMLButtonElement>, item: GalleryLibrary, nextId: string | null) {
+    event.preventDefault()
+    event.stopPropagation()
+    const src = dragRef.current || event.dataTransfer.getData('text/plain')
+    if (!src || src === item.id) {
+      setOver((prev) => (prev ? null : prev))
+      event.dataTransfer.dropEffect = 'none'
+      return
+    }
+    const box = event.currentTarget.getBoundingClientRect()
+    const dest = dropOnItem(item, event.clientX, box.left, box.width, nextId, 'x')
+    const ok = canMove(items, src, dest.parentId)
+    event.dataTransfer.dropEffect = ok ? 'move' : 'none'
+    const kind = ok ? dropKind(item, dest) : null
+    const next = kind ? { id: item.id, kind } : null
+    setOver((prev) => (prev?.id === next?.id && prev?.kind === next?.kind ? prev : next))
+  }
+
+  function dropOn(event: DragEvent<HTMLButtonElement>, item: GalleryLibrary, nextId: string | null) {
+    event.preventDefault()
+    event.stopPropagation()
+    const src = dragRef.current || event.dataTransfer.getData('text/plain')
+    const rect = event.currentTarget.getBoundingClientRect()
+    endDrag()
+    if (!src) {
+      return
+    }
+    const dest = dropOnItem(item, event.clientX, rect.left, rect.width, nextId, 'x')
+    if (!canMove(items, src, dest.parentId)) {
+      return
+    }
+    const ids = placeIds(items, dest.parentId, src, dest.beforeId)
+    if (orderChanged(items, dest.parentId, src, ids)) {
+      onDrop(dest.parentId, ids)
+    }
   }
 
   return (
@@ -80,7 +118,7 @@ export function GalleryLibraries({
               dragging={dragging === item.id}
               dropKind={over?.id === item.id ? over.kind : null}
               onClick={() => {
-                if (dragged.current) {
+                if (session.clickLocked()) {
                   return
                 }
                 isFolder(item) ? onOpenFolder(item) : onOpen(item)
@@ -91,37 +129,17 @@ export function GalleryLibraries({
               }}
               onDragStart={(event) => startDrag(event, item.id)}
               onDrag={() => {
-                dragged.current = true
+                session.mark()
               }}
               onDragEnd={endDrag}
-              onDragOver={(event) => {
-                event.preventDefault()
-                const src = dragRef.current || event.dataTransfer.getData('text/plain')
-                if (!src || src === item.id) {
-                  setOver(null)
-                  event.dataTransfer.dropEffect = 'none'
+              onDragOver={(event) => hover(event, item, next?.id ?? null)}
+              onDragLeave={(event) => {
+                if (event.currentTarget.contains(event.relatedTarget as Node)) {
                   return
                 }
-                const box = event.currentTarget.getBoundingClientRect()
-                const dest = dropOnItem(item, event.clientX, box.left, box.width, next?.id ?? null)
-                const ok = canMove(items, src, dest.parentId)
-                event.dataTransfer.dropEffect = ok ? 'move' : 'none'
-                const kind = ok ? dropKind(item, dest) : null
-                setOver(kind ? { id: item.id, kind } : null)
+                setOver((prev) => (prev?.id === item.id ? null : prev))
               }}
-              onDrop={(event) => {
-                event.preventDefault()
-                const src = dragRef.current || event.dataTransfer.getData('text/plain')
-                const rect = event.currentTarget.getBoundingClientRect()
-                endDrag()
-                if (!src) {
-                  return
-                }
-                const dest = dropOnItem(item, event.clientX, rect.left, rect.width, next?.id ?? null)
-                if (canMove(items, src, dest.parentId)) {
-                  onDrop(dest.parentId, placeIds(items, dest.parentId, src, dest.beforeId))
-                }
-              }}
+              onDrop={(event) => dropOn(event, item, next?.id ?? null)}
             />
           )
         })}

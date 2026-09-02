@@ -1,9 +1,12 @@
+import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import { LightboxView } from '@/components/composites/models/LightboxView.tsx'
 import { PreviewMedia } from '@/components/composites/models/PreviewMedia.tsx'
 import { galleryItemImageUrl, galleryItemThumbUrl, type GalleryItem } from '@/lib/api/gallery.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
 import { useVisible } from '@/lib/gallery/visible.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { GalleryImageToolbar } from '@/views/gallery/panels/content/GalleryImageToolbar.tsx'
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 
 const GAP_REM = 0.5
@@ -74,11 +77,13 @@ function Thumb({
   width,
   height,
   onSelect,
+  onMenu,
 }: {
   item: GalleryItem
   width: number
   height: number
   onSelect: () => void
+  onMenu: (event: MouseEvent<HTMLButtonElement>) => void
 }) {
   const [ref, visible] = useVisible<HTMLButtonElement>()
   const full = galleryItemImageUrl(item.id)
@@ -93,10 +98,11 @@ function Thumb({
     <button
       ref={ref}
       type="button"
-      className="shrink-0 overflow-hidden rounded-md border border-line bg-panel [content-visibility:auto]"
+      className="relative shrink-0 overflow-hidden rounded-md border border-line bg-panel [content-visibility:auto]"
       style={{ width, height, aspectRatio: aspectCss(item) }}
       onClick={onSelect}
       onMouseDown={onMiddle}
+      onContextMenu={onMenu}
     >
       {visible ? (
         <PreviewMedia
@@ -104,6 +110,11 @@ function Thumb({
           type={asVideo ? 'video' : undefined}
           className="h-full w-full object-cover"
         />
+      ) : null}
+      {item.favorite ? (
+        <span className="pointer-events-none absolute top-1.5 right-1.5 text-yellow">
+          <AppIcon id="star" size={14} className="fill-current drop-shadow" />
+        </span>
       ) : null}
     </button>
   )
@@ -115,14 +126,21 @@ export function GalleryResults({
   hasNext,
   loadingMore,
   onMore,
+  onFavorite,
+  onRemove,
+  onFileInfo,
 }: {
   items: GalleryItem[]
   error: string | null
   hasNext: boolean
   loadingMore: boolean
   onMore: () => void
+  onFavorite: (item: GalleryItem) => void
+  onRemove: (item: GalleryItem) => void
+  onFileInfo: (item: GalleryItem) => void
 }) {
   const [index, setIndex] = useState<number | null>(null)
+  const [menu, setMenu] = useState<{ x: number; y: number; item: GalleryItem } | null>(null)
   const [box, setBox] = useState({ width: 0, gap: 8, targetH: 208 })
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null)
@@ -133,6 +151,15 @@ export function GalleryResults({
     () => packRows(items, box.width, box.gap, box.targetH),
     [items, box.width, box.gap, box.targetH],
   )
+
+  useEffect(() => {
+    if (index == null) {
+      return
+    }
+    if (index >= items.length) {
+      setIndex(items.length ? items.length - 1 : null)
+    }
+  }, [items, index])
 
   useEffect(() => {
     const root = scrollerRef.current
@@ -182,6 +209,10 @@ export function GalleryResults({
                   width={row.height * aspect}
                   height={row.height}
                   onSelect={() => setIndex(itemIndex)}
+                  onMenu={(event) => {
+                    event.preventDefault()
+                    setMenu({ x: event.clientX, y: event.clientY, item })
+                  }}
                 />
               ))}
             </div>
@@ -199,6 +230,35 @@ export function GalleryResults({
           ) : null}
         </div>
       ) : null}
+      {menu ? (
+        <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+          <ContextMenuItem
+            icon="info"
+            label="File Info"
+            onClick={() => {
+              onFileInfo(menu.item)
+              setMenu(null)
+              setIndex(null)
+            }}
+          />
+          <ContextMenuItem
+            icon="star"
+            label={menu.item.favorite ? 'Unfavorite' : 'Favorite'}
+            onClick={() => {
+              onFavorite(menu.item)
+              setMenu(null)
+            }}
+          />
+          <ContextMenuItem
+            label="Remove"
+            danger
+            onClick={() => {
+              onRemove(menu.item)
+              setMenu(null)
+            }}
+          />
+        </ContextMenu>
+      ) : null}
       {current ? (
         <LightboxView
           src={galleryItemImageUrl(current.id)}
@@ -206,6 +266,17 @@ export function GalleryResults({
           alt="Generated"
           resetKey={current.id}
           many={many}
+          toolbar={
+            <GalleryImageToolbar
+              favorite={Boolean(current.favorite)}
+              onFileInfo={() => {
+                setIndex(null)
+                onFileInfo(current)
+              }}
+              onFavorite={() => onFavorite(current)}
+              onRemove={() => onRemove(current)}
+            />
+          }
           onClose={() => setIndex(null)}
           onPrev={() => setIndex((i) => (i == null ? 0 : (i + items.length - 1) % items.length))}
           onNext={() => setIndex((i) => (i == null ? 0 : (i + 1) % items.length))}

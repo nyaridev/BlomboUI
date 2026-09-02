@@ -300,8 +300,14 @@ def _public_generation(row: Any) -> dict[str, Any]:
         prompt = lora_tags.strip_tags(str(row["prompt"] or params.get("prompt") or ""))
     if not negative:
         negative = lora_tags.strip_tags(str(row["negative_prompt"] or params.get("negative_prompt") or ""))
+    keys = row.keys() if hasattr(row, "keys") else ()
+    try:
+        starred = bool(int(row["favorite"])) if not keys or "favorite" in keys else False
+    except (TypeError, ValueError, KeyError):
+        starred = False
     return {
         "id": row["id"],
+        "favorite": starred,
         "prompt": prompt,
         "negative_prompt": negative,
         "seed": row["seed"],
@@ -315,7 +321,7 @@ def _public_generation(row: Any) -> dict[str, Any]:
         "scheduler": str(params.get("scheduler") or ""),
         "loras": [
             {
-                "path": save_meta.rel_for_hashes("loras", item.get("hashes")),
+                "path": save_meta.name_for_model("loras", item),
                 "strength": item.get("strength", 1),
                 "hash": str((item.get("hashes") or {}).get("autov2") or ""),
             }

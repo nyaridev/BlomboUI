@@ -67,29 +67,52 @@ export function canMove(items: GalleryLibrary[], dragId: string, parentId: strin
 }
 
 export function placeIds(items: GalleryLibrary[], parentId: string | null, dragId: string, beforeId: string | null) {
-  const siblings = childrenOf(items, parentId)
-    .map((item) => item.id)
-    .filter((id) => id !== dragId)
-  if (!beforeId) {
+  const order = childrenOf(items, parentId).map((item) => item.id)
+  const siblings = order.filter((id) => id !== dragId)
+  let target = beforeId
+  while (target === dragId) {
+    const index = order.indexOf(target)
+    target = index >= 0 && index + 1 < order.length ? order[index + 1] : null
+  }
+  if (!target) {
     return [...siblings, dragId]
   }
-  const index = siblings.indexOf(beforeId)
+  const index = siblings.indexOf(target)
   if (index < 0) {
     return [...siblings, dragId]
   }
   return [...siblings.slice(0, index), dragId, ...siblings.slice(index)]
 }
 
+export function orderChanged(items: GalleryLibrary[], parentId: string | null, dragId: string, ids: string[]) {
+  const item = items.find((row) => row.id === dragId)
+  if ((item?.parent_id ?? null) !== parentId) {
+    return true
+  }
+  const current = childrenOf(items, parentId).map((row) => row.id)
+  return current.length !== ids.length || current.some((id, index) => id !== ids[index])
+}
+
 export type LibraryDrop = { parentId: string | null; beforeId: string | null }
 export type LibraryDropKind = 'before' | 'after' | 'into'
+export type LibraryDropAxis = 'x' | 'y'
 
-export function dropOnItem(item: GalleryLibrary, clientY: number, top: number, height: number, nextId: string | null): LibraryDrop {
-  const y = clientY - top
+export function dropOnItem(
+  item: GalleryLibrary,
+  client: number,
+  origin: number,
+  size: number,
+  nextId: string | null,
+  axis: LibraryDropAxis = 'y',
+): LibraryDrop {
+  const t = size > 0 ? (client - origin) / size : 0.5
   const folder = isFolder(item)
-  if (folder && y >= height * 0.35 && y <= height * 0.85) {
+  const lo = axis === 'x' ? 0.28 : 0.3
+  const hi = axis === 'x' ? 0.72 : 0.7
+  if (folder && t >= lo && t <= hi) {
     return { parentId: item.id, beforeId: null }
   }
-  if (y < height / 2) {
+  if (t < 0.5) {
     return { parentId: item.parent_id ?? null, beforeId: item.id }
   }
   return { parentId: item.parent_id ?? null, beforeId: nextId }
@@ -103,4 +126,44 @@ export function dropKind(item: GalleryLibrary, dest: LibraryDrop): LibraryDropKi
     return null
   }
   return dest.beforeId === item.id ? 'before' : 'after'
+}
+
+export function createDragSession() {
+  let moved = false
+  let unlock = 0
+  return {
+    start() {
+      moved = false
+      if (unlock) {
+        window.clearTimeout(unlock)
+        unlock = 0
+      }
+    },
+    mark() {
+      moved = true
+    },
+    end() {
+      if (!moved) {
+        return
+      }
+      if (unlock) {
+        window.clearTimeout(unlock)
+      }
+      unlock = window.setTimeout(() => {
+        moved = false
+        unlock = 0
+      }, 80)
+    },
+    clickLocked() {
+      if (!moved) {
+        return false
+      }
+      moved = false
+      if (unlock) {
+        window.clearTimeout(unlock)
+        unlock = 0
+      }
+      return true
+    },
+  }
 }

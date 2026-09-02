@@ -87,15 +87,17 @@ class SaveMetaTests(unittest.TestCase):
         blob = json.dumps(packed)
         self.assertEqual(packed["prompt"], "cat, dress")
         self.assertEqual(packed["prompt_raw"], "cat, __outfit__")
-        self.assertNotIn("foo.safetensors", blob)
+        self.assertIn("foo.safetensors", blob)
         self.assertNotIn("/models", blob)
         self.assertNotIn(".yaml", blob)
         self.assertFalse(any(item.get("kind") == "wildcards" for item in packed["models"]))
         kinds = {item["kind"] for item in packed["models"]}
         self.assertEqual(kinds, {"checkpoints", "loras"})
+        by_kind = {item["kind"]: item for item in packed["models"]}
+        self.assertEqual(by_kind["checkpoints"]["path"], "foo.safetensors")
+        self.assertEqual(by_kind["loras"]["path"], "detail.safetensors")
         for item in packed["models"]:
             self.assertTrue(item["hashes"])
-            self.assertNotIn("path", item)
             self.assertNotIn("name", item)
         wait.assert_not_called()
         request.assert_not_called()
@@ -247,9 +249,6 @@ class SaveMetaTests(unittest.TestCase):
         self.assertNotIn("prompt", unit)
         kinds = {item["kind"] for item in unit["models"]}
         self.assertEqual(kinds, {"ultralytics", "sams"})
-        dump = json.dumps(packed)
-        self.assertNotIn(".pt", dump)
-        self.assertNotIn("bbox/", dump)
         taken = save_meta.take_params(packed)
         self.assertIsNotNone(taken)
         self.assertEqual(taken["adetailer"]["units"][0]["sampler"], "dpmpp_2m")
@@ -440,6 +439,30 @@ class SaveMetaTests(unittest.TestCase):
         self.assertEqual(blob["sampler"], "euler")
         self.assertEqual(blob["scheduler"], "sgm_uniform")
         self.assertEqual({item["kind"] for item in blob["models"]}, {"upscale_models"})
+
+    def test_pack_params_keeps_path_when_hashes_missing(self) -> None:
+        with (
+            patch.object(models, "model_file", side_effect=lambda kind, name: Path(f"/tmp/{kind}/{name}")),
+            patch.object(hashes, "entry", return_value=None),
+            patch.object(hashes, "wait", return_value="") as wait,
+            patch.object(hashes, "request"),
+        ):
+            packed = save_meta.pack_params(
+                {
+                    "prompt": "cat",
+                    "prompt_raw": "cat",
+                    "negative_prompt": "",
+                    "negative_prompt_raw": "",
+                    "checkpoint": "foo.safetensors",
+                    "loras": [{"lora": "style/detail.safetensors", "strength": 0.8}],
+                }
+            )
+        by_kind = {item["kind"]: item for item in packed["models"]}
+        self.assertEqual(by_kind["checkpoints"]["path"], "foo.safetensors")
+        self.assertNotIn("hashes", by_kind["checkpoints"])
+        self.assertEqual(by_kind["loras"]["path"], "style/detail.safetensors")
+        self.assertNotIn("hashes", by_kind["loras"])
+        wait.assert_called()
 
     def test_embed_round_trip_and_grid_matches_first_image(self) -> None:
         packed = _packed()

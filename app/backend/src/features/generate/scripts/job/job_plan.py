@@ -143,6 +143,8 @@ def _attach_lora_hashes(values: dict[str, Any]) -> None:
             continue
         name = str(item.get("lora") or item.get("path") or "")
         path = models.model_file("loras", name)
+        if path:
+            hashes.request(path, urgent=True)
         row = hashes.entry(path) if path else None
         item["hash"] = (row or {}).get("autov2") or ""
 

@@ -18,7 +18,10 @@ function remPx() {
 
 export function SettingsView() {
   const location = useLocation()
+  const visible = location.pathname === '/settings'
   const rowRef = useRef<HTMLDivElement>(null)
+  const wasHidden = useRef(!visible)
+  const [visit, setVisit] = useState(0)
   const [navWidth, setNavWidth] = useState(() => NAV_REM * 16)
   const [query, setQuery] = useState('')
   const [page, setPage] = useState<PageId>('Appearance')
@@ -56,6 +59,13 @@ export function SettingsView() {
   useEffect(() => {
     setNavWidth(NAV_REM * remPx())
   }, [])
+
+  useEffect(() => {
+    if (visible && wasHidden.current) {
+      setVisit((n) => n + 1)
+    }
+    wasHidden.current = !visible
+  }, [visible])
 
   useEffect(() => {
     if (shown.some((item) => item.id === page)) {
@@ -98,7 +108,7 @@ export function SettingsView() {
         containerRef={rowRef}
       />
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pl-4">
-        <SettingsContent shown={shown} query={query} searching={searching} />
+        <SettingsContent key={visit} shown={shown} query={query} searching={searching} />
       </div>
     </div>
   )

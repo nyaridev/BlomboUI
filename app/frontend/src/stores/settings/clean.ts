@@ -522,7 +522,8 @@ export function cleanBrowseSortMap(raw: unknown): Record<string, GalleryBrowseSo
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
     const name = key.trim()
     const sort = cleanBrowseSort(value)
-    if (BROWSE_KEYS.has(name) && sort !== GALLERY_BROWSE_SORT_DEFAULT) {
+    const fallback = name === 'tags' ? 'works' : GALLERY_BROWSE_SORT_DEFAULT
+    if (BROWSE_KEYS.has(name) && sort !== fallback) {
       out[name] = sort
     }
   }

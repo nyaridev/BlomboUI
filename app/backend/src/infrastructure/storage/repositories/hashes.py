@@ -38,23 +38,27 @@ def get_by_path(path: str) -> dict[str, Any] | None:
     }
 
 
-def find_path(digests: set[str]) -> str | None:
+def find_paths(digests: set[str]) -> list[str]:
     wanted = [item.lower() for item in digests if item]
     if not wanted:
-        return None
+        return []
     marks = ",".join("?" for _ in wanted)
-    row = cache.query_one(
+    rows = cache.query(
         f"""
         SELECT path FROM model_hashes
         WHERE lower(sha256) IN ({marks})
            OR lower(autov1) IN ({marks})
            OR lower(autov2) IN ({marks})
            OR lower(autov3) IN ({marks})
-        LIMIT 1
         """,
         (*wanted, *wanted, *wanted, *wanted),
     )
-    return str(row["path"]) if row else None
+    return [str(row["path"]) for row in rows]
+
+
+def find_path(digests: set[str]) -> str | None:
+    rows = find_paths(digests)
+    return rows[0] if rows else None
 
 
 def replace_all(data: dict[str, Any]) -> None:

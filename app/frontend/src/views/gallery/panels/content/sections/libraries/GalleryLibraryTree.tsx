@@ -6,9 +6,11 @@ import type { GallerySidebarId } from '@/views/gallery/panels/content/filters.ts
 import {
   canMove,
   childrenOf,
+  createDragSession,
   dropKind,
   dropOnItem,
   isFolder,
+  orderChanged,
   placeIds,
   type LibraryDrop,
   type LibraryDropKind,
@@ -46,18 +48,19 @@ export function GalleryLibraryTree({
   const [drag, setDrag] = useState<string | null>(null)
   const [over, setOver] = useState<{ id: string; kind: LibraryDropKind | 'root' } | null>(null)
   const dragRef = useRef<string | null>(null)
-  const dragged = useRef(false)
+  const session = useRef(createDragSession()).current
 
   function startDrag(event: DragEvent, ident: string) {
     event.dataTransfer.effectAllowed = 'move'
     event.dataTransfer.setData('text/plain', ident)
     dragRef.current = ident
-    dragged.current = false
+    session.start()
     setDrag(ident)
   }
 
   function endDrag() {
     dragRef.current = null
+    session.end()
     setDrag(null)
     setOver(null)
   }
@@ -66,7 +69,10 @@ export function GalleryLibraryTree({
     if (!canMove(libraries, src, dest.parentId)) {
       return
     }
-    onDrop(dest.parentId, placeIds(libraries, dest.parentId, src, dest.beforeId))
+    const ids = placeIds(libraries, dest.parentId, src, dest.beforeId)
+    if (orderChanged(libraries, dest.parentId, src, ids)) {
+      onDrop(dest.parentId, ids)
+    }
   }
 
   function renderRows(parentId: string | null, depth: number) {
@@ -91,7 +97,7 @@ export function GalleryLibraryTree({
             ].join(' ')}
             style={{ paddingLeft: `${0.5 + depth * 0.75}rem` }}
             onClick={() => {
-              if (dragged.current) {
+              if (session.clickLocked()) {
                 return
               }
               onNav(ident)
@@ -102,38 +108,42 @@ export function GalleryLibraryTree({
             }}
             onDragStart={(event) => startDrag(event, item.id)}
             onDrag={() => {
-              dragged.current = true
+              session.mark()
             }}
             onDragEnd={endDrag}
             onDragOver={(event) => {
               event.preventDefault()
+              event.stopPropagation()
               const src = dragRef.current || event.dataTransfer.getData('text/plain')
               if (!src || src === item.id) {
-                setOver(null)
+                setOver((prev) => (prev ? null : prev))
                 event.dataTransfer.dropEffect = 'none'
                 return
               }
-              const dest = dropOnItem(
-                item,
-                event.clientY,
-                event.currentTarget.getBoundingClientRect().top,
-                event.currentTarget.getBoundingClientRect().height,
-                next?.id ?? null,
-              )
+              const rect = event.currentTarget.getBoundingClientRect()
+              const dest = dropOnItem(item, event.clientY, rect.top, rect.height, next?.id ?? null, 'y')
               const ok = canMove(libraries, src, dest.parentId)
               event.dataTransfer.dropEffect = ok ? 'move' : 'none'
               const kind = ok ? dropKind(item, dest) : null
-              setOver(kind ? { id: item.id, kind } : null)
+              const nextOver = kind ? { id: item.id, kind } : null
+              setOver((prev) => (prev?.id === nextOver?.id && prev?.kind === nextOver?.kind ? prev : nextOver))
+            }}
+            onDragLeave={(event) => {
+              if (event.currentTarget.contains(event.relatedTarget as Node)) {
+                return
+              }
+              setOver((prev) => (prev?.id === item.id ? null : prev))
             }}
             onDrop={(event) => {
               event.preventDefault()
+              event.stopPropagation()
               const src = dragRef.current || event.dataTransfer.getData('text/plain')
               const rect = event.currentTarget.getBoundingClientRect()
               endDrag()
               if (!src) {
                 return
               }
-              applyDrop(src, dropOnItem(item, event.clientY, rect.top, rect.height, next?.id ?? null))
+              applyDrop(src, dropOnItem(item, event.clientY, rect.top, rect.height, next?.id ?? null, 'y'))
             }}
           >
             {folder ? (
@@ -141,6 +151,9 @@ export function GalleryLibraryTree({
                 className="flex h-4 w-4 shrink-0 items-center justify-center"
                 onClick={(event) => {
                   event.stopPropagation()
+                  if (session.clickLocked()) {
+                    return
+                  }
                   setOpen((value) => ({ ...value, [item.id]: value[item.id] === false }))
                 }}
               >
@@ -152,13 +165,10 @@ export function GalleryLibraryTree({
             <AppIcon id={folder ? 'folder' : 'images'} size={14} />
             <span className="min-w-0 truncate">{item.name}</span>
           </button>
-          {over?.id === item.id && over.kind === 'after' && !(folder && expanded) ? (
+          {over?.id === item.id && over.kind === 'after' ? (
             <span className="my-0.5 block h-0.5 rounded-full bg-accent" />
           ) : null}
           {folder && expanded ? renderRows(item.id, depth + 1) : null}
-          {over?.id === item.id && over.kind === 'after' && folder && expanded ? (
-            <span className="my-0.5 block h-0.5 rounded-full bg-accent" />
-          ) : null}
         </Fragment>
       )
     })
@@ -179,7 +189,10 @@ export function GalleryLibraryTree({
           const src = dragRef.current || event.dataTransfer.getData('text/plain')
           const ok = Boolean(src && canMove(libraries, src, null))
           event.dataTransfer.dropEffect = ok ? 'move' : 'none'
-          setOver(ok ? { id: 'root', kind: 'root' } : null)
+          setOver((prev) => {
+            const next = ok ? ({ id: 'root', kind: 'root' } as const) : null
+            return prev?.id === next?.id && prev?.kind === next?.kind ? prev : next
+          })
         }}
         onDrop={(event) => {
           event.preventDefault()

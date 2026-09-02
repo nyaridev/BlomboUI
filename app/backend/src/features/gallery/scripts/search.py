@@ -4,7 +4,10 @@ import random
 from typing import Any
 
 from features.gallery.scripts import cache as gallery_cache
+from features.models.scripts import hashes
+from features.models.scripts import models as model_files
 from features.models.scripts import thumbnail_scopes
+from features.generate.scripts.save_meta import HASH_KEYS
 from features.settings import service as settings
 from infrastructure.storage.repositories import gallery as gallery_repo
 
@@ -15,7 +18,7 @@ PAGE = 200
 PAGE_MIN = 20
 PAGE_MAX = 500
 BROWSE_PREVIEW = 6
-BROWSE_KINDS = {"checkpoints": "checkpoint", "loras": "lora", "wildcards": "wildcard"}
+BROWSE_KINDS = {"checkpoints": "checkpoint", "loras": "lora", "wildcards": "wildcard", "tags": "tag"}
 
 
 def _hide() -> bool:
@@ -55,6 +58,15 @@ def _page_size(limit: int = 0) -> int:
     return max(PAGE_MIN, min(PAGE_MAX, raw))
 
 
+def _fav(row: Any, keys: Any) -> bool:
+    if keys and "favorite" not in keys:
+        return False
+    try:
+        return bool(int(row["favorite"]))
+    except (TypeError, ValueError, KeyError):
+        return False
+
+
 def _public(row: Any) -> dict[str, Any]:
     keys = row.keys() if hasattr(row, "keys") else ()
     return {
@@ -65,6 +77,7 @@ def _public(row: Any) -> dict[str, Any]:
         "checkpoint": str(row["checkpoint_name"] or ""),
         "width": _dim(row["width"] if "width" in keys else None),
         "height": _dim(row["height"] if "height" in keys else None),
+        "favorite": _fav(row, keys),
     }
 
 
@@ -125,20 +138,55 @@ def _query_extra(q: str) -> tuple[list[str], list[Any]]:
     return extra, params
 
 
+def _aliases(kind: str, name: str) -> list[str]:
+    out = [name]
+    seen = {name.casefold()}
+    path = model_files.model_file(kind, name)
+    row = hashes.entry(path) if path else None
+    if not row:
+        return out
+    for key in HASH_KEYS:
+        digest = str(row.get(key) or "").strip()
+        if digest and digest.casefold() not in seen:
+            seen.add(digest.casefold())
+            out.append(digest)
+    return out
+
+
 def _models_extra(models: list[str] | None) -> tuple[list[str], list[Any]]:
     names = [str(item).strip() for item in models or [] if str(item).strip()]
     if not names:
         return [], []
-    marks = ",".join("?" for _ in names)
-    return [f"checkpoint_name IN ({marks})"], names
+    aliases: list[str] = []
+    seen: set[str] = set()
+    likes: list[str] = []
+    for name in names:
+        likes.append(_like(name))
+        for kind in ("checkpoints", "diffusion_models"):
+            for item in _aliases(kind, name):
+                key = item.casefold()
+                if key not in seen:
+                    seen.add(key)
+                    aliases.append(item)
+        base = name.replace("\\", "/").rsplit("/", 1)[-1]
+        if base.casefold() not in seen:
+            seen.add(base.casefold())
+            aliases.append(base)
+    marks = ",".join("?" for _ in aliases)
+    clauses = [f"checkpoint_name IN ({marks})"]
+    clauses.extend("checkpoint_name LIKE ? ESCAPE '\\'" for _ in likes)
+    return [f"({' OR '.join(clauses)})"], [*aliases, *likes]
 
 
-def _link_extra(names: list[str] | None, table: str) -> tuple[list[str], list[Any]]:
+def _link_extra(names: list[str] | None, table: str, kind: str = "") -> tuple[list[str], list[Any]]:
     extra: list[str] = []
     params: list[Any] = []
     for name in [str(item).strip() for item in names or [] if str(item).strip()]:
-        extra.append(f"id IN (SELECT item_id FROM {table} WHERE name = ? OR name LIKE ? ESCAPE '\\')")
-        params.extend([name, _like(name)])
+        aliases = _aliases(kind, name) if kind else [name]
+        marks = ",".join("?" for _ in aliases)
+        extra.append(f"id IN (SELECT item_id FROM {table} WHERE name IN ({marks}) OR name LIKE ? ESCAPE '\\')")
+        params.extend(aliases)
+        params.append(_like(name))
     return extra, params
 
 
@@ -158,7 +206,7 @@ def _library_clause(library: dict[str, Any]) -> tuple[str, list[Any]] | None:
     model_sql, model_params = _models_extra(list(library.get("models") or []))
     extra.extend(model_sql)
     params.extend(model_params)
-    lora_sql, lora_params = _link_extra(list(library.get("loras") or []), "gallery_item_loras")
+    lora_sql, lora_params = _link_extra(list(library.get("loras") or []), "gallery_item_loras", "loras")
     extra.extend(lora_sql)
     params.extend(lora_params)
     wild_sql, wild_params = _link_extra(list(library.get("wildcards") or []), "gallery_item_wildcards")
@@ -207,10 +255,13 @@ def search(
     limit: int = 0,
     order_random: bool = False,
     unions: list[dict[str, Any]] | None = None,
+    favorite: bool = False,
 ) -> dict[str, Any]:
     cap = _page_size(limit)
     where, params = _base_where(_hide(), media)
     extra: list[str] = []
+    if favorite:
+        extra.append("favorite = 1")
 
     query_sql, query_params = _query_extra(q)
     extra.extend(query_sql)
@@ -226,7 +277,7 @@ def search(
     extra.extend(model_sql)
     params.extend(model_params)
 
-    lora_sql, lora_params = _link_extra(loras, "gallery_item_loras")
+    lora_sql, lora_params = _link_extra(loras, "gallery_item_loras", "loras")
     extra.extend(lora_sql)
     params.extend(lora_params)
     wild_sql, wild_params = _link_extra(wildcards, "gallery_item_wildcards")
@@ -342,6 +393,23 @@ def browse(kind: str, sort: str = "recent", direction: str = "desc", limit: int 
             rows = rows[:cap]
         names = [str(row["name"]) for row in rows]
         previews = _previews_for("checkpoint_name", names, hide)
+        return {"items": [_browse_item(row, previews) for row in rows]}
+    if key == "tags":
+        tag_hide = "AND i.asset_kind != 'interrupted'" if hide else ""
+        rows = gallery_repo.query(
+            f"""
+            SELECT t.tag AS name, MAX(i.created_at) AS recent, COUNT(*) AS works
+            FROM gallery_item_tags t
+            JOIN gallery_items i ON i.id = t.item_id
+            WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {tag_hide}
+            GROUP BY t.tag
+            ORDER BY {'works' if by_works else 'recent'} {order}, name COLLATE NOCASE
+            """,
+        )
+        if cap:
+            rows = rows[:cap]
+        names = [str(row["name"]) for row in rows]
+        previews = _join_previews("gallery_item_tags", names, hide, "tag")
         return {"items": [_browse_item(row, previews) for row in rows]}
     table = "gallery_item_loras" if key == "loras" else "gallery_item_wildcards"
     rows = gallery_repo.query(

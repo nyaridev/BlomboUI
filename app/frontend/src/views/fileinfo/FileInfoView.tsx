@@ -6,6 +6,7 @@ import {
   getModelInfo,
   getModelSafetensors,
   getWorkflows,
+  galleryItemImageUrl,
   readPngInfo,
   saveModelThumb,
   type CivitaiVersion,
@@ -162,11 +163,42 @@ export function FileInfoView() {
     }
   }
 
+  async function openGalleryItem(ident: string) {
+    try {
+      const res = await fetch(galleryItemImageUrl(ident))
+      if (!res.ok) {
+        throw new Error('Could not load image')
+      }
+      const blob = await res.blob()
+      const type = blob.type || 'image/png'
+      const ext = type.includes('jpeg')
+        ? '.jpg'
+        : type.includes('webp')
+          ? '.webp'
+          : type.startsWith('video/')
+            ? '.mp4'
+            : '.png'
+      await onFile(new File([blob], `gallery${ext}`, { type }))
+    } catch (err) {
+      setKind('empty')
+      setError(err instanceof Error ? err.message : 'Could not load image')
+    }
+  }
+
   useEffect(() => {
     if (location.pathname !== '/file-info') {
       return
     }
-    const incoming = location.state as { kind?: keyof ModelLists; path?: string; thumb?: number } | null
+    const incoming = location.state as {
+      kind?: keyof ModelLists
+      path?: string
+      thumb?: number
+      galleryId?: string
+    } | null
+    if (incoming?.galleryId) {
+      void openGalleryItem(incoming.galleryId)
+      return
+    }
     if (!incoming?.kind || !incoming?.path) {
       return
     }

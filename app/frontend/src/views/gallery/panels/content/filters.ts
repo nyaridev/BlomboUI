@@ -1,7 +1,16 @@
 export type GalleryMedia = 'all' | 'image' | 'video'
 export type GalleryOrientation = 'all' | 'vertical' | 'square' | 'horizontal'
 
-export type GallerySidebarId = 'home' | 'checkpoints' | 'loras' | 'wildcards' | 'libraries' | `library:${string}` | `folder:${string}`
+export type GallerySidebarId =
+  | 'home'
+  | 'recent'
+  | 'checkpoints'
+  | 'loras'
+  | 'wildcards'
+  | 'tags'
+  | 'libraries'
+  | `library:${string}`
+  | `folder:${string}`
 
 export type GalleryFilters = {
   q: string
@@ -13,6 +22,7 @@ export type GalleryFilters = {
   media: GalleryMedia
   orientation: GalleryOrientation
   random: boolean
+  favorite: boolean
 }
 
 export const EMPTY_FILTERS: GalleryFilters = {
@@ -25,6 +35,7 @@ export const EMPTY_FILTERS: GalleryFilters = {
   media: 'all',
   orientation: 'all',
   random: false,
+  favorite: false,
 }
 
 export const ORIENTATION: { id: GalleryOrientation; label: string }[] = [
@@ -44,7 +55,8 @@ export function filtersActive(filters: GalleryFilters) {
       filters.wildcards.length ||
       filters.media !== 'all' ||
       filters.orientation !== 'all' ||
-      filters.random,
+      filters.random ||
+      filters.favorite,
   )
 }
 

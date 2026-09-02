@@ -52,7 +52,7 @@ export const GALLERY_SORT_KEY_DEFAULT: GallerySortKey = 'added'
 export const GALLERY_SORT_DIR_DEFAULT: GallerySortDir = 'desc'
 export type GalleryFilterScope = 'global' | 'local'
 
-export const GALLERY_BROWSE_KINDS = ['checkpoints', 'loras', 'wildcards'] as const
+export const GALLERY_BROWSE_KINDS = ['checkpoints', 'loras', 'wildcards', 'tags'] as const
 export const LOOKUP_GROUPS = [
   { id: 'checkpoints' as const, label: 'Base Model', kinds: ['checkpoints', 'diffusion_models'] },
   { id: 'loras' as const, label: 'LoRA', kinds: ['loras'] },

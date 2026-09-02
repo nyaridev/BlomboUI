@@ -206,6 +206,17 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(works[0]["works"], 2)
         self.assertTrue(recent[0]["previews"])
 
+    def test_browse_tags_by_works(self) -> None:
+        gallery_cache.ingest(_write(self.root / "one.png", {"prompt": "cat, sitting"}, "2026-01-01T00:00:00.000Z"))
+        gallery_cache.ingest(_write(self.root / "two.png", {"prompt": "cat, standing"}, "2026-01-02T00:00:00.000Z"))
+        gallery_cache.ingest(_write(self.root / "three.png", {"prompt": "dog"}, "2026-01-03T00:00:00.000Z"))
+        works = search.browse("tags", "works", "desc")["items"]
+        names = [item["name"] for item in works]
+        self.assertEqual(names[0], "cat")
+        self.assertEqual(works[0]["works"], 2)
+        self.assertIn("dog", names)
+        self.assertTrue(works[0]["previews"])
+
     def test_scope_filter_uses_prompt_tags(self) -> None:
         gallery_cache.ingest(_write(self.root / "cat.png", {"prompt": "cat, portrait"}))
         gallery_cache.ingest(_write(self.root / "dog.png", {"prompt": "dog, portrait"}))
@@ -315,6 +326,21 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(len(preview_ids), 6)
         self.assertNotEqual(preview_ids, newest)
         self.assertEqual(preview_ids, list(reversed(ids[:6])))
+
+    def test_favorite_toggle_and_search_filter(self) -> None:
+        from features.gallery.scripts import gallery as gallery_items
+
+        gallery_cache.ingest(_write(self.root / "plain.png", {"prompt": "plain"}))
+        starred = gallery_cache.ingest(_write(self.root / "star.png", {"prompt": "star"}))
+        assert starred is not None
+        updated = gallery_items.set_favorite(starred["id"], True)
+        self.assertTrue(updated["favorite"])
+        found = search.search(favorite=True)
+        self.assertEqual([item["id"] for item in found["items"]], [starred["id"]])
+        self.assertTrue(found["items"][0]["favorite"])
+        self.assertEqual(len(search.search()["items"]), 2)
+        gallery_items.set_favorite(starred["id"], False)
+        self.assertEqual(search.search(favorite=True)["items"], [])
 
 
 if __name__ == "__main__":

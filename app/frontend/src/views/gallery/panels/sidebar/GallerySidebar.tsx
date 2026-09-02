@@ -49,6 +49,10 @@ export function GallerySidebar({
           <AppIcon id="asterisk" size={14} />
           Wildcards
         </button>
+        <button type="button" className={rowClass(nav === 'tags')} onClick={() => onNav('tags')}>
+          <AppIcon id="tag" size={14} />
+          Tags
+        </button>
       </div>
       <div className="flex min-h-0 flex-col gap-0.5">
         <div className="px-2 py-0.5 text-[10px] font-medium tracking-[0.12em] text-muted uppercase">Galleries</div>

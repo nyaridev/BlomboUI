@@ -399,7 +399,8 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
         const key = galleryBrowseKey(kind, state.galleryBrowseShare)
         const next = { ...state.galleryBrowseSort }
         const sort = cleanBrowseSort(value)
-        if (sort === GALLERY_BROWSE_SORT_DEFAULT) {
+        const fallback = key === 'tags' ? 'works' : GALLERY_BROWSE_SORT_DEFAULT
+        if (sort === fallback) {
           delete next[key]
         } else {
           next[key] = sort
@@ -431,12 +432,14 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
           state.galleryBrowseSort.checkpoints ??
           state.galleryBrowseSort.loras ??
           state.galleryBrowseSort.wildcards ??
+          state.galleryBrowseSort.tags ??
           GALLERY_BROWSE_SORT_DEFAULT
         const dir =
           state.galleryBrowseDir.global ??
           state.galleryBrowseDir.checkpoints ??
           state.galleryBrowseDir.loras ??
           state.galleryBrowseDir.wildcards ??
+          state.galleryBrowseDir.tags ??
           GALLERY_BROWSE_DIR_DEFAULT
         const galleryBrowseSort = { ...state.galleryBrowseSort }
         const galleryBrowseDir = { ...state.galleryBrowseDir }

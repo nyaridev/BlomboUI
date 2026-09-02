@@ -21,6 +21,7 @@ export function GalleryCoverCard({
   onDrag,
   onDragEnd,
   onDragOver,
+  onDragLeave,
   onDrop,
 }: {
   previews: GalleryPreview[]
@@ -35,6 +36,7 @@ export function GalleryCoverCard({
   onDrag?: (event: DragEvent<HTMLButtonElement>) => void
   onDragEnd?: (event: DragEvent<HTMLButtonElement>) => void
   onDragOver?: (event: DragEvent<HTMLButtonElement>) => void
+  onDragLeave?: (event: DragEvent<HTMLButtonElement>) => void
   onDrop?: (event: DragEvent<HTMLButtonElement>) => void
 }) {
   const dropMarker = dropKind === 'before' || dropKind === 'after' ? (
@@ -65,6 +67,7 @@ export function GalleryCoverCard({
         onDrag={onDrag}
         onDragEnd={onDragEnd}
         onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
         onDrop={onDrop}
       >
         <div className="aspect-[4/5] w-full">

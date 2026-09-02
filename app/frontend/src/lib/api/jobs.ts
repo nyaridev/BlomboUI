@@ -32,6 +32,7 @@ export type JobLora = {
 export type JobGalleryItem = {
   id: string
   kind?: string
+  favorite?: boolean
   prompt: string
   negative_prompt: string
   seed: number | null

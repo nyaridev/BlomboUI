@@ -333,7 +333,7 @@ def _gallery_query(raw: Any) -> dict[str, str]:
     return out
 
 
-_GALLERY_BROWSE_KEYS = ("checkpoints", "loras", "wildcards", "global")
+_GALLERY_BROWSE_KEYS = ("checkpoints", "loras", "wildcards", "tags", "global")
 _GALLERY_BROWSE_SORTS = ("recent", "works")
 
 
@@ -344,7 +344,10 @@ def _gallery_browse_sort(raw: Any) -> dict[str, str]:
     for key, value in raw.items():
         name = str(key).strip()
         sort = str(value or "").strip().lower()
-        if name not in _GALLERY_BROWSE_KEYS or sort not in _GALLERY_BROWSE_SORTS or sort == "recent":
+        if name not in _GALLERY_BROWSE_KEYS or sort not in _GALLERY_BROWSE_SORTS:
+            continue
+        default = "works" if name == "tags" else "recent"
+        if sort == default:
             continue
         out[name] = sort
     return out

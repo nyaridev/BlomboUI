@@ -2,7 +2,7 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { PreviewMedia } from '@/components/composites/models/PreviewMedia.tsx'
 import { isVideoPreview } from '@/lib/civitai/media.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
-import { useEffect, useRef, type PointerEvent } from 'react'
+import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 type LightboxViewProps = {
@@ -11,6 +11,7 @@ type LightboxViewProps = {
   alt: string
   resetKey: string
   many: boolean
+  toolbar?: ReactNode
   onClose: () => void
   onPrev: () => void
   onNext: () => void
@@ -64,7 +65,7 @@ function paint(img: HTMLImageElement | null, next: { scale: number; x: number; y
   return next
 }
 
-export function LightboxView({ src, type, alt, resetKey, many, onClose, onPrev, onNext }: LightboxViewProps) {
+export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose, onPrev, onNext }: LightboxViewProps) {
   const stageRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement>(null)
   const viewRef = useRef({ scale: MIN, x: 0, y: 0 })
@@ -211,6 +212,14 @@ export function LightboxView({ src, type, alt, resetKey, many, onClose, onPrev, 
       data-overlay
       onClick={onClose}
     >
+      {toolbar ? (
+        <div
+          className="absolute top-1.5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-cluster"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {toolbar}
+        </div>
+      ) : null}
       <CloseButton onClick={onClose} />
       {many ? <Arrow dir="left" onClick={onPrev} /> : null}
       {video ? (

@@ -9,6 +9,7 @@ export type GalleryItem = {
   checkpoint?: string
   width?: number | null
   height?: number | null
+  favorite?: boolean
 }
 
 export type GalleryPreview = {
@@ -22,7 +23,7 @@ export type GalleryTag = {
   previews: GalleryPreview[]
 }
 
-export type GalleryBrowseKind = 'checkpoints' | 'loras' | 'wildcards'
+export type GalleryBrowseKind = 'checkpoints' | 'loras' | 'wildcards' | 'tags'
 
 export type GalleryBrowseItem = {
   name: string
@@ -74,6 +75,7 @@ export type GallerySearchQuery = {
   cursor?: string
   limit?: number
   random?: boolean
+  favorite?: boolean
 }
 
 function qs(params: Record<string, string | string[] | undefined>) {
@@ -137,6 +139,7 @@ export async function searchGallery(query: GallerySearchQuery): Promise<GalleryS
         cursor: query.cursor,
         limit: query.limit != null ? String(query.limit) : undefined,
         random: query.random ? '1' : undefined,
+        favorite: query.favorite ? '1' : undefined,
       })}`,
     ),
   )
@@ -253,6 +256,25 @@ export async function deleteGalleryLibrary(id: string): Promise<void> {
   }
 }
 
+export async function setGalleryFavorite(ident: string, favorite: boolean): Promise<GalleryItem> {
+  const res = await fetch(api(`/gallery/items/${encodeURIComponent(ident)}/favorite`), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ favorite }),
+  })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as GalleryItem
+}
+
+export async function removeGalleryItem(ident: string): Promise<void> {
+  const res = await fetch(api(`/gallery/items/${encodeURIComponent(ident)}/remove`), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+}
+
 export async function getLatestGalleryItem(): Promise<GalleryItem | null> {
   const res = await fetch(api('/gallery/items/latest'))
   if (!res.ok) {
@@ -321,8 +343,8 @@ export async function deleteRemoved(id: string): Promise<void> {
   }
 }
 
-export async function deleteAllRemoved(): Promise<void> {
-  const res = await fetch(api('/user-removed'), { method: 'DELETE' })
+export async function deleteAllRemoved(kind?: string): Promise<void> {
+  const res = await fetch(api(`/user-removed${qs({ kind })}`), { method: 'DELETE' })
   if (!res.ok) {
     throw new Error(await readError(res))
   }

@@ -39,7 +39,7 @@ def checkpoint_name(params: dict[str, Any]) -> str:
         if kind not in {"checkpoints", "diffusion_models", "checkpoint"}:
             continue
         lookup = "diffusion_models" if kind == "diffusion_models" else "checkpoints"
-        return save_meta.rel_for_hashes(lookup, item.get("hashes"))
+        return save_meta.name_for_model(lookup, item)
     return ""
 
 
@@ -48,7 +48,7 @@ def lora_names(params: dict[str, Any]) -> list[str]:
     for item in params.get("models") or []:
         if not isinstance(item, dict) or item.get("kind") != "loras":
             continue
-        found.append(save_meta.rel_for_hashes("loras", item.get("hashes")))
+        found.append(save_meta.name_for_model("loras", item))
     return _names(found)
 
 

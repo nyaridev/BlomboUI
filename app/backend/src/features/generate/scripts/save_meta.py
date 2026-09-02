@@ -118,25 +118,26 @@ def pack_hires(values: dict[str, Any]) -> dict[str, Any]:
     models: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add(kind: str, row: dict[str, str], strength: float | None = None) -> None:
-        _push_model(models, seen, kind, row, strength)
+    def add(kind: str, rel: str, strength: float | None = None) -> None:
+        name = str(rel or "").replace("\\", "/").strip()
+        _push_model(models, seen, kind, name, _hashes_for(kind, name), strength)
 
-    add("upscale_models", _hashes_for("upscale_models", str(blob.get("upscale_model") or blob.get("upscaleModel") or "")))
+    add("upscale_models", str(blob.get("upscale_model") or blob.get("upscaleModel") or ""))
     if _flag(blob, "model_override", "modelOverride"):
         ckpt = str(blob.get("checkpoint") or "")
         if _hires_kind_diffusion(blob):
-            add("diffusion_models", _hashes_for("diffusion_models", ckpt))
+            add("diffusion_models", ckpt)
         else:
             kind, row = _hash_named(ckpt, ("checkpoints", "diffusion_models"))
-            add(kind or "checkpoints", row)
-        add("vae", _hashes_for("vae", str(blob.get("vae") or "")))
-        add("text_encoders", _hashes_for("text_encoders", str(blob.get("text_encoder") or blob.get("textEncoder") or "")))
+            _push_model(models, seen, kind or "checkpoints", ckpt, row)
+        add("vae", str(blob.get("vae") or ""))
+        add("text_encoders", str(blob.get("text_encoder") or blob.get("textEncoder") or ""))
     if _flag(blob, "lora_override", "loraOverride"):
         rows = blob.get("loras")
         if isinstance(rows, list):
             for item in rows:
                 name, strength = _lora_ref(item)
-                add("loras", _hashes_for("loras", name), strength)
+                add("loras", name, strength)
     out["models"] = models
     return out
 
@@ -155,33 +156,27 @@ def pack_adetailer(values: dict[str, Any]) -> dict[str, Any]:
         snap = adetailer_meta_fields(unit, values)
         models: list[dict[str, Any]] = []
         seen: set[str] = set()
-        _push_model(models, seen, "ultralytics", _hashes_for("ultralytics", str(unit.get("detector") or "")))
-        _push_model(
-            models,
-            seen,
-            "sams",
-            _hashes_for("sams", str(unit.get("sam_model") or unit.get("samModel") or "")),
-        )
+        detector = str(unit.get("detector") or "")
+        _push_model(models, seen, "ultralytics", detector, _hashes_for("ultralytics", detector))
+        sam = str(unit.get("sam_model") or unit.get("samModel") or "")
+        _push_model(models, seen, "sams", sam, _hashes_for("sams", sam))
         if _flag(unit, "model_override", "modelOverride"):
             ckpt = str(unit.get("checkpoint") or "")
             if _adetailer_kind_diffusion(unit):
-                _push_model(models, seen, "diffusion_models", _hashes_for("diffusion_models", ckpt))
+                _push_model(models, seen, "diffusion_models", ckpt, _hashes_for("diffusion_models", ckpt))
             else:
                 kind, row = _hash_named(ckpt, ("checkpoints", "diffusion_models"))
-                _push_model(models, seen, kind or "checkpoints", row)
-            _push_model(models, seen, "vae", _hashes_for("vae", str(unit.get("vae") or "")))
-            _push_model(
-                models,
-                seen,
-                "text_encoders",
-                _hashes_for("text_encoders", str(unit.get("text_encoder") or unit.get("textEncoder") or "")),
-            )
+                _push_model(models, seen, kind or "checkpoints", ckpt, row)
+            vae = str(unit.get("vae") or "")
+            _push_model(models, seen, "vae", vae, _hashes_for("vae", vae))
+            encoder = str(unit.get("text_encoder") or unit.get("textEncoder") or "")
+            _push_model(models, seen, "text_encoders", encoder, _hashes_for("text_encoders", encoder))
         if _flag(unit, "lora_override", "loraOverride"):
             rows = unit.get("loras")
             if isinstance(rows, list):
                 for item in rows:
                     name, strength = _lora_ref(item)
-                    _push_model(models, seen, "loras", _hashes_for("loras", name), strength)
+                    _push_model(models, seen, "loras", name, _hashes_for("loras", name), strength)
         snap["models"] = models
         units.append(snap)
     return {"units": units}
@@ -216,16 +211,23 @@ def _push_model(
     out: list[dict[str, Any]],
     seen: set[str],
     kind: str,
-    row: dict[str, str],
+    rel: str,
+    row: dict[str, str] | None = None,
     strength: float | None = None,
 ) -> None:
-    if not row:
+    name = str(rel or "").replace("\\", "/").strip()
+    hashes_row = dict(row) if row else {}
+    if not name and not hashes_row:
         return
-    key = row.get("sha256") or row.get("autov2") or ""
+    key = str(hashes_row.get("sha256") or hashes_row.get("autov2") or name)
     if not key or key in seen:
         return
     seen.add(key)
-    item: dict[str, Any] = {"kind": kind, "hashes": row}
+    item: dict[str, Any] = {"kind": kind}
+    if hashes_row:
+        item["hashes"] = hashes_row
+    if name:
+        item["path"] = name
     if strength is not None:
         item["strength"] = strength
     out.append(item)
@@ -245,19 +247,20 @@ def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) 
     out: list[dict[str, Any]] = []
     seen: set[str] = set()
 
-    def add(kind: str, row: dict[str, str], strength: float | None = None) -> None:
-        _push_model(out, seen, kind, row, strength)
+    def add(kind: str, rel: str, strength: float | None = None) -> None:
+        name = str(rel or "").replace("\\", "/").strip()
+        _push_model(out, seen, kind, name, _hashes_for(kind, name), strength)
 
     ckpt = str(values.get("checkpoint") or "")
     kind, row = _hash_named(ckpt, ("checkpoints", "diffusion_models"))
-    add(kind or "checkpoints", row)
-    add("vae", _hashes_for("vae", str(values.get("vae") or "")))
-    add("text_encoders", _hashes_for("text_encoders", str(values.get("text_encoder") or "")))
+    _push_model(out, seen, kind or "checkpoints", ckpt, row)
+    add("vae", str(values.get("vae") or ""))
+    add("text_encoders", str(values.get("text_encoder") or ""))
     rows = values.get("loras")
     if isinstance(rows, list):
         for item in rows:
             name, strength = _lora_ref(item)
-            add("loras", _hashes_for("loras", name), strength)
+            add("loras", name, strength)
     if isinstance(graph, dict):
         for key, node in graph.items():
             if not isinstance(node, dict) or _hires_node(node) or _adetailer_node(node, str(key)):
@@ -268,14 +271,14 @@ def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) 
                 for value in inputs.values():
                     if not isinstance(value, dict) or not value.get("on", True):
                         continue
-                    add("loras", _hashes_for("loras", str(value.get("lora") or "")), _num(value.get("strength"), 1.0))
+                    add("loras", str(value.get("lora") or ""), _num(value.get("strength"), 1.0))
                 continue
             spec = _LOADERS.get(cls)
             if not spec:
                 continue
             kind, keys = spec
             for key in keys:
-                add(kind, _hashes_for(kind, str(inputs.get(key) or "")))
+                add(kind, str(inputs.get(key) or ""))
     return out
 
 
@@ -307,17 +310,24 @@ def _hashes_for(kind: str, rel: str) -> dict[str, str]:
         return {}
     row = hashes.entry(path) or {}
     if not row:
-        hashes.request(path, urgent=True)
-        return {}
+        if kind in models.HASH_KINDS:
+            hashes.wait(path)
+        else:
+            hashes.request(path, urgent=True)
+        row = hashes.entry(path) or {}
     return {key: str(row[key]) for key in HASH_KEYS if row.get(key)}
 
 
 def _hash_named(rel: str, kinds: tuple[str, ...]) -> tuple[str, dict[str, str]]:
+    name = str(rel or "").replace("\\", "/").strip()
+    empty = ""
     for kind in kinds:
-        row = _hashes_for(kind, rel)
+        row = _hashes_for(kind, name)
         if row:
             return kind, row
-    return "", {}
+        if not empty and name and models.model_file(kind, name):
+            empty = kind
+    return empty, {}
 
 
 def _lora_ref(item: Any) -> tuple[str, float]:
@@ -337,6 +347,24 @@ def _num(value: Any, fallback: float) -> float:
     return number
 
 
+def is_digest(value: str) -> bool:
+    raw = str(value or "").strip()
+    return len(raw) in {8, 10, 12, 64} and all(char in "0123456789abcdefABCDEF" for char in raw)
+
+
+def name_for_model(kind: str, item: Any) -> str:
+    if not isinstance(item, dict):
+        return ""
+    lookup = "diffusion_models" if kind == "diffusion_models" else kind
+    resolved = rel_for_hashes(lookup, item.get("hashes"))
+    if resolved and not is_digest(resolved):
+        return resolved
+    hint = str(item.get("path") or "").replace("\\", "/").strip().strip("/")
+    if hint:
+        return hint
+    return resolved
+
+
 def rel_for_hashes(kind: str, row: Any) -> str:
     wanted = {str(row.get(key) or "").lower() for key in HASH_KEYS} if isinstance(row, dict) else set()
     wanted.discard("")
@@ -345,11 +373,11 @@ def rel_for_hashes(kind: str, row: Any) -> str:
     path = hashes.find_path(wanted)
     if path is None:
         return str((row or {}).get("autov2") or (row or {}).get("sha256") or "")
-    rel = _rel_under_kind(kind, path)
+    rel = rel_under_kind(kind, path)
     return rel or str(row.get("autov2") or row.get("sha256") or "")
 
 
-def _rel_under_kind(kind: str, path: Path) -> str:
+def rel_under_kind(kind: str, path: Path) -> str:
     try:
         resolved = path.resolve()
     except OSError:

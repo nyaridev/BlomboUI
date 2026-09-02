@@ -10,6 +10,7 @@ from typing import Any
 from infrastructure.storage.repositories import gallery as gallery_repo
 
 from features.gallery.scripts import index as gallery_index
+from features.gallery.scripts import relink as gallery_relink
 from features.generate.scripts import save_meta
 from shared import dirs
 from shared import pnginfo
@@ -265,13 +266,27 @@ def _refresh_links(existing: Any) -> None:
         cached_params = {}
     if not isinstance(cached_params, dict):
         return
+    checkpoint = gallery_index.checkpoint_name(cached_params)
     links = gallery_index.links(cached_params, str(existing["prompt"] or ""))
-    if not (links["tags"] or links["loras"] or links["wildcards"]):
-        return
 
     def write(conn: Any) -> None:
-        if gallery_repo.has_links(conn, ident):
+        if checkpoint != str(existing["checkpoint_name"] or ""):
+            conn.execute(
+                "UPDATE gallery_items SET checkpoint_name = ? WHERE id = ?",
+                (checkpoint, ident),
+            )
+        current = {
+            str(row["name"])
+            for row in conn.execute("SELECT name FROM gallery_item_loras WHERE item_id = ?", (ident,))
+        }
+        if current != set(links["loras"]):
+            gallery_repo.replace_links(conn, ident, links)
             return
+        if not (links["tags"] or links["loras"] or links["wildcards"]):
+            return
+        for table in ("gallery_item_tags", "gallery_item_loras", "gallery_item_wildcards"):
+            if conn.execute(f"SELECT 1 FROM {table} WHERE item_id = ? LIMIT 1", (ident,)).fetchone():
+                return
         gallery_repo.replace_links(conn, ident, links)
 
     gallery_repo.transaction(write)
@@ -351,6 +366,7 @@ def sync() -> None:
         gallery_repo.delete_stale_seen(conn, disk)
 
     gallery_repo.transaction(finish)
+    gallery_relink.relink_digests()
 
 
 def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
@@ -419,6 +435,18 @@ def path_for_id(ident: str) -> Path | None:
         return None
     path = Path(str(cached["path"]))
     return path if dirs.allowed_file(path) else None
+
+
+def set_favorite(ident: str, favorite: bool) -> Any | None:
+    cached = row(ident)
+    if not cached:
+        return None
+    kind = str(cached["asset_kind"] or "image")
+    if kind in {"grid", "temp"}:
+        raise ValueError("cannot favorite this item")
+    updated = gallery_repo.set_favorite(ident, bool(favorite))
+    _OUTPUT_CACHE.pop(str(cached["path"]), None)
+    return updated
 
 
 def forget_paths(paths: list[str]) -> None:

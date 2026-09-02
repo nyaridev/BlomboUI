@@ -7,6 +7,7 @@ from features.gallery.scripts.gallery import (
     item_thumb,
     list_items,
     list_since,
+    set_favorite,
 )
 from features.gallery.scripts.cache import ingest, start_sync, sync
 from features.gallery.scripts.search import browse, home, search
@@ -26,6 +27,7 @@ from features.gallery.scripts.removed import (
     purge_expired,
     purge_permanent,
     remove_entry,
+    remove_gallery_item,
     restore,
     reveal,
     thumb_file,
@@ -54,9 +56,11 @@ __all__ = [
     "purge_expired",
     "purge_permanent",
     "remove_entry",
+    "remove_gallery_item",
     "restore",
     "reveal",
     "search",
+    "set_favorite",
     "start_sync",
     "sync",
     "thumb_file",

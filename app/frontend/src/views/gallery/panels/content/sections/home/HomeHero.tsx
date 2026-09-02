@@ -1,7 +1,8 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
+import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import { PreviewMedia } from '@/components/composites/models/PreviewMedia.tsx'
 import { galleryItemImageUrl, galleryItemThumbUrl, type GalleryItem } from '@/lib/api/gallery.ts'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type MouseEvent } from 'react'
 
 const SPAN = 3
 const REACH = SPAN * 2
@@ -37,12 +38,21 @@ function Nav({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void }) {
 export function HomeHero({
   items,
   onOpen,
+  onTitle,
+  onFavorite,
+  onRemove,
+  onFileInfo,
 }: {
   items: GalleryItem[]
   onOpen: (item: GalleryItem) => void
+  onTitle: () => void
+  onFavorite: (item: GalleryItem) => void
+  onRemove: (item: GalleryItem) => void
+  onFileInfo: (item: GalleryItem) => void
 }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
+  const [menu, setMenu] = useState<{ x: number; y: number; item: GalleryItem } | null>(null)
   const n = items.length
   const many = n > 1
   const prevItems = useRef(items)
@@ -62,14 +72,14 @@ export function HomeHero({
   }
   const current = n ? items[Math.min(resolved, n - 1)] : null
   useEffect(() => {
-    if (paused || n < 2) {
+    if (paused || menu || n < 2) {
       return
     }
     const timer = window.setInterval(() => {
       setIndex((value) => (value + 1) % n)
     }, 4000)
     return () => window.clearInterval(timer)
-  }, [paused, n])
+  }, [paused, menu, n])
 
   if (!current) {
     return null
@@ -77,7 +87,14 @@ export function HomeHero({
 
   return (
     <section className="flex flex-col gap-3">
-      <h2 className="text-sm font-medium text-ink">Recent generations</h2>
+      <button
+        type="button"
+        className="flex items-center gap-1 text-left text-sm font-medium text-ink hover:text-accent"
+        onClick={onTitle}
+      >
+        Recent generations
+        <AppIcon id="chevron-right" size={14} />
+      </button>
       <div
         className="relative h-[22rem] overflow-hidden"
         onMouseEnter={() => setPaused(true)}
@@ -109,6 +126,10 @@ export function HomeHero({
                 aria-hidden={peek}
                 aria-label={peek ? undefined : on ? 'Open image' : 'Show this image'}
                 onClick={() => (on ? onOpen(item) : setIndex(i))}
+                onContextMenu={(event: MouseEvent<HTMLButtonElement>) => {
+                  event.preventDefault()
+                  setMenu({ x: event.clientX, y: event.clientY, item })
+                }}
               >
                 <PreviewMedia
                   src={on ? galleryItemImageUrl(item.id) : galleryItemThumbUrl(item.id)}
@@ -128,6 +149,34 @@ export function HomeHero({
           </>
         ) : null}
       </div>
+      {menu ? (
+        <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
+          <ContextMenuItem
+            icon="info"
+            label="File Info"
+            onClick={() => {
+              onFileInfo(menu.item)
+              setMenu(null)
+            }}
+          />
+          <ContextMenuItem
+            icon="star"
+            label={menu.item.favorite ? 'Unfavorite' : 'Favorite'}
+            onClick={() => {
+              onFavorite(menu.item)
+              setMenu(null)
+            }}
+          />
+          <ContextMenuItem
+            label="Remove"
+            danger
+            onClick={() => {
+              onRemove(menu.item)
+              setMenu(null)
+            }}
+          />
+        </ContextMenu>
+      ) : null}
     </section>
   )
 }

@@ -8,6 +8,10 @@ class RemovedIn(BaseModel):
     path: str = ""
 
 
+class FavoriteIn(BaseModel):
+    favorite: bool
+
+
 class LibraryIn(BaseModel):
     name: str = ""
     query: str = ""

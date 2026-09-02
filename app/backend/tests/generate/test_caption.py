@@ -148,6 +148,21 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(preview["inputs"]["source"][0], find(graph, "AILab_QwenVL_GGUF")[0])
         shutil.rmtree(src.parent, ignore_errors=True)
 
+    def test_fill_qwen_empty_guidance_stays_empty(self) -> None:
+        src = Path(tempfile.mkdtemp()) / "empty.png"
+        write_png(src, (200, 200))
+        graph = fill(
+            {
+                "workflow": "image_caption",
+                "input_image": src.name,
+                "source_image": str(src),
+                "caption": {"engine": "qwen", "guidance": ""},
+            }
+        )
+        node = find(graph, "AILab_QwenVL")[1]
+        self.assertEqual(node["inputs"]["custom_prompt"], "")
+        shutil.rmtree(src.parent, ignore_errors=True)
+
     def test_fill_drops_save_image_when_unchecked(self) -> None:
         graph = fill(
             {
@@ -197,10 +212,12 @@ class CaptionWorkflowTests(unittest.TestCase):
         self.assertEqual(caption.clean_caption({"batch_count": 3})["batch_size"], 3)
         self.assertEqual(caption.clean_caption({"batch_size": 4})["batch_size"], 4)
 
-    def test_qwen_prompt_uses_guidance_or_base(self) -> None:
+    def test_qwen_prompt_uses_guidance_or_empty(self) -> None:
         self.assertEqual(caption.qwen_prompt({"guidance": "Focus on clothing."}), "Focus on clothing.")
-        self.assertIn("`Subject`.", caption.qwen_prompt({}))
-        self.assertNotIn("`Character`.", caption.qwen_prompt({}))
+        self.assertEqual(caption.qwen_prompt({}), "")
+        self.assertEqual(caption.qwen_prompt({"guidance": ""}), "")
+        self.assertEqual(caption.qwen_prompt({"guidance": "  "}), "")
+        self.assertIn("`Subject`.", caption.BASE_PROMPT)
         self.assertEqual(caption.qwen_prompt({"prompt_source": "preset", "guidance": "Focus on clothing."}), "")
 
     def test_fill_qwen_preset_and_generation(self) -> None:

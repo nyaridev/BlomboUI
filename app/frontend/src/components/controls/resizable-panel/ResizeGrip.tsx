@@ -1,4 +1,3 @@
-import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { type PointerEvent } from 'react'
 
 function clamp(value: number, min: number, max: number) {
@@ -56,7 +55,7 @@ export function ResizeGrip({
       type="button"
       aria-label="Resize"
       title="Drag to resize. Double-click to reset."
-      className="absolute right-0 bottom-0 z-10 flex h-5 w-5 cursor-ns-resize items-end justify-end bg-transparent p-0.5 text-muted hover:text-ink"
+      className="resize-grip"
       onPointerDown={onDown}
       onDoubleClick={(event) => {
         event.preventDefault()
@@ -64,7 +63,7 @@ export function ResizeGrip({
         onReset()
       }}
     >
-      <AppIcon id="grip-horizontal" size={11} />
+      <span className="resize-grip-bar" />
     </button>
   )
 }

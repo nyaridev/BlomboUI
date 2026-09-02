@@ -201,8 +201,7 @@ def clean_caption(raw: Any) -> dict[str, Any]:
 def qwen_prompt(blob: dict[str, Any]) -> str:
     if str(blob.get("prompt_source") or "custom") != "custom":
         return ""
-    extra = str(blob.get("guidance") or "").strip()
-    return extra or BASE_PROMPT
+    return str(blob.get("guidance") or "").strip()
 
 
 def join_caption_parts(*parts: str) -> str:

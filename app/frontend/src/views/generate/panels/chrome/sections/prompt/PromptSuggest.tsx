@@ -57,7 +57,7 @@ function abbrevCount(value: number) {
 
 function fieldClass(disabled: boolean) {
   return [
-    'h-full w-full resize-none overflow-y-auto rounded border border-line bg-field px-2 py-1.5 pr-5 pb-4 font-mono text-sm text-ink outline-none placeholder:text-muted focus:border-accent',
+    'h-full w-full resize-none overflow-y-auto rounded border border-line bg-field px-2 py-1.5 pb-3 font-mono text-sm text-ink outline-none placeholder:text-muted focus:border-accent',
     disabled ? 'cursor-not-allowed' : '',
   ].join(' ')
 }

@@ -12,8 +12,8 @@ import { ExpandSection } from '@/components/controls/expand-section/ExpandSectio
 import { NumberField } from '@/components/controls/number/NumberField.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { ButtonControl } from '@/components/controls/button/ButtonControl.tsx'
-import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.tsx'
 import { ApplyRow, TemplateModelFields } from '@/components/composites/templates/TemplateModelFields.tsx'
+import { ParamsTabStrip, type PassTab } from '@/views/generate/panels/generation/sections/params/ParamsTabStrip.tsx'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { templateApplyFields, type TemplateParams, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
 import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, snapToSet } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
@@ -43,7 +43,7 @@ export function TemplateParamsForm({
   locked = false,
   workflowParams = [],
 }: TemplateParamsFormProps) {
-  const [tab, setTab] = useState<'generation' | 'controlnet' | 'hires' | 'adetailer'>('generation')
+  const [tab, setTab] = useState<PassTab>('first')
   const [samplers, setSamplers] = useState<string[]>([...SAMPLERS])
   const [schedulers, setSchedulers] = useState<string[]>([...SCHEDULERS])
   const [clipTypes, setClipTypes] = useState<string[]>(['stable_diffusion', 'krea2'])
@@ -88,6 +88,13 @@ export function TemplateParamsForm({
   const rembg = workflowParams.includes('rembg')
   const upscale = workflowParams.includes('upscale')
   const caption = workflowParams.includes('caption')
+  const showHires = !workflowParams.length || workflowParams.includes('hires')
+  const shown = tab === 'hires' && !showHires ? 'first' : tab
+  const passOn =
+    shown === 'first' ||
+    (shown === 'hires' && value.hires.enabled) ||
+    (shown === 'adetailer' && value.adetailer.enabled) ||
+    (shown === 'controlnet' && Boolean(value.controlnet.enabled))
   function set<K extends keyof TemplateParams>(key: K, next: TemplateParams[K]) {
     if (locked) {
       return
@@ -205,26 +212,27 @@ export function TemplateParamsForm({
         </div>
       ) : (
         <>
-      <TabsList
-        value={tab}
-        onValueChange={(next) => setTab(next as typeof tab)}
-        className="flex shrink-0 gap-cluster"
+      <ParamsTabStrip
+        value={shown}
+        onValueChange={setTab}
+        showHires={showHires}
+        hiresOn={value.hires.enabled}
+        adetailerOn={value.adetailer.enabled}
+        controlnetOn={Boolean(value.controlnet.enabled)}
+        locked={locked}
+        onHires={(enabled) => onChange({ ...value, hires: { ...value.hires, enabled } })}
+        onAdetailer={(enabled) => onChange({ ...value, adetailer: { ...value.adetailer, enabled } })}
+        onControlnet={(enabled) => onChange({ ...value, controlnet: { ...value.controlnet, enabled } })}
+      />
+      <div
+        className={[
+          'relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]',
+          passOn ? '' : 'pointer-events-none opacity-50',
+        ]
+          .filter(Boolean)
+          .join(' ')}
       >
-        <TabsTrigger value="generation" active={tab === 'generation'}>
-          Generation
-        </TabsTrigger>
-        <TabsTrigger value="controlnet" active={tab === 'controlnet'}>
-          ControlNet
-        </TabsTrigger>
-        <TabsTrigger value="hires" active={tab === 'hires'}>
-          Hires. fix
-        </TabsTrigger>
-        <TabsTrigger value="adetailer" active={tab === 'adetailer'}>
-          ADetailer
-        </TabsTrigger>
-      </TabsList>
-      <div className="relative min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
-        <div className={tab === 'generation' ? 'flex flex-col gap-stack' : 'pointer-events-none invisible absolute inset-x-0 top-0 flex flex-col gap-stack'}>
+        <div className={shown === 'first' ? 'flex flex-col gap-stack' : 'pointer-events-none invisible absolute inset-x-0 top-0 flex flex-col gap-stack'}>
       <div className="rounded-md border border-line bg-panel p-2.5">
         <TemplateModelFields
           value={value}
@@ -593,12 +601,13 @@ export function TemplateParamsForm({
         </ApplyRow>
       </ParamSection>
         </div>
-        <div className={tab === 'controlnet' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
+        <div className={shown === 'controlnet' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
           <ApplyRow id="controlnet" apply={apply} onToggle={toggle} locked={locked}>
             <ControlnetParams />
           </ApplyRow>
         </div>
-        <div className={tab === 'hires' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
+        {showHires ? (
+        <div className={shown === 'hires' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
           <HiresParams
             value={value.hires}
             onChange={(hires) => onChange({ ...value, hires })}
@@ -613,7 +622,8 @@ export function TemplateParamsForm({
             )}
           />
         </div>
-        <div className={tab === 'adetailer' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
+        ) : null}
+        <div className={shown === 'adetailer' ? '' : 'pointer-events-none invisible absolute inset-x-0 top-0'}>
           <AdetailerParams
             value={value.adetailer}
             onChange={(adetailer) => onChange({ ...value, adetailer })}

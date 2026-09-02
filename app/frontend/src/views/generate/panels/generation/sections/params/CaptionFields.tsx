@@ -235,10 +235,11 @@ export function CaptionFields({
                 <label className="flex min-w-0 flex-col gap-1">
                   <span className="text-xs text-muted">Prompt</span>
                   <ResizableTextarea
-                    className="min-h-52 w-full rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+                    className="min-h-52 w-full rounded border border-line bg-field px-2 py-1.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
                     value={value.guidance}
                     disabled={locked}
                     onChange={(event) => set({ guidance: event.target.value })}
+                    placeholder="Custom prompt…"
                     spellCheck={false}
                   />
                 </label>

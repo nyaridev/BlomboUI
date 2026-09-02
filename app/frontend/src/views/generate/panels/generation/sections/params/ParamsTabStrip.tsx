@@ -12,6 +12,7 @@ export function ParamsTabStrip({
   onHires,
   onAdetailer,
   onControlnet,
+  locked = false,
 }: {
   value: PassTab
   onValueChange: (value: PassTab) => void
@@ -22,12 +23,13 @@ export function ParamsTabStrip({
   onHires: (enabled: boolean) => void
   onAdetailer: (enabled: boolean) => void
   onControlnet: (enabled: boolean) => void
+  locked?: boolean
 }) {
   return (
     <TabsList
       value={value}
       onValueChange={(next) => onValueChange(next as PassTab)}
-      className="flex shrink-0 gap-cluster"
+      className="tabs-rail shrink-0"
     >
       <TabsTrigger value="first" active={value === 'first'}>
         First Pass
@@ -36,6 +38,7 @@ export function ParamsTabStrip({
         value="controlnet"
         active={value === 'controlnet'}
         checked={controlnetOn}
+        disabled={locked}
         onCheckedChange={(enabled) => {
           onControlnet(enabled)
           if (enabled) {
@@ -50,6 +53,7 @@ export function ParamsTabStrip({
           value="hires"
           active={value === 'hires'}
           checked={hiresOn}
+          disabled={locked}
           onCheckedChange={(enabled) => {
             onHires(enabled)
             if (enabled) {
@@ -64,6 +68,7 @@ export function ParamsTabStrip({
         value="adetailer"
         active={value === 'adetailer'}
         checked={adetailerOn}
+        disabled={locked}
         onCheckedChange={(enabled) => {
           onAdetailer(enabled)
           if (enabled) {

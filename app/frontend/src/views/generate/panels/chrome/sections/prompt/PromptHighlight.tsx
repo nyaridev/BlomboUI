@@ -149,7 +149,7 @@ function renderText(text: string, ranges: HighlightRange[]): ReactNode[] {
 
 export const PromptHighlight = forwardRef<HTMLDivElement, PromptHighlightProps>(function PromptHighlight({ text, loras, side }, ref) {
   return (
-    <div ref={ref} aria-hidden="true" className="prompt-highlight pointer-events-none absolute inset-px z-0 overflow-hidden rounded px-2 py-1.5 pr-5 pb-4 font-mono text-sm">
+    <div ref={ref} aria-hidden="true" className="prompt-highlight pointer-events-none absolute inset-px z-0 overflow-hidden rounded px-2 py-1.5 pb-3 font-mono text-sm">
       {renderText(text, rangesFor(text, loras, side))}
     </div>
   )

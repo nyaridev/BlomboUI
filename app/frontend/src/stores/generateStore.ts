@@ -267,7 +267,7 @@ export function mergeCaption(raw: unknown): CaptionSettings {
     qwenModel: text(row.qwenModel ?? row.qwen_model, base.qwenModel) || base.qwenModel,
     qwenGgufModel: text(row.qwenGgufModel ?? row.qwen_gguf_model, base.qwenGgufModel) || base.qwenGgufModel,
     quantization: text(row.quantization, base.quantization) || base.quantization,
-    guidance: text(row.guidance, base.guidance).trim() || base.guidance,
+    guidance: text(row.guidance, base.guidance),
     prefix: text(row.prefix, base.prefix),
     suffix: text(row.suffix, base.suffix),
     megapixels: Math.max(0.25, Math.min(4, num(row.megapixels, base.megapixels))),

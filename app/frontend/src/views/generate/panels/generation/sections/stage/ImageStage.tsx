@@ -1,10 +1,26 @@
+import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { LightboxView } from '@/components/composites/models/LightboxView.tsx'
+import { IconButton } from '@/components/controls/button/IconButton.tsx'
 import { ProgressBar } from '@/components/controls/progress/ProgressBar.tsx'
-import { galleryItemImageUrl, galleryItemThumbUrl, type JobGalleryItem } from '@/lib/api.ts'
+import {
+  galleryItemImageUrl,
+  galleryItemThumbUrl,
+  getWorkflows,
+  openFolder,
+  type JobGalleryItem,
+} from '@/lib/api.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
-import { useGenerateStore } from '@/stores/generateStore.ts'
+import { applySetWorkflow, touchRecent } from '@/stores/generatePersist.ts'
+import { mergeParams, pickParams, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
+import { toast } from '@/stores/toastStore.ts'
 import { GenerationInfo } from '@/views/generate/panels/generation/sections/params/GenerationInfo.tsx'
 import { ThumbStrip, type ThumbItem } from '@/views/generate/panels/generation/sections/stage/ThumbStrip.tsx'
+import {
+  fileFromSrc,
+  filenameFromPath,
+  outputDirForCurrent,
+  outputPathForCurrent,
+} from '@/views/generate/panels/generation/sections/stage/stageActions.ts'
 import { useEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { isTyping, overlayOpen } from '@/lib/hotkeys.ts'
@@ -13,6 +29,7 @@ type ImageStageProps = {
   images: string[]
   gridUrls: string[]
   gallery?: JobGalleryItem[]
+  payload?: Record<string, unknown> | null
   busy: boolean
   previewUrl: string | null
   progressPct: number
@@ -28,6 +45,7 @@ export function ImageStage({
   images,
   gridUrls,
   gallery = [],
+  payload = null,
   busy,
   previewUrl,
   progressPct,
@@ -50,7 +68,7 @@ export function ImageStage({
   const wasBusy = useRef(busy)
   const heldPreview = useRef<string | null>(null)
   const coverWithPreview = useRef(false)
-  const heldFinal = useRef<{ src: string; thumb?: string } | null>(null)
+  const heldFinal = useRef<{ src: string; thumb?: string; key: string } | null>(null)
   const heldInfo = useRef<JobGalleryItem | null>(null)
   const [previewReady, setPreviewReady] = useState(false)
   if (!wasBusy.current && busy) {
@@ -85,7 +103,7 @@ export function ImageStage({
     coverWithPreview.current = false
   }
   if (current && ready && !coverWithPreview.current) {
-    heldFinal.current = { src: current.src, thumb: current.thumb }
+    heldFinal.current = { src: current.src, thumb: current.thumb, key: current.key }
   }
   const previewSrc = previewFailed ? null : previewUrl || (coverWithPreview.current ? heldPreview.current : null)
   const showPreview = Boolean(previewSrc)
@@ -174,6 +192,55 @@ export function ImageStage({
     return () => window.removeEventListener('keydown', onKey)
   }, [current, generate, hideResults])
 
+  const actionKey = showCurrent && current ? current.key : showLastFinal && lastFinal ? lastFinal.key : null
+  const actionSrc = showCurrent && current ? current.src : showLastFinal && lastFinal ? lastFinal.src : null
+  const folder = outputDirForCurrent(payload, actionKey)
+  const canSend = Boolean(actionSrc) && !busy && !hideResults
+  const showActions = Boolean(actionSrc)
+
+  async function revealFolder() {
+    if (!folder) {
+      return
+    }
+    try {
+      await openFolder(folder)
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Folder not found', 'error')
+    }
+  }
+
+  async function sendTo(extra: 'upscale' | 'rembg') {
+    if (!actionSrc || !canSend) {
+      return
+    }
+    try {
+      const workflows = await getWorkflows()
+      const target = workflows.find((item) => (item.params ?? []).includes(extra))
+      if (!target) {
+        toast('Workflow not found', 'error')
+        return
+      }
+      const name = filenameFromPath(outputPathForCurrent(payload, actionKey))
+      const file = await fileFromSrc(actionSrc, name)
+      useGenerateStore.setState((s) => ({
+        ...applySetWorkflow(s, target.id, target.defaults, {
+          pickParams,
+          mergeParams: (raw) => mergeParams(raw as Partial<TemplateParams> | Record<string, unknown> | undefined),
+        }),
+        recentWorkflowIds: touchRecent(s.recentWorkflowIds, target.id),
+      }))
+      if (extra === 'upscale') {
+        useGenerateStore.getState().setImageUpscale({ inputMode: 'files' })
+        useGenerateStore.getState().setImageUpscaleFiles([file])
+      } else {
+        useGenerateStore.getState().setRembg({ inputMode: 'files' })
+        useGenerateStore.getState().setRembgFiles([file])
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Could not send image', 'error')
+    }
+  }
+
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
@@ -257,6 +324,22 @@ export function ImageStage({
         ) : null}
       </div>
       {many && !hideResults ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
+      {showActions ? (
+        <div className="flex items-center justify-center gap-cluster">
+          <IconButton label disabled={!folder} onClick={() => void revealFolder()}>
+            <AppIcon id="folder" />
+            Open folder
+          </IconButton>
+          <IconButton label disabled={!canSend} onClick={() => void sendTo('upscale')}>
+            <AppIcon id="scaling" />
+            Upscale
+          </IconButton>
+          <IconButton label disabled={!canSend} onClick={() => void sendTo('rembg')}>
+            <AppIcon id="image-minus" />
+            Remove background
+          </IconButton>
+        </div>
+      ) : null}
       {hideInfo ? null : <GenerationInfo info={genInfo ?? heldInfo.current} />}
       {lightbox && current && !hideResults ? (
         <LightboxView

@@ -43,6 +43,7 @@ export function TabsTrigger({
   children,
   checked,
   onCheckedChange,
+  disabled,
 }: {
   value: string
   active: boolean
@@ -50,6 +51,7 @@ export function TabsTrigger({
   children: ReactNode
   checked?: boolean
   onCheckedChange?: (checked: boolean) => void
+  disabled?: boolean
 }) {
   return (
     <PrimitiveTabsTrigger value={value} className={tabTriggerClass(active, extra)}>
@@ -60,7 +62,7 @@ export function TabsTrigger({
             onPointerDown={(event) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
           >
-            <CheckboxControl checked={Boolean(checked)} onChange={onCheckedChange} />
+            <CheckboxControl checked={Boolean(checked)} onChange={onCheckedChange} disabled={disabled} />
           </span>
           {children}
         </span>

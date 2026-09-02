@@ -57,6 +57,7 @@ export function GenerationPanel({
           : []
       }
       gallery={starting ? [] : (job?.gallery ?? [])}
+      payload={job?.payload ?? null}
       busy={busy}
       previewUrl={
         !starting && busy && job?.has_preview && jobId

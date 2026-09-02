@@ -104,7 +104,7 @@ export function ExpandSection({
             ref={bodyRef}
             className={[
               'section-body p-2',
-              fit ? '' : 'overflow-auto pb-5',
+              fit ? '' : 'overflow-auto pb-3',
               dimmed ? 'opacity-40' : '',
               inert ? 'pointer-events-none' : '',
             ].join(' ')}

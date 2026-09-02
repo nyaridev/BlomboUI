@@ -77,7 +77,7 @@ export function AdetailerUnitTabs({
 
   return (
     <div
-      className="flex min-w-0 flex-wrap items-center gap-cluster"
+      className="tabs-rail"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault()
@@ -202,6 +202,7 @@ export function AdetailerUnitTabs({
       {locked ? null : (
         <IconButton
           aria-label="Add ADetailer unit"
+          className="-mb-px"
           onClick={() => {
             const unit = newAdetailerUnit(`ADetailer ${units.length + 1}`)
             onChange([...units, unit])

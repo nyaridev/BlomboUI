@@ -54,7 +54,7 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
   const [picks, setPicks] = useState<string[]>(['euler'])
   const [tags, setTags] = useState<string[]>(['1girl'])
   const [listTags, setListTags] = useState<string[]>(['first', 'second'])
-  const [folder, setFolder] = useState('A:\\Projects\\models')
+  const [folder, setFolder] = useState('')
   const [glyph, setGlyph] = useState<Glyph>(CUSTOM_GLYPH)
   const [dialog, setDialog] = useState<'dialog' | 'confirm' | null>(null)
   const [menu, setMenu] = useState(false)
@@ -124,6 +124,10 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
             </IconButton>
             <IconButton tone="ghost" aria-label="Reset to default">
               <AppIcon id="undo-2" size={14} />
+            </IconButton>
+            <IconButton label>
+              <AppIcon id="folder" />
+              Open folder
             </IconButton>
           </SettingsBlock>
         </SettingsCard>
@@ -311,7 +315,7 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
             </div>
           </SettingsBlock>
           <SettingsBlock query={query} title="Tabs with checkbox" className="flex flex-col gap-2">
-            <TabsList value={tab} onValueChange={setTab} className="flex gap-cluster">
+            <TabsList value={tab} onValueChange={setTab} className="tabs-rail">
               <TabsTrigger value="one" active={tab === 'one'}>
                 First Pass
               </TabsTrigger>
@@ -366,7 +370,7 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
           </SettingsBlock>
           <SettingsBlock query={query} title="Resize grip" className="flex flex-col gap-2">
             <div className="relative h-32 rounded border border-line bg-field" style={{ height: panelHeight }}>
-              <span className="p-2 text-xs text-muted">Drag the corner</span>
+              <span className="p-2 text-xs text-muted">Drag the bottom edge</span>
               <ResizeGrip value={panelHeight} min={64} max={240} onChange={setPanelHeight} onReset={() => setPanelHeight(128)} />
             </div>
           </SettingsBlock>

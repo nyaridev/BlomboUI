@@ -1,6 +1,10 @@
 import { PreviewMedia } from '@/components/composites/models/PreviewMedia.tsx'
 import { galleryItemImageUrl, galleryItemThumbUrl, type GalleryPreview } from '@/lib/api/gallery.ts'
+import { useVisible } from '@/lib/gallery/visible.ts'
 import { useEffect, useRef, useState } from 'react'
+
+const INTERVAL_MS = 6000
+const FADE_MS = 700
 
 function srcOf(item: GalleryPreview) {
   return item.media_kind === 'video' ? galleryItemImageUrl(item.id) : galleryItemThumbUrl(item.id)
@@ -14,6 +18,7 @@ function layerClass(on: boolean) {
 }
 
 export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
+  const [visibleRef, visible] = useVisible<HTMLDivElement>()
   const [index, setIndex] = useState(0)
   const [front, setFront] = useState(0)
   const [slots, setSlots] = useState<[GalleryPreview | null, GalleryPreview | null]>([items[0] ?? null, null])
@@ -21,7 +26,16 @@ export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
   const seen = useRef('')
   const itemsRef = useRef(items)
   const prevItems = useRef(items)
+  const slotsRef = useRef(slots)
+  const visibleNow = useRef(visible)
+  const hiddenReady = useRef(false)
+  const pendingAdvance = useRef(false)
+  const fading = useRef(false)
+  const fadeTimer = useRef(0)
+  const indexRef = useRef(0)
   itemsRef.current = items
+  slotsRef.current = slots
+  visibleNow.current = visible
   let resolved = index
   if (prevItems.current !== items) {
     const id = seen.current || prevItems.current[index]?.id
@@ -40,14 +54,47 @@ export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
       setIndex(resolved)
     }
   }
+  indexRef.current = resolved
   const current = items[resolved] ?? items[0] ?? null
   const currentId = current?.id ?? ''
+
+  function fillHidden() {
+    const list = itemsRef.current
+    if (list.length < 2) {
+      return
+    }
+    const nextItem = list[(indexRef.current + 1) % list.length]
+    if (!nextItem) {
+      return
+    }
+    const hidden = 1 - frontRef.current
+    if (slotsRef.current[hidden]?.id === nextItem.id) {
+      hiddenReady.current = true
+      return
+    }
+    hiddenReady.current = false
+    setSlots((prev) => {
+      const next: [GalleryPreview | null, GalleryPreview | null] = [prev[0], prev[1]]
+      next[hidden] = nextItem
+      return next
+    })
+  }
+
+  function advanceIfDue() {
+    if (!pendingAdvance.current || !hiddenReady.current || itemsRef.current.length < 2) {
+      return
+    }
+    pendingAdvance.current = false
+    setIndex((value) => (value + 1) % itemsRef.current.length)
+  }
+
   useEffect(() => {
     if (!currentId) {
       seen.current = ''
       return
     }
-    if (seen.current === currentId) {
+    if (slotsRef.current[frontRef.current]?.id === currentId) {
+      seen.current = currentId
       return
     }
     const item = itemsRef.current.find((row) => row.id === currentId) ?? itemsRef.current[0]
@@ -56,13 +103,19 @@ export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
     }
     const first = seen.current === ''
     seen.current = currentId
+    pendingAdvance.current = false
+    window.clearTimeout(fadeTimer.current)
     if (first) {
+      fading.current = false
+      hiddenReady.current = false
       setSlots([item, null])
       frontRef.current = 0
       setFront(0)
       return
     }
     const hidden = 1 - frontRef.current
+    fading.current = true
+    hiddenReady.current = false
     setSlots((prev) => {
       const next: [GalleryPreview | null, GalleryPreview | null] = [prev[0], prev[1]]
       next[hidden] = item
@@ -73,6 +126,13 @@ export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
       innerFrame = window.requestAnimationFrame(() => {
         frontRef.current = hidden
         setFront(hidden)
+        fadeTimer.current = window.setTimeout(() => {
+          fading.current = false
+          if (visibleNow.current) {
+            fillHidden()
+            advanceIfDue()
+          }
+        }, FADE_MS)
       })
     })
     return () => {
@@ -82,29 +142,59 @@ export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
   }, [currentId])
 
   useEffect(() => {
-    if (items.length < 2) {
+    if (!visible || items.length < 2 || fading.current) {
+      return
+    }
+    fillHidden()
+    advanceIfDue()
+  }, [visible, items, resolved, currentId, front])
+
+  useEffect(() => {
+    if (!visible || items.length < 2) {
+      pendingAdvance.current = false
       return
     }
     const timer = window.setInterval(() => {
+      if (!hiddenReady.current) {
+        pendingAdvance.current = true
+        return
+      }
+      pendingAdvance.current = false
       setIndex((value) => (value + 1) % items.length)
-    }, 3000)
+    }, INTERVAL_MS)
     return () => window.clearInterval(timer)
-  }, [items.length])
+  }, [visible, items.length])
+
+  useEffect(() => () => window.clearTimeout(fadeTimer.current), [])
+
+  function onSlotReady(slot: number) {
+    if (slot === frontRef.current || fading.current) {
+      return
+    }
+    hiddenReady.current = true
+    if (pendingAdvance.current) {
+      pendingAdvance.current = false
+      setIndex((value) => (value + 1) % itemsRef.current.length)
+    }
+  }
 
   if (!current) {
     return <div className="h-full w-full bg-field" />
   }
 
   return (
-    <div className="relative h-full w-full overflow-hidden bg-field">
+    <div ref={visibleRef} className="relative h-full w-full overflow-hidden bg-field">
       {slots.map((item, slot) =>
         item ? (
           <div key={slot} className={layerClass(front === slot)}>
             <PreviewMedia
               src={srcOf(item)}
               type={item.media_kind === 'video' ? 'video' : undefined}
-              autoPlay={front === slot}
+              autoPlay={visible && front === slot}
+              preload={front === slot ? 'metadata' : 'auto'}
               className="h-full w-full object-cover"
+              onLoad={() => onSlotReady(slot)}
+              onError={() => onSlotReady(slot)}
             />
           </div>
         ) : null,

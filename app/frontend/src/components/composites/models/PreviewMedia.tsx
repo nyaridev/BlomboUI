@@ -8,6 +8,7 @@ export function PreviewMedia({
   className = '',
   autoPlay = true,
   draggable = false,
+  preload = 'metadata',
   onLoad,
   onError,
 }: {
@@ -17,6 +18,7 @@ export function PreviewMedia({
   className?: string
   autoPlay?: boolean
   draggable?: boolean
+  preload?: 'none' | 'metadata' | 'auto'
   onLoad?: () => void
   onError?: () => void
 }) {
@@ -44,7 +46,7 @@ export function PreviewMedia({
         loop
         muted
         playsInline
-        preload="metadata"
+        preload={preload}
         draggable={draggable}
         onLoadedData={onLoad}
         onError={onError}

@@ -97,6 +97,12 @@ class SettingsTests(unittest.TestCase):
                         "mode": "likely",
                         "fallback": True,
                     },
+                    "loras": {
+                        "ids": ["eeeeeeeeeeee"],
+                        "optionalIds": [],
+                        "auto": False,
+                        "mode": "likely",
+                    },
                 },
             }
         )
@@ -104,8 +110,10 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(result["galleryScopeMode"]["gallery-search-loras"], "global")
         self.assertEqual(result["galleryLocalScopes"]["template"]["ids"], ["aaaaaaaaaaaa"])
         self.assertEqual(result["galleryLocalScopes"]["gallery-search"]["ids"], ["bbbbbbbbbbbb"])
+        self.assertEqual(result["galleryLocalScopes"]["gallery-search"]["fallback"], False)
         self.assertEqual(result["galleryLocalScopes"]["gallery-create"]["ids"], ["dddddddddddd"])
         self.assertEqual(result["galleryLocalScopes"]["template-loras"]["ids"], ["cccccccccccc"])
+        self.assertEqual(result["galleryLocalScopes"]["loras"]["fallback"], True)
 
     def test_gallery_auto_types_keeps_true_drops_false(self) -> None:
         result = settings._clean({"galleryAutoTypes": {"loras": True, "checkpoints": False, "nope": True}})

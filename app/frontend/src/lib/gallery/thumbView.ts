@@ -74,7 +74,7 @@ export function civitaiSaveContext(kind?: string) {
   return saveContext(generateGalleryScopeKey(kind))
 }
 
-export function thumbView(fallback = false, scopeKey = GLOBAL_SCOPE): ThumbView {
+export function thumbView(fallback = true, scopeKey = GLOBAL_SCOPE): ThumbView {
   const pack = readScopePack(scopeKey)
   const ids = selectedScopeIds(scopeKey)
   const optional = optionalScopeIds(ids, scopeKey)

@@ -404,7 +404,7 @@ export const SETTINGS_DEFAULTS = {
   thumbScopeIds: [] as string[],
   thumbScopeOptionalIds: [] as string[],
   thumbScopeAuto: false,
-  trashThumbFallback: false,
+  trashThumbFallback: true,
   scopeGroups: [] as string[],
   scopeOrder: [] as string[],
   lookupScopeIds: [] as string[],

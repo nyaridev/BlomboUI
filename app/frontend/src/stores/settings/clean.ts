@@ -384,7 +384,7 @@ export function cleanLocalScope(raw: unknown): GalleryLocalScope | null {
     optionalIds: cleanScopeIds(row.optionalIds),
     auto: Boolean(row.auto),
     mode: row.mode === 'exact' ? 'exact' : 'likely',
-    fallback: Boolean(row.fallback),
+    fallback: row.fallback !== false,
   }
   return emptyLocalScope(pack) ? null : pack
 }

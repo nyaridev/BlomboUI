@@ -6,7 +6,7 @@ import {
   updateThumbScope,
   type ThumbScope,
 } from '@/lib/api.ts'
-import { contextKey, galleryThumbView, generateGalleryViewKey, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/gallery/thumbView.ts'
+import { contextKey, galleryThumbView, generateGalleryViewKey, readScopePack, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/gallery/thumbView.ts'
 import { galleryScopeKey } from '@/stores/settings/constants.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
@@ -196,7 +196,7 @@ export function useThumbView(kind?: string, scopeKey?: string) {
   )
   const autoKey = useThumbnailScopeStore((s) => s.autoKey)
   return useMemo(
-    () => (kind ? galleryThumbView(kind, resolved) : thumbView(false, resolved)),
+    () => (kind ? galleryThumbView(kind, resolved) : thumbView(readScopePack(resolved).fallback, resolved)),
     [kind, resolved, ids, optional, auto, mode, gallery, trash, local, autoKey],
   )
 }

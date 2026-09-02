@@ -407,7 +407,7 @@ def _gallery_local_scopes(raw: Any) -> dict[str, dict[str, Any]]:
             "optionalIds": optional,
             "auto": bool(item.get("auto")),
             "mode": "exact" if item.get("mode") == "exact" else "likely",
-            "fallback": bool(item.get("fallback")),
+            "fallback": bool(item.get("fallback", True)),
         }
         if pack["ids"] or pack["optionalIds"] or pack["auto"] or pack["mode"] != "likely" or not pack["fallback"]:
             out[name] = pack
@@ -541,7 +541,7 @@ def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, 
 
 
 def _gallery_fallback(raw: Any) -> bool:
-    return bool(raw) if isinstance(raw, bool) else False
+    return bool(raw) if isinstance(raw, bool) else True
 
 
 def _path_template(raw: Any, default: str) -> str | None:

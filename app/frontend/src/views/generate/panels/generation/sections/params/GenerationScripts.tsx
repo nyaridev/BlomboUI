@@ -4,6 +4,7 @@ import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.ts
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { XyPlotSettings } from '@/views/generate/panels/generation/sections/params/XyPlotSettings.tsx'
+import { ScopeThumbsSettings } from '@/views/generate/panels/generation/sections/params/ScopeThumbsSettings.tsx'
 import {
   isGenerateScript,
   type GenerateScript,
@@ -12,11 +13,16 @@ import {
   type PromptMatrixTarget,
 } from '@/views/generate/panels/generation/sections/params/promptMatrix.ts'
 import { type XyPlotSettings as XyPlotValue } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
+import {
+  DEFAULT_SCOPE_THUMBS,
+  type ScopeThumbsSettings as ScopeThumbsValue,
+} from '@/views/generate/panels/generation/sections/params/scopeThumbs.ts'
 
 const SCRIPTS = [
   { value: 'none', label: 'None', text: 'No script is selected.' },
   { value: 'xy-plot', label: 'X/Y Plot', text: '' },
   { value: 'prompt-matrix', label: 'Prompt Matrix', text: '' },
+  { value: 'scope-thumbs', label: 'Scope Thumbnails', text: '' },
 ]
 
 const INSERT_OPTIONS = [
@@ -38,6 +44,7 @@ export type ScriptsValue = {
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotValue
+  scopeThumbs: ScopeThumbsValue
 }
 
 function promptTags(prompt: string, negative: string) {
@@ -84,15 +91,18 @@ export function GenerationScripts({
   const storeScript = useGenerateStore((s) => s.script)
   const storePromptMatrix = useGenerateStore((s) => s.promptMatrix)
   const storeXyPlot = useGenerateStore((s) => s.xyPlot)
+  const storeScopeThumbs = useGenerateStore((s) => s.scopeThumbs)
   const setScript = useGenerateStore((s) => s.setScript)
   const setPromptMatrix = useGenerateStore((s) => s.setPromptMatrix)
   const setXyPlot = useGenerateStore((s) => s.setXyPlot)
+  const setScopeThumbs = useGenerateStore((s) => s.setScopeThumbs)
   const prompt = useGenerateStore((s) => s.prompt)
   const negativePrompt = useGenerateStore((s) => s.negativePrompt)
   const current: ScriptsValue = value ?? {
     script: storeScript,
     promptMatrix: storePromptMatrix,
     xyPlot: storeXyPlot,
+    scopeThumbs: storeScopeThumbs,
   }
   const [expanded, setExpanded] = useState(() => Boolean(current.script))
   const searchTags = useMemo(() => promptTags(prompt, negativePrompt), [negativePrompt, prompt])
@@ -119,6 +129,9 @@ export function GenerationScripts({
     }
     if (patch.xyPlot) {
       setXyPlot(patch.xyPlot)
+    }
+    if (patch.scopeThumbs) {
+      setScopeThumbs(patch.scopeThumbs)
     }
   }
 
@@ -215,6 +228,12 @@ export function GenerationScripts({
                 onChange={(xyPlot) => commit({ xyPlot })}
                 workflowParams={workflowParams}
                 comfyOk={comfyOk}
+              />
+            ) : selected.value === 'scope-thumbs' ? (
+              <ScopeThumbsSettings
+                value={current.scopeThumbs ?? DEFAULT_SCOPE_THUMBS}
+                onChange={(scopeThumbs) => commit({ scopeThumbs })}
+                locked={locked}
               />
             ) : (
               <p className="text-sm text-muted">{selected.text}</p>

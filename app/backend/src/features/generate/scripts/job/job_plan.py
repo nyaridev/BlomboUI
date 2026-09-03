@@ -195,12 +195,13 @@ def _resolve_auto_loras(raw: Any) -> tuple[list[dict[str, Any]], list[str]]:
                 strength = 1.0
         else:
             strength = requested_strength
+        inject = not (isinstance(value, dict) and value.get("inject") is False)
         found.append(
             {
                 "lora": path,
                 "strength": strength,
-                "prompt": str(info.get("prompt") or ""),
-                "negative_prompt": str(info.get("negative_prompt") or ""),
+                "prompt": str(info.get("prompt") or "") if inject else "",
+                "negative_prompt": str(info.get("negative_prompt") or "") if inject else "",
                 "apply_at": info.get("apply_at")
                 if info.get("apply_at") in {"start", "end"}
                 else default_apply_at,

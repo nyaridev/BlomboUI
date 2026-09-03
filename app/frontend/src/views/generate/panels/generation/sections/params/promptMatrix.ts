@@ -19,11 +19,11 @@ export const DEFAULT_PROMPT_MATRIX: PromptMatrixSettings = {
   search: '',
 }
 
-export const GENERATE_SCRIPTS = ['', 'xy-plot', 'prompt-matrix'] as const
+export const GENERATE_SCRIPTS = ['', 'xy-plot', 'prompt-matrix', 'scope-thumbs'] as const
 export type GenerateScript = (typeof GENERATE_SCRIPTS)[number]
 
 export function isGenerateScript(value: unknown): value is GenerateScript {
-  return value === '' || value === 'xy-plot' || value === 'prompt-matrix'
+  return value === '' || value === 'xy-plot' || value === 'prompt-matrix' || value === 'scope-thumbs'
 }
 
 export function isPromptMatrixMode(value: unknown): value is PromptMatrixMode {

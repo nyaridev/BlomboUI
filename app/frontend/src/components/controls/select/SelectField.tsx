@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
+import { createPortal } from 'react-dom'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { PrimitiveInput } from '@/components/primitives/PrimitiveInput.tsx'
 import { PrimitiveButton } from '@/components/primitives/PrimitiveButton.tsx'
@@ -15,6 +16,7 @@ type SelectFieldProps = {
   expanded?: boolean
   onExpand?: () => void
   className?: string
+  menu?: 'default' | 'tall'
 }
 
 export function SelectField({
@@ -28,13 +30,16 @@ export function SelectField({
   expanded = false,
   onExpand,
   className = '',
+  menu: menuSize = 'default',
 }: SelectFieldProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
+  const [menuBox, setMenuBox] = useState<CSSProperties>()
   const root = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const menu = useRef<HTMLUListElement>(null)
+  const tallMenu = menuSize === 'tall'
   const items = toOptions(options)
   const currentOption = items.find((item) => item.value === value)
   const current = currentOption?.label ?? value
@@ -72,9 +77,52 @@ export function SelectField({
     setActive(0)
   }, [query, open])
 
+  useLayoutEffect(() => {
+    if (!open || !tallMenu) {
+      setMenuBox(undefined)
+      return
+    }
+    function place() {
+      const rect = root.current?.getBoundingClientRect()
+      if (!rect) {
+        return
+      }
+      const gap = 4
+      const edge = 8
+      const want = Math.min(window.innerHeight * 0.55, 28 * 16)
+      const spaceBelow = window.innerHeight - rect.bottom - gap - edge
+      const spaceAbove = rect.top - gap - edge
+      const minBelow = 8 * 16
+      let top = rect.bottom + gap
+      let maxH = Math.min(want, Math.max(0, spaceBelow))
+      if (spaceBelow < minBelow && spaceAbove > spaceBelow) {
+        maxH = Math.min(want, Math.max(0, spaceAbove))
+        top = Math.max(edge, rect.top - gap - maxH)
+      }
+      setMenuBox({
+        position: 'fixed',
+        top,
+        left: rect.left,
+        right: 'auto',
+        width: rect.width,
+        maxHeight: maxH,
+        overflow: 'auto',
+        zIndex: 80,
+      })
+    }
+    place()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open, tallMenu, shown.length])
+
   useEffect(() => {
     function onDoc(event: MouseEvent) {
-      if (root.current?.contains(event.target as Node)) {
+      const node = event.target as Node
+      if (root.current?.contains(node) || menu.current?.contains(node)) {
         return
       }
       onOutside.current()
@@ -110,7 +158,7 @@ export function SelectField({
     }
     el.addEventListener('wheel', onWheel, { passive: false })
     return () => el.removeEventListener('wheel', onWheel)
-  }, [open])
+  }, [open, menuBox])
 
   useEffect(() => {
     if (!open) {
@@ -119,6 +167,37 @@ export function SelectField({
     const el = menu.current?.querySelector('[data-active="true"]')
     el?.scrollIntoView({ block: 'nearest' })
   }, [active, open, shown])
+
+  const list = open ? (
+    <ul ref={menu} className="select-menu" style={tallMenu ? menuBox : undefined}>
+      {shown.map((item, index) => (
+        <li key={`${item.value}:${item.label}`}>
+          <button
+            type="button"
+            disabled={item.disabled}
+            data-active={index === active ? 'true' : undefined}
+            className={index === active ? 'is-selected' : undefined}
+            onMouseEnter={() => setActive(index)}
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              if (!item.disabled) {
+                pick(item.value)
+              }
+            }}
+          >
+            <span className="flex min-w-0 items-center justify-between gap-2">
+              <span className="min-w-0 truncate">{item.label}</span>
+              {item.badge ? (
+                <span className="shrink-0 rounded-full border border-green/70 bg-green/25 px-1.5 py-0.5 text-[0.625rem] leading-none text-green-bright">
+                  {item.badge}
+                </span>
+              ) : null}
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  ) : null
 
   return (
     <div ref={root} className={['relative min-w-0', className].filter(Boolean).join(' ')}>
@@ -202,36 +281,7 @@ export function SelectField({
           <AppIcon id={chevron === 'expand' ? (expanded ? 'chevron-up' : 'chevron-down') : open ? 'chevron-up' : 'chevron-down'} size={12} />
         </PrimitiveButton>
       </div>
-      {open ? (
-        <ul ref={menu} className="select-menu">
-          {shown.map((item, index) => (
-            <li key={`${item.value}:${item.label}`}>
-              <button
-                type="button"
-                disabled={item.disabled}
-                data-active={index === active ? 'true' : undefined}
-                className={index === active ? 'is-selected' : undefined}
-                onMouseEnter={() => setActive(index)}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => {
-                  if (!item.disabled) {
-                    pick(item.value)
-                  }
-                }}
-              >
-                <span className="flex min-w-0 items-center justify-between gap-2">
-                  <span className="min-w-0 truncate">{item.label}</span>
-                  {item.badge ? (
-                    <span className="shrink-0 rounded-full border border-green/70 bg-green/25 px-1.5 py-0.5 text-[0.625rem] leading-none text-green-bright">
-                      {item.badge}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {open ? (tallMenu && menuBox ? createPortal(list, document.body) : tallMenu ? null : list) : null}
     </div>
   )
 }

@@ -9,6 +9,11 @@ import {
   type PromptMatrixSettings,
 } from '@/views/generate/panels/generation/sections/params/promptMatrix.ts'
 import { DEFAULT_XY_PLOT, type XyPlotSettings } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
+import {
+  DEFAULT_SCOPE_THUMBS,
+  mergeScopeThumbs,
+  type ScopeThumbsSettings,
+} from '@/views/generate/panels/generation/sections/params/scopeThumbs.ts'
 import { isHiresSizeMode, isResMode, isUpscaleSizeMode, snapDim, type HiresSizeMode, type ResMode, type UpscaleSizeMode } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import {
   AUTO_LORA_PREFIX,
@@ -1017,6 +1022,7 @@ export const DEFAULTS = {
   script: '' as GenerateScript,
   promptMatrix: cloneJson(DEFAULT_PROMPT_MATRIX),
   xyPlot: cloneJson(DEFAULT_XY_PLOT),
+  scopeThumbs: cloneJson(DEFAULT_SCOPE_THUMBS),
   rembg: cloneJson(DEFAULT_REMBG),
   imageUpscale: cloneJson(DEFAULT_IMAGE_UPSCALE),
   caption: cloneJson(DEFAULT_CAPTION),
@@ -1062,6 +1068,7 @@ export const PARAM_KEYS = [
   'script',
   'promptMatrix',
   'xyPlot',
+  'scopeThumbs',
   'rembg',
   'imageUpscale',
   'caption',
@@ -1107,6 +1114,7 @@ export type TemplateParams = {
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotSettings
+  scopeThumbs: ScopeThumbsSettings
   rembg: RembgSettings
   imageUpscale: ImageUpscaleSettings
   caption: CaptionSettings
@@ -1153,6 +1161,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     script: source.script,
     promptMatrix: cloneJson(source.promptMatrix),
     xyPlot: cloneJson(source.xyPlot),
+    scopeThumbs: cloneJson(source.scopeThumbs ?? DEFAULT_SCOPE_THUMBS),
     rembg: mergeRembg(source.rembg),
     imageUpscale: mergeImageUpscale(source.imageUpscale),
     caption: mergeCaption(source.caption),
@@ -1208,6 +1217,10 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       }
       if (key === 'xyPlot') {
         next.xyPlot = mergeXyPlot(value)
+        continue
+      }
+      if (key === 'scopeThumbs') {
+        next.scopeThumbs = mergeScopeThumbs(value)
         continue
       }
       if (key === 'rembg') {
@@ -1472,7 +1485,7 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   adetailerApply('adetailerSeed', 'Seed', ['seedOverride', 'seed', 'seedAfter']),
   adetailerApply('adetailerAttention', 'Attention', ['attentionOverride', 'attentionEngine', 'sageAttention', 'allowCompile']),
   adetailerApply('adetailerAdvanced', 'Advanced', ADETAILER_ADVANCED_KEYS),
-  { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot'] },
+  { id: 'scripts', label: 'Scripts', keys: ['script', 'promptMatrix', 'xyPlot', 'scopeThumbs'] },
   rembgApply('rembgEngine', 'Engine', ['engine']),
   rembgApply('rembgModel', 'Model', ['rmbgModel', 'birefnetModel']),
   rembgApply('rembgSensitivity', 'Sensitivity', ['sensitivity']),
@@ -1854,6 +1867,7 @@ type GenerateState = {
   script: GenerateScript
   promptMatrix: PromptMatrixSettings
   xyPlot: XyPlotSettings
+  scopeThumbs: ScopeThumbsSettings
   rembg: RembgSettings
   rembgFiles: File[]
   imageUpscale: ImageUpscaleSettings
@@ -1924,6 +1938,7 @@ type GenerateState = {
   setScript: (value: GenerateScript) => void
   setPromptMatrix: (value: PromptMatrixSettings) => void
   setXyPlot: (value: XyPlotSettings) => void
+  setScopeThumbs: (value: ScopeThumbsSettings) => void
   setRembg: (value: Partial<RembgSettings>) => void
   setRembgFiles: (value: File[]) => void
   setImageUpscale: (value: Partial<ImageUpscaleSettings>) => void
@@ -2025,6 +2040,7 @@ export const useGenerateStore = create<GenerateState>()(
       setScript: (script) => set({ script: isGenerateScript(script) ? script : '' }),
       setPromptMatrix: (promptMatrix) => set({ promptMatrix: mergePromptMatrix(promptMatrix) }),
       setXyPlot: (xyPlot) => set({ xyPlot: mergeXyPlot(xyPlot) }),
+      setScopeThumbs: (scopeThumbs) => set({ scopeThumbs: mergeScopeThumbs(scopeThumbs) }),
       setRembg: (rembg) => set((s) => ({ rembg: mergeRembg({ ...s.rembg, ...rembg }) })),
       setRembgFiles: (rembgFiles) => set({ rembgFiles }),
       setImageUpscale: (imageUpscale) =>

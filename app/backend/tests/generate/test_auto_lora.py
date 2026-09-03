@@ -124,6 +124,29 @@ class AutoLoraTests(unittest.TestCase):
         self.assertEqual([row["strength"] for row in rows], [0.3])
         self.assertEqual(missing, [])
 
+    def test_resolve_auto_loras_skips_triggers_when_inject_false(self) -> None:
+        with (
+            patch.object(models, "list_kind", return_value=[{"path": "a.safetensors"}]),
+            patch.object(
+                model_meta,
+                "get_info",
+                return_value={
+                    "strength": 0.7,
+                    "prompt": "red hair",
+                    "negative_prompt": "blurry",
+                    "apply_at": None,
+                },
+            ),
+        ):
+            rows, missing = jobs._resolve_auto_loras(
+                [{"path": "a.safetensors", "strength": 0.6, "inject": False}]
+            )
+
+        self.assertEqual(missing, [])
+        self.assertEqual(rows[0]["prompt"], "")
+        self.assertEqual(rows[0]["negative_prompt"], "")
+        self.assertEqual(rows[0]["strength"], 0.6)
+
     def test_normalized_structured_auto_lora_resolves_nested_path(self) -> None:
         requested = {
             "path": "Illustrious/Style/THEANTLERS/ta_picturd1.safetensors",

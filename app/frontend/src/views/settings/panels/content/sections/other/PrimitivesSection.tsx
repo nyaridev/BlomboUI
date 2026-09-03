@@ -162,6 +162,29 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
         <SettingsCard query={query} title="Choices">
           <SettingsBlock query={query} title="Select" className="flex flex-col gap-2">
             <SelectField value={choice} onChange={setChoice} options={['euler', 'euler_a', 'dpmpp_2m']} />
+            <SelectField
+              value={choice}
+              onChange={setChoice}
+              menu="tall"
+              options={[
+                'euler',
+                'euler_a',
+                'dpmpp_2m',
+                'dpmpp_2m_sde',
+                'dpmpp_sde',
+                'dpmpp_3m_sde',
+                'uni_pc',
+                'uni_pc_bh2',
+                'ddim',
+                'ddpm',
+                'lms',
+                'heun',
+                'dpm_2',
+                'dpm_2_a',
+                'lcm',
+                'ipndm',
+              ]}
+            />
           </SettingsBlock>
           <SettingsBlock query={query} title="Chip select" className="flex flex-col gap-2">
             <ChipSelect

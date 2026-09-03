@@ -30,6 +30,21 @@ class XyPlotIn(BaseModel):
     grid_margin: int = Field(default=0, ge=0, le=256)
 
 
+class ScopeThumbTargetIn(BaseModel):
+    kind: str
+    path: str
+    tag: str = ""
+
+
+class ScopeThumbsIn(BaseModel):
+    context: str = "global"
+    type: Literal["checkpoints", "loras", "wildcards"] = "loras"
+    search: str = ""
+    targets: list[ScopeThumbTargetIn] = Field(default_factory=list)
+    skip_existing: bool = Field(default=False, validation_alias=AliasChoices("skip_existing", "skipExisting"))
+    apply_after: bool = Field(default=True, validation_alias=AliasChoices("apply_after", "applyAfter"))
+
+
 class AutoLoraIn(BaseModel):
     path: str
     strength: float = 1.0
@@ -303,6 +318,7 @@ class JobIn(BaseModel):
     auto_loras: list[str | AutoLoraIn] = Field(default_factory=list)
     prompt_matrix: PromptMatrixIn | None = None
     xy_plot: XyPlotIn | None = None
+    scope_thumbs: ScopeThumbsIn | None = None
     rembg: RembgIn | None = None
     upscale: UpscaleIn | None = None
     caption: CaptionIn | None = None

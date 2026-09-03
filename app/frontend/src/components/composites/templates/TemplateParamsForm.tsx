@@ -592,7 +592,12 @@ export function TemplateParamsForm({
       <ParamSection title="Scripts">
         <ApplyRow id="scripts" apply={apply} onToggle={toggle} locked={locked}>
           <GenerationScripts
-            value={{ script: value.script, promptMatrix: value.promptMatrix, xyPlot: value.xyPlot }}
+            value={{
+              script: value.script,
+              promptMatrix: value.promptMatrix,
+              xyPlot: value.xyPlot,
+              scopeThumbs: value.scopeThumbs,
+            }}
             onChange={(next) => onChange({ ...value, ...next })}
             locked={locked}
             workflowParams={workflowParams}

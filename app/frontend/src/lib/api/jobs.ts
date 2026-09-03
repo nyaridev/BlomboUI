@@ -73,6 +73,15 @@ export type XyPlotRequest = {
   grid_margin: number
 }
 
+export type ScopeThumbsRequest = {
+  context: string
+  type: 'checkpoints' | 'loras' | 'wildcards'
+  search: string
+  targets: { kind: string; path: string; tag?: string }[]
+  skip_existing?: boolean
+  apply_after?: boolean
+}
+
 export type AutoLoraRequest = string | { path: string; strength: number }
 
 export type JobRequest = {
@@ -154,6 +163,7 @@ export type JobRequest = {
   auto_loras?: AutoLoraRequest[]
   prompt_matrix?: PromptMatrixRequest
   xy_plot?: XyPlotRequest
+  scope_thumbs?: ScopeThumbsRequest
   adetailer?: {
     enabled: boolean
     units: {

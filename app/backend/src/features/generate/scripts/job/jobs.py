@@ -19,6 +19,7 @@ from features.gallery.scripts import cache as gallery_cache
 from infrastructure.comfy import client as comfy
 from features.models.scripts import hashes
 from features.models.scripts import loras as lora_tags
+from features.models.scripts import model_meta
 from features.wildcards.scripts import wildcards as wildcard_tags
 from config import comfy_base
 from .job_output import (
@@ -56,6 +57,7 @@ from ..workflow.comfy_fill import combined_progress, progress_stage_map, progres
 from ..workflow.compose import hires_enabled
 from .. import save_meta
 from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
+from .scope_thumbs import scope_thumb_run_values, scope_thumbs_config, scope_thumbs_count
 from ..workflow.rembg import clean_rembg, input_runs, is_rembg, list_input_images, stage_input
 from ..workflow.upscale import SEED_MAX, clean_upscale, is_file_utility, is_image_upscale, wrap_seed
 from ..workflow.caption import clean_caption, input_runs as caption_input_runs, is_caption
@@ -101,6 +103,27 @@ def _record_output(job_id: str, values: dict[str, Any], ident: str, path: Path, 
         values["outputs"] = outputs
     outputs.append({"id": ident, "path": str(path), "kind": kind, "created_at": _now()})
     jobs_repo.set_payload(job_id, json.dumps(values))
+
+
+def _save_scope_thumb(run_values: dict[str, Any], path: Path) -> None:
+    target = run_values.get("scope_thumb_target")
+    cfg = run_values.get("scope_thumbs")
+    if not isinstance(target, dict) or not isinstance(cfg, dict):
+        return
+    kind = str(target.get("kind") or "")
+    rel = str(target.get("path") or "")
+    context = str(cfg.get("context") or "global")
+    if not kind or not rel or not path.is_file():
+        return
+    try:
+        model_meta.save_thumb(kind, rel, path.read_bytes(), context)
+    except Exception as exc:
+        record_log("generate", "scope_thumb_failed", rel, str(exc))
+
+
+def _flush_scope_thumbs(rows: list[tuple[dict[str, Any], Path]]) -> None:
+    for run_values, path in rows:
+        _save_scope_thumb(run_values, path)
 
 
 def _preview_first(every: int, after: int) -> int:
@@ -428,6 +451,20 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     values["xy_plot"] = xy_config(values.get("xy_plot"))
     seed = int(values["seed"])
     xy = values.get("xy_plot")
+    raw_thumbs = values.get("scope_thumbs")
+    values["scope_thumbs"] = None if xy else scope_thumbs_config(raw_thumbs)
+    if (
+        not xy
+        and isinstance(raw_thumbs, dict)
+        and bool(raw_thumbs.get("skip_existing") or raw_thumbs.get("skipExisting"))
+        and not values["scope_thumbs"]
+    ):
+        had = any(
+            isinstance(item, dict) and str(item.get("path") or "").strip()
+            for item in (raw_thumbs.get("targets") or [])
+        )
+        if had:
+            raise comfy.ComfyError("bad_request", "All selected models already have thumbnails.", status=400)
     keep_minus_one = isinstance(xy, dict) and bool(xy.get("keep_minus_one"))
     if seed < 0 and not keep_minus_one:
         if is_image_upscale(values):
@@ -438,6 +475,10 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     values["batch_size"] = max(1, int(values.get("batch_size") or 1))
     values["batch_count"] = max(1, int(values.get("batch_count") or 1))
     values["prompt_matrix"] = None if xy else _prompt_matrix_config(values.get("prompt_matrix"))
+    thumbs = values.get("scope_thumbs") if isinstance(values.get("scope_thumbs"), dict) else None
+    if thumbs:
+        values["prompt_matrix"] = None
+        values["batch_size"] = 1
     values["auto_loras"] = _normalize_auto_loras(values.get("auto_loras"))
     if is_file_utility(values):
         if is_rembg(values):
@@ -454,6 +495,7 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             values["caption"] = clean_caption(values.get("caption"))
         values["xy_plot"] = None
         values["prompt_matrix"] = None
+        values["scope_thumbs"] = None
         values["batch_size"] = 1
         values["batch_count"] = 1
         values["batch_grid"] = False
@@ -462,9 +504,10 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
             raise comfy.ComfyError("bad_request", "Drop or pick at least one image.", status=400)
         values["input_paths"] = [str(path) for path in list_input_images(values)]
         xy = None
+        thumbs = None
     matrix = values.get("prompt_matrix")
     if not is_file_utility(values):
-        values["batch_grid"] = True if xy else (bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True)))
+        values["batch_grid"] = False if thumbs else (True if xy else (bool(matrix["save_grid"]) if isinstance(matrix, dict) else bool(values.get("batch_grid", True))))
     values["batch_grid_max"] = max(2, min(100, int(values.get("batch_grid_max") or 36)))
     values["batch_grid_quality"] = max(40, min(95, int(values.get("batch_grid_quality") or 85)))
     values["batch_grid_format"] = _grid_fmt(values.get("batch_grid_format"))
@@ -485,8 +528,12 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         _live.clear()
         xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
         n = xy_cell_count(xy) if xy else 0
+        thumbs = values.get("scope_thumbs") if isinstance(values.get("scope_thumbs"), dict) else None
+        thumb_n = scope_thumbs_count(thumbs)
         if n:
             live_count = n
+        elif thumb_n:
+            live_count = thumb_n
         elif is_file_utility(values):
             live_count = max(1, len(runs))
         else:
@@ -508,12 +555,22 @@ async def create_job(body: dict[str, Any]) -> dict[str, Any]:
 
 
 async def run_job(job_id: str, values: dict[str, Any]) -> None:
+    pending_thumbs: list[tuple[dict[str, Any], Path]] = []
     try:
         xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
+        thumbs = values.get("scope_thumbs") if isinstance(values.get("scope_thumbs"), dict) else None
         if is_file_utility(values):
             runs = caption_input_runs(values) if is_caption(values) else input_runs(values)
         elif xy:
             runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
+        elif thumbs:
+            mode = _seed_after(values)
+            base_seed = int(values["seed"])
+            runs = []
+            for i in range(scope_thumbs_count(thumbs)):
+                run_values = scope_thumb_run_values(values, thumbs, i)
+                run_values["seed"] = _run_seed(mode, base_seed, i)
+                runs.append(run_values)
         else:
             mode = _seed_after(values)
             matrix_lines, batch_count, batch_size = _generation_plan(values)
@@ -697,7 +754,16 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 had_image = True
                 if not first_pass:
                     saved.append(path)
+                    if run_values.get("scope_thumb_target"):
+                        cfg = run_values.get("scope_thumbs")
+                        if isinstance(cfg, dict) and cfg.get("apply_after", True):
+                            await asyncio.to_thread(_save_scope_thumb, run_values, path)
+                        else:
+                            pending_thumbs.append((run_values, path))
         values["duration_ms"] = int((time.monotonic() - started) * 1000)
+        if pending_thumbs:
+            await asyncio.to_thread(_flush_scope_thumbs, pending_thumbs)
+            pending_thumbs.clear()
         if canceled:
             if saved and values.get("batch_grid_on_cancel", True):
                 if xy:

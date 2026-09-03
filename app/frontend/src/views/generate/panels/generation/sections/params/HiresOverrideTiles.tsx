@@ -212,6 +212,7 @@ export function PickTile({
   showStrengthControl,
   autoCheckpoint,
   badge,
+  onPick,
 }: {
   role: string
   kind: keyof ModelLists
@@ -230,6 +231,7 @@ export function PickTile({
   showStrengthControl?: boolean
   autoCheckpoint?: string
   badge?: string
+  onPick?: (rect: DOMRect) => void
 }) {
   const style = useGenerateStore((s) => s.modelTileStyle)
   const spec = modelTileSpec(style)
@@ -246,6 +248,10 @@ export function PickTile({
     }
     const rect = wrapRef.current?.getBoundingClientRect()
     if (!rect) {
+      return
+    }
+    if (onPick) {
+      onPick(rect)
       return
     }
     setAnchor(rect)
@@ -268,7 +274,7 @@ export function PickTile({
         unresolved={!empty && !item}
         warn={warn}
         badge={badge}
-        onOpen={() => (open ? setOpen(false) : show())}
+        onOpen={() => (onPick ? show() : open ? setOpen(false) : show())}
         onClear={onClear && !empty && !disabled ? onClear : undefined}
         strengthControl={strengthControl}
         showStrengthControl={showStrengthControl}

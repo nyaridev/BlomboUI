@@ -1,4 +1,13 @@
 import { xyCellCount } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
+import {
+  SCOPE_THUMBS_ROOT,
+  resolveScopeThumbTargets,
+  scopeThumbsContext,
+  scopeThumbsTargetCount,
+  scopeThumbsTypeLabel,
+} from '@/views/generate/panels/generation/sections/params/scopeThumbs.ts'
+import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
+import { useThumbnailScopeStore } from '@/stores/thumbnailScopeStore.ts'
 import { GenerateChrome } from '@/views/generate/panels/chrome/GenerateChrome.tsx'
 import { GenerateActions } from '@/views/generate/panels/chrome/sections/actions/GenerateActions.tsx'
 import { PromptStack } from '@/views/generate/panels/chrome/sections/prompt/PromptStack.tsx'
@@ -80,6 +89,7 @@ export function GenerateView() {
   const script = useGenerateStore((s) => s.script)
   const promptMatrix = useGenerateStore((s) => s.promptMatrix)
   const xyPlot = useGenerateStore((s) => s.xyPlot)
+  const scopeThumbs = useGenerateStore((s) => s.scopeThumbs)
   const modelTileStyle = useGenerateStore((s) => s.modelTileStyle)
   const activeLoraOrder = useGenerateStore((s) => s.activeLoraOrder)
   const activeLoraStrengths = useGenerateStore((s) => s.activeLoraStrengths)
@@ -121,11 +131,21 @@ export function GenerateView() {
   const [error, setError] = useState<string | null>(null)
   const [tab, setTab] = useState<GenerateTab>('Generation')
   const [starting, setStarting] = useState(false)
+  const [scopeThumbsConfirm, setScopeThumbsConfirm] = useState<{
+    context: string
+    type: typeof scopeThumbs.type
+    source: typeof scopeThumbs.source
+    directory: string
+    count: number
+  } | null>(null)
+  const confirmThumbs = useRef(false)
+  const thumbsPulled = useRef(0)
   const genRowRef = useRef<HTMLDivElement>(null)
   const runLock = useRef(false)
   const [paramsWidth, setParamsWidth] = useState<number | null>(null)
   const [workflows, setWorkflows] = useState<WorkflowInfo[]>([])
   const seenFail = useRef('')
+  const scopeItems = useThumbnailScopeStore((s) => s.items)
   const location = useLocation()
   const navigate = useNavigate()
   const workflowParams = workflows.find((item) => item.id === workflow)?.params ?? []
@@ -207,6 +227,16 @@ export function GenerateView() {
       }
       setJob(next)
       setImageIds(idsFromJob(next))
+      if (next.payload?.scope_thumbs && typeof next.payload.scope_thumbs === 'object') {
+        const blob = next.payload.scope_thumbs as { apply_after?: unknown }
+        const applyAfter = blob.apply_after !== false
+        const done = next.status === 'completed' || next.status === 'canceled'
+        const n = idsFromJob(next).length
+        if (done || (applyAfter && next.status === 'running' && n > thumbsPulled.current)) {
+          thumbsPulled.current = done ? 0 : n
+          void useModelsStore.getState().pull()
+        }
+      }
       if (next.status === 'failed') {
         const message = next.error || 'Generate failed'
         const key = `${next.id}:${message}`
@@ -312,13 +342,61 @@ export function GenerateView() {
     ) {
       return
     }
+    const thumbTargets =
+      !fileUtility && script === 'scope-thumbs'
+        ? resolveScopeThumbTargets({
+            settings: scopeThumbs,
+            checkpoints,
+            diffusionModels,
+            loras: loraItems,
+            wildcards: wildcardItems,
+          })
+        : []
+    if (!fileUtility && script === 'scope-thumbs') {
+      if (!thumbTargets.length) {
+        if (scopeThumbs.skipExisting) {
+          const all = resolveScopeThumbTargets({
+            settings: { ...scopeThumbs, skipExisting: false },
+            checkpoints,
+            diffusionModels,
+            loras: loraItems,
+            wildcards: wildcardItems,
+          })
+          if (all.length) {
+            setError('All selected models already have thumbnails.')
+          }
+        }
+        return
+      }
+      const search = scopeThumbs.search.trim()
+      if ((scopeThumbs.type === 'loras' || scopeThumbs.type === 'wildcards') && search) {
+        const gen = useGenerateStore.getState()
+        if (!gen.prompt.includes(search) && !gen.negativePrompt.includes(search)) {
+          setError('Prompt S/R text was not found in the prompt.')
+          return
+        }
+      }
+      if (!confirmThumbs.current) {
+        setScopeThumbsConfirm({
+          context: scopeThumbsContext(scopeThumbs.scopeIds),
+          type: scopeThumbs.type,
+          source: scopeThumbs.source,
+          directory: scopeThumbs.directory,
+          count: thumbTargets.length,
+        })
+        return
+      }
+      confirmThumbs.current = false
+    }
     setError(null)
     setStarting(true)
+    thumbsPulled.current = 0
     setImageIds([])
     const activeLines = promptMatrixLines(promptMatrix.lines)
     const activePromptMatrix = script === 'prompt-matrix' && activeLines.length ? promptMatrix : null
     const xyCells = xyCellCount(xyPlot)
     const activeXyPlot = script === 'xy-plot' && xyCells ? xyPlot : null
+    const activeScopeThumbs = script === 'scope-thumbs' && thumbTargets.length ? scopeThumbs : null
     const keepMinusOne = Boolean(activeXyPlot?.keepMinusOne && seed < 0)
     const captionUsed = usedSeed32(caption.seed, caption.seedAfter)
     const used = upscaleMode
@@ -341,11 +419,13 @@ export function GenerateView() {
     const count = Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1))
     const seedSteps = activeXyPlot
       ? xyCells
-      : activePromptMatrix
-        ? activePromptMatrix.useBatch
-          ? activeLines.length * count
-          : activeLines.length
-        : count
+      : activeScopeThumbs
+        ? thumbTargets.length
+        : activePromptMatrix
+          ? activePromptMatrix.useBatch
+            ? activeLines.length * count
+            : activeLines.length
+          : count
     if (upscaleMode) {
       setImageUpscale({ seed: nextSeed32(used, imageUpscale.seedAfter, seedSteps) })
     } else if (captionMode) {
@@ -389,7 +469,7 @@ export function GenerateView() {
         seed_after: captionMode ? caption.seedAfter : upscaleMode ? imageUpscale.seedAfter : seedAfter,
         batch_size: Math.max(1, Math.min(8, Math.round(Number(batchSize)) || 1)),
         batch_count: Math.max(1, Math.min(100, Math.round(Number(batchCount)) || 1)),
-        batch_grid: fileUtility ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
+        batch_grid: fileUtility || activeScopeThumbs ? false : activeXyPlot ? true : activePromptMatrix ? activePromptMatrix.saveGrid : batchGrid,
         batch_grid_max: batchGridMax,
         batch_grid_quality: batchGridQuality,
         batch_grid_format: gridFormat,
@@ -488,6 +568,17 @@ export function GenerateView() {
               respect_instant_lora: Boolean(activeXyPlot.respectInstantLora),
               grid_margin: activeXyPlot.gridMargin,
             },
+        scope_thumbs:
+          fileUtility || !activeScopeThumbs
+            ? undefined
+            : {
+                context: scopeThumbsContext(activeScopeThumbs.scopeIds),
+                type: activeScopeThumbs.type,
+                search: activeScopeThumbs.search,
+                targets: thumbTargets,
+                skip_existing: activeScopeThumbs.skipExisting,
+                apply_after: activeScopeThumbs.applyAfter,
+              },
         auto_loras: fileUtility
           ? []
           : activeLoraOrder
@@ -785,13 +876,16 @@ export function GenerateView() {
       : null
   const matrixPayloadLines = promptMatrixLines(matrixPayload?.lines)
   const xyCells = xyPlotCellCount(payload.xy_plot)
+  const thumbCount = scopeThumbsTargetCount(payload.scope_thumbs)
   const batchTotal = xyCells
     ? xyCells
-    : matrixPayloadLines.length
-      ? matrixPayload?.use_batch === false
-        ? matrixPayloadLines.length
-        : baseBatchTotal * matrixPayloadLines.length
-      : baseBatchTotal
+    : thumbCount
+      ? thumbCount
+      : matrixPayloadLines.length
+        ? matrixPayload?.use_batch === false
+          ? matrixPayloadLines.length
+          : baseBatchTotal * matrixPayloadLines.length
+        : baseBatchTotal
   const batched = batchTotal > 1
   const progress = job?.progress
   const progressMax = progress?.max || 0
@@ -953,6 +1047,46 @@ export function GenerateView() {
           ) : undefined
         }
       />
+      {scopeThumbsConfirm ? (
+        <ConfirmDialog
+          title="Replace scope thumbnails?"
+          body={
+            <div className="flex flex-col gap-1">
+              <p>
+                Scope:{' '}
+                {scopeThumbsConfirm.context === GLOBAL_SCOPE
+                  ? 'Global'
+                  : scopeThumbsConfirm.context
+                      .split('+')
+                      .map((id) => scopeItems.find((item) => item.id === id)?.name ?? id)
+                      .join(', ')}
+              </p>
+              <p>Type: {scopeThumbsTypeLabel(scopeThumbsConfirm.type)}</p>
+              <p>
+                Source:{' '}
+                {scopeThumbsConfirm.source === 'directory'
+                  ? `${scopeThumbsConfirm.directory === SCOPE_THUMBS_ROOT ? '(all)' : scopeThumbsConfirm.directory} · ${scopeThumbsConfirm.count} ${scopeThumbsConfirm.count === 1 ? 'model' : 'models'}`
+                  : `${scopeThumbsConfirm.count} selected`}
+              </p>
+              <p>Existing previews for this scope will be replaced.</p>
+            </div>
+          }
+          onClose={() => setScopeThumbsConfirm(null)}
+          actions={[
+            { label: 'Cancel', kind: 'ghost', onClick: () => setScopeThumbsConfirm(null) },
+            {
+              label: 'Generate',
+              kind: 'primary',
+              danger: true,
+              onClick: () => {
+                confirmThumbs.current = true
+                setScopeThumbsConfirm(null)
+                void generate()
+              },
+            },
+          ]}
+        />
+      ) : null}
       {error ? (
         <ConfirmDialog
           title="Generate failed"

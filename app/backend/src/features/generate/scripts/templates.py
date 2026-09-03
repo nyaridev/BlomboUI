@@ -176,7 +176,7 @@ _APPLY = (
     "attention",
 )
 
-_SCRIPTS = ("", "xy-plot", "prompt-matrix")
+_SCRIPTS = ("", "xy-plot", "prompt-matrix", "scope-thumbs")
 _BLOBS = ("controlnet", "hires", "adetailer")
 
 
@@ -300,7 +300,7 @@ def _clean_params(raw: Any) -> dict[str, Any]:
             packed = dict(blob)
             packed["enabled"] = bool(blob.get("enabled"))
             out[key] = packed
-    for key in ("promptMatrix", "xyPlot"):
+    for key in ("promptMatrix", "xyPlot", "scopeThumbs"):
         blob = raw.get(key)
         if isinstance(blob, dict):
             out[key] = dict(blob)

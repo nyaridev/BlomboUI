@@ -1,4 +1,5 @@
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
+import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { isLoggedIssue, useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
@@ -41,13 +42,6 @@ function pathsLabel(kind: string) {
     return 'IDs'
   }
   return 'Files'
-}
-
-function categoryClass(on: boolean) {
-  return [
-    'flex h-8 flex-1 items-center justify-center gap-1.5 rounded border text-sm',
-    on ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted hover:text-ink',
-  ].join(' ')
 }
 
 function groupByKind(items: GuiIssue[]) {
@@ -95,39 +89,48 @@ export function ErrorsView() {
   return (
     <section className="flex h-full min-h-0 flex-col px-10 py-4">
       <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-cluster">
           <h1 className="text-2xl font-semibold">Errors</h1>
-          <IconButton aria-label="Rescan"
-            title="Rescan"
-            disabled={scanning}
-            onClick={() => void refreshModels()}
-          >
-            <AppIcon id="refresh-cw" /></IconButton>
-          {pane === 'logs' && logs.length ? (
-            <IconButton aria-label="Clear logs"
-              title="Clear logs"
-              disabled={busy}
-              onClick={() => void dismissLog()}
-            >
-              <AppIcon id="eraser" /></IconButton>
-          ) : null}
+          <div className="flex items-center gap-cluster">
+            <IconButton label aria-label="Reload" title="Reload" disabled={scanning} onClick={() => void refreshModels()}>
+              <AppIcon id="refresh-cw" />
+              Reload
+            </IconButton>
+            {pane === 'logs' && logs.length ? (
+              <IconButton label aria-label="Clear logs" title="Clear logs" disabled={busy} onClick={() => void dismissLog()}>
+                <AppIcon id="eraser" />
+                Clear logs
+              </IconButton>
+            ) : null}
+          </div>
         </div>
-        <div className="mt-3 flex h-8 shrink-0 gap-1">
-          <button type="button" className={categoryClass(pane === 'errors')} onClick={() => setPane('errors')}>
-            Errors
-            {errors.length > 0 ? <span className={COUNT_BADGE}>{errors.length}</span> : null}
-          </button>
-          <button
-            type="button"
-            className={categoryClass(pane === 'logs')}
-            onClick={() => {
-              setPane('logs')
-              markLogsSeen()
-            }}
-          >
-            Logs
-            {unreadLogs > 0 ? <span className={COUNT_BADGE}>{unreadLogs}</span> : null}
-          </button>
+        <div className="mt-3 shrink-0">
+          <SegmentSwitch
+            fill
+            value={pane}
+            tone="blue"
+            options={[
+              {
+                id: 'errors',
+                label: (
+                  <>
+                    Errors
+                    {errors.length > 0 ? <span className={COUNT_BADGE}>{errors.length}</span> : null}
+                  </>
+                ),
+              },
+              {
+                id: 'logs',
+                label: (
+                  <>
+                    Logs
+                    {unreadLogs > 0 ? <span className={COUNT_BADGE}>{unreadLogs}</span> : null}
+                  </>
+                ),
+              },
+            ]}
+            onChange={setPane}
+          />
         </div>
         <div className="mt-4 min-h-0 flex-1 overflow-y-auto">
           {groups.length === 0 ? (

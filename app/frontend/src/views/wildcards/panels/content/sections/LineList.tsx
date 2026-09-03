@@ -83,41 +83,53 @@ export function LineList({
       {value.map((line, index) => (
         <div key={index}>
           {moving && slot === index ? <span className="mb-1.5 block h-0.5 rounded-full bg-accent" /> : null}
-          <div
-            className={['flex items-start gap-1.5', drag === index ? 'opacity-20' : ''].join(' ')}
-            onDragOver={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              if (drag === null) {
-                return
-              }
-              setSlot(index === drag ? drag : index < drag ? index : index + 1)
-            }}
-            onDrop={(event) => {
-              event.preventDefault()
-              event.stopPropagation()
-              applyDrop()
-            }}
-          >
-            <span
-              draggable
-              className="flex h-8 w-5 shrink-0 cursor-grab items-center justify-center text-muted active:cursor-grabbing"
-              onDragStart={(event) => {
-                event.dataTransfer.effectAllowed = 'move'
-                event.dataTransfer.setData('text/plain', String(index))
-                setDrag(index)
-                setSlot(index)
+          <div className={drag === index ? 'opacity-20' : ''}>
+            <div
+              className="flex items-start gap-1.5"
+              onDragOver={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                if (drag === null) {
+                  return
+                }
+                setSlot(index === drag ? drag : index < drag ? index : index + 1)
               }}
-              onDragEnd={() => {
-                setDrag(null)
-                setSlot(null)
+              onDrop={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                applyDrop()
               }}
             >
-              <AppIcon id="grip-vertical" size={12} />
-            </span>
-            <GrowField value={line} onChange={(next) => patch(index, next)} inset={depth != null} />
-            <IconButton className="shrink-0" aria-label="Remove line" onClick={() =>remove(index)}>
-              <AppIcon id="x" /></IconButton>
+              <span
+                draggable
+                className="flex h-8 w-5 shrink-0 cursor-grab items-center justify-center text-muted active:cursor-grabbing"
+                onDragStart={(event) => {
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', String(index))
+                  const rowEl = event.currentTarget.parentElement
+                  if (rowEl instanceof HTMLElement) {
+                    const rect = rowEl.getBoundingClientRect()
+                    event.dataTransfer.setDragImage(
+                      rowEl,
+                      Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+                      Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+                    )
+                  }
+                  setDrag(index)
+                  setSlot(index)
+                }}
+                onDragEnd={() => {
+                  setDrag(null)
+                  setSlot(null)
+                }}
+              >
+                <AppIcon id="grip-vertical" size={12} />
+              </span>
+              <GrowField value={line} onChange={(next) => patch(index, next)} inset={depth != null} />
+              <IconButton className="shrink-0" aria-label="Remove line" onClick={() => remove(index)}>
+                <AppIcon id="x" />
+              </IconButton>
+            </div>
           </div>
         </div>
       ))}

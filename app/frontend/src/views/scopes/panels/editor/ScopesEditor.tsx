@@ -239,7 +239,7 @@ export function ScopesEditor({
         </button>
       </div>
       <div ref={rowRef} className="flex min-h-0 flex-1">
-        <div className="flex min-h-0 shrink-0 flex-col gap-2 overflow-y-auto pr-1" style={{ width: listWidth }}>
+        <div className="flex min-h-0 shrink-0 flex-col gap-2 overflow-y-auto" style={{ width: listWidth }}>
           {sections.map((section) => {
             const closed = Boolean(section.title) && collapsed.has(section.title)
             const overHeader = Boolean(dragId && drop?.header && drop.title === section.title)
@@ -376,7 +376,7 @@ export function ScopesEditor({
           min={LIST_MIN_REM * remPx()}
           containerRef={rowRef}
         />
-        <div className="min-h-0 min-w-0 flex-1 overflow-hidden pl-4">
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           {open && open.id !== GLOBAL_SCOPE ? (
             <ScopeEditor
               key={open.id}

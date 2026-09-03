@@ -1,0 +1,58 @@
+---
+description: Frontend layers, views, controls, themes, routing, and settings UI ownership.
+alwaysApply: true
+---
+
+# Frontend contract
+
+The frontend is a thin Vite + React client in `app/frontend/`. `@` aliases `src`; Vite proxies `/api` to FastAPI. The backend does not serve the SPA.
+
+## Source boundaries
+
+```text
+app/frontend/src/
+  app/          shell, router, app tabs
+  views/        product surfaces and their panels
+  components/   primitives, controls, layout, composites
+  theme/        provider, registry, tokens, shared control styles
+  stores/       existing Zustand state
+  lib/          API and focused helpers
+```
+
+```text
+views → controls, composites, layout, stores, lib
+composites → controls
+layout → controls, composites
+controls → primitives
+primitives → Radix or native elements
+app → layout, views, ThemeProvider
+```
+
+- Primitives provide behavior and accessibility only. Controls are the only styled form of primitives.
+- Views, composites, and layout import controls, never Radix or primitives. Do not build one-off styled versions of catalogued controls in a view.
+- Reusable multi-surface UI belongs in `components/composites/`; global shell belongs in `components/layout/`.
+
+## Views and routing
+
+- One product surface per `views/<surface>/` folder. Keep `<Surface>View.tsx` to composition, store wiring, and panels.
+- Put tab bodies, forms, fetch loops, and job loops in the owning panel or a neighboring hook. Name panel folders after visible regions.
+- `app/router.tsx` keeps Generate and Gallery panes alive through `FILL_PATHS` and show/hide behavior. Do not replace them with unmounting routes.
+
+## Theme and controls
+
+- Preserve the existing visual language. Theme colors, radius, and spacing tokens live in `theme/themes.css`; do not add hex/RGB elsewhere.
+- Before adding or restyling a screen, control, or layout, find the nearest comparable existing surface. Reuse its control, layout structure, spacing tokens, and interaction behavior instead of creating a parallel interpretation.
+- Use Tailwind for layout. Use `gap-cluster` for toolbar siblings, `gap-stack` for form or section blocks, and `h-toolbar` for controls in one toolbar row. Do not introduce ad-hoc margins or one-off gaps where an established pattern exists.
+- Controls own padding, radius, and color through tokens and `theme/controls.css`; settings layout styles stay with settings content.
+- Preserve the surface hierarchy: `bg` → `panel` → `field`. A control uses the contrasting token for its immediate container, not its ancestor. Reuse `ExpandSection` and the nested-surface inversion rules in `controls.css`; never override them with view-level color recipes.
+- Use `ExpandSection` for user-facing expandable form sections. Do not hand-roll a chevron/header/body pattern in a view unless it is a menu or popover interaction; choose its `field` or `inset` tone from the immediate parent surface.
+- A new visual recipe, spacing value, or raw styled control is an exception: add or extend the shared control/token, then catalog its variant.
+- Review UI work in normal, hover, focus, disabled, selected, open, and nested-surface states across every supported theme. Text, borders, fields, and controls must remain visibly distinct from their immediate background.
+- New controls or variants are unfinished until the real control appears in Settings → Other → Primitives (`PrimitivesSection.tsx`). Primitives is a catalog, not a settings home.
+
+## Settings UI
+
+- A setting has one editor and belongs on the page for its product surface. Reuse `SettingsCard`, `SettingsBlock`, and existing controls.
+- Canonical settings groups and pages live in `views/settings/panels/content/groups.ts`: General, Generate, Files, Gallery, Models, Civitai, Autocomplete, and Other.
+- A new setting must be wired end-to-end: frontend settings state, backend allowlist/cleaning, its owning card, page search, and relevant Settings links or hashes. Keep persisted keys stable.
+- Create a settings page only for a distinct job; do not create a group for one card. Settings search excludes the Primitives catalog.

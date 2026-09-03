@@ -28,6 +28,20 @@ class TemplateTests(unittest.TestCase):
             item.stop()
         shutil.rmtree(self.tmp, ignore_errors=True)
 
+    def test_create_with_empty_apply_persists(self) -> None:
+        created = templates.create_template("txt2img", "Blank", {"steps": 20}, apply=[])
+        self.assertEqual(created["apply"], [])
+        items, _ = templates.list_templates("txt2img")
+        by_id = {item["id"]: item for item in items}
+        self.assertEqual(by_id[created["id"]]["apply"], [])
+
+    def test_create_with_steps_apply_persists(self) -> None:
+        created = templates.create_template("txt2img", "Steps", {"steps": 30}, apply=["steps"])
+        self.assertEqual(created["apply"], ["steps"])
+        items, _ = templates.list_templates("txt2img")
+        by_id = {item["id"]: item for item in items}
+        self.assertEqual(by_id[created["id"]]["apply"], ["steps"])
+
     def test_create_update_and_apply_are_persistent(self) -> None:
         created = templates.create_template("txt2img", "Portrait", {"prompt": "portrait", "steps": 20})
         templates.update_template("txt2img", created["id"], {"prompt": "close portrait"}, icon={"kind": "emoji", "id": "🎨"})

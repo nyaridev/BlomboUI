@@ -8,13 +8,16 @@ import {
   createTemplate,
   deleteTemplate,
   getTemplates,
+  getWorkflows,
   reorderTemplates,
   updateTemplate,
   type TemplateInfo,
 } from '@/lib/api.ts'
 import {
+  changedApplyIds,
   DEFAULT_APPLY,
   diffParams,
+  mergeParams,
   mixParams,
   mixStack,
   paramsOf,
@@ -130,8 +133,14 @@ export function TemplateBar() {
     setOpen(false)
   }
 
-  async function onCreate(name: string) {
-    const item = await createTemplate(workflow, name, pickParams(useGenerateStore.getState()))
+  async function onCreate(name: string, source: 'empty' | 'current') {
+    const workflows = await getWorkflows().catch(() => [])
+    const info = workflows.find((item) => item.id === workflow)
+    const baseline = info?.defaults != null ? mergeParams(info.defaults) : paramsOf({ builtin: true })
+    const live = pickParams(useGenerateStore.getState())
+    const params = source === 'empty' ? baseline : live
+    const apply = source === 'empty' ? [] : changedApplyIds(baseline, live, info?.params ?? [])
+    const item = await createTemplate(workflow, name, params, apply)
     const next = await refresh()
     setItems(next.some((entry) => entry.id === item.id) ? next : [...next, item])
     useGenerateStore.getState().setViewedTemplateId(item.id)
@@ -248,13 +257,24 @@ export function TemplateBar() {
           actions={[
             { label: 'Cancel', kind: 'ghost', onClick: () => setCreate(false) },
             {
-              label: 'Create',
+              label: 'Empty',
+              kind: 'ghost',
+              disabled: !createTrimmed || Boolean(createHint),
+              onClick: () => {
+                setCreateBusy(true)
+                void onCreate(createTrimmed, 'empty')
+                  .catch((err) => setCreateError(err instanceof Error ? err.message : 'Could not create template'))
+                  .finally(() => setCreateBusy(false))
+              },
+            },
+            {
+              label: 'From current',
               kind: 'primary',
               submit: true,
               disabled: !createTrimmed || Boolean(createHint),
               onClick: () => {
                 setCreateBusy(true)
-                void onCreate(createTrimmed)
+                void onCreate(createTrimmed, 'current')
                   .catch((err) => setCreateError(err instanceof Error ? err.message : 'Could not create template'))
                   .finally(() => setCreateBusy(false))
               },

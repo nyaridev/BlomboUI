@@ -1,12 +1,14 @@
 import { pageLabel } from '@/views/settings/panels/sidebar/SettingsSidebar.tsx'
 import { GROUPS } from '@/views/settings/panels/content/groups.ts'
 
+type ShownPage = (typeof GROUPS)[number]['pages'][number] & { showAll?: boolean }
+
 export function SettingsContent({
   shown,
   query,
   searching,
 }: {
-  shown: (typeof GROUPS)[number]['pages'][number][]
+  shown: ShownPage[]
   query: string
   searching: boolean
 }) {
@@ -18,7 +20,7 @@ export function SettingsContent({
       {shown.map((item) => (
         <div key={item.id} id={`settings-${item.id}`} className="flex flex-col gap-4">
           {searching ? <h1 className="text-sm font-medium text-ink">{pageLabel(item)}</h1> : null}
-          <item.Panel query={query} />
+          <item.Panel query={item.showAll ? '' : query} />
         </div>
       ))}
     </div>

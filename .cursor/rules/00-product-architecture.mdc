@@ -1,0 +1,46 @@
+---
+description: BlomboUI product boundaries, ownership, and lightweight architecture.
+alwaysApply: true
+---
+
+# Product architecture
+
+BlomboUI is a thin local GUI over ComfyUI: Vite/React renders the product, FastAPI owns product APIs and persistence, and ComfyUI remains the generation backend. Preserve that boundary; do not introduce a framework, plugin system, DI container, or parallel architecture for a single feature.
+
+## Canonical shape
+
+```text
+app/
+  frontend/    Vite + React client
+  backend/     FastAPI application
+  workflows/   workflow JSON templates
+runtime/       generated runtime state and ComfyUI install
+user/          user-owned data and outputs
+```
+
+- Frontend source is `app/frontend/src/`; backend source is `app/backend/src/`.
+- Product I/O follows `UI → /api → feature → ComfyUI, disk, or SQLite`.
+- Features own a product concern; shared code owns only genuinely shared behavior. Do not create `core/`, broad `services/`, or factory layers to connect one caller.
+- Put I/O at the edges. Keep feature logic straightforward and use the existing FastAPI, Zustand, SQLite, and ComfyUI seams.
+
+## Change discipline
+
+- Make the smallest change that satisfies the request. Do not add speculative options, abstractions, or unrelated cleanup.
+- Understand and trace the affected flow before choosing a solution. Reuse an existing helper, platform capability, or installed dependency before adding code or a dependency.
+- One file has one recognizable job. Treat 500 lines as a soft ceiling; split by responsibility, not ceremony.
+- Match established local patterns and names. Remove imports or code made unused by your own change, but leave unrelated cleanup alone.
+- Fix the root cause at the shared owner rather than patching each visible symptom. Check sibling callers when changing shared behavior.
+- Preserve a stable persisted key and ownership boundary unless a migration is explicitly requested.
+- Verify changes proportionally: reproduce a defect before fixing it when practical, and leave a focused runnable check for non-trivial logic.
+- If a deliberate simplification has a known ceiling, document its limit and upgrade path with a `ponytail:` comment.
+
+## Ownership map
+
+- **Generate** owns jobs, workflow filling, templates, and grids.
+- **Models** owns local model discovery, thumbnails, scopes, and hashes.
+- **Gallery** owns indexing, search, libraries, and trash.
+- **Civitai / downloads / history** own remote browsing, installation, queueing, and history.
+- **Wildcards** and **complete** own prompt expansion and tag completion.
+- **Settings** owns the persisted settings blob; do not add another settings store.
+
+Stack-specific implementation contracts live in `10-frontend-contract.mdc` and `20-backend-contract.mdc`. Cross-layer data invariants live in `30-cross-surface-invariants.mdc`.

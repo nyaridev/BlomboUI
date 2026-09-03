@@ -30,7 +30,7 @@ export function GallerySidebar({
   onDrop: (parentId: string | null, ids: string[]) => void
 }) {
   return (
-    <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto pr-1">
+    <nav className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
       <div className="flex flex-col gap-0.5">
         <div className="px-2 py-0.5 text-[10px] font-medium tracking-[0.12em] text-muted uppercase">Browse</div>
         <button type="button" className={rowClass(nav === 'home')} onClick={() => onNav('home')}>

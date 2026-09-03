@@ -467,19 +467,19 @@ export function GalleryView() {
   const empty = homeReady && !searching && !error && home.recent.length === 0
 
   if (!homeReady) {
-    return <div className="h-full min-h-0 px-6 py-4" />
+    return <div className="h-full min-h-0 px-10 py-4" />
   }
   if (empty) {
     return (
-      <div className="flex h-full min-h-0 items-center justify-center px-6 py-4">
+      <div className="flex h-full min-h-0 items-center justify-center px-10 py-4">
         <p className="text-sm text-muted">{EMPTY_COPY}</p>
       </div>
     )
   }
 
   return (
-    <div ref={rowRef} className="flex h-full min-h-0 px-6 py-4">
-      <aside className="flex min-h-0 shrink-0 flex-col pr-3" style={{ width: navWidth }}>
+    <div ref={rowRef} className="flex h-full min-h-0 px-10 py-4">
+      <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: navWidth }}>
         <GallerySidebar
           nav={nav}
           libraries={libraries}
@@ -498,7 +498,7 @@ export function GalleryView() {
         min={NAV_MIN_REM * remPx()}
         containerRef={rowRef}
       />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 pl-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <div className="flex shrink-0 flex-col gap-cluster">
           <div className="flex flex-wrap items-center gap-cluster">
             <IconButton

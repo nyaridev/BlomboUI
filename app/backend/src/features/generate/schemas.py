@@ -334,6 +334,7 @@ class InterruptIn(BaseModel):
 class TemplateIn(BaseModel):
     name: str
     params: dict[str, Any] = Field(default_factory=dict)
+    apply: list[str] | None = None
 
 
 class TemplateUpdate(BaseModel):

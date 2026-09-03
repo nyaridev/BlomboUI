@@ -32,7 +32,7 @@ export function WildcardsEditor({
   onText: (text: string) => void
 }) {
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col pl-4">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
       <WildcardFileBar
         path={draft?.path ?? null}
         dirty={dirty}

@@ -67,14 +67,14 @@ export function ExpandSection({
   return (
     <div
       className={[
-        'rounded border border-line',
+        'min-w-0 flex-1 overflow-hidden rounded-md border border-line',
         tone === 'inset' ? 'bg-panel' : 'bg-field',
         locked ? 'pointer-events-auto' : '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
-      <div className="flex items-center gap-2 px-2 py-1.5">
+      <div className="flex h-toolbar items-center gap-cluster px-2">
         {togglable ? (
           <CheckboxControl checked={enabled} onChange={(value) => onEnabled?.(value)} disabled={locked} />
         ) : null}
@@ -86,12 +86,12 @@ export function ExpandSection({
           ].join(' ')}
           onClick={toggle}
         >
-          <span>{title}</span>
+          <span className="truncate">{title}</span>
         </button>
         {trailing}
         <button
           type="button"
-          className="flex items-center text-muted"
+          className="field-select-chevron text-muted"
           aria-label={open ? 'Collapse' : 'Expand'}
           onClick={toggle}
         >

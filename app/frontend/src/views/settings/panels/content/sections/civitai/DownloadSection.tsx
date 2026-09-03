@@ -131,31 +131,31 @@ export function DownloadSection({ query = '' }: { query?: string }) {
             onEnabled={(value) => setDownload({ modelIntelligent: value })}
             fit
           >
-          <div className="flex flex-col gap-2">
-            <Check
-              checked={download.modelSortBaseModel}
-              label="Sort by base model"
-              field="modelSortBaseModel"
-              onChange={(value) => setDownload({ modelSortBaseModel: value })}
-            />
-            <Check
-              checked={download.modelSortCategory}
-              label="Sort by category"
-              field="modelSortCategory"
-              onChange={(value) => setDownload({ modelSortCategory: value })}
-            />
-            <Check
-              checked={download.modelSortCreator}
-              label="Sort by creator"
-              field="modelSortCreator"
-              onChange={(value) => setDownload({ modelSortCreator: value })}
-            />
-            <p className="text-xs text-muted">
-              Example: <span className="text-ink">{examplePath}</span>. The path updates with the sorting options; a
-              custom creator prefix only changes the filename.
-            </p>
-          </div>
-        </ExpandSection>
+            <div className="flex flex-col gap-2">
+              <Check
+                checked={download.modelSortBaseModel}
+                label="Sort by base model"
+                field="modelSortBaseModel"
+                onChange={(value) => setDownload({ modelSortBaseModel: value })}
+              />
+              <Check
+                checked={download.modelSortCategory}
+                label="Sort by category"
+                field="modelSortCategory"
+                onChange={(value) => setDownload({ modelSortCategory: value })}
+              />
+              <Check
+                checked={download.modelSortCreator}
+                label="Sort by creator"
+                field="modelSortCreator"
+                onChange={(value) => setDownload({ modelSortCreator: value })}
+              />
+              <p className="text-xs text-muted">
+                Example: <span className="text-ink">{examplePath}</span>. The path updates with the sorting options; a
+                custom creator prefix only changes the filename.
+              </p>
+            </div>
+          </ExpandSection>
         </SettingsField>
         <SettingsField setting="civitaiDownload" field="modelNaming" className="flex items-start gap-2">
           <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm text-ink">

@@ -43,7 +43,7 @@ export function ScopeGroupList({
 }) {
   return (
     <div
-      className="flex min-h-0 shrink-0 flex-col gap-1 overflow-y-auto pr-1"
+      className="flex min-h-0 shrink-0 flex-col gap-1 overflow-y-auto"
       style={{ width: listWidth }}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {

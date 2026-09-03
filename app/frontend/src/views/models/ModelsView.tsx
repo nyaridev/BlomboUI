@@ -1,7 +1,7 @@
 import { CivitaiPanel } from '@/views/models/panels/civitai/CivitaiPanel.tsx'
 import { LocalModelsPanel, type LocalKindTab } from '@/views/models/panels/local/LocalModelsPanel.tsx'
 import { ManagerPanel } from '@/views/models/panels/manager/ManagerPanel.tsx'
-import { ChoiceChip } from '@/components/controls/button/ChoiceChip.tsx'
+import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.tsx'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 
@@ -40,12 +40,8 @@ export function ModelsView() {
           <ManagerPanel />
         ) : (
           <div className="flex h-full min-h-0 flex-col">
-            <div className="mb-2 flex h-toolbar shrink-0 gap-cluster">
-              {KIND_TABS.map((item) => (
-                <ChoiceChip key={item.id} active={shownKind === item.id} className="px-2 py-1 text-xs" onClick={() => setKind(item.id)}>
-                  {item.label}
-                </ChoiceChip>
-              ))}
+            <div className="mb-2 flex h-toolbar shrink-0">
+              <SegmentSwitch value={shownKind} tone="blue" options={[...KIND_TABS]} onChange={setKind} />
             </div>
             <div className="min-h-0 flex-1">
               <LocalModelsPanel kind={shownKind} />

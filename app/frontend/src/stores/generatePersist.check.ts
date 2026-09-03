@@ -2,8 +2,8 @@ import assert from 'node:assert/strict'
 import {
   applySetWorkflow,
   hydrateFromPacks,
+  reorderId,
   toggleId,
-  touchRecent,
   workflowHasPack,
   type ContentParams,
 } from './generatePersist.ts'
@@ -26,12 +26,12 @@ function pack(extra: Partial<ContentParams> & { sampler?: string; steps?: number
 assert.equal(workflowHasPack({}, {}, 'sd15'), false)
 assert.equal(workflowHasPack({ sd15: base }, {}, 'sd15'), true)
 assert.equal(workflowHasPack({}, { anima: emptyWorkflowModels('') }, 'anima'), true)
-assert.deepEqual(touchRecent([], 'sd15'), ['sd15'])
-assert.deepEqual(touchRecent(['sd15', 'anima'], 'anima'), ['anima', 'sd15'])
-assert.deepEqual(touchRecent(['a', 'b', 'c', 'd', 'e'], 'f'), ['f', 'a', 'b', 'c', 'd'])
 assert.deepEqual(toggleId([], 'sd15'), ['sd15'])
 assert.deepEqual(toggleId(['sd15', 'anima'], 'sd15'), ['anima'])
-assert.deepEqual(toggleId(['sd15'], 'anima'), ['sd15', 'anima'])
+assert.deepEqual(toggleId(['sd15'], 'anima'), ['anima', 'sd15'])
+assert.deepEqual(reorderId(['a', 'b', 'c'], 'c', 'a', true), ['c', 'a', 'b'])
+assert.deepEqual(reorderId(['a', 'b', 'c'], 'a', 'c', false), ['b', 'c', 'a'])
+assert.deepEqual(reorderId(['a', 'b', 'c'], 'a', 'a', true), ['a', 'b', 'c'])
 
 type Live = ContentParams & {
   workflow: string

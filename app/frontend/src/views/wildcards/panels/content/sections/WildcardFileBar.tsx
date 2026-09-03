@@ -1,4 +1,5 @@
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
+import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 
 function fileName(path: string | null) {
@@ -51,30 +52,28 @@ export function WildcardFileBar({
           <AppIcon id="pencil" />
         </button>
       </div>
-      <div className="min-w-0 flex-1" />
-      {dirty ? <span className="shrink-0 text-xs text-muted">Unsaved</span> : null}
-      <div className="inline-flex h-8 shrink-0 rounded border border-line text-xs">
-        <button
-          type="button"
-          className={['h-full rounded-l px-2', !raw && open ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
-          disabled={!open || busy || !raw}
-          onClick={onDashboard}
-        >
-          Dashboard
-        </button>
-        <button
-          type="button"
-          className={['h-full rounded-r px-2', raw && open ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
-          disabled={!open || busy || raw}
-          onClick={onRaw}
-        >
-          Raw
-        </button>
-      </div>
       <IconButton className="shrink-0" aria-label="Open in Explorer"
         title="Open in Explorer"
         disabled={!open || busy}
         onClick={onReveal}><AppIcon id="square-arrow-out-up-right" /></IconButton>
+      <div className="min-w-0 flex-1" />
+      {dirty ? <span className="shrink-0 text-xs text-muted">Unsaved</span> : null}
+      <SegmentSwitch
+        value={raw ? 'raw' : 'dashboard'}
+        tone="blue"
+        disabled={!open || busy}
+        options={[
+          { id: 'dashboard', label: 'Dashboard' },
+          { id: 'raw', label: 'Raw' },
+        ]}
+        onChange={(id) => {
+          if (id === 'raw') {
+            onRaw()
+            return
+          }
+          onDashboard()
+        }}
+      />
       <button
         type="button"
         className="inline-flex h-8 items-center justify-center rounded border border-accent bg-accent px-3 text-sm leading-none text-ink disabled:opacity-40"

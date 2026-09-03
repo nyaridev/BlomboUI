@@ -213,7 +213,7 @@ function YamlSection({
           aria-label={open ? 'Collapse section' : 'Expand section'}
           onClick={() => setOpen((on) => !on)}
         >
-          <AppIcon id={open ? 'chevron-down' : 'chevron-right'} size={10} />
+          <AppIcon id={open ? 'chevron-down' : 'chevron-right'} size={14} />
         </button>
         <input
           className="box-border h-8 min-w-0 flex-1 rounded border border-line bg-bg px-2 py-0 font-mono text-sm leading-[1.875rem] text-ink outline-none focus:border-accent"

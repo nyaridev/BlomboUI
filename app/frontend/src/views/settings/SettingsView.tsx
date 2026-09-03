@@ -27,16 +27,25 @@ export function SettingsView() {
   const [page, setPage] = useState<PageId>('Appearance')
   const searching = query.trim().length > 0
   const groups = useMemo(
-    () =>
-      GROUPS.map((group) => ({
+    () => {
+      const q = query.trim()
+      return GROUPS.map((group) => ({
         ...group,
-        pages: group.pages.filter((item) => {
-          if (query.trim() && 'search' in item && item.search === false) {
-            return false
-          }
-          return matchesSetting(query, item.id, pageLabel(item), item.terms)
-        }),
-      })).filter((group) => group.pages.length > 0),
+        pages: group.pages
+          .filter((item) => {
+            if (q && 'search' in item && item.search === false) {
+              return false
+            }
+            return matchesSetting(query, item.id, pageLabel(item), item.terms)
+          })
+          .map((item) => ({
+            ...item,
+            // If the query matches the view/page name in the sidebar (e.g. "Grids", "Temp"), expand
+            // the whole page in the right panel instead of filtering cards/blocks.
+            showAll: searching && matchesSetting(query, item.id, pageLabel(item)),
+          })),
+      })).filter((group) => group.pages.length > 0)
+    },
     [query],
   )
   const shown = useMemo(() => {
@@ -86,7 +95,7 @@ export function SettingsView() {
 
   return (
     <div ref={rowRef} className="flex h-full min-h-0 px-10 py-4">
-      <aside className="flex min-h-0 shrink-0 flex-col gap-3 pr-3" style={{ width: navWidth }}>
+      <aside className="flex min-h-0 shrink-0 flex-col gap-3" style={{ width: navWidth }}>
         <div className="relative h-toolbar shrink-0">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center text-muted">
             <AppIcon id="search" size={12} />
@@ -107,7 +116,7 @@ export function SettingsView() {
         min={NAV_MIN_REM * remPx()}
         containerRef={rowRef}
       />
-      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto pl-4">
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
         <SettingsContent key={visit} shown={shown} query={query} searching={searching} />
       </div>
     </div>

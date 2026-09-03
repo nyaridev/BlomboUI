@@ -23,12 +23,20 @@ export function workflowHasPack(
   return Object.hasOwn(paramsByWorkflow, id) || Object.hasOwn(modelsByWorkflow, id)
 }
 
-export function touchRecent(ids: string[], id: string, cap = 5): string[] {
-  return [id, ...ids.filter((item) => item !== id)].slice(0, cap)
+export function toggleId(ids: string[], id: string): string[] {
+  return ids.includes(id) ? ids.filter((item) => item !== id) : [id, ...ids]
 }
 
-export function toggleId(ids: string[], id: string): string[] {
-  return ids.includes(id) ? ids.filter((item) => item !== id) : [...ids, id]
+export function reorderId(ids: string[], draggedId: string, targetId: string, before: boolean): string[] {
+  const from = ids.indexOf(draggedId)
+  const target = ids.indexOf(targetId)
+  if (from < 0 || target < 0 || from === target) {
+    return ids
+  }
+  const next = ids.filter((id) => id !== draggedId)
+  const targetIndex = next.indexOf(targetId)
+  next.splice(targetIndex + (before ? 0 : 1), 0, draggedId)
+  return next
 }
 
 export type WorkflowSwitchState<P extends ContentParams> = P & {

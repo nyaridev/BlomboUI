@@ -4,6 +4,7 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import { ConfirmDialog } from '@/components/controls/dialog/Dialog.tsx'
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
+import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import {
   browseThumbUrl,
   clearBrowseHistory,
@@ -62,13 +63,6 @@ function dayLabel(key: string) {
     day: 'numeric',
     year: 'numeric',
   })
-}
-
-function categoryClass(on: boolean) {
-  return [
-    'flex h-8 flex-1 items-center justify-center gap-1.5 rounded border text-sm',
-    on ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted hover:text-ink',
-  ].join(' ')
 }
 
 function groupByDay(items: BrowseHistoryItem[], query: string) {
@@ -133,7 +127,7 @@ function HistoryThumb({
 export function HistoryView() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [pane, setPane] = useState<Pane>('history')
+  const [pane, setPane] = useState<Pane>('downloads')
   const [items, setItems] = useState<BrowseHistoryItem[]>([])
   const [busy, setBusy] = useState(true)
   const [query, setQuery] = useState('')
@@ -208,22 +202,30 @@ export function HistoryView() {
   return (
     <section className="flex h-full min-h-0 flex-col px-10 py-4">
       <div className="mx-auto flex w-full max-w-3xl min-h-0 flex-1 flex-col">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between gap-cluster">
           <h1 className="text-2xl font-semibold">History</h1>
-          <IconButton className="text-red" aria-label="Clear list"
+          <IconButton
+            label
+            aria-label="Clear list"
             title="Clear list"
             disabled={clearDisabled}
-            onClick={() =>setConfirmAll(true)}
+            onClick={() => setConfirmAll(true)}
           >
-            <AppIcon id="trash-2" /></IconButton>
+            <AppIcon id="trash-2" className="text-red" />
+            <span className="text-red">Clear list</span>
+          </IconButton>
         </div>
-        <div className="mt-3 flex h-8 shrink-0 gap-1">
-          <button type="button" className={categoryClass(pane === 'history')} onClick={() => setPane('history')}>
-            History
-          </button>
-          <button type="button" className={categoryClass(pane === 'downloads')} onClick={() => setPane('downloads')}>
-            Downloads
-          </button>
+        <div className="mt-3 shrink-0">
+          <SegmentSwitch
+            fill
+            value={pane}
+            tone="blue"
+            options={[
+              { id: 'downloads', label: 'Downloads' },
+              { id: 'history', label: 'History' },
+            ]}
+            onChange={setPane}
+          />
         </div>
         {pane === 'downloads' ? (
           <DownloadsView embedded active={tabActive} />

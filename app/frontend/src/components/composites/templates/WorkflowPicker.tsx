@@ -2,9 +2,9 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import { Dialog } from '@/components/controls/dialog/Dialog.tsx'
 import { getWorkflows, type WorkflowInfo } from '@/lib/api.ts'
-import { applySetWorkflow, toggleId, touchRecent } from '@/stores/generatePersist.ts'
+import { applySetWorkflow, reorderId, toggleId } from '@/stores/generatePersist.ts'
 import { mergeParams, pickParams, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 
 function catIcon(category?: string) {
   return category === 'utility' ? 'wrench' : 'image'
@@ -18,14 +18,12 @@ function matches(item: WorkflowInfo, q: string) {
 }
 
 const ICON_BTN = 'flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-line hover:text-ink'
-const CHIP =
-  'flex h-8 shrink-0 items-center gap-1.5 rounded border border-line bg-field px-2 text-sm text-ink hover:bg-line'
+const CHIP = 'flex h-8 shrink-0 items-center gap-1.5 rounded border border-line bg-field px-2 text-sm text-ink hover:bg-line'
 
 type Menu = { x: number; y: number; id: string }
 
 export function WorkflowPicker() {
   const workflow = useGenerateStore((s) => s.workflow)
-  const recentWorkflowIds = useGenerateStore((s) => s.recentWorkflowIds)
   const favoriteWorkflowIds = useGenerateStore((s) => s.favoriteWorkflowIds)
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<WorkflowInfo[]>([])
@@ -81,24 +79,29 @@ export function WorkflowPicker() {
         pickParams,
         mergeParams: (raw) => mergeParams(raw as Partial<TemplateParams> | Record<string, unknown> | undefined),
       }),
-      recentWorkflowIds: touchRecent(s.recentWorkflowIds, id),
     }))
     close()
   }
 
   function toggleFavorite(id: string) {
-    useGenerateStore.setState((s) => ({ favoriteWorkflowIds: toggleId(s.favoriteWorkflowIds, id) }))
+    useGenerateStore.setState((s) => ({
+      favoriteWorkflowIds: toggleId(s.favoriteWorkflowIds, id),
+    }))
     setMenu(null)
+  }
+
+  function reorderFavorites(draggedId: string, targetId: string, before: boolean) {
+    useGenerateStore.setState((s) => ({
+      favoriteWorkflowIds: reorderId(s.favoriteWorkflowIds, draggedId, targetId, before),
+    }))
   }
 
   const q = query.trim().toLowerCase()
   const byId = new Map(items.map((item) => [item.id, item]))
-  const recent = recentWorkflowIds
-    .map((id) => byId.get(id))
-    .filter((item): item is WorkflowInfo => !!item && matches(item, q))
+  const favorites = favoriteWorkflowIds.map((id) => byId.get(id)).filter((item): item is WorkflowInfo => !!item && matches(item, q))
   const image = items.filter((item) => item.category !== 'utility' && matches(item, q))
   const utility = items.filter((item) => item.category === 'utility' && matches(item, q))
-  const empty = recent.length === 0 && image.length === 0 && utility.length === 0
+  const empty = favorites.length === 0 && image.length === 0 && utility.length === 0
   const menuItem = menu ? byId.get(menu.id) : undefined
 
   return (
@@ -146,33 +149,9 @@ export function WorkflowPicker() {
               <p className="text-xs text-muted">No workflows.</p>
             ) : (
               <>
-                <Section
-                  title="Recently used"
-                  items={recent}
-                  prefix="recent"
-                  workflow={workflow}
-                  favored={favored}
-                  onPick={pick}
-                  onMenu={setMenu}
-                />
-                <Section
-                  title="Image"
-                  items={image}
-                  prefix="image"
-                  workflow={workflow}
-                  favored={favored}
-                  onPick={pick}
-                  onMenu={setMenu}
-                />
-                <Section
-                  title="Utility"
-                  items={utility}
-                  prefix="utility"
-                  workflow={workflow}
-                  favored={favored}
-                  onPick={pick}
-                  onMenu={setMenu}
-                />
+                <Section title="Favorites" items={favorites} prefix="favorite" workflow={workflow} favored={favored} onPick={pick} onMenu={setMenu} onReorder={q ? undefined : reorderFavorites} />
+                <Section title="Image" items={image} prefix="image" workflow={workflow} favored={favored} onPick={pick} onMenu={setMenu} />
+                <Section title="Utility" items={utility} prefix="utility" workflow={workflow} favored={favored} onPick={pick} onMenu={setMenu} />
               </>
             )}
           </div>
@@ -183,6 +162,9 @@ export function WorkflowPicker() {
           <ContextMenuItem
             icon="star"
             label={favored.has(menu.id) ? 'Unfavorite' : 'Favorite'}
+            danger={favored.has(menu.id)}
+            tone={favored.has(menu.id) ? 'default' : 'accent'}
+            iconClassName={favored.has(menu.id) ? '' : 'fill-current'}
             onClick={() => toggleFavorite(menu.id)}
           />
         </ContextMenu>
@@ -199,6 +181,7 @@ function Section({
   favored,
   onPick,
   onMenu,
+  onReorder,
 }: {
   title: string
   items: WorkflowInfo[]
@@ -207,39 +190,119 @@ function Section({
   favored: Set<string>
   onPick: (id: string) => void
   onMenu: (menu: Menu) => void
+  onReorder?: (draggedId: string, targetId: string, before: boolean) => void
 }) {
+  const [drag, setDrag] = useState<number | null>(null)
+  const [slot, setSlot] = useState<number | null>(null)
+  const dragged = useRef(false)
+  const moving = drag !== null && slot !== null && slot !== drag && slot !== drag + 1
+
+  function applyDrop() {
+    if (!moving || drag === null || slot === null || !onReorder) {
+      return
+    }
+    const targetIndex = slot === items.length ? slot - 1 : slot
+    const target = items[targetIndex]
+    if (target) {
+      onReorder(items[drag].id, target.id, slot !== items.length)
+    }
+  }
+
   if (items.length === 0) {
     return null
   }
   return (
-    <div className="select-menu-group">
-      <div className="select-menu-section">{title}</div>
+    <div
+      className="select-menu-group"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault()
+        applyDrop()
+        setDrag(null)
+        setSlot(null)
+      }}
+    >
+      <div
+        className="select-menu-section font-medium uppercase tracking-[0.12em]"
+        style={{ color: 'var(--color-muted)' }}
+      >
+        {title}
+      </div>
       {items.map((item) => {
         const on = item.id === workflow
         const star = favored.has(item.id)
         return (
-          <button
-            key={`${prefix}:${item.id}`}
-            type="button"
-            title={item.name}
-            className={[
-              'flex h-toolbar w-full min-w-0 items-center gap-cluster rounded px-2 text-left text-sm',
-              on ? 'bg-accent text-ink' : 'text-ink hover:bg-line',
-            ].join(' ')}
-            onClick={() => onPick(item.id)}
-            onContextMenu={(event) => {
-              event.preventDefault()
-              onMenu({ x: event.clientX, y: event.clientY, id: item.id })
-            }}
-          >
-            <span className="shrink-0 text-muted">
-              <AppIcon id={catIcon(item.category)} />
-            </span>
-            <span className="min-w-0 truncate">{item.name}</span>
-            {star ? <AppIcon id="star" size={12} className="ml-auto fill-current text-yellow" /> : null}
-          </button>
+          <Fragment key={`${prefix}:${item.id}`}>
+            {moving && slot === items.indexOf(item) ? <span className="mb-0.5 block h-0.5 rounded-full bg-accent" /> : null}
+            <div
+              className={['flex items-center', drag === items.indexOf(item) ? 'opacity-20' : ''].join(' ')}
+              onDragOver={(event) => {
+                if (!onReorder) {
+                  return
+                }
+                event.preventDefault()
+                event.stopPropagation()
+                const box = event.currentTarget.getBoundingClientRect()
+                const index = items.indexOf(item)
+                setSlot(event.clientY < box.top + box.height / 2 ? index : index + 1)
+              }}
+              onDrop={(event) => {
+                event.preventDefault()
+                event.stopPropagation()
+                applyDrop()
+                setDrag(null)
+                setSlot(null)
+              }}
+            >
+              <button
+                type="button"
+                draggable={Boolean(onReorder)}
+                title={item.name}
+                className={[
+                  'flex h-toolbar min-w-0 flex-1 items-center gap-cluster rounded px-2 text-left text-sm',
+                  onReorder ? 'cursor-grab active:cursor-grabbing' : '',
+                  on ? 'bg-accent text-ink' : 'text-ink hover:bg-line',
+                ].join(' ')}
+                onDragStart={(event) => {
+                  if (!onReorder) {
+                    return
+                  }
+                  dragged.current = false
+                  event.dataTransfer.effectAllowed = 'move'
+                  event.dataTransfer.setData('text/plain', item.id)
+                  setDrag(items.indexOf(item))
+                  setSlot(items.indexOf(item))
+                }}
+                onDrag={() => {
+                  dragged.current = true
+                }}
+                onDragEnd={() => {
+                  setDrag(null)
+                  setSlot(null)
+                }}
+                onClick={() => {
+                  if (dragged.current) {
+                    dragged.current = false
+                    return
+                  }
+                  onPick(item.id)
+                }}
+                onContextMenu={(event) => {
+                  event.preventDefault()
+                  onMenu({ x: event.clientX, y: event.clientY, id: item.id })
+                }}
+              >
+                <span className="shrink-0 text-muted">
+                  <AppIcon id={catIcon(item.category)} />
+                </span>
+                <span className="min-w-0 truncate">{item.name}</span>
+                {star ? <AppIcon id="star" size={12} className="ml-auto fill-current text-yellow" /> : null}
+              </button>
+            </div>
+          </Fragment>
         )
       })}
+      {moving && slot === items.length ? <span className="mt-0.5 block h-0.5 rounded-full bg-accent" /> : null}
     </div>
   )
 }

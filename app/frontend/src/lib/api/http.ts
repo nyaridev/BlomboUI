@@ -134,11 +134,12 @@ export async function createTemplate(
   workflow: string,
   name: string,
   params: Record<string, unknown>,
+  apply?: string[],
 ): Promise<TemplateInfo> {
   const res = await fetch(api(`/templates/${encodeURIComponent(workflow)}`), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, params }),
+    body: JSON.stringify(apply !== undefined ? { name, params, apply } : { name, params }),
   })
   if (!res.ok) {
     throw new Error(await readError(res))

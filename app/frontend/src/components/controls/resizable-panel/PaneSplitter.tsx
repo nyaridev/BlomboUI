@@ -25,7 +25,7 @@ export function PaneSplitter({
       containerRef={containerRef}
       maxRatio={maxRatio}
       title={onReset ? 'Drag to resize. Double-click to reset.' : 'Drag to resize'}
-      className="group flex w-2 shrink-0 cursor-col-resize items-stretch justify-center select-none"
+      className="group flex w-8 shrink-0 cursor-col-resize items-stretch justify-center px-3 select-none"
     >
       <span className="w-px bg-line group-hover:bg-ink" />
     </PrimitiveResizablePanel>

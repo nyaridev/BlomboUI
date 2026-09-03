@@ -1,0 +1,48 @@
+---
+description: FastAPI request flow, feature ownership, storage, and concurrency contracts.
+alwaysApply: true
+---
+
+# Backend contract
+
+The backend is FastAPI in `app/backend/src/`. Uvicorn runs `main:app` from `app/backend`; `/api` routes serve the frontend. Keep FastAPI as a thin boundary over feature logic, storage, disk, and the synchronous ComfyUI client.
+
+## Source boundaries
+
+```text
+api/routes/                 validate, call feature, map errors
+features/<name>/            service.py facade, schemas.py, scripts/
+infrastructure/comfy/       synchronous Comfy HTTP and websocket client
+infrastructure/storage/     three SQLite connections and repositories
+shared/                     focused shared helpers
+bootstrap/                  install-time environment and YAML work
+```
+
+- Route flow is `api/routes/<surface>.py → features.<name>.service → scripts → repositories or ComfyUI`.
+- Keep routes thin. Put feature logic in `scripts/`; `service.py` is a facade. Register routes in `api/router.py`.
+- Put request schemas beside their feature. Put table access only in `infrastructure/storage/repositories/`; features never open SQLite connections directly.
+- `bootstrap/env.py` owns install-time path/YAML work. Runtime paths and helpers belong in `config.py` or `shared/`.
+
+## Storage
+
+There are exactly three singleton SQLite connections, opened synchronously in lifespan with WAL and module `RLock`s:
+
+- `user/data/sqlite/blombo.sqlite` — settings and durable user/product data.
+- `runtime/data/sqlite/cache.sqlite` — jobs and model hashes.
+- `runtime/data/sqlite/cache_gallery.sqlite` — gallery index data.
+
+Do not add a fourth database, `aiosqlite`, or an unguarded connection. New tables belong in the appropriate existing storage schema and repository.
+
+## Concurrency and ComfyUI
+
+- Prefer synchronous `def` routes for synchronous I/O; Starlette uses its threadpool.
+- Use `async def` only when awaiting. Move disk, CPU, SQLite preparation, and synchronous network work called from async code to `asyncio.to_thread`.
+- `asyncio.create_task` starts on the event loop only after blocking preparation completes.
+- The Comfy client remains synchronous (`urlopen`, `websockets.sync`, polling). Call it from a sync route or worker thread; never block the event loop with it.
+- Long background work uses the established named daemon-thread pattern: model hashing, gallery sync, completion rebuild, download work, and thumbnail prefetch. Do not add a process pool, custom executor, or `BackgroundTasks` for this work.
+- Reuse existing locks and shared state; do not create a competing queue or state registry.
+
+## Lifecycle and tests
+
+- Lifespan opens storage, initializes scopes/completion/models, starts hash warming, purges gallery data, and stops models on shutdown. Keep startup I/O synchronous where the existing lifespan requires it.
+- Add focused backend tests under `app/backend/tests/<feature>/`. Run `PYTHONPATH=src python -m unittest discover -s tests` from `app/backend` when relevant.

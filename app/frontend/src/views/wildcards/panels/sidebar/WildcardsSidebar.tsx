@@ -40,8 +40,8 @@ export function WildcardsSidebar({
 }) {
   return (
     <>
-      <aside className="flex min-h-0 shrink-0 flex-col pr-3" style={{ width: treeWidth }}>
-        <div className="min-h-0 flex-1 overflow-y-auto pr-1">
+      <aside className="flex min-h-0 shrink-0 flex-col" style={{ width: treeWidth }}>
+        <div className="min-h-0 flex-1 overflow-y-auto">
           <WildcardTree
             roots={shown}
             filePath={filePath}

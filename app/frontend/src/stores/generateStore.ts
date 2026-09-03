@@ -1776,6 +1776,13 @@ export function diffParams(from: TemplateParams, to: TemplateParams): ParamDiff[
   return diffs
 }
 
+export function changedApplyIds(from: TemplateParams, to: TemplateParams, workflowParams: string[] = []): string[] {
+  const visible = new Set(templateApplyFields(workflowParams).map((field) => field.id))
+  return diffParams(from, to)
+    .map((item) => item.id)
+    .filter((id) => visible.has(id))
+}
+
 export function paramsEqualApply(a: TemplateParams, b: TemplateParams, apply: string[]): boolean {
   const enabled = new Set(apply)
   for (const field of APPLY_FIELDS) {
@@ -1876,7 +1883,6 @@ type GenerateState = {
   captionFiles: File[]
   attention: AttentionSettings
   workflow: string
-  recentWorkflowIds: string[]
   favoriteWorkflowIds: string[]
   templateId: string
   templateByWorkflow: Record<string, string>
@@ -1958,7 +1964,6 @@ export const useGenerateStore = create<GenerateState>()(
   persist(
     (set) => ({
       ...DEFAULTS,
-      recentWorkflowIds: [],
       favoriteWorkflowIds: [],
       templateId: 'default',
       templateByWorkflow: {},
@@ -2101,7 +2106,6 @@ export const useGenerateStore = create<GenerateState>()(
         return hydrateFromPacks(current, rest, paramsByWorkflow, modelsByWorkflow, workflow, {
           templateByWorkflow,
           viewedTemplateByWorkflow,
-          recentWorkflowIds: parseIdList(rest.recentWorkflowIds, 5),
           favoriteWorkflowIds: parseIdList(rest.favoriteWorkflowIds),
           templateId: templateByWorkflow[workflow] ?? 'default',
           modelTileStyle: parseModelTileStyle(rest.modelTileStyle),

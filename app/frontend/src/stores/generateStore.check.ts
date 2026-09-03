@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
 import {
   applyOf,
+  changedApplyIds,
   DEFAULT_APPLY,
   DEFAULT_PARAMS,
+  mergeParams,
   mixParams,
   pickParams,
   templateApplyFields,
@@ -42,6 +44,15 @@ const visible = templateApplyFields(['hires']).map((field) => field.id)
 assert.ok(visible.includes('adetailerSteps'))
 assert.ok(visible.includes('hiresSteps'))
 assert.ok(!visible.includes('rembgEngine'))
+
+const baseline = mergeParams({ steps: 8, sampler: 'euler', cfg: 1 })
+const live = pickParams(baseline)
+live.steps = 30
+assert.deepEqual(changedApplyIds(baseline, live, ['hires']), ['steps'])
+const rembgLive = pickParams(DEFAULT_PARAMS)
+rembgLive.rembg.engine = 'birefnet'
+assert.ok(!changedApplyIds(DEFAULT_PARAMS, rembgLive, ['hires']).includes('rembgEngine'))
+assert.ok(changedApplyIds(DEFAULT_PARAMS, rembgLive, ['rembg']).includes('rembgEngine'))
 
 const hiresCurrent = pickParams(DEFAULT_PARAMS)
 hiresCurrent.hires.enabled = false

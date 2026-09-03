@@ -1,3 +1,4 @@
+import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { ChipSelect } from '@/components/controls/chip-select/ChipSelect.tsx'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { TextField } from '@/components/controls/input/TextField.tsx'
@@ -56,13 +57,6 @@ export function filterDraftEqual(left: CivitaiFilterDraft, right: CivitaiFilterD
     left.baseModels.length === right.baseModels.length &&
     left.baseModels.every((value) => right.baseModels.includes(value))
   )
-}
-
-function chipClass(active: boolean) {
-  return [
-    'rounded border px-2 py-1 text-xs',
-    active ? 'border-accent bg-accent text-ink' : 'border-line bg-field text-muted hover:text-ink',
-  ].join(' ')
 }
 
 function nextTriState(value: CivitaiTriState): CivitaiTriState {
@@ -148,13 +142,12 @@ export function CivitaiFilters({
               <div className="flex flex-col gap-3">
                 <div>
                   <p className="mb-1.5 text-xs text-muted">Time period</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {CIVITAI_PERIODS.map((item) => (
-                      <button key={item.value} type="button" className={chipClass(filterDraft.period === item.value)} onClick={() => setFilterDraft((current) => ({ ...current, period: item.value }))}>
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
+                  <SegmentSwitch
+                    tone="blue"
+                    value={filterDraft.period}
+                    options={CIVITAI_PERIODS.map((item) => ({ id: item.value, label: item.label }))}
+                    onChange={(period) => setFilterDraft((current) => ({ ...current, period }))}
+                  />
                 </div>
                 <div>
                   <p className="mb-1.5 text-xs text-muted">Model status</p>
@@ -196,12 +189,13 @@ export function CivitaiFilters({
         </button>
       </div>
       <div className="flex min-w-0 flex-wrap items-start gap-cluster">
-        <div className="flex min-w-0 flex-1 flex-wrap gap-cluster">
-          {CIVITAI_CATEGORIES.map((item) => (
-            <button key={item.label} type="button" className={chipClass(filterDraft.tag === item.value)} onClick={() => setFilterDraft((current) => ({ ...current, tag: item.value }))}>
-              {item.label}
-            </button>
-          ))}
+        <div className="min-w-0 flex-1">
+          <SegmentSwitch
+            tone="blue"
+            value={filterDraft.tag}
+            options={CIVITAI_CATEGORIES.map((item) => ({ id: item.value, label: item.label }))}
+            onChange={(tag) => setFilterDraft((current) => ({ ...current, tag }))}
+          />
         </div>
         <div className="ml-auto flex min-h-9 min-w-0 shrink-0 items-stretch gap-cluster">
           <div className="w-56 min-w-0">

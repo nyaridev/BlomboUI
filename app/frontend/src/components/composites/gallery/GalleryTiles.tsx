@@ -122,7 +122,7 @@ export function GalleryTiles({
         <>
           <div
             ref={treeRef}
-            className="h-full min-h-0 shrink-0 overflow-y-auto pr-1"
+            className="h-full min-h-0 shrink-0 overflow-y-auto"
             style={{ width: treeWidth }}
             onScroll={(event) => {
               onTreeScroll(event.currentTarget.scrollTop)
@@ -161,7 +161,7 @@ export function GalleryTiles({
       ) : null}
       <div
         ref={tilesRef}
-        className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto p-2"
+        className="h-full min-h-0 min-w-0 flex-1 overflow-y-auto py-2 pr-2"
         onScroll={(event) => {
           onTileScroll(event.currentTarget.scrollTop)
         }}

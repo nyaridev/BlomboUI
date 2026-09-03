@@ -443,7 +443,7 @@ def _out(item: dict[str, Any], *, builtin: bool = False, apply: list[str] | None
         "name": item["name"],
         "builtin": builtin,
         "icon": _icon_of(item, builtin=builtin),
-        "apply": list(apply if apply is not None else item.get("apply") or _all_apply()),
+        "apply": list(apply if apply is not None else item["apply"] if isinstance(item.get("apply"), list) else _all_apply()),
         "enabled": True if builtin else bool(item.get("enabled", True)),
     }
     if not builtin:
@@ -466,9 +466,9 @@ def set_apply(workflow: str, apply: Any) -> list[str]:
     return next_apply
 
 
-def create_template(workflow: str, name: str, params: Any) -> dict[str, Any]:
+def create_template(workflow: str, name: str, params: Any, apply: Any = None) -> dict[str, Any]:
     ident = _name(name)
-    items, apply = _load(workflow)
+    items, workflow_apply = _load(workflow)
     if _taken(items, ident):
         raise TemplateError("exists", f'A template named "{ident}" already exists', status=409)
     item = {
@@ -476,11 +476,11 @@ def create_template(workflow: str, name: str, params: Any) -> dict[str, Any]:
         "name": ident,
         "params": _clean_params(params),
         "icon": dict(CUSTOM_ICON),
-        "apply": default_apply(workflow),
+        "apply": _clean_apply(apply, default_apply(workflow)) if apply is not None else default_apply(workflow),
         "enabled": True,
     }
     items.append(item)
-    _save(workflow, items, apply)
+    _save(workflow, items, workflow_apply)
     return _out(item)
 
 

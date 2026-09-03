@@ -2,7 +2,7 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { FolderField } from '@/components/controls/folder-field/FolderField.tsx'
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
 import { checkFolderPaths } from '@/lib/api.ts'
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 
 export const LOCAL_ID = 'local'
 export const OUTPUT_ID = 'output'
@@ -94,6 +94,7 @@ export function FolderList({
 }) {
   const [drag, setDrag] = useState<number | null>(null)
   const [slot, setSlot] = useState<number | null>(null)
+  const dragged = useRef(false)
   const [exists, setExists] = useState<Record<string, boolean>>({})
   const liveIds = useMemo(() => new Set(Object.keys(livePaths)), [livePaths])
   const lockedSet = useMemo(() => new Set(lockedIds ?? (lockedId ? [lockedId] : [])), [lockedId, lockedIds])
@@ -140,21 +141,21 @@ export function FolderList({
     onChange(items.map((item) => (item.id === id ? { ...item, ...part } : item)))
   }
 
-  function rowClass(item: FolderEntry, index: number) {
-    const problem = problems.get(item.id)
-    return [
-      'flex items-center gap-1.5 rounded-md border p-1.5',
-      problem ? 'border-red/70 bg-red/15' : 'border-line bg-panel',
-      drag === index ? 'opacity-20' : '',
-    ].join(' ')
+  function endDrag() {
+    dragged.current = false
+    setDrag(null)
+    setSlot(null)
   }
 
   function renderRow(item: FolderEntry, index: number, draggable: boolean) {
     const lockedRow = lockedSet.has(item.id)
     const path = livePaths[item.id] || item.path
-    return (
+    const row = (
       <div
-        className={rowClass(item, index)}
+        className={[
+          'flex items-center gap-1.5 rounded-md border p-1.5',
+          problems.get(item.id) ? 'border-red/70 bg-red/15' : 'border-line bg-panel',
+        ].join(' ')}
         onDragOver={(event) => {
           if (!draggable) {
             return
@@ -170,6 +171,7 @@ export function FolderList({
           event.preventDefault()
           event.stopPropagation()
           applyDrop()
+          endDrag()
         }}
       >
         {draggable ? (
@@ -177,15 +179,25 @@ export function FolderList({
             draggable
             className="flex h-8 w-5 shrink-0 cursor-grab items-center justify-center text-muted active:cursor-grabbing"
             onDragStart={(event) => {
+              dragged.current = false
               event.dataTransfer.effectAllowed = 'move'
               event.dataTransfer.setData('text/plain', item.id)
+              const rowEl = event.currentTarget.parentElement
+              if (rowEl instanceof HTMLElement) {
+                const rect = rowEl.getBoundingClientRect()
+                event.dataTransfer.setDragImage(
+                  rowEl,
+                  Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
+                  Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
+                )
+              }
               setDrag(index)
               setSlot(index)
             }}
-            onDragEnd={() => {
-              setDrag(null)
-              setSlot(null)
+            onDrag={() => {
+              dragged.current = true
             }}
+            onDragEnd={endDrag}
           >
             <AppIcon id="grip-vertical" size={12} />
           </span>
@@ -215,6 +227,14 @@ export function FolderList({
         )}
       </div>
     )
+    if (!draggable) {
+      return row
+    }
+    return (
+      <div className={drag === index ? 'opacity-20' : ''}>
+        {row}
+      </div>
+    )
   }
 
   return (
@@ -230,6 +250,7 @@ export function FolderList({
         onDrop={(event) => {
           event.preventDefault()
           applyDrop()
+          endDrag()
         }}
       >
         {rows.map((item, index) => (

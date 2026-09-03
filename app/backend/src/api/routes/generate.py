@@ -31,7 +31,7 @@ def put_workflow_apply(workflow: str, body: WorkflowApplyIn) -> dict:
 
 @api.post("/templates/{workflow}")
 def post_template(workflow: str, body: TemplateIn) -> dict:
-    return {"template": generate.create_template(workflow, body.name, body.params)}
+    return {"template": generate.create_template(workflow, body.name, body.params, body.apply)}
 
 
 @api.put("/templates/{workflow}/order")

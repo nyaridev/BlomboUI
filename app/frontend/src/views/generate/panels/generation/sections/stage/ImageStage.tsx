@@ -11,7 +11,7 @@ import {
   type JobGalleryItem,
 } from '@/lib/api.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
-import { applySetWorkflow, touchRecent } from '@/stores/generatePersist.ts'
+import { applySetWorkflow } from '@/stores/generatePersist.ts'
 import { mergeParams, pickParams, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { GenerationInfo } from '@/views/generate/panels/generation/sections/params/GenerationInfo.tsx'
@@ -144,7 +144,7 @@ export function ImageStage({
       setPreviewReady(false)
       setPreviewFailed(false)
     }
-  if (wasBusy.current && !busy) {
+    if (wasBusy.current && !busy) {
       let focus = 0
       if (gridUrls.length === 0) {
         images.forEach((id, i) => {
@@ -247,7 +247,6 @@ export function ImageStage({
           pickParams,
           mergeParams: (raw) => mergeParams(raw as Partial<TemplateParams> | Record<string, unknown> | undefined),
         }),
-        recentWorkflowIds: touchRecent(s.recentWorkflowIds, target.id),
       }))
       if (extra === 'upscale') {
         useGenerateStore.getState().setImageUpscale({ inputMode: 'files' })
@@ -345,23 +344,46 @@ export function ImageStage({
       </div>
       {many && !hideResults ? <ThumbStrip items={items} index={index} onSelect={setIndex} onError={markFailed} /> : null}
       {showActions ? (
-        <div className="flex items-center justify-center gap-cluster">
-          <IconButton label disabled={!folder} onClick={() => void revealFolder()}>
-            <AppIcon id="folder" />
-            Open folder
+        <div className="flex flex-wrap items-center justify-center gap-cluster">
+          <IconButton
+            label
+            className="shrink-0"
+            disabled={!folder}
+            onClick={() => void revealFolder()}
+          >
+            <span className="inline-flex items-center gap-cluster px-2 whitespace-nowrap">
+              <AppIcon id="folder" />
+              Open folder
+            </span>
           </IconButton>
-          <IconButton label disabled={!canSend} onClick={() => void sendTo('upscale')}>
-            <AppIcon id="scaling" />
-            Upscale
+          <IconButton
+            label
+            className="shrink-0"
+            disabled={!canSend}
+            onClick={() => void sendTo('upscale')}
+          >
+            <span className="inline-flex items-center gap-cluster px-2 whitespace-nowrap">
+              <AppIcon id="scaling" />
+              Upscale
+            </span>
           </IconButton>
-          <IconButton label disabled={!canSend} onClick={() => void sendTo('rembg')}>
-            <AppIcon id="image-minus" />
-            Remove background
+          <IconButton
+            label
+            className="shrink-0"
+            disabled={!canSend}
+            onClick={() => void sendTo('rembg')}
+          >
+            <span className="inline-flex items-center gap-cluster px-2 whitespace-nowrap">
+              <AppIcon id="image-minus" />
+              Remove background
+            </span>
           </IconButton>
           {favoriteId ? (
-            <IconButton label on={favorited} onClick={() => void toggleFavorite()}>
-              <AppIcon id="star" className={favorited ? 'fill-current text-yellow' : ''} />
-              Favorite
+            <IconButton label className="shrink-0" on={favorited} onClick={() => void toggleFavorite()}>
+              <span className="inline-flex items-center gap-cluster px-2 whitespace-nowrap">
+                <AppIcon id="star" className={favorited ? 'fill-current text-yellow' : ''} />
+                Favorite
+              </span>
             </IconButton>
           ) : null}
         </div>

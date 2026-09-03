@@ -1,0 +1,49 @@
+---
+description: Cross-layer contracts for persisted settings, gallery filters, workflows, and control cataloging.
+alwaysApply: true
+---
+
+# Cross-surface invariants
+
+These rules protect behavior that crosses frontend state, backend validation, and product surfaces. Update every named owner together; do not duplicate state or silently change its semantics.
+
+## Persisted settings
+
+- `features/settings` owns backend settings validation and cleaning. The frontend uses the existing settings store.
+- Every persisted key must be accepted and cleaned by backend `_KEYS` / cleaning logic. Do not rename keys solely to match a navigation label.
+- A setting has one editor. Other surfaces link to its owner instead of adding a second editor.
+
+## Gallery filter packs
+
+Thumbnail scopes and type/sort filters are isolated per product surface. A globe shares only among sibling galleries in that same surface; it never creates an application-wide filter pack.
+
+| Surface | Shared scope pack | Local views |
+|---|---|---|
+| Generate galleries | `thumbScopeIds` | checkpoints, loras, wildcards, other, generate utilities |
+| Models Local | `galleryLocalScopes.models` | models-all, models-loras, and siblings |
+| Templates picker | `galleryLocalScopes.template` | template gallery views |
+| Gallery filter tiles | `galleryLocalScopes['gallery-search']` | gallery-search views |
+| Gallery create/edit | `galleryLocalScopes['gallery-create']` | gallery-create views |
+
+- Scope globe shares scope chips, Auto, matching mode, and Global Fallback only inside its surface. Type/sort globe shares type and sort the same way; search query remains per view.
+- Globe on reads/writes that surface's shared pack. Globe off reads/writes only the current view's local pack. Never seed one from the other when toggling.
+- A missing local pack uses `LOCAL_SCOPE_DEFAULT`: empty chips, Most Likely, Auto off, Global Fallback on.
+- Global Fallback is a pack flag, not globe sharing. Gallery image-search chips are separate from thumbnail-scope packs.
+- Chrome tiles follow their own gallery pack. Persist keys through `stores/settings/constants.ts` and list all view/share keys in backend settings validators.
+
+## Gallery view completeness
+
+- New model or gallery selectors use `components/composites/gallery/GalleryBrowser.tsx` inline or `components/composites/models/FloatingModelsView.tsx` as an overlay. Reuse their `GalleryTiles`, toolbar, thumbnail scope, filters, sorting, pinning, tree/scroll behavior, overlays, and selection glow; do not rebuild a partial browser.
+- Treat selection behavior as an explicit product decision. Match the nearest comparable picker for single versus multi-select, selected highlight, focus state, and whether selection keeps the picker open; never assume a selection closes its surface.
+- Single-select pickers pass `value` and `onSelect`; multi-select pickers pass `selected` and `onSelect`, so existing selections stay highlighted. Configure overlay `closeOnSelect` / `dismissOutside` on `FloatingModelsView`; do not duplicate its close behavior with local `setOpen(false)`.
+- Any intentional deviation needs a product reason and must preserve clear feedback, including selected-tile visibility and highlight where selection remains relevant.
+
+## Workflow template parameters
+
+Workflow JSON is the source of truth for its own editor. Every workflow must keep these aligned:
+
+1. JSON `apply` controls template checkboxes and `default_apply()` for newly created templates.
+2. JSON `extras` and nodes inferred in `_workflow_params` define Generate `workflowParams` and `templateApplyFields()`.
+3. The template UI branch and `TemplateParamsForm` render only parameters that workflow supports.
+
+File utilities such as `rembg` and `upscale` use dedicated editors with per-parameter ApplyRows and output paths. Files/directory drop remains live Generate state, not a template field. Do not hide an entire params blob behind one apply checkbox.

@@ -3,8 +3,8 @@ import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/Prom
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useLayoutEffect, useRef, useState } from 'react'
 
-const PROMPT_FRAC = 0.11
-const NEGATIVE_FRAC = 0.065
+const PROMPT_FRAC = 0.12
+const NEGATIVE_FRAC = 0.075
 
 function remPx() {
   return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16

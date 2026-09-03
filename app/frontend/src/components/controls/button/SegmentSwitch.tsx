@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { PrimitiveButton } from '@/components/primitives/PrimitiveButton.tsx'
 
 const TONE = {
@@ -15,7 +16,7 @@ export function SegmentSwitch<T extends string>({
   onChange,
 }: {
   value: T
-  options: { id: T; label: string }[]
+  options: { id: T; label: ReactNode }[]
   tone?: keyof typeof TONE
   fill?: boolean
   disabled?: boolean
@@ -35,7 +36,7 @@ export function SegmentSwitch<T extends string>({
           key={item.id}
           disabled={disabled}
           className={[
-            'h-full px-2.5',
+            'inline-flex h-full items-center justify-center gap-1.5 px-2.5',
             fill ? 'min-w-0 flex-1' : '',
             index === 0 ? 'rounded-l' : '',
             index === last ? 'rounded-r' : '',

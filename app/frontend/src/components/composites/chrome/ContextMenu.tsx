@@ -56,19 +56,24 @@ export function ContextMenuItem({
   onClick,
   danger = false,
   icon,
+  tone = 'default',
+  iconClassName = '',
 }: {
   label: string
   onClick: () => void
   danger?: boolean
   icon?: string
+  tone?: 'default' | 'accent'
+  iconClassName?: string
 }) {
   const mark = icon || (danger ? 'trash-2' : '')
+  const color = danger ? 'text-red-bright' : tone === 'accent' ? 'text-yellow' : 'text-ink'
   return (
     <button
       type="button"
       className={[
         'flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-line',
-        danger ? 'text-red-bright' : 'text-ink',
+        color,
       ].join(' ')}
       onPointerDown={(event) => {
         event.preventDefault()
@@ -76,7 +81,7 @@ export function ContextMenuItem({
         onClick()
       }}
     >
-      {mark ? <AppIcon id={mark} size={14} /> : null}
+      {mark ? <AppIcon id={mark} size={14} className={iconClassName} /> : null}
       <span>{label}</span>
     </button>
   )

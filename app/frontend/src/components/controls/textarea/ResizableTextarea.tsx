@@ -22,16 +22,18 @@ export function ResizableTextarea({
     }
   }, [defaultHeight])
 
+  const applied = height ?? defaultHeight
+
   return (
-    <div className="relative min-w-0" style={height == null ? undefined : { height }}>
+    <div className="relative flex min-w-0 flex-col" style={applied == null ? undefined : { height: applied }}>
       <PrimitiveTextarea
         {...props}
         ref={textarea}
-        className={['h-full w-full resize-none', className].filter(Boolean).join(' ')}
-        style={{ ...style, ...(height == null ? {} : { height: '100%' }) }}
+        className={['block h-full w-full resize-none', className].filter(Boolean).join(' ')}
+        style={{ ...style, ...(applied == null ? {} : { height: '100%' }) }}
       />
       <ResizeGrip
-        value={height ?? defaultHeight ?? minHeight}
+        value={applied ?? minHeight}
         onChange={setHeight}
         onReset={() => setHeight(null)}
         min={minHeight}

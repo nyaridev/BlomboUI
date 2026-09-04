@@ -3,6 +3,8 @@ import { OutputPathOverride } from '@/views/generate/panels/generation/sections/
 import { RembgFields } from '@/views/generate/panels/generation/sections/params/RembgFields.tsx'
 import { ImageUpscaleFields } from '@/views/generate/panels/generation/sections/params/ImageUpscaleFields.tsx'
 import { CaptionFields } from '@/views/generate/panels/generation/sections/params/CaptionFields.tsx'
+import { DatasetTabStrip } from '@/views/generate/panels/generation/sections/params/DatasetTabStrip.tsx'
+import { SpritesFields } from '@/views/generate/panels/generation/sections/params/SpritesFields.tsx'
 import { AdetailerParams } from '@/views/generate/panels/generation/sections/params/AdetailerParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
@@ -88,6 +90,7 @@ export function TemplateParamsForm({
   const rembg = workflowParams.includes('rembg')
   const upscale = workflowParams.includes('upscale')
   const caption = workflowParams.includes('caption')
+  const dataset = workflowParams.includes('dataset')
   const showHires = !workflowParams.length || workflowParams.includes('hires')
   const shown = tab === 'hires' && !showHires ? 'first' : tab
   const passOn =
@@ -209,6 +212,34 @@ export function TemplateParamsForm({
               </ApplyRow>
             )}
           />
+        </div>
+      ) : dataset ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-stack overflow-y-auto">
+          <ParamSection title="Output">
+            <ApplyRow id="outputPath" apply={apply} onToggle={toggle} locked={locked}>
+              <div className="flex min-w-0 flex-col gap-1">
+                <Label>Output folder</Label>
+                <FolderField
+                  value={value.outputImagePath}
+                  onChange={(outputImagePath) => set('outputImagePath', outputImagePath)}
+                  placeholder="dataset_prep/[date]"
+                />
+              </div>
+            </ApplyRow>
+          </ParamSection>
+          <DatasetTabStrip value={value.dataset.tab} onValueChange={(tab) => onChange({ ...value, dataset: { ...value.dataset, tab } })} />
+          {value.dataset.tab === 'sprites' ? (
+            <SpritesFields
+              value={value.dataset.sprites}
+              onChange={(sprites) => onChange({ ...value, dataset: { ...value.dataset, sprites: { ...value.dataset.sprites, ...sprites } } })}
+              locked={locked}
+              wrap={(id, node) => (
+                <ApplyRow id={id} apply={apply} onToggle={toggle} locked={locked}>
+                  {node}
+                </ApplyRow>
+              )}
+            />
+          ) : null}
         </div>
       ) : (
         <>

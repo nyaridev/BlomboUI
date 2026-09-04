@@ -19,6 +19,7 @@ from features.generate.scripts import save_meta, templates
 from features.generate.scripts.workflow import rembg
 from features.generate.scripts.workflow import upscale as image_upscale
 from features.generate.scripts.workflow import caption
+from features.generate.scripts.workflow import dataset
 from features.generate.scripts.workflow.compose import hires_enabled
 from config import RUNTIME, comfy_output_root, outputs_root
 from .job_plan import DEFAULTS
@@ -229,6 +230,15 @@ def _output_dir(values: dict[str, Any], kind: str) -> Path:
                 return path
             return _expand_path(override, values, caption.PATH_DEFAULT)
         return _expand_path(caption.PATH_DEFAULT, values, caption.PATH_DEFAULT)
+    elif dataset.is_dataset(values):
+        override = str(values.get("output_image_path") or "").strip()
+        if override:
+            path = Path(override)
+            if path.is_absolute():
+                path.mkdir(parents=True, exist_ok=True)
+                return path
+            return _expand_path(override, values, dataset.PATH_DEFAULT)
+        return _expand_path(dataset.PATH_DEFAULT, values, dataset.PATH_DEFAULT)
     else:
         override = str(values.get("output_image_path") or "").strip()
         template = override or str(cfg.get("imagePath") or settings.IMAGE_PATH_DEFAULT)
@@ -254,6 +264,11 @@ def _name_template(values: dict[str, Any], kind: str) -> tuple[str, str]:
         override = str(values.get("output_hires_name") or "").strip()
         raw = override or str(cfg.get("hiresName") or settings.HIRES_NAME_DEFAULT)
         fallback = settings.HIRES_NAME_DEFAULT
+    elif dataset.is_dataset(values) and kind not in {"grids", "hires"}:
+        override = str(values.get("output_image_name") or "").strip()
+        raw = override or dataset.NAME_DEFAULT
+        fallback = dataset.NAME_DEFAULT
+        return _strip_name_ext(raw) or fallback, fallback
     elif caption.is_caption(values) and kind not in {"grids", "hires"}:
         if "output_image_name" in values:
             raw = str(values.get("output_image_name") or "").strip()
@@ -363,6 +378,8 @@ def _image_save_opts(values: dict[str, Any] | None = None) -> tuple[str, int, bo
     if values and rembg.is_rembg(values):
         return "png", 100, False, 4096
     if values and caption.is_caption(values):
+        return "png", 100, False, 4096
+    if values and dataset.is_dataset(values):
         return "png", 100, False, 4096
     cfg = settings.load()
     fmt = str(cfg.get("imageFormat") or "png").lower()
@@ -514,6 +531,9 @@ def _import_bytes(
         graph = None
     elif caption.is_caption(values):
         packed = caption.empty_params()
+        graph = None
+    elif dataset.is_dataset(values):
+        packed = dataset.empty_params()
         graph = None
     else:
         packed = save_meta.pack_params(values, graph, kind=kind)

@@ -320,6 +320,20 @@ export type JobRequest = {
     input_mode: 'files' | 'directory'
     input_dir: string
   }
+  dataset?: {
+    tab: 'sprites'
+    input_mode: 'files' | 'directory'
+    input_dir: string
+    sprites: {
+      width: number
+      height: number
+      padding: number
+      min_area: number
+      upscale_model: string
+      background: 'Alpha' | 'Color'
+      background_color: string
+    }
+  }
   attention?: {
     enabled: boolean
     engine: 'sage' | 'flash'

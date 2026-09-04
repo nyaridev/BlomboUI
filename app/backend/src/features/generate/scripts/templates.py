@@ -9,6 +9,7 @@ from infrastructure.comfy.client import workflow_file
 from features.generate.scripts.workflow import rembg
 from features.generate.scripts.workflow import upscale as image_upscale
 from features.generate.scripts.workflow import caption
+from features.generate.scripts.workflow import dataset
 from features.generate.scripts.workflow.attention import clean_attention
 from infrastructure.storage.repositories import templates as templates_repo
 
@@ -111,6 +112,13 @@ _CAPTION_APPLY = (
     "captionKeepModelLoaded",
     "captionSeed",
 )
+_DATASET_APPLY = (
+    "spritesSize",
+    "spritesPadding",
+    "spritesMinArea",
+    "spritesUpscale",
+    "spritesBackground",
+)
 _HIRES_APPLY = (
     "hiresModel",
     "hiresSize",
@@ -173,6 +181,7 @@ _APPLY = (
     *_REMBG_APPLY,
     *_UPSCALE_APPLY,
     *_CAPTION_APPLY,
+    *_DATASET_APPLY,
     "attention",
 )
 
@@ -181,7 +190,7 @@ _BLOBS = ("controlnet", "hires", "adetailer")
 
 
 _CONTENT_APPLY = ("prompt", "negativePrompt", "checkpoint", "vae", "textEncoder", "loras")
-_UTILITY_APPLY = _REMBG_APPLY + _UPSCALE_APPLY + _CAPTION_APPLY
+_UTILITY_APPLY = _REMBG_APPLY + _UPSCALE_APPLY + _CAPTION_APPLY + _DATASET_APPLY
 
 
 def _all_apply() -> list[str]:
@@ -315,6 +324,9 @@ def _clean_params(raw: Any) -> dict[str, Any]:
     caption_blob = raw.get("caption")
     if isinstance(caption_blob, dict):
         out["caption"] = caption.clean_caption(caption_blob)
+    dataset_blob = raw.get("dataset")
+    if isinstance(dataset_blob, dict):
+        out["dataset"] = dataset.clean_dataset(dataset_blob)
     attention_blob = raw.get("attention")
     if isinstance(attention_blob, dict):
         packed = clean_attention(attention_blob)

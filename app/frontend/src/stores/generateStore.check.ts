@@ -54,6 +54,14 @@ rembgLive.rembg.engine = 'birefnet'
 assert.ok(!changedApplyIds(DEFAULT_PARAMS, rembgLive, ['hires']).includes('rembgEngine'))
 assert.ok(changedApplyIds(DEFAULT_PARAMS, rembgLive, ['rembg']).includes('rembgEngine'))
 
+const datasetVisible = templateApplyFields(['dataset']).map((field) => field.id)
+assert.ok(datasetVisible.includes('spritesSize'))
+assert.ok(datasetVisible.includes('outputPath'))
+assert.ok(!datasetVisible.includes('rembgEngine'))
+const datasetLive = pickParams(DEFAULT_PARAMS)
+datasetLive.dataset.sprites.padding = 24
+assert.ok(changedApplyIds(DEFAULT_PARAMS, datasetLive, ['dataset']).includes('spritesPadding'))
+
 const hiresCurrent = pickParams(DEFAULT_PARAMS)
 hiresCurrent.hires.enabled = false
 hiresCurrent.hires.steps = 20

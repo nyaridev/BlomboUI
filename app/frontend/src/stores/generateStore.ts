@@ -109,6 +109,81 @@ export type RembgEngine = 'rmbg' | 'birefnet'
 export type RembgInputMode = 'files' | 'directory'
 export type RembgBackground = 'Alpha' | 'Color'
 
+export type DatasetTab = 'sprites'
+
+export type DatasetSpritesSettings = {
+  width: number
+  height: number
+  padding: number
+  minArea: number
+  upscaleModel: string
+  background: RembgBackground
+  backgroundColor: string
+}
+
+export type DatasetSettings = {
+  inputMode: RembgInputMode
+  inputDir: string
+  tab: DatasetTab
+  sprites: DatasetSpritesSettings
+}
+
+export const DEFAULT_DATASET_SPRITES: DatasetSpritesSettings = {
+  width: 512,
+  height: 512,
+  padding: 8,
+  minArea: 32,
+  upscaleModel: '',
+  background: 'Alpha',
+  backgroundColor: '#222222',
+}
+
+export const DEFAULT_DATASET: DatasetSettings = {
+  inputMode: 'files',
+  inputDir: '',
+  tab: 'sprites',
+  sprites: { ...DEFAULT_DATASET_SPRITES },
+}
+
+export function mergeDatasetSprites(raw: unknown): DatasetSpritesSettings {
+  const base = cloneJson(DEFAULT_DATASET_SPRITES)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return base
+  }
+  const row = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback)
+  const num = (value: unknown, fallback: number) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : fallback
+  const background = text(row.background, base.background)
+  return {
+    width: Math.max(64, Math.min(4096, Math.round(num(row.width, base.width)))),
+    height: Math.max(64, Math.min(4096, Math.round(num(row.height, base.height)))),
+    padding: Math.max(0, Math.min(512, Math.round(num(row.padding, base.padding)))),
+    minArea: Math.max(1, Math.min(1_000_000, Math.round(num(row.minArea ?? row.min_area, base.minArea)))),
+    upscaleModel: text(row.upscaleModel ?? row.upscale_model, base.upscaleModel),
+    background: background === 'Color' ? 'Color' : 'Alpha',
+    backgroundColor: text(row.backgroundColor ?? row.background_color, base.backgroundColor) || base.backgroundColor,
+  }
+}
+
+export function mergeDataset(raw: unknown): DatasetSettings {
+  const base = cloneJson(DEFAULT_DATASET)
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return base
+  }
+  const row = raw as Record<string, unknown>
+  const text = (value: unknown, fallback: string) => (typeof value === 'string' ? value : fallback)
+  const inputMode = text(row.inputMode ?? row.input_mode, base.inputMode)
+  const tab = text(row.tab, base.tab)
+  const spritesRaw = row.sprites && typeof row.sprites === 'object' && !Array.isArray(row.sprites) ? row.sprites : row
+  return {
+    inputMode: inputMode === 'directory' ? 'directory' : 'files',
+    inputDir: text(row.inputDir ?? row.input_dir, base.inputDir),
+    tab: tab === 'sprites' ? 'sprites' : 'sprites',
+    sprites: mergeDatasetSprites(spritesRaw),
+  }
+}
+
 export type RembgSettings = {
   inputMode: RembgInputMode
   inputDir: string
@@ -1028,6 +1103,7 @@ export const DEFAULTS = {
   rembg: cloneJson(DEFAULT_REMBG),
   imageUpscale: cloneJson(DEFAULT_IMAGE_UPSCALE),
   caption: cloneJson(DEFAULT_CAPTION),
+  dataset: cloneJson(DEFAULT_DATASET),
   attention: cloneJson(DEFAULT_ATTENTION),
   activeLoraOrder: [] as string[],
   activeLoraStrengths: {} as Record<string, number>,
@@ -1074,6 +1150,7 @@ export const PARAM_KEYS = [
   'rembg',
   'imageUpscale',
   'caption',
+  'dataset',
   'attention',
   'activeLoraOrder',
   'activeLoraStrengths',
@@ -1120,6 +1197,7 @@ export type TemplateParams = {
   rembg: RembgSettings
   imageUpscale: ImageUpscaleSettings
   caption: CaptionSettings
+  dataset: DatasetSettings
   attention: AttentionSettings
   activeLoraOrder: string[]
   activeLoraStrengths: Record<string, number>
@@ -1167,6 +1245,7 @@ export function pickParams(source: TemplateParams): TemplateParams {
     rembg: mergeRembg(source.rembg),
     imageUpscale: mergeImageUpscale(source.imageUpscale),
     caption: mergeCaption(source.caption),
+    dataset: mergeDataset(source.dataset),
     attention: mergeAttention(source.attention),
     activeLoraOrder: [...(source.activeLoraOrder ?? [])],
     activeLoraStrengths: { ...(source.activeLoraStrengths ?? {}) },
@@ -1235,6 +1314,10 @@ export function mergeParams(raw: Partial<TemplateParams> | Record<string, unknow
       }
       if (key === 'caption') {
         next.caption = mergeCaption(value)
+        continue
+      }
+      if (key === 'dataset') {
+        next.dataset = mergeDataset(value)
         continue
       }
       if (key === 'attention') {
@@ -1365,6 +1448,10 @@ function captionApply(id: string, label: string, nested: readonly (keyof Caption
   return { id, label, keys: ['caption'], nested }
 }
 
+function datasetApply(id: string, label: string, nested: readonly (keyof DatasetSpritesSettings)[]): ApplyField {
+  return { id, label, keys: ['dataset'], nested }
+}
+
 function adetailerApply(id: string, label: string, nested: readonly (keyof AdetailerUnit)[]): ApplyField {
   return { id, label, keys: ['adetailer'], nested }
 }
@@ -1379,6 +1466,10 @@ function isAdetailerApply(field: ApplyField) {
 
 function isHiresApply(field: ApplyField) {
   return field.keys[0] === 'hires' && Boolean(field.nested?.length)
+}
+
+function isDatasetApply(field: ApplyField) {
+  return field.keys[0] === 'dataset' && Boolean(field.nested?.length)
 }
 
 const UPSCALE_ADVANCED_KEYS = [
@@ -1530,6 +1621,11 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   captionApply('captionMaxTokens', 'Max tokens', ['maxTokens']),
   captionApply('captionKeepModelLoaded', 'Keep model loaded', ['keepModelLoaded']),
   captionApply('captionSeed', 'Seed', ['seed', 'seedAfter']),
+  datasetApply('spritesSize', 'Size', ['width', 'height']),
+  datasetApply('spritesPadding', 'Padding', ['padding']),
+  datasetApply('spritesMinArea', 'Min area', ['minArea']),
+  datasetApply('spritesUpscale', 'Upscale model', ['upscaleModel']),
+  datasetApply('spritesBackground', 'Background', ['background', 'backgroundColor']),
 ]
 
 const CONTENT_APPLY = new Set(['prompt', 'negativePrompt', 'checkpoint', 'vae', 'textEncoder', 'loras'])
@@ -1554,6 +1650,9 @@ export function templateApplyFields(workflowParams: string[]) {
   }
   if (workflowParams.includes('caption')) {
     return APPLY_FIELDS.filter((field) => field.keys[0] === 'caption' || field.id === 'outputPath')
+  }
+  if (workflowParams.includes('dataset')) {
+    return APPLY_FIELDS.filter((field) => field.keys[0] === 'dataset' || field.id === 'outputPath')
   }
   return APPLY_FIELDS.filter((field) => {
     if (field.id === 'checkpoint' || field.id === 'vae' || field.id === 'textEncoder' || field.id === 'loras') {
@@ -1647,6 +1746,9 @@ function nestedSame(from: TemplateParams, to: TemplateParams, field: ApplyField)
     }
     return lu.every((unit, index) => nested.every((name) => sameParam(unit[name], ru[index]?.[name])))
   }
+  if (isDatasetApply(field)) {
+    return nested.every((name) => sameParam(from.dataset.sprites[name as keyof DatasetSpritesSettings], to.dataset.sprites[name as keyof DatasetSpritesSettings]))
+  }
   const key = field.keys[0]
   const left = from[key] as Record<string, unknown> | undefined
   const right = to[key] as Record<string, unknown> | undefined
@@ -1667,6 +1769,10 @@ function nestedFormat(params: TemplateParams, field: ApplyField) {
       }
     }
     return parts.join(', ')
+  }
+  if (isDatasetApply(field)) {
+    const blob = params.dataset.sprites as Record<string, unknown>
+    return nested.map((name) => formatParamValue(blob[name])).join(', ')
   }
   const blob = params[field.keys[0]] as Record<string, unknown> | undefined
   return nested.map((name) => formatParamValue(blob?.[name])).join(', ')
@@ -1706,6 +1812,17 @@ function assignNested(next: TemplateParams, source: TemplateParams, field: Apply
   }
   if (isAdetailerApply(field)) {
     assignAdetailer(next, source, nested)
+    return
+  }
+  if (isDatasetApply(field)) {
+    const blob = cloneJson(next.dataset)
+    const src = source.dataset.sprites as Record<string, unknown>
+    const dst = { ...blob.sprites } as Record<string, unknown>
+    for (const name of nested) {
+      dst[name] = src[name]
+    }
+    blob.sprites = dst as DatasetSpritesSettings
+    next.dataset = blob
     return
   }
   const key = field.keys[0]
@@ -1871,6 +1988,8 @@ type GenerateState = {
   imageUpscaleFiles: File[]
   caption: CaptionSettings
   captionFiles: File[]
+  dataset: DatasetSettings
+  datasetFiles: File[]
   attention: AttentionSettings
   workflow: string
   favoriteWorkflowIds: string[]
@@ -1941,6 +2060,8 @@ type GenerateState = {
   setImageUpscaleFiles: (value: File[]) => void
   setCaption: (value: Partial<CaptionSettings>) => void
   setCaptionFiles: (value: File[]) => void
+  setDataset: (value: Partial<DatasetSettings> | { sprites?: Partial<DatasetSpritesSettings> }) => void
+  setDatasetFiles: (value: File[]) => void
   setAttention: (value: Partial<AttentionSettings>) => void
   setWorkflow: (value: string, defaults?: Partial<TemplateParams> | Record<string, unknown>) => void
   setTemplateId: (value: string) => void
@@ -1964,6 +2085,7 @@ export const useGenerateStore = create<GenerateState>()(
       rembgFiles: [],
       imageUpscaleFiles: [],
       captionFiles: [],
+      datasetFiles: [],
       modelTileStyle: 'tall',
       vae: '',
       textEncoder: '',
@@ -2043,6 +2165,15 @@ export const useGenerateStore = create<GenerateState>()(
       setImageUpscaleFiles: (imageUpscaleFiles) => set({ imageUpscaleFiles }),
       setCaption: (caption) => set((s) => ({ caption: mergeCaption({ ...s.caption, ...caption }) })),
       setCaptionFiles: (captionFiles) => set({ captionFiles }),
+      setDataset: (dataset) =>
+        set((s) => ({
+          dataset: mergeDataset({
+            ...s.dataset,
+            ...dataset,
+            sprites: { ...s.dataset.sprites, ...(dataset.sprites ?? {}) },
+          }),
+        })),
+      setDatasetFiles: (datasetFiles) => set({ datasetFiles }),
       setAttention: (attention) => set((s) => ({ attention: mergeAttention({ ...s.attention, ...attention }) })),
       setWorkflow: (workflow, defaults) =>
         set((s) =>
@@ -2084,7 +2215,7 @@ export const useGenerateStore = create<GenerateState>()(
         removeItem: () => removeGeneratePersist(),
       })),
       partialize: (s) => {
-        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, captionFiles: _captionFiles, ...rest } = s
+        const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, captionFiles: _captionFiles, datasetFiles: _datasetFiles, ...rest } = s
         return {
           ...rest,
           paramsByWorkflow: { ...s.paramsByWorkflow, [s.workflow]: pickParams(s) },

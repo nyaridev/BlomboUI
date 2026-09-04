@@ -2,6 +2,7 @@ import { AdetailerParams } from '@/views/generate/panels/generation/sections/par
 import { ImageUpscaleParams } from '@/views/generate/panels/generation/sections/params/ImageUpscaleParams.tsx'
 import { RembgParams } from '@/views/generate/panels/generation/sections/params/RembgParams.tsx'
 import { CaptionParams } from '@/views/generate/panels/generation/sections/params/CaptionParams.tsx'
+import { DatasetParams } from '@/views/generate/panels/generation/sections/params/DatasetParams.tsx'
 import { ControlnetParams } from '@/views/generate/panels/generation/sections/params/ControlnetParams.tsx'
 import { FirstPassParams } from '@/views/generate/panels/generation/sections/params/FirstPassParams.tsx'
 import { HiresParams } from '@/views/generate/panels/generation/sections/params/HiresParams.tsx'
@@ -32,6 +33,7 @@ export function GenerationParams({
   const rembg = workflowParams.includes('rembg')
   const upscale = workflowParams.includes('upscale')
   const caption = workflowParams.includes('caption')
+  const dataset = workflowParams.includes('dataset')
   const [pass, setPass] = useState<PassTab>('first')
   const shown = pass === 'hires' && !showHires ? 'first' : pass
   const enabled =
@@ -48,6 +50,8 @@ export function GenerationParams({
         <ImageUpscaleParams lastSeed={lastSeed} />
       ) : caption ? (
       <CaptionParams lastSeed={lastSeed} />
+      ) : dataset ? (
+        <DatasetParams />
       ) : (
         <>
       <ParamsTabStrip

@@ -1,0 +1,13 @@
+{
+  "name": "Dataset Prep",
+  "category": "utility",
+  "apply": [
+    "spritesSize",
+    "spritesPadding",
+    "spritesMinArea",
+    "spritesUpscale",
+    "spritesBackground",
+    "outputPath"
+  ],
+  "extras": ["dataset"]
+}

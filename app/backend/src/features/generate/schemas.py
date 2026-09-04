@@ -224,6 +224,23 @@ class CaptionIn(BaseModel):
     input_dir: str = ""
 
 
+class DatasetSpritesIn(BaseModel):
+    width: int = Field(default=512, ge=64, le=4096)
+    height: int = Field(default=512, ge=64, le=4096)
+    padding: int = Field(default=8, ge=0, le=512)
+    min_area: int = Field(default=32, ge=1, le=1_000_000)
+    upscale_model: str = ""
+    background: Literal["Alpha", "Color"] = "Alpha"
+    background_color: str = "#222222"
+
+
+class DatasetIn(BaseModel):
+    tab: Literal["sprites"] = "sprites"
+    input_mode: Literal["files", "directory"] = "files"
+    input_dir: str = ""
+    sprites: DatasetSpritesIn = Field(default_factory=DatasetSpritesIn)
+
+
 class UpscaleIn(BaseModel):
     engine: Literal["model", "seedvr2"] = "model"
     input_mode: Literal["files", "directory"] = "files"
@@ -322,6 +339,7 @@ class JobIn(BaseModel):
     rembg: RembgIn | None = None
     upscale: UpscaleIn | None = None
     caption: CaptionIn | None = None
+    dataset: DatasetIn | None = None
     attention: AttentionIn | None = None
     input_dir: str | None = None
     input_paths: list[str] = Field(default_factory=list)

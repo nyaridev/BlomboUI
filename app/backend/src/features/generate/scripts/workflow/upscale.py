@@ -37,6 +37,7 @@ def is_file_utility(values: dict[str, Any]) -> bool:
         "background_removal",
         "image_upscale",
         "image_caption",
+        "dataset_prep",
     }
 
 

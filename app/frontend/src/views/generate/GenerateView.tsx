@@ -84,6 +84,8 @@ export function GenerateView() {
   const imageUpscaleFiles = useGenerateStore((s) => s.imageUpscaleFiles)
   const caption = useGenerateStore((s) => s.caption)
   const captionFiles = useGenerateStore((s) => s.captionFiles)
+  const dataset = useGenerateStore((s) => s.dataset)
+  const datasetFiles = useGenerateStore((s) => s.datasetFiles)
   const setImageUpscale = useGenerateStore((s) => s.setImageUpscale)
   const setCaption = useGenerateStore((s) => s.setCaption)
   const script = useGenerateStore((s) => s.script)
@@ -152,7 +154,9 @@ export function GenerateView() {
   const rembgMode = workflowParams.includes('rembg')
   const upscaleMode = workflowParams.includes('upscale')
   const captionMode = workflowParams.includes('caption')
-  const fileUtility = rembgMode || upscaleMode || captionMode
+  const datasetMode = workflowParams.includes('dataset')
+  const fileUtility = rembgMode || upscaleMode || captionMode || datasetMode
+  const datasetNeedsComfy = datasetMode && Boolean(dataset.sprites.upscaleModel.trim())
 
   useEffect(() => {
     let gone = false
@@ -287,13 +291,14 @@ export function GenerateView() {
     const rembgMode = workflowParams.includes('rembg')
     const upscaleMode = workflowParams.includes('upscale')
     const captionMode = workflowParams.includes('caption')
-    const fileUtility = rembgMode || upscaleMode || captionMode
+    const datasetMode = workflowParams.includes('dataset')
+    const fileUtility = rembgMode || upscaleMode || captionMode || datasetMode
     if (!fileUtility && !checkpoint.trim()) {
       return
     }
     if (fileUtility) {
-      const input = rembgMode ? rembg : upscaleMode ? imageUpscale : caption
-      const files = rembgMode ? rembgFiles : upscaleMode ? imageUpscaleFiles : captionFiles
+      const input = rembgMode ? rembg : upscaleMode ? imageUpscale : captionMode ? caption : dataset
+      const files = rembgMode ? rembgFiles : upscaleMode ? imageUpscaleFiles : captionMode ? captionFiles : datasetFiles
       if (input.inputMode === 'files' && !files.length) {
         return
       }
@@ -447,9 +452,9 @@ export function GenerateView() {
     }
     try {
       const gen = useGenerateStore.getState()
-      const inputFiles = rembgMode ? rembgFiles : upscaleMode ? imageUpscaleFiles : captionFiles
-      const inputMode = rembgMode ? rembg.inputMode : upscaleMode ? imageUpscale.inputMode : caption.inputMode
-      const inputDir = rembgMode ? rembg.inputDir : upscaleMode ? imageUpscale.inputDir : caption.inputDir
+      const inputFiles = rembgMode ? rembgFiles : upscaleMode ? imageUpscaleFiles : captionMode ? captionFiles : datasetFiles
+      const inputMode = rembgMode ? rembg.inputMode : upscaleMode ? imageUpscale.inputMode : captionMode ? caption.inputMode : dataset.inputMode
+      const inputDir = rembgMode ? rembg.inputDir : upscaleMode ? imageUpscale.inputDir : captionMode ? caption.inputDir : dataset.inputDir
       const inputPaths =
         fileUtility && inputMode === 'files' ? await uploadJobImages(inputFiles) : undefined
       const next = await createJob({
@@ -483,7 +488,7 @@ export function GenerateView() {
         workflow,
         template: templateId,
         output_image_path:
-          rembgMode || upscaleMode || captionMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
+          rembgMode || upscaleMode || captionMode || datasetMode || outputPathEnabled ? outputImagePath.trim() || undefined : undefined,
         output_grid_path: outputPathEnabled ? outputGridPath.trim() || undefined : undefined,
         output_image_name: captionMode
           ? outputImageName
@@ -697,6 +702,22 @@ export function GenerateView() {
               input_dir: caption.inputDir,
             }
           : undefined,
+        dataset: datasetMode
+          ? {
+              tab: dataset.tab,
+              input_mode: dataset.inputMode,
+              input_dir: dataset.inputDir,
+              sprites: {
+                width: dataset.sprites.width,
+                height: dataset.sprites.height,
+                padding: dataset.sprites.padding,
+                min_area: dataset.sprites.minArea,
+                upscale_model: dataset.sprites.upscaleModel,
+                background: dataset.sprites.background,
+                background_color: dataset.sprites.backgroundColor,
+              },
+            }
+          : undefined,
         input_dir: fileUtility && inputMode === 'directory' ? inputDir.trim() : undefined,
         input_paths: inputPaths,
       })
@@ -818,17 +839,17 @@ export function GenerateView() {
         void restart()
         return
       }
-      if (!busy && health?.comfy.reachable === true && (fileUtility || checkpoint.trim())) {
+      if (!busy && ((datasetMode && !datasetNeedsComfy) || health?.comfy.reachable === true) && (fileUtility || checkpoint.trim())) {
         void generate()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [busy, checkpoint, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, fileUtility, restart, swapTarget])
+  }, [busy, checkpoint, datasetMode, datasetNeedsComfy, generate, generateTabKeysFollowLayout, generateTabOrder, health, hiddenGenerateTabs, interrupt, navigate, fileUtility, restart, swapTarget])
 
   const comfyOk = health?.comfy.reachable === true
   const canGenerate =
-    comfyOk &&
+    (datasetMode && !datasetNeedsComfy ? true : comfyOk) &&
     (fileUtility
       ? (rembgMode
           ? rembg.inputMode === 'directory'
@@ -838,9 +859,13 @@ export function GenerateView() {
             ? imageUpscale.inputMode === 'directory'
               ? Boolean(imageUpscale.inputDir.trim())
               : imageUpscaleFiles.length > 0
-            : caption.inputMode === 'directory'
-              ? Boolean(caption.inputDir.trim())
-              : captionFiles.length > 0) &&
+            : captionMode
+              ? caption.inputMode === 'directory'
+                ? Boolean(caption.inputDir.trim())
+                : captionFiles.length > 0
+              : dataset.inputMode === 'directory'
+                ? Boolean(dataset.inputDir.trim())
+                : datasetFiles.length > 0) &&
         (!upscaleMode || imageUpscale.engine !== 'model' || Boolean(imageUpscale.upscaleModel.trim()))
       : Boolean(checkpoint.trim()) &&
         (!workflowParams.includes('textEncoder') || Boolean(textEncoder.trim())) &&

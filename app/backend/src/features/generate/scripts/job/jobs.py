@@ -29,6 +29,7 @@ from .job_output import (
     _grid_values,
     _import_image,
     _import_preview,
+    _import_bytes,
     _maybe_grid,
     _maybe_xy_grid,
     _template_name,
@@ -61,6 +62,7 @@ from .scope_thumbs import scope_thumb_run_values, scope_thumbs_config, scope_thu
 from ..workflow.rembg import clean_rembg, input_runs, is_rembg, list_input_images, stage_input
 from ..workflow.upscale import SEED_MAX, clean_upscale, is_file_utility, is_image_upscale, wrap_seed
 from ..workflow.caption import clean_caption, input_runs as caption_input_runs, is_caption
+from ..workflow import dataset
 
 
 class LiveJob:
@@ -441,12 +443,14 @@ def _is_interrupted(path: str, params_json: str | None = None) -> bool:
 
 
 def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
-    if not comfy.reachable():
+    values = {**DEFAULTS, **{k: v for k, v in body.items() if v is not None}}
+    values["workflow_id"] = str(values.get("workflow") or DEFAULTS["workflow"])
+    if dataset.is_dataset(values):
+        values["dataset"] = dataset.clean_dataset(values.get("dataset"))
+    if (not dataset.is_dataset(values) or dataset.needs_comfy(values)) and not comfy.reachable():
         message = f"ComfyUI is not running on {comfy_base()}."
         record_log("generate", "generate_failed", "start", message)
         raise comfy.ComfyError("comfy_unreachable", message)
-    values = {**DEFAULTS, **{k: v for k, v in body.items() if v is not None}}
-    values["workflow_id"] = str(values.get("workflow") or DEFAULTS["workflow"])
     values["template_id"] = str(values.get("template") or DEFAULTS["template"])
     values["xy_plot"] = xy_config(values.get("xy_plot"))
     seed = int(values["seed"])
@@ -493,16 +497,29 @@ def _prepare_job(body: dict[str, Any]) -> tuple[str, dict[str, Any]]:
                 raise comfy.ComfyError("bad_request", "Pick an upscale model.", status=400)
         if is_caption(values):
             values["caption"] = clean_caption(values.get("caption"))
+        if dataset.is_dataset(values):
+            values["dataset"] = dataset.clean_dataset(values.get("dataset"))
         values["xy_plot"] = None
         values["prompt_matrix"] = None
         values["scope_thumbs"] = None
         values["batch_size"] = 1
         values["batch_count"] = 1
         values["batch_grid"] = False
-        runs = caption_input_runs(values) if is_caption(values) else input_runs(values)
+        runs = (
+            caption_input_runs(values)
+            if is_caption(values)
+            else dataset.input_runs(values)
+            if dataset.is_dataset(values)
+            else input_runs(values)
+        )
         if not runs:
             raise comfy.ComfyError("bad_request", "Drop or pick at least one image.", status=400)
-        values["input_paths"] = [str(path) for path in list_input_images(values)]
+        values["input_paths"] = [
+            str(path)
+            for path in (
+                dataset.list_input_images(values) if dataset.is_dataset(values) else list_input_images(values)
+            )
+        ]
         xy = None
         thumbs = None
     matrix = values.get("prompt_matrix")
@@ -560,7 +577,13 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
         xy = values.get("xy_plot") if isinstance(values.get("xy_plot"), dict) else None
         thumbs = values.get("scope_thumbs") if isinstance(values.get("scope_thumbs"), dict) else None
         if is_file_utility(values):
-            runs = caption_input_runs(values) if is_caption(values) else input_runs(values)
+            runs = (
+                caption_input_runs(values)
+                if is_caption(values)
+                else dataset.input_runs(values)
+                if dataset.is_dataset(values)
+                else input_runs(values)
+            )
         elif xy:
             runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
         elif thumbs:
@@ -667,6 +690,39 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
 
             def on_event(event: dict[str, Any], batch_i: int = run_i) -> None:
                 _on_live(job_id, {**event, "batch_i": batch_i, "batch_count": total_batch_count})
+
+            if dataset.is_dataset(run_values):
+                src = run_values.get("input_image") or ""
+                run_values["source_image"] = str(src)
+                crops = await asyncio.to_thread(dataset.extract_sprites_from_path, src, run_values)
+                skipped = False
+                for sprite_i, crop in enumerate(crops):
+                    with _live_lock:
+                        live = _live.get(job_id)
+                        if live and live.cancel:
+                            canceled = True
+                            break
+                        if live and live.skip:
+                            skipped = True
+                            live.skip = False
+                            break
+                    tag = f"{run_i}-{sprite_i}"
+                    png = await asyncio.to_thread(dataset.finish_sprite, crop, run_values, job_id, tag)
+                    ident, path = await asyncio.to_thread(_import_bytes, job_id, run_values, png, None, "images")
+                    _record_output(job_id, values, ident, path, "image")
+                    saved.append(path)
+                    had_image = True
+                    with _live_lock:
+                        live = _live.get(job_id)
+                        if live:
+                            live.latest = png
+                            live.preview = png
+                            live.preview_rev += 1
+                if canceled:
+                    break
+                if skipped:
+                    continue
+                continue
 
             if is_file_utility(run_values):
                 src = run_values.get("input_image") or ""
@@ -775,6 +831,8 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
             jobs_repo.finish(job_id, "canceled", _now(), json.dumps(values))
             _prune_jobs()
             return
+        if dataset.is_dataset(values) and not had_image:
+            raise comfy.ComfyError("job_failed", "No sprites found in the selected images.")
         if not had_image:
             for path in temps:
                 path.unlink(missing_ok=True)

@@ -52,6 +52,7 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
   const [pct, setPct] = useState(27)
   const [hires, setHires] = useState(true)
   const [picks, setPicks] = useState<string[]>(['euler'])
+  const [repeatPicks, setRepeatPicks] = useState<string[]>(['42'])
   const [tags, setTags] = useState<string[]>(['1girl'])
   const [listTags, setListTags] = useState<string[]>(['first', 'second'])
   const [folder, setFolder] = useState('')
@@ -192,6 +193,14 @@ export function PrimitivesSection({ query = '' }: { query?: string }) {
               value={picks}
               onChange={setPicks}
               placeholder="Add sampler…"
+            />
+            <ChipSelect
+              options={[]}
+              value={repeatPicks}
+              onChange={setRepeatPicks}
+              allowCustom
+              allowDuplicates
+              placeholder="Type a value again to repeat…"
             />
           </SettingsBlock>
           <SettingsBlock query={query} title="Chip input" className="flex flex-col gap-2">

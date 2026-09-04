@@ -57,7 +57,7 @@ from .job_plan import (
 from ..workflow.comfy_fill import combined_progress, progress_stage_map, progress_stages, stage_index
 from ..workflow.compose import hires_enabled
 from .. import save_meta
-from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_run_values
+from ..grid.xy_plot import xy_cell_count, xy_cells, xy_config, xy_materialize_seeds, xy_run_values
 from .scope_thumbs import scope_thumb_run_values, scope_thumbs_config, scope_thumbs_count
 from ..workflow.rembg import clean_rembg, input_runs, is_rembg, list_input_images, stage_input
 from ..workflow.upscale import SEED_MAX, clean_upscale, is_file_utility, is_image_upscale, wrap_seed
@@ -585,6 +585,9 @@ async def run_job(job_id: str, values: dict[str, Any]) -> None:
                 else input_runs(values)
             )
         elif xy:
+            xy = xy_materialize_seeds(xy)
+            values["xy_plot"] = xy
+            jobs_repo.set_payload(job_id, json.dumps(values))
             runs = [xy_run_values(values, xy, cell) for cell in xy_cells(xy)]
         elif thumbs:
             mode = _seed_after(values)

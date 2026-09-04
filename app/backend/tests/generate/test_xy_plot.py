@@ -8,6 +8,7 @@ from features.generate.scripts.grid.xy_plot import (
     xy_cells,
     xy_config,
     xy_labels,
+    xy_materialize_seeds,
     xy_run_values,
     xy_shape,
 )
@@ -196,6 +197,42 @@ class XyPlotTests(unittest.TestCase):
             run = xy_run_values({"prompt": "1girl", "seed": 1, "auto_loras": []}, cfg, {"x": 0, "y": 0})
         self.assertEqual(run["auto_loras"], [{"path": "style.safetensors"}])
         self.assertEqual(run["prompt"], "1girl")
+
+    def test_repeated_seed_chips_are_kept(self) -> None:
+        cfg = xy_config({"x": {"type": "seed", "values": ["42", "42", "7"]}, "y": {"type": "none", "values": []}})
+        assert cfg is not None
+        self.assertEqual(cfg["x"]["values"], ["42", "42", "7"])
+        self.assertEqual(xy_cell_count(cfg), 3)
+        self.assertEqual(xy_shape(cfg), (3, 1))
+
+    def test_minus_one_seed_chip_is_shared_across_the_other_axis(self) -> None:
+        cfg = xy_config(
+            {
+                "x": {"type": "seed", "values": ["-1"]},
+                "y": {"type": "steps", "values": ["10", "20"]},
+            }
+        )
+        assert cfg is not None
+        with patch("features.generate.scripts.grid.xy_plot.random.randint", return_value=99):
+            cfg = xy_materialize_seeds(cfg)
+        self.assertEqual(cfg["x"]["values"], ["99"])
+        a = xy_run_values({"seed": 1, "steps": 20}, cfg, {"x": 0, "y": 0})
+        b = xy_run_values({"seed": 1, "steps": 20}, cfg, {"x": 0, "y": 1})
+        self.assertEqual(a["seed"], 99)
+        self.assertEqual(b["seed"], 99)
+        self.assertEqual(a["steps"], 10)
+        self.assertEqual(b["steps"], 20)
+
+    def test_repeated_minus_one_seed_chips_roll_separately(self) -> None:
+        cfg = xy_config({"x": {"type": "seed", "values": ["-1", "-1"]}, "y": {"type": "none", "values": []}})
+        assert cfg is not None
+        with patch("features.generate.scripts.grid.xy_plot.random.randint", side_effect=[11, 22]):
+            cfg = xy_materialize_seeds(cfg)
+        self.assertEqual(cfg["x"]["values"], ["11", "22"])
+        a = xy_run_values({"seed": 1}, cfg, {"x": 0, "y": 0})
+        b = xy_run_values({"seed": 1}, cfg, {"x": 1, "y": 0})
+        self.assertEqual(a["seed"], 11)
+        self.assertEqual(b["seed"], 22)
 
 
 if __name__ == "__main__":

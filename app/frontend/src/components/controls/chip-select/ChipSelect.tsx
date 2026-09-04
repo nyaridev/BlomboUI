@@ -21,6 +21,7 @@ type ChipSelectProps = {
   chipClassName?: (item: string) => string
   compact?: boolean
   allowCustom?: boolean
+  allowDuplicates?: boolean
   overlay?: ChipSelectOverlay
 }
 
@@ -43,6 +44,7 @@ export function ChipSelect({
   chipClassName,
   compact = false,
   allowCustom = false,
+  allowDuplicates = false,
   overlay,
 }: ChipSelectProps) {
   const [open, setOpen] = useState(false)
@@ -64,7 +66,7 @@ export function ChipSelect({
       .filter((section) => section.options.length > 0)
   }, [sections, value, query, chipLabel])
   const custom = allowCustom ? query.trim() : ''
-  const canAddCustom = Boolean(custom) && !value.includes(custom)
+  const canAddCustom = Boolean(custom) && (allowDuplicates || !value.includes(custom))
   const flat = useMemo(() => {
     const items = shown.flatMap((section) => section.options)
     return canAddCustom && !items.includes(custom) ? [...items, ADD] : items
@@ -77,8 +79,11 @@ export function ChipSelect({
     setActive(0)
   }
 
-  function add(item: string) {
-    if (!item || value.includes(item)) {
+  function add(item: string, fromCustom = false) {
+    if (!item) {
+      return
+    }
+    if (!(fromCustom && allowDuplicates) && value.includes(item)) {
       return
     }
     onChange([...value, item])
@@ -89,7 +94,7 @@ export function ChipSelect({
 
   function addCustom() {
     if (canAddCustom) {
-      add(custom)
+      add(custom, true)
     }
   }
 

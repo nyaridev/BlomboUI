@@ -147,6 +147,7 @@ function AxisRow({
               }
             }}
             allowCustom={!inactive && xyTypeAllowsCustom(axis.type)}
+            allowDuplicates={!inactive && xyTypeAllowsCustom(axis.type)}
             placeholder={inactive ? 'Select a type first…' : xyTypeAllowsCustom(axis.type) ? 'Select or type…' : 'Select…'}
             chipClassName={() => 'bg-field text-ink'}
           />

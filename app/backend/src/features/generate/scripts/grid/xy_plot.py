@@ -29,12 +29,10 @@ def _clean_values(raw: Any) -> list[str]:
     if not isinstance(raw, list):
         return []
     out: list[str] = []
-    seen: set[str] = set()
     for item in raw:
         value = str(item).strip()
-        if not value or value in seen:
+        if not value:
             continue
-        seen.add(value)
         out.append(value)
     return out
 
@@ -74,6 +72,31 @@ def xy_config(raw: Any) -> dict[str, Any] | None:
         "respect_instant_lora": bool(raw.get("respect_instant_lora", False)),
         "grid_margin": margin,
     }
+
+
+def xy_materialize_seeds(config: dict[str, Any]) -> dict[str, Any]:
+    next_config = {
+        **config,
+        "x": dict(config["x"]) if isinstance(config.get("x"), dict) else {"type": "none", "values": []},
+        "y": dict(config["y"]) if isinstance(config.get("y"), dict) else {"type": "none", "values": []},
+    }
+    for key in ("x", "y"):
+        axis = next_config[key]
+        if str(axis.get("type") or "") != "seed":
+            continue
+        chips: list[str] = []
+        for raw in xy_axis_values(axis):
+            try:
+                seed = int(str(raw).strip())
+            except (TypeError, ValueError):
+                chips.append(str(raw))
+                continue
+            if seed < 0:
+                chips.append(str(random.randint(0, 2**53 - 1)))
+            else:
+                chips.append(str(seed))
+        axis["values"] = chips
+    return next_config
 
 
 def xy_axis_values(axis: dict[str, Any] | None) -> list[str]:

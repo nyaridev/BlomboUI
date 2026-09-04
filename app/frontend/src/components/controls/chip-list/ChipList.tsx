@@ -30,8 +30,8 @@ export function ChipList({
   const [slot, setSlot] = useState<number | null>(null)
   const dragged = useRef(false)
 
-  function remove(item: string) {
-    onChange(value.filter((entry) => entry !== item))
+  function remove(index: number) {
+    onChange(value.filter((_, i) => i !== index))
   }
 
   function moving() {
@@ -63,7 +63,7 @@ export function ChipList({
       }}
     >
       {value.map((item, index) => (
-        <Fragment key={item}>
+        <Fragment key={`${index}-${item}`}>
           {moving() && slot === index ? (
             <span className="w-0.5 self-stretch rounded-full bg-accent" />
           ) : null}
@@ -121,7 +121,7 @@ export function ChipList({
                 onClick={(event) => {
                   event.preventDefault()
                   event.stopPropagation()
-                  remove(item)
+                  remove(index)
                 }}
               >
                 <AppIcon id="x" size={12} />

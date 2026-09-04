@@ -1,11 +1,10 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt, setLoraStrengthAt } from '@/lib/prompt/loraTags.ts'
 import { modelTypesMatch } from '@/lib/modelTypes.ts'
-import { parseWildcardTags, removeWildcardAt, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
+import { parseWildcardTags, removeWildcardAt, reorderWildcardTags, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
 import {
   autoLoraId,
   promptLoraId,
-  reorderActiveLoras,
   sameModelSwap,
   useGenerateStore,
   type ModelSwap,
@@ -13,11 +12,12 @@ import {
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
-import { useEffect, useMemo, useRef, useState, type DragEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { LoraStrengthSlider } from '@/components/controls/slider/LoraStrengthSlider.tsx'
 import { modelTileSpec, type ModelTileStyle } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
 import { emptyTile, promptTile, RowLabel, slotTile, Tile, type Group } from '@/views/generate/panels/chrome/sections/tiles/modelTileParts.tsx'
 import { displayName } from '@/views/generate/panels/chrome/sections/tiles/modelTileUtils.ts'
+import { useTileReorder } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 import { type GenerateTab } from '@/views/generate/panels/workspace/tabs.ts'
 import { tabForSwap } from '@/views/generate/panels/generation/generateHelpers.ts'
 
@@ -127,75 +127,21 @@ export function ModelTileRow({
   })
   const normalizedOrderKey = normalizedOrder.join('\0')
   const scrollerRef = useRef<HTMLDivElement>(null)
-  const draggedLora = useRef<string | null>(null)
-  const [draggingLoraId, setDraggingLoraId] = useState<string | null>(null)
-  const [dropTarget, setDropTarget] = useState<{ id: string; before: boolean } | null>(null)
   const [showStrengthControls, setShowStrengthControls] = useState(false)
   const normalizedOrderRef = useRef(normalizedOrder)
   normalizedOrderRef.current = normalizedOrder
   const [fade, setFade] = useState({ left: false, right: false })
+  const { dragProps: loraDrag } = useTileReorder(normalizedOrder, setActiveLoraOrder)
+  const wildIds = wildHits.map((_, index) => String(index))
+  const { dragProps: wildDrag } = useTileReorder(wildIds, (next) => {
+    setPrompt(reorderWildcardTags(prompt, next.map(Number)))
+  })
 
   useEffect(() => {
     if (normalizedOrderKey !== activeLoraOrder.join('\0')) {
       setActiveLoraOrder(normalizedOrderRef.current)
     }
   }, [activeLoraOrder, normalizedOrderKey, setActiveLoraOrder])
-
-  function endDrag() {
-    draggedLora.current = null
-    setDraggingLoraId(null)
-    setDropTarget(null)
-  }
-
-  function moveLora(id: string, before: boolean) {
-    const next = reorderActiveLoras(normalizedOrder, draggedLora.current || '', id, before)
-    if (next) {
-      setActiveLoraOrder(next)
-    }
-    endDrag()
-  }
-
-  function dragStart(event: DragEvent<HTMLElement>, id: string) {
-    draggedLora.current = id
-    setDraggingLoraId(id)
-    setDropTarget(null)
-    event.dataTransfer.effectAllowed = 'move'
-    event.dataTransfer.setData('text/plain', id)
-    const rect = event.currentTarget.getBoundingClientRect()
-    event.dataTransfer.setDragImage(
-      event.currentTarget,
-      Math.max(0, Math.min(rect.width, event.clientX - rect.left)),
-      Math.max(0, Math.min(rect.height, event.clientY - rect.top)),
-    )
-  }
-
-  function dragOver(event: DragEvent<HTMLElement>, id: string) {
-    const source = draggedLora.current
-    if (!source || source === id) {
-      setDropTarget(null)
-      return
-    }
-    event.preventDefault()
-    event.dataTransfer.dropEffect = 'move'
-    const rect = event.currentTarget.getBoundingClientRect()
-    const before = event.clientX < rect.left + rect.width / 2
-    const from = normalizedOrder.indexOf(source)
-    const next = normalizedOrder.filter((item) => item !== source)
-    const insertAt = next.indexOf(id) + (before ? 0 : 1)
-    if (from < 0 || insertAt === from) {
-      setDropTarget(null)
-      return
-    }
-    setDropTarget((previous) => (
-      previous?.id === id && previous.before === before ? previous : { id, before }
-    ))
-  }
-
-  function drop(event: DragEvent<HTMLElement>, id: string) {
-    event.preventDefault()
-    const rect = event.currentTarget.getBoundingClientRect()
-    moveLora(id, event.clientX < rect.left + rect.width / 2)
-  }
   function focus(swap: ModelSwap, tab: GenerateTab) {
     setSwapTarget(sameModelSwap(swapTarget, swap) ? null : swap)
     onOpenTab(tab)
@@ -245,16 +191,15 @@ export function ModelTileRow({
               }}
             />
           )
-          const dropPosition: 'before' | 'after' | undefined =
-            dropTarget?.id === ref.id ? (dropTarget.before ? 'before' : 'after') : undefined
+          const drag = loraDrag(ref.id)
           const dragProps = {
             dragId: ref.id,
-            dragging: draggingLoraId === ref.id,
-            dropPosition,
-            onDragStart: (event: DragEvent<HTMLElement>) => dragStart(event, ref.id),
-            onDragOver: (event: DragEvent<HTMLElement>) => dragOver(event, ref.id),
-            onDrop: (event: DragEvent<HTMLElement>) => drop(event, ref.id),
-            onDragEnd: endDrag,
+            dragging: drag.dragging,
+            dropPosition: drag.dropPosition,
+            onDragStart: drag.onDragStart,
+            onDragOver: drag.onDragOver,
+            onDrop: drag.onDrop,
+            onDragEnd: drag.onDragEnd,
           }
           if (ref.mode === 'auto') {
             return {
@@ -316,23 +261,33 @@ export function ModelTileRow({
       tiles: [
         ...wildHits.map((hit, index) => {
           const item = wildcards.find((row) => wildcardMatches(row, hit.name)) ?? null
-          return promptTile(
-            'Wildcard',
-            hit.name,
-            item,
-            'wildcards',
-            index,
-            { slot: 'wildcard', index },
-            () => {
-              setPrompt(removeWildcardAt(prompt, index))
-              if (swapTarget?.slot === 'wildcard' && swapTarget.index === index) {
-                setSwapTarget(null)
-              }
-            },
-            undefined,
-            undefined,
-            wildView,
-          )
+          const drag = wildDrag(String(index))
+          return {
+            ...promptTile(
+              'Wildcard',
+              hit.name,
+              item,
+              'wildcards',
+              index,
+              { slot: 'wildcard', index },
+              () => {
+                setPrompt(removeWildcardAt(prompt, index))
+                if (swapTarget?.slot === 'wildcard' && swapTarget.index === index) {
+                  setSwapTarget(null)
+                }
+              },
+              undefined,
+              undefined,
+              wildView,
+            ),
+            dragId: String(index),
+            dragging: drag.dragging,
+            dropPosition: drag.dropPosition,
+            onDragStart: drag.onDragStart,
+            onDragOver: drag.onDragOver,
+            onDrop: drag.onDrop,
+            onDragEnd: drag.onDragEnd,
+          }
         }),
         emptyTile('Wildcard', { slot: 'wildcard', index: -1 }),
       ],

@@ -2,11 +2,11 @@ import { FloatingModelsView } from '@/components/composites/models/FloatingModel
 import { LoraStrengthSlider } from '@/components/controls/slider/LoraStrengthSlider.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
 import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, setLoraStrengthAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
-import { parseWildcardTags, removeWildcardAt, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
+import { parseWildcardTags, removeWildcardAt, replaceWildcardAt, reorderWildcardTags, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelLists } from '@/lib/api.ts'
 import { toggleSkip } from '@/components/composites/templates/templateApply.ts'
-import { autoLoraId, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
+import { autoLoraId, promptLoraId, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { galleryScopeKey } from '@/stores/settings/constants.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
@@ -16,6 +16,7 @@ import { RowLabel } from '@/views/generate/panels/chrome/sections/tiles/modelTil
 import { modelTileSpec } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
 import { displayName } from '@/views/generate/panels/chrome/sections/tiles/modelTileUtils.ts'
 import { useRef, useState, type ReactNode } from 'react'
+import { useTileReorder, type TileDragProps } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 
 export function ApplyRow({
   id,
@@ -107,6 +108,7 @@ function TemplateCard({
   showStrengthControl,
   selected,
   closeOnSelect = true,
+  drag,
 }: {
   kind: keyof ModelLists
   role: string
@@ -126,6 +128,7 @@ function TemplateCard({
   showStrengthControl?: boolean
   selected?: string[]
   closeOnSelect?: boolean
+  drag?: TileDragProps
 }) {
   const style = useGenerateStore((s) => s.modelTileStyle)
   const box = useRef<HTMLDivElement>(null)
@@ -167,6 +170,7 @@ function TemplateCard({
           onClear={locked || empty ? undefined : onClear}
           strengthControl={strengthControl}
           showStrengthControl={showStrengthControl}
+          {...(empty || !drag ? {} : drag)}
         />
       </div>
       {open && anchor ? (
@@ -329,6 +333,38 @@ export function TemplateModelFields({
     patch({ prompt: next.prompt, negativePrompt: next.negativePrompt })
   }
 
+  const promptRefs = hits.map((hit, index) => {
+    const item = loras.find((row) => loraNameMatches(hit.name, row.path)) ?? null
+    return {
+      id: promptLoraId(item ? modelPath(item) : hit.name, hit.start),
+      mode: 'prompt' as const,
+      path: item ? modelPath(item) : hit.name,
+      index,
+      hit,
+      item,
+    }
+  })
+  const autoRefs = autoIds.map((id) => {
+    const path = id.slice(autoPrefix.length)
+    const item = loras.find((row) => row.path === path) ?? null
+    return { id, mode: 'auto' as const, path, index: -1, hit: null, item }
+  })
+  const availableRefs = [...autoRefs, ...promptRefs]
+  const availableIds = new Set(availableRefs.map((ref) => ref.id))
+  const normalizedOrder = [
+    ...value.activeLoraOrder.filter((id) => availableIds.has(id)),
+    ...availableRefs.map((ref) => ref.id).filter((id) => !value.activeLoraOrder.includes(id)),
+  ]
+  const orderedRefs = normalizedOrder.flatMap((id) => {
+    const ref = availableRefs.find((item) => item.id === id)
+    return ref ? [ref] : []
+  })
+  const { dragProps: loraDrag } = useTileReorder(normalizedOrder, (activeLoraOrder) => patch({ activeLoraOrder }))
+  const wildIds = wildHits.map((_, index) => String(index))
+  const { dragProps: wildDrag } = useTileReorder(wildIds, (next) => {
+    patch({ prompt: reorderWildcardTags(value.prompt, next.map(Number)) })
+  })
+
   return (
     <div
       className="min-w-0 overflow-x-auto"
@@ -397,77 +433,78 @@ export function TemplateModelFields({
           <>
             {showCheckpoint || showVae || showTe ? <span className="mx-1 w-px shrink-0 self-stretch bg-line" /> : null}
             <Group label="LoRa" showLabel={spec.overlay} gap={spec.gap}>
-              {autoIds.map((id) => {
-                const path = id.slice(autoPrefix.length)
-                const item = loras.find((row) => row.path === path) ?? null
-                const strength = value.activeLoraStrengths[path] ?? item?.strength ?? 1
-                const rangeMin = item?.slider ? loraSliderMin : loraStrengthMin
-                const rangeMax = item?.slider ? loraSliderMax : loraStrengthMax
+              {orderedRefs.map((ref) => {
+                const strength =
+                  ref.mode === 'auto'
+                    ? value.activeLoraStrengths[ref.path] ?? ref.item?.strength ?? 1
+                    : ref.hit?.strength ?? 1
+                const rangeMin = ref.item?.slider ? loraSliderMin : loraStrengthMin
+                const rangeMax = ref.item?.slider ? loraSliderMax : loraStrengthMax
+                const drag = locked ? undefined : loraDrag(ref.id)
+                if (ref.mode === 'auto') {
+                  return (
+                    <TemplateCard
+                      key={ref.id}
+                      kind="loras"
+                      role="LoRA"
+                      value={ref.path}
+                      name={displayName(ref.item, ref.path)}
+                      src={modelThumbSrc('loras', ref.item, loraView)}
+                      unresolved={!ref.item}
+                      dimmed={value.skippedLoras.includes(ref.id)}
+                      locked={locked}
+                      badge={formatLoraStrength(strength)}
+                      chromeKey="template-loras"
+                      showStrengthControl={showStrength}
+                      drag={drag}
+                      strengthControl={
+                        <LoraStrengthSlider
+                          label={displayName(ref.item, ref.path)}
+                          value={strength}
+                          min={rangeMin}
+                          max={rangeMax}
+                          onChange={(next) =>
+                            patch({ activeLoraStrengths: { ...value.activeLoraStrengths, [ref.path]: next } })
+                          }
+                        />
+                      }
+                      onToggle={() => patch({ skippedLoras: toggleSkip(value.skippedLoras, ref.id) })}
+                      onChange={(next) => replaceAuto(ref.path, next)}
+                      onClear={() =>
+                        patch({
+                          activeLoraOrder: value.activeLoraOrder.filter((entry) => entry !== ref.id),
+                          skippedLoras: value.skippedLoras.filter((entry) => entry !== ref.id),
+                        })
+                      }
+                    />
+                  )
+                }
                 return (
                   <TemplateCard
-                    key={id}
+                    key={ref.id}
                     kind="loras"
                     role="LoRA"
-                    value={path}
-                    name={displayName(item, path)}
-                    src={modelThumbSrc('loras', item, loraView)}
-                    unresolved={!item}
-                    dimmed={value.skippedLoras.includes(id)}
+                    value={ref.path}
+                    name={displayName(ref.item, ref.hit?.name || ref.path)}
+                    src={modelThumbSrc('loras', ref.item, loraView)}
+                    unresolved={!ref.item}
                     locked={locked}
-                    badge={formatLoraStrength(strength)}
+                    badge={ref.hit?.invalid ? ref.hit.raw.trim() || '?' : formatLoraStrength(ref.hit?.strength ?? 1)}
                     chromeKey="template-loras"
                     showStrengthControl={showStrength}
+                    drag={drag}
                     strengthControl={
                       <LoraStrengthSlider
-                        label={displayName(item, path)}
-                        value={strength}
+                        label={displayName(ref.item, ref.hit?.name || ref.path)}
+                        value={ref.hit?.strength ?? 1}
                         min={rangeMin}
                         max={rangeMax}
-                        onChange={(next) =>
-                          patch({ activeLoraStrengths: { ...value.activeLoraStrengths, [path]: next } })
-                        }
+                        onChange={(next) => patch({ prompt: setLoraStrengthAt(value.prompt, ref.index, next) })}
                       />
                     }
-                    onToggle={() => patch({ skippedLoras: toggleSkip(value.skippedLoras, id) })}
-                    onChange={(next) => replaceAuto(path, next)}
-                    onClear={() =>
-                      patch({
-                        activeLoraOrder: value.activeLoraOrder.filter((entry) => entry !== id),
-                        skippedLoras: value.skippedLoras.filter((entry) => entry !== id),
-                      })
-                    }
-                  />
-                )
-              })}
-              {hits.map((hit, index) => {
-                const item = loras.find((row) => loraNameMatches(hit.name, row.path)) ?? null
-                const rangeMin = item?.slider ? loraSliderMin : loraStrengthMin
-                const rangeMax = item?.slider ? loraSliderMax : loraStrengthMax
-                return (
-                  <TemplateCard
-                    key={`prompt-${index}-${hit.name}`}
-                    kind="loras"
-                    role="LoRA"
-                    value={item ? modelPath(item) : hit.name}
-                    name={displayName(item, hit.name)}
-                    src={modelThumbSrc('loras', item, loraView)}
-                    unresolved={!item}
-                    locked={locked}
-                    badge={hit.invalid ? hit.raw.trim() || '?' : formatLoraStrength(hit.strength)}
-                    chromeKey="template-loras"
-                    showStrengthControl={showStrength}
-                    strengthControl={
-                      <LoraStrengthSlider
-                        label={displayName(item, hit.name)}
-                        value={hit.strength}
-                        min={rangeMin}
-                        max={rangeMax}
-                        onChange={(next) => patch({ prompt: setLoraStrengthAt(value.prompt, index, next) })}
-                      />
-                    }
-                    onChange={(path) => replacePromptLora(index, path)}
+                    onChange={(path) => replacePromptLora(ref.index, path)}
                     onClear={() => {
-                      const next = removeLoraAt(value.prompt, value.negativePrompt, index, item?.prompt || '')
+                      const next = removeLoraAt(value.prompt, value.negativePrompt, ref.index, ref.item?.prompt || '')
                       patch({ prompt: next.prompt, negativePrompt: next.negativePrompt })
                     }}
                   />
@@ -503,6 +540,7 @@ export function TemplateModelFields({
                 unresolved={!item}
                 locked={locked}
                 chromeKey="template-wildcards"
+                drag={locked ? undefined : wildDrag(String(index))}
                 onChange={(path) => {
                   const next = wildcards.find((row) => row.path === path)
                   if (next) {

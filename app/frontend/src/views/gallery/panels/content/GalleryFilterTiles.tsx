@@ -11,6 +11,7 @@ import { RowLabel } from '@/views/generate/panels/chrome/sections/tiles/modelTil
 import { modelTileSpec, type ModelTileStyle } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
 import { displayName } from '@/views/generate/panels/chrome/sections/tiles/modelTileUtils.ts'
 import { useEffect, useRef, useState } from 'react'
+import { useTileReorder, type TileDragProps } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 
 function chipFile(value: string) {
   return value.replace(/\\/g, '/').split('/').pop() || value
@@ -174,6 +175,7 @@ function FilterGroup({
   const selected = selectedPaths(chips, items)
   const group = useRef<HTMLDivElement>(null)
   const [anchor, setAnchor] = useState<DOMRect | null>(null)
+  const { dragProps } = useTileReorder(chips, onChange)
 
   function showPicker(rect: DOMRect) {
     setAnchor(rect)
@@ -213,6 +215,7 @@ function FilterGroup({
               unresolved={!item}
               onOpen={showPicker}
               onClear={() => onChange(chips.filter((entry) => entry !== chip))}
+              drag={dragProps(chip)}
             />
           )
         })}
@@ -243,6 +246,7 @@ function FilterCard({
   unresolved = false,
   onOpen,
   onClear,
+  drag,
 }: {
   style: ModelTileStyle
   role: string
@@ -252,6 +256,7 @@ function FilterCard({
   unresolved?: boolean
   onOpen: (anchor: DOMRect) => void
   onClear?: () => void
+  drag?: TileDragProps
 }) {
   const box = useRef<HTMLDivElement>(null)
 
@@ -271,6 +276,7 @@ function FilterCard({
           }
         }}
         onClear={empty ? undefined : onClear}
+        {...(empty || !drag ? {} : drag)}
       />
     </div>
   )

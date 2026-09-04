@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ChipList } from '@/components/controls/chip-list/ChipList.tsx'
 import { matches, wrap } from '@/components/controls/select/selectNav.ts'
 
 export type ChipSection = { title: string; options: string[] }
 
-export type ChipSelectOverlay = (ctx: { anchor: DOMRect; onClose: () => void }) => ReactNode
+export type ChipSelectOverlay = (ctx: {
+  anchor: DOMRect
+  onClose: () => void
+  retain: RefObject<HTMLDivElement | null>
+}) => ReactNode
 
 type ChipSelectProps = {
   options: string[] | ChipSection[]
@@ -281,7 +285,7 @@ export function ChipSelect({
         </button>
       </div>
       {open && overlay && field.current
-        ? overlay({ anchor: field.current.getBoundingClientRect(), onClose: close })
+        ? overlay({ anchor: field.current.getBoundingClientRect(), onClose: close, retain: root })
         : null}
       {open && !overlay ? (
         <ul

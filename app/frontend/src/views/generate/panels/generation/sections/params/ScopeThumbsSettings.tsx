@@ -4,6 +4,7 @@ import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { TextField } from '@/components/controls/input/TextField.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
 import { FloatingModelsView } from '@/components/composites/models/FloatingModelsView.tsx'
+import { FloatingScopeView } from '@/components/composites/models/FloatingScopeView.tsx'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
 import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
@@ -12,6 +13,7 @@ import { useThumbnailScopeStore, useThumbView } from '@/stores/thumbnailScopeSto
 import { useEffect, useMemo, useState } from 'react'
 import { PickTile } from '@/views/generate/panels/generation/sections/params/HiresOverrideTiles.tsx'
 import { modelTileSpec } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
+import { useTileReorder } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 import {
   SCOPE_THUMBS_TYPE_OPTIONS,
   exclusiveScopeIds,
@@ -105,6 +107,8 @@ export function ScopeThumbsSettings({
     })
   }
 
+  const { dragProps } = useTileReorder(picked, (selected) => commit({ selected }))
+
   const showSr = value.type === 'loras' || value.type === 'wildcards'
   const galleryKind = value.type === 'checkpoints' ? 'checkpoints' : value.type
   const role = value.type === 'loras' ? 'LoRA' : value.type === 'wildcards' ? 'Wildcard' : 'Checkpoint'
@@ -120,6 +124,25 @@ export function ScopeThumbsSettings({
           options={scopeOptions}
           placeholder="Empty = Global"
           chipLabel={(id) => named.get(id)?.name ?? id}
+          overlay={({ anchor, onClose, retain }) => (
+            <FloatingScopeView
+              anchor={anchor}
+              selected={value.scopeIds}
+              onClose={onClose}
+              retain={retain}
+              onSelect={(id) => {
+                if (id === GLOBAL_SCOPE) {
+                  onScopeIds([])
+                  return
+                }
+                if (value.scopeIds.includes(id)) {
+                  onScopeIds(value.scopeIds.filter((item) => item !== id))
+                  return
+                }
+                onScopeIds(exclusiveScopeIds(value.scopeIds, id, items))
+              }}
+            />
+          )}
         />
       </div>
       <div className="flex min-w-0 flex-col gap-1">
@@ -197,6 +220,7 @@ export function ScopeThumbsSettings({
               onClear={locked ? undefined : () => commit({ selected: value.selected.filter((entry) => entry !== path) })}
               disabled={locked}
               hideLabel
+              drag={locked ? undefined : dragProps(path)}
             />
           ))}
           <PickTile

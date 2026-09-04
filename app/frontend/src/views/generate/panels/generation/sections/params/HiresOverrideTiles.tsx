@@ -12,6 +12,7 @@ import { useMemo, useRef, useState, type ReactNode } from 'react'
 import { ModelTile } from '@/views/generate/panels/chrome/sections/tiles/ModelTile.tsx'
 import { modelTileSpec } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
 import { displayName } from '@/views/generate/panels/chrome/sections/tiles/modelTileUtils.ts'
+import { useTileReorder, type TileDragProps } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 import { formatLoraStrength } from '@/lib/prompt/loraTags.ts'
 
 import { type HiresLora, type HiresSettings, useGenerateStore } from '@/stores/generateStore.ts'
@@ -50,6 +51,14 @@ export function HiresOverrideTiles({
   const checkpointItem = baseModels.find((item) => modelPath(item) === typeSource)
   const [hoverLoras, setHoverLoras] = useState(false)
   const taken = hires.loras.map((row) => row.path)
+  const { dragProps: loraDrag } = useTileReorder(taken, (next) => {
+    patchHires({
+      loras: next.flatMap((path) => {
+        const row = hires.loras.find((entry) => entry.path === path)
+        return row ? [row] : []
+      }),
+    })
+  })
 
   function itemKind(item: ModelEntry): keyof ModelLists {
     return unetSet.has(item) ? 'diffusion_models' : 'checkpoints'
@@ -171,6 +180,7 @@ export function HiresOverrideTiles({
                     />
                   }
                   showStrengthControl={hoverLoras}
+                  drag={locked ? undefined : loraDrag(row.path)}
                 />
               )
             })}
@@ -213,6 +223,7 @@ export function PickTile({
   autoCheckpoint,
   badge,
   onPick,
+  drag,
 }: {
   role: string
   kind: keyof ModelLists
@@ -232,6 +243,7 @@ export function PickTile({
   autoCheckpoint?: string
   badge?: string
   onPick?: (rect: DOMRect) => void
+  drag?: TileDragProps
 }) {
   const style = useGenerateStore((s) => s.modelTileStyle)
   const spec = modelTileSpec(style)
@@ -278,6 +290,7 @@ export function PickTile({
         onClear={onClear && !empty && !disabled ? onClear : undefined}
         strengthControl={strengthControl}
         showStrengthControl={showStrengthControl}
+        {...(empty || !drag ? {} : drag)}
       />
       {open && anchor ? (
         <FloatingModelsView

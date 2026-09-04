@@ -6,8 +6,7 @@
     "steps",
     "clipSkip",
     "cfg",
-    "seed",
-    "outputPath"
+    "seed"
   ],
   "extras": ["hires"],
   "ports": {

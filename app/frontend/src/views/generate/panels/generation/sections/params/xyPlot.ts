@@ -110,3 +110,7 @@ export function xyTypeUsesOptions(type: XyAxisType) {
     type === 'resolution'
   )
 }
+
+export function xyTypeUsesGallery(type: XyAxisType) {
+  return type === 'checkpoint' || type === 'vae' || type === 'text_encoder' || type === 'lora'
+}

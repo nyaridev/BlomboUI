@@ -1,8 +1,9 @@
 import { GalleryBrowser } from '@/components/composites/gallery/GalleryBrowser.tsx'
+import { isForeignOverlay, isTopOverlay, placePanel } from '@/components/composites/models/overlayPanel.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
-import { useEffect, useRef, type CSSProperties } from 'react'
+import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 
 type FloatingModelsViewProps = {
@@ -47,7 +48,7 @@ export function FloatingModelsView({
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
-      if (event.key !== 'Escape') {
+      if (event.key !== 'Escape' || !isTopOverlay(panelRef.current)) {
         return
       }
       event.stopImmediatePropagation()
@@ -59,7 +60,7 @@ export function FloatingModelsView({
         return
       }
       const node = event.target as Node | null
-      if (panelRef.current?.contains(node)) {
+      if (panelRef.current?.contains(node) || isForeignOverlay(panelRef.current, node)) {
         return
       }
       onClose()
@@ -77,7 +78,7 @@ export function FloatingModelsView({
       ref={panelRef}
       data-overlay=""
       data-models-picker=""
-      className="fixed z-[80] flex flex-col overflow-hidden rounded-md border border-line bg-panel p-2 shadow-[0_8px_24px_rgb(0_0_0_/_0.45)]"
+      className="pointer-events-auto fixed z-[80] flex flex-col overflow-hidden rounded-md border border-line bg-panel p-2 shadow-[0_8px_24px_rgb(0_0_0_/_0.45)]"
       style={pos}
     >
       <GalleryBrowser
@@ -101,19 +102,4 @@ export function FloatingModelsView({
     </div>,
     document.body,
   )
-}
-
-function placePanel(anchor: DOMRect): CSSProperties {
-  const width = Math.min(window.innerWidth - 16, 56 * 16)
-  const height = Math.min(window.innerHeight - 24, 36 * 16)
-  const gap = 4
-  let top = anchor.bottom + gap
-  let left = anchor.left
-  if (top + height > window.innerHeight - 8) {
-    top = Math.max(8, anchor.top - gap - height)
-  }
-  if (left + width > window.innerWidth - 8) {
-    left = Math.max(8, window.innerWidth - 8 - width)
-  }
-  return { top, left, width, height }
 }

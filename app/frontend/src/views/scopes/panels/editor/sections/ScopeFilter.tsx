@@ -1,6 +1,7 @@
+import { FloatingScopeView } from '@/components/composites/models/FloatingScopeView.tsx'
 import { ChipList } from '@/components/controls/chip-list/ChipList.tsx'
 import { GLOBAL_SCOPE } from '@/lib/gallery/thumbView.ts'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 
 export function ScopeFilter({
   items,
@@ -17,62 +18,28 @@ export function ScopeFilter({
 }) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const root = useRef<HTMLDivElement>(null)
+  const field = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
   const named = useMemo(() => new Map(items.map((item) => [item.id, item])), [items])
 
-  useEffect(() => {
-    function onDoc(event: MouseEvent) {
-      if (!root.current?.contains(event.target as Node)) {
-        setOpen(false)
-        setQuery('')
-      }
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpen(false)
-        setQuery('')
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [])
+  function close() {
+    setOpen(false)
+    setQuery('')
+  }
 
-  const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    const leftover = items.filter((item) => item.id !== GLOBAL_SCOPE && !ids.includes(item.id))
-    const matched = leftover.filter((item) => {
-      if (!needle) {
-        return true
-      }
-      return [item.name, item.group, ...item.anyGroups.flat()].join(' ').toLowerCase().includes(needle)
-    })
-    const groups = new Map<string, typeof matched>()
-    for (const item of matched) {
-      const key = item.group.trim() || 'Ungrouped'
-      const list = groups.get(key) || []
-      list.push(item)
-      groups.set(key, list)
-    }
-    return [...groups.entries()]
-  }, [ids, items, query])
-
-  function add(id: string) {
+  function pick(id: string) {
     if (id === GLOBAL_SCOPE) {
       onIds(ids.length === 1 && ids[0] === GLOBAL_SCOPE ? [] : [GLOBAL_SCOPE])
       onOptional([])
-      setQuery('')
       return
     }
     const next = ids.filter((item) => item !== GLOBAL_SCOPE)
-    if (!next.includes(id)) {
-      onIds([...next, id])
+    if (next.includes(id)) {
+      onIds(next.filter((item) => item !== id))
+      onOptional(optionalIds.filter((item) => item !== id))
+      return
     }
-    setQuery('')
+    onIds([...next, id])
   }
 
   function toggleOptional(id: string) {
@@ -83,8 +50,9 @@ export function ScopeFilter({
   }
 
   return (
-    <div ref={root} className="relative flex h-8 min-w-0 shrink-0 items-stretch">
+    <div className="relative flex h-8 min-w-0 shrink-0 items-stretch">
       <div
+        ref={field}
         className="flex min-w-0 flex-1 cursor-text items-center gap-1 overflow-hidden rounded border border-line bg-field px-1.5 focus-within:border-accent"
         onClick={() => {
           input.current?.focus()
@@ -135,32 +103,17 @@ export function ScopeFilter({
           </ChipList>
         </div>
       </div>
-      {open ? (
-        <ul className="select-menu">
-          <li>
-            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => add(GLOBAL_SCOPE)}>
-              Global
-            </button>
-          </li>
-          {shown.length === 0 ? (
-            <li className="px-2 py-1.5 text-sm text-muted">No matches</li>
-          ) : (
-            shown.map(([group, rows]) => (
-              <li key={group} className="select-menu-group">
-                <div className="select-menu-section">{group}</div>
-                <ul>
-                  {rows.map((item) => (
-                    <li key={item.id}>
-                      <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => add(item.id)}>
-                        {item.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))
-          )}
-        </ul>
+      {open && field.current ? (
+        <FloatingScopeView
+          anchor={field.current.getBoundingClientRect()}
+          selected={ids}
+          onSelect={pick}
+          onClose={close}
+          query={query}
+          onQuery={setQuery}
+          retain={field}
+          emptyMeansGlobal={false}
+        />
       ) : null}
     </div>
   )

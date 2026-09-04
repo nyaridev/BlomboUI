@@ -108,6 +108,11 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual(params["activeLoraStrengths"]["bar.safetensors"], 0.5)
         self.assertNotIn("", params["activeLoraStrengths"])
 
+    def test_checkpoint_and_diffusion_default_apply_omits_output_path(self) -> None:
+        self.assertNotIn("outputPath", templates.default_apply("sd15"))
+        self.assertNotIn("outputPath", templates.default_apply("krea2"))
+        self.assertIn("outputPath", templates.default_apply("image_upscale"))
+
     def test_image_upscale_default_apply_and_create(self) -> None:
         expected = list(templates._UPSCALE_APPLY) + ["outputPath"]
         self.assertEqual(templates.default_apply("image_upscale"), expected)

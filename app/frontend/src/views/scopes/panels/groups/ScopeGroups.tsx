@@ -8,7 +8,7 @@ import { groupValue, nameKey, orderByIds, placeScope, UNGROUPED } from '@/views/
 import { ScopeFilter } from '@/views/scopes/panels/editor/sections/ScopeFilter.tsx'
 import { ScopeGroupDetail } from '@/views/scopes/panels/groups/sections/ScopeGroupDetail.tsx'
 import { ScopeGroupList } from '@/views/scopes/panels/groups/sections/ScopeGroupList.tsx'
-import { memberThumb, thumbSrc } from '@/views/scopes/panels/groups/sections/scopeGroupUtils.ts'
+import { memberThumb, thumbSrc } from '@/lib/gallery/scopeThumbs.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbnailScopeStore } from '@/stores/thumbnailScopeStore.ts'
 import { toast } from '@/stores/toastStore.ts'

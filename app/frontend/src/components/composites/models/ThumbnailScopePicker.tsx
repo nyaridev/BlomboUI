@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
+import { FloatingScopeView } from '@/components/composites/models/FloatingScopeView.tsx'
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
 import { ChipList } from '@/components/controls/chip-list/ChipList.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
@@ -44,7 +45,7 @@ export function ThumbnailScopePicker({
   const optionalIds = selected.filter((id) => (local ? pack?.optionalIds ?? [] : optionalStored).includes(id))
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
-  const root = useRef<HTMLDivElement>(null)
+  const field = useRef<HTMLDivElement>(null)
   const input = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -53,48 +54,12 @@ export function ThumbnailScopePicker({
     }
   }, [load, loaded])
 
-  useEffect(() => {
-    function onDoc(event: MouseEvent) {
-      if (!root.current?.contains(event.target as Node)) {
-        setOpen(false)
-        setQuery('')
-      }
-    }
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setOpen(false)
-        setQuery('')
-      }
-    }
-    document.addEventListener('mousedown', onDoc)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('mousedown', onDoc)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [])
-
-  const shown = useMemo(() => {
-    const needle = query.trim().toLowerCase()
-    const leftover = items.filter((item) => item.id !== GLOBAL_SCOPE && !selected.includes(item.id))
-    const matched = leftover.filter((item) => {
-      if (!needle) {
-        return true
-      }
-      const hay = [item.name, item.group, ...item.anyGroups.flat()].join(' ').toLowerCase()
-      return hay.includes(needle)
-    })
-    const groups = new Map<string, typeof matched>()
-    for (const item of matched) {
-      const key = item.group.trim() || 'Ungrouped'
-      const list = groups.get(key) || []
-      list.push(item)
-      groups.set(key, list)
-    }
-    return [...groups.entries()]
-  }, [items, query, selected])
-
   const fallbackOn = fallbackKind === 'trash' ? trashFallback : fallbackKind ? (local ? Boolean(pack?.fallback) : galleryFallback) : null
+
+  function close() {
+    setOpen(false)
+    setQuery('')
+  }
 
   function refreshModels() {
     void useModelsStore.getState().pull()
@@ -208,8 +173,9 @@ export function ThumbnailScopePicker({
   }
 
   return (
-    <div ref={root} className="relative flex min-w-0 flex-1 items-stretch gap-1">
+    <div className="relative flex min-w-0 flex-1 items-stretch gap-1">
       <div
+        ref={field}
         className="flex min-w-0 flex-1 cursor-text items-center gap-1 overflow-hidden rounded border border-line bg-field px-1.5 focus-within:border-accent"
         onClick={() => {
           input.current?.focus()
@@ -296,46 +262,16 @@ export function ThumbnailScopePicker({
           Global Fallback
         </button>
       ) : null}
-      {open ? (
-        <ul className="select-menu">
-          <li>
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => {
-                toggleId(GLOBAL_SCOPE)
-                setQuery('')
-              }}
-            >
-              Global
-            </button>
-          </li>
-          {shown.length === 0 ? (
-            <li className="px-2 py-1.5 text-sm text-muted">No matches</li>
-          ) : (
-            shown.map(([group, rows]) => (
-              <li key={group} className="select-menu-group">
-                <div className="select-menu-section">{group}</div>
-                <ul>
-                  {rows.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => {
-                          replaceGroup(item.id)
-                          setQuery('')
-                        }}
-                      >
-                        {item.name}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))
-          )}
-        </ul>
+      {open && field.current ? (
+        <FloatingScopeView
+          anchor={field.current.getBoundingClientRect()}
+          selected={selected}
+          onSelect={replaceGroup}
+          onClose={close}
+          query={query}
+          onQuery={setQuery}
+          retain={field}
+        />
       ) : null}
     </div>
   )

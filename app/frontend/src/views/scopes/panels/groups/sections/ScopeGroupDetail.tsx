@@ -1,6 +1,6 @@
 import { TilePreview } from '@/components/composites/models/TilePreview.tsx'
 import type { ScopeThumb, ThumbScope } from '@/lib/api.ts'
-import { memberThumb, thumbSrc } from '@/views/scopes/panels/groups/sections/scopeGroupUtils.ts'
+import { memberThumb, thumbSrc } from '@/lib/gallery/scopeThumbs.ts'
 import type { RefObject } from 'react'
 
 export function ScopeGroupDetail({

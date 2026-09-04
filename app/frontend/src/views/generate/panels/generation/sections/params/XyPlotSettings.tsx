@@ -1,28 +1,29 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
+import { FloatingModelsView } from '@/components/composites/models/FloatingModelsView.tsx'
 import { ChipSelect } from '@/components/controls/chip-select/ChipSelect.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
-import { getKSamplerChoices } from '@/lib/api.ts'
+import { getKSamplerChoices, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
+import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useMemo, useState } from 'react'
 import { listedChoices, SAMPLERS, SCHEDULERS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
+import { PickTile } from '@/views/generate/panels/generation/sections/params/HiresOverrideTiles.tsx'
+import { modelTileSpec } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
+import { useTileReorder } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 import {
   xyTypeAllowsCustom,
   xyTypeOptions,
+  xyTypeUsesGallery,
   xyTypeUsesOptions,
   type XyAxisSettings,
   type XyAxisType,
   type XyPlotSettings,
 } from '@/views/generate/panels/generation/sections/params/xyPlot.ts'
-
-function fileStem(path: string) {
-  const base = path.replace(/\\/g, '/').split('/').pop() || path
-  return base.replace(/\.[^/.]+$/, '') || base
-}
 
 function promptTags(prompt: string, negative: string) {
   const seen = new Set<string>()
@@ -114,7 +115,7 @@ function AxisRow({
     if (axis.type === 'prompt_sr') {
       return axis.values.length === 0 ? promptTags(prompt, negativePrompt) : []
     }
-    if (xyTypeUsesOptions(axis.type)) {
+    if (xyTypeUsesOptions(axis.type) && !xyTypeUsesGallery(axis.type)) {
       return models.map((item) => modelPath(item)).filter(Boolean)
     }
     return []
@@ -134,25 +135,112 @@ function AxisRow({
       </div>
       <div className={['flex min-w-0 flex-col gap-1', inactive ? 'pointer-events-none opacity-50' : ''].filter(Boolean).join(' ')}>
         <span className="text-xs text-muted">{label} value</span>
-        <ChipSelect
-          options={inactive ? [] : options}
-          value={inactive ? [] : axis.values}
-          onChange={(values) => {
-            if (!inactive) {
-              onChange({ ...axis, values })
-            }
-          }}
-          allowCustom={!inactive && xyTypeAllowsCustom(axis.type)}
-          chipLabel={
-            axis.type === 'checkpoint' || axis.type === 'vae' || axis.type === 'text_encoder' || axis.type === 'lora'
-              ? fileStem
-              : undefined
-          }
-          placeholder={inactive ? 'Select a type first…' : xyTypeAllowsCustom(axis.type) ? 'Select or type…' : 'Select…'}
-          chipClassName={() => 'bg-field text-ink'}
-        />
+        {xyTypeUsesGallery(axis.type) ? (
+          <AxisModelTiles axis={axis} models={models} onChange={onChange} />
+        ) : (
+          <ChipSelect
+            options={inactive ? [] : options}
+            value={inactive ? [] : axis.values}
+            onChange={(values) => {
+              if (!inactive) {
+                onChange({ ...axis, values })
+              }
+            }}
+            allowCustom={!inactive && xyTypeAllowsCustom(axis.type)}
+            placeholder={inactive ? 'Select a type first…' : xyTypeAllowsCustom(axis.type) ? 'Select or type…' : 'Select…'}
+            chipClassName={() => 'bg-field text-ink'}
+          />
+        )}
       </div>
     </div>
+  )
+}
+
+function AxisModelTiles({
+  axis,
+  models,
+  onChange,
+}: {
+  axis: XyAxisSettings
+  models: ModelEntry[]
+  onChange: (axis: XyAxisSettings) => void
+}) {
+  const style = useGenerateStore((s) => s.modelTileStyle)
+  const spec = modelTileSpec(style)
+  const [picker, setPicker] = useState<DOMRect | null>(null)
+  const { dragProps } = useTileReorder(axis.values, (values) => onChange({ ...axis, values }))
+  const galleryKind: keyof ModelLists =
+    axis.type === 'lora' ? 'loras' : axis.type === 'vae' ? 'vae' : axis.type === 'text_encoder' ? 'text_encoders' : 'checkpoints'
+  const chromeKey = axis.type === 'lora' ? 'loras' : axis.type === 'checkpoint' ? 'checkpoints' : 'other'
+  const role = axis.type === 'lora' ? 'LoRA' : axis.type === 'vae' ? 'VAE' : axis.type === 'text_encoder' ? 'Text encoder' : 'Checkpoint'
+  const view = useThumbView(galleryKind)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
+  const diffusionPaths = useMemo(() => new Set(diffusionModels.map((item) => modelPath(item))), [diffusionModels])
+
+  function itemKind(item: ModelEntry): keyof ModelLists {
+    return diffusionPaths.has(modelPath(item)) ? 'diffusion_models' : 'checkpoints'
+  }
+
+  function toggle(path: string) {
+    onChange({
+      ...axis,
+      values: axis.values.includes(path) ? axis.values.filter((entry) => entry !== path) : [...axis.values, path],
+    })
+  }
+
+  return (
+    <>
+      <div className={['flex min-w-0 flex-wrap items-start', spec.gap].join(' ')}>
+        {axis.values.map((path) => (
+          <PickTile
+            key={path}
+            role={role}
+            kind={galleryKind}
+            items={models}
+            itemKind={axis.type === 'checkpoint' ? itemKind : undefined}
+            value={path}
+            viewKind={
+              axis.type === 'checkpoint' && diffusionPaths.has(path) ? 'diffusion_models' : galleryKind
+            }
+            view={view}
+            chromeKey={chromeKey}
+            onChange={toggle}
+            onPick={setPicker}
+            onClear={() => onChange({ ...axis, values: axis.values.filter((entry) => entry !== path) })}
+            disabled={false}
+            hideLabel
+            drag={dragProps(path)}
+          />
+        ))}
+        <PickTile
+          role={role}
+          kind={galleryKind}
+          items={models}
+          itemKind={axis.type === 'checkpoint' ? itemKind : undefined}
+          value=""
+          viewKind={galleryKind}
+          view={view}
+          chromeKey={chromeKey}
+          onChange={toggle}
+          onPick={setPicker}
+          disabled={false}
+          hideLabel
+        />
+      </div>
+      {picker ? (
+        <FloatingModelsView
+          kind={galleryKind}
+          items={models}
+          itemKind={axis.type === 'checkpoint' ? itemKind : undefined}
+          selected={axis.values}
+          chromeKey={chromeKey}
+          anchor={picker}
+          closeOnSelect={false}
+          onSelect={toggle}
+          onClose={() => setPicker(null)}
+        />
+      ) : null}
+    </>
   )
 }
 

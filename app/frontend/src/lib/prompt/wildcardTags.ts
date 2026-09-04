@@ -74,6 +74,44 @@ export function removeWildcardAt(prompt: string, index: number) {
   return tidyPrompt(prompt.slice(0, hit.start) + prompt.slice(hit.end))
 }
 
+export function reorderWildcardTags(prompt: string, order: number[]): string {
+  const hits = parseWildcardTags(prompt)
+  if (!hits.length || order.length !== hits.length) {
+    return prompt
+  }
+  let out = prompt
+  for (let index = hits.length - 1; index >= 0; index -= 1) {
+    const next = hits[order[index]]
+    const current = hits[index]
+    if (!next || next.tag === current.tag) {
+      continue
+    }
+    out = out.slice(0, current.start) + next.tag + out.slice(current.end)
+  }
+  return out
+}
+
+export function moveWildcardAt(prompt: string, fromIndex: number, toIndex: number, before = true): string {
+  const hits = parseWildcardTags(prompt)
+  if (
+    fromIndex < 0 ||
+    toIndex < 0 ||
+    fromIndex >= hits.length ||
+    toIndex >= hits.length ||
+    fromIndex === toIndex
+  ) {
+    return prompt
+  }
+  const order = hits.map((_, index) => index)
+  const [moved] = order.splice(fromIndex, 1)
+  const insertAt = order.indexOf(toIndex) + (before ? 0 : 1)
+  if (insertAt === fromIndex) {
+    return prompt
+  }
+  order.splice(insertAt, 0, moved)
+  return reorderWildcardTags(prompt, order)
+}
+
 function hasTag(prompt: string, tag: string) {
   const want = tag.toLowerCase()
   const re = new RegExp(TAG.source, 'gi')

@@ -1,4 +1,5 @@
 import { parseModelTileStyle, type ModelTileStyle } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
+import { reorderIds } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 import { readyTemplateParams } from '@/components/composites/templates/templateApply.ts'
 import {
   DEFAULT_PROMPT_MATRIX,
@@ -1834,19 +1835,7 @@ function cleanActiveLoraOrder(raw: unknown): string[] {
 }
 
 export function reorderActiveLoras(order: string[], draggedId: string, targetId: string, before = true): string[] | null {
-  const from = order.indexOf(draggedId)
-  const target = order.indexOf(targetId)
-  if (from < 0 || target < 0 || from === target) {
-    return null
-  }
-  const next = [...order]
-  const [moved] = next.splice(from, 1)
-  const insertAt = next.indexOf(targetId) + (before ? 0 : 1)
-  if (insertAt === from) {
-    return null
-  }
-  next.splice(insertAt, 0, moved)
-  return next
+  return reorderIds(order, draggedId, targetId, before)
 }
 
 type GenerateState = {

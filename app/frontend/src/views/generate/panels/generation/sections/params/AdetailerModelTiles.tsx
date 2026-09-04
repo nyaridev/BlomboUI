@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react'
 import { PickTile } from '@/views/generate/panels/generation/sections/params/HiresOverrideTiles.tsx'
 import { modelTileSpec } from '@/views/generate/panels/chrome/sections/tiles/modelLayouts.ts'
 import { displayName } from '@/views/generate/panels/chrome/sections/tiles/modelTileUtils.ts'
+import { useTileReorder } from '@/views/generate/panels/chrome/sections/tiles/useTileReorder.ts'
 import { type AdetailerUnit, type HiresLora, useGenerateStore } from '@/stores/generateStore.ts'
 
 const LABEL = 'truncate px-0.5 text-[10px] uppercase tracking-wide text-muted'
@@ -47,6 +48,14 @@ export function AdetailerModelTiles({
   const checkpointItem = baseModels.find((item) => modelPath(item) === typeSource)
   const [hoverLoras, setHoverLoras] = useState(false)
   const taken = unit.loras.map((row) => row.path)
+  const { dragProps: loraDrag } = useTileReorder(taken, (next) => {
+    patch({
+      loras: next.flatMap((path) => {
+        const row = unit.loras.find((entry) => entry.path === path)
+        return row ? [row] : []
+      }),
+    })
+  })
 
   function itemKind(item: ModelEntry): keyof ModelLists {
     return unetSet.has(item) ? 'diffusion_models' : 'checkpoints'
@@ -163,6 +172,7 @@ export function AdetailerModelTiles({
                     />
                   }
                   showStrengthControl={hoverLoras}
+                  drag={locked ? undefined : loraDrag(row.path)}
                 />
               )
             })}

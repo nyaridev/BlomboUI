@@ -2,8 +2,10 @@ import {
   autoThumbScopes,
   createThumbScope,
   deleteThumbScope,
+  getScopeThumbs,
   getThumbScopes,
   updateThumbScope,
+  type ScopeThumb,
   type ThumbScope,
 } from '@/lib/api.ts'
 import { contextKey, galleryThumbView, generateGalleryViewKey, readScopePack, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/gallery/thumbView.ts'
@@ -21,7 +23,10 @@ type ScopeState = {
   items: ThumbScope[]
   loaded: boolean
   autoKey: string
+  thumbs: ScopeThumb[]
+  thumbsLoaded: boolean
   load: () => Promise<void>
+  loadThumbs: () => Promise<void>
   create: (body: Partial<ThumbScope>) => Promise<ThumbScope>
   update: (id: string, body: Partial<ThumbScope>) => Promise<ThumbScope>
   remove: (id: string) => Promise<void>
@@ -55,6 +60,8 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
   items: [],
   loaded: false,
   autoKey: '',
+  thumbs: [],
+  thumbsLoaded: false,
   load: async () => {
     try {
       const items = await getThumbScopes()
@@ -64,6 +71,16 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
     }
     await get().refreshAuto()
     refreshModels()
+  },
+  loadThumbs: async () => {
+    try {
+      const thumbs = await getScopeThumbs()
+      set({ thumbs, thumbsLoaded: true })
+    } catch {
+      if (!get().thumbsLoaded) {
+        set({ thumbs: [], thumbsLoaded: true })
+      }
+    }
   },
   create: async (body) => {
     const row = await createThumbScope(body)

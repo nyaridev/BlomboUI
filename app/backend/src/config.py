@@ -23,8 +23,8 @@ def get_version() -> str:
     try:
         value = path.read_text(encoding="utf-8").splitlines()[0].strip()
     except OSError:
-        return "1.0.0"
-    return value or "1.0.0"
+        return "1.1.0"
+    return value or "1.1.0"
 
 
 VERSION = get_version()
@@ -61,7 +61,11 @@ def launcher_env() -> dict:
 
 def _is_user_leaf(path: Path, name: str) -> bool:
     parts = path.parts
-    return len(parts) >= 2 and parts[-1].lower() == name.lower() and parts[-2].lower() == "user"
+    return (
+        len(parts) >= 2
+        and parts[-1].lower() == name.lower()
+        and parts[-2].lower() == "user"
+    )
 
 
 def _follow_install(raw: object, name: str) -> Path:
@@ -106,8 +110,14 @@ def wildcards_root() -> Path:
 
 def comfy_base() -> str:
     env = launcher_env()
-    host = os.environ.get("COMFYUI_HOST", "").strip() or str(env.get("comfyui.host") or "") or COMFY_HOST
-    raw_port = os.environ.get("COMFYUI_PORT", "").strip() or str(env.get("comfyui.port") or "")
+    host = (
+        os.environ.get("COMFYUI_HOST", "").strip()
+        or str(env.get("comfyui.host") or "")
+        or COMFY_HOST
+    )
+    raw_port = os.environ.get("COMFYUI_PORT", "").strip() or str(
+        env.get("comfyui.port") or ""
+    )
     try:
         port = int(raw_port) if raw_port else COMFY_PORT
     except ValueError:

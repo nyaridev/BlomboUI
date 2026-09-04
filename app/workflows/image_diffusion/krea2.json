@@ -7,8 +7,7 @@
     "clipType",
     "clipDevice",
     "cfg",
-    "seed",
-    "outputPath"
+    "seed"
   ],
   "extras": ["hires"],
   "defaults": { "resMode": "scaler", "aspect": "3:4", "megapixels": 1.5 },

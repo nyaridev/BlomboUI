@@ -154,8 +154,12 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
     refreshModels()
   },
   setAuto: (value) => {
+    const prev = useSettingsStore.getState().thumbScopeAuto
     useSettingsStore.getState().setThumbScopeAuto(value)
     void get().refreshAuto()
+    if (prev !== value) {
+      refreshModels()
+    }
   },
   setMode: (value) => {
     useSettingsStore.getState().setThumbDisplayMode(value)
@@ -173,14 +177,18 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
   },
   refreshAuto: async (prompt) => {
     const text = prompt ?? useGenerateStore.getState().prompt
+    let ids: string[] = []
     try {
-      const ids = await autoThumbScopes(text)
-      setAutoScopeIds(ids)
-      set({ autoKey: ids.join('+') })
+      ids = await autoThumbScopes(text)
     } catch {
-      setAutoScopeIds([])
-      set({ autoKey: '' })
+      ids = []
     }
+    const autoKey = ids.join('+')
+    if (autoKey === get().autoKey) {
+      return
+    }
+    setAutoScopeIds(ids)
+    set({ autoKey })
     if (
       useSettingsStore.getState().thumbScopeAuto ||
       Object.values(useSettingsStore.getState().galleryLocalScopes).some((pack) => pack.auto)

@@ -68,13 +68,43 @@ export function storedLoraStrengthLabel(strength?: number, slider?: boolean) {
   return formatLoraStrength(n)
 }
 
-export function loraNameMatches(tagName: string, path: string) {
-  const stem = loraStem(path).toLowerCase()
+export function loraLookupKeys(path: string) {
   const posix = path.replace(/\\/g, '/').toLowerCase()
   const file = posix.split('/').pop() || posix
+  const stem = file.replace(/\.[^/.]+$/, '')
   const noExt = posix.replace(/\.[^/.]+$/, '')
+  return [stem, posix, file, noExt] as const
+}
+
+export function loraNameMatches(tagName: string, path: string) {
   const name = tagName.replace(/\\/g, '/').toLowerCase()
-  return name === stem || name === posix || name === file || name === noExt
+  return loraLookupKeys(path).includes(name)
+}
+
+const loraIndexCache = new WeakMap<object, Map<string, { path: string }>>()
+
+function loraIndex<T extends { path: string }>(items: readonly T[]) {
+  const cached = loraIndexCache.get(items)
+  if (cached) {
+    return cached as Map<string, T>
+  }
+  const map = new Map<string, T>()
+  for (const item of items) {
+    for (const key of loraLookupKeys(item.path)) {
+      if (!map.has(key)) {
+        map.set(key, item)
+      }
+    }
+  }
+  loraIndexCache.set(items, map)
+  return map
+}
+
+export function findLoraByTag<T extends { path: string }>(items: readonly T[], tagName: string) {
+  if (!tagName) {
+    return undefined
+  }
+  return loraIndex(items).get(tagName.replace(/\\/g, '/').toLowerCase())
 }
 
 export function promptHasLora(prompt: string, path: string) {

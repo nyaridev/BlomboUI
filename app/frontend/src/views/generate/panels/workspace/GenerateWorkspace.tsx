@@ -6,10 +6,10 @@ import { WildcardsPanel } from '@/views/generate/panels/wildcards/WildcardsPanel
 import { TabsList, TabsTrigger } from '@/components/controls/tabs/TabsControl.tsx'
 import { selectedWildcardPaths } from '@/views/generate/panels/generation/generateHelpers.ts'
 import { type Job, type ModelEntry, type ModelLists } from '@/lib/api.ts'
-import { parseWildcardTags, replaceWildcardAt, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
+import { findWildcardByTag, parseWildcardTags, replaceWildcardAt, toggleWildcard } from '@/lib/prompt/wildcardTags.ts'
 import { useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
 import type { GenerateTab } from '@/views/generate/panels/workspace/tabs.ts'
-import type { ReactNode, RefObject } from 'react'
+import { useMemo, type ReactNode, type RefObject } from 'react'
 
 type LoraItem = ModelEntry & {
   auto_apply?: boolean | null
@@ -211,14 +211,15 @@ function WildcardGallery({
   const prompt = useGenerateStore((s) => s.prompt)
   const setPrompt = useGenerateStore((s) => s.setPrompt)
   const wildHits = parseWildcardTags(prompt)
+  const selected = useMemo(() => selectedWildcardPaths(prompt, items), [items, prompt])
   const wildFocus =
     swapTarget?.slot === 'wildcard' && swapTarget.index >= 0
-      ? items.find((row) => wildcardMatches(row, wildHits[swapTarget.index]?.name ?? ''))?.path
+      ? findWildcardByTag(items, wildHits[swapTarget.index]?.name ?? '')?.path
       : undefined
   return (
     <WildcardsPanel
       items={items}
-      selected={selectedWildcardPaths(prompt, items)}
+      selected={selected}
       focus={wildFocus}
       onSelect={(path) => {
         const item = items.find((row) => row.path === path)

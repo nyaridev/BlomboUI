@@ -4,6 +4,7 @@ import json
 import shutil
 import tempfile
 import unittest
+from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -158,6 +159,16 @@ class ImageUpscaleWorkflowTests(unittest.TestCase):
         self.assertEqual(blob["seed"], 42)
         self.assertEqual(blob["resolution"], 2560)
         self.assertEqual(blob["max_resolution"], 2560)
+        self.assertEqual(blob["background"], "Alpha")
+        self.assertEqual(blob["background_color"], "#222222")
+
+    def test_clean_upscale_accepts_background_color(self) -> None:
+        blob = upscale.clean_upscale({"background": "Color", "backgroundColor": "#abcabc"})
+        self.assertEqual(blob["background"], "Color")
+        self.assertEqual(blob["background_color"], "#abcabc")
+        blob = upscale.clean_upscale({"background": "nope", "background_color": ""})
+        self.assertEqual(blob["background"], "Alpha")
+        self.assertEqual(blob["background_color"], "#222222")
 
     def test_clean_upscale_allows_zero_max_resolution(self) -> None:
         blob = upscale.clean_upscale({"max_resolution": 0})
@@ -232,6 +243,8 @@ class ImageUpscaleTemplateTests(unittest.TestCase):
     def test_default_apply_from_workflow_json(self) -> None:
         apply = templates.default_apply("image_upscale")
         self.assertEqual(apply, list(templates._UPSCALE_APPLY) + ["outputPath"])
+        self.assertLess(apply.index("upscaleColor"), apply.index("upscaleBackground"))
+        self.assertLess(apply.index("upscaleBackground"), apply.index("upscaleSeed"))
 
     def test_clean_params_keeps_upscale_blob(self) -> None:
         created = templates.create_template(
@@ -243,6 +256,105 @@ class ImageUpscaleTemplateTests(unittest.TestCase):
         self.assertEqual(blob["engine"], "seedvr2")
         self.assertEqual(blob["dit_model"], "dit.safetensors")
         self.assertFalse(blob["allow_compile"])
+        self.assertEqual(blob["background"], "Alpha")
+        self.assertEqual(blob["background_color"], "#222222")
+
+
+def _png_bytes(image: Image.Image) -> bytes:
+    buf = BytesIO()
+    image.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def _open_png(raw: bytes) -> Image.Image:
+    image = Image.open(BytesIO(raw))
+    image.load()
+    return image.convert("RGBA")
+
+
+class ImageUpscaleFinishTests(unittest.TestCase):
+    def test_color_fills_transparent_pixels(self) -> None:
+        src = Image.new("RGBA", (4, 4), (255, 0, 0, 0))
+        src.putpixel((0, 0), (255, 0, 0, 255))
+        out = upscale.finish_image(
+            _png_bytes(src),
+            {"workflow": "image_upscale", "upscale": {"background": "Color", "background_color": "#112233"}},
+        )
+        result = _open_png(out)
+        self.assertEqual(result.getpixel((0, 0)), (255, 0, 0, 255))
+        self.assertEqual(result.getpixel((1, 1)), (0x11, 0x22, 0x33, 255))
+
+    def test_color_flattens_partial_alpha(self) -> None:
+        src = Image.new("RGBA", (4, 4), (255, 0, 0, 128))
+        out = upscale.finish_image(
+            _png_bytes(src),
+            {"workflow": "image_upscale", "upscale": {"background": "Color", "background_color": "#000000"}},
+        )
+        result = _open_png(out)
+        self.assertEqual(result.getchannel("A").getextrema(), (255, 255))
+        pixel = result.getpixel((1, 1))
+        self.assertEqual(pixel[3], 255)
+        self.assertEqual(pixel[1], 0)
+        self.assertEqual(pixel[2], 0)
+        self.assertGreater(pixel[0], 100)
+        self.assertLess(pixel[0], 160)
+
+    def test_alpha_keeps_transparency(self) -> None:
+        src = Image.new("RGBA", (4, 4), (10, 20, 30, 0))
+        src.putpixel((2, 1), (10, 20, 30, 180))
+        out = upscale.finish_image(
+            _png_bytes(src),
+            {"workflow": "image_upscale", "upscale": {"background": "Alpha"}},
+        )
+        result = _open_png(out)
+        self.assertEqual(result.getpixel((0, 0))[3], 0)
+        self.assertEqual(result.getpixel((2, 1)), (10, 20, 30, 180))
+
+    def test_restores_source_alpha_when_comfy_is_opaque(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            source = Image.new("RGBA", (4, 4), (9, 9, 9, 0))
+            source.putpixel((1, 2), (9, 9, 9, 200))
+            path = tmp / "src.png"
+            source.save(path, format="PNG")
+            comfy = Image.new("RGB", (4, 4), (10, 20, 30))
+            out = upscale.finish_image(
+                _png_bytes(comfy),
+                {
+                    "workflow": "image_upscale",
+                    "source_image": str(path),
+                    "upscale": {"background": "Alpha"},
+                },
+            )
+            result = _open_png(out)
+            self.assertEqual(result.getpixel((1, 2)), (10, 20, 30, 200))
+            self.assertEqual(result.getpixel((0, 0))[3], 0)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+    def test_replaces_noisy_comfy_alpha_with_source(self) -> None:
+        tmp = Path(tempfile.mkdtemp())
+        try:
+            source = Image.new("RGBA", (4, 4), (9, 9, 9, 255))
+            source.putpixel((0, 0), (9, 9, 9, 0))
+            path = tmp / "src.png"
+            source.save(path, format="PNG")
+            comfy = Image.new("RGBA", (4, 4), (10, 20, 30, 80))
+            comfy.putpixel((2, 2), (10, 20, 30, 255))
+            out = upscale.finish_image(
+                _png_bytes(comfy),
+                {
+                    "workflow": "image_upscale",
+                    "source_image": str(path),
+                    "upscale": {"background": "Alpha"},
+                },
+            )
+            result = _open_png(out)
+            self.assertEqual(result.getpixel((2, 2))[3], 255)
+            self.assertEqual(result.getpixel((1, 1))[3], 255)
+            self.assertEqual(result.getpixel((0, 0))[3], 0)
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
 
 
 class ImageUpscaleListTests(unittest.TestCase):

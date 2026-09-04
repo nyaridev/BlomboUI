@@ -1,8 +1,9 @@
 import { GalleryBrowser } from '@/components/composites/gallery/GalleryBrowser.tsx'
 import type { ModelEntry } from '@/lib/api.ts'
-import { loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
+import { findLoraByTag, parseLoraHits, removeLoraAt, replaceLoraAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
 import { selectedLoraPaths } from '@/views/generate/panels/generation/generateHelpers.ts'
 import { useGenerateStore, type ModelSwap } from '@/stores/generateStore.ts'
+import { useMemo } from 'react'
 
 type LoraItem = ModelEntry & {
   auto_apply?: boolean | null
@@ -28,9 +29,13 @@ export function LorasPanel({
   const onPrompt = useGenerateStore((s) => s.setPrompt)
   const onNegativePrompt = useGenerateStore((s) => s.setNegativePrompt)
   const loraHits = parseLoraHits(prompt)
+  const selected = useMemo(
+    () => selectedLoraPaths(prompt, items, activeLoraOrder, autoApplyDefault),
+    [activeLoraOrder, autoApplyDefault, items, prompt],
+  )
   const focus =
     swapTarget?.slot === 'lora' && swapTarget.index >= 0
-      ? items.find((row) => loraNameMatches(loraHits[swapTarget.index]?.name ?? '', row.path))?.path
+      ? findLoraByTag(items, loraHits[swapTarget.index]?.name ?? '')?.path
       : swapTarget?.slot === 'lora' && swapTarget.auto
         ? swapTarget.path
         : undefined
@@ -39,7 +44,7 @@ export function LorasPanel({
       <GalleryBrowser
         kind="loras"
         items={items}
-        selected={selectedLoraPaths(prompt, items, activeLoraOrder, autoApplyDefault)}
+        selected={selected}
         focus={focus}
         onSelect={(path) => {
           const item = items.find((row) => row.path === path)
@@ -73,7 +78,7 @@ export function LorasPanel({
           }
           if (swapTarget?.slot === 'lora' && swapTarget.index >= 0) {
             const hit = loraHits[swapTarget.index]
-            const old = hit ? items.find((row) => loraNameMatches(hit.name, row.path)) : null
+            const old = hit ? findLoraByTag(items, hit.name) : null
             if (instant) {
               const next = removeLoraAt(prompt, negativePrompt, swapTarget.index, old?.prompt || '')
               onPrompt(next.prompt)

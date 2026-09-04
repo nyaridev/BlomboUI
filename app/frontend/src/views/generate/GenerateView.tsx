@@ -634,6 +634,8 @@ export function GenerateView() {
               crop: imageUpscale.crop as 'disabled' | 'center',
               seed: used,
               color_correction: imageUpscale.colorCorrection,
+              background: imageUpscale.background,
+              background_color: imageUpscale.backgroundColor,
               resolution: imageUpscale.resolution,
               max_resolution: imageUpscale.maxResolution,
               max_resolution_override: imageUpscale.maxResolutionOverride,

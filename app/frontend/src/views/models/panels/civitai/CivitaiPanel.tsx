@@ -422,7 +422,7 @@ export function CivitaiPanel() {
           </button>
         </div>
       ) : null}
-      {activeId === null ? (
+      <div className={activeId === null ? 'flex min-h-0 flex-1 flex-col gap-3' : 'hidden'}>
         <CivitaiFilters
           browse={browse}
           filterDraft={filterDraft}
@@ -440,22 +440,8 @@ export function CivitaiPanel() {
           }}
           onNsfw={() => setCivitaiBrowse({ nsfw: !browse.nsfw })}
         />
-      ) : null}
-      {tabs.map((tab) => (
-        <div
-          key={tab.id}
-          className={tab.id === activeId ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}
-        >
-          <CivitaiModelView
-            modelId={tab.id}
-            preferredBases={browse.baseModels}
-            active={tab.id === activeId}
-            onDownload={(versionId) => setDownloadRequest({ modelId: tab.id, versionId })}
-          />
-        </div>
-      ))}
-      {activeId === null ? (
         <CivitaiResults
+          active={activeId === null}
           error={error}
           busy={busy}
           items={items}
@@ -480,7 +466,20 @@ export function CivitaiPanel() {
           onOpenBackground={(item) => openTab(item, false)}
           onDownload={openDownload}
         />
-      ) : null}
+      </div>
+      {tabs.map((tab) => (
+        <div
+          key={tab.id}
+          className={tab.id === activeId ? 'flex min-h-0 min-w-0 flex-1 flex-col' : 'hidden'}
+        >
+          <CivitaiModelView
+            modelId={tab.id}
+            preferredBases={browse.baseModels}
+            active={tab.id === activeId}
+            onDownload={(versionId) => setDownloadRequest({ modelId: tab.id, versionId })}
+          />
+        </div>
+      ))}
       {downloadRequest ? (
         <CivitaiDownloadDialog
           modelId={downloadRequest.modelId}

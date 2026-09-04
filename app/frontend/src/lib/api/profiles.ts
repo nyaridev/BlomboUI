@@ -22,6 +22,45 @@ export type ProfilesPayload = {
 
 const PROFILE_KEY = 'blombo-active-profile'
 const GENERATE_KEY = 'blombo-generate'
+const GENERATE_PERSIST_DELAY = 300
+
+let persistTimer: number | null = null
+let pendingPersist: { key: string; value: string } | null = null
+let persistFlushBound = false
+
+function persistNow(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    /* ignore */
+  }
+}
+
+function flushGeneratePersist() {
+  if (persistTimer != null) {
+    window.clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  if (!pendingPersist) {
+    return
+  }
+  persistNow(pendingPersist.key, pendingPersist.value)
+  pendingPersist = null
+}
+
+function bindPersistFlush() {
+  if (persistFlushBound || typeof window === 'undefined') {
+    return
+  }
+  persistFlushBound = true
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      flushGeneratePersist()
+    }
+  })
+  window.addEventListener('pagehide', flushGeneratePersist)
+  window.addEventListener('beforeunload', flushGeneratePersist)
+}
 
 export function storedProfileId(): string {
   try {
@@ -60,14 +99,23 @@ export function readGeneratePersist(): string | null {
 }
 
 export function writeGeneratePersist(value: string): void {
-  try {
-    localStorage.setItem(generatePersistKey(), value)
-  } catch {
-    /* ignore */
+  bindPersistFlush()
+  pendingPersist = { key: generatePersistKey(), value }
+  if (persistTimer != null) {
+    window.clearTimeout(persistTimer)
   }
+  persistTimer = window.setTimeout(() => {
+    persistTimer = null
+    flushGeneratePersist()
+  }, GENERATE_PERSIST_DELAY)
 }
 
 export function removeGeneratePersist(): void {
+  if (persistTimer != null) {
+    window.clearTimeout(persistTimer)
+    persistTimer = null
+  }
+  pendingPersist = null
   try {
     localStorage.removeItem(generatePersistKey())
   } catch {

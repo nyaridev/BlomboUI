@@ -255,6 +255,8 @@ export type JobRequest = {
     crop: 'disabled' | 'center'
     seed: number
     color_correction: string
+    background: 'Alpha' | 'Color'
+    background_color: string
     resolution: number
     max_resolution: number
     max_resolution_override: boolean

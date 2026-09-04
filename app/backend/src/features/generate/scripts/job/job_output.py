@@ -529,6 +529,7 @@ def _import_bytes(
     elif image_upscale.is_image_upscale(values):
         packed = image_upscale.empty_params()
         graph = None
+        raw = image_upscale.finish_image(raw, values)
     elif caption.is_caption(values):
         packed = caption.empty_params()
         graph = None

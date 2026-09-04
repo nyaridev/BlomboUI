@@ -24,6 +24,7 @@ _SEEDVR2_KINDS = {
     "SeedVR2VideoUpscaler",
 }
 _MODEL_EXTS = {".safetensors", ".pt", ".pth", ".ckpt", ".bin"}
+_BACKGROUNDS = {"Alpha", "Color"}
 DIT_DEFAULT = "seedvr2_ema_7b_sharp_fp16.safetensors"
 VAE_DEFAULT = "ema_vae_fp16.safetensors"
 
@@ -143,6 +144,10 @@ def clean_upscale(raw: Any) -> dict[str, Any]:
     except (TypeError, ValueError):
         megapixels = 1.0
     color = _text(src, "color_correction", "colorCorrection", default="lab") or "lab"
+    background = str(src.get("background") or "Alpha").strip()
+    if background not in _BACKGROUNDS:
+        background = "Alpha"
+    background_color = str(src.get("background_color") or src.get("backgroundColor") or "#222222").strip() or "#222222"
     offload = _text(src, "offload_device", "offloadDevice", default="cpu") or "cpu"
     dit_device = _text(src, "dit_device", "ditDevice", default="cuda:0") or "cuda:0"
     vae_device = _text(src, "vae_device", "vaeDevice", default="cuda:0") or "cuda:0"
@@ -165,6 +170,8 @@ def clean_upscale(raw: Any) -> dict[str, Any]:
         "crop": crop,
         "seed": _clean_seed(src),
         "color_correction": color,
+        "background": background,
+        "background_color": background_color,
         "resolution": max(64, min(8192, _int(src, "resolution", default=2560))),
         "max_resolution": max(0, min(8192, _int(src, "max_resolution", "maxResolution", default=2560))),
         "max_resolution_override": _flag(src, "max_resolution_override", "maxResolutionOverride"),
@@ -202,6 +209,49 @@ def clean_upscale(raw: Any) -> dict[str, Any]:
         "dynamo_cache_size_limit": max(1, min(256, _int(src, "dynamo_cache_size_limit", "dynamoCacheSizeLimit", default=64))),
         "dynamo_recompile_limit": max(1, min(512, _int(src, "dynamo_recompile_limit", "dynamoRecompileLimit", default=128))),
     }
+
+
+def _fully_opaque(image: Any) -> bool:
+    return image.getchannel("A").getextrema() == (255, 255)
+
+
+def _source_rgba(values: dict[str, Any]) -> Any | None:
+    path = source_path(values)
+    if path is None:
+        return None
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            image.load()
+            return image.convert("RGBA")
+    except OSError:
+        return None
+
+
+def finish_image(raw: bytes, values: dict[str, Any]) -> bytes:
+    from io import BytesIO
+
+    from PIL import Image
+
+    from features.generate.scripts.workflow.dataset import parse_color
+
+    blob = clean_upscale(values.get("upscale"))
+    try:
+        with Image.open(BytesIO(raw)) as image:
+            image.load()
+            rgba = image.convert("RGBA")
+    except OSError:
+        return raw
+    source = _source_rgba(values)
+    if source is not None and not _fully_opaque(source):
+        rgba.putalpha(source.getchannel("A").resize(rgba.size, Image.Resampling.LANCZOS))
+    if blob["background"] == "Color":
+        canvas = Image.new("RGBA", rgba.size, parse_color(str(blob.get("background_color") or "#222222")))
+        rgba = Image.alpha_composite(canvas, rgba)
+    out = BytesIO()
+    rgba.save(out, format="PNG")
+    return out.getvalue()
 
 
 def _source_size(values: dict[str, Any]) -> tuple[int, int]:

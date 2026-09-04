@@ -1,7 +1,7 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
-import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt, setLoraStrengthAt } from '@/lib/prompt/loraTags.ts'
+import { formatLoraStrength, findLoraByTag, parseLoraHits, removeLoraAt, setLoraStrengthAt } from '@/lib/prompt/loraTags.ts'
 import { modelTypesMatch } from '@/lib/modelTypes.ts'
-import { parseWildcardTags, removeWildcardAt, reorderWildcardTags, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
+import { findWildcardByTag, parseWildcardTags, removeWildcardAt, reorderWildcardTags } from '@/lib/prompt/wildcardTags.ts'
 import {
   autoLoraId,
   promptLoraId,
@@ -86,35 +86,66 @@ export function ModelTileRow({
   const spec = modelTileSpec(style)
   const loraHits = parseLoraHits(prompt)
   const wildHits = parseWildcardTags(prompt)
+  const loraHitKey = loraHits
+    .map((hit) => `${hit.name}\0${hit.start}\0${hit.end}\0${hit.strength}\0${Number(hit.invalid)}\0${hit.raw}`)
+    .join('\n')
+  const wildHitKey = wildHits.map((hit) => `${hit.name}\0${hit.start}\0${hit.end}`).join('\n')
+  const loraHitsHold = useRef({ key: loraHitKey, hits: loraHits })
+  if (loraHitsHold.current.key !== loraHitKey) {
+    loraHitsHold.current = { key: loraHitKey, hits: loraHits }
+  }
+  const wildHitsHold = useRef({ key: wildHitKey, hits: wildHits })
+  if (wildHitsHold.current.key !== wildHitKey) {
+    wildHitsHold.current = { key: wildHitKey, hits: wildHits }
+  }
+  const stableLoraHits = loraHitsHold.current.hits
+  const stableWildHits = wildHitsHold.current.hits
   const autoPrefix = autoLoraId('')
-  const promptRefs = loraHits.map((hit, index) => {
-    const item = loras.find((row) => loraNameMatches(hit.name, row.path)) ?? null
-    return {
-      id: promptLoraId(item?.path ?? hit.name, hit.start),
-      mode: 'prompt' as const,
-      path: item?.path ?? hit.name,
-      index,
-      hit,
-      item,
-    }
-  })
-  const autoRefs = activeLoraOrder
-    .filter((id) => id.startsWith(autoPrefix))
-    .flatMap((id) => {
-      const path = id.slice(autoPrefix.length)
-      const item = loras.find((row) => row.path === path) ?? null
-      if (item && !(item.auto_apply ?? loraAutoApplyDefault)) {
-        return []
-      }
-      return [{
-        id,
-        mode: 'auto' as const,
-        path,
-        index: -1,
-        hit: null,
-        item,
-      }]
-    })
+  const promptRefs = useMemo(
+    () =>
+      stableLoraHits.map((hit, index) => {
+        const item = findLoraByTag(loras, hit.name) ?? null
+        return {
+          id: promptLoraId(item?.path ?? hit.name, hit.start),
+          mode: 'prompt' as const,
+          path: item?.path ?? hit.name,
+          index,
+          hit,
+          item,
+        }
+      }),
+    [loras, stableLoraHits],
+  )
+  const autoRefs = useMemo(
+    () =>
+      activeLoraOrder
+        .filter((id) => id.startsWith(autoPrefix))
+        .flatMap((id) => {
+          const path = id.slice(autoPrefix.length)
+          const item = loras.find((row) => row.path === path) ?? null
+          if (item && !(item.auto_apply ?? loraAutoApplyDefault)) {
+            return []
+          }
+          return [{
+            id,
+            mode: 'auto' as const,
+            path,
+            index: -1,
+            hit: null,
+            item,
+          }]
+        }),
+    [activeLoraOrder, autoPrefix, loraAutoApplyDefault, loras],
+  )
+  const resolvedWilds = useMemo(
+    () =>
+      stableWildHits.map((hit, index) => ({
+        hit,
+        index,
+        item: findWildcardByTag(wildcards, hit.name) ?? null,
+      })),
+    [stableWildHits, wildcards],
+  )
   const availableRefs = [...autoRefs, ...promptRefs]
   const availableIds = new Set(availableRefs.map((ref) => ref.id))
   const normalizedOrder = [
@@ -259,8 +290,7 @@ export function ModelTileRow({
       tab: 'Wildcards',
       label: 'Wildcards',
       tiles: [
-        ...wildHits.map((hit, index) => {
-          const item = wildcards.find((row) => wildcardMatches(row, hit.name)) ?? null
+        ...resolvedWilds.map(({ hit, index, item }) => {
           const drag = wildDrag(String(index))
           return {
             ...promptTile(

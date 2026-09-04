@@ -29,6 +29,7 @@ function CivitaiPlaceholder({
 }
 
 export function CivitaiResults({
+  active,
   error,
   busy,
   items,
@@ -49,6 +50,7 @@ export function CivitaiResults({
   onOpenBackground,
   onDownload,
 }: {
+  active: boolean
   error: string
   busy: boolean
   items: CivitaiModel[]
@@ -79,7 +81,7 @@ export function CivitaiResults({
 
   useEffect(() => {
     const root = scrollerRef.current
-    if (!root || !sentinel || !hasNext || loadingMore || loadMoreError) {
+    if (!active || !root || !sentinel || !hasNext || loadingMore || loadMoreError) {
       return
     }
     const observer = new IntersectionObserver(
@@ -92,7 +94,7 @@ export function CivitaiResults({
     )
     observer.observe(sentinel)
     return () => observer.disconnect()
-  }, [hasNext, loadMoreError, loadingMore, onLoadMore, sentinel])
+  }, [active, hasNext, loadMoreError, loadingMore, onLoadMore, sentinel])
 
   if (error) {
     return <CivitaiErrorState message={error} busy={busy} onRetry={onRetry} />

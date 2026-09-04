@@ -388,6 +388,8 @@ export type ImageUpscaleSettings = {
   seed: number
   seedAfter: SeedAfter
   colorCorrection: string
+  background: RembgBackground
+  backgroundColor: string
   resolution: number
   maxResolution: number
   maxResolutionOverride: boolean
@@ -442,6 +444,8 @@ export const DEFAULT_IMAGE_UPSCALE: ImageUpscaleSettings = {
   seed: 42,
   seedAfter: 'fixed',
   colorCorrection: 'lab',
+  background: 'Alpha',
+  backgroundColor: '#222222',
   resolution: 2560,
   maxResolution: 2560,
   maxResolutionOverride: false,
@@ -511,6 +515,8 @@ export function mergeImageUpscale(raw: unknown): ImageUpscaleSettings {
     seed: wrapSeed32(Math.round(num(row.seed, base.seed))),
     seedAfter: isSeedAfter(seedAfterRaw) ? seedAfterRaw : base.seedAfter,
     colorCorrection: text(row.colorCorrection ?? row.color_correction, base.colorCorrection) || base.colorCorrection,
+    background: text(row.background, base.background) === 'Color' ? 'Color' : 'Alpha',
+    backgroundColor: text(row.backgroundColor ?? row.background_color, base.backgroundColor) || base.backgroundColor,
     resolution: Math.max(64, Math.min(8192, Math.round(num(row.resolution, base.resolution)))),
     maxResolution: Math.max(0, Math.min(8192, Math.round(num(row.maxResolution ?? row.max_resolution, base.maxResolution)))),
     maxResolutionOverride: Boolean(row.maxResolutionOverride ?? row.max_resolution_override ?? base.maxResolutionOverride),
@@ -1599,6 +1605,7 @@ export const APPLY_FIELDS: readonly ApplyField[] = [
   upscaleApply('upscaleResolution', 'Resolution', ['resolution']),
   upscaleApply('upscaleMaxResolution', 'Max resolution', ['maxResolution', 'maxResolutionOverride']),
   upscaleApply('upscaleColor', 'Color correction', ['colorCorrection']),
+  upscaleApply('upscaleBackground', 'Background', ['background', 'backgroundColor']),
   upscaleApply('upscaleInputNoise', 'Input noise', ['inputNoiseScale']),
   upscaleApply('upscaleLatentNoise', 'Latent noise', ['latentNoiseScale']),
   upscaleApply('upscaleSeed', 'Seed', ['seed', 'seedAfter']),

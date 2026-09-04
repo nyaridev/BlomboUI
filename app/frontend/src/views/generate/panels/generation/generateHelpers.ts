@@ -1,12 +1,26 @@
 import type { Job, ModelEntry } from '@/lib/api.ts'
-import { loraNameMatches, parseLoraHits } from '@/lib/prompt/loraTags.ts'
-import { parseWildcardTags, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
+import { findLoraByTag, parseLoraHits } from '@/lib/prompt/loraTags.ts'
+import { findWildcardByTag, parseWildcardTags } from '@/lib/prompt/wildcardTags.ts'
 import { autoLoraId, type AdetailerSettings, type ModelSwap } from '@/stores/generateStore.ts'
 import { modelPath } from '@/stores/modelsStore.ts'
 
 export function idsFromJob(job: Job): string[] {
   return job.gallery_ids
 }
+
+function samePaths(left: string[], right: string[]) {
+  return left.length === right.length && left.every((path, index) => path === right[index])
+}
+
+function reusePaths(previous: string[] | null, next: string[]) {
+  if (previous && samePaths(previous, next)) {
+    return previous
+  }
+  return next
+}
+
+let lastLoraPaths: string[] | null = null
+let lastWildcardPaths: string[] | null = null
 
 export function selectedLoraPaths(
   prompt: string,
@@ -17,7 +31,7 @@ export function selectedLoraPaths(
   const out: string[] = []
   const seen = new Set<string>()
   for (const hit of parseLoraHits(prompt)) {
-    const item = items.find((row) => loraNameMatches(hit.name, row.path))
+    const item = findLoraByTag(items, hit.name)
     if (item && !seen.has(item.path)) {
       seen.add(item.path)
       out.push(item.path)
@@ -34,20 +48,22 @@ export function selectedLoraPaths(
       out.push(path)
     }
   }
-  return out
+  lastLoraPaths = reusePaths(lastLoraPaths, out)
+  return lastLoraPaths
 }
 
-export function selectedWildcardPaths(prompt: string, items: { path: string }[]) {
+export function selectedWildcardPaths(prompt: string, items: { path: string; label?: string; tag?: string }[]) {
   const out: string[] = []
   const seen = new Set<string>()
   for (const hit of parseWildcardTags(prompt)) {
-    const item = items.find((row) => wildcardMatches(row, hit.name))
+    const item = findWildcardByTag(items, hit.name)
     if (item && !seen.has(item.path)) {
       seen.add(item.path)
       out.push(item.path)
     }
   }
-  return out
+  lastWildcardPaths = reusePaths(lastWildcardPaths, out)
+  return lastWildcardPaths
 }
 
 export function promptMatrixLines(raw: unknown): string[] {

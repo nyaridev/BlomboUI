@@ -1,8 +1,8 @@
 import { FloatingModelsView } from '@/components/composites/models/FloatingModelsView.tsx'
 import { LoraStrengthSlider } from '@/components/controls/slider/LoraStrengthSlider.tsx'
 import { CheckboxControl } from '@/components/controls/toggle/CheckboxControl.tsx'
-import { formatLoraStrength, loraNameMatches, parseLoraHits, removeLoraAt, replaceLoraAt, setLoraStrengthAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
-import { parseWildcardTags, removeWildcardAt, replaceWildcardAt, reorderWildcardTags, toggleWildcard, wildcardMatches } from '@/lib/prompt/wildcardTags.ts'
+import { formatLoraStrength, findLoraByTag, parseLoraHits, removeLoraAt, replaceLoraAt, setLoraStrengthAt, toggleLoraPrompts } from '@/lib/prompt/loraTags.ts'
+import { findWildcardByTag, parseWildcardTags, removeWildcardAt, replaceWildcardAt, reorderWildcardTags, toggleWildcard } from '@/lib/prompt/wildcardTags.ts'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelLists } from '@/lib/api.ts'
 import { toggleSkip } from '@/components/composites/templates/templateApply.ts'
@@ -224,7 +224,7 @@ export function TemplateModelFields({
   const autoIds = value.activeLoraOrder.filter((id) => id.startsWith(autoPrefix))
   const takenLoras = [
     ...autoIds.map((id) => id.slice(autoPrefix.length)),
-    ...hits.map((hit) => loras.find((row) => loraNameMatches(hit.name, row.path))?.path ?? ''),
+    ...hits.map((hit) => findLoraByTag(loras, hit.name)?.path ?? ''),
   ].filter(Boolean)
   const tileStyle = useGenerateStore((s) => s.modelTileStyle)
   const spec = modelTileSpec(tileStyle)
@@ -305,7 +305,7 @@ export function TemplateModelFields({
 
   function replacePromptLora(index: number, path: string) {
     const hit = hits[index]
-    const old = hit ? loras.find((row) => loraNameMatches(hit.name, row.path)) : null
+    const old = hit ? findLoraByTag(loras, hit.name) : null
     const item = loras.find((row) => row.path === path)
     const instant = Boolean(item?.auto_apply ?? autoDefault)
     if (instant) {
@@ -334,7 +334,7 @@ export function TemplateModelFields({
   }
 
   const promptRefs = hits.map((hit, index) => {
-    const item = loras.find((row) => loraNameMatches(hit.name, row.path)) ?? null
+    const item = findLoraByTag(loras, hit.name) ?? null
     return {
       id: promptLoraId(item ? modelPath(item) : hit.name, hit.start),
       mode: 'prompt' as const,
@@ -528,7 +528,7 @@ export function TemplateModelFields({
         {showCheckpoint || showVae || showTe || showLoras ? <span className="mx-1 w-px shrink-0 self-stretch bg-line" /> : null}
         <Group label="Wildcards" showLabel={spec.overlay} gap={spec.gap}>
           {wildHits.map((hit, index) => {
-            const item = wildcards.find((row) => wildcardMatches(row, hit.name)) ?? null
+            const item = findWildcardByTag(wildcards, hit.name) ?? null
             return (
               <TemplateCard
                 key={`wild-${index}-${hit.name}`}

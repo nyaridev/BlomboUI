@@ -87,6 +87,7 @@ _UPSCALE_APPLY = (
     "upscaleResolution",
     "upscaleMaxResolution",
     "upscaleColor",
+    "upscaleBackground",
     "upscaleInputNoise",
     "upscaleLatentNoise",
     "upscaleSeed",

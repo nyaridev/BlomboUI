@@ -46,6 +46,31 @@ export function wildcardMatches(item: Pick<ModelEntry, 'path' | 'label' | 'tag'>
   return wildcardTag(item).toLowerCase() === wrap(tagName).toLowerCase()
 }
 
+const wildcardIndexCache = new WeakMap<object, Map<string, Pick<ModelEntry, 'path' | 'label' | 'tag'>>>()
+
+function wildcardIndex<T extends Pick<ModelEntry, 'path' | 'label' | 'tag'>>(items: readonly T[]) {
+  const cached = wildcardIndexCache.get(items)
+  if (cached) {
+    return cached as Map<string, T>
+  }
+  const map = new Map<string, T>()
+  for (const item of items) {
+    const key = wildcardTag(item).toLowerCase()
+    if (!map.has(key)) {
+      map.set(key, item)
+    }
+  }
+  wildcardIndexCache.set(items, map)
+  return map
+}
+
+export function findWildcardByTag<T extends Pick<ModelEntry, 'path' | 'label' | 'tag'>>(items: readonly T[], tagName: string) {
+  if (!tagName) {
+    return undefined
+  }
+  return wildcardIndex(items).get(wrap(tagName).toLowerCase())
+}
+
 export function replaceWildcardAt(prompt: string, index: number, item: Pick<ModelEntry, 'path' | 'label' | 'tag'>) {
   const hit = parseWildcardTags(prompt)[index]
   const tag = wildcardTag(item)

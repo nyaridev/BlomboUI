@@ -1,4 +1,4 @@
-import { loraNameMatches, parseLoraHits } from '@/lib/prompt/loraTags.ts'
+import { findLoraByTag, parseLoraHits } from '@/lib/prompt/loraTags.ts'
 import { parseWildcardTags } from '@/lib/prompt/wildcardTags.ts'
 import type { ModelEntry } from '@/lib/api.ts'
 import { forwardRef, type ReactNode } from 'react'
@@ -93,7 +93,7 @@ function rangesFor(text: string, loras: ModelEntry[], side: PromptHighlightProps
   const ranges: HighlightRange[] = []
   for (const hit of parseLoraHits(text)) {
     ranges.push({ start: hit.start, end: hit.end, kind: 'lora' })
-    const item = loras.find((row) => loraNameMatches(hit.name, row.path))
+    const item = findLoraByTag(loras, hit.name)
     if (!item) {
       continue
     }

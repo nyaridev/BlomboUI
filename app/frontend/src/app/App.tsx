@@ -40,7 +40,6 @@ export function App() {
   const loaded = useSettingsStore((s) => s.loaded)
   const thumbScopeAuto = useSettingsStore((s) => s.thumbScopeAuto)
   const localThumbAuto = useSettingsStore((s) => Object.values(s.galleryLocalScopes).some((pack) => pack.auto))
-  const prompt = useGenerateStore((s) => s.prompt)
   const hiddenMainTabs = useSettingsStore((s) => s.hiddenMainTabs)
   const mainTabOrder = useSettingsStore((s) => s.mainTabOrder)
   const mainTabKeysFollowLayout = useSettingsStore((s) => s.mainTabKeysFollowLayout)
@@ -107,11 +106,25 @@ export function App() {
     if (!loaded || (!thumbScopeAuto && !localThumbAuto)) {
       return
     }
-    const timer = window.setTimeout(() => {
-      void useThumbnailScopeStore.getState().refreshAuto(prompt)
-    }, 350)
-    return () => window.clearTimeout(timer)
-  }, [loaded, localThumbAuto, prompt, thumbScopeAuto])
+    let timer = 0
+    function run() {
+      window.clearTimeout(timer)
+      timer = window.setTimeout(() => {
+        void useThumbnailScopeStore.getState().refreshAuto(useGenerateStore.getState().prompt)
+      }, 350)
+    }
+    run()
+    const unsub = useGenerateStore.subscribe((state, prev) => {
+      if (state.prompt === prev.prompt) {
+        return
+      }
+      run()
+    })
+    return () => {
+      unsub()
+      window.clearTimeout(timer)
+    }
+  }, [loaded, localThumbAuto, thumbScopeAuto])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {

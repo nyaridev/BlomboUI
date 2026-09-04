@@ -14,6 +14,8 @@ import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useEffect, useState, type ReactNode } from 'react'
 
 const BOX = 'rounded-md border border-line bg-panel p-2.5'
+const FIELD =
+  'box-border h-toolbar min-w-0 flex-1 rounded border border-line bg-field px-2 py-0 font-mono text-sm leading-[1.875rem] text-ink outline-none placeholder:text-muted focus:border-accent'
 const COLOR = ['lab', 'none', 'wavelet']
 const DEVICES = ['cuda:0', 'cpu']
 const ATTENTION = ['sdpa']
@@ -105,6 +107,38 @@ export function ImageUpscaleFields({
           options={[...SEED_AFTER]}
         />
       </div>
+    </div>,
+  )
+  const backgroundBlock = box(
+    'upscaleBackground',
+    <div className="flex flex-col gap-stack">
+      <SegmentSwitch
+        fill
+        value={value.background}
+        tone="blue"
+        options={[
+          { id: 'Alpha', label: 'Alpha' },
+          { id: 'Color', label: 'Color' },
+        ]}
+        onChange={(background) => onChange({ background })}
+      />
+      {value.background === 'Color' ? (
+        <label className="flex min-w-0 items-center gap-cluster">
+          <span className="text-xs text-muted">Background</span>
+          <input
+            type="color"
+            className="h-toolbar w-10 shrink-0 rounded border border-line bg-field"
+            value={value.backgroundColor}
+            onChange={(event) => onChange({ backgroundColor: event.target.value })}
+          />
+          <input
+            className={FIELD}
+            value={value.backgroundColor}
+            spellCheck={false}
+            onChange={(event) => onChange({ backgroundColor: event.target.value })}
+          />
+        </label>
+      ) : null}
     </div>,
   )
   const noiseBlock = (
@@ -237,6 +271,7 @@ export function ImageUpscaleFields({
                   />
                 </div>,
               )}
+              {backgroundBlock}
               {seedBlock}
             </>
           ) : (
@@ -262,6 +297,7 @@ export function ImageUpscaleFields({
                   </div>,
                 )}
               </div>
+              {backgroundBlock}
             </>
           )}
         </div>

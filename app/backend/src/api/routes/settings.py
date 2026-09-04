@@ -19,4 +19,5 @@ def get_settings() -> dict:
 def put_settings(body: dict[str, Any]) -> dict:
     data = settings.save(body)
     dirs.write_extra_model_paths()
+    dirs.apply_output_override()
     return {"settings": data}

@@ -241,7 +241,8 @@ class GalleryCacheTests(unittest.TestCase):
 
         def hang() -> None:
             started.set()
-            block.wait(1)
+            if not block.is_set():
+                block.wait(1)
 
         with patch.object(gallery_cache, "sync", hang):
             busy = gallery_cache.start_sync()
@@ -249,6 +250,151 @@ class GalleryCacheTests(unittest.TestCase):
             self.assertTrue(started.wait(1))
             self.assertTrue(gallery_cache.start_sync())
             block.set()
+
+    def test_sync_skips_resolve_for_paths_already_under_output(self) -> None:
+        root = self.tmp / "gallery"
+        root.mkdir()
+        _write_v2(root / "image.png", prompt="still")
+        with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
+            gallery_cache.sync()
+            with patch.object(gallery_cache, "resolve_path") as resolve:
+                gallery_cache.sync()
+                resolve.assert_not_called()
+
+    def test_path_for_id_keeps_missing_until_sync(self) -> None:
+        root = self.tmp / "gallery"
+        root.mkdir()
+        missing = root / "gone.png"
+        ident = "gallery:missing"
+        gallery_db.execute(
+            """
+            INSERT INTO gallery_items (
+                id, path, root, asset_kind, media_kind, size, mtime_ns,
+                prompt, negative_prompt, params_json, created_at
+            ) VALUES (?, ?, ?, 'image', 'image', 1, 1, '', '', '{}', '2026-01-01T00:00:00Z')
+            """,
+            (ident, str(missing), str(root)),
+        )
+        with (
+            patch.object(gallery_cache, "USER", self.tmp / "user"),
+            patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]),
+        ):
+            self.assertIsNone(gallery_cache.path_for_id(ident))
+        self.assertIsNotNone(gallery_db.query_one("SELECT id FROM gallery_items WHERE id = ?", (ident,)))
+        with patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]):
+            gallery_cache.sync()
+        self.assertIsNone(gallery_db.query_one("SELECT id FROM gallery_items WHERE id = ?", (ident,)))
+
+    def test_list_rows_keeps_missing_until_sync(self) -> None:
+        root = self.tmp / "gallery"
+        root.mkdir()
+        missing = root / "gone.png"
+        ident = "gallery:missing"
+        gallery_db.execute(
+            """
+            INSERT INTO gallery_items (
+                id, path, root, asset_kind, media_kind, size, mtime_ns,
+                prompt, negative_prompt, params_json, created_at
+            ) VALUES (?, ?, ?, 'image', 'image', 1, 1, '', '', '{}', '2026-01-01T00:00:00Z')
+            """,
+            (ident, str(missing), str(root)),
+        )
+        with (
+            patch.object(gallery_cache, "USER", self.tmp / "user"),
+            patch.object(gallery_cache.dirs, "gallery_roots", return_value=[root]),
+        ):
+            self.assertEqual(len(gallery_cache.list_rows()), 1)
+            gallery_cache.sync()
+            self.assertEqual(gallery_cache.list_rows(), [])
+        self.assertIsNone(gallery_db.query_one("SELECT id FROM gallery_items WHERE id = ?", (ident,)))
+
+    def test_resolve_rewrites_moved_profile_output(self) -> None:
+        user = self.tmp / "user"
+        old_root = user / "output"
+        new_root = old_root / "default"
+        dest = _write_v2(new_root / "pic.png", prompt="still")
+        ident = "gallery:pic"
+        gallery_db.execute(
+            """
+            INSERT INTO gallery_items (
+                id, path, root, asset_kind, media_kind, size, mtime_ns,
+                prompt, negative_prompt, params_json, created_at, favorite
+            ) VALUES (?, ?, ?, 'image', 'image', 1, 1, '', '', '{}', '2026-01-01T00:00:00Z', 1)
+            """,
+            (ident, str(old_root / "pic.png"), str(old_root)),
+        )
+        with (
+            patch.object(gallery_cache, "USER", user),
+            patch.object(gallery_cache, "outputs_root", return_value=new_root),
+            patch.object(gallery_cache.dirs, "gallery_roots", return_value=[new_root.resolve()]),
+        ):
+            found = gallery_cache.path_for_id(ident)
+            row = gallery_cache.row(ident)
+        self.assertEqual(found, dest.resolve())
+        self.assertIsNotNone(row)
+        self.assertEqual(row["id"], ident)
+        self.assertEqual(int(row["favorite"]), 1)
+        self.assertEqual(Path(row["path"]), dest.resolve())
+
+    def test_sync_relocates_profile_output_and_listing_stays_sql(self) -> None:
+        user = self.tmp / "user"
+        old_root = user / "output"
+        new_root = old_root / "default"
+        dest = _write_v2(new_root / "pic.png", prompt="still")
+        ident = "gallery:pic"
+        gallery_db.execute(
+            """
+            INSERT INTO gallery_items (
+                id, path, root, asset_kind, media_kind, size, mtime_ns,
+                prompt, negative_prompt, params_json, created_at, favorite
+            ) VALUES (?, ?, ?, 'image', 'image', 1, 1, '', '', '{}', '2026-01-01T00:00:00Z', 1)
+            """,
+            (ident, str(old_root / "pic.png"), str(old_root)),
+        )
+        with (
+            patch.object(gallery_cache, "USER", user),
+            patch.object(gallery_cache, "outputs_root", return_value=new_root),
+            patch.object(gallery_cache.dirs, "gallery_roots", return_value=[new_root.resolve()]),
+        ):
+            listed = gallery_cache.list_rows()
+            self.assertEqual(len(listed), 1)
+            self.assertEqual(listed[0]["id"], ident)
+            gallery_cache.sync()
+            row = gallery_cache.row(ident)
+        self.assertIsNotNone(row)
+        self.assertEqual(row["id"], ident)
+        self.assertEqual(int(row["favorite"]), 1)
+        self.assertEqual(Path(row["path"]), dest.resolve())
+
+    def test_resolve_moves_flat_output_into_profile(self) -> None:
+        user = self.tmp / "user"
+        old_root = user / "output"
+        new_root = old_root / "default"
+        new_root.mkdir(parents=True)
+        src = _write_v2(old_root / "pic.png", prompt="still")
+        ident = "gallery:pic"
+        gallery_db.execute(
+            """
+            INSERT INTO gallery_items (
+                id, path, root, asset_kind, media_kind, size, mtime_ns,
+                prompt, negative_prompt, params_json, created_at
+            ) VALUES (?, ?, ?, 'image', 'image', 1, 1, '', '', '{}', '2026-01-01T00:00:00Z')
+            """,
+            (ident, str(src), str(old_root)),
+        )
+        with (
+            patch.object(gallery_cache, "USER", user),
+            patch.object(gallery_cache, "outputs_root", return_value=new_root),
+            patch.object(gallery_cache.dirs, "gallery_roots", return_value=[new_root.resolve()]),
+        ):
+            found = gallery_cache.path_for_id(ident)
+            row = gallery_cache.row(ident)
+        dest = (new_root / "pic.png").resolve()
+        self.assertEqual(found, dest)
+        self.assertTrue(dest.is_file())
+        self.assertFalse(src.exists())
+        self.assertEqual(row["id"], ident)
+        self.assertEqual(Path(row["path"]), dest)
 
     def test_thumbnail_cache_sanitizes_path_unsafe_item_ids(self) -> None:
         source = self.tmp / "source.png"

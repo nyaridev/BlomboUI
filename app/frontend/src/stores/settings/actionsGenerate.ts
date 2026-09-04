@@ -23,6 +23,7 @@ import {
   cleanLargeJpegMaxKb,
   cleanHistoryLimit,
   cleanGalleryPageSize,
+  cleanGalleryCardPageSize,
   cleanHiresTempAfterDays,
 } from './clean.ts'
 import {
@@ -123,6 +124,10 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
     },
     setGalleryPageSize: (galleryPageSize) => {
       set({ galleryPageSize: cleanGalleryPageSize(galleryPageSize) })
+      persist()
+    },
+    setGalleryCardPageSize: (galleryCardPageSize) => {
+      set({ galleryCardPageSize: cleanGalleryCardPageSize(galleryCardPageSize) })
       persist()
     },
     setHiddenGenerateTabs: (hiddenGenerateTabs) => {

@@ -4,7 +4,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from features.downloads.scripts.thumbs import BROWSE_THUMBS, clear_thumbs, delete_thumbs, item_thumb, prefetch, thumb_media
+from features.downloads.scripts.thumbs import browse_thumbs_root, clear_thumbs, delete_thumbs, item_thumb, prefetch, thumb_media
 from infrastructure.storage.repositories import browse_history as repo
 
 
@@ -44,7 +44,7 @@ def record(body: dict[str, Any]) -> dict[str, Any]:
     )
     trim_to_limit()
     if image_url and repo.get_by_id(ident):
-        prefetch(ident, root=BROWSE_THUMBS, image_url=image_url)
+        prefetch(ident, root=browse_thumbs_root(), image_url=image_url)
     row = get(ident)
     return row or {"id": ident, "modelId": model_id}
 
@@ -52,13 +52,13 @@ def record(body: dict[str, Any]) -> dict[str, Any]:
 def remove(ident: int) -> bool:
     if not ident or not repo.delete(ident):
         return False
-    delete_thumbs(ident, BROWSE_THUMBS)
+    delete_thumbs(ident, browse_thumbs_root())
     return True
 
 
 def clear() -> int:
     count = repo.delete_all()
-    clear_thumbs(BROWSE_THUMBS)
+    clear_thumbs(browse_thumbs_root())
     return count
 
 
@@ -66,7 +66,7 @@ def thumb(ident: int) -> Path | None:
     row = get(ident)
     if not row:
         return None
-    return item_thumb(ident, root=BROWSE_THUMBS, image_url=str(row.get("imageUrl") or ""))
+    return item_thumb(ident, root=browse_thumbs_root(), image_url=str(row.get("imageUrl") or ""))
 
 
 def trim_to_limit() -> list[int]:
@@ -81,7 +81,7 @@ def trim_to_limit() -> list[int]:
     dropped = repo.ids_beyond(limit)
     for ident in dropped:
         repo.delete(ident)
-        delete_thumbs(ident, BROWSE_THUMBS)
+        delete_thumbs(ident, browse_thumbs_root())
     return dropped
 
 

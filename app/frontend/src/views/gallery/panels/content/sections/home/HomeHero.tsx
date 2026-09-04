@@ -42,6 +42,7 @@ export function HomeHero({
   onFavorite,
   onRemove,
   onFileInfo,
+  onMissing,
 }: {
   items: GalleryItem[]
   onOpen: (item: GalleryItem) => void
@@ -49,6 +50,7 @@ export function HomeHero({
   onFavorite: (item: GalleryItem) => void
   onRemove: (item: GalleryItem) => void
   onFileInfo: (item: GalleryItem) => void
+  onMissing: (id: string) => void
 }) {
   const [index, setIndex] = useState(0)
   const [paused, setPaused] = useState(false)
@@ -136,6 +138,7 @@ export function HomeHero({
                   type={on && item.media_kind === 'video' ? 'video' : undefined}
                   autoPlay={on}
                   className="h-full w-full object-cover"
+                  onError={() => onMissing(item.id)}
                 />
                 {on ? null : <div className="pointer-events-none absolute inset-0 bg-bg/45 backdrop-blur-[2px]" />}
               </button>

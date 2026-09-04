@@ -75,9 +75,34 @@ CREATE TABLE IF NOT EXISTS gallery_seen (
 );
 """
 
+_FTS = """
+CREATE VIRTUAL TABLE IF NOT EXISTS gallery_fts USING fts5(
+    item_id UNINDEXED,
+    text,
+    tokenize = 'unicode61'
+);
+"""
+
 
 def db_path() -> Path:
     return cache_gallery_db_path()
+
+
+def _ensure_fts(conn: sqlite3.Connection) -> None:
+    try:
+        conn.executescript(_FTS)
+    except sqlite3.OperationalError:
+        return
+    try:
+        fts_n = int(conn.execute("SELECT COUNT(*) AS n FROM gallery_fts").fetchone()["n"])
+        item_n = int(conn.execute("SELECT COUNT(*) AS n FROM gallery_items").fetchone()["n"])
+    except (sqlite3.OperationalError, TypeError, ValueError, KeyError):
+        return
+    if fts_n == item_n:
+        return
+    from infrastructure.storage.repositories import gallery as gallery_repo
+
+    gallery_repo.rebuild_search(conn)
 
 
 def connect() -> sqlite3.Connection:
@@ -89,6 +114,7 @@ def connect() -> sqlite3.Connection:
             _CONN.execute("PRAGMA foreign_keys = ON")
             _CONN.execute("PRAGMA journal_mode=WAL")
             _CONN.executescript(SCHEMA)
+            _ensure_fts(_CONN)
             _CONN.commit()
         return _CONN
 

@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom'
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ComfyStatus } from '@/components/layout/ComfyStatus.tsx'
 import { GpuBar } from '@/components/layout/GpuBar.tsx'
+import { ProfilePicker } from '@/components/layout/ProfilePicker.tsx'
 import { TemplateBar } from '@/components/composites/templates/TemplateBar.tsx'
 import { WorkflowPicker } from '@/components/composites/templates/WorkflowPicker.tsx'
 import { mainTab } from '@/app/appTabs.ts'
@@ -16,12 +17,14 @@ export function TopBar({
   issueCount,
   comfyOk,
   comfyMissing,
+  onReload,
 }: {
   leftTabs: string[]
   showErrors: boolean
   issueCount: number
   comfyOk: boolean
   comfyMissing: boolean
+  onReload: () => void
 }) {
   return (
     <header className="flex flex-col bg-panel px-4 pt-2">
@@ -29,6 +32,7 @@ export function TopBar({
         <div className="flex items-center gap-1.5">
           <WorkflowPicker />
           <TemplateBar />
+          <ProfilePicker onReload={onReload} />
         </div>
         <div className="ml-auto flex items-center gap-3">
           {!comfyOk ? (

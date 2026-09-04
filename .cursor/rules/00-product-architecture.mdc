@@ -42,5 +42,6 @@ user/          user-owned data and outputs
 - **Civitai / downloads / history** own remote browsing, installation, queueing, and history.
 - **Wildcards** and **complete** own prompt expansion and tag completion.
 - **Settings** owns the persisted settings blob; do not add another settings store.
+- **Profiles** owns the install-wide registry (`profile.sqlite`) and which profile is active at launch. Product data stays per-profile; ComfyUI, `user/models/`, `user/wildcards/`, and `user/autocompletion/` stay shared.
 
 Stack-specific implementation contracts live in `10-frontend-contract.mdc` and `20-backend-contract.mdc`. Cross-layer data invariants live in `30-cross-surface-invariants.mdc`.

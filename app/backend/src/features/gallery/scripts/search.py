@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+import re
 import random
 from typing import Any
 
-from features.gallery.scripts import cache as gallery_cache
-from features.models.scripts import hashes
-from features.models.scripts import models as model_files
 from features.models.scripts import thumbnail_scopes
 from features.generate.scripts.save_meta import HASH_KEYS
 from features.settings import service as settings
 from infrastructure.storage.repositories import gallery as gallery_repo
+from infrastructure.storage.repositories import hashes as hashes_repo
 
 HOME_LIMIT = 24
 HOME_SHELF = 12
@@ -17,7 +16,11 @@ TAG_LIMIT = 12
 PAGE = 200
 PAGE_MIN = 20
 PAGE_MAX = 500
+CARD_PAGE = 80
+CARD_MIN = 20
+CARD_MAX = 500
 BROWSE_PREVIEW = 6
+PREVIEW_WINDOW = 12
 BROWSE_KINDS = {"checkpoints": "checkpoint", "loras": "lora", "wildcards": "wildcard", "tags": "tag"}
 
 
@@ -56,6 +59,29 @@ def _page_size(limit: int = 0) -> int:
     except (TypeError, ValueError):
         raw = PAGE
     return max(PAGE_MIN, min(PAGE_MAX, raw))
+
+
+def _card_page_size(limit: int = 0) -> int:
+    if limit:
+        try:
+            return max(1, min(CARD_MAX, int(limit)))
+        except (TypeError, ValueError):
+            pass
+    try:
+        raw = int(settings.load().get("galleryCardPageSize") or CARD_PAGE)
+    except (TypeError, ValueError):
+        raw = CARD_PAGE
+    return max(CARD_MIN, min(CARD_MAX, raw))
+
+
+def _browse_offset(cursor: str) -> int:
+    raw = str(cursor or "").strip()
+    if not raw:
+        return 0
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        return 0
 
 
 def _fav(row: Any, keys: Any) -> bool:
@@ -107,7 +133,27 @@ def _scope_ids(scope_ids: list[str]) -> set[str] | None:
             scopes.append(row)
     if not scopes:
         return None
-    rows = gallery_repo.query("SELECT item_id, tag FROM gallery_item_tags")
+    needles: list[str] = []
+    seen: set[str] = set()
+    for scope in scopes:
+        for group in scope.get("anyGroups") or []:
+            for tag in group:
+                key = str(tag or "")
+                if key and key not in seen:
+                    seen.add(key)
+                    needles.append(key)
+        for tag in scope.get("exclude") or []:
+            key = str(tag or "")
+            if key and key not in seen:
+                seen.add(key)
+                needles.append(key)
+    if not needles:
+        return set()
+    marks = ",".join("?" for _ in needles)
+    rows = gallery_repo.query(
+        f"SELECT item_id, tag FROM gallery_item_tags WHERE tag IN ({marks})",
+        needles,
+    )
     grouped: dict[str, set[str]] = {}
     for row in rows:
         grouped.setdefault(str(row["item_id"]), set()).add(str(row["tag"]))
@@ -126,23 +172,30 @@ def _words(query: str) -> list[str]:
     return [part for part in query.replace(",", " ").split() if part]
 
 
-def _query_extra(q: str) -> tuple[list[str], list[Any]]:
-    extra: list[str] = []
-    params: list[Any] = []
+def _fts_match(q: str) -> str:
+    terms: list[str] = []
     for word in _words(str(q or "").strip().casefold()):
-        extra.append(
-            "(prompt LIKE ? ESCAPE '\\' OR negative_prompt LIKE ? ESCAPE '\\' OR id IN (SELECT item_id FROM gallery_item_tags WHERE tag LIKE ? ESCAPE '\\'))"
-        )
-        needle = _like(word)
-        params.extend([needle, needle, needle])
-    return extra, params
+        cleaned = re.sub(r"[^\w]+", " ", word, flags=re.UNICODE).strip()
+        for part in cleaned.split():
+            if part:
+                terms.append(part + "*")
+    return " AND ".join(terms)
 
 
-def _aliases(kind: str, name: str) -> list[str]:
+def _query_extra(q: str) -> tuple[list[str], list[Any]]:
+    match = _fts_match(q)
+    if not match:
+        return [], []
+    return ["id IN (SELECT item_id FROM gallery_fts WHERE gallery_fts MATCH ?)"], [match]
+
+
+def _aliases(name: str) -> list[str]:
     out = [name]
     seen = {name.casefold()}
-    path = model_files.model_file(kind, name)
-    row = hashes.entry(path) if path else None
+    try:
+        row = hashes_repo.find_by_suffix(name)
+    except Exception:
+        row = None
     if not row:
         return out
     for key in HASH_KEYS:
@@ -162,12 +215,11 @@ def _models_extra(models: list[str] | None) -> tuple[list[str], list[Any]]:
     likes: list[str] = []
     for name in names:
         likes.append(_like(name))
-        for kind in ("checkpoints", "diffusion_models"):
-            for item in _aliases(kind, name):
-                key = item.casefold()
-                if key not in seen:
-                    seen.add(key)
-                    aliases.append(item)
+        for item in _aliases(name):
+            key = item.casefold()
+            if key not in seen:
+                seen.add(key)
+                aliases.append(item)
         base = name.replace("\\", "/").rsplit("/", 1)[-1]
         if base.casefold() not in seen:
             seen.add(base.casefold())
@@ -182,7 +234,7 @@ def _link_extra(names: list[str] | None, table: str, kind: str = "") -> tuple[li
     extra: list[str] = []
     params: list[Any] = []
     for name in [str(item).strip() for item in names or [] if str(item).strip()]:
-        aliases = _aliases(kind, name) if kind else [name]
+        aliases = _aliases(name) if kind else [name]
         marks = ",".join("?" for _ in aliases)
         extra.append(f"id IN (SELECT item_id FROM {table} WHERE name IN ({marks}) OR name LIKE ? ESCAPE '\\')")
         params.extend(aliases)
@@ -307,7 +359,7 @@ def search(
         where = f"{where} AND {' AND '.join(extra)}"
     if order_random:
         rows = gallery_repo.query(
-            f"SELECT * FROM gallery_items WHERE {where} ORDER BY RANDOM() LIMIT ?",
+            f"SELECT {gallery_repo.PUBLIC_SELECT} FROM gallery_items WHERE {where} ORDER BY RANDOM() LIMIT ?",
             (*params, cap),
         )
         return {"items": [_public(row) for row in rows], "cursor": ""}
@@ -370,7 +422,9 @@ def previews_for_library(library: dict[str, Any]) -> list[dict[str, str]]:
     return [{"id": item["id"], "media_kind": str(item.get("media_kind") or "image")} for item in result["items"]]
 
 
-def browse(kind: str, sort: str = "recent", direction: str = "desc", limit: int = 0) -> dict[str, Any]:
+def browse(
+    kind: str, sort: str = "recent", direction: str = "desc", limit: int = 0, cursor: str = ""
+) -> dict[str, Any]:
     key = str(kind or "").strip().lower()
     if key not in BROWSE_KINDS:
         raise ValueError("unknown browse kind")
@@ -378,55 +432,56 @@ def browse(kind: str, sort: str = "recent", direction: str = "desc", limit: int 
     interrupted = "AND asset_kind != 'interrupted'" if hide else ""
     order = "DESC" if str(direction).lower() != "asc" else "ASC"
     by_works = str(sort).lower() == "works"
-    cap = max(0, int(limit or 0))
+    cap = _card_page_size(limit)
+    offset = _browse_offset(cursor)
     if key == "checkpoints":
-        rows = gallery_repo.query(
-            f"""
+        sql = f"""
             SELECT checkpoint_name AS name, MAX(created_at) AS recent, COUNT(*) AS works
             FROM gallery_items
             WHERE asset_kind != 'grid' AND asset_kind != 'temp' {interrupted} AND checkpoint_name != ''
             GROUP BY checkpoint_name
             ORDER BY {'works' if by_works else 'recent'} {order}, name COLLATE NOCASE
-            """,
-        )
-        if cap:
-            rows = rows[:cap]
+            LIMIT ? OFFSET ?
+            """
+        rows = gallery_repo.query(sql, (cap + 1, offset))
+        next_cursor = str(offset + cap) if len(rows) > cap else ""
+        rows = rows[:cap]
         names = [str(row["name"]) for row in rows]
         previews = _previews_for("checkpoint_name", names, hide)
-        return {"items": [_browse_item(row, previews) for row in rows]}
+        return {"items": [_browse_item(row, previews) for row in rows], "cursor": next_cursor}
     if key == "tags":
         tag_hide = "AND i.asset_kind != 'interrupted'" if hide else ""
-        rows = gallery_repo.query(
-            f"""
+        sql = f"""
             SELECT t.tag AS name, MAX(i.created_at) AS recent, COUNT(*) AS works
             FROM gallery_item_tags t
             JOIN gallery_items i ON i.id = t.item_id
             WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {tag_hide}
             GROUP BY t.tag
             ORDER BY {'works' if by_works else 'recent'} {order}, name COLLATE NOCASE
-            """,
-        )
-        if cap:
-            rows = rows[:cap]
+            LIMIT ? OFFSET ?
+            """
+        rows = gallery_repo.query(sql, (cap + 1, offset))
+        next_cursor = str(offset + cap) if len(rows) > cap else ""
+        rows = rows[:cap]
         names = [str(row["name"]) for row in rows]
         previews = _join_previews("gallery_item_tags", names, hide, "tag")
-        return {"items": [_browse_item(row, previews) for row in rows]}
+        return {"items": [_browse_item(row, previews) for row in rows], "cursor": next_cursor}
     table = "gallery_item_loras" if key == "loras" else "gallery_item_wildcards"
-    rows = gallery_repo.query(
-        f"""
+    sql = f"""
         SELECT l.name AS name, MAX(i.created_at) AS recent, COUNT(*) AS works
         FROM {table} l
         JOIN gallery_items i ON i.id = l.item_id
         WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {interrupted}
         GROUP BY l.name
         ORDER BY {'works' if by_works else 'recent'} {order}, name COLLATE NOCASE
-        """,
-    )
-    if cap:
-        rows = rows[:cap]
+        LIMIT ? OFFSET ?
+        """
+    rows = gallery_repo.query(sql, (cap + 1, offset))
+    next_cursor = str(offset + cap) if len(rows) > cap else ""
+    rows = rows[:cap]
     names = [str(row["name"]) for row in rows]
     previews = _join_previews(table, names, hide)
-    return {"items": [_browse_item(row, previews) for row in rows]}
+    return {"items": [_browse_item(row, previews) for row in rows], "cursor": next_cursor}
 
 
 def _browse_item(row: Any, previews: dict[str, list[dict[str, str]]]) -> dict[str, Any]:
@@ -446,12 +501,18 @@ def _previews_for(column: str, names: list[str], hide: bool) -> dict[str, list[d
     marks = ",".join("?" for _ in names)
     rows = gallery_repo.query(
         f"""
-        SELECT {column} AS name, id, media_kind, created_at
-        FROM gallery_items
-        WHERE asset_kind != 'grid' AND asset_kind != 'temp' {interrupted} AND {column} IN ({marks})
-        ORDER BY created_at DESC
+        SELECT name, id, media_kind, created_at FROM (
+            SELECT {column} AS name, id, media_kind, created_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY {column} ORDER BY created_at DESC, id DESC
+                   ) AS rn
+            FROM gallery_items
+            WHERE asset_kind != 'grid' AND asset_kind != 'temp' {interrupted}
+              AND {column} IN ({marks})
+        ) ranked
+        WHERE rn <= ?
         """,
-        names,
+        (*names, PREVIEW_WINDOW),
     )
     return _take_previews(rows)
 
@@ -463,13 +524,20 @@ def _join_previews(table: str, names: list[str], hide: bool, column: str = "name
     marks = ",".join("?" for _ in names)
     rows = gallery_repo.query(
         f"""
-        SELECT l.{column} AS name, i.id AS id, i.media_kind AS media_kind, i.created_at AS created_at
-        FROM {table} l
-        JOIN gallery_items i ON i.id = l.item_id
-        WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {interrupted} AND l.{column} IN ({marks})
-        ORDER BY i.created_at DESC
+        SELECT name, id, media_kind, created_at FROM (
+            SELECT l.{column} AS name, i.id AS id, i.media_kind AS media_kind,
+                   i.created_at AS created_at,
+                   ROW_NUMBER() OVER (
+                       PARTITION BY l.{column} ORDER BY i.created_at DESC, i.id DESC
+                   ) AS rn
+            FROM {table} l
+            JOIN gallery_items i ON i.id = l.item_id
+            WHERE i.asset_kind != 'grid' AND i.asset_kind != 'temp' {interrupted}
+              AND l.{column} IN ({marks})
+        ) ranked
+        WHERE rn <= ?
         """,
-        names,
+        (*names, PREVIEW_WINDOW),
     )
     return _take_previews(rows)
 

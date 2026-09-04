@@ -61,6 +61,30 @@ def find_path(digests: set[str]) -> str | None:
     return rows[0] if rows else None
 
 
+def find_by_suffix(rel: str) -> dict[str, str] | None:
+    name = str(rel or "").replace("\\", "/").strip().lstrip("/")
+    if not name:
+        return None
+    needle = name.casefold()
+    row = cache.query_one(
+        """
+        SELECT sha256, autov1, autov2, autov3 FROM model_hashes
+        WHERE lower(replace(path, '\\', '/')) = ?
+           OR lower(replace(path, '\\', '/')) LIKE ?
+        LIMIT 1
+        """,
+        (needle, "%/" + needle),
+    )
+    if not row:
+        return None
+    return {
+        "sha256": str(row["sha256"] or ""),
+        "autov1": str(row["autov1"] or ""),
+        "autov2": str(row["autov2"] or ""),
+        "autov3": str(row["autov3"] or ""),
+    }
+
+
 def replace_all(data: dict[str, Any]) -> None:
     def write(conn) -> None:
         conn.execute("DELETE FROM model_hashes")

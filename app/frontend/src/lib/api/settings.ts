@@ -1,4 +1,4 @@
-import { api, readError } from './http.ts'
+import { api, getHealth, readError } from './http.ts'
 
 export type FolderDir = {
   id: string
@@ -66,6 +66,7 @@ export type UserSettings = {
   galleryItemThumbVideoFormat?: string
   galleryItemThumbQuality?: number
   galleryPageSize?: number
+  galleryCardPageSize?: number
   downloadHistoryLimit?: number
   browseHistoryLimit?: number
   civitaiMarks?: Record<string, { text?: string; icon?: { kind?: string; id?: string; color?: string } }>
@@ -266,4 +267,30 @@ export async function reloadApp(): Promise<void> {
   } catch {
     return
   }
+}
+
+async function waitForHealth(up: boolean, tries: number) {
+  for (let i = 0; i < tries; i++) {
+    if (i) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250))
+    }
+    try {
+      await getHealth()
+      if (up) {
+        return
+      }
+    } catch {
+      if (!up) {
+        return
+      }
+    }
+  }
+}
+
+export async function restartApp(): Promise<void> {
+  await reloadApp()
+  await waitForHealth(false, 24)
+  await waitForHealth(true, 80)
+  await new Promise((resolve) => window.setTimeout(resolve, 400))
+  window.location.reload()
 }

@@ -20,13 +20,20 @@ from features.models.scripts import models
 from features.models.scripts import thumbnail_embed
 from features.models.scripts import thumbnail_scopes
 from features.wildcards.scripts import files as wildcard_files
-from config import USER, models_root, wildcards_root
+from config import models_root, removed_root, wildcards_root
 
-REMOVED = USER / "removed"
+REMOVED = None
 GALLERY_KIND = "gallery"
 _SKIP = {".gitkeep", "desktop.ini"}
 _HOURS_DEFAULT = 48
 _MAX_GB_DEFAULT = 100
+
+
+def trash_root() -> Path:
+    override = globals().get("REMOVED")
+    if isinstance(override, Path):
+        return override
+    return removed_root()
 
 
 class RemovedError(ValueError):
@@ -65,7 +72,7 @@ def remove_gallery_item(ident: str) -> dict[str, Any]:
     if str(row["asset_kind"] or "image") in {"grid", "temp"}:
         raise RemovedError("cannot remove this item")
     uid = str(uuid.uuid4())
-    dest = REMOVED / uid
+    dest = trash_root() / uid
     dest.mkdir(parents=True, exist_ok=True)
     size = int(source.stat().st_size)
     shutil.move(str(source), str(dest / source.name))
@@ -266,7 +273,7 @@ def _trash_file(kind: str, ident: str) -> str:
     if not source.is_file():
         raise RemovedError("not found", 404)
     uid = str(uuid.uuid4())
-    dest = REMOVED / uid
+    dest = trash_root() / uid
     dest.mkdir(parents=True, exist_ok=True)
     size = int(source.stat().st_size)
     shutil.move(str(source), str(dest / source.name))
@@ -402,10 +409,11 @@ def _dir_size(folder: Path) -> int:
 
 
 def _folders() -> list[Path]:
-    if not REMOVED.is_dir():
+    folder = trash_root()
+    if not folder.is_dir():
         return []
     try:
-        entries = list(REMOVED.iterdir())
+        entries = list(folder.iterdir())
     except OSError:
         return []
     out: list[Path] = []
@@ -420,7 +428,7 @@ def _item_dir(item_id: str) -> Path:
         uid = str(uuid.UUID(str(item_id)))
     except ValueError as exc:
         raise RemovedError("not found", 404) from exc
-    folder = REMOVED / uid
+    folder = trash_root() / uid
     if not folder.is_dir():
         raise RemovedError("not found", 404)
     return folder

@@ -4,15 +4,12 @@ import io
 import threading
 from pathlib import Path
 
-from config import DATA
+from config import browse_thumbs_root, download_thumbs_root
 from features.civitai.scripts.client import fetch_image
 from features.downloads.scripts import history
 from features.models.scripts import model_thumb_anim
 from features.settings import service as settings
 
-DOWNLOAD_THUMBS = DATA / "history" / "download"
-BROWSE_THUMBS = DATA / "history" / "browse"
-THUMBS = DOWNLOAD_THUMBS
 _DEFAULT_MP = 0.25
 _DEFAULT_IMAGE = "jpg"
 _DEFAULT_VIDEO = "webp"
@@ -55,7 +52,7 @@ def item_thumb(ident: int, *, root: Path | None = None, image_url: str | None = 
     if not ident:
         return None
     with _ident_lock(ident):
-        return _item_thumb(ident, root or DOWNLOAD_THUMBS, image_url)
+        return _item_thumb(ident, root or download_thumbs_root(), image_url)
 
 
 def _prefetch(ident: int, root: Path | None, image_url: str | None) -> None:
@@ -77,7 +74,7 @@ def _ident_lock(ident: int) -> threading.Lock:
 def _item_thumb(ident: int, root: Path, image_url: str | None) -> Path | None:
     url = str(image_url or "").strip()
     if not url:
-        row = history.get(ident) if root == DOWNLOAD_THUMBS else None
+        row = history.get(ident) if root.resolve() == download_thumbs_root().resolve() else None
         if not row:
             return None
         url = str(row.get("imageUrl") or "").strip()
@@ -100,7 +97,7 @@ def _item_thumb(ident: int, root: Path, image_url: str | None) -> Path | None:
 
 
 def delete_thumbs(ident: int, root: Path | None = None) -> None:
-    folder = root or DOWNLOAD_THUMBS
+    folder = root or download_thumbs_root()
     if not folder.is_dir():
         return
     prefix = f"{ident}_"
@@ -110,7 +107,7 @@ def delete_thumbs(ident: int, root: Path | None = None) -> None:
 
 
 def clear_thumbs(root: Path | None = None) -> None:
-    folder = root or DOWNLOAD_THUMBS
+    folder = root or download_thumbs_root()
     if not folder.is_dir():
         return
     for path in folder.iterdir():

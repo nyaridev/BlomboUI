@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from features.settings.scripts.values import (
@@ -277,6 +278,13 @@ def _clean(raw: Any) -> dict[str, Any]:
             pass
         else:
             out["galleryPageSize"] = max(20, min(500, value))
+    if "galleryCardPageSize" in raw:
+        try:
+            value = int(raw["galleryCardPageSize"])
+        except (TypeError, ValueError):
+            pass
+        else:
+            out["galleryCardPageSize"] = max(20, min(500, value))
     if "downloadHistoryLimit" in raw:
         try:
             value = int(raw["downloadHistoryLimit"])
@@ -333,6 +341,12 @@ def _clean(raw: Any) -> dict[str, Any]:
             rows = _dir_list(raw[key])
             if rows is not None:
                 out[key] = rows
+    if "outputRoot" in raw:
+        text = str(raw.get("outputRoot") or "").strip()
+        if text:
+            path = Path(text)
+            if path.is_absolute():
+                out["outputRoot"] = str(path)
     if "civitaiDownload" in raw and isinstance(raw["civitaiDownload"], dict):
         out["civitaiDownload"] = _civitai_download(raw["civitaiDownload"])
     if "downloadQueue" in raw:

@@ -44,6 +44,7 @@ export function GalleryHome({
   onFavorite,
   onRemove,
   onFileInfo,
+  onMissing,
 }: {
   data: GalleryHomeData
   libraries: GalleryLibrary[]
@@ -62,6 +63,7 @@ export function GalleryHome({
   onFavorite: (item: GalleryItem) => void
   onRemove: (item: GalleryItem) => void
   onFileInfo: (item: GalleryItem) => void
+  onMissing: (id: string) => void
 }) {
   return (
     <div className="flex flex-col gap-8">
@@ -72,6 +74,7 @@ export function GalleryHome({
         onFavorite={onFavorite}
         onRemove={onRemove}
         onFileInfo={onFileInfo}
+        onMissing={onMissing}
       />
       {data.tags.length ? (
         <Shelf title="Popular tags" onTitle={onTags}>
@@ -82,6 +85,7 @@ export function GalleryHome({
               title={item.tag}
               subtitle={`${item.count} works`}
               onClick={() => onTag(item.tag)}
+              onMissing={onMissing}
             />
           ))}
         </Shelf>
@@ -89,21 +93,21 @@ export function GalleryHome({
       {data.checkpoints.length ? (
         <Shelf title="Recently used models" onTitle={onModels}>
           {data.checkpoints.map((item) => (
-            <CoverBrowse key={item.name} item={item} onOpen={onModel} />
+            <CoverBrowse key={item.name} item={item} onOpen={onModel} onMissing={onMissing} />
           ))}
         </Shelf>
       ) : null}
       {data.loras.length ? (
         <Shelf title="Recently used LoRAs" onTitle={onLoras}>
           {data.loras.map((item) => (
-            <CoverBrowse key={item.name} item={item} onOpen={onLora} />
+            <CoverBrowse key={item.name} item={item} onOpen={onLora} onMissing={onMissing} />
           ))}
         </Shelf>
       ) : null}
       {data.wildcards.length ? (
         <Shelf title="Recently used wildcards" onTitle={onWildcards}>
           {data.wildcards.map((item) => (
-            <CoverBrowse key={item.name} item={item} onOpen={onWildcard} />
+            <CoverBrowse key={item.name} item={item} onOpen={onWildcard} onMissing={onMissing} />
           ))}
         </Shelf>
       ) : null}
@@ -118,6 +122,7 @@ export function GalleryHome({
               title={item.name}
               subtitle={item.query || 'Saved search'}
               onClick={() => onLibrary(item)}
+              onMissing={onMissing}
             />
           ))}
         </Shelf>
@@ -126,13 +131,22 @@ export function GalleryHome({
   )
 }
 
-function CoverBrowse({ item, onOpen }: { item: GalleryBrowseItem; onOpen: (name: string) => void }) {
+function CoverBrowse({
+  item,
+  onOpen,
+  onMissing,
+}: {
+  item: GalleryBrowseItem
+  onOpen: (name: string) => void
+  onMissing: (id: string) => void
+}) {
   return (
     <GalleryCoverCard
       previews={item.previews}
       title={labelOf(item.name)}
       subtitle={`${item.works} works`}
       onClick={() => onOpen(item.name)}
+      onMissing={onMissing}
     />
   )
 }

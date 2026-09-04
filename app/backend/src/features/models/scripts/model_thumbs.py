@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from infrastructure.storage.repositories import model_meta as model_meta_db
-from config import USER
+from config import model_thumbs_root
 from features.models.scripts import thumbnail_embed
 from features.models.scripts import thumbnail_scopes
 from features.models.scripts import model_thumb_anim
@@ -21,8 +21,8 @@ from .model_thumb_storage import (
     write_index,
 )
 
-ROOT = USER / "model_thumbs"
-THUMBS = ROOT
+ROOT = None
+THUMBS = None
 THUMB_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif", ".mp4", ".webm")
 _SAVE = {"png": ("PNG", ".png"), "jpg": ("JPEG", ".jpg"), "webp": ("WEBP", ".webp")}
 THUMB_MP_DEFAULT = 0.25
@@ -42,8 +42,18 @@ _MEDIA = {
 GLOBAL = thumbnail_scopes.GLOBAL_ID
 
 
+def thumbs_root() -> Path:
+    override = globals().get("THUMBS")
+    if isinstance(override, Path):
+        return override
+    root = globals().get("ROOT")
+    if isinstance(root, Path):
+        return root
+    return model_thumbs_root()
+
+
 def thumb_dir(kind: str, ident: str) -> Path:
-    return THUMBS / kind / ident
+    return thumbs_root() / kind / ident
 
 
 def thumb_paths(kind: str, ident: str, context: str = GLOBAL) -> list[Path]:
@@ -250,7 +260,7 @@ def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: 
             for path in list(folder.glob("*")):
                 if path.is_file():
                     path.unlink(missing_ok=True)
-            prune_empty(folder, THUMBS / kind)
+            prune_empty(folder, thumbs_root() / kind)
         drop_ident(kind, ident)
         return
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context or GLOBAL))
@@ -258,7 +268,7 @@ def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: 
         if path.is_file():
             path.unlink()
     drop_context(kind, ident, key)
-    prune_empty(thumb_dir(kind, ident), THUMBS / kind)
+    prune_empty(thumb_dir(kind, ident), thumbs_root() / kind)
 
 
 def drop_scope(scope_id: str) -> None:
@@ -268,7 +278,7 @@ def drop_scope(scope_id: str) -> None:
     data = load_index()
     changed = False
     for kind, rows in list(data.items()):
-        root = THUMBS / kind
+        root = thumbs_root() / kind
         if not isinstance(rows, dict):
             continue
         for ident, contexts in list(rows.items()):
@@ -293,7 +303,7 @@ def drop_scope(scope_id: str) -> None:
 
 
 def iter_idents(kind: str) -> list[str]:
-    folder = THUMBS / kind
+    folder = thumbs_root() / kind
     if not folder.is_dir():
         return []
     out: list[str] = []
@@ -350,7 +360,7 @@ def take(kind: str, ident: str, dest: Path) -> None:
     if not src:
         return
     dest.mkdir(parents=True, exist_ok=True)
-    root = THUMBS / kind
+    root = thumbs_root() / kind
     for thumb_ident in list(iter_idents(kind)):
         if thumb_ident != src and not thumb_ident.startswith(src + "#"):
             continue
@@ -374,7 +384,7 @@ def take(kind: str, ident: str, dest: Path) -> None:
 def put(kind: str, thumbs: Path) -> None:
     if not thumbs.is_dir():
         return
-    root = THUMBS / kind
+    root = thumbs_root() / kind
     root.mkdir(parents=True, exist_ok=True)
     for file in thumbs.rglob("*"):
         if not file.is_file():
@@ -446,8 +456,8 @@ def list_saved() -> list[dict[str, Any]]:
 
 def rebuild_index() -> None:
     data: dict[str, dict[str, dict[str, Any]]] = {}
-    if THUMBS.is_dir():
-        for kind_dir in THUMBS.iterdir():
+    if thumbs_root().is_dir():
+        for kind_dir in thumbs_root().iterdir():
             if not kind_dir.is_dir():
                 continue
             kind = kind_dir.name
@@ -626,11 +636,11 @@ def _move_ident(kind: str, old: str, new: str) -> None:
     if dest.is_dir():
         for child in list(src.iterdir()):
             relocate(child, dest / child.name)
-        prune_empty(src, THUMBS / kind)
+        prune_empty(src, thumbs_root() / kind)
         return
     dest.parent.mkdir(parents=True, exist_ok=True)
     relocate(src, dest)
-    prune_empty(src.parent, THUMBS / kind)
+    prune_empty(src.parent, thumbs_root() / kind)
 
 
 

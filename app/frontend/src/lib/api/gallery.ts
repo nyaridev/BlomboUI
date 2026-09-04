@@ -32,6 +32,11 @@ export type GalleryBrowseItem = {
   previews: GalleryPreview[]
 }
 
+export type GalleryBrowsePage = {
+  items: GalleryBrowseItem[]
+  cursor: string
+}
+
 export type GalleryHome = {
   recent: GalleryItem[]
   tags: GalleryTag[]
@@ -123,7 +128,7 @@ export async function syncGallery(): Promise<void> {
   }
 }
 
-export async function searchGallery(query: GallerySearchQuery): Promise<GallerySearch> {
+export async function searchGallery(query: GallerySearchQuery, signal?: AbortSignal): Promise<GallerySearch> {
   const res = await fetch(
     api(
       `/gallery/search${qs({
@@ -142,6 +147,7 @@ export async function searchGallery(query: GallerySearchQuery): Promise<GalleryS
         favorite: query.favorite ? '1' : undefined,
       })}`,
     ),
+    signal ? { signal } : undefined,
   )
   if (!res.ok) {
     throw new Error(await readError(res))
@@ -169,13 +175,23 @@ export async function browseGallery(
   kind: GalleryBrowseKind,
   sort: 'recent' | 'works' = 'recent',
   dir: 'asc' | 'desc' = 'desc',
-): Promise<GalleryBrowseItem[]> {
-  const res = await fetch(api(`/gallery/browse/${kind}${qs({ sort, dir })}`))
+  opts?: { limit?: number; cursor?: string },
+): Promise<GalleryBrowsePage> {
+  const res = await fetch(
+    api(
+      `/gallery/browse/${kind}${qs({
+        sort,
+        dir,
+        limit: opts?.limit != null ? String(opts.limit) : undefined,
+        cursor: opts?.cursor,
+      })}`,
+    ),
+  )
   if (!res.ok) {
     throw new Error(await readError(res))
   }
-  const data = (await res.json()) as { items?: GalleryBrowseItem[] }
-  return data.items ?? []
+  const data = (await res.json()) as { items?: GalleryBrowseItem[]; cursor?: string }
+  return { items: data.items ?? [], cursor: data.cursor ?? '' }
 }
 
 export async function listGalleryLibraries(): Promise<GalleryLibrary[]> {

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from api.routes import civitai, complete, downloads, gallery, generate, history, manager, models, settings, system, wildcards
+from api.routes import civitai, complete, downloads, gallery, generate, history, manager, models, profiles, settings, system, wildcards
 
 
 def include_routes(app: FastAPI) -> None:
@@ -17,6 +17,7 @@ def include_routes(app: FastAPI) -> None:
         history,
         complete,
         settings,
+        profiles,
         system,
     ):
         app.include_router(router_module.api, prefix="/api")

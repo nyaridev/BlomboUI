@@ -29,7 +29,8 @@ import {
   workflowHasPack,
 } from '@/stores/generatePersist.ts'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { readGeneratePersist, removeGeneratePersist, writeGeneratePersist } from '@/lib/api/profiles.ts'
 
 export const SEED_AFTER = [
   { value: 'randomize', label: 'Randomize' },
@@ -2077,6 +2078,11 @@ export const useGenerateStore = create<GenerateState>()(
     }),
     {
       name: 'blombo-generate',
+      storage: createJSONStorage(() => ({
+        getItem: () => readGeneratePersist(),
+        setItem: (_name, value) => writeGeneratePersist(value),
+        removeItem: () => removeGeneratePersist(),
+      })),
       partialize: (s) => {
         const { viewedImageUrl: _viewed, swapTarget: _swap, rembgFiles: _files, imageUpscaleFiles: _upscaleFiles, captionFiles: _captionFiles, ...rest } = s
         return {

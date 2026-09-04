@@ -1,4 +1,5 @@
 import { AuthorAliasesSection, AUTHOR_ALIASES_QUERY } from '@/views/settings/panels/content/sections/civitai/AuthorAliasesSection.tsx'
+import { ProfilesSection, PROFILES_QUERY } from '@/views/settings/panels/content/sections/general/ProfilesSection.tsx'
 import { GeneralSection, GENERAL_QUERY } from '@/views/settings/panels/content/sections/general/GeneralSection.tsx'
 import { DownloadSection, DOWNLOAD_QUERY } from '@/views/settings/panels/content/sections/civitai/DownloadSection.tsx'
 import { HistorySection, HISTORY_QUERY } from '@/views/settings/panels/content/sections/civitai/HistorySection.tsx'
@@ -27,6 +28,7 @@ export const GROUPS = [
     title: 'General',
     pages: [
       { id: 'Appearance', terms: GENERAL_QUERY, Panel: GeneralSection },
+      { id: 'Profiles', terms: PROFILES_QUERY, Panel: ProfilesSection },
       { id: 'Tabs', terms: TABS_QUERY, Panel: TabsSection },
       { id: 'Pickers', terms: GALLERY_QUERY, Panel: PickersSection },
     ],

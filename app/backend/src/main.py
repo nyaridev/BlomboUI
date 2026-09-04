@@ -20,12 +20,16 @@ from features.gallery import service as gallery
 from features.gallery.scripts import relink as gallery_relink
 from features.generate import service as generate
 from features.models import service as models
+from features.profiles import service as profiles
 from infrastructure.storage import connect as connect_storage
+from shared import dirs
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     connect_storage()
+    dirs.apply_output_override()
+    gallery.start_sync()
     gallery_relink.install()
     models.list_scopes()
     complete.schedule_rebuild()
@@ -36,6 +40,10 @@ async def lifespan(_app: FastAPI):
     ).start()
     try:
         await asyncio.to_thread(gallery.purge_expired)
+    except OSError:
+        pass
+    try:
+        await asyncio.to_thread(profiles.purge_expired)
     except OSError:
         pass
     yield

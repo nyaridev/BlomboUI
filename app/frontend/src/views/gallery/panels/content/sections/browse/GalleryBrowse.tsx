@@ -10,6 +10,7 @@ import {
   type GallerySortDir,
 } from '@/stores/settingsStore.ts'
 import { GalleryCoverCard, labelOf } from '@/views/gallery/panels/content/sections/home/GalleryCoverCard.tsx'
+import { useEffect, useState } from 'react'
 
 const SORTS = [
   { value: 'recent', label: 'Recent' },
@@ -20,12 +21,20 @@ export function GalleryBrowse({
   kind,
   items,
   error,
+  hasNext,
+  loadingMore,
   onOpen,
+  onMissing,
+  onMore,
 }: {
   kind: GalleryBrowseKind
   items: GalleryBrowseItem[]
   error: string | null
+  hasNext: boolean
+  loadingMore: boolean
   onOpen: (name: string) => void
+  onMissing: (id: string) => void
+  onMore: () => void
 }) {
   const share = useSettingsStore((s) => s.galleryBrowseShare)
   const key = galleryBrowseKey(kind, share)
@@ -34,10 +43,28 @@ export function GalleryBrowse({
   const setSort = useSettingsStore((s) => s.setGalleryBrowseSort)
   const setDir = useSettingsStore((s) => s.setGalleryBrowseDir)
   const setShare = useSettingsStore((s) => s.setGalleryBrowseShare)
+  const [scroller, setScroller] = useState<HTMLDivElement | null>(null)
+  const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!scroller || !sentinel || !hasNext || loadingMore) {
+      return
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting) {
+          onMore()
+        }
+      },
+      { root: scroller, rootMargin: '200px' },
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasNext, loadingMore, onMore, scroller, sentinel])
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex h-toolbar items-stretch gap-cluster">
+    <div ref={setScroller} className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+      <div className="flex h-toolbar shrink-0 items-stretch gap-cluster">
         <SelectField
           value={sort}
           onChange={(value) => setSort(kind, value as GalleryBrowseSort)}
@@ -70,10 +97,22 @@ export function GalleryBrowse({
               title={labelOf(item.name)}
               subtitle={`${item.works} works`}
               onClick={() => onOpen(item.name)}
+              onMissing={onMissing}
             />
           ))}
         </div>
       )}
+      {hasNext ? (
+        <div ref={setSentinel} className="flex h-12 w-full shrink-0 items-center justify-center" aria-hidden={!loadingMore}>
+          {loadingMore ? (
+            <span
+              className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-ink"
+              role="status"
+              aria-label="Loading more"
+            />
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }

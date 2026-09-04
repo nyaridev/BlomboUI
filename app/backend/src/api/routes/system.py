@@ -9,6 +9,7 @@ from api.errors import ApiError
 from features.generate.schemas import ComfyFreeIn
 from features.generate import service as generate
 from features.issues.service import clear_log, dismiss_log, list_issues, record_log
+from features.profiles import service as profiles
 from features.settings import service as settings
 from features.settings.schemas import OutputPathIn, PathsCheckIn
 from shared import dirs, pnginfo
@@ -69,6 +70,7 @@ def health() -> dict:
         "ok": True,
         "api": "blombo",
         "version": VERSION,
+        "profile": profiles.current(),
         "comfy": {
             "reachable": generate.reachable(),
             "restarting": (RUNTIME / "tmp" / "comfy-restart").is_file(),

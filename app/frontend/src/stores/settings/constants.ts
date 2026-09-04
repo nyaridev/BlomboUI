@@ -265,6 +265,7 @@ export const SETTINGS_DEFAULTS = {
   galleryItemThumbVideoFormat: 'webp' as AnimatedThumbFormat,
   galleryItemThumbQuality: 85,
   galleryPageSize: 200,
+  galleryCardPageSize: 80,
   downloadHistoryLimit: -1,
   browseHistoryLimit: 500,
   civitaiMarks: defaultCivitaiMarks(),

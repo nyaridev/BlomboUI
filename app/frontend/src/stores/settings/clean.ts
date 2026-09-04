@@ -149,6 +149,14 @@ export function cleanGalleryPageSize(raw: unknown) {
   return Math.max(20, Math.min(500, Math.round(n)))
 }
 
+export function cleanGalleryCardPageSize(raw: unknown) {
+  const n = typeof raw === 'number' ? raw : Number(raw)
+  if (!Number.isFinite(n)) {
+    return SETTINGS_DEFAULTS.galleryCardPageSize
+  }
+  return Math.max(20, Math.min(500, Math.round(n)))
+}
+
 export function cleanLargeJpegMaxKb(raw: unknown) {
   const n = typeof raw === 'number' ? raw : Number(raw)
   if (!Number.isFinite(n)) {
@@ -728,6 +736,10 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       typeof patch.galleryPageSize === 'number'
         ? cleanGalleryPageSize(patch.galleryPageSize)
         : SETTINGS_DEFAULTS.galleryPageSize,
+    galleryCardPageSize:
+      typeof patch.galleryCardPageSize === 'number'
+        ? cleanGalleryCardPageSize(patch.galleryCardPageSize)
+        : SETTINGS_DEFAULTS.galleryCardPageSize,
     downloadHistoryLimit: cleanHistoryLimit(patch.downloadHistoryLimit, SETTINGS_DEFAULTS.downloadHistoryLimit),
     browseHistoryLimit: cleanHistoryLimit(patch.browseHistoryLimit, SETTINGS_DEFAULTS.browseHistoryLimit),
     civitaiMarks: 'civitaiMarks' in patch ? cleanCivitaiMarks(patch.civitaiMarks) : SETTINGS_DEFAULTS.civitaiMarks,

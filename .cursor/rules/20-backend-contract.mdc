@@ -13,7 +13,7 @@ The backend is FastAPI in `app/backend/src/`. Uvicorn runs `main:app` from `app/
 api/routes/                 validate, call feature, map errors
 features/<name>/            service.py facade, schemas.py, scripts/
 infrastructure/comfy/       synchronous Comfy HTTP and websocket client
-infrastructure/storage/     three SQLite connections and repositories
+infrastructure/storage/     profile registry plus three per-profile SQLite connections and repositories
 shared/                     focused shared helpers
 bootstrap/                  install-time environment and YAML work
 ```
@@ -25,13 +25,14 @@ bootstrap/                  install-time environment and YAML work
 
 ## Storage
 
-There are exactly three singleton SQLite connections, opened synchronously in lifespan with WAL and module `RLock`s:
+There are exactly three **per-profile** product SQLite connections, opened synchronously in lifespan with WAL and module `RLock`s, plus one install-wide profile registry:
 
-- `user/data/sqlite/blombo.sqlite` — settings and durable user/product data.
-- `runtime/data/sqlite/cache.sqlite` — jobs and model hashes.
-- `runtime/data/sqlite/cache_gallery.sqlite` — gallery index data.
+- `user/data/sqlite/profile.sqlite` — profile ids, display names, the active profile, and removed profiles until they expire. Not a product database.
+- `user/data/sqlite/{id}/blombo.sqlite` — settings and durable user/product data for the active profile.
+- `runtime/data/sqlite/{id}/cache.sqlite` — jobs and model hashes for the active profile.
+- `runtime/data/sqlite/{id}/cache_gallery.sqlite` — gallery index data for the active profile.
 
-Do not add a fourth database, `aiosqlite`, or an unguarded connection. New tables belong in the appropriate existing storage schema and repository.
+`{id}` is `default` or a lowercase UUID. The running app opens only the active profile’s product databases. Do not add `aiosqlite`, an unguarded connection, or another product database. New tables belong in the appropriate existing storage schema and repository.
 
 ## Concurrency and ComfyUI
 

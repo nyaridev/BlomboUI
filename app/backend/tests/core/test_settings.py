@@ -130,6 +130,14 @@ class SettingsTests(unittest.TestCase):
         result = settings._clean({"galleryAutoTypes": {"loras": True, "checkpoints": False, "nope": True}})
         self.assertEqual(result["galleryAutoTypes"], {"loras": True})
 
+    def test_gallery_page_sizes_clamp(self) -> None:
+        result = settings._clean({"galleryPageSize": 9999, "galleryCardPageSize": 5})
+        self.assertEqual(result["galleryPageSize"], 500)
+        self.assertEqual(result["galleryCardPageSize"], 20)
+        result = settings._clean({"galleryPageSize": 200, "galleryCardPageSize": 80})
+        self.assertEqual(result["galleryPageSize"], 200)
+        self.assertEqual(result["galleryCardPageSize"], 80)
+
 
 if __name__ == "__main__":
     unittest.main()

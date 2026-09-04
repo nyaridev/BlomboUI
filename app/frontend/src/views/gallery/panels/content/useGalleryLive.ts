@@ -1,8 +1,11 @@
 import { getLatestGalleryItem, listGallerySince, syncGallery } from '@/lib/api/gallery.ts'
 import { useCallback, useEffect, useRef } from 'react'
 
+const SYNC_GAP_MS = 30_000
+
 export function useGalleryLive(visible: boolean, onLive: () => void) {
   const newest = useRef('')
+  const lastSync = useRef(0)
   const onLiveRef = useRef(onLive)
   onLiveRef.current = onLive
 
@@ -17,7 +20,11 @@ export function useGalleryLive(visible: boolean, onLive: () => void) {
       return
     }
     let stop = false
-    void syncGallery().catch(() => undefined)
+    const now = Date.now()
+    if (now - lastSync.current >= SYNC_GAP_MS) {
+      lastSync.current = now
+      void syncGallery().catch(() => undefined)
+    }
     const timer = window.setInterval(() => {
       const stamp = newest.current
       if (!stamp) {

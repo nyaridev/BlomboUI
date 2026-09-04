@@ -94,7 +94,7 @@ def list_gallery_since(created_at: str = "") -> dict:
 
 @api.post("/gallery/sync")
 def sync_gallery() -> dict:
-    busy = gallery.start_sync()
+    busy = gallery.start_sync(again=False)
     return {"ok": True, "busy": busy}
 
 
@@ -141,9 +141,9 @@ def gallery_home() -> dict:
 
 
 @api.get("/gallery/browse/{kind}")
-def gallery_browse(kind: str, sort: str = "recent", dir: str = "desc") -> dict:
+def gallery_browse(kind: str, sort: str = "recent", dir: str = "desc", limit: int = 0, cursor: str = "") -> dict:
     try:
-        return gallery.browse(kind, sort, dir)
+        return gallery.browse(kind, sort, dir, limit, cursor)
     except ValueError as exc:
         raise ApiError("bad_request", str(exc), 400) from exc
 

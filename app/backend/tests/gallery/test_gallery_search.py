@@ -10,8 +10,10 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from infrastructure.storage import cache as cache_db
 from infrastructure.storage import cache_gallery as gallery_db
 from infrastructure.storage import user as user_db
+from infrastructure.storage.repositories import gallery as gallery_repo
 from features.gallery.scripts import cache as gallery_cache
 from features.gallery.scripts import libraries, search
 from features.models.scripts import thumbnail_scopes
@@ -69,6 +71,8 @@ class GallerySearchTests(unittest.TestCase):
         self.root = self.tmp / "gallery"
         self.root.mkdir()
         self.patches = [
+            patch.object(cache_db, "_CONN", None),
+            patch.object(cache_db, "db_path", return_value=self.tmp / "cache.sqlite"),
             patch.object(gallery_db, "_CONN", None),
             patch.object(gallery_db, "db_path", return_value=self.tmp / "cache_gallery.sqlite"),
             patch.object(user_db, "_CONN", None),
@@ -78,10 +82,14 @@ class GallerySearchTests(unittest.TestCase):
         ]
         for item in self.patches:
             item.start()
+        cache_db.connect()
         gallery_db.connect()
         user_db.connect()
 
     def tearDown(self) -> None:
+        if cache_db._CONN is not None:
+            cache_db._CONN.close()
+            cache_db._CONN = None
         if gallery_db._CONN is not None:
             gallery_db._CONN.close()
             gallery_db._CONN = None
@@ -126,6 +134,24 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(len(found["items"]), 2)
         self.assertTrue(found["cursor"])
 
+    def test_search_keeps_missing_until_sync(self) -> None:
+        first = gallery_cache.ingest(_write(self.root / "a.png", {"prompt": "one"}, "2026-01-01T00:00:00.000Z"))
+        gone = gallery_cache.ingest(_write(self.root / "b.png", {"prompt": "two"}, "2026-01-02T00:00:00.000Z"))
+        latest = gallery_cache.ingest(_write(self.root / "c.png", {"prompt": "three"}, "2026-01-03T00:00:00.000Z"))
+        self.assertIsNotNone(first)
+        self.assertIsNotNone(gone)
+        self.assertIsNotNone(latest)
+        Path(gone["path"]).unlink()
+        listed = search.search(limit=10)
+        self.assertEqual({item["id"] for item in listed["items"]}, {first["id"], gone["id"], latest["id"]})
+        gallery_cache.sync()
+        page = search.search(limit=1)
+        self.assertEqual([item["id"] for item in page["items"]], [latest["id"]])
+        self.assertTrue(page["cursor"])
+        rest = search.search(limit=1, cursor=page["cursor"])
+        self.assertEqual([item["id"] for item in rest["items"]], [first["id"]])
+        self.assertIsNone(gallery_cache.row(gone["id"]))
+
     def test_index_uses_raw_prompt_and_model_hashes_only(self) -> None:
         gallery_cache.ingest(
             _write(
@@ -148,6 +174,45 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(len(search.search(q="dress cat")["items"]), 1)
         self.assertEqual(len(search.search(q="sitting, cat")["items"]), 1)
         self.assertEqual(len(search.search(q="dress dog")["items"]), 0)
+
+    def test_search_model_filter_does_not_touch_disk(self) -> None:
+        gallery_cache.ingest(
+            _write(
+                self.root / "a.png",
+                {
+                    "prompt": "cat",
+                    "models": [{"kind": "checkpoints", "hashes": {"autov2": "noobai.safetensors"}}],
+                },
+            )
+        )
+        with (
+            patch("features.models.scripts.models.model_file") as model_file,
+            patch("features.models.scripts.hashes.entry") as entry,
+        ):
+            found = search.search(models=["noobai.safetensors"])
+            model_file.assert_not_called()
+            entry.assert_not_called()
+        self.assertEqual(len(found["items"]), 1)
+
+    def test_browse_previews_use_recent_window(self) -> None:
+        for index in range(20):
+            gallery_cache.ingest(
+                _write(
+                    self.root / f"{index}.png",
+                    {"prompt": "cat", "models": [{"kind": "checkpoints", "hashes": {"autov2": "alpha.safetensors"}}]},
+                    f"2026-01-{index + 1:02d}T00:00:00.000Z",
+                )
+            )
+        captured: list[int] = []
+
+        def take(items, k):
+            captured.append(len(items))
+            return items[:k]
+
+        with patch("features.gallery.scripts.search.random.sample", side_effect=take):
+            cards = search.browse("checkpoints")["items"]
+        self.assertEqual(captured, [search.PREVIEW_WINDOW])
+        self.assertEqual(len(cards[0]["previews"]), search.BROWSE_PREVIEW)
 
     def test_list_rows_does_not_scan_disk(self) -> None:
         _write(self.root / "late.png", {"prompt": "later"})
@@ -216,6 +281,49 @@ class GallerySearchTests(unittest.TestCase):
         self.assertEqual(works[0]["works"], 2)
         self.assertIn("dog", names)
         self.assertTrue(works[0]["previews"])
+
+    def test_browse_pages_limit_and_cursor(self) -> None:
+        names = ["alpha", "beta", "gamma", "delta", "echo"]
+        for index, name in enumerate(names):
+            gallery_cache.ingest(
+                _write(
+                    self.root / f"{index}.png",
+                    {
+                        "prompt": name,
+                        "models": [{"kind": "checkpoints", "hashes": {"autov2": f"{name}.safetensors"}}],
+                    },
+                    f"2026-01-{index + 1:02d}T00:00:00.000Z",
+                )
+            )
+        captured: list[list[str]] = []
+        real = search._previews_for
+
+        def wrap(column: str, preview_names: list[str], hide: bool):
+            captured.append(list(preview_names))
+            return real(column, preview_names, hide)
+
+        with patch("features.gallery.scripts.search._previews_for", side_effect=wrap):
+            first = search.browse("checkpoints", "recent", "desc", 2)
+        self.assertEqual([item["name"] for item in first["items"]], ["echo.safetensors", "delta.safetensors"])
+        self.assertEqual(first["cursor"], "2")
+        self.assertEqual(captured, [["echo.safetensors", "delta.safetensors"]])
+        second = search.browse("checkpoints", "recent", "desc", 2, first["cursor"])
+        self.assertEqual([item["name"] for item in second["items"]], ["gamma.safetensors", "beta.safetensors"])
+        self.assertEqual(second["cursor"], "4")
+        third = search.browse("checkpoints", "recent", "desc", 2, second["cursor"])
+        self.assertEqual([item["name"] for item in third["items"]], ["alpha.safetensors"])
+        self.assertEqual(third["cursor"], "")
+
+    def test_search_rows_omit_params_json(self) -> None:
+        gallery_cache.ingest(_write(self.root / "prompt.png", {"prompt": "cat " * 80}))
+        rows = gallery_repo.list_items("asset_kind != 'grid' AND asset_kind != 'temp'", (10,))
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn("params_json", rows[0].keys())
+        found = search.search(q="cat")
+        self.assertEqual(len(found["items"]), 1)
+        self.assertNotIn("params_json", found["items"][0])
+        self.assertIn("id", found["items"][0])
+        self.assertIn("created_at", found["items"][0])
 
     def test_scope_filter_uses_prompt_tags(self) -> None:
         gallery_cache.ingest(_write(self.root / "cat.png", {"prompt": "cat, portrait"}))

@@ -7,9 +7,9 @@ from features.settings import service as settings
 from features.gallery.scripts import cache as gallery_cache
 from features.gallery.scripts import index as gallery_index
 from features.models.scripts import model_thumb_anim
-from config import USER
+from config import gallery_thumbs_root
 
-THUMBS = USER / "gallery_thumbs"
+THUMBS = None
 _DEFAULT_MP = 0.5
 _DEFAULT_IMAGE = "jpg"
 _DEFAULT_VIDEO = "webp"
@@ -23,6 +23,13 @@ _STILL = {
     "gif": ("GIF", ".gif"),
     "video": ("JPEG", ".jpg"),
 }
+
+
+def thumbs_root() -> Path:
+    override = globals().get("THUMBS")
+    if isinstance(override, Path):
+        return override
+    return gallery_thumbs_root()
 
 
 def _hide() -> bool:
@@ -96,7 +103,7 @@ def disk_thumb(ident: str) -> Path | None:
 def _thumb(src: Path, ident: str) -> Path | None:
     safe_ident = "".join(char if char.isalnum() or char in "._-" else "_" for char in ident)
     megapixels, image_fmt, video_fmt, quality = _opts()
-    stem = THUMBS / _stem(safe_ident, megapixels, image_fmt, video_fmt, quality)
+    stem = thumbs_root() / _stem(safe_ident, megapixels, image_fmt, video_fmt, quality)
     try:
         src_mtime = src.stat().st_mtime
     except OSError:
@@ -104,7 +111,7 @@ def _thumb(src: Path, ident: str) -> Path | None:
     existing = _existing(stem, src_mtime)
     if existing:
         return existing
-    THUMBS.mkdir(parents=True, exist_ok=True)
+    thumbs_root().mkdir(parents=True, exist_ok=True)
     path = _encode(src, stem, image_fmt, video_fmt, megapixels, quality)
     if not path:
         return None
@@ -167,12 +174,13 @@ def _existing(stem: Path, src_mtime: float) -> Path | None:
 
 
 def _drop_others(safe_ident: str, keep: Path) -> None:
-    if not THUMBS.is_dir():
+    folder = thumbs_root()
+    if not folder.is_dir():
         return
     prefix = f"{safe_ident}_"
     old = f"{safe_ident}.jpg"
     keep_resolved = keep.resolve()
-    for path in THUMBS.iterdir():
+    for path in folder.iterdir():
         if not path.is_file():
             continue
         try:

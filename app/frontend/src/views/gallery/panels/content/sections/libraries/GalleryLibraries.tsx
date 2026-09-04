@@ -18,6 +18,7 @@ export function GalleryLibraries({
   onEdit,
   onRemove,
   onDrop,
+  onMissing,
 }: {
   items: GalleryLibrary[]
   parentId: string | null
@@ -30,6 +31,7 @@ export function GalleryLibraries({
   onEdit: (library: GalleryLibrary) => void
   onRemove: (library: GalleryLibrary) => void
   onDrop: (parentId: string | null, ids: string[]) => void
+  onMissing: (id: string) => void
 }) {
   const [menu, setMenu] = useState<{ x: number; y: number; library: GalleryLibrary } | null>(null)
   const [over, setOver] = useState<{ id: string; kind: LibraryDropKind } | null>(null)
@@ -140,6 +142,7 @@ export function GalleryLibraries({
                 setOver((prev) => (prev?.id === item.id ? null : prev))
               }}
               onDrop={(event) => dropOn(event, item, next?.id ?? null)}
+              onMissing={onMissing}
             />
           )
         })}

@@ -22,14 +22,16 @@ import {
   setGalleryFavorite,
   updateGalleryLibrary,
   type GalleryBrowseItem,
+  type GalleryBrowsePage,
   type GalleryHome as GalleryHomeData,
   type GalleryItem,
   type GalleryLibrary,
+  type GalleryPreview,
   type ThumbScope,
 } from '@/lib/api.ts'
 import { galleryBrowseKey, useSettingsStore, type GalleryBrowseKind } from '@/stores/settingsStore.ts'
 import { toast } from '@/stores/toastStore.ts'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { GalleryBrowse } from '@/views/gallery/panels/content/sections/browse/GalleryBrowse.tsx'
 import { GalleryFilterTiles } from '@/views/gallery/panels/content/GalleryFilterTiles.tsx'
@@ -46,6 +48,8 @@ import { useGalleryLive } from '@/views/gallery/panels/content/useGalleryLive.ts
 
 const NAV_REM = 14
 const NAV_MIN_REM = 10
+const SEARCH_DEBOUNCE_MS = 150
+const BROWSE_KINDS: GalleryBrowseKind[] = ['checkpoints', 'loras', 'wildcards', 'tags']
 const EMPTY_HOME: GalleryHomeData = { recent: [], tags: [], checkpoints: [], loras: [], wildcards: [] }
 const EMPTY_COPY = 'Nothing yet. Generate something on the Generate tab.'
 const MEDIA: { id: GalleryMedia; label: string }[] = [
@@ -85,6 +89,32 @@ function mergeFront(incoming: GalleryItem[], prev: GalleryItem[]) {
   return [...incoming, ...prev.filter((item) => !seen.has(item.id))]
 }
 
+function dropPreviews<T extends { previews?: GalleryPreview[] }>(items: T[], id: string): T[] {
+  return items.map((item) => ({
+    ...item,
+    previews: item.previews?.filter((preview) => preview.id !== id) ?? item.previews,
+  }))
+}
+
+function isAbort(err: unknown) {
+  return err instanceof DOMException
+    ? err.name === 'AbortError'
+    : err instanceof Error && err.name === 'AbortError'
+}
+
+function browseSortDir(kind: GalleryBrowseKind): { sort: 'recent' | 'works'; dir: 'asc' | 'desc' } {
+  const state = useSettingsStore.getState()
+  const key = galleryBrowseKey(kind, state.galleryBrowseShare)
+  return {
+    sort: state.galleryBrowseSort[key] ?? (kind === 'tags' && !state.galleryBrowseShare ? 'works' : 'recent'),
+    dir: state.galleryBrowseDir[key] ?? 'desc',
+  }
+}
+
+function browseCacheKey(kind: GalleryBrowseKind, sort: string, dir: string, cardPageSize: number) {
+  return `${kind}|${sort}|${dir}|${cardPageSize}`
+}
+
 export function GalleryView() {
   const visible = useLocation().pathname === '/gallery'
   const navigate = useNavigate()
@@ -98,6 +128,10 @@ export function GalleryView() {
   const [results, setResults] = useState<GalleryItem[]>([])
   const [cursor, setCursor] = useState('')
   const [browse, setBrowse] = useState<GalleryBrowseItem[]>([])
+  const [browseCursor, setBrowseCursor] = useState('')
+  const browseCacheRef = useRef<Partial<Record<string, GalleryBrowsePage>>>({})
+  const loadMoreAbort = useRef<AbortController | null>(null)
+  const [qSearch, setQSearch] = useState('')
   const [libraries, setLibraries] = useState<GalleryLibrary[]>([])
   const [scopes, setScopes] = useState<ThumbScope[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -114,6 +148,24 @@ export function GalleryView() {
   const folderId = nav.startsWith('folder:') ? nav.slice(7) : ''
   const folderImages = Boolean(folderId) && folderView === 'images'
   const searching = filtersActive(filters) || nav.startsWith('library:') || folderImages || nav === 'recent'
+  const searchFilters = useMemo(
+    () => ({ ...filters, q: qSearch }),
+    [
+      qSearch,
+      filters.tags,
+      filters.scopes,
+      filters.models,
+      filters.loras,
+      filters.wildcards,
+      filters.media,
+      filters.orientation,
+      filters.random,
+      filters.favorite,
+    ],
+  )
+  const requestSearching =
+    searching &&
+    (filtersActive(searchFilters) || nav.startsWith('library:') || folderImages || nav === 'recent')
   const share = useSettingsStore((s) => s.galleryBrowseShare)
   const browseKey = isBrowse(nav) ? galleryBrowseKey(nav, share) : ''
   const sort = useSettingsStore((s) =>
@@ -121,6 +173,7 @@ export function GalleryView() {
   )
   const dir = useSettingsStore((s) => (browseKey ? s.galleryBrowseDir[browseKey] ?? 'desc' : 'desc'))
   const pageSize = useSettingsStore((s) => s.galleryPageSize)
+  const cardPageSize = useSettingsStore((s) => s.galleryCardPageSize)
   const navRef = useRef(nav)
   const filtersRef = useRef(filters)
   const searchingRef = useRef(searching)
@@ -133,6 +186,11 @@ export function GalleryView() {
   pageSizeRef.current = pageSize
   homeRef.current = home
   folderViewRef.current = folderView
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQSearch(filters.q), SEARCH_DEBOUNCE_MS)
+    return () => window.clearTimeout(timer)
+  }, [filters.q])
 
   const onLive = useCallback(() => {
     const currentNav = navRef.current
@@ -176,6 +234,54 @@ export function GalleryView() {
   }, [])
   const setNewest = useGalleryLive(visible, onLive)
 
+  function paintBrowse(page: GalleryBrowsePage) {
+    setBrowse(page.items)
+    setBrowseCursor(page.cursor)
+  }
+
+  useEffect(() => {
+    let stop = false
+    void getGalleryHome()
+      .then((data) => {
+        if (stop) {
+          return
+        }
+        setHome(data)
+        setHomeReady(true)
+        setNewest(newestStamp(data.recent))
+        if (navRef.current === 'home' && !searchingRef.current) {
+          setError(null)
+        }
+      })
+      .catch((err: unknown) => {
+        if (stop) {
+          return
+        }
+        setHomeReady(true)
+        if (navRef.current === 'home' && !searchingRef.current) {
+          setError(err instanceof Error ? err.message : 'Could not load gallery')
+        }
+      })
+    const size = useSettingsStore.getState().galleryCardPageSize
+    for (const kind of BROWSE_KINDS) {
+      const next = browseSortDir(kind)
+      const cacheKey = browseCacheKey(kind, next.sort, next.dir, size)
+      void browseGallery(kind, next.sort, next.dir, { limit: size })
+        .then((page) => {
+          browseCacheRef.current[cacheKey] = page
+          if (stop || navRef.current !== kind || searchingRef.current) {
+            return
+          }
+          paintBrowse(page)
+          setError(null)
+        })
+        .catch(() => undefined)
+    }
+    return () => {
+      stop = true
+    }
+  }, [setNewest])
+
   useEffect(() => {
     if (!visible) {
       return
@@ -196,33 +302,15 @@ export function GalleryView() {
       return
     }
     let stop = false
-    const loadHome = nav === 'home' || !homeReady
-    if (loadHome) {
-      void getGalleryHome()
-        .then((data) => {
-          if (stop) {
-            return
-          }
-          setHome(data)
-          setHomeReady(true)
-          if (!searching && nav === 'home') {
-            setError(null)
-            setNewest(newestStamp(data.recent))
-          }
-        })
-        .catch((err: unknown) => {
-          if (!stop) {
-            setHomeReady(true)
-            if (nav === 'home' && !searching) {
-              setError(err instanceof Error ? err.message : 'Could not load gallery')
-            }
-          }
-        })
-    }
-    if (searching) {
+    if (requestSearching) {
       loadingMoreRef.current = false
       setLoadingMore(false)
-      void searchGallery(searchArgs(filters, pageSize, undefined, folderImages ? folderId : ''))
+      loadMoreAbort.current?.abort()
+      const ac = new AbortController()
+      void searchGallery(
+        searchArgs(searchFilters, pageSize, undefined, folderImages ? folderId : ''),
+        ac.signal,
+      )
         .then((data) => {
           if (stop) {
             return
@@ -233,19 +321,35 @@ export function GalleryView() {
           setNewest(newestStamp(data.items))
         })
         .catch((err: unknown) => {
-          if (!stop) {
-            setError(err instanceof Error ? err.message : 'Could not search gallery')
+          if (stop || isAbort(err)) {
+            return
           }
+          setError(err instanceof Error ? err.message : 'Could not search gallery')
         })
       return () => {
         stop = true
+        ac.abort()
       }
     }
     if (isBrowse(nav)) {
-      void browseGallery(nav, sort, dir)
-        .then((items) => {
+      loadingMoreRef.current = false
+      setLoadingMore(false)
+      const cacheKey = browseCacheKey(nav, sort, dir, cardPageSize)
+      const cached = browseCacheRef.current[cacheKey]
+      if (cached) {
+        paintBrowse(cached)
+        setError(null)
+        return () => {
+          stop = true
+        }
+      }
+      setBrowse([])
+      setBrowseCursor('')
+      void browseGallery(nav, sort, dir, { limit: cardPageSize })
+        .then((page) => {
+          browseCacheRef.current[cacheKey] = page
           if (!stop) {
-            setBrowse(items)
+            paintBrowse(page)
             setError(null)
           }
         })
@@ -258,7 +362,7 @@ export function GalleryView() {
     return () => {
       stop = true
     }
-  }, [visible, searching, nav, filters, sort, dir, homeReady, setNewest, pageSize, shuffle])
+  }, [visible, searching, requestSearching, nav, searchFilters, sort, dir, cardPageSize, setNewest, pageSize, shuffle, folderImages, folderId])
 
   function applyLibrary(library: GalleryLibrary) {
     if (isFolder(library)) {
@@ -275,6 +379,7 @@ export function GalleryView() {
       loras: library.loras,
       wildcards: library.wildcards,
     })
+    setQSearch(library.query)
     setNav(`library:${library.id}`)
   }
 
@@ -296,13 +401,28 @@ export function GalleryView() {
       setFilters({ ...EMPTY_FILTERS, wildcards: [name] })
     } else if (nav === 'tags') {
       setFilters({ ...EMPTY_FILTERS, tags: [name], q: name })
+      setQSearch(name)
     }
   }
 
   function goNav(id: GallerySidebarId) {
     setNav(id)
+    if (isBrowse(id)) {
+      const key = galleryBrowseKey(id, share)
+      const nextSort =
+        useSettingsStore.getState().galleryBrowseSort[key] ?? (id === 'tags' && !share ? 'works' : 'recent')
+      const nextDir = useSettingsStore.getState().galleryBrowseDir[key] ?? 'desc'
+      const cached = browseCacheRef.current[browseCacheKey(id, nextSort, nextDir, cardPageSize)]
+      if (cached) {
+        paintBrowse(cached)
+      } else {
+        setBrowse([])
+        setBrowseCursor('')
+      }
+    }
     if (id === 'home' || id === 'libraries' || id === 'recent' || isBrowse(id) || id.startsWith('folder:')) {
       setFilters(EMPTY_FILTERS)
+      setQSearch('')
       if (id.startsWith('folder:')) {
         setFolderView('galleries')
       }
@@ -405,7 +525,22 @@ export function GalleryView() {
 
   function dropItem(id: string) {
     setResults((prev) => prev.filter((item) => item.id !== id))
-    setHome((prev) => ({ ...prev, recent: prev.recent.filter((item) => item.id !== id) }))
+    setHome((prev) => ({
+      ...prev,
+      recent: prev.recent.filter((item) => item.id !== id),
+      tags: dropPreviews(prev.tags, id),
+      checkpoints: dropPreviews(prev.checkpoints, id),
+      loras: dropPreviews(prev.loras, id),
+      wildcards: dropPreviews(prev.wildcards, id),
+    }))
+    setBrowse((prev) => dropPreviews(prev, id))
+    browseCacheRef.current = Object.fromEntries(
+      Object.entries(browseCacheRef.current).map(([key, page]) => [
+        key,
+        page ? { ...page, items: dropPreviews(page.items, id) } : page,
+      ]),
+    )
+    setLibraries((prev) => dropPreviews(prev, id))
     setPreview((value) => {
       if (!value) {
         return value
@@ -443,12 +578,42 @@ export function GalleryView() {
   }
 
   const loadMore = useCallback(() => {
-    if (!cursor || loadingMoreRef.current) {
+    if (loadingMoreRef.current) {
+      return
+    }
+    if (isBrowse(nav) && !searching) {
+      if (!browseCursor) {
+        return
+      }
+      loadingMoreRef.current = true
+      setLoadingMore(true)
+      const cacheKey = browseCacheKey(nav, sort, dir, cardPageSize)
+      void browseGallery(nav, sort, dir, { limit: cardPageSize, cursor: browseCursor })
+        .then((page) => {
+          setBrowse((items) => {
+            const seen = new Set(items.map((item) => item.name))
+            const merged = [...items, ...page.items.filter((item) => !seen.has(item.name))]
+            browseCacheRef.current[cacheKey] = { items: merged, cursor: page.cursor }
+            return merged
+          })
+          setBrowseCursor(page.cursor)
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          loadingMoreRef.current = false
+          setLoadingMore(false)
+        })
+      return
+    }
+    if (!cursor) {
       return
     }
     loadingMoreRef.current = true
     setLoadingMore(true)
-    void searchGallery(searchArgs(filters, pageSize, cursor, folderImages ? folderId : ''))
+    loadMoreAbort.current?.abort()
+    const ac = new AbortController()
+    loadMoreAbort.current = ac
+    void searchGallery(searchArgs(searchFilters, pageSize, cursor, folderImages ? folderId : ''), ac.signal)
       .then((data) => {
         setResults((items) => {
           const seen = new Set(items.map((item) => item.id))
@@ -456,11 +621,18 @@ export function GalleryView() {
         })
         setCursor(data.cursor)
       })
-      .finally(() => {
-        loadingMoreRef.current = false
-        setLoadingMore(false)
+      .catch((err: unknown) => {
+        if (isAbort(err)) {
+          return
+        }
       })
-  }, [cursor, filters, pageSize, folderImages, folderId])
+      .finally(() => {
+        if (loadMoreAbort.current === ac) {
+          loadingMoreRef.current = false
+          setLoadingMore(false)
+        }
+      })
+  }, [browseCursor, cardPageSize, cursor, dir, folderId, folderImages, nav, pageSize, searchFilters, searching, sort])
 
   const current = preview ? preview.items[preview.index] : null
   const scopeLabels = Object.fromEntries(scopes.map((item) => [item.id, item.name]))
@@ -619,7 +791,7 @@ export function GalleryView() {
             onWildcards={(next) => setFilters((value) => ({ ...value, wildcards: next }))}
           />
         </div>
-        <div className={searching ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto'}>
+        <div className={searching || isBrowse(nav) ? 'flex min-h-0 flex-1 flex-col' : 'min-h-0 flex-1 overflow-y-auto'}>
           {searching ? (
             <GalleryResults
               key={String(shuffle)}
@@ -631,6 +803,7 @@ export function GalleryView() {
               onFavorite={onItemFavorite}
               onRemove={setTrashImage}
               onFileInfo={onItemFileInfo}
+              onMissing={dropItem}
             />
           ) : nav === 'home' ? (
             <GalleryHome
@@ -651,9 +824,19 @@ export function GalleryView() {
               onFavorite={onItemFavorite}
               onRemove={setTrashImage}
               onFileInfo={onItemFileInfo}
+              onMissing={dropItem}
             />
           ) : isBrowse(nav) ? (
-            <GalleryBrowse kind={nav} items={browse} error={error} onOpen={onBrowseOpen} />
+            <GalleryBrowse
+              kind={nav}
+              items={browse}
+              error={error}
+              hasNext={Boolean(browseCursor)}
+              loadingMore={loadingMore}
+              onOpen={onBrowseOpen}
+              onMissing={dropItem}
+              onMore={loadMore}
+            />
           ) : (
             <GalleryLibraries
               items={libraries}
@@ -671,6 +854,7 @@ export function GalleryView() {
               onEdit={(item) => (isFolder(item) ? setRenameFolder(item) : setEdit(item))}
               onRemove={setRemove}
               onDrop={(parent, ids) => void onDrop(parent, ids)}
+              onMissing={dropItem}
             />
           )}
         </div>

@@ -14,7 +14,7 @@ from features.gallery.scripts import relink as gallery_relink
 from features.generate.scripts import save_meta
 from shared import dirs
 from shared import pnginfo
-from config import RUNTIME, outputs_root
+from config import RUNTIME, USER, outputs_root, valid_profile_id
 
 IMAGE_EXTS = gallery_index.IMAGE_EXTS
 VIDEO_EXTS = gallery_index.VIDEO_EXTS
@@ -22,6 +22,8 @@ MEDIA_EXTS = gallery_index.MEDIA_EXTS
 _OUTPUT_CACHE: dict[str, tuple[int, int, dict[str, Any]]] = {}
 _SYNC_LOCK = threading.Lock()
 _SYNC_THREAD: threading.Thread | None = None
+_SYNC_AGAIN = False
+_SYNC_BATCH = 250
 
 
 def canonical(path: Path) -> Path:
@@ -237,21 +239,30 @@ def ingest(path: Path, ident: str | None = None) -> dict[str, Any] | None:
     return dict(values)
 
 
-def start_sync() -> bool:
-    global _SYNC_THREAD
+def start_sync(*, again: bool = True) -> bool:
+    global _SYNC_THREAD, _SYNC_AGAIN
     with _SYNC_LOCK:
         if _SYNC_THREAD is not None and _SYNC_THREAD.is_alive():
+            if again:
+                _SYNC_AGAIN = True
             return True
+        _SYNC_AGAIN = False
         _SYNC_THREAD = threading.Thread(target=_sync_safe, daemon=True, name="gallery-sync")
         _SYNC_THREAD.start()
         return True
 
 
 def _sync_safe() -> None:
-    try:
-        sync()
-    except Exception:
-        pass
+    global _SYNC_AGAIN
+    while True:
+        try:
+            sync()
+        except Exception:
+            pass
+        with _SYNC_LOCK:
+            if not _SYNC_AGAIN:
+                return
+            _SYNC_AGAIN = False
 
 
 def _mark_seen(path: str, size: int, mtime_ns: int, ok: bool) -> None:
@@ -308,10 +319,37 @@ def _cached_ok(path: Path, key: str, size: int, mtime_ns: int, scan_root: Path, 
 
 
 def sync() -> None:
+    _relocate_index()
     roots = _roots()
     root_keys = [str(root) for root in roots]
     disk: set[str] = set()
     items: set[str] = set()
+    seen_map = {
+        str(row["path"]): row
+        for row in gallery_repo.query("SELECT path, size, mtime_ns, ok FROM gallery_seen")
+    }
+    exist_map = {str(row["path"]): row for row in gallery_repo.query("SELECT * FROM gallery_items")}
+    pending: list[tuple[Any, ...]] = []
+
+    def flush() -> None:
+        if not pending:
+            return
+        batch = list(pending)
+        pending.clear()
+
+        def write(conn: Any) -> None:
+            for op in batch:
+                kind = op[0]
+                if kind == "row":
+                    _, values, p, n, m = op
+                    _write_row(conn, values, gallery_repo.fetch_by_path(conn, values["path"]))
+                    gallery_repo.upsert_seen(conn, p, n, m, True)
+                    continue
+                _, p, n, m, ok = op
+                gallery_repo.upsert_seen(conn, p, n, m, bool(ok))
+
+        gallery_repo.transaction(write)
+
     for root in roots:
         for path in _iter_media(root):
             key = str(path)
@@ -325,15 +363,11 @@ def sync() -> None:
                 continue
             disk.add(key)
             scan_root = _root_for(path, roots)
-
-            def lookup(conn: Any, p: str = key) -> tuple[Any, Any]:
-                return gallery_repo.fetch_seen(conn, p), gallery_repo.fetch_by_path(conn, p)
-
-            seen_row, existing = gallery_repo.transaction(lookup)
+            seen_row = seen_map.get(key)
+            existing = exist_map.get(key)
             if seen_row and int(seen_row["size"]) == size and int(seen_row["mtime_ns"]) == mtime_ns:
                 if int(seen_row["ok"]) and existing:
                     items.add(key)
-                    _refresh_links(existing)
                     continue
                 if not int(seen_row["ok"]):
                     continue
@@ -346,17 +380,18 @@ def sync() -> None:
             ):
                 items.add(key)
                 continue
-            values = _row_values(path, scan_root)
+            values = _row_values(path, scan_root, ident=str(existing["id"]) if existing else None)
             if values and not _is_sidecar(path, _params_of(values), scan_root):
                 items.add(key)
-
-                def write(conn: Any, row: dict[str, Any] = values, p: str = key, n: int = size, m: int = mtime_ns) -> None:
-                    _write_row(conn, row, gallery_repo.fetch_by_path(conn, row["path"]))
-                    gallery_repo.upsert_seen(conn, p, n, m, True)
-
-                gallery_repo.transaction(write)
+                pending.append(("row", values, key, size, mtime_ns))
+                exist_map[key] = values
+                if len(pending) >= _SYNC_BATCH:
+                    flush()
                 continue
-            _mark_seen(key, size, mtime_ns, False)
+            pending.append(("seen", key, size, mtime_ns, False))
+            if len(pending) >= _SYNC_BATCH:
+                flush()
+    flush()
 
     def finish(conn: Any) -> None:
         if root_keys:
@@ -369,12 +404,101 @@ def sync() -> None:
     gallery_relink.relink_digests()
 
 
+def _relocate_index() -> None:
+    dest_root = str(canonical(outputs_root())).casefold()
+    output = str(canonical(USER / "output")).casefold()
+    for row in gallery_repo.list_locations():
+        raw = str(row["path"] or "")
+        key = raw.casefold()
+        if key.startswith(dest_root) or not key.startswith(output):
+            continue
+        resolve_path(row, forget_missing=False)
+
+
+def _is_flat_output(path: Path) -> bool:
+    try:
+        rel = canonical(path).relative_to(canonical(USER / "output"))
+    except (OSError, ValueError):
+        return False
+    parts = rel.parts
+    return bool(parts) and not valid_profile_id(parts[0])
+
+
+def _relocate_dest(path: Path) -> Path | None:
+    dest_root = canonical(outputs_root())
+    try:
+        rel = canonical(path).relative_to(canonical(USER / "output"))
+    except (OSError, ValueError):
+        return None
+    parts = rel.parts
+    if not parts:
+        return None
+    if valid_profile_id(parts[0]):
+        if len(parts) < 2:
+            return None
+        rel = Path(*parts[1:])
+    dest = dest_root / rel
+    try:
+        if canonical(dest) == canonical(path):
+            return None
+    except OSError:
+        pass
+    return dest
+
+
+def _move_into(src: Path, dest: Path) -> bool:
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        if dest.exists():
+            return dest.is_file()
+        src.replace(dest)
+        return dest.is_file()
+    except OSError:
+        return False
+
+
+def _commit_relocate(ident: str, old_path: str, dest: Path) -> bool:
+    dest = canonical(dest)
+    root = _root_for(dest, _roots())
+    _OUTPUT_CACHE.pop(old_path, None)
+    if not gallery_repo.rewrite_location(ident, old_path, str(dest), str(root)):
+        forget_paths([old_path])
+        return False
+    return True
+
+
+def resolve_path(row: Any, *, forget_missing: bool = True) -> Path | None:
+    ident = str(row["id"] or "")
+    raw = str(row["path"] or "")
+    if not ident or not raw:
+        return None
+    path = Path(raw)
+    dest = _relocate_dest(path)
+    try:
+        if path.is_file() and dest is None:
+            return path
+    except OSError:
+        pass
+    if dest is not None:
+        if dest.is_file() and dirs.allowed_file(dest):
+            return dest if _commit_relocate(ident, raw, dest) else None
+        if path.is_file() and _is_flat_output(path) and _move_into(path, dest) and dirs.allowed_file(dest):
+            return dest if _commit_relocate(ident, raw, dest) else None
+    if forget_missing:
+        forget_paths([raw])
+    return None
+
+
 def list_rows(limit: int = 200, hide_interrupted: bool = True) -> list[Any]:
     cap = max(1, min(200, int(limit)))
     clauses = ["asset_kind != 'grid'", "asset_kind != 'temp'"]
     if hide_interrupted:
         clauses.append("asset_kind != 'interrupted'")
-    return gallery_repo.list_items(" AND ".join(clauses), (cap,))
+    return gallery_repo.query(
+        f"SELECT {gallery_repo.PUBLIC_SELECT}, path FROM gallery_items WHERE {' AND '.join(clauses)} "
+        "ORDER BY created_at DESC, id DESC LIMIT ?",
+        (cap,),
+    )
 
 
 def list_since(created_at: str, hide_interrupted: bool = True, limit: int = 60) -> list[Any]:
@@ -433,8 +557,7 @@ def path_for_id(ident: str) -> Path | None:
     cached = row(ident)
     if not cached:
         return None
-    path = Path(str(cached["path"]))
-    return path if dirs.allowed_file(path) else None
+    return resolve_path(cached, forget_missing=False)
 
 
 def set_favorite(ident: str, favorite: bool) -> Any | None:

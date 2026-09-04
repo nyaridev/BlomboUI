@@ -1,6 +1,6 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { getHealth, reloadApp } from '@/lib/api.ts'
+import { rememberProfileId, restartApp } from '@/lib/api.ts'
 import { digitKey, isTyping } from '@/lib/hotkeys.ts'
 import { bindSmoothWheel } from '@/lib/smoothWheel.ts'
 import { useHealthStore } from '@/stores/healthStore.ts'
@@ -23,24 +23,6 @@ import {
   visibleLeftTabIds,
   visibleMainTabIds,
 } from './appTabs.ts'
-
-async function waitForHealth(up: boolean, tries: number) {
-  for (let i = 0; i < tries; i++) {
-    if (i) {
-      await new Promise((resolve) => window.setTimeout(resolve, 250))
-    }
-    try {
-      await getHealth()
-      if (up) {
-        return
-      }
-    } catch {
-      if (!up) {
-        return
-      }
-    }
-  }
-}
 
 export function App() {
   const reloadLock = useRef(false)
@@ -96,6 +78,13 @@ export function App() {
     }, 4000)
     return () => window.clearInterval(timer)
   }, [loadModels, loadSettings, refreshHealth])
+
+  useEffect(() => {
+    const id = health?.profile?.id
+    if (id) {
+      rememberProfileId(id)
+    }
+  }, [health?.profile?.id])
 
   useEffect(() => {
     if (!comfyRestarting) {
@@ -173,11 +162,7 @@ export function App() {
     }
     reloadLock.current = true
     setReloading(true)
-    await reloadApp()
-    await waitForHealth(false, 24)
-    await waitForHealth(true, 80)
-    await new Promise((resolve) => window.setTimeout(resolve, 400))
-    window.location.reload()
+    await restartApp()
   }
 
   return (
@@ -189,6 +174,7 @@ export function App() {
           issueCount={issueCount}
           comfyOk={comfyOk}
           comfyMissing={comfyMissing}
+          onReload={() => void onReload()}
         />
       }
       footer={<Footer />}

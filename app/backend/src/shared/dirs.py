@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import getpass
 import os
 import subprocess
@@ -9,7 +8,7 @@ import threading
 from pathlib import Path
 
 from features.settings import service as settings
-from config import RUNTIME, launcher_env, models_root, outputs_root, wildcards_root, comfy_models_root
+from config import RUNTIME, USER, active_profile_id, models_root, outputs_root, set_output_override, wildcards_root, comfy_models_root
 from shared.extra_model_paths import write_file as write_extra_model_paths_file
 
 _PICK_LOCK = threading.Lock()
@@ -161,12 +160,18 @@ def set_output_root(raw: str) -> dict[str, str]:
     if not path.is_absolute():
         raise ValueError("path must be absolute")
     path.mkdir(parents=True, exist_ok=True)
-    env = dict(launcher_env())
-    env["outputs.root"] = str(path.resolve())
-    dest = RUNTIME / "data" / "launcher-env.json"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(json.dumps(env, indent=2), encoding="utf-8")
+    resolved_path = path.resolve()
+    default = (USER / "output" / active_profile_id()).resolve()
+    override = None if resolved_path == default else str(resolved_path)
+    settings.save_output_root(override)
+    set_output_override(override)
     return resolved()
+
+
+def apply_output_override() -> None:
+    raw = settings.load().get("outputRoot")
+    text = str(raw).strip() if isinstance(raw, str) else ""
+    set_output_override(text or None)
 
 
 def write_extra_model_paths() -> Path:

@@ -17,7 +17,7 @@ function layerClass(on: boolean) {
   ].join(' ')
 }
 
-export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
+export function RotatingPreview({ items, onMissing }: { items: GalleryPreview[]; onMissing?: (id: string) => void }) {
   const [visibleRef, visible] = useVisible<HTMLDivElement>()
   const [index, setIndex] = useState(0)
   const [front, setFront] = useState(0)
@@ -194,7 +194,10 @@ export function RotatingPreview({ items }: { items: GalleryPreview[] }) {
               preload={front === slot ? 'metadata' : 'auto'}
               className="h-full w-full object-cover"
               onLoad={() => onSlotReady(slot)}
-              onError={() => onSlotReady(slot)}
+              onError={() => {
+                onMissing?.(item.id)
+                onSlotReady(slot)
+              }}
             />
           </div>
         ) : null,

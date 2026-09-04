@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 import sys
 from pathlib import Path
@@ -19,6 +20,9 @@ WEB = APP / "frontend"
 API = APP / "backend"
 RESTART_FLAG = RUNTIME / "tmp" / "restart"
 COMFY_RESTART_FLAG = RUNTIME / "tmp" / "comfy-restart"
+_PROFILE_UUID = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+)
 
 
 def bundled_comfy() -> Path:
@@ -37,6 +41,24 @@ def env_path(name: str) -> Path | None:
     if not raw:
         return None
     return Path(raw).expanduser()
+
+
+def active_profile_id() -> str:
+    path = USER / "data" / "sqlite" / "profile.sqlite"
+    if not path.is_file():
+        return "default"
+    try:
+        conn = sqlite3.connect(f"file:{path.as_posix()}?mode=ro", uri=True)
+        try:
+            row = conn.execute("SELECT active_id FROM profile_state WHERE id = 1").fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return "default"
+    ident = str(row[0] if row else "default").strip().lower()
+    if ident == "default" or _PROFILE_UUID.fullmatch(ident):
+        return ident
+    return "default"
 
 
 def _first_existing(candidates: list[Path]) -> Path | None:
@@ -81,16 +103,29 @@ def ensure_dirs() -> None:
     for sub in MODEL_SUBDIRS:
         (models / sub).mkdir(exist_ok=True)
     (USER / "output").mkdir(exist_ok=True)
+    (USER / "output" / "default").mkdir(exist_ok=True)
     (USER / "data" / "sqlite").mkdir(parents=True, exist_ok=True)
+    (USER / "data" / "sqlite" / "default").mkdir(parents=True, exist_ok=True)
     (RUNTIME / "data" / "sqlite").mkdir(parents=True, exist_ok=True)
+    (RUNTIME / "data" / "sqlite" / "default").mkdir(parents=True, exist_ok=True)
     (USER / "wildcards").mkdir(exist_ok=True)
     (USER / "autocompletion").mkdir(exist_ok=True)
     (USER / "gallery_thumbs").mkdir(exist_ok=True)
+    (USER / "gallery_thumbs" / "default").mkdir(exist_ok=True)
     (USER / "model_thumbs").mkdir(exist_ok=True)
-    download_thumbs = USER / "data" / "history" / "download"
-    browse_thumbs = USER / "data" / "history" / "browse"
+    (USER / "model_thumbs" / "default").mkdir(exist_ok=True)
+    ident = active_profile_id()
+    (USER / "output" / ident).mkdir(exist_ok=True)
+    (USER / "data" / "sqlite" / ident).mkdir(parents=True, exist_ok=True)
+    (RUNTIME / "data" / "sqlite" / ident).mkdir(parents=True, exist_ok=True)
+    (USER / "gallery_thumbs" / ident).mkdir(exist_ok=True)
+    (USER / "model_thumbs" / ident).mkdir(exist_ok=True)
+    download_thumbs = USER / "data" / "history" / ident / "download"
+    browse_thumbs = USER / "data" / "history" / ident / "browse"
     download_thumbs.mkdir(parents=True, exist_ok=True)
     browse_thumbs.mkdir(parents=True, exist_ok=True)
+    (USER / "data" / "history" / "default" / "download").mkdir(parents=True, exist_ok=True)
+    (USER / "data" / "history" / "default" / "browse").mkdir(parents=True, exist_ok=True)
     old_thumbs = USER / "download_thumbs"
     if old_thumbs.is_dir():
         for path in old_thumbs.iterdir():
@@ -106,13 +141,15 @@ def ensure_dirs() -> None:
         except OSError:
             pass
     (USER / "removed").mkdir(exist_ok=True)
+    (USER / "removed" / "default").mkdir(exist_ok=True)
+    (USER / "removed" / ident).mkdir(exist_ok=True)
 
 
 def resolve() -> dict[str, str | None]:
     comfy = env_path("COMFYUI_PATH") or bundled_comfy()
     models = env_path("MODELS_ROOT") or (USER / "models")
     wildcards = env_path("WILDCARDS_ROOT") or (USER / "wildcards")
-    outputs = env_path("OUTPUTS_ROOT") or kept_output() or (USER / "output")
+    outputs = env_path("OUTPUTS_ROOT") or kept_output() or (USER / "output" / active_profile_id())
     py = comfy_python(comfy)
     bundled = bundled_comfy()
 
@@ -159,10 +196,23 @@ def kept_output() -> Path | None:
     if not raw:
         return None
     folder = Path(raw)
-    parts = folder.parts
-    if len(parts) >= 2 and parts[-1].lower() == "output" and parts[-2].lower() == "user":
+    if _is_install_output(folder):
         return None
     return folder
+
+
+def _is_install_output(folder: Path) -> bool:
+    parts = folder.parts
+    if len(parts) >= 2 and parts[-1].lower() == "output" and parts[-2].lower() == "user":
+        return True
+    if (
+        len(parts) >= 3
+        and parts[-1].lower() == "default"
+        and parts[-2].lower() == "output"
+        and parts[-3].lower() == "user"
+    ):
+        return True
+    return False
 
 
 def write_extra_model_paths(models_root: Path) -> Path:
@@ -174,7 +224,7 @@ def write_extra_model_paths(models_root: Path) -> Path:
 
 
 def user_model_dirs() -> list[tuple[str, Path]]:
-    path = USER / "data" / "sqlite" / "blombo.sqlite"
+    path = USER / "data" / "sqlite" / active_profile_id() / "blombo.sqlite"
     if not path.is_file():
         return []
     try:

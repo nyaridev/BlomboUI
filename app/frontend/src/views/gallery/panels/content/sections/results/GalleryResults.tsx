@@ -78,12 +78,14 @@ function Thumb({
   height,
   onSelect,
   onMenu,
+  onMissing,
 }: {
   item: GalleryItem
   width: number
   height: number
   onSelect: () => void
   onMenu: (event: MouseEvent<HTMLButtonElement>) => void
+  onMissing: (id: string) => void
 }) {
   const [ref, visible] = useVisible<HTMLButtonElement>()
   const full = galleryItemImageUrl(item.id)
@@ -109,6 +111,7 @@ function Thumb({
           src={galleryItemThumbUrl(item.id)}
           type={asVideo ? 'video' : undefined}
           className="h-full w-full object-cover"
+          onError={() => onMissing(item.id)}
         />
       ) : null}
       {item.favorite ? (
@@ -129,6 +132,7 @@ export function GalleryResults({
   onFavorite,
   onRemove,
   onFileInfo,
+  onMissing,
 }: {
   items: GalleryItem[]
   error: string | null
@@ -138,6 +142,7 @@ export function GalleryResults({
   onFavorite: (item: GalleryItem) => void
   onRemove: (item: GalleryItem) => void
   onFileInfo: (item: GalleryItem) => void
+  onMissing: (id: string) => void
 }) {
   const [index, setIndex] = useState<number | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number; item: GalleryItem } | null>(null)
@@ -209,6 +214,7 @@ export function GalleryResults({
                   width={row.height * aspect}
                   height={row.height}
                   onSelect={() => setIndex(itemIndex)}
+                  onMissing={onMissing}
                   onMenu={(event) => {
                     event.preventDefault()
                     setMenu({ x: event.clientX, y: event.clientY, item })

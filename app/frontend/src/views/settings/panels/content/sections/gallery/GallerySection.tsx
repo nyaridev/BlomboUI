@@ -11,7 +11,7 @@ import {
 } from '@/stores/settingsStore.ts'
 
 export const GALLERY_TAB_QUERY =
-  'gallery tab search grid images load page size infinite scroll thumbnails megapixels jpg jpeg png webp gif video quality format'
+  'gallery tab search grid images load page size infinite scroll thumbnails megapixels jpg jpeg png webp gif video quality format cards tiles models loras wildcards tags'
 
 export function GallerySection({ query = '' }: { query?: string }) {
   const galleryItemThumbMegapixels = useSettingsStore((s) => s.galleryItemThumbMegapixels)
@@ -19,18 +19,24 @@ export function GallerySection({ query = '' }: { query?: string }) {
   const galleryItemThumbVideoFormat = useSettingsStore((s) => s.galleryItemThumbVideoFormat)
   const galleryItemThumbQuality = useSettingsStore((s) => s.galleryItemThumbQuality)
   const galleryPageSize = useSettingsStore((s) => s.galleryPageSize)
+  const galleryCardPageSize = useSettingsStore((s) => s.galleryCardPageSize)
   const setGalleryItemThumbMegapixels = useSettingsStore((s) => s.setGalleryItemThumbMegapixels)
   const setGalleryItemThumbFormat = useSettingsStore((s) => s.setGalleryItemThumbFormat)
   const setGalleryItemThumbVideoFormat = useSettingsStore((s) => s.setGalleryItemThumbVideoFormat)
   const setGalleryItemThumbQuality = useSettingsStore((s) => s.setGalleryItemThumbQuality)
   const setGalleryPageSize = useSettingsStore((s) => s.setGalleryPageSize)
+  const setGalleryCardPageSize = useSettingsStore((s) => s.setGalleryCardPageSize)
   const qualityOff = galleryItemThumbFormat === 'png' && galleryItemThumbVideoFormat === 'gif'
 
   return (
     <div className="flex max-w-xl flex-col gap-3">
-      <SettingsCard query={query} title="Loading" terms="load page size infinite scroll search images count" setting="galleryPageSize">
+      <SettingsCard query={query} title="Image loading" terms="load page size infinite scroll search images count" setting="galleryPageSize">
         <NumberField value={galleryPageSize} onChange={setGalleryPageSize} min={20} max={500} />
         <p className="text-xs text-muted">Images fetched each time the Gallery search grid loads or scrolls for more.</p>
+      </SettingsCard>
+      <SettingsCard query={query} title="Card loading" terms="load page size infinite scroll cards tiles models loras wildcards tags" setting="galleryCardPageSize">
+        <NumberField value={galleryCardPageSize} onChange={setGalleryCardPageSize} min={20} max={500} />
+        <p className="text-xs text-muted">Tiles shown at once on Models, LoRAs, Wildcards, and Tags. Scroll for more.</p>
       </SettingsCard>
       <SettingsCard
         query={query}

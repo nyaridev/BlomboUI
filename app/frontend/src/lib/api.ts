@@ -1,4 +1,5 @@
 // Compatibility barrel: callers can keep importing the public API from this path.
+export * from './api/profiles.ts'
 export * from './api/civitai.ts'
 export * from './api/downloads.ts'
 export * from './api/history.ts'

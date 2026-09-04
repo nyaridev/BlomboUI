@@ -23,6 +23,7 @@ export function GalleryCoverCard({
   onDragOver,
   onDragLeave,
   onDrop,
+  onMissing,
 }: {
   previews: GalleryPreview[]
   title: string
@@ -38,6 +39,7 @@ export function GalleryCoverCard({
   onDragOver?: (event: DragEvent<HTMLButtonElement>) => void
   onDragLeave?: (event: DragEvent<HTMLButtonElement>) => void
   onDrop?: (event: DragEvent<HTMLButtonElement>) => void
+  onMissing?: (id: string) => void
 }) {
   const dropMarker = dropKind === 'before' || dropKind === 'after' ? (
     <span
@@ -71,7 +73,7 @@ export function GalleryCoverCard({
         onDrop={onDrop}
       >
         <div className="aspect-[4/5] w-full">
-          <RotatingPreview items={previews} />
+          <RotatingPreview items={previews} onMissing={onMissing} />
         </div>
         <div className="flex min-w-0 flex-col gap-0.5 px-2 py-1.5">
           <span className="truncate text-sm text-ink">{title}</span>

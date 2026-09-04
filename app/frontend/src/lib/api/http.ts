@@ -26,6 +26,10 @@ export type Health = {
   ok: boolean
   api: string
   version: string
+  profile?: {
+    id: string
+    displayName: string
+  }
   comfy: {
     reachable: boolean
     restarting?: boolean

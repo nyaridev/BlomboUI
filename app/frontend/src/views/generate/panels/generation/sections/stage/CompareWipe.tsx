@@ -33,6 +33,8 @@ export function CompareWipe({
 }: CompareWipeProps) {
   const outerRef = useRef<HTMLDivElement>(null)
   const frameRef = useRef<HTMLDivElement>(null)
+  const afterRef = useRef<HTMLImageElement | null>(null)
+  const live = useRef(true)
   const afterSize = useRef({ w: 0, h: 0 })
   const dragRef = useRef<{ pointerId: number } | null>(null)
   const clickRef = useRef<{ x: number; y: number } | null>(null)
@@ -52,10 +54,17 @@ export function CompareWipe({
   }
 
   useEffect(() => {
-    setThumbFailed(false)
-    setAfterReady(false)
-    afterSize.current = { w: 0, h: 0 }
-    setFrame({ x: 0, y: 0, w: 0, h: 0 })
+    live.current = true
+    return () => {
+      live.current = false
+    }
+  }, [])
+
+  useEffect(() => {
+    const img = afterRef.current
+    if (img?.complete) {
+      onAfterImg(img)
+    }
   }, [afterSrc])
 
   useEffect(() => {
@@ -69,6 +78,9 @@ export function CompareWipe({
   }, [])
 
   function onAfterImg(img: HTMLImageElement) {
+    if (!img.naturalWidth || !img.naturalHeight) {
+      return
+    }
     afterSize.current = { w: img.naturalWidth, h: img.naturalHeight }
     setAfterReady(true)
     layout()
@@ -152,12 +164,14 @@ export function CompareWipe({
         />
       ) : null}
       <img
+        key={afterSrc}
         src={afterSrc}
         alt={alt}
         className={['absolute inset-0 h-full w-full object-contain', afterReady && ready ? 'invisible' : ''].join(' ')}
         fetchPriority="high"
         decoding="async"
         draggable={false}
+        ref={afterRef}
         onLoad={(event) => onAfterImg(event.currentTarget)}
         onError={() => onAfterError?.()}
       />
@@ -169,11 +183,16 @@ export function CompareWipe({
             style={{ left: frame.x, top: frame.y, width: frame.w, height: frame.h }}
           >
             <img
+              key={beforeSrc}
               src={beforeSrc}
               alt=""
               className="absolute inset-0 h-full w-full object-contain"
               draggable={false}
-              onError={() => onBeforeError?.()}
+              onError={() => {
+                if (live.current) {
+                  onBeforeError?.()
+                }
+              }}
             />
             <img
               src={afterSrc}

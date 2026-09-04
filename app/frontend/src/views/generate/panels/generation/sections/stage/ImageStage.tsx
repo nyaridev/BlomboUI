@@ -65,7 +65,7 @@ export function ImageStage({
   const [index, setIndex] = useState(0)
   const [lightbox, setLightbox] = useState(false)
   const [split, setSplit] = useState(0.5)
-  const [beforeFailed, setBeforeFailed] = useState(false)
+  const [beforeFailed, setBeforeFailed] = useState<Set<number>>(() => new Set())
   const [failed, setFailed] = useState<Set<string>>(() => new Set())
   const [previewFailed, setPreviewFailed] = useState(false)
   const [thumbFailed, setThumbFailed] = useState(false)
@@ -105,9 +105,9 @@ export function ImageStage({
   const beforeSrc =
     jobId &&
     compareWorkflow(payload) &&
-    !beforeFailed &&
     afterIndex >= 0 &&
-    afterIndex < inputPathCount(payload)
+    afterIndex < inputPathCount(payload) &&
+    !beforeFailed.has(afterIndex)
       ? jobInputUrl(jobId, afterIndex)
       : null
   const ready = Boolean(current?.src && loadedSrc === current.src)
@@ -130,7 +130,7 @@ export function ImageStage({
   const hideResults = busy && (showPreview || coverWithPreview.current)
   const showCurrent = Boolean(current) && !hideResults
   const showLastFinal = Boolean(lastFinal) && !showCurrent && !previewCovering
-  const coverWithLast = Boolean(lastFinal) && showCurrent && !ready && !previewCovering
+  const coverWithLast = Boolean(lastFinal) && showCurrent && !ready && !previewCovering && !beforeSrc
 
   function markFailed(key: string) {
     setFailed((prev) => {
@@ -143,14 +143,24 @@ export function ImageStage({
     })
   }
 
-  useEffect(() => {
-    setFailed(new Set())
-    setBeforeFailed(false)
-  }, [sourceKey])
+  function markBeforeFailed(index: number) {
+    if (index < 0) {
+      return
+    }
+    setBeforeFailed((prev) => {
+      if (prev.has(index)) {
+        return prev
+      }
+      const next = new Set(prev)
+      next.add(index)
+      return next
+    })
+  }
 
   useEffect(() => {
-    setBeforeFailed(false)
-  }, [current?.key])
+    setFailed(new Set())
+    setBeforeFailed(new Set())
+  }, [sourceKey])
 
   useEffect(() => {
     setPreviewFailed(false)
@@ -286,6 +296,7 @@ export function ImageStage({
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
         {showCurrent && current && beforeSrc ? (
           <CompareWipe
+            key={current.key}
             beforeSrc={beforeSrc}
             afterSrc={current.src}
             afterThumb={current.thumb}
@@ -294,7 +305,7 @@ export function ImageStage({
             onSplit={setSplit}
             onAfterLoad={() => setLoadedSrc(current.src)}
             onAfterError={() => markFailed(current.key)}
-            onBeforeError={() => setBeforeFailed(true)}
+            onBeforeError={() => markBeforeFailed(afterIndex)}
             onActivate={() => setLightbox(true)}
           />
         ) : showCurrent && current ? (
@@ -432,12 +443,13 @@ export function ImageStage({
           compare={
             beforeSrc ? (
               <CompareWipe
+                key={current.key}
                 beforeSrc={beforeSrc}
                 afterSrc={current.src}
                 alt="Comparison"
                 split={split}
                 onSplit={setSplit}
-                onBeforeError={() => setBeforeFailed(true)}
+                onBeforeError={() => markBeforeFailed(afterIndex)}
                 className="absolute inset-0"
               />
             ) : undefined

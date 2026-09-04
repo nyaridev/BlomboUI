@@ -8,7 +8,7 @@ import type { ModelLists } from '@/lib/api.ts'
 import { toggleSkip } from '@/components/composites/templates/templateApply.ts'
 import { autoLoraId, promptLoraId, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
-import { galleryScopeKey } from '@/stores/settings/constants.ts'
+import { galleryPackKey } from '@/stores/settings/constants.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { ModelTile } from '@/views/generate/panels/chrome/sections/tiles/ModelTile.tsx'
@@ -229,11 +229,11 @@ export function TemplateModelFields({
   const tileStyle = useGenerateStore((s) => s.modelTileStyle)
   const spec = modelTileSpec(tileStyle)
   const [showStrength, setShowStrength] = useState(false)
-  const ckptKey = useSettingsStore((s) => galleryScopeKey('template-checkpoints', s))
-  const teKey = useSettingsStore((s) => galleryScopeKey('template-text-encoders', s))
-  const vaeKey = useSettingsStore((s) => galleryScopeKey('template-vae', s))
-  const loraKey = useSettingsStore((s) => galleryScopeKey('template-loras', s))
-  const wildKey = useSettingsStore((s) => galleryScopeKey('template-wildcards', s))
+  const ckptKey = galleryPackKey('template-checkpoints')
+  const teKey = galleryPackKey('template-text-encoders')
+  const vaeKey = galleryPackKey('template-vae')
+  const loraKey = galleryPackKey('template-loras')
+  const wildKey = galleryPackKey('template-wildcards')
   const ckptView = useThumbView('checkpoints', ckptKey)
   const teView = useThumbView('text_encoders', teKey)
   const vaeView = useThumbView('vae', vaeKey)

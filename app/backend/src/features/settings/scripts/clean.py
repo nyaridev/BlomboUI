@@ -29,7 +29,6 @@ from features.settings.scripts.validators import (
     _gallery_fallback,
     _gallery_local_scopes,
     _gallery_map,
-    _gallery_mode_map,
     _gallery_pin_selected,
     _gallery_auto_types,
     _gallery_query,
@@ -446,10 +445,6 @@ def _clean(raw: Any) -> dict[str, Any]:
         out["galleryQuery"] = _gallery_query(raw["galleryQuery"])
     if "galleryLocalScopes" in raw and isinstance(raw["galleryLocalScopes"], dict):
         out["galleryLocalScopes"] = _gallery_local_scopes(raw["galleryLocalScopes"])
-    if "galleryScopeMode" in raw and isinstance(raw["galleryScopeMode"], dict):
-        out["galleryScopeMode"] = _gallery_mode_map(raw["galleryScopeMode"])
-    if "galleryFilterMode" in raw and isinstance(raw["galleryFilterMode"], dict):
-        out["galleryFilterMode"] = _gallery_mode_map(raw["galleryFilterMode"])
     if "galleryAutoTypes" in raw and isinstance(raw["galleryAutoTypes"], dict):
         out["galleryAutoTypes"] = _gallery_auto_types(raw["galleryAutoTypes"])
     if "galleryPinSelected" in raw and isinstance(raw["galleryPinSelected"], dict):

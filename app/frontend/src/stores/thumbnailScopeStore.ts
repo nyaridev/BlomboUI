@@ -8,8 +8,8 @@ import {
   type ScopeThumb,
   type ThumbScope,
 } from '@/lib/api.ts'
-import { contextKey, galleryThumbView, generateGalleryViewKey, readScopePack, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/gallery/thumbView.ts'
-import { galleryScopeKey } from '@/stores/settings/constants.ts'
+import { contextKey, galleryThumbView, readScopePack, selectedScopeIds, setAutoScopeIds, thumbView } from '@/lib/gallery/thumbView.ts'
+import { galleryPackKey } from '@/stores/settings/constants.ts'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
@@ -199,9 +199,8 @@ export function currentContextKey() {
 }
 
 export function useThumbView(kind?: string, scopeKey?: string) {
-  const modeMap = useSettingsStore((s) => s.galleryScopeMode)
   const resolved =
-    scopeKey ?? (kind && kind !== 'trash' ? galleryScopeKey(generateGalleryViewKey(kind), { galleryScopeMode: modeMap }) : GLOBAL_SCOPE)
+    scopeKey ?? (kind && kind !== 'trash' ? galleryPackKey(kind) : GLOBAL_SCOPE)
   const ids = useSettingsStore((s) => s.thumbScopeIds.join('+'))
   const optional = useSettingsStore((s) => s.thumbScopeOptionalIds.join('+'))
   const auto = useSettingsStore((s) => s.thumbScopeAuto)

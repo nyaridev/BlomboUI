@@ -3,7 +3,6 @@ import type { SettingsSet } from './actionTypes.ts'
 import { cleanCivitaiBrowse } from '@/lib/civitai/browse.ts'
 import { cleanCivitaiTabId, cleanCivitaiTabs } from '@/lib/civitai/version.ts'
 import {
-  cleanFilterScope,
   cleanFilterScopeIds,
   cleanLookupKinds,
   cleanLookupModels,
@@ -15,9 +14,7 @@ import {
   emptyLocalScope,
 } from './clean.ts'
 import {
-  GALLERY_LOCAL_KEYS,
-  GALLERY_MODE_KEY_SET,
-  galleryModeDefault,
+  GALLERY_PACK_KEY_SET,
   LOCAL_SCOPE_DEFAULT,
   type GalleryLocalScope,
 } from './constants.ts'
@@ -110,41 +107,39 @@ export function createScopeActions(set: SettingsSet, persist: () => void): Parti
       persist()
     },
     setGalleryTypes: (key, value) => {
-      const name = key.trim().slice(0, 80)
-      if (!name) {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
         return
       }
       set((state) => {
         const types = cleanTypeList(value)
         const galleryTypes = { ...state.galleryTypes }
         if (types.length) {
-          galleryTypes[name] = types
+          galleryTypes[key] = types
         } else {
-          delete galleryTypes[name]
+          delete galleryTypes[key]
         }
         return { galleryTypes }
       })
       persist()
     },
     setGalleryQuery: (key, value) => {
-      const name = key.trim().slice(0, 80)
-      if (!name) {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
         return
       }
       set((state) => {
         const text = typeof value === 'string' ? value.slice(0, 200) : ''
         const galleryQuery = { ...state.galleryQuery }
         if (text) {
-          galleryQuery[name] = text
+          galleryQuery[key] = text
         } else {
-          delete galleryQuery[name]
+          delete galleryQuery[key]
         }
         return { galleryQuery }
       })
       persist()
     },
     setGalleryLocalScope: (key, patch) => {
-      if (!GALLERY_LOCAL_KEYS.has(key)) {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
         return
       }
       set((state) => {
@@ -186,57 +181,25 @@ export function createScopeActions(set: SettingsSet, persist: () => void): Parti
       })
       persist()
     },
-    setGalleryScopeMode: (key, value) => {
-      if (!GALLERY_MODE_KEY_SET.has(key)) {
-        return
-      }
-      set((state) => {
-        const fallback = galleryModeDefault(key)
-        const scope = cleanFilterScope(value, fallback)
-        const galleryScopeMode = { ...state.galleryScopeMode }
-        if (scope === fallback) {
-          delete galleryScopeMode[key]
-        } else {
-          galleryScopeMode[key] = scope
-        }
-        return { galleryScopeMode }
-      })
-      persist()
-    },
-    setGalleryFilterMode: (key, value) => {
-      if (!GALLERY_MODE_KEY_SET.has(key)) {
-        return
-      }
-      set((state) => {
-        const fallback = galleryModeDefault(key)
-        const scope = cleanFilterScope(value, fallback)
-        const galleryFilterMode = { ...state.galleryFilterMode }
-        if (scope === fallback) {
-          delete galleryFilterMode[key]
-        } else {
-          galleryFilterMode[key] = scope
-        }
-        return { galleryFilterMode }
-      })
-      persist()
-    },
     setGalleryAutoTypes: (key, value) => {
-      const name = key.trim().slice(0, 80)
-      if (!name) {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
         return
       }
       set((state) => {
         const galleryAutoTypes = { ...state.galleryAutoTypes }
         if (value) {
-          galleryAutoTypes[name] = true
+          galleryAutoTypes[key] = true
         } else {
-          delete galleryAutoTypes[name]
+          delete galleryAutoTypes[key]
         }
         return { galleryAutoTypes }
       })
       persist()
     },
     setGalleryPinSelected: (key, value) => {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
+        return
+      }
       set((state) => {
         const galleryPinSelected = { ...state.galleryPinSelected }
         if (value) {

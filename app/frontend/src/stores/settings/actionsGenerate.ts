@@ -28,6 +28,7 @@ import {
 import {
   GALLERY_BROWSE_DIR_DEFAULT,
   GALLERY_BROWSE_SORT_DEFAULT,
+  GALLERY_PACK_KEY_SET,
   GALLERY_SORT_DIR_DEFAULT,
   GALLERY_SORT_KEY_DEFAULT,
   SETTINGS_DEFAULTS,
@@ -321,34 +322,32 @@ export function createGenerateActions(set: SettingsSet, persist: () => void): Pa
       persist()
     },
     setGallerySortKey: (key, gallerySortKey) => {
-      const name = key.trim().slice(0, 80)
-      if (!name) {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
         return
       }
       set((state) => {
         const next = { ...state.gallerySortKey }
         const value = cleanSortKey(gallerySortKey)
         if (value === GALLERY_SORT_KEY_DEFAULT) {
-          delete next[name]
+          delete next[key]
         } else {
-          next[name] = value
+          next[key] = value
         }
         return { gallerySortKey: next }
       })
       persist()
     },
     setGallerySortDir: (key, gallerySortDir) => {
-      const name = key.trim().slice(0, 80)
-      if (!name) {
+      if (!GALLERY_PACK_KEY_SET.has(key)) {
         return
       }
       set((state) => {
         const next = { ...state.gallerySortDir }
         const value = cleanSortDir(gallerySortDir)
         if (value === GALLERY_SORT_DIR_DEFAULT) {
-          delete next[name]
+          delete next[key]
         } else {
-          next[name] = value
+          next[key] = value
         }
         return { gallerySortDir: next }
       })

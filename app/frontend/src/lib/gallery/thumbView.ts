@@ -1,5 +1,5 @@
 import { useSettingsStore, LOCAL_SCOPE_DEFAULT, type GalleryLocalScope, type GalleryViewKind } from '@/stores/settingsStore.ts'
-import { galleryScopeKey } from '@/stores/settings/constants.ts'
+import { galleryPackKey } from '@/stores/settings/constants.ts'
 import { modelThumbUrl, type ModelEntry, type ModelLists, type ThumbView } from '@/lib/api.ts'
 
 export const GLOBAL_SCOPE = 'global'
@@ -46,20 +46,11 @@ export function contextKey(ids: string[] = selectedScopeIds()) {
 }
 
 export function generateGalleryViewKey(kind?: string) {
-  if (kind === 'loras') {
-    return 'loras'
-  }
-  if (kind === 'wildcards') {
-    return 'wildcards'
-  }
-  if (kind === 'vae' || kind === 'text_encoders' || kind === 'upscale_models' || kind === 'controlnet' || kind === 'embeddings' || kind === 'sams' || kind === 'ultralytics') {
-    return 'other'
-  }
-  return 'checkpoints'
+  return galleryPackKey(kind || 'checkpoints')
 }
 
 export function generateGalleryScopeKey(kind?: string) {
-  return galleryScopeKey(generateGalleryViewKey(kind), useSettingsStore.getState())
+  return generateGalleryViewKey(kind)
 }
 
 export function saveContext(scopeKey = GLOBAL_SCOPE) {

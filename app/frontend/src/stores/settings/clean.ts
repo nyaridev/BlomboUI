@@ -5,12 +5,9 @@ import {
   GALLERY_BROWSE_DIR_DEFAULT,
   GALLERY_BROWSE_KINDS,
   GALLERY_BROWSE_SORT_DEFAULT,
-  GALLERY_FILTER_KEYS,
-  GALLERY_LOCAL_KEYS,
-  GALLERY_MODE_KEY_SET,
+  GALLERY_PACK_KEY_SET,
   GALLERY_SORT_DIR_DEFAULT,
   GALLERY_SORT_KEY_DEFAULT,
-  galleryModeDefault,
   IMAGE_FORMATS,
   lookupGroupFor,
   SETTINGS_DEFAULTS,
@@ -18,7 +15,6 @@ import {
   type AutocompleteListRule,
   type AnimatedThumbFormat,
   type GalleryBrowseSort,
-  type GalleryFilterScope,
   type GalleryLocalScope,
   type GallerySortDir,
   type GallerySortKey,
@@ -316,30 +312,10 @@ export function cleanGalleryTypes(raw: unknown): Record<string, string[]> {
   }
   const out: Record<string, string[]> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const name = key.trim().slice(0, 80)
-    if (name) {
-      out[name] = cleanTypeList(value)
-    }
-  }
-  return out
-}
-
-export function cleanFilterScope(raw: unknown, fallback: GalleryFilterScope): GalleryFilterScope {
-  return raw === 'global' || raw === 'local' ? raw : fallback
-}
-
-export function cleanModeMap(raw: unknown): Record<string, GalleryFilterScope> {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return {}
-  }
-  const out: Record<string, GalleryFilterScope> = {}
-  for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (!GALLERY_MODE_KEY_SET.has(key) || (value !== 'global' && value !== 'local')) {
+    if (!GALLERY_PACK_KEY_SET.has(key)) {
       continue
     }
-    if (value !== galleryModeDefault(key)) {
-      out[key] = value
-    }
+    out[key] = cleanTypeList(value)
   }
   return out
 }
@@ -350,7 +326,7 @@ export function cleanGalleryPinSelected(raw: unknown): Record<string, boolean> {
   }
   const out: Record<string, boolean> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (GALLERY_FILTER_KEYS.has(key) && typeof value === 'boolean' && !value) {
+    if (GALLERY_PACK_KEY_SET.has(key) && typeof value === 'boolean' && !value) {
       out[key] = false
     }
   }
@@ -363,7 +339,7 @@ export function cleanGalleryAutoTypes(raw: unknown): Record<string, boolean> {
   }
   const out: Record<string, boolean> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    if (GALLERY_FILTER_KEYS.has(key) && value === true) {
+    if (GALLERY_PACK_KEY_SET.has(key) && value === true) {
       out[key] = true
     }
   }
@@ -395,7 +371,7 @@ export function cleanLocalScopes(raw: unknown): Record<string, GalleryLocalScope
   }
   const out: Record<string, GalleryLocalScope> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const pack = GALLERY_LOCAL_KEYS.has(key) ? cleanLocalScope(value) : null
+    const pack = GALLERY_PACK_KEY_SET.has(key) ? cleanLocalScope(value) : null
     if (pack) {
       out[key] = pack
     }
@@ -409,10 +385,12 @@ export function cleanQueryMap(raw: unknown): Record<string, string> {
   }
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const name = key.trim().slice(0, 80)
+    if (!GALLERY_PACK_KEY_SET.has(key)) {
+      continue
+    }
     const text = cleanSearch(value)
-    if (name && text) {
-      out[name] = text
+    if (text) {
+      out[key] = text
     }
   }
   return out
@@ -484,10 +462,12 @@ export function cleanSortKeyMap(raw: unknown): Record<string, GallerySortKey> {
   }
   const out: Record<string, GallerySortKey> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const name = key.trim().slice(0, 80)
+    if (!GALLERY_PACK_KEY_SET.has(key)) {
+      continue
+    }
     const sort = cleanSortKey(value)
-    if (name && sort !== GALLERY_SORT_KEY_DEFAULT) {
-      out[name] = sort
+    if (sort !== GALLERY_SORT_KEY_DEFAULT) {
+      out[key] = sort
     }
   }
   return out
@@ -499,10 +479,12 @@ export function cleanSortDirMap(raw: unknown): Record<string, GallerySortDir> {
   }
   const out: Record<string, GallerySortDir> = {}
   for (const [key, value] of Object.entries(raw as Record<string, unknown>)) {
-    const name = key.trim().slice(0, 80)
+    if (!GALLERY_PACK_KEY_SET.has(key)) {
+      continue
+    }
     const dir = cleanSortDir(value)
-    if (name && dir !== GALLERY_SORT_DIR_DEFAULT) {
-      out[name] = dir
+    if (dir !== GALLERY_SORT_DIR_DEFAULT) {
+      out[key] = dir
     }
   }
   return out
@@ -885,14 +867,6 @@ export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {
       patch.galleryLocalScopes && typeof patch.galleryLocalScopes === 'object' && !Array.isArray(patch.galleryLocalScopes)
         ? cleanLocalScopes(patch.galleryLocalScopes)
         : SETTINGS_DEFAULTS.galleryLocalScopes,
-    galleryScopeMode:
-      patch.galleryScopeMode && typeof patch.galleryScopeMode === 'object'
-        ? cleanModeMap(patch.galleryScopeMode)
-        : SETTINGS_DEFAULTS.galleryScopeMode,
-    galleryFilterMode:
-      patch.galleryFilterMode && typeof patch.galleryFilterMode === 'object'
-        ? cleanModeMap(patch.galleryFilterMode)
-        : SETTINGS_DEFAULTS.galleryFilterMode,
     galleryAutoTypes:
       patch.galleryAutoTypes && typeof patch.galleryAutoTypes === 'object'
         ? cleanGalleryAutoTypes(patch.galleryAutoTypes)

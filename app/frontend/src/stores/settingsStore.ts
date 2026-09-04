@@ -13,9 +13,7 @@ import {
   type AutocompleteListRule,
   type AutocompleteMode,
   type CivitaiSite,
-  type GalleryFilterScope,
   type GalleryLocalScope,
-  type GalleryModeKey,
   type GalleryBrowseKind,
   type GalleryBrowseSort,
   type GallerySortDir,
@@ -155,8 +153,6 @@ export type SettingsState = typeof SETTINGS_DEFAULTS & {
   setGalleryQuery: (key: string, value: string) => void
   setGalleryLocalScope: (key: string, patch: Partial<GalleryLocalScope>) => void
   dropGalleryLocalScopeId: (id: string) => void
-  setGalleryScopeMode: (key: GalleryModeKey, value: GalleryFilterScope) => void
-  setGalleryFilterMode: (key: GalleryModeKey, value: GalleryFilterScope) => void
   setGalleryAutoTypes: (key: string, value: boolean) => void
   setGalleryPinSelected: (key: string, value: boolean) => void
   setGalleryBrowseSort: (kind: GalleryBrowseKind, value: GalleryBrowseSort) => void
@@ -281,8 +277,6 @@ const KEYS = [
   'galleryTypes',
   'galleryQuery',
   'galleryLocalScopes',
-  'galleryScopeMode',
-  'galleryFilterMode',
   'galleryAutoTypes',
   'galleryPinSelected',
   'galleryBrowseSort',

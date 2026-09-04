@@ -50,7 +50,6 @@ export type GallerySortKey = 'name' | 'added' | 'edited' | 'path'
 export type GallerySortDir = 'asc' | 'desc'
 export const GALLERY_SORT_KEY_DEFAULT: GallerySortKey = 'added'
 export const GALLERY_SORT_DIR_DEFAULT: GallerySortDir = 'desc'
-export type GalleryFilterScope = 'global' | 'local'
 
 export const GALLERY_BROWSE_KINDS = ['checkpoints', 'loras', 'wildcards', 'tags'] as const
 export const LOOKUP_GROUPS = [
@@ -76,65 +75,82 @@ export function galleryBrowseKey(kind: GalleryBrowseKind, share: boolean) {
   return share ? 'global' : kind
 }
 
-export const GENERATE_FILTER_VIEWS = [
-  { key: 'checkpoints', label: 'Base Model' },
-  { key: 'loras', label: 'LoRA' },
-  { key: 'wildcards', label: 'Wildcards' },
-  { key: 'other', label: 'Other' },
+export const GALLERY_PACK_KEYS = [
+  'checkpoints',
+  'loras',
+  'wildcards',
+  'other',
+  'models-all',
+  'vae',
+  'text_encoders',
+  'generate-upscale',
+  'generate-detector',
+  'generate-sam',
+] as const
+export type GalleryPackKey = (typeof GALLERY_PACK_KEYS)[number]
+export const GALLERY_PACK_KEY_SET = new Set<string>(GALLERY_PACK_KEYS)
+
+const PACK_PREFIXES = [
+  'gallery-search-',
+  'gallery-create-',
+  'generate-hires-',
+  'generate-adetailer-',
+  'template-',
+  'models-',
+  'primitives-',
+  'pick-',
 ] as const
 
-export const GENERATE_PICKER_FILTER_VIEWS = [
-  { key: 'generate-upscale', label: 'Upscale' },
-  { key: 'generate-detector', label: 'Detector' },
-  { key: 'generate-sam', label: 'SAM' },
-] as const
+function packFromKind(kind: string): GalleryPackKey {
+  if (kind === 'checkpoint' || kind === 'checkpoints' || kind === 'diffusion_models') {
+    return 'checkpoints'
+  }
+  if (kind === 'loras') {
+    return 'loras'
+  }
+  if (kind === 'wildcards') {
+    return 'wildcards'
+  }
+  if (kind === 'vae') {
+    return 'vae'
+  }
+  if (kind === 'text_encoders' || kind === 'text-encoders') {
+    return 'text_encoders'
+  }
+  if (kind === 'upscale' || kind === 'upscale_models') {
+    return 'generate-upscale'
+  }
+  if (kind === 'detector' || kind === 'ultralytics') {
+    return 'generate-detector'
+  }
+  if (kind === 'sam' || kind === 'sams') {
+    return 'generate-sam'
+  }
+  if (kind === 'all') {
+    return 'models-all'
+  }
+  if (kind === 'other' || kind === 'controlnet' || kind === 'embeddings') {
+    return 'other'
+  }
+  return lookupGroupFor(kind) ?? 'checkpoints'
+}
 
-export const MODELS_FILTER_VIEWS = [
-  { key: 'models-all', label: 'All' },
-  { key: 'models-checkpoints', label: 'Base Model' },
-  { key: 'models-loras', label: 'LoRA' },
-  { key: 'models-wildcards', label: 'Wildcards' },
-  { key: 'models-other', label: 'Other' },
-] as const
+export function galleryPackKey(viewKey: string): GalleryPackKey {
+  if (GALLERY_PACK_KEY_SET.has(viewKey)) {
+    return viewKey as GalleryPackKey
+  }
+  let suffix = viewKey
+  for (const prefix of PACK_PREFIXES) {
+    if (viewKey.startsWith(prefix)) {
+      suffix = viewKey.slice(prefix.length)
+      break
+    }
+  }
+  return packFromKind(suffix)
+}
 
-export const TEMPLATE_FILTER_VIEWS = [
-  { key: 'template-checkpoints', label: 'Checkpoint' },
-  { key: 'template-text-encoders', label: 'Text encoder' },
-  { key: 'template-vae', label: 'VAE' },
-  { key: 'template-loras', label: 'LoRA' },
-  { key: 'template-wildcards', label: 'Wildcards' },
-] as const
-
-export const GALLERY_SEARCH_FILTER_VIEWS = [
-  { key: 'gallery-search-checkpoints', label: 'Models' },
-  { key: 'gallery-search-loras', label: 'LoRA' },
-  { key: 'gallery-search-wildcards', label: 'Wildcards' },
-] as const
-
-export const GALLERY_CREATE_FILTER_VIEWS = [
-  { key: 'gallery-create-checkpoints', label: 'Models' },
-  { key: 'gallery-create-loras', label: 'LoRA' },
-  { key: 'gallery-create-wildcards', label: 'Wildcards' },
-] as const
-
-export const GALLERY_MODE_KEYS = [
-  ...GENERATE_FILTER_VIEWS.map((item) => item.key),
-  ...GENERATE_PICKER_FILTER_VIEWS.map((item) => item.key),
-  ...MODELS_FILTER_VIEWS.map((item) => item.key),
-  ...TEMPLATE_FILTER_VIEWS.map((item) => item.key),
-  ...GALLERY_SEARCH_FILTER_VIEWS.map((item) => item.key),
-  ...GALLERY_CREATE_FILTER_VIEWS.map((item) => item.key),
-] as const
-export type GalleryModeKey = (typeof GALLERY_MODE_KEYS)[number]
-
-export const GALLERY_SHARE_GLOBAL = 'global'
-export const GALLERY_SHARE_MODELS = 'models'
-export const GALLERY_SHARE_TEMPLATE = 'template'
-export const GALLERY_SHARE_GALLERY = 'gallery-search'
-export const GALLERY_SHARE_CREATE = 'gallery-create'
-
-export function galleryModeDefault(viewKey: string): GalleryFilterScope {
-  return viewKey.startsWith('models') ? 'global' : 'local'
+export function isGenerateGallery(viewKey: string): boolean {
+  return !viewKey.startsWith('models') && !viewKey.startsWith('template') && !viewKey.startsWith('gallery-')
 }
 
 export type GalleryLocalScope = {
@@ -151,117 +167,6 @@ export const LOCAL_SCOPE_DEFAULT: GalleryLocalScope = {
   auto: false,
   mode: 'likely',
   fallback: true,
-}
-
-export const GALLERY_LOCAL_KEYS = new Set<string>([
-  ...GENERATE_FILTER_VIEWS.map((item) => item.key),
-  ...GENERATE_PICKER_FILTER_VIEWS.map((item) => item.key),
-  GALLERY_SHARE_MODELS,
-  GALLERY_SHARE_TEMPLATE,
-  GALLERY_SHARE_GALLERY,
-  GALLERY_SHARE_CREATE,
-  ...MODELS_FILTER_VIEWS.map((item) => item.key),
-  ...TEMPLATE_FILTER_VIEWS.map((item) => item.key),
-  ...GALLERY_SEARCH_FILTER_VIEWS.map((item) => item.key),
-  ...GALLERY_CREATE_FILTER_VIEWS.map((item) => item.key),
-])
-export const GALLERY_FILTER_KEYS = new Set<string>([
-  GALLERY_SHARE_GLOBAL,
-  GALLERY_SHARE_MODELS,
-  GALLERY_SHARE_TEMPLATE,
-  GALLERY_SHARE_GALLERY,
-  GALLERY_SHARE_CREATE,
-  ...GALLERY_LOCAL_KEYS,
-])
-export const GALLERY_MODE_KEY_SET = new Set<string>(GALLERY_MODE_KEYS)
-
-export function galleryModeKey(viewKey: string): GalleryModeKey {
-  if (GALLERY_MODE_KEY_SET.has(viewKey)) {
-    return viewKey as GalleryModeKey
-  }
-  if (viewKey.startsWith('models')) {
-    return 'models-all'
-  }
-  if (viewKey.startsWith('template-')) {
-    return 'template-checkpoints'
-  }
-  if (viewKey.startsWith('gallery-search-')) {
-    return 'gallery-search-checkpoints'
-  }
-  if (viewKey.startsWith('gallery-create-')) {
-    return 'gallery-create-checkpoints'
-  }
-  if (viewKey === 'generate-hires-loras') {
-    return 'loras'
-  }
-  if (viewKey === 'generate-hires-checkpoint') {
-    return 'checkpoints'
-  }
-  if (viewKey === 'generate-hires-text_encoders' || viewKey === 'generate-hires-vae') {
-    return 'other'
-  }
-  return 'checkpoints'
-}
-
-export function galleryModeValue(
-  map: Record<string, GalleryFilterScope>,
-  viewKey: string,
-): GalleryFilterScope {
-  const key = galleryModeKey(viewKey)
-  return map[key] ?? galleryModeDefault(key)
-}
-
-export function galleryShareKey(viewKey: string): string {
-  if (viewKey.startsWith('template')) {
-    return GALLERY_SHARE_TEMPLATE
-  }
-  if (viewKey.startsWith('gallery-search')) {
-    return GALLERY_SHARE_GALLERY
-  }
-  if (viewKey.startsWith('gallery-create')) {
-    return GALLERY_SHARE_CREATE
-  }
-  if (viewKey.startsWith('models') || galleryModeKey(viewKey).startsWith('models')) {
-    return GALLERY_SHARE_MODELS
-  }
-  return GALLERY_SHARE_GLOBAL
-}
-
-export function galleryShareLabel(viewKey: string): string {
-  const share = galleryShareKey(viewKey)
-  if (share === GALLERY_SHARE_TEMPLATE) {
-    return 'Templates'
-  }
-  if (share === GALLERY_SHARE_GALLERY) {
-    return 'Gallery search'
-  }
-  if (share === GALLERY_SHARE_CREATE) {
-    return 'Gallery libraries'
-  }
-  if (share === GALLERY_SHARE_MODELS) {
-    return 'Models galleries'
-  }
-  return 'Generate galleries'
-}
-
-export function isGenerateGallery(viewKey: string): boolean {
-  return galleryShareKey(viewKey) === GALLERY_SHARE_GLOBAL
-}
-
-function galleryStoreKey(viewKey: string, modeMap: Record<string, GalleryFilterScope>): string {
-  const key = galleryModeKey(viewKey)
-  if (galleryModeValue(modeMap, viewKey) === 'global') {
-    return galleryShareKey(viewKey)
-  }
-  return key
-}
-
-export function galleryFilterKey(viewKey: string, state: { galleryFilterMode: Record<string, GalleryFilterScope> }): string {
-  return galleryStoreKey(viewKey, state.galleryFilterMode)
-}
-
-export function galleryScopeKey(viewKey: string, state: { galleryScopeMode: Record<string, GalleryFilterScope> }): string {
-  return galleryStoreKey(viewKey, state.galleryScopeMode)
 }
 
 export const IMAGE_FORMATS = [
@@ -420,8 +325,6 @@ export const SETTINGS_DEFAULTS = {
   galleryTypes: {} as Record<string, string[]>,
   galleryQuery: {} as Record<string, string>,
   galleryLocalScopes: {} as Record<string, GalleryLocalScope>,
-  galleryScopeMode: {} as Record<string, GalleryFilterScope>,
-  galleryFilterMode: {} as Record<string, GalleryFilterScope>,
   galleryAutoTypes: {} as Record<string, boolean>,
   galleryPinSelected: {} as Record<string, boolean>,
   galleryBrowseSort: {} as Record<string, GalleryBrowseSort>,

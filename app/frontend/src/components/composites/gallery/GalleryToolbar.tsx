@@ -16,30 +16,6 @@ export const GALLERY_SORTS = [
 export type GallerySortKey = (typeof GALLERY_SORTS)[number]['value']
 export type GallerySortDir = 'asc' | 'desc'
 
-function GlobeBtn({
-  on,
-  onToggle,
-  shareOn,
-  shareOff,
-}: {
-  on: boolean
-  onToggle: () => void
-  shareOn: string
-  shareOff: string
-}) {
-  return (
-    <IconButton
-      on={on}
-      aria-label={on ? shareOn : shareOff}
-      aria-pressed={on}
-      title={on ? shareOn : shareOff}
-      onClick={onToggle}
-    >
-      <AppIcon id="globe" />
-    </IconButton>
-  )
-}
-
 export function GalleryToolbar({
   sortKind,
   scopeKey,
@@ -60,11 +36,6 @@ export function GalleryToolbar({
   busy,
   onRefresh,
   chipLabel,
-  scopeGlobal,
-  onScopeGlobal,
-  filterGlobal,
-  onFilterGlobal,
-  shareLabel,
   autoType,
   onAutoType,
 }: {
@@ -87,11 +58,6 @@ export function GalleryToolbar({
   busy: boolean
   onRefresh: () => void
   chipLabel?: (item: string) => string
-  scopeGlobal: boolean
-  onScopeGlobal: () => void
-  filterGlobal: boolean
-  onFilterGlobal: () => void
-  shareLabel: string
   autoType?: boolean
   onAutoType?: () => void
 }) {
@@ -99,12 +65,6 @@ export function GalleryToolbar({
     <>
       <div className="flex h-toolbar shrink-0 items-stretch gap-cluster">
         <ThumbnailScopePicker fallbackKind={sortKind} scopeKey={scopeKey} />
-        <GlobeBtn
-          on={scopeGlobal}
-          onToggle={onScopeGlobal}
-          shareOn={`Sharing scopes across ${shareLabel}`}
-          shareOff={`Share scopes across ${shareLabel}`}
-        />
       </div>
       <div className="flex h-toolbar shrink-0 items-stretch gap-cluster">
         <div className="relative min-w-0 flex-1">
@@ -163,12 +123,6 @@ export function GalleryToolbar({
           </IconButton>
         ) : null}
         <IconButton aria-label="Refresh models" title="Refresh models (R)" disabled={busy} onClick={onRefresh}><AppIcon id="refresh-cw" /></IconButton>
-        <GlobeBtn
-          on={filterGlobal}
-          onToggle={onFilterGlobal}
-          shareOn={`Sharing filters across ${shareLabel}`}
-          shareOff={`Share filters across ${shareLabel}`}
-        />
       </div>
     </>
   )

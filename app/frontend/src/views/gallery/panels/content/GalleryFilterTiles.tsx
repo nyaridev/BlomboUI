@@ -2,9 +2,8 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { FloatingModelsView } from '@/components/composites/models/FloatingModelsView.tsx'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
-import { galleryScopeKey } from '@/stores/settings/constants.ts'
+import { galleryPackKey } from '@/stores/settings/constants.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { ModelTile } from '@/views/generate/panels/chrome/sections/tiles/ModelTile.tsx'
 import { RowLabel } from '@/views/generate/panels/chrome/sections/tiles/modelTileParts.tsx'
@@ -170,7 +169,7 @@ function FilterGroup({
   onChange: (value: string[]) => void
 }) {
   const spec = modelTileSpec(style)
-  const scopeKey = useSettingsStore((s) => galleryScopeKey(chromeKey, s))
+  const scopeKey = galleryPackKey(chromeKey)
   const view = useThumbView(kind, scopeKey)
   const selected = selectedPaths(chips, items)
   const group = useRef<HTMLDivElement>(null)

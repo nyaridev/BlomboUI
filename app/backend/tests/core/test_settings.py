@@ -60,13 +60,12 @@ class SettingsTests(unittest.TestCase):
         result = settings._clean({"lookupKinds": ["loras", "other", "checkpoints"]})
         self.assertEqual(result["lookupKinds"], ["loras", "other", "checkpoints"])
 
-    def test_gallery_local_scopes_keep_template_and_search_keys(self) -> None:
+    def test_gallery_packs_keep_type_keys_drop_surface_keys(self) -> None:
         result = settings._clean(
             {
                 "galleryScopeMode": {
                     "template-loras": "global",
                     "gallery-search-loras": "global",
-                    "gallery-create-loras": "local",
                 },
                 "galleryLocalScopes": {
                     "template": {
@@ -83,14 +82,7 @@ class SettingsTests(unittest.TestCase):
                         "mode": "exact",
                         "fallback": False,
                     },
-                    "gallery-create": {
-                        "ids": ["dddddddddddd"],
-                        "optionalIds": [],
-                        "auto": False,
-                        "mode": "likely",
-                        "fallback": True,
-                    },
-                    "template-loras": {
+                    "models-loras": {
                         "ids": ["cccccccccccc"],
                         "optionalIds": [],
                         "auto": False,
@@ -103,17 +95,36 @@ class SettingsTests(unittest.TestCase):
                         "auto": False,
                         "mode": "likely",
                     },
+                    "vae": {
+                        "ids": ["ffffffffffff"],
+                        "optionalIds": [],
+                        "auto": True,
+                        "mode": "exact",
+                        "fallback": False,
+                    },
+                    "models-all": {
+                        "ids": ["111111111111"],
+                        "optionalIds": [],
+                        "auto": False,
+                        "mode": "likely",
+                        "fallback": True,
+                    },
                 },
+                "galleryQuery": {"loras": "cat", "models-loras": "old", "template": "nope"},
+                "galleryTypes": {"loras": ["Pony"], "models-loras": ["SDXL"]},
             }
         )
-        self.assertEqual(result["galleryScopeMode"]["template-loras"], "global")
-        self.assertEqual(result["galleryScopeMode"]["gallery-search-loras"], "global")
-        self.assertEqual(result["galleryLocalScopes"]["template"]["ids"], ["aaaaaaaaaaaa"])
-        self.assertEqual(result["galleryLocalScopes"]["gallery-search"]["ids"], ["bbbbbbbbbbbb"])
-        self.assertEqual(result["galleryLocalScopes"]["gallery-search"]["fallback"], False)
-        self.assertEqual(result["galleryLocalScopes"]["gallery-create"]["ids"], ["dddddddddddd"])
-        self.assertEqual(result["galleryLocalScopes"]["template-loras"]["ids"], ["cccccccccccc"])
+        self.assertNotIn("galleryScopeMode", result)
+        self.assertNotIn("template", result["galleryLocalScopes"])
+        self.assertNotIn("gallery-search", result["galleryLocalScopes"])
+        self.assertNotIn("models-loras", result["galleryLocalScopes"])
+        self.assertEqual(result["galleryLocalScopes"]["loras"]["ids"], ["eeeeeeeeeeee"])
         self.assertEqual(result["galleryLocalScopes"]["loras"]["fallback"], True)
+        self.assertEqual(result["galleryLocalScopes"]["vae"]["ids"], ["ffffffffffff"])
+        self.assertEqual(result["galleryLocalScopes"]["vae"]["auto"], True)
+        self.assertEqual(result["galleryLocalScopes"]["models-all"]["ids"], ["111111111111"])
+        self.assertEqual(result["galleryQuery"], {"loras": "cat"})
+        self.assertEqual(result["galleryTypes"], {"loras": ["Pony"]})
 
     def test_gallery_auto_types_keeps_true_drops_false(self) -> None:
         result = settings._clean({"galleryAutoTypes": {"loras": True, "checkpoints": False, "nope": True}})

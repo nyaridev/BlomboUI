@@ -233,8 +233,8 @@ def _gallery_types(raw: Any) -> dict[str, list[str]]:
     if not isinstance(raw, dict):
         return out
     for key, value in raw.items():
-        name = str(key).strip()[:80]
-        if not name or not isinstance(value, list):
+        name = str(key).strip()
+        if name not in _GALLERY_PACK_KEYS or not isinstance(value, list):
             continue
         types: list[str] = []
         seen: set[str] = set()
@@ -248,75 +248,18 @@ def _gallery_types(raw: Any) -> dict[str, list[str]]:
     return out
 
 
-_GALLERY_MODE_KEYS = (
+_GALLERY_PACK_KEYS = (
     "checkpoints",
     "loras",
     "wildcards",
     "other",
+    "models-all",
+    "vae",
+    "text_encoders",
     "generate-upscale",
     "generate-detector",
     "generate-sam",
-    "models-all",
-    "models-checkpoints",
-    "models-loras",
-    "models-wildcards",
-    "models-other",
-    "template-checkpoints",
-    "template-text-encoders",
-    "template-vae",
-    "template-loras",
-    "template-wildcards",
-    "gallery-search-checkpoints",
-    "gallery-search-loras",
-    "gallery-search-wildcards",
-    "gallery-create-checkpoints",
-    "gallery-create-loras",
-    "gallery-create-wildcards",
 )
-def _gallery_mode_default(name: str) -> str:
-    return "global" if name.startswith("models") else "local"
-_GALLERY_LOCAL_KEYS = (
-    "checkpoints",
-    "loras",
-    "wildcards",
-    "other",
-    "generate-upscale",
-    "generate-detector",
-    "generate-sam",
-    "models",
-    "models-all",
-    "models-checkpoints",
-    "models-loras",
-    "models-wildcards",
-    "models-other",
-    "template",
-    "template-checkpoints",
-    "template-text-encoders",
-    "template-vae",
-    "template-loras",
-    "template-wildcards",
-    "gallery-search",
-    "gallery-search-checkpoints",
-    "gallery-search-loras",
-    "gallery-search-wildcards",
-    "gallery-create",
-    "gallery-create-checkpoints",
-    "gallery-create-loras",
-    "gallery-create-wildcards",
-)
-
-
-def _gallery_mode_map(raw: Any) -> dict[str, str]:
-    out: dict[str, str] = {}
-    if not isinstance(raw, dict):
-        return out
-    for key, value in raw.items():
-        name = str(key).strip()
-        if name not in _GALLERY_MODE_KEYS or value not in ("global", "local"):
-            continue
-        if value != _gallery_mode_default(name):
-            out[name] = value
-    return out
 
 
 def _gallery_query(raw: Any) -> dict[str, str]:
@@ -324,8 +267,8 @@ def _gallery_query(raw: Any) -> dict[str, str]:
     if not isinstance(raw, dict):
         return out
     for key, value in raw.items():
-        name = str(key).strip()[:80]
-        if not name or not isinstance(value, str):
+        name = str(key).strip()
+        if name not in _GALLERY_PACK_KEYS or not isinstance(value, str):
             continue
         text = value[:200]
         if text:
@@ -372,7 +315,7 @@ def _gallery_pin_selected(raw: Any) -> dict[str, bool]:
         return out
     for key, value in raw.items():
         name = str(key).strip()
-        if (name != "global" and name not in _GALLERY_LOCAL_KEYS) or value is not False:
+        if name not in _GALLERY_PACK_KEYS or value is not False:
             continue
         out[name] = False
     return out
@@ -384,7 +327,7 @@ def _gallery_auto_types(raw: Any) -> dict[str, bool]:
         return out
     for key, value in raw.items():
         name = str(key).strip()
-        if (name != "global" and name not in _GALLERY_LOCAL_KEYS) or value is not True:
+        if name not in _GALLERY_PACK_KEYS or value is not True:
             continue
         out[name] = True
     return out
@@ -398,7 +341,7 @@ def _gallery_local_scopes(raw: Any) -> dict[str, dict[str, Any]]:
         return out
     for key, item in raw.items():
         name = str(key).strip()
-        if name not in _GALLERY_LOCAL_KEYS or not isinstance(item, dict):
+        if name not in _GALLERY_PACK_KEYS or not isinstance(item, dict):
             continue
         ids = ordered_ids(item.get("ids") or [])
         optional = ordered_ids(item.get("optionalIds") or [])
@@ -530,8 +473,8 @@ def _gallery_map(raw: Any, allowed: tuple[str, ...], default: str) -> dict[str, 
         return None
     out: dict[str, str] = {}
     for key, item in raw.items():
-        name = str(key).strip()[:80]
-        if not name:
+        name = str(key).strip()
+        if name not in _GALLERY_PACK_KEYS:
             continue
         value = str(item) if item is not None else default
         picked = value if value in allowed else default

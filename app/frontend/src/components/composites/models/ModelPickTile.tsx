@@ -3,9 +3,8 @@ import { FloatingModelsView } from '@/components/composites/models/FloatingModel
 import { TilePreview } from '@/components/composites/models/TilePreview.tsx'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
-import { galleryScopeKey } from '@/stores/settings/constants.ts'
+import { galleryPackKey } from '@/stores/settings/constants.ts'
 import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
-import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -39,7 +38,7 @@ export function ModelPickTile({
   const empty = !value
   const unresolved = Boolean(value) && !item
   const name = empty ? role : modelLabel(value) || value
-  const scopeKey = useSettingsStore((s) => (chromeKey ? galleryScopeKey(chromeKey, s) : undefined))
+  const scopeKey = chromeKey ? galleryPackKey(chromeKey) : undefined
   const view = useThumbView(kind, scopeKey)
 
   useEffect(() => {

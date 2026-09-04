@@ -158,8 +158,6 @@ export type UserSettings = {
     string,
     { ids?: string[]; optionalIds?: string[]; auto?: boolean; mode?: string; fallback?: boolean }
   >
-  galleryScopeMode?: Record<string, string>
-  galleryFilterMode?: Record<string, string>
   galleryBrowseSort?: Record<string, string>
   galleryBrowseDir?: Record<string, string>
   galleryBrowseShare?: boolean

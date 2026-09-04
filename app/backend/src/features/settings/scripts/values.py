@@ -136,8 +136,6 @@ _KEYS = (
     "galleryTypes",
     "galleryQuery",
     "galleryLocalScopes",
-    "galleryScopeMode",
-    "galleryFilterMode",
     "galleryAutoTypes",
     "galleryPinSelected",
     "galleryBrowseSort",

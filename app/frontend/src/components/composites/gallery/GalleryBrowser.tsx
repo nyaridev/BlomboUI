@@ -35,11 +35,7 @@ import {
 import { filterTypeSections, MODEL_TYPE_SECTIONS } from '@/lib/modelTypes.ts'
 import { modelPath, useModelsStore } from '@/stores/modelsStore.ts'
 import {
-  galleryFilterKey,
-  galleryModeKey,
-  galleryModeValue,
-  galleryScopeKey,
-  galleryShareLabel,
+  galleryPackKey,
   GALLERY_SORT_DIR_DEFAULT,
   GALLERY_SORT_KEY_DEFAULT,
   isGenerateGallery,
@@ -88,35 +84,29 @@ export function GalleryBrowser({
 }: GalleryViewProps) {
   const navigate = useNavigate()
   const viewKey = chromeKey || kind
-  const modeKey = galleryModeKey(viewKey)
+  const packKey = galleryPackKey(viewKey)
   const generate = isGenerateGallery(viewKey)
-  const filterKey = useSettingsStore((s) => galleryFilterKey(viewKey, s))
-  const scopeKey = useSettingsStore((s) => galleryScopeKey(viewKey, s))
-  const scopeGlobal = useSettingsStore((s) => galleryModeValue(s.galleryScopeMode, viewKey) === 'global')
-  const filterGlobal = useSettingsStore((s) => galleryModeValue(s.galleryFilterMode, viewKey) === 'global')
-  const setGalleryScopeMode = useSettingsStore((s) => s.setGalleryScopeMode)
-  const setGalleryFilterMode = useSettingsStore((s) => s.setGalleryFilterMode)
   const saved = chrome.get(viewKey)
   const sortKind: GalleryViewKind =
     kind === 'loras' || kind === 'wildcards' ? kind : viewKey === 'other' || viewKey.endsWith('-other') ? 'other' : 'checkpoints'
-  const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[filterKey] ?? GALLERY_SORT_KEY_DEFAULT)
-  const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[filterKey] ?? GALLERY_SORT_DIR_DEFAULT)
+  const gallerySortKey = useSettingsStore((s) => s.gallerySortKey[packKey] ?? GALLERY_SORT_KEY_DEFAULT)
+  const gallerySortDir = useSettingsStore((s) => s.gallerySortDir[packKey] ?? GALLERY_SORT_DIR_DEFAULT)
   const setGallerySortKey = useSettingsStore((s) => s.setGallerySortKey)
   const setGallerySortDir = useSettingsStore((s) => s.setGallerySortDir)
-  const pinSelected = useSettingsStore((s) => s.galleryPinSelected[modeKey] ?? true)
+  const pinSelected = useSettingsStore((s) => s.galleryPinSelected[packKey] ?? true)
   const setGalleryPinSelected = useSettingsStore((s) => s.setGalleryPinSelected)
   const galleryTileScale = useSettingsStore((s) => s.galleryTileScale)
   const tileScale = tileScaleOverride ?? galleryTileScale
   const parentOnUnselect = useSettingsStore((s) => s.galleryParentOnUnselect)
   const modelDirs = useSettingsStore((s) => s.modelDirs)
   const wildcardDirs = useSettingsStore((s) => s.wildcardDirs)
-  const storedTypes = useSettingsStore((s) => s.galleryTypes[filterKey] ?? EMPTY_TYPES)
+  const storedTypes = useSettingsStore((s) => s.galleryTypes[packKey] ?? EMPTY_TYPES)
   const setGalleryTypes = useSettingsStore((s) => s.setGalleryTypes)
-  const autoType = useSettingsStore((s) => generate && s.galleryAutoTypes[filterKey] === true)
+  const autoType = useSettingsStore((s) => generate && s.galleryAutoTypes[packKey] === true)
   const setGalleryAutoTypes = useSettingsStore((s) => s.setGalleryAutoTypes)
-  const overlayTypes = useGalleryAutoTypes(generate, filterKey, autoType, setGalleryTypes, autoCheckpoint)
+  const overlayTypes = useGalleryAutoTypes(generate, packKey, autoType, setGalleryTypes, autoCheckpoint)
   const typeFilter = overlayTypes ?? storedTypes
-  const query = useSettingsStore((s) => s.galleryQuery[modeKey] ?? '')
+  const query = useSettingsStore((s) => s.galleryQuery[packKey] ?? '')
   const setGalleryQuery = useSettingsStore((s) => s.setGalleryQuery)
   const hiddenModelTypes = useSettingsStore((s) => s.hiddenModelTypes)
   const otherGallery = kind === 'vae' && Boolean(itemKind)
@@ -155,9 +145,9 @@ export function GalleryBrowser({
   const [treeWidth, setTreeWidth] = useState(() => saved?.treeWidth ?? TREE_REM * 16)
   const [showTree, setShowTree] = useState(() => saved?.showTree ?? true)
   function setQuery(update: string | ((current: string) => string)) {
-    const current = useSettingsStore.getState().galleryQuery[modeKey] ?? ''
+    const current = useSettingsStore.getState().galleryQuery[packKey] ?? ''
     const next = typeof update === 'function' ? update(current) : update
-    setGalleryQuery(modeKey, next)
+    setGalleryQuery(packKey, next)
   }
   const [infoItem, setInfoItem] = useState<ModelEntry | null>(null)
   const [fsRoots, setFsRoots] = useState<ReturnType<typeof toDisplayRoots>>([])
@@ -170,7 +160,7 @@ export function GalleryBrowser({
     fileTile: boolean
     kind: keyof ModelLists
   } | null>(null)
-  const thumbView = useThumbView(sortKind, scopeKey)
+  const thumbView = useThumbView(sortKind, packKey)
   const shownSortKey = gallerySortKey
   const shownSortDir = gallerySortDir
   const tileW = TILE_COL_REM * tileScale
@@ -401,39 +391,34 @@ export function GalleryBrowser({
     <div className={fill ? 'flex h-full min-h-0 flex-col gap-2' : 'flex flex-col gap-2'}>
       <GalleryToolbar
         sortKind={sortKind}
-        scopeKey={scopeKey}
+        scopeKey={packKey}
         query={query}
         onQuery={setQuery}
         typeOptions={typeOptions}
         typeFilter={visibleTypeFilter}
         onTypes={(value) => {
           if (autoType) {
-            setGalleryAutoTypes(filterKey, false)
+            setGalleryAutoTypes(packKey, false)
           }
           const kinds = otherGallery
             ? []
-            : (useSettingsStore.getState().galleryTypes[filterKey] ?? EMPTY_TYPES).filter(isOtherKind)
-          setGalleryTypes(filterKey, otherGallery ? value : [...kinds, ...value.filter((item) => !isOtherKind(item))])
+            : (useSettingsStore.getState().galleryTypes[packKey] ?? EMPTY_TYPES).filter(isOtherKind)
+          setGalleryTypes(packKey, otherGallery ? value : [...kinds, ...value.filter((item) => !isOtherKind(item))])
         }}
         chipLabel={(item) => otherKindLabel(item) || item}
         sortKey={shownSortKey}
         sortDir={shownSortDir}
-        onSortKey={(value) => setGallerySortKey(filterKey, value as SortKey)}
-        onSortDir={() => setGallerySortDir(filterKey, shownSortDir === 'asc' ? 'desc' : 'asc')}
+        onSortKey={(value) => setGallerySortKey(packKey, value as SortKey)}
+        onSortDir={() => setGallerySortDir(packKey, shownSortDir === 'asc' ? 'desc' : 'asc')}
         showTree={showTree}
         onShowTree={() => setShowTree((on) => !on)}
         pinSelected={pinSelected}
-        onPinSelected={() => setGalleryPinSelected(modeKey, !pinSelected)}
+        onPinSelected={() => setGalleryPinSelected(packKey, !pinSelected)}
         hasSelection={Boolean(onSelect)}
         busy={busy}
         onRefresh={() => void (itemKind ? refreshAll() : refreshKind(kind)).then(() => loadTree())}
-        scopeGlobal={scopeGlobal}
-        onScopeGlobal={() => setGalleryScopeMode(modeKey, scopeGlobal ? 'local' : 'global')}
-        filterGlobal={filterGlobal}
-        onFilterGlobal={() => setGalleryFilterMode(modeKey, filterGlobal ? 'local' : 'global')}
-        shareLabel={galleryShareLabel(viewKey)}
         autoType={autoType}
-        onAutoType={generate ? () => setGalleryAutoTypes(filterKey, !autoType) : undefined}
+        onAutoType={generate ? () => setGalleryAutoTypes(packKey, !autoType) : undefined}
       />
       <GalleryTiles
         rowRef={rowRef}
@@ -508,7 +493,7 @@ export function GalleryBrowser({
       />
       <GalleryOverlays
         kind={kind}
-        scopeKey={scopeKey}
+        scopeKey={packKey}
         extraNames={extraNames}
         tree={tree}
         kindOf={kindOf}

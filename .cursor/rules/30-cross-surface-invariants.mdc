@@ -15,21 +15,19 @@ These rules protect behavior that crosses frontend state, backend validation, an
 
 ## Gallery filter packs
 
-Thumbnail scopes and type/sort filters are isolated per product surface. A globe shares only among sibling galleries in that same surface; it never creates an application-wide filter pack.
+Thumbnail scopes, type chips, sort, search query, pin-selected, and Generate auto-types are stored by **displayed item type**, not by product surface. `galleryPackKey(chromeKey)` in `stores/settings/constants.ts` is the only resolver. There is no globe toggle and no surface share pack.
 
-| Surface | Shared scope pack | Local views |
-|---|---|---|
-| Generate galleries | `thumbScopeIds` | checkpoints, loras, wildcards, other, generate utilities |
-| Models Local | `galleryLocalScopes.models` | models-all, models-loras, and siblings |
-| Templates picker | `galleryLocalScopes.template` | template gallery views |
-| Gallery filter tiles | `galleryLocalScopes['gallery-search']` | gallery-search views |
-| Gallery create/edit | `galleryLocalScopes['gallery-create']` | gallery-create views |
+Canonical packs:
 
-- Scope globe shares scope chips, Auto, matching mode, and Global Fallback only inside its surface. Type/sort globe shares type and sort the same way; search query remains per view.
-- Globe on reads/writes that surface's shared pack. Globe off reads/writes only the current view's local pack. Never seed one from the other when toggling.
-- A missing local pack uses `LOCAL_SCOPE_DEFAULT`: empty chips, Most Likely, Auto off, Global Fallback on.
-- Global Fallback is a pack flag, not globe sharing. Gallery image-search chips are separate from thumbnail-scope packs.
-- Chrome tiles follow their own gallery pack. Persist keys through `stores/settings/constants.ts` and list all view/share keys in backend settings validators.
+- `checkpoints` — Base Model galleries and checkpoint pickers (Generate, Models, templates, gallery-search/create, hires/adetailer/primitives)
+- `loras` — every LoRA gallery and LoRA overlay
+- `wildcards` — every wildcards gallery
+- `other` — mixed Other galleries only (Generate Other, Models → Other)
+- `models-all` — Models → All
+- `vae` / `text_encoders` — VAE and text-encoder pickers (templates, hires, adetailer)
+- `generate-upscale` / `generate-detector` / `generate-sam` — those Generate pickers
+
+A missing pack uses `LOCAL_SCOPE_DEFAULT`: empty chips, Most Likely, Auto off, Global Fallback on. Global Fallback is a pack flag, not sharing. Flat `thumbScopeIds` and siblings remain only for `GLOBAL_SCOPE` (trash, Civitai save-to-global, no-view thumbs). Gallery image-search chips are separate from thumbnail-scope definitions. Tree width and scroll stay per raw `chromeKey`. Persist pack keys through `stores/settings/constants.ts` and list them in backend settings validators.
 
 ## Gallery view completeness
 

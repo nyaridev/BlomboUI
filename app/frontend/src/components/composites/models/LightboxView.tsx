@@ -2,7 +2,7 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { PreviewMedia } from '@/components/composites/models/PreviewMedia.tsx'
 import { isVideoPreview } from '@/lib/civitai/media.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
-import { useEffect, useRef, type PointerEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 
 type LightboxViewProps = {
@@ -11,6 +11,7 @@ type LightboxViewProps = {
   alt: string
   resetKey: string
   many: boolean
+  compare?: ReactNode
   toolbar?: ReactNode
   onClose: () => void
   onPrev: () => void
@@ -55,24 +56,42 @@ function Arrow({ dir, onClick }: { dir: 'left' | 'right'; onClick: () => void })
   )
 }
 
-function paint(img: HTMLImageElement | null, next: { scale: number; x: number; y: number }) {
+function paint(img: HTMLElement | null, next: { scale: number; x: number; y: number }) {
   if (next.scale <= MIN) {
     next = { scale: MIN, x: 0, y: 0 }
   }
   if (img) {
     img.style.transform = `translate(${next.x}px, ${next.y}px) scale(${next.scale})`
+    img.style.setProperty('--compare-zoom', String(next.scale))
   }
   return next
 }
 
-export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose, onPrev, onNext }: LightboxViewProps) {
+function skipPan(event: { target: EventTarget | null }) {
+  return event.target instanceof Element && Boolean(event.target.closest('[data-lightbox-no-pan]'))
+}
+
+export function LightboxView({
+  src,
+  type,
+  alt,
+  resetKey,
+  many,
+  compare,
+  toolbar,
+  onClose,
+  onPrev,
+  onNext,
+}: LightboxViewProps) {
   const stageRef = useRef<HTMLDivElement>(null)
-  const imgRef = useRef<HTMLImageElement>(null)
+  const imgRef = useRef<HTMLElement | null>(null)
   const viewRef = useRef({ scale: MIN, x: 0, y: 0 })
   const dragRef = useRef<{ x: number; y: number; px: number; py: number } | null>(null)
   const navRef = useRef({ many, onPrev, onNext })
   const wheelAcc = useRef(0)
+  const [afterSize, setAfterSize] = useState<{ w: number; h: number } | null>(null)
   const video = isVideoPreview(src, type)
+  const hasCompare = Boolean(compare)
   navRef.current = { many, onPrev, onNext }
 
   function apply(next: { scale: number; x: number; y: number }) {
@@ -82,6 +101,24 @@ export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose,
   useEffect(() => {
     apply({ scale: MIN, x: 0, y: 0 })
   }, [resetKey])
+
+  useEffect(() => {
+    if (!hasCompare) {
+      setAfterSize(null)
+      return
+    }
+    let gone = false
+    const img = new Image()
+    img.onload = () => {
+      if (!gone && img.naturalWidth && img.naturalHeight) {
+        setAfterSize({ w: img.naturalWidth, h: img.naturalHeight })
+      }
+    }
+    img.src = src
+    return () => {
+      gone = true
+    }
+  }, [hasCompare, src])
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -176,7 +213,10 @@ export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose,
     return () => el.removeEventListener('wheel', onWheel)
   }, [video])
 
-  function onPointerDown(event: PointerEvent<HTMLImageElement>) {
+  function onPointerDown(event: PointerEvent<HTMLElement>) {
+    if (skipPan(event)) {
+      return
+    }
     if (middleOpen(event, src)) {
       event.stopPropagation()
       return
@@ -188,7 +228,7 @@ export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose,
     event.currentTarget.style.transition = 'none'
   }
 
-  function onPointerMove(event: PointerEvent<HTMLImageElement>) {
+  function onPointerMove(event: PointerEvent<HTMLElement>) {
     const drag = dragRef.current
     if (!drag) {
       return
@@ -200,10 +240,18 @@ export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose,
     })
   }
 
-  function onPointerUp(event: PointerEvent<HTMLImageElement>) {
+  function onPointerUp(event: PointerEvent<HTMLElement>) {
     dragRef.current = null
-    event.currentTarget.style.transition = 'transform 140ms ease-out'
+    if (!hasCompare) {
+      event.currentTarget.style.transition = 'transform 140ms ease-out'
+    }
   }
+
+  const mediaStyle = {
+    transform: 'translate(0px, 0px) scale(1)',
+    cursor: 'all-scroll',
+    touchAction: 'none',
+  } as const
 
   return createPortal(
     <div
@@ -231,18 +279,43 @@ export function LightboxView({ src, type, alt, resetKey, many, toolbar, onClose,
             className="max-h-[92vh] max-w-[92vw] object-contain"
           />
         </div>
+      ) : hasCompare ? (
+        <div
+          ref={(node) => {
+            imgRef.current = node
+          }}
+          className="relative max-h-[92vh] max-w-[92vw]"
+          style={
+            {
+              ...mediaStyle,
+              transition: hasCompare ? 'none' : 'transform 140ms ease-out',
+              width: afterSize
+                ? `min(92vw, calc(92vh * ${afterSize.w} / ${afterSize.h}))`
+                : 'min(92vw, 92vh)',
+              height: afterSize
+                ? `min(92vh, calc(92vw * ${afterSize.h} / ${afterSize.w}))`
+                : 'min(92vw, 92vh)',
+              visibility: afterSize ? 'visible' : 'hidden',
+              ['--compare-zoom']: 1,
+            } as CSSProperties
+          }
+          onClick={(event) => event.stopPropagation()}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+        >
+          {compare}
+        </div>
       ) : (
         <img
-          ref={imgRef}
+          ref={(node) => {
+            imgRef.current = node
+          }}
           src={src}
           alt={alt}
           className="max-h-[92vh] max-w-[92vw] object-contain"
-          style={{
-            transform: 'translate(0px, 0px) scale(1)',
-            transition: 'transform 140ms ease-out',
-            cursor: 'all-scroll',
-            touchAction: 'none',
-          }}
+          style={{ ...mediaStyle, transition: 'transform 140ms ease-out' }}
           onClick={(event) => event.stopPropagation()}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}

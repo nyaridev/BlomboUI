@@ -395,6 +395,10 @@ export function jobPreviewUrl(jobId: string, tick: number): string {
   return api(`/jobs/${jobId}/preview?t=${tick}`)
 }
 
+export function jobInputUrl(jobId: string, index: number): string {
+  return api(`/jobs/${jobId}/input/${index}`)
+}
+
 export function jobStepPreviewUrl(jobId: string, step: number): string {
   return api(`/jobs/${jobId}/previews/${step}`)
 }

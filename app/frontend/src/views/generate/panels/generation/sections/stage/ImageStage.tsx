@@ -6,6 +6,7 @@ import {
   galleryItemImageUrl,
   galleryItemThumbUrl,
   getWorkflows,
+  jobInputUrl,
   openFolder,
   setGalleryFavorite,
   type JobGalleryItem,
@@ -15,6 +16,8 @@ import { applySetWorkflow } from '@/stores/generatePersist.ts'
 import { mergeParams, pickParams, useGenerateStore, type TemplateParams } from '@/stores/generateStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { GenerationInfo } from '@/views/generate/panels/generation/sections/params/GenerationInfo.tsx'
+import { CompareWipe } from '@/views/generate/panels/generation/sections/stage/CompareWipe.tsx'
+import { compareWorkflow, inputPathCount } from '@/views/generate/panels/generation/sections/stage/compareWipe.ts'
 import { ThumbStrip, type ThumbItem } from '@/views/generate/panels/generation/sections/stage/ThumbStrip.tsx'
 import {
   fileFromSrc,
@@ -31,6 +34,7 @@ type ImageStageProps = {
   gridUrls: string[]
   gallery?: JobGalleryItem[]
   payload?: Record<string, unknown> | null
+  jobId?: string
   busy: boolean
   previewUrl: string | null
   progressPct: number
@@ -47,6 +51,7 @@ export function ImageStage({
   gridUrls,
   gallery = [],
   payload = null,
+  jobId,
   busy,
   previewUrl,
   progressPct,
@@ -59,6 +64,8 @@ export function ImageStage({
 }: ImageStageProps) {
   const [index, setIndex] = useState(0)
   const [lightbox, setLightbox] = useState(false)
+  const [split, setSplit] = useState(0.5)
+  const [beforeFailed, setBeforeFailed] = useState(false)
   const [failed, setFailed] = useState<Set<string>>(() => new Set())
   const [previewFailed, setPreviewFailed] = useState(false)
   const [thumbFailed, setThumbFailed] = useState(false)
@@ -94,6 +101,15 @@ export function ImageStage({
     heldInfo.current = genInfo
   }
   const many = items.length > 1
+  const afterIndex = current && !viewingGrid ? images.indexOf(current.key) : -1
+  const beforeSrc =
+    jobId &&
+    compareWorkflow(payload) &&
+    !beforeFailed &&
+    afterIndex >= 0 &&
+    afterIndex < inputPathCount(payload)
+      ? jobInputUrl(jobId, afterIndex)
+      : null
   const ready = Boolean(current?.src && loadedSrc === current.src)
   if (previewUrl) {
     heldPreview.current = previewUrl
@@ -129,7 +145,12 @@ export function ImageStage({
 
   useEffect(() => {
     setFailed(new Set())
+    setBeforeFailed(false)
   }, [sourceKey])
+
+  useEffect(() => {
+    setBeforeFailed(false)
+  }, [current?.key])
 
   useEffect(() => {
     setPreviewFailed(false)
@@ -263,7 +284,20 @@ export function ImageStage({
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-2">
       <div className="relative aspect-square w-full overflow-hidden rounded-md border border-line bg-panel">
-        {showCurrent && current ? (
+        {showCurrent && current && beforeSrc ? (
+          <CompareWipe
+            beforeSrc={beforeSrc}
+            afterSrc={current.src}
+            afterThumb={current.thumb}
+            alt="Comparison"
+            split={split}
+            onSplit={setSplit}
+            onAfterLoad={() => setLoadedSrc(current.src)}
+            onAfterError={() => markFailed(current.key)}
+            onBeforeError={() => setBeforeFailed(true)}
+            onActivate={() => setLightbox(true)}
+          />
+        ) : showCurrent && current ? (
           <button
             type="button"
             className="h-full w-full"
@@ -395,6 +429,19 @@ export function ImageStage({
           alt={current.key.startsWith('grid-') ? 'Batch grid' : 'Generated'}
           resetKey={current.key}
           many={many}
+          compare={
+            beforeSrc ? (
+              <CompareWipe
+                beforeSrc={beforeSrc}
+                afterSrc={current.src}
+                alt="Comparison"
+                split={split}
+                onSplit={setSplit}
+                onBeforeError={() => setBeforeFailed(true)}
+                className="absolute inset-0"
+              />
+            ) : undefined
+          }
           onClose={() => setLightbox(false)}
           onPrev={() => setIndex((i) => (i + items.length - 1) % items.length)}
           onNext={() => setIndex((i) => (i + 1) % items.length)}

@@ -834,3 +834,20 @@ def grid_path(job_id: str, index: int = 0) -> Path | None:
     return paths[index]
 
 
+def input_path(job_id: str, index: int = 0) -> Path | None:
+    raw = jobs_repo.payload_json(job_id)
+    if raw is None:
+        return None
+    payload = json.loads(raw)
+    listed = payload.get("input_paths")
+    if not isinstance(listed, list) or index < 0 or index >= len(listed):
+        return None
+    item = listed[index]
+    if not isinstance(item, str):
+        return None
+    path = Path(item)
+    if not path.is_file():
+        return None
+    return path
+
+

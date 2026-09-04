@@ -122,6 +122,14 @@ def job_grid_at(job_id: str, index: int) -> FileResponse:
     return image_response(path)
 
 
+@api.get("/jobs/{job_id}/input/{index}")
+def job_input_at(job_id: str, index: int) -> FileResponse:
+    path = generate.input_path(job_id, index)
+    if not path:
+        raise ApiError("not_found", "input not found")
+    return image_response(path)
+
+
 def preview_response(data: bytes | None) -> Response:
     if not data:
         raise ApiError("not_found", "preview not found")

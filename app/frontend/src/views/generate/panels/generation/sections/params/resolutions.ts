@@ -62,13 +62,10 @@ export const DEFAULT_SET_RESOLUTIONS = ['1024x1024', '1152x896', '1216x832', '13
 
 export type Size = { w: number; h: number }
 
+const MEGAPIXEL_PIXELS = 1024 * 1024
+
 function snap8(value: number, min: number, max: number) {
   const snapped = Math.round(value / 8) * 8
-  return Math.min(max, Math.max(min, snapped))
-}
-
-function ceil8(value: number, min: number, max: number) {
-  const snapped = Math.ceil(value / 8) * 8
   return Math.min(max, Math.max(min, snapped))
 }
 
@@ -136,12 +133,12 @@ export function snapToSet(width: number, height: number, sets: string[]): Size {
 
 export function sizeFromScaler(aspectId: string, megapixels: number) {
   const aspect = ASPECTS.find((item) => item.id === aspectId) ?? ASPECTS[3]
-  const pixels = Math.max(0.2, megapixels) * 1_000_000
+  const pixels = Math.max(0.2, megapixels) * MEGAPIXEL_PIXELS
   const height = Math.sqrt(pixels * (aspect.h / aspect.w))
   const width = height * (aspect.w / aspect.h)
   return {
-    width: ceil8(width, 64, 4096),
-    height: ceil8(height, 64, 4096),
+    width: snap8(width, 64, 4096),
+    height: snap8(height, 64, 4096),
   }
 }
 
@@ -156,6 +153,6 @@ export function inferScaler(width: number, height: number) {
       score = next
     }
   }
-  const megapixels = Math.round(((width * height) / 1_000_000) * 20) / 20
+  const megapixels = Math.round(((width * height) / MEGAPIXEL_PIXELS) * 20) / 20
   return { aspect: best.id, megapixels: Math.min(4, Math.max(0.2, megapixels)) }
 }

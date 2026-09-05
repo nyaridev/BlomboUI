@@ -256,7 +256,8 @@ def _source_size(path: Path | None) -> tuple[int, int]:
 def target_size(path: str | Path | None, megapixels: float) -> tuple[int, int]:
     width, height = _source_size(Path(path) if path else None)
     pixels = max(width * height, 1)
-    scale = math.sqrt(max(0.25, min(4.0, float(megapixels))) * 1_000_000 / pixels)
+    total = int(round(max(0.25, min(4.0, float(megapixels))) * 1024 * 1024))
+    scale = math.sqrt(total / pixels)
     return max(1, int(round(width * scale))), max(1, int(round(height * scale)))
 
 

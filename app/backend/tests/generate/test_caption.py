@@ -374,6 +374,21 @@ class CaptionHistoryTests(unittest.TestCase):
         self.assertEqual(texts, ["caption here"])
 
 
+class CaptionTargetSizeTests(unittest.TestCase):
+    def test_one_megapixel_square_uses_1024_squared(self) -> None:
+        src = Path(tempfile.mkdtemp()) / "square.png"
+        write_png(src, (1000, 1000))
+        self.assertEqual(caption.target_size(src, 1.0), (1024, 1024))
+        shutil.rmtree(src.parent, ignore_errors=True)
+
+    def test_preserves_aspect_without_snapping_to_eight(self) -> None:
+        src = Path(tempfile.mkdtemp()) / "wide.png"
+        write_png(src, (2000, 1000))
+        width, height = caption.target_size(src, 1.0)
+        self.assertEqual((width, height), (1448, 724))
+        shutil.rmtree(src.parent, ignore_errors=True)
+
+
 class CaptionTemplateTests(unittest.TestCase):
     def test_default_apply(self) -> None:
         expected = list(templates._CAPTION_APPLY) + ["outputPath"]

@@ -18,7 +18,7 @@ import { ApplyRow, TemplateModelFields } from '@/components/composites/templates
 import { ParamsTabStrip, type PassTab } from '@/views/generate/panels/generation/sections/params/ParamsTabStrip.tsx'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { templateApplyFields, type TemplateParams, SEED_AFTER, type SeedAfter } from '@/stores/generateStore.ts'
-import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, snapToSet } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
+import { ASPECTS, SAMPLERS, SCHEDULERS, formatSize, listedChoices, orientSize, parseSize, sizeFromScaler, snapToSet } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import { useEffect, useState } from 'react'
@@ -466,7 +466,13 @@ export function TemplateParamsForm({
               <button
                 type="button"
                 className={['px-2 py-1', value.resMode === 'scaler' ? 'bg-line text-ink' : 'text-muted hover:text-ink'].join(' ')}
-                onClick={() => set('resMode', 'scaler')}
+                onClick={() => {
+                  if (locked) {
+                    return
+                  }
+                  const size = sizeFromScaler(value.aspect, value.megapixels)
+                  onChange({ ...value, resMode: 'scaler', width: size.width, height: size.height })
+                }}
               >
                 Scaler
               </button>
@@ -567,7 +573,13 @@ export function TemplateParamsForm({
                   <Label>Aspect</Label>
                   <SelectField
                     value={value.aspect}
-                    onChange={(aspect) => set('aspect', aspect)}
+                    onChange={(aspect) => {
+                      if (locked) {
+                        return
+                      }
+                      const size = sizeFromScaler(aspect, value.megapixels)
+                      onChange({ ...value, aspect, width: size.width, height: size.height })
+                    }}
                     options={ASPECTS.map((item) => ({ value: item.id, label: item.label }))}
                   />
                 </div>
@@ -575,7 +587,13 @@ export function TemplateParamsForm({
                   <Label>Megapixels</Label>
                   <NumberField
                     value={value.megapixels}
-                    onChange={(megapixels) => set('megapixels', megapixels)}
+                    onChange={(megapixels) => {
+                      if (locked) {
+                        return
+                      }
+                      const size = sizeFromScaler(value.aspect, megapixels)
+                      onChange({ ...value, megapixels, width: size.width, height: size.height })
+                    }}
                     min={0.2}
                     max={4}
                     step={0.05}

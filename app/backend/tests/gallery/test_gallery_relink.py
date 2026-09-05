@@ -225,6 +225,28 @@ class GalleryRelinkTests(unittest.TestCase):
         names = [str(row["name"]) for row in gallery_db.query("SELECT name FROM gallery_item_loras ORDER BY name")]
         self.assertEqual(names, ["style/foo.safetensors"])
 
+    def test_ingest_collapses_prefixed_and_bare_lora_paths(self) -> None:
+        gallery_cache.ingest(
+            _write(
+                self.root / "a.png",
+                {
+                    "prompt": "cat",
+                    "models": [
+                        {
+                            "kind": "loras",
+                            "hashes": {"autov2": DIGEST, "sha256": SHA},
+                            "path": "NSFW/foo.safetensors",
+                            "strength": 0.8,
+                        },
+                        {"kind": "loras", "path": "foo.safetensors", "strength": 0.8},
+                    ],
+                },
+            )
+        )
+        names = [str(row["name"]) for row in gallery_db.query("SELECT name FROM gallery_item_loras")]
+        self.assertEqual(names, ["NSFW/foo.safetensors"])
+        self.assertEqual(len(search.browse("loras")["items"]), 1)
+
 
 if __name__ == "__main__":
     unittest.main()

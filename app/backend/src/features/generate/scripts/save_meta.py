@@ -217,6 +217,10 @@ def _push_model(
 ) -> None:
     name = str(rel or "").replace("\\", "/").strip()
     hashes_row = dict(row) if row else {}
+    if kind == "loras" and name:
+        name = _canonical_lora(name)
+        if not hashes_row:
+            hashes_row = _hashes_for("loras", name)
     if not name and not hashes_row:
         return
     key = str(hashes_row.get("sha256") or hashes_row.get("autov2") or name)
@@ -257,7 +261,8 @@ def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) 
     add("vae", str(values.get("vae") or ""))
     add("text_encoders", str(values.get("text_encoder") or ""))
     rows = values.get("loras")
-    if isinstance(rows, list):
+    have_loras = isinstance(rows, list)
+    if have_loras:
         for item in rows:
             name, strength = _lora_ref(item)
             add("loras", name, strength)
@@ -268,15 +273,18 @@ def collect_models(values: dict[str, Any], graph: dict[str, Any] | None = None) 
             cls = str(node.get("class_type") or "")
             inputs = node.get("inputs") if isinstance(node.get("inputs"), dict) else {}
             if cls == "Power Lora Loader (rgthree)":
-                for value in inputs.values():
-                    if not isinstance(value, dict) or not value.get("on", True):
-                        continue
-                    add("loras", str(value.get("lora") or ""), _num(value.get("strength"), 1.0))
+                if not have_loras:
+                    for value in inputs.values():
+                        if not isinstance(value, dict) or not value.get("on", True):
+                            continue
+                        add("loras", str(value.get("lora") or ""), _num(value.get("strength"), 1.0))
                 continue
             spec = _LOADERS.get(cls)
             if not spec:
                 continue
             kind, keys = spec
+            if kind == "loras" and have_loras:
+                continue
             for key in keys:
                 add(kind, str(inputs.get(key) or ""))
     return out
@@ -293,11 +301,84 @@ def checkpoint_hashes(params: dict[str, Any]) -> dict[str, str]:
 
 
 def lora_models(params: dict[str, Any]) -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
+    found: list[dict[str, Any]] = []
     for item in params.get("models") or []:
         if not isinstance(item, dict) or item.get("kind") != "loras":
             continue
-        out.append(item)
+        found.append(item)
+    return _unique_loras(found)
+
+
+def _canonical_lora(rel: str) -> str:
+    name = str(rel or "").replace("\\", "/").strip()
+    if not name:
+        return name
+    path = models.model_file("loras", name)
+    if path:
+        return rel_under_kind("loras", path) or name
+    from features.models.scripts.loras import resolve
+
+    found = resolve(name, [str(item["path"]) for item in models.list_kind("loras")])
+    return found or name
+
+
+def _lora_digest(item: dict[str, Any]) -> str:
+    row = item.get("hashes") if isinstance(item.get("hashes"), dict) else {}
+    return str(row.get("sha256") or row.get("autov2") or "").strip().casefold()
+
+
+def _lora_path(item: dict[str, Any]) -> str:
+    return str(item.get("path") or "").replace("\\", "/").strip().strip("/").casefold()
+
+
+def _lora_path_alias(left: str, right: str) -> bool:
+    if not left or not right:
+        return False
+    if left == right:
+        return True
+    return left.endswith("/" + right) or right.endswith("/" + left)
+
+
+def _prefer_lora(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
+    cur_hash = _lora_digest(current)
+    inc_hash = _lora_digest(incoming)
+    if inc_hash and not cur_hash:
+        chosen = dict(incoming)
+    elif cur_hash and not inc_hash:
+        chosen = dict(current)
+    elif len(_lora_path(incoming)) > len(_lora_path(current)):
+        chosen = dict(incoming)
+    else:
+        chosen = dict(current)
+    if not chosen.get("path"):
+        path = current.get("path") or incoming.get("path")
+        if path:
+            chosen["path"] = path
+    if not chosen.get("hashes"):
+        hashes_row = current.get("hashes") or incoming.get("hashes")
+        if hashes_row:
+            chosen["hashes"] = hashes_row
+    return chosen
+
+
+def _unique_loras(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    for item in items:
+        digest = _lora_digest(item)
+        path = _lora_path(item)
+        index = -1
+        for i, existing in enumerate(out):
+            other_digest = _lora_digest(existing)
+            if digest and other_digest and digest == other_digest:
+                index = i
+                break
+            if _lora_path_alias(path, _lora_path(existing)):
+                index = i
+                break
+        if index < 0:
+            out.append(item)
+        else:
+            out[index] = _prefer_lora(out[index], item)
     return out
 
 
@@ -306,6 +387,9 @@ def _hashes_for(kind: str, rel: str) -> dict[str, str]:
     if not name or kind == "wildcards":
         return {}
     path = models.model_file(kind, name)
+    if not path and kind == "loras":
+        name = _canonical_lora(name)
+        path = models.model_file(kind, name)
     if not path:
         return {}
     row = hashes.entry(path) or {}

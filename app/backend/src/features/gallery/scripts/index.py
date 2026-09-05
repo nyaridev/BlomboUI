@@ -44,11 +44,7 @@ def checkpoint_name(params: dict[str, Any]) -> str:
 
 
 def lora_names(params: dict[str, Any]) -> list[str]:
-    found: list[str] = []
-    for item in params.get("models") or []:
-        if not isinstance(item, dict) or item.get("kind") != "loras":
-            continue
-        found.append(save_meta.name_for_model("loras", item))
+    found = [save_meta.name_for_model("loras", item) for item in save_meta.lora_models(params)]
     return _names(found)
 
 

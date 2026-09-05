@@ -20,6 +20,7 @@ type SavedHashes = {
 type SavedModel = {
   kind: string
   hashes?: SavedHashes
+  path?: string
   strength?: number
 }
 
@@ -313,13 +314,57 @@ function v2Rows(
 }
 
 function v2Loras(params: SavedParams, hits: Record<string, CivitaiVersion | null>): PngLora[] {
-  return (params.models || [])
-    .filter((item) => item.kind === 'loras')
-    .map((item) => {
-      const hash = hashOf(item.hashes)
-      const hit = hitFor(item.hashes, hits)
-      return { name: hit?.model?.name || hash, hash: hash.toLowerCase(), strength: item.strength }
+  const unique: SavedModel[] = []
+  for (const item of params.models || []) {
+    if (item.kind !== 'loras') {
+      continue
+    }
+    const digest = hashOf(item.hashes).toLowerCase()
+    const path = loraPathKey(item.path)
+    const index = unique.findIndex((row) => {
+      const other = hashOf(row.hashes).toLowerCase()
+      if (digest && other && digest === other) {
+        return true
+      }
+      return loraPathAlias(path, loraPathKey(row.path))
     })
+    if (index < 0) {
+      unique.push(item)
+      continue
+    }
+    unique[index] = preferLora(unique[index], item)
+  }
+  return unique.map((item) => {
+    const hash = hashOf(item.hashes)
+    const hit = hitFor(item.hashes, hits)
+    return { name: hit?.model?.name || hash, hash: hash.toLowerCase(), strength: item.strength }
+  })
+}
+
+function loraPathKey(path?: string) {
+  return (path || '').replace(/\\/g, '/').replace(/^\/+|\/+$/g, '').toLowerCase()
+}
+
+function loraPathAlias(left: string, right: string) {
+  if (!left || !right) {
+    return false
+  }
+  if (left === right) {
+    return true
+  }
+  return left.endsWith(`/${right}`) || right.endsWith(`/${left}`)
+}
+
+function preferLora(current: SavedModel, incoming: SavedModel) {
+  const curHash = hashOf(current.hashes)
+  const incHash = hashOf(incoming.hashes)
+  if (incHash && !curHash) {
+    return incoming
+  }
+  if (curHash && !incHash) {
+    return current
+  }
+  return loraPathKey(incoming.path).length > loraPathKey(current.path).length ? incoming : current
 }
 
 function RawSwitch({ mode, onMode }: { mode: 'json' | 'formatted'; onMode: (mode: 'json' | 'formatted') => void }) {

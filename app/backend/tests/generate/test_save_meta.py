@@ -464,6 +464,64 @@ class SaveMetaTests(unittest.TestCase):
         self.assertNotIn("hashes", by_kind["loras"])
         wait.assert_called()
 
+    def test_pack_params_skips_graph_lora_when_values_list_present(self) -> None:
+        def fake_file(kind: str, name: str):
+            if kind == "loras" and name == "foo.safetensors":
+                return None
+            return Path(f"/models/{kind}/{name}")
+
+        def fake_entry(path: Path) -> dict[str, str]:
+            stem = path.stem
+            return {"autov1": f"{stem}1", "autov2": f"{stem}2", "autov3": f"{stem}3", "sha256": f"{stem}s"}
+
+        with (
+            patch.object(models, "model_file", side_effect=fake_file),
+            patch.object(hashes, "wait"),
+            patch.object(hashes, "request"),
+            patch.object(hashes, "entry", side_effect=fake_entry),
+        ):
+            packed = save_meta.pack_params(
+                {
+                    "prompt": "cat",
+                    "prompt_raw": "cat",
+                    "negative_prompt": "",
+                    "negative_prompt_raw": "",
+                    "checkpoint": "base.safetensors",
+                    "loras": [{"lora": "NSFW/foo.safetensors", "strength": 0.8}],
+                },
+                {
+                    "1": {"class_type": "CheckpointLoaderSimple", "inputs": {"ckpt_name": "base.safetensors"}},
+                    "2": {
+                        "class_type": "Power Lora Loader (rgthree)",
+                        "inputs": {"lora_1": {"on": True, "lora": "foo.safetensors", "strength": 0.8}},
+                    },
+                    "3": {"class_type": "LoraLoader", "inputs": {"lora_name": "foo.safetensors"}},
+                },
+            )
+        loras = [item for item in packed["models"] if item["kind"] == "loras"]
+        self.assertEqual(len(loras), 1)
+        self.assertEqual(loras[0]["path"], "NSFW/foo.safetensors")
+        self.assertEqual(loras[0]["hashes"]["autov2"], "foo2")
+        self.assertEqual(loras[0]["strength"], 0.8)
+
+    def test_lora_models_collapses_prefixed_and_bare_paths(self) -> None:
+        rows = save_meta.lora_models(
+            {
+                "models": [
+                    {
+                        "kind": "loras",
+                        "hashes": {"autov2": "v2lora", "sha256": "aa" * 32},
+                        "path": "NSFW/foo.safetensors",
+                        "strength": 0.8,
+                    },
+                    {"kind": "loras", "path": "foo.safetensors", "strength": 0.8},
+                ]
+            }
+        )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["path"], "NSFW/foo.safetensors")
+        self.assertEqual(rows[0]["hashes"]["autov2"], "v2lora")
+
     def test_embed_round_trip_and_grid_matches_first_image(self) -> None:
         packed = _packed()
         meta = save_meta.envelope("job-1", {"template_id": "portrait"}, packed, "image", "2026-01-01T00:00:00Z")

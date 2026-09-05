@@ -43,6 +43,7 @@ export type GalleryHome = {
   checkpoints: GalleryBrowseItem[]
   loras: GalleryBrowseItem[]
   wildcards: GalleryBrowseItem[]
+  generation?: number
 }
 
 export type GallerySearch = {
@@ -168,6 +169,7 @@ export async function getGalleryHome(): Promise<GalleryHome> {
     checkpoints: data.checkpoints ?? [],
     loras: data.loras ?? [],
     wildcards: data.wildcards ?? [],
+    generation: Number(data.generation) || 0,
   }
 }
 

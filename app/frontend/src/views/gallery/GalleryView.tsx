@@ -30,6 +30,7 @@ import {
   type ThumbScope,
 } from '@/lib/api.ts'
 import { galleryBrowseKey, useSettingsStore, type GalleryBrowseKind } from '@/stores/settingsStore.ts'
+import { useHealthStore } from '@/stores/healthStore.ts'
 import { toast } from '@/stores/toastStore.ts'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
@@ -50,8 +51,7 @@ const NAV_REM = 14
 const NAV_MIN_REM = 10
 const SEARCH_DEBOUNCE_MS = 150
 const BROWSE_KINDS: GalleryBrowseKind[] = ['checkpoints', 'loras', 'wildcards', 'tags']
-const EMPTY_HOME: GalleryHomeData = { recent: [], tags: [], checkpoints: [], loras: [], wildcards: [] }
-const EMPTY_COPY = 'Nothing yet. Generate something on the Generate tab.'
+const EMPTY_HOME: GalleryHomeData = { recent: [], tags: [], checkpoints: [], loras: [], wildcards: [], generation: 0 }
 const MEDIA: { id: GalleryMedia; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'image', label: 'Images' },
@@ -115,6 +115,15 @@ function browseCacheKey(kind: GalleryBrowseKind, sort: string, dir: string, card
   return `${kind}|${sort}|${dir}|${cardPageSize}`
 }
 
+function mergeHome(prev: GalleryHomeData, data: GalleryHomeData): GalleryHomeData {
+  return {
+    ...data,
+    checkpoints: data.checkpoints.length ? data.checkpoints : prev.checkpoints,
+    loras: data.loras.length ? data.loras : prev.loras,
+    wildcards: data.wildcards.length ? data.wildcards : prev.wildcards,
+  }
+}
+
 export function GalleryView() {
   const visible = useLocation().pathname === '/gallery'
   const navigate = useNavigate()
@@ -124,7 +133,6 @@ export function GalleryView() {
   const [filters, setFilters] = useState<GalleryFilters>(EMPTY_FILTERS)
   const [shuffle, setShuffle] = useState(0)
   const [home, setHome] = useState<GalleryHomeData>(EMPTY_HOME)
-  const [homeReady, setHomeReady] = useState(false)
   const [results, setResults] = useState<GalleryItem[]>([])
   const [cursor, setCursor] = useState('')
   const [browse, setBrowse] = useState<GalleryBrowseItem[]>([])
@@ -174,6 +182,7 @@ export function GalleryView() {
   const dir = useSettingsStore((s) => (browseKey ? s.galleryBrowseDir[browseKey] ?? 'desc' : 'desc'))
   const pageSize = useSettingsStore((s) => s.galleryPageSize)
   const cardPageSize = useSettingsStore((s) => s.galleryCardPageSize)
+  const gallerySync = useHealthStore((s) => s.health?.gallery_sync ?? 0)
   const navRef = useRef(nav)
   const filtersRef = useRef(filters)
   const searchingRef = useRef(searching)
@@ -222,9 +231,8 @@ export function GalleryView() {
         .then((data) => {
           setHome((prev) => {
             const shelves = prev.checkpoints.length || prev.loras.length || prev.wildcards.length || prev.tags.length
-            return shelves ? { ...prev, recent: data.recent } : data
+            return shelves ? { ...prev, recent: data.recent, generation: data.generation } : data
           })
-          setHomeReady(true)
           if (navRef.current === 'home') {
             setError(null)
           }
@@ -246,8 +254,7 @@ export function GalleryView() {
         if (stop) {
           return
         }
-        setHome(data)
-        setHomeReady(true)
+        setHome((prev) => mergeHome(prev, data))
         setNewest(newestStamp(data.recent))
         if (navRef.current === 'home' && !searchingRef.current) {
           setError(null)
@@ -257,7 +264,6 @@ export function GalleryView() {
         if (stop) {
           return
         }
-        setHomeReady(true)
         if (navRef.current === 'home' && !searchingRef.current) {
           setError(err instanceof Error ? err.message : 'Could not load gallery')
         }
@@ -269,6 +275,9 @@ export function GalleryView() {
       void browseGallery(kind, next.sort, next.dir, { limit: size })
         .then((page) => {
           browseCacheRef.current[cacheKey] = page
+          if (kind !== 'tags') {
+            setHome((prev) => ({ ...prev, [kind]: page.items }))
+          }
           if (stop || navRef.current !== kind || searchingRef.current) {
             return
           }
@@ -286,6 +295,18 @@ export function GalleryView() {
     if (!visible) {
       return
     }
+    void getGalleryHome()
+      .then((data) => {
+        setHome((prev) => mergeHome(prev, data))
+        setNewest(newestStamp(data.recent))
+      })
+      .catch(() => undefined)
+  }, [visible, setNewest])
+
+  useEffect(() => {
+    if (!visible) {
+      return
+    }
     void Promise.all([
       listGalleryLibraries(),
       getThumbScopes(),
@@ -296,6 +317,37 @@ export function GalleryView() {
       })
       .catch(() => undefined)
   }, [visible])
+
+  useEffect(() => {
+    const seen = homeRef.current.generation ?? 0
+    if (gallerySync <= seen) {
+      return
+    }
+    browseCacheRef.current = {}
+    void getGalleryHome()
+      .then((data) => {
+        setHome((prev) => mergeHome(prev, data))
+        setNewest(newestStamp(data.recent))
+      })
+      .catch(() => undefined)
+    const size = useSettingsStore.getState().galleryCardPageSize
+    for (const kind of BROWSE_KINDS) {
+      const next = browseSortDir(kind)
+      const cacheKey = browseCacheKey(kind, next.sort, next.dir, size)
+      void browseGallery(kind, next.sort, next.dir, { limit: size })
+        .then((page) => {
+          browseCacheRef.current[cacheKey] = page
+          if (kind !== 'tags') {
+            setHome((prev) => ({ ...prev, [kind]: page.items }))
+          }
+          if (navRef.current === kind && !searchingRef.current) {
+            paintBrowse(page)
+            setError(null)
+          }
+        })
+        .catch(() => undefined)
+    }
+  }, [gallerySync, setNewest])
 
   useEffect(() => {
     if (!visible) {
@@ -343,8 +395,6 @@ export function GalleryView() {
           stop = true
         }
       }
-      setBrowse([])
-      setBrowseCursor('')
       void browseGallery(nav, sort, dir, { limit: cardPageSize })
         .then((page) => {
           browseCacheRef.current[cacheKey] = page
@@ -415,9 +465,6 @@ export function GalleryView() {
       const cached = browseCacheRef.current[browseCacheKey(id, nextSort, nextDir, cardPageSize)]
       if (cached) {
         paintBrowse(cached)
-      } else {
-        setBrowse([])
-        setBrowseCursor('')
       }
     }
     if (id === 'home' || id === 'libraries' || id === 'recent' || isBrowse(id) || id.startsWith('folder:')) {
@@ -636,18 +683,6 @@ export function GalleryView() {
 
   const current = preview ? preview.items[preview.index] : null
   const scopeLabels = Object.fromEntries(scopes.map((item) => [item.id, item.name]))
-  const empty = homeReady && !searching && !error && home.recent.length === 0
-
-  if (!homeReady) {
-    return <div className="h-full min-h-0 px-10 py-4" />
-  }
-  if (empty) {
-    return (
-      <div className="flex h-full min-h-0 items-center justify-center px-10 py-4">
-        <p className="text-sm text-muted">{EMPTY_COPY}</p>
-      </div>
-    )
-  }
 
   return (
     <div ref={rowRef} className="flex h-full min-h-0 px-10 py-4">

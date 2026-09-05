@@ -49,6 +49,9 @@ export function ModelPickTile({
     if (!value || item || !items.length) {
       return
     }
+    if (value.includes('/') || value.includes('\\') || value.includes('#')) {
+      return
+    }
     const hits = matchPaths(items, value)
     if (hits.length === 1) {
       onChange(hits[0])

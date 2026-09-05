@@ -36,17 +36,31 @@ def is_data_name(name: str) -> bool:
     return str(name or "").endswith(DATA_SUFFIX)
 
 
+_DIR_STEMS: dict[str, dict[str, int]] = {}
+
+
+def reset_dir_cache() -> None:
+    _DIR_STEMS.clear()
+
+
 def dir_for_file(path: Path) -> Path:
     parent = path.parent
     preferred = parent / f"{path.stem}{DATA_SUFFIX}"
     alt = parent / f"{path.name}{DATA_SUFFIX}"
     if alt.is_dir() and not preferred.is_dir():
         return alt
-    try:
-        clash = any(item.is_file() and item.stem == path.stem and item.name != path.name for item in parent.iterdir())
-    except OSError:
-        clash = False
-    return alt if clash else preferred
+    key = str(parent)
+    counts = _DIR_STEMS.get(key)
+    if counts is None:
+        counts = {}
+        try:
+            for item in parent.iterdir():
+                if item.is_file():
+                    counts[item.stem] = counts.get(item.stem, 0) + 1
+        except OSError:
+            pass
+        _DIR_STEMS[key] = counts
+    return alt if counts.get(path.stem, 0) > 1 else preferred
 
 
 def data_dir(kind: str, ident: str) -> Path | None:

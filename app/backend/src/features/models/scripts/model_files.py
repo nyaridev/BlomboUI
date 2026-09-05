@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any
 
 from shared import dirs
+from features.models.scripts import catalog
+from features.models.scripts import hashes
 from features.models.scripts import model_meta
 from features.models.scripts import models
 from config import models_root
@@ -100,6 +102,7 @@ def move_entry(kind: str, rel: str, folder: str) -> dict[str, str]:
     dest = dest_parent / source.name
     _require_unique(dest_parent, source.name, source)
     sidecar_src = source if source.is_file() else None
+    pairs = hashes.move_pairs(source, dest)
     _relocate(source, dest)
     if sidecar_src is not None and dest.is_file():
         from features.models.scripts import model_sidecar
@@ -108,7 +111,8 @@ def move_entry(kind: str, rel: str, folder: str) -> dict[str, str]:
     nxt = _join(folder, source.name)
     if nxt != rel:
         model_meta.remap_ident(kind, rel, nxt)
-        models.refresh_models(kind)
+        hashes.remap_moved(source, dest, pairs)
+        catalog.relocate(kind, rel, nxt)
     return {"path": nxt, "kind": "dir" if dest.is_dir() else "file"}
 
 
@@ -121,6 +125,7 @@ def rename_entry(kind: str, rel: str, name: str) -> dict[str, str]:
     dest = source.with_name(leaf)
     _require_unique(source.parent, leaf, source)
     sidecar_src = source if source.is_file() else None
+    pairs = hashes.move_pairs(source, dest)
     _relocate(source, dest)
     if sidecar_src is not None and dest.is_file():
         from features.models.scripts import model_sidecar
@@ -129,7 +134,8 @@ def rename_entry(kind: str, rel: str, name: str) -> dict[str, str]:
     nxt = _join(_parent_rel(rel), leaf)
     if nxt != rel:
         model_meta.remap_ident(kind, rel, nxt)
-        models.refresh_models(kind)
+        hashes.remap_moved(source, dest, pairs)
+        catalog.relocate(kind, rel, nxt)
     return {"path": nxt, "kind": "dir" if dest.is_dir() else "file"}
 
 

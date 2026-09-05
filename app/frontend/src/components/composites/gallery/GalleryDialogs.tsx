@@ -29,42 +29,6 @@ function nameError(name: string, taken: string[], ignore = '') {
   return uniqueError(trimmed, taken, ignore)
 }
 
-export function GalleryCreateFolderDialog({
-  folder,
-  name,
-  taken,
-  busy,
-  onName,
-  onClose,
-  onCreate,
-}: {
-  folder: string
-  name: string
-  taken: string[]
-  busy: boolean
-  onName: (name: string) => void
-  onClose: () => void
-  onCreate: () => void
-}) {
-  const issue = nameError(name, taken)
-  const canSave = Boolean(name.trim()) && !issue && !busy
-  return (
-    <NameDialog
-      title="New folder"
-      description={<p className="mt-1.5 text-xs text-muted">Created in {folder || 'Local'}.</p>}
-      name={name}
-      issue={issue}
-      busy={busy}
-      onName={onName}
-      onClose={onClose}
-      actions={[
-        { label: 'Cancel', onClick: onClose },
-        { label: 'Create', kind: 'primary', disabled: !canSave, submit: true, onClick: onCreate },
-      ]}
-    />
-  )
-}
-
 export function GalleryRenameDialog({
   name,
   taken,

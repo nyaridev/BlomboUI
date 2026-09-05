@@ -35,7 +35,6 @@ export function GalleryTree({
   onRename,
   onReveal,
   onRemove,
-  onAdd,
   onOpenManager,
 }: {
   roots: GalleryNode[]
@@ -52,7 +51,6 @@ export function GalleryTree({
   onRename: (path: string, name: string) => void
   onReveal: (path: string) => void
   onRemove: (path: string) => void
-  onAdd: (folder: string) => void
   onOpenManager?: (path: string, kind: 'dir' | 'file') => void
 }) {
   const [drag, setDrag] = useState<string | null>(null)
@@ -238,15 +236,6 @@ export function GalleryTree({
       <div className="flex flex-col gap-1.5">{roots.map((node) => renderNode(node))}</div>
       {menu ? (
         <ContextMenu x={menu.x} y={menu.y} onClose={() => setMenu(null)}>
-          {menu.kind === 'dir' ? (
-            <ContextMenuItem
-              label="New folder"
-              onClick={() => {
-                setMenu(null)
-                onAdd(menu.path)
-              }}
-            />
-          ) : null}
           {menu.root ? null : (
             <ContextMenuItem
               label="Rename"

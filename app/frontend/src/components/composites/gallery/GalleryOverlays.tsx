@@ -1,11 +1,10 @@
 import { ConfirmDialog } from '@/components/controls/dialog/Dialog.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
-import { GalleryCreateFolderDialog, GalleryRenameDialog } from '@/components/composites/gallery/GalleryDialogs.tsx'
+import { GalleryRenameDialog } from '@/components/composites/gallery/GalleryDialogs.tsx'
 import { ModelInfoDialog } from '@/components/composites/models/ModelInfoDialog.tsx'
 import { identToDisplay, parentIdent, siblingNames, type GalleryNode } from '@/lib/gallery/tree.ts'
 import type { CivitaiVersion, ModelEntry, ModelLists } from '@/lib/api.ts'
 
-type NameState = { folder: string; name: string }
 type RenameState = { path: string; name: string }
 type MoveState = { path: string; folder: string; from: string; to: string }
 type TileMenuState = { x: number; y: number; path: string; name: string; fileTile: boolean; kind: keyof ModelLists }
@@ -23,12 +22,8 @@ export function GalleryOverlays({
   fillConfirm,
   onFillClose,
   onFill,
-  creating,
   renaming,
   fileBusy,
-  onCreateName,
-  onCreateClose,
-  onCreate,
   onRenameName,
   onRenameClose,
   onRename,
@@ -56,12 +51,8 @@ export function GalleryOverlays({
   fillConfirm: FillConfirm | null
   onFillClose: () => void
   onFill: () => void
-  creating: NameState | null
   renaming: RenameState | null
   fileBusy: boolean
-  onCreateName: (name: string) => void
-  onCreateClose: () => void
-  onCreate: () => void
   onRenameName: (name: string) => void
   onRenameClose: () => void
   onRename: () => void
@@ -102,17 +93,6 @@ export function GalleryOverlays({
             { label: 'Cancel', onClick: onFillClose },
             { label: 'Replace', kind: 'primary', onClick: onFill },
           ]}
-        />
-      ) : null}
-      {creating ? (
-        <GalleryCreateFolderDialog
-          folder={identToDisplay(creating.folder, extraNames)}
-          name={creating.name}
-          taken={siblingNames(tree, identToDisplay(creating.folder, extraNames)) ?? []}
-          busy={fileBusy}
-          onName={onCreateName}
-          onClose={onCreateClose}
-          onCreate={onCreate}
         />
       ) : null}
       {renaming ? (

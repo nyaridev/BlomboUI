@@ -7,6 +7,7 @@ import time
 from collections import deque
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from infrastructure.storage.repositories import hashes as hashes_repo
 from shared import dirs
@@ -48,13 +49,13 @@ def cached(path: Path) -> str | None:
     return row["autov2"] if row else None
 
 
-def entry(path: Path) -> dict[str, str] | None:
+def entry(path: Path, cache: dict[str, dict[str, Any]] | None = None) -> dict[str, str] | None:
     try:
         stat = path.stat()
         key = str(path.resolve())
     except OSError:
         return None
-    raw = hashes_repo.get_by_path(key)
+    raw = cache.get(key) if cache is not None else hashes_repo.get_by_path(key)
     if not _complete(raw, stat):
         return None
     sha256 = str(raw["sha256"])
@@ -64,6 +65,41 @@ def entry(path: Path) -> dict[str, str] | None:
         "autov2": str(raw.get("autov2") or sha256[:10]),
         "autov3": str(raw.get("autov3") or ""),
     }
+
+
+def load_all() -> dict[str, dict[str, Any]]:
+    return hashes_repo.load_all()
+
+
+def remap_path(src: Path, dest: Path) -> None:
+    old = str(src)
+    try:
+        new = str(dest.resolve())
+    except OSError:
+        new = str(dest)
+    if not old or old == new:
+        return
+    hashes_repo.remap_path(old, new)
+
+
+def remap_moved(_source: Path, _dest: Path, pairs: list[tuple[Path, Path]]) -> None:
+    for old, new in pairs:
+        remap_path(old, new)
+
+
+def move_pairs(source: Path, dest: Path) -> list[tuple[Path, Path]]:
+    try:
+        if source.is_file():
+            return [(source.resolve(), dest)]
+        if not source.is_dir():
+            return []
+        pairs: list[tuple[Path, Path]] = []
+        for path in source.rglob("*"):
+            if path.is_file():
+                pairs.append((path.resolve(), dest / path.relative_to(source)))
+        return pairs
+    except OSError:
+        return []
 
 
 def request(path: Path, urgent: bool = False) -> str | None:

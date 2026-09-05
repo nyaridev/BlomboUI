@@ -171,7 +171,7 @@ export function GalleryBrowser({
   const busy = useModelsStore((s) => s.busy)
   const refreshKind = useModelsStore((s) => s.refreshKind)
   const refreshAll = useModelsStore((s) => s.refresh)
-  const pull = useModelsStore((s) => s.pull)
+  const treeEpoch = useModelsStore((s) => s.treeEpoch)
   const setThumb = useModelsStore((s) => s.setThumb)
   const setMeta = useModelsStore((s) => s.setMeta)
   function kindOf(item: ModelEntry) {
@@ -210,7 +210,8 @@ export function GalleryBrowser({
     parentOnUnselect,
     onSelect,
     value,
-    pull,
+    items,
+    kindOf,
     loadTree,
     setThumb,
     setMeta,
@@ -222,8 +223,6 @@ export function GalleryBrowser({
     setFillConfirm,
     filling,
     fileBusy,
-    creating,
-    setCreating,
     renaming,
     setRenaming,
     pendingMove,
@@ -236,7 +235,6 @@ export function GalleryBrowser({
     downloadCivitai,
     clickDir,
     clickFile,
-    createFolder,
     renameEntry,
     revealEntry,
     runRemove,
@@ -263,7 +261,8 @@ export function GalleryBrowser({
     pinSelected ? '1' : '0',
     extraNames.join('\n'),
     visibleTypeFilter.join('\n'),
-    items.map((item) => item.path).join('\n'),
+    String(items.length),
+    String(treeEpoch),
   ].join('\0')
   const pinRef = useRef({ token: layoutToken, selected, value })
   if (pinRef.current.token !== layoutToken) {
@@ -314,7 +313,7 @@ export function GalleryBrowser({
 
   useEffect(() => {
     void loadTree()
-  }, [loadTree])
+  }, [loadTree, treeEpoch])
 
   useEffect(() => {
     if (saved?.treeWidth) {
@@ -456,7 +455,6 @@ export function GalleryBrowser({
           void revealEntry(displayToIdent(path), item ? kindOf(item) : undefined)
         }}
         onRemove={(path) => setPendingRemove(displayToIdent(path))}
-        onAdd={(folder) => setCreating({ folder: displayToIdent(folder), name: '' })}
         onOpenManager={
           kind === 'wildcards'
             ? (path, nodeKind) => openInManager(displayToIdent(path), nodeKind === 'dir')
@@ -508,12 +506,8 @@ export function GalleryBrowser({
         fillConfirm={fillConfirm}
         onFillClose={() => setFillConfirm(null)}
         onFill={() => void fileActions.replaceCivitai()}
-        creating={creating}
         renaming={renaming}
         fileBusy={fileBusy}
-        onCreateName={(name) => setCreating({ ...creating!, name })}
-        onCreateClose={() => setCreating(null)}
-        onCreate={() => void createFolder()}
         onRenameName={(name) => setRenaming({ ...renaming!, name })}
         onRenameClose={() => setRenaming(null)}
         onRename={() => void renameEntry()}

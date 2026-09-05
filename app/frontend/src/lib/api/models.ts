@@ -323,22 +323,6 @@ export async function getModelTree(kind: keyof ModelLists): Promise<ModelTreeNod
   return Array.isArray(data.roots) ? data.roots : []
 }
 
-export async function createModelFolder(
-  kind: keyof ModelLists,
-  folder: string,
-  name: string,
-): Promise<{ path: string; kind: 'dir' }> {
-  const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/folder`), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ folder, name }),
-  })
-  if (!res.ok) {
-    throw new Error(await readError(res))
-  }
-  return (await res.json()) as { path: string; kind: 'dir' }
-}
-
 export async function revealModelFile(kind: keyof ModelLists, path: string): Promise<void> {
   const res = await fetch(api(`/user-models/${encodeURIComponent(kind)}/open`), {
     method: 'POST',

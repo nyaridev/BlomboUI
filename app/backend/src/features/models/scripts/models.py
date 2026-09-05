@@ -1,15 +1,23 @@
 from __future__ import annotations
 
+import logging
+import os
+import time
 from pathlib import Path
 from typing import Any
 
 from shared import dirs
 from infrastructure.comfy import client as comfy
+from features.models.scripts import catalog
 from features.models.scripts import hashes
 from features.models.scripts import model_meta
+from features.models.scripts import model_sidecar
 from features.models.scripts import model_thumbs
+from features.models.scripts import model_thumb_storage
 from features.wildcards.scripts import wildcards as wildcard_meta
 from config import models_root, wildcards_root
+
+log = logging.getLogger("blombo.models")
 
 KINDS = {
     "checkpoints": (".safetensors", ".ckpt", ".pt", ".pth", ".sft"),
@@ -27,6 +35,7 @@ KINDS = {
 WILDCARD_EXTS = (".txt", ".yaml", ".yml")
 ALL_KINDS = frozenset((*KINDS, "wildcards"))
 HASH_KINDS = ("checkpoints", "loras", "diffusion_models")
+_SKIP = {".gitkeep", "desktop.ini"}
 
 
 def list_models(
@@ -35,8 +44,11 @@ def list_models(
     fallback: bool = False,
     optional: list[str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
+    started = time.perf_counter()
+    catalog.hydrate()
     data = {kind: list_kind(kind, context, mode, fallback, optional) for kind in KINDS}
     data["wildcards"] = list_kind("wildcards", context, mode, fallback, optional)
+    log.info("list_models %.0fms", (time.perf_counter() - started) * 1000)
     return data
 
 
@@ -46,9 +58,18 @@ def list_kind(
     mode: str = "exact",
     fallback: bool = False,
     optional: list[str] | None = None,
+    *,
+    force: bool = False,
 ) -> list[dict[str, Any]]:
+    catalog.hydrate()
+    if not force:
+        hit = catalog.peek(kind)
+        if hit is not None:
+            return hit
+    started = time.perf_counter()
     items: list[dict[str, Any]] = []
     files: list[str] = []
+    scan_started = time.perf_counter()
     if kind == "wildcards":
         local, local_files = _scan_folder(kind, wildcards_root(), WILDCARD_EXTS, "")
         items.extend(local)
@@ -66,26 +87,36 @@ def list_kind(
             extra, extra_files = _scan_folder(kind, folder / kind, exts, name)
             items.extend(extra)
             files.extend(extra_files)
+    scan_ms = (time.perf_counter() - scan_started) * 1000
     model_meta.reconcile(kind, files)
     stamps = model_meta.user_stamps(kind)
     info = model_meta.all_info(kind)
+    index = model_thumb_storage.load_index()
+    kind_index = index.get(kind) if isinstance(index.get(kind), dict) else {}
+    hash_cache = hashes.load_all() if kind != "wildcards" else {}
+    model_sidecar.reset_dir_cache()
+    decorate_started = time.perf_counter()
     for item in items:
         tile = str(item["path"])
         rel = str(item.get("source") or tile).split("#", 1)[0]
-        file_path = model_file(kind, tile)
-        thumb_path = model_thumbs.resolved_file(kind, tile, context, mode, fallback, optional)
-        thumb = model_thumbs.resolved_mtime(kind, tile, context, mode, fallback, optional)
-        global_path = model_thumbs.thumb_at(kind, tile, model_thumbs.GLOBAL)
-        exact_path = model_thumbs.thumb_at(kind, tile, context)
+        ident = model_thumbs.ident_of(tile)
+        ident_rows = kind_index.get(ident) if ident and isinstance(kind_index.get(ident), dict) else {}
+        file_path = model_path(kind, tile)
+        thumb_path = model_thumbs.resolved_file(
+            kind, tile, context, mode, fallback, optional, ident_rows=ident_rows
+        )
+        thumb = model_thumbs.mtime_of(thumb_path)
+        global_path = model_thumbs.thumb_at(kind, tile, model_thumbs.GLOBAL, ident_rows=ident_rows)
+        exact_path = model_thumbs.thumb_at(kind, tile, context, ident_rows=ident_rows)
         item["thumb"] = thumb
         item["thumb_media"] = model_thumbs.thumb_media(thumb_path) if thumb_path else ""
-        item["thumb_global"] = model_thumbs.thumb_mtime(kind, tile, model_thumbs.GLOBAL)
+        item["thumb_global"] = model_thumbs.mtime_of(global_path)
         item["thumb_global_media"] = model_thumbs.thumb_media(global_path) if global_path else ""
-        item["thumb_exact"] = model_thumbs.thumb_mtime(kind, tile, context)
+        item["thumb_exact"] = model_thumbs.mtime_of(exact_path)
         item["thumb_exact_media"] = model_thumbs.thumb_media(exact_path) if exact_path else ""
-        item["thumb_any"] = model_thumbs.thumb_any_mtime(kind, tile)
+        item["thumb_any"] = model_thumbs.thumb_any_mtime(kind, tile, ident_rows=ident_rows)
         if file_path is not None and kind != "wildcards":
-            item["hashes"] = hashes.entry(file_path) or {}
+            item["hashes"] = hashes.entry(file_path, cache=hash_cache) or {}
         item["edited"] = max(int(item["edited"]), thumb, item["thumb_global"], item["thumb_any"], stamps.get(rel, 0))
         row = info.get(rel) or {}
         item["prompt"] = str(row.get("prompt") or "")
@@ -97,6 +128,16 @@ def list_kind(
         item["apply_at"] = row.get("apply_at") if row.get("apply_at") in {"start", "end"} else None
         item["types"] = list(row.get("types") or [])
     items.sort(key=lambda item: str(item.get("tag") or item["path"]).lower())
+    decorate_ms = (time.perf_counter() - decorate_started) * 1000
+    catalog.set_kind(kind, items)
+    log.info(
+        "list_kind %s %.0fms scan=%.0f decorate=%.0f n=%s",
+        kind,
+        (time.perf_counter() - started) * 1000,
+        scan_ms,
+        decorate_ms,
+        len(items),
+    )
     return items
 
 
@@ -108,9 +149,15 @@ def refresh_models(
     optional: list[str] | None = None,
 ) -> dict[str, list[dict[str, Any]]]:
     comfy.warmup_model_lists(kind)
-    data = {kind: list_kind(kind, context, mode, fallback, optional)} if kind else list_models(context, mode, fallback, optional)
+    catalog.invalidate(kind)
+    data = {kind: list_kind(kind, context, mode, fallback, optional, force=True)} if kind else list_models(context, mode, fallback, optional)
     hashes.warm(hash_files())
     return data
+
+
+def reload_kind(kind: str) -> list[dict[str, Any]]:
+    catalog.invalidate(kind)
+    return list_kind(kind, force=True)
 
 
 def hash_files() -> list[Path]:
@@ -122,24 +169,27 @@ def hash_files() -> list[Path]:
     return items
 
 
-def _times(path: Path) -> tuple[int, int]:
-    st = path.stat()
-    added = getattr(st, "st_birthtime", None)
+def _times(path: Path, st: os.stat_result | None = None) -> tuple[int, int]:
+    info = st or path.stat()
+    added = getattr(info, "st_birthtime", None)
     if added is None:
-        added = st.st_ctime
-    return int(added), int(st.st_mtime)
+        added = info.st_ctime
+    return int(added), int(info.st_mtime)
 
 
 def _iter_files(folder: Path, exts: tuple[str, ...]) -> list[Path]:
     if not folder.is_dir():
         return []
     items: list[Path] = []
-    for path in folder.rglob("*"):
-        if not path.is_file() or path.name in {".gitkeep", "desktop.ini"}:
-            continue
-        if path.suffix.lower() not in exts:
-            continue
-        items.append(path)
+    for root, dirnames, filenames in os.walk(folder):
+        dirnames[:] = [name for name in dirnames if name not in _SKIP and not name.startswith(".") and not name.endswith("_data")]
+        for name in filenames:
+            if name in _SKIP or name.startswith("."):
+                continue
+            suffix = Path(name).suffix.lower()
+            if suffix not in exts:
+                continue
+            items.append(Path(root) / name)
     return items
 
 
@@ -156,8 +206,9 @@ def _scan_folder(kind: str, folder: Path, exts: tuple[str, ...], prefix: str) ->
 
     for path in paths:
         try:
-            added, edited = _times(path)
-            size = path.stat().st_size
+            st = path.stat()
+            added, edited = _times(path, st)
+            size = st.st_size
         except OSError:
             continue
         posix = path.relative_to(folder).as_posix()

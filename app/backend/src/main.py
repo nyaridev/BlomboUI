@@ -29,6 +29,7 @@ from shared import dirs
 async def lifespan(_app: FastAPI):
     connect_storage()
     dirs.apply_output_override()
+    models.hydrate_lists()
     gallery.start_sync()
     gallery_relink.install()
     models.list_scopes()

@@ -1,8 +1,6 @@
 import { useState, type Dispatch, type SetStateAction } from 'react'
 import { toast } from '@/stores/toastStore.ts'
 import {
-  createModelFolder,
-  createWildcardFolder,
   moveModelEntry,
   moveWildcardEntry,
   renameModelEntry,
@@ -11,10 +9,13 @@ import {
   revealModelFile,
   revealWildcardFile,
   type CivitaiVersion,
+  type ModelEntry,
   type ModelLists,
 } from '@/lib/api.ts'
 import { applyCivitaiMeta, civitaiHashes, hasCivitaiLocalData, lookupCivitai, waitModelInfo } from '@/lib/civitai/fill.ts'
 import { civitaiSaveThumbView } from '@/lib/gallery/thumbView.ts'
+import { filePath } from '@/components/composites/gallery/galleryUtils.ts'
+import { useModelsStore } from '@/stores/modelsStore.ts'
 import {
   dirExists,
   identToDisplay,
@@ -22,7 +23,6 @@ import {
   scopeRoot,
 } from '@/lib/gallery/tree.ts'
 
-type NameState = { folder: string; name: string }
 type RenameState = { path: string; name: string }
 type MoveState = { path: string; folder: string; from: string; to: string }
 type FillConfirm = { path: string; hit: CivitaiVersion; kind: keyof ModelLists }
@@ -38,7 +38,8 @@ export function useGalleryFileOps({
   parentOnUnselect,
   onSelect,
   value,
-  pull,
+  items,
+  kindOf,
   loadTree,
   setThumb,
   setMeta,
@@ -53,7 +54,8 @@ export function useGalleryFileOps({
   parentOnUnselect: boolean
   onSelect?: (id: string) => void
   value?: string
-  pull: () => Promise<void>
+  items: ModelEntry[]
+  kindOf: (item: ModelEntry) => keyof ModelLists
   loadTree: () => Promise<void>
   setThumb: (kind: keyof ModelLists, path: string, tick: number) => void
   setMeta: (kind: keyof ModelLists, path: string, meta: { prompt?: string }) => void
@@ -64,10 +66,23 @@ export function useGalleryFileOps({
   const [fillConfirm, setFillConfirm] = useState<FillConfirm | null>(null)
   const [filling, setFilling] = useState<string | null>(null)
   const [fileBusy, setFileBusy] = useState(false)
-  const [creating, setCreating] = useState<NameState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const [pendingMove, setPendingMove] = useState<MoveState | null>(null)
   const [pendingRemove, setPendingRemove] = useState<string | null>(null)
+  const relocate = useModelsStore((s) => s.relocate)
+  const removeIdent = useModelsStore((s) => s.removeIdent)
+
+  function kindFor(ident: string): keyof ModelLists {
+    const exact = items.find((row) => filePath(row) === ident || row.path === ident)
+    if (exact) {
+      return kindOf(exact)
+    }
+    const child = items.find((row) => {
+      const file = filePath(row)
+      return file.startsWith(`${ident}/`) || row.path.startsWith(`${ident}/`)
+    })
+    return child ? kindOf(child) : kind
+  }
 
   function folderExists(path: string) {
     return treeDirs.has(path) || dirExists(paths, path)
@@ -107,9 +122,10 @@ export function useGalleryFileOps({
   async function runMove(path: string, folder: string) {
     setFileBusy(true)
     try {
-      const next = kind === 'wildcards' ? await moveWildcardEntry(path, folder) : await moveModelEntry(kind, path, folder)
+      const moveKind = kindFor(path)
+      const next = moveKind === 'wildcards' ? await moveWildcardEntry(path, folder) : await moveModelEntry(moveKind, path, folder)
+      relocate(moveKind, path, next.path)
       applyRelocate(path, next.path, next.kind)
-      await pull()
       await loadTree()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not move', 'error')
@@ -214,29 +230,6 @@ export function useGalleryFileOps({
     setQuery(path)
   }
 
-  async function createFolder() {
-    if (!creating || fileBusy) {
-      return
-    }
-    const name = creating.name.trim()
-    if (!name) {
-      return
-    }
-    setFileBusy(true)
-    try {
-      const next = kind === 'wildcards' ? await createWildcardFolder(creating.folder, name) : await createModelFolder(kind, creating.folder, name)
-      const display = identToDisplay(next.path, extraNames)
-      setOpenDirs((current) => new Set(current).add(identToDisplay(creating.folder, extraNames)).add(display))
-      setQuery(display)
-      setCreating(null)
-      await loadTree()
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not create folder', 'error')
-    } finally {
-      setFileBusy(false)
-    }
-  }
-
   async function renameEntry() {
     if (!renaming || fileBusy) {
       return
@@ -247,10 +240,11 @@ export function useGalleryFileOps({
     }
     setFileBusy(true)
     try {
-      const next = kind === 'wildcards' ? await renameWildcardEntry(renaming.path, name) : await renameModelEntry(kind, renaming.path, name)
+      const renameKind = kindFor(renaming.path)
+      const next = renameKind === 'wildcards' ? await renameWildcardEntry(renaming.path, name) : await renameModelEntry(renameKind, renaming.path, name)
+      relocate(renameKind, renaming.path, next.path)
       applyRelocate(renaming.path, next.path, next.kind)
       setRenaming(null)
-      await pull()
       await loadTree()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not rename', 'error')
@@ -275,7 +269,8 @@ export function useGalleryFileOps({
   async function runRemove(ident: string) {
     setFileBusy(true)
     try {
-      await trashEntry(kind, ident)
+      const trashKind = kindFor(ident)
+      await trashEntry(trashKind, ident)
       if (onSelect && value && (value === ident || value.startsWith(`${ident}/`) || value.startsWith(`${ident}#`))) {
         onSelect('')
       }
@@ -287,7 +282,7 @@ export function useGalleryFileOps({
         return current
       })
       setPendingRemove(null)
-      await pull()
+      removeIdent(trashKind, ident)
       await loadTree()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not remove', 'error')
@@ -303,8 +298,6 @@ export function useGalleryFileOps({
     setFillConfirm,
     filling,
     fileBusy,
-    creating,
-    setCreating,
     renaming,
     setRenaming,
     pendingMove,
@@ -319,7 +312,6 @@ export function useGalleryFileOps({
     replaceCivitai,
     clickDir,
     clickFile,
-    createFolder,
     renameEntry,
     revealEntry,
     runRemove,

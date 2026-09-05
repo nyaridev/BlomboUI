@@ -66,8 +66,12 @@ export function useWildcardManager() {
   const [raw, setRaw] = useState(false)
   const dirty = Boolean(draft && snapshot(draft, raw) !== saved)
   const pull = useModelsStore((s) => s.pull)
+  const relocate = useModelsStore((s) => s.relocate)
+  const removeIdent = useModelsStore((s) => s.removeIdent)
+  const bumpTree = useModelsStore((s) => s.bumpTree)
   const refreshKind = useModelsStore((s) => s.refreshKind)
   const modelsBusy = useModelsStore((s) => s.busy)
+  const treeEpoch = useModelsStore((s) => s.treeEpoch)
   const wildcardFiles = useModelsStore((s) => {
     const seen = new Set<string>()
     for (const item of s.wildcards) {
@@ -121,7 +125,7 @@ export function useWildcardManager() {
       }
       toast(err instanceof Error ? err.message : 'Could not load wildcards', 'error')
     })
-  }, [active, loadTree, wildcardFiles])
+  }, [active, loadTree, wildcardFiles, treeEpoch])
 
   const openFile = useCallback(async (path: string) => {
     const file = await getWildcardFile(path)
@@ -270,6 +274,7 @@ export function useWildcardManager() {
       setFolderPath(next.path)
       setCreating(null)
       setNewName('')
+      bumpTree()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not create folder', 'error')
     } finally {
@@ -384,8 +389,8 @@ export function useWildcardManager() {
     try {
       const next = await moveWildcardEntry(path, folder)
       retarget(path, next.path, next.kind)
+      relocate('wildcards', path, next.path)
       await loadTree()
-      await pull()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not move', 'error')
     } finally {
@@ -416,9 +421,9 @@ export function useWildcardManager() {
     try {
       const next = await renameWildcardEntry(renaming.path, name)
       retarget(renaming.path, next.path, next.kind)
+      relocate('wildcards', renaming.path, next.path)
       setRenaming(null)
       await loadTree()
-      await pull()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not rename', 'error')
     } finally {
@@ -446,8 +451,8 @@ export function useWildcardManager() {
         return parentPath(ident)
       })
       setPendingRemove(null)
+      removeIdent('wildcards', ident)
       await loadTree()
-      await pull()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Could not remove', 'error')
     } finally {

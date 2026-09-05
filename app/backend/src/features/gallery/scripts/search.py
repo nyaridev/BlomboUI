@@ -7,6 +7,7 @@ from typing import Any
 from features.models.scripts import thumbnail_scopes
 from features.generate.scripts.save_meta import HASH_KEYS
 from features.settings import service as settings
+from features.gallery.scripts import cache as gallery_cache
 from infrastructure.storage.repositories import gallery as gallery_repo
 from infrastructure.storage.repositories import hashes as hashes_repo
 
@@ -401,9 +402,10 @@ def home() -> dict[str, Any]:
             }
             for row in tags
         ],
-        "checkpoints": browse("checkpoints", "recent", "desc", HOME_SHELF)["items"],
-        "loras": browse("loras", "recent", "desc", HOME_SHELF)["items"],
-        "wildcards": browse("wildcards", "recent", "desc", HOME_SHELF)["items"],
+        "checkpoints": [],
+        "loras": [],
+        "wildcards": [],
+        "generation": gallery_cache.sync_generation(),
     }
 
 

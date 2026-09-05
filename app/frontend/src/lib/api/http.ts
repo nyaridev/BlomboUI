@@ -30,6 +30,7 @@ export type Health = {
     id: string
     displayName: string
   }
+  gallery_sync?: number
   comfy: {
     reachable: boolean
     restarting?: boolean

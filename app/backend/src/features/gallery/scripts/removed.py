@@ -13,6 +13,7 @@ from typing import Any
 from shared import dirs
 
 from features.settings import service as settings
+from features.models.scripts import catalog
 from features.models.scripts import model_files
 from features.models.scripts import model_meta
 from features.models.scripts import model_thumbs
@@ -55,7 +56,7 @@ def remove_entry(kind: str, path: str) -> dict[str, Any]:
         _prune_tree(source, _root_dir(kind, ident))
     else:
         ids.append(_trash_file(kind, ident))
-    models.refresh_models(kind)
+    catalog.drop(kind, ident)
     _trim_size()
     return {"ids": ids, "count": len(ids)}
 

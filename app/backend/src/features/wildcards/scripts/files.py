@@ -9,10 +9,12 @@ from pathlib import Path
 from typing import Any
 
 from shared import dirs
+from features.models.scripts import catalog
+from features.models.scripts import hashes
 from features.models.scripts import model_meta
 from features.models.scripts import models
 from config import wildcards_root
-from features.wildcards.scripts.wildcards import YAML_EXTS, load_yaml, load_yaml_text, mixed_sections
+from features.wildcards.scripts.wildcards import YAML_EXTS, drop_yaml_cache, load_yaml, load_yaml_text, mixed_sections
 
 TXT_EXT = ".txt"
 WILDCARD_EXTS = {TXT_EXT, *YAML_EXTS}
@@ -112,7 +114,8 @@ def write_file(rel: str, body: dict[str, Any]) -> dict[str, Any]:
             _write_text(path, _dump_yaml(node))
     else:
         raise WildcardError("unsupported file type")
-    models.refresh_models("wildcards")
+    drop_yaml_cache(path)
+    models.reload_kind("wildcards")
     return read_file(rel)
 
 
@@ -133,7 +136,7 @@ def create_file(folder: str, name: str) -> dict[str, Any]:
         _write_text(path, _dump_yaml({stem: {}}))
     else:
         path.write_text("", encoding="utf-8")
-    models.refresh_models("wildcards")
+    models.reload_kind("wildcards")
     return {"path": rel, **read_file(rel)}
 
 
@@ -182,6 +185,7 @@ def move_entry(rel: str, folder: str) -> dict[str, str]:
     dest = dest_parent / source.name
     _require_unique(dest_parent, source.name, source)
     sidecar_src = source if source.is_file() else None
+    pairs = hashes.move_pairs(source, dest)
     _relocate(source, dest)
     if sidecar_src is not None and dest.is_file():
         from features.models.scripts import model_sidecar
@@ -190,7 +194,8 @@ def move_entry(rel: str, folder: str) -> dict[str, str]:
     nxt = _join(folder, source.name)
     if nxt != rel:
         model_meta.remap_ident("wildcards", rel, nxt)
-        models.refresh_models("wildcards")
+        hashes.remap_moved(source, dest, pairs)
+        catalog.relocate("wildcards", rel, nxt)
     return {"path": nxt, "kind": "dir" if dest.is_dir() else "file"}
 
 
@@ -202,6 +207,7 @@ def rename_entry(rel: str, name: str) -> dict[str, str]:
     dest = source.with_name(leaf)
     _require_unique(source.parent, leaf, source)
     sidecar_src = source if source.is_file() else None
+    pairs = hashes.move_pairs(source, dest)
     _relocate(source, dest)
     if sidecar_src is not None and dest.is_file():
         from features.models.scripts import model_sidecar
@@ -210,7 +216,8 @@ def rename_entry(rel: str, name: str) -> dict[str, str]:
     nxt = _join(_parent_rel(rel), leaf)
     if nxt != rel:
         model_meta.remap_ident("wildcards", rel, nxt)
-        models.refresh_models("wildcards")
+        hashes.remap_moved(source, dest, pairs)
+        catalog.relocate("wildcards", rel, nxt)
     return {"path": nxt, "kind": "dir" if dest.is_dir() else "file"}
 
 

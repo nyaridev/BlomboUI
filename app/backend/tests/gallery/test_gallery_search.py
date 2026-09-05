@@ -408,9 +408,10 @@ class GallerySearchTests(unittest.TestCase):
         tags = [item["tag"] for item in data["tags"]]
         self.assertEqual(tags[0], "cat")
         self.assertTrue(data["tags"][0]["previews"])
-        self.assertEqual(data["checkpoints"][0]["name"], "alpha.safetensors")
+        self.assertEqual(data["checkpoints"], [])
         self.assertIsInstance(data["loras"], list)
         self.assertIsInstance(data["wildcards"], list)
+        self.assertIn("generation", data)
 
     def test_cover_previews_sample_not_newest(self) -> None:
         ids: list[str] = []

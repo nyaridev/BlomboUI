@@ -85,6 +85,19 @@ def find_by_suffix(rel: str) -> dict[str, str] | None:
     }
 
 
+def remap_path(old: str, new: str) -> None:
+    src = str(old or "")
+    dest = str(new or "")
+    if not src or not dest or src == dest:
+        return
+
+    def write(conn) -> None:
+        conn.execute("DELETE FROM model_hashes WHERE path = ?", (dest,))
+        conn.execute("UPDATE model_hashes SET path = ? WHERE path = ?", (dest, src))
+
+    cache.transaction(write)
+
+
 def replace_all(data: dict[str, Any]) -> None:
     def write(conn) -> None:
         conn.execute("DELETE FROM model_hashes")

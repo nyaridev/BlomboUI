@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import random
 import re
 from pathlib import Path
@@ -15,6 +16,8 @@ YAML_EXTS = {".yaml", ".yml"}
 TXT_EXT = ".txt"
 
 YamlNode = dict[str, "YamlNode"] | list[str]
+_SKIP = {".gitkeep", "desktop.ini"}
+_yaml_cache: dict[str, tuple[int, int, dict[str, YamlNode]]] = {}
 
 
 def iter_tiles(path: Path, rel: str, claimed: dict[str, str] | None = None) -> list[dict[str, Any]]:
@@ -162,12 +165,15 @@ def iter_sources(root: Path | None = None) -> list[tuple[Path, str]]:
     if not folder.is_dir():
         return []
     items: list[tuple[Path, str]] = []
-    for path in folder.rglob("*"):
-        if not path.is_file() or path.name in {".gitkeep", "desktop.ini"}:
-            continue
-        if path.suffix.lower() not in {TXT_EXT, *YAML_EXTS}:
-            continue
-        items.append((path, path.relative_to(folder).as_posix()))
+    for current, dirnames, filenames in os.walk(folder):
+        dirnames[:] = [name for name in dirnames if name not in _SKIP and not name.startswith(".") and not name.endswith("_data")]
+        for name in filenames:
+            if name in _SKIP or name.startswith("."):
+                continue
+            path = Path(current) / name
+            if path.suffix.lower() not in {TXT_EXT, *YAML_EXTS}:
+                continue
+            items.append((path, path.relative_to(folder).as_posix()))
     items.sort(key=lambda row: (row[1].count("/"), row[1].lower()))
     return items
 
@@ -202,17 +208,36 @@ def _txt_lines(path: Path) -> list[str]:
     return out
 
 
+def drop_yaml_cache(path: Path | None = None) -> None:
+    if path is None:
+        _yaml_cache.clear()
+        return
+    _yaml_cache.pop(str(path), None)
+
+
 def _yaml_tree(path: Path) -> dict[str, YamlNode]:
+    try:
+        st = path.stat()
+        key = str(path)
+        hit = _yaml_cache.get(key)
+        if hit and hit[0] == st.st_mtime_ns and hit[1] == st.st_size:
+            return hit[2]
+    except OSError:
+        st = None
+        key = str(path)
     data, err = load_yaml(path)
     if err or mixed_sections(data):
-        return {}
-    if not isinstance(data, dict):
-        return {}
-    out: dict[str, YamlNode] = {}
-    for raw_name, body in data.items():
-        node = _yaml_node(body)
-        if node:
-            out[str(raw_name)] = node
+        out: dict[str, YamlNode] = {}
+    elif not isinstance(data, dict):
+        out = {}
+    else:
+        out = {}
+        for raw_name, body in data.items():
+            node = _yaml_node(body)
+            if node:
+                out[str(raw_name)] = node
+    if st is not None:
+        _yaml_cache[key] = (st.st_mtime_ns, st.st_size, out)
     return out
 
 

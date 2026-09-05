@@ -23,7 +23,9 @@ from features.models.scripts.models import (
     model_file,
     model_info,
     refresh_models,
+    reload_kind,
 )
+from features.models.scripts.catalog import hydrate as hydrate_lists
 from features.models.scripts.safetensors_meta import read as read_safetensors
 from features.models.scripts.thumbnail_embed import read_file as read_thumb_meta
 from features.models.scripts.thumbnail_scopes import (
@@ -51,6 +53,7 @@ __all__ = [
     "delete_thumb",
     "drop_scope",
     "hash_files",
+    "hydrate_lists",
     "install_manager_model",
     "list_manager_models",
     "list_models",
@@ -65,6 +68,7 @@ __all__ = [
     "read_safetensors",
     "read_thumb_meta",
     "refresh_models",
+    "reload_kind",
     "resolved_file",
     "restore_all",
     "save_thumb",

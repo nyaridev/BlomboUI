@@ -19,10 +19,15 @@ const EMPTY: ModelLists = {
 
 type ModelsState = ModelLists & {
   busy: boolean
+  loaded: boolean
+  treeEpoch: number
   load: () => Promise<void>
   pull: () => Promise<void>
   refresh: (opts?: { silent?: boolean }) => Promise<void>
   refreshKind: (kind: keyof ModelLists) => Promise<void>
+  relocate: (kind: keyof ModelLists, from: string, to: string) => void
+  removeIdent: (kind: keyof ModelLists, ident: string) => void
+  bumpTree: () => void
   setThumb: (kind: keyof ModelLists, path: string, thumb: number) => void
   setMeta: (
     kind: keyof ModelLists,
@@ -118,29 +123,82 @@ function notifyIssues() {
   void useIssuesStore.getState().load().then((items) => toastIssues(items))
 }
 
+function coversIdent(value: string, ident: string) {
+  return value === ident || value.startsWith(`${ident}/`) || value.startsWith(`${ident}#`)
+}
+
+function remapIdent(value: string, from: string, to: string) {
+  if (!value || !from) {
+    return value
+  }
+  if (value === from) {
+    return to
+  }
+  if (value.startsWith(`${from}/`) || value.startsWith(`${from}#`)) {
+    return to + value.slice(from.length)
+  }
+  return value
+}
+
+function relocateList(items: ModelEntry[], from: string, to: string) {
+  return items.map((item) => {
+    const path = remapIdent(item.path, from, to)
+    const source = item.source ? remapIdent(item.source, from, to) : item.source
+    if (path === item.path && source === item.source) {
+      return item
+    }
+    return { ...item, path, source: source || item.source }
+  })
+}
+
+function dropIdent(items: ModelEntry[], ident: string) {
+  return items.filter((item) => !coversIdent(item.path, ident) && !coversIdent(item.source || '', ident))
+}
+
+let inflight: Promise<void> | null = null
+
 export const useModelsStore = create<ModelsState>((set, get) => ({
   ...EMPTY,
   busy: false,
+  loaded: false,
+  treeEpoch: 0,
   load: async () => {
-    if (get().busy) {
+    if (get().loaded) {
+      return
+    }
+    if (inflight) {
+      await inflight
       return
     }
     set({ busy: true })
-    try {
-      set(apply(await getModels()))
-    } catch {
-      /* keep current */
-    } finally {
-      set({ busy: false })
-      void notifyIssues()
-    }
+    inflight = (async () => {
+      try {
+        set({ ...apply(await getModels()), loaded: true })
+      } catch {
+        /* keep current */
+      } finally {
+        inflight = null
+        set({ busy: false })
+        void notifyIssues()
+      }
+    })()
+    await inflight
   },
   pull: async () => {
-    try {
-      set(apply(await getModels()))
-    } catch {
-      /* keep current */
+    if (inflight) {
+      await inflight
+      return
     }
+    inflight = (async () => {
+      try {
+        set({ ...apply(await getModels()), loaded: true })
+      } catch {
+        /* keep current */
+      } finally {
+        inflight = null
+      }
+    })()
+    await inflight
   },
   refresh: async (opts) => {
     if (get().busy) {
@@ -148,13 +206,13 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     }
     set({ busy: true })
     try {
-      set(apply(await refreshModels()))
+      set({ ...apply(await refreshModels()), loaded: true, treeEpoch: get().treeEpoch + 1 })
       if (!opts?.silent) {
         toast('Models reloaded', 'ok')
       }
     } catch {
       try {
-        set(apply(await getModels()))
+        set({ ...apply(await getModels()), loaded: true, treeEpoch: get().treeEpoch + 1 })
         if (!opts?.silent) {
           toast('Models reloaded', 'ok')
         }
@@ -173,12 +231,12 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
     set({ busy: true })
     try {
       const lists = await refreshModels(kind)
-      set({ [kind]: asList(lists[kind]) })
+      set({ [kind]: asList(lists[kind]), loaded: true, treeEpoch: get().treeEpoch + 1 })
       toast('Models reloaded', 'ok')
     } catch {
       try {
         const lists = await getModels()
-        set({ [kind]: asList(lists[kind]) })
+        set({ [kind]: asList(lists[kind]), loaded: true, treeEpoch: get().treeEpoch + 1 })
         toast('Models reloaded', 'ok')
       } catch {
         /* keep current */
@@ -187,6 +245,27 @@ export const useModelsStore = create<ModelsState>((set, get) => ({
       set({ busy: false })
       void notifyIssues()
     }
+  },
+  relocate: (kind, from, to) => {
+    if (!from || from === to) {
+      return
+    }
+    set((state) => ({
+      [kind]: relocateList(state[kind], from, to),
+      treeEpoch: state.treeEpoch + 1,
+    }))
+  },
+  removeIdent: (kind, ident) => {
+    if (!ident) {
+      return
+    }
+    set((state) => ({
+      [kind]: dropIdent(state[kind], ident),
+      treeEpoch: state.treeEpoch + 1,
+    }))
+  },
+  bumpTree: () => {
+    set((state) => ({ treeEpoch: state.treeEpoch + 1 }))
   },
   setThumb: (kind, path, thumb) => {
     const now = Math.floor(Date.now() / 1000)

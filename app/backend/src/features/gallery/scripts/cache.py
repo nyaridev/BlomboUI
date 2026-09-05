@@ -24,6 +24,8 @@ _SYNC_LOCK = threading.Lock()
 _SYNC_THREAD: threading.Thread | None = None
 _SYNC_AGAIN = False
 _SYNC_BATCH = 250
+_LISTENERS: list[Any] = []
+_SYNC_GEN = 0
 
 
 def canonical(path: Path) -> Path:
@@ -402,6 +404,26 @@ def sync() -> None:
 
     gallery_repo.transaction(finish)
     gallery_relink.relink_digests()
+    _emit_sync()
+
+
+def listen_sync(callback: Any) -> None:
+    if callback not in _LISTENERS:
+        _LISTENERS.append(callback)
+
+
+def sync_generation() -> int:
+    return _SYNC_GEN
+
+
+def _emit_sync() -> None:
+    global _SYNC_GEN
+    _SYNC_GEN += 1
+    for callback in list(_LISTENERS):
+        try:
+            callback()
+        except Exception:
+            pass
 
 
 def _relocate_index() -> None:

@@ -33,6 +33,11 @@ CREATE TABLE IF NOT EXISTS model_hashes (
     autov2 TEXT NOT NULL DEFAULT '',
     autov3 TEXT NOT NULL DEFAULT ''
 );
+
+CREATE TABLE IF NOT EXISTS model_lists (
+    kind TEXT PRIMARY KEY,
+    data_json TEXT NOT NULL
+);
 """
 
 

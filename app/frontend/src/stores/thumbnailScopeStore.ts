@@ -70,7 +70,9 @@ export const useThumbnailScopeStore = create<ScopeState>((set, get) => ({
       set({ items: [], loaded: true })
     }
     await get().refreshAuto()
-    refreshModels()
+    if (!useModelsStore.getState().loaded && !useModelsStore.getState().busy) {
+      refreshModels()
+    }
   },
   loadThumbs: async () => {
     try {

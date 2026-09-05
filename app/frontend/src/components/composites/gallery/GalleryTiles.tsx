@@ -2,13 +2,13 @@ import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { PaneSplitter } from '@/components/controls/resizable-panel/PaneSplitter.tsx'
 import { IconButton } from '@/components/controls/button/IconButton.tsx'
 import { GalleryTree } from '@/components/composites/gallery/GalleryTree.tsx'
-import { otherKindLabel } from '@/components/composites/gallery/galleryUtils.ts'
+import { otherKindLabel, remPx } from '@/components/composites/gallery/galleryUtils.ts'
 import { TilePreview, TILE_GLOW } from '@/components/composites/models/TilePreview.tsx'
 import type { GalleryNode } from '@/lib/gallery/tree.ts'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import { storedLoraStrengthLabel } from '@/lib/prompt/loraTags.ts'
 import type { ModelEntry, ModelLists, ThumbView } from '@/lib/api.ts'
-import type { DragEvent, MouseEvent, RefObject } from 'react'
+import { useEffect, useState, type DragEvent, type MouseEvent, type RefObject } from 'react'
 
 export function GalleryTiles({
   rowRef,
@@ -39,7 +39,6 @@ export function GalleryTiles({
   onRename,
   onReveal,
   onRemove,
-  onAdd,
   onOpenManager,
   tiles,
   tileCellW,
@@ -84,7 +83,6 @@ export function GalleryTiles({
   onRename: (path: string, name: string) => void
   onReveal: (path: string) => void
   onRemove: (path: string) => void
-  onAdd: (folder: string) => void
   onOpenManager?: (path: string, kind: 'dir' | 'file') => void
   tiles: ModelEntry[]
   tileCellW: number
@@ -101,6 +99,48 @@ export function GalleryTiles({
   onDownload: (path: string, kind: keyof ModelLists) => void
   onInfo: (item: ModelEntry) => void
 }) {
+  const [windowRange, setWindowRange] = useState({ start: 0, end: tiles.length, padTop: 0, padBottom: 0 })
+
+  useEffect(() => {
+    const el = tilesRef.current
+    if (!el) {
+      setWindowRange({ start: 0, end: tiles.length, padTop: 0, padBottom: 0 })
+      return
+    }
+    function update() {
+      const node = tilesRef.current
+      if (!node) {
+        return
+      }
+      const rem = remPx()
+      const gap = tileGapRem * rem
+      const cellW = tileCellW * rem
+      const cellH = tileCellH * rem
+      const cols = Math.max(1, Math.floor((node.clientWidth + gap) / (cellW + gap)))
+      const rowH = cellH + gap
+      const rows = Math.max(1, Math.ceil(tiles.length / cols))
+      const overscan = 4
+      const first = Math.max(0, Math.floor(node.scrollTop / rowH) - overscan)
+      const visible = Math.ceil(node.clientHeight / rowH) + overscan * 2
+      const start = first * cols
+      const end = Math.min(tiles.length, (first + visible) * cols)
+      setWindowRange({
+        start,
+        end,
+        padTop: first * rowH,
+        padBottom: Math.max(0, (rows - first - visible) * rowH),
+      })
+    }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(el)
+    el.addEventListener('scroll', update, { passive: true })
+    return () => {
+      observer.disconnect()
+      el.removeEventListener('scroll', update)
+    }
+  }, [tileCellH, tileCellW, tileGapRem, tiles.length, tilesRef])
+
   function startDrag(event: DragEvent, item: ModelEntry) {
     if (!fileOps) {
       event.preventDefault()
@@ -111,6 +151,11 @@ export function GalleryTiles({
     event.dataTransfer.setData('text/plain', path)
     onDragIdent(path)
   }
+
+  const tileStart = windowRange.end === 0 ? 0 : windowRange.start
+  const tileEnd = windowRange.end === 0 ? tiles.length : windowRange.end
+  const padTop = windowRange.end === 0 ? 0 : windowRange.padTop
+  const padBottom = windowRange.end === 0 ? 0 : windowRange.padBottom
 
   return (
     <div
@@ -146,7 +191,6 @@ export function GalleryTiles({
               onRename={onRename}
               onReveal={onReveal}
               onRemove={onRemove}
-              onAdd={onAdd}
               onOpenManager={onOpenManager}
             />
           </div>
@@ -175,9 +219,11 @@ export function GalleryTiles({
               gap: `${tileGapRem}rem`,
               gridAutoRows: `${tileCellH}rem`,
               gridTemplateColumns: `repeat(auto-fill, minmax(${tileCellW}rem, ${tileCellW}rem))`,
+              paddingTop: padTop,
+              paddingBottom: padBottom,
             }}
           >
-            {tiles.map((item) => {
+            {tiles.slice(tileStart, tileEnd).map((item) => {
               const selected = isOn(item.path) || focus === item.path
               const itemType = kindOf(item)
               const badge =
@@ -191,6 +237,7 @@ export function GalleryTiles({
                   label={labelOf(item)}
                   badge={badge || undefined}
                   selected={selected}
+                  preventMediaDrag={fileOps}
                 />
               )
               const content = onSelect ? (
@@ -221,8 +268,7 @@ export function GalleryTiles({
               return (
                 <div
                   key={`${itemType}:${item.path}`}
-                  className="min-w-0 p-1.5 [content-visibility:auto]"
-                  style={{ containIntrinsicSize: `${tileCellW}rem ${tileCellH}rem` }}
+                  className="min-w-0 p-1.5"
                 >
                   <div className="group relative">
                     {content}

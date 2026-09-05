@@ -72,8 +72,13 @@ def _logged_issues() -> list[dict[str, Any]]:
 
 
 def _duplicate_names(kind: str) -> list[dict[str, Any]]:
+    from features.models.scripts import catalog
+
     groups: dict[str, list[str]] = {}
-    for item in models.list_kind(kind):
+    items = catalog.peek(kind)
+    if items is None:
+        items = models.list_kind(kind)
+    for item in items:
         path = str(item.get("path") or "")
         stem = Path(path).stem.lower()
         if stem:

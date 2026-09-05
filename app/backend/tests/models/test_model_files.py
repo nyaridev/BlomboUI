@@ -16,7 +16,8 @@ class ModelFilesTests(unittest.TestCase):
             patch.object(model_files, "models_root", return_value=self.tmp),
             patch.object(model_files.dirs, "extra_named", return_value={}),
             patch.object(model_files.model_meta, "remap_ident"),
-            patch.object(model_files.models, "refresh_models"),
+            patch.object(model_files.catalog, "relocate"),
+            patch.object(model_files.hashes, "remap_moved"),
         ]
         for item in self.patches:
             item.start()
@@ -35,7 +36,19 @@ class ModelFilesTests(unittest.TestCase):
         self.assertFalse((folder / "old.safetensors").exists())
         self.assertTrue((folder / "new.safetensors").is_file())
         model_files.model_meta.remap_ident.assert_called_once_with("loras", "old.safetensors", "new.safetensors")
-        model_files.models.refresh_models.assert_called_once_with("loras")
+        model_files.catalog.relocate.assert_called_once_with("loras", "old.safetensors", "new.safetensors")
+        model_files.hashes.remap_moved.assert_called_once()
+
+    def test_move_entry_does_not_refresh(self) -> None:
+        folder = self.tmp / "loras"
+        dest = folder / "sub"
+        dest.mkdir(parents=True)
+        (folder / "a.safetensors").write_bytes(b"x")
+        result = model_files.move_entry("loras", "a.safetensors", "sub")
+        self.assertEqual(result, {"path": "sub/a.safetensors", "kind": "file"})
+        self.assertTrue((dest / "a.safetensors").is_file())
+        model_files.catalog.relocate.assert_called_once_with("loras", "a.safetensors", "sub/a.safetensors")
+        model_files.hashes.remap_moved.assert_called()
 
     def test_resolve_extra_root_uses_kind_and_ignores_name_case(self) -> None:
         extra = self.tmp / "comfy"

@@ -6,6 +6,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from api.errors import ApiError
+from features.gallery.scripts import cache as gallery_cache
 from features.generate.schemas import ComfyFreeIn
 from features.generate import service as generate
 from features.issues.service import clear_log, dismiss_log, list_issues, record_log
@@ -71,6 +72,7 @@ def health() -> dict:
         "api": "blombo",
         "version": VERSION,
         "profile": profiles.current(),
+        "gallery_sync": gallery_cache.sync_generation(),
         "comfy": {
             "reachable": generate.reachable(),
             "restarting": (RUNTIME / "tmp" / "comfy-restart").is_file(),

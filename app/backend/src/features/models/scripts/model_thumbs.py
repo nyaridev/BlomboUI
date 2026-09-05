@@ -69,9 +69,18 @@ def raw_paths(kind: str, ident: str, context: str = GLOBAL) -> list[Path]:
     return [Path(str(base) + ext) for ext in THUMB_EXTS]
 
 
-def thumb_at(kind: str, ident: str, context: str = GLOBAL) -> Path | None:
+def ident_of(rel: str) -> str | None:
+    return _ident(rel)
+
+
+def mtime_of(path: Path | None) -> int:
+    return _mtime(path)
+
+
+def thumb_at(kind: str, ident: str, context: str = GLOBAL, ident_rows: dict[str, Any] | None = None) -> Path | None:
     folder = thumb_dir(kind, ident)
-    row = ident_index(kind, ident).get(context)
+    rows = ident_rows if ident_rows is not None else ident_index(kind, ident)
+    row = rows.get(context) if isinstance(rows, dict) else None
     if isinstance(row, dict):
         name = str(row.get("file") or "")
         if name:
@@ -97,12 +106,13 @@ def thumb_mtime(kind: str, rel: str, context: str = GLOBAL) -> int:
     return _mtime(path)
 
 
-def thumb_any_mtime(kind: str, rel: str) -> int:
+def thumb_any_mtime(kind: str, rel: str, ident_rows: dict[str, Any] | None = None) -> int:
     ident = _ident(rel)
     if not ident:
         return 0
     best = 0
-    for row in ident_index(kind, ident).values():
+    rows = ident_rows if ident_rows is not None else ident_index(kind, ident)
+    for row in (rows or {}).values():
         if not isinstance(row, dict):
             continue
         try:
@@ -126,28 +136,30 @@ def resolved_file(
     fallback: bool = False,
     optional: list[str] | None = None,
     raw: bool = False,
+    ident_rows: dict[str, Any] | None = None,
 ) -> Path | None:
     ident = _ident(rel)
     if not ident:
         return None
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
-    exact = thumb_at(kind, ident, key)
+    rows = ident_rows if ident_rows is not None else ident_index(kind, ident)
+    exact = thumb_at(kind, ident, key, ident_rows=rows)
     found: Path | None = None
     rank_mode = mode == "likely" or bool(optional)
     if not rank_mode:
         if exact:
             found = exact
         elif fallback and key != GLOBAL:
-            found = thumb_at(kind, ident, GLOBAL)
+            found = thumb_at(kind, ident, GLOBAL, ident_rows=rows)
     elif exact:
         found = exact
     else:
         ids = thumbnail_scopes.parse_context(key)
         best: tuple[tuple[int, int, int], int, Path] | None = None
-        for ctx, row in ident_index(kind, ident).items():
+        for ctx, row in (rows or {}).items():
             if ctx == key or ctx == GLOBAL:
                 continue
-            path = thumb_at(kind, ident, ctx)
+            path = thumb_at(kind, ident, ctx, ident_rows=rows)
             if not path:
                 continue
             rank = thumbnail_scopes.rank_thumb(
@@ -161,7 +173,7 @@ def resolved_file(
         if best:
             found = best[2]
         elif fallback:
-            found = thumb_at(kind, ident, GLOBAL)
+            found = thumb_at(kind, ident, GLOBAL, ident_rows=rows)
     if raw and found:
         beside = _raw_beside(found)
         if beside and beside.suffix.lower() not in {".mp4", ".webm"}:

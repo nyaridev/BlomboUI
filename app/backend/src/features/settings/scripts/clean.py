@@ -363,7 +363,7 @@ def _clean(raw: Any) -> dict[str, Any]:
             pass
     if "managerDownloadDirId" in raw:
         ident = str(raw["managerDownloadDirId"] or "").strip()
-        if ident:
+        if ident and ident != "comfyui":
             out["managerDownloadDirId"] = ident
     if "removedAfterHours" in raw:
         try:

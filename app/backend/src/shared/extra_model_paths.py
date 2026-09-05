@@ -21,6 +21,10 @@ MODEL_SUBDIRS = (
     "gligen",
     "diffusers",
     "classifiers",
+    "LLM",
+    "audio_encoders",
+    "model_patches",
+    "latent_upscale_models",
 )
 
 
@@ -42,6 +46,9 @@ def yaml_block(ident: str, root: Path) -> list[str]:
 
 def write_file(dest: Path, named_roots: list[tuple[str, Path]]) -> Path:
     dest.parent.mkdir(parents=True, exist_ok=True)
+    if not named_roots:
+        dest.unlink(missing_ok=True)
+        return dest
     lines: list[str] = []
     for ident, root in named_roots:
         lines.extend(yaml_block(yaml_ident(ident), root))

@@ -11,9 +11,7 @@ ROOT="$(CDPATH= cd -- "$SCRIPT_DIR/../../.." && pwd)"
 
 PYTHON="${PYTHON:-python3}"
 GIT="${GIT:-git}"
-if [ -z "${VENV_DIR:-}" ]; then
-  VENV_DIR="$ROOT/runtime/.venv"
-fi
+VENV_DIR="$ROOT/runtime/.venv"
 
 # -----------------------------------------------------------------------------
 # Tool checks

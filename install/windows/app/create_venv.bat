@@ -12,11 +12,7 @@ if not defined PYTHON set PYTHON=python
 if not defined GIT set GIT=git
 for %%I in (%PYTHON%) do set PYTHON_EXE=%%~I
 for %%I in (%GIT%) do set GIT_EXE=%%~I
-if not defined VENV_DIR (
-    set VENV_DIR=%ROOT%\runtime\.venv
-) else (
-    for %%I in (%VENV_DIR%) do set VENV_DIR=%%~fI
-)
+set VENV_DIR=%ROOT%\runtime\.venv
 
 :: -----------------------------------------------------------------------------
 :: Tool checks

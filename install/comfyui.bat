@@ -28,9 +28,7 @@ if not defined MODELS_DIR (
     )
 )
 if not defined COMFY_ROOT set COMFY_ROOT=%ROOT%\runtime\comfyui
-if defined COMFYUI_PATH (
-    for %%I in (%COMFYUI_PATH%) do set COMFY_DIR=%%~fI
-) else if not defined COMFY_DIR (
+if not defined COMFY_DIR (
     call "%ROOT%\install\windows\comfyui\_pick_slot.bat" /selected
 )
 if not defined COMFY_PYTHON (
@@ -97,18 +95,12 @@ if not defined COMFYUI_LOG (
 cd /D "%COMFY_DIR%"
 if not exist "%ROOT%\runtime\tmp\" mkdir "%ROOT%\runtime\tmp"
 
-if exist "%YAML%" (
-    if defined COMFYUI_LOG (
-        "%COMFY_PYTHON%" -I -W "ignore::FutureWarning" -u main.py --listen %COMFYUI_HOST% --port %COMFYUI_PORT% %COMFYUI_LAUNCH% --preview-method auto --output-directory "%COMFY_OUT%" --extra-model-paths-config "%YAML%" !COMFYUI_ARGS! > "%COMFYUI_LOG%" 2>&1
-    ) else (
-        "%COMFY_PYTHON%" -I -W "ignore::FutureWarning" -u main.py --listen %COMFYUI_HOST% --port %COMFYUI_PORT% %COMFYUI_LAUNCH% --preview-method auto --output-directory "%COMFY_OUT%" --extra-model-paths-config "%YAML%" !COMFYUI_ARGS!
-    )
+set EXTRA_YAML=
+if exist "%YAML%" set EXTRA_YAML=--extra-model-paths-config "%YAML%"
+if defined COMFYUI_LOG (
+    "%COMFY_PYTHON%" -I -W "ignore::FutureWarning" -u main.py --listen %COMFYUI_HOST% --port %COMFYUI_PORT% %COMFYUI_LAUNCH% --preview-method auto --output-directory "%COMFY_OUT%" --models-directory "%MODELS_DIR%" %EXTRA_YAML% !COMFYUI_ARGS! > "%COMFYUI_LOG%" 2>&1
 ) else (
-    if defined COMFYUI_LOG (
-        "%COMFY_PYTHON%" -I -W "ignore::FutureWarning" -u main.py --listen %COMFYUI_HOST% --port %COMFYUI_PORT% %COMFYUI_LAUNCH% --preview-method auto --output-directory "%COMFY_OUT%" --models-directory "%MODELS_DIR%" !COMFYUI_ARGS! > "%COMFYUI_LOG%" 2>&1
-    ) else (
-        "%COMFY_PYTHON%" -I -W "ignore::FutureWarning" -u main.py --listen %COMFYUI_HOST% --port %COMFYUI_PORT% %COMFYUI_LAUNCH% --preview-method auto --output-directory "%COMFY_OUT%" --models-directory "%MODELS_DIR%" !COMFYUI_ARGS!
-    )
+    "%COMFY_PYTHON%" -I -W "ignore::FutureWarning" -u main.py --listen %COMFYUI_HOST% --port %COMFYUI_PORT% %COMFYUI_LAUNCH% --preview-method auto --output-directory "%COMFY_OUT%" --models-directory "%MODELS_DIR%" %EXTRA_YAML% !COMFYUI_ARGS!
 )
 exit /b %errorlevel%
 

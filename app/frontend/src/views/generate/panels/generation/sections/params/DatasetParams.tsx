@@ -52,7 +52,7 @@ export function DatasetParams() {
           onSelect={setSelectedIndex}
           onFiles={setDatasetFiles}
           className="min-h-48 w-full min-w-0 max-w-full"
-          placeholder="Drop images here, or click to pick"
+          placeholder="Drop or paste images here, or click to pick"
         />
       )}
       <div className="flex min-w-0 flex-col gap-1">

@@ -368,9 +368,7 @@ class ImageUpscaleListTests(unittest.TestCase):
             nested.mkdir()
             (nested / "b.pt").write_bytes(b"x")
             (folder / "skip.txt").write_text("no", encoding="utf-8")
-            with patch.object(upscale, "comfy_models_root", return_value=root), patch.object(
-                upscale, "models_root", return_value=root / "missing"
-            ):
+            with patch.object(upscale, "models_root", return_value=root):
                 names = upscale.list_seedvr2_models()
         self.assertEqual(names, ["a.safetensors", "sub/b.pt"])
 

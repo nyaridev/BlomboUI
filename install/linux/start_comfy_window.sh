@@ -25,10 +25,11 @@ cmd=(
   --preview-method auto
   --output-directory "$out_dir"
 )
+if [ -n "$models_dir" ]; then
+  cmd+=(--models-directory "$models_dir")
+fi
 if [ -n "$yaml" ] && [ -f "$yaml" ]; then
   cmd+=(--extra-model-paths-config "$yaml")
-elif [ -n "$models_dir" ]; then
-  cmd+=(--models-directory "$models_dir")
 fi
 if [ "${#extra_args[@]}" -gt 0 ]; then
   cmd+=("${extra_args[@]}")

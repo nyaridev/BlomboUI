@@ -5,7 +5,7 @@ import random
 from pathlib import Path
 from typing import Any
 
-from config import comfy_models_root, models_root
+from config import models_root
 from features.generate.scripts.workflow.rembg import source_path
 
 PATH_DEFAULT = "image_upscale/[date]"
@@ -54,9 +54,8 @@ def empty_params() -> dict[str, Any]:
 
 def list_seedvr2_models() -> list[str]:
     names: set[str] = set()
-    for root in (comfy_models_root() / "SEEDVR2", models_root() / "SEEDVR2"):
-        if not root.is_dir():
-            continue
+    root = models_root() / "SEEDVR2"
+    if root.is_dir():
         for path in sorted(root.rglob("*")):
             if path.is_file() and path.suffix.lower() in _MODEL_EXTS:
                 names.add(str(path.relative_to(root)).replace("\\", "/"))

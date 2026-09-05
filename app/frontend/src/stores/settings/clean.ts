@@ -574,14 +574,14 @@ export function cleanDirs(raw: unknown): FolderDir[] {
     const id = String(row.id || '').trim().slice(0, 80)
     const name = String(row.name || '').trim().slice(0, 40)
     const path = String(row.path || '').trim().slice(0, 500)
-    if (!id || !name || seen.has(id) || name.includes('/') || name.includes('\\')) {
+    if (!id || id === COMFY_ID || !name || seen.has(id) || name.includes('/') || name.includes('\\')) {
       continue
     }
     seen.add(id)
     out.push({
       id,
-      name: id === LOCAL_ID ? 'Local' : id === COMFY_ID ? 'ComfyUI' : name,
-      path: id === LOCAL_ID || id === COMFY_ID ? '' : path,
+      name: id === LOCAL_ID ? 'Local' : name,
+      path: id === LOCAL_ID ? '' : path,
     })
   }
   return out
@@ -595,16 +595,7 @@ export function ensureLocal(items: FolderDir[]): FolderDir[] {
 }
 
 export function ensureModelDirs(items: FolderDir[]): FolderDir[] {
-  const local: FolderDir = { id: LOCAL_ID, name: 'Local', path: '' }
-  const comfy: FolderDir = { id: COMFY_ID, name: 'ComfyUI', path: '' }
-  const mapped = items.map((item) => (item.id === LOCAL_ID ? local : item.id === COMFY_ID ? comfy : item))
-  const withLocal = mapped.some((item) => item.id === LOCAL_ID) ? mapped : [local, ...mapped]
-  if (withLocal.some((item) => item.id === COMFY_ID)) {
-    return withLocal
-  }
-  const localIndex = withLocal.findIndex((item) => item.id === LOCAL_ID)
-  const insert = localIndex >= 0 ? localIndex + 1 : 1
-  return [...withLocal.slice(0, insert), comfy, ...withLocal.slice(insert)]
+  return ensureLocal(items.filter((item) => item.id !== COMFY_ID))
 }
 
 export function applyPatch(patch: UserSettings): typeof SETTINGS_DEFAULTS {

@@ -19,10 +19,11 @@ $arg = @(
     "--preview-method", "auto",
     "--output-directory", $OutDir
 )
+if ($ModelsDir) {
+    $arg += @("--models-directory", $ModelsDir)
+}
 if ($Yaml -and (Test-Path -LiteralPath $Yaml)) {
     $arg += @("--extra-model-paths-config", $Yaml)
-} elseif ($ModelsDir) {
-    $arg += @("--models-directory", $ModelsDir)
 }
 if ($ExtraArgs) {
     $arg += [regex]::Split($ExtraArgs.Trim(), '\s+') | Where-Object { $_ }

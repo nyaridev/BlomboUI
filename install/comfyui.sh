@@ -53,13 +53,9 @@ else
 fi
 COMFY_ROOT="${COMFY_ROOT:-$ROOT/runtime/comfyui}"
 if [ -z "${COMFY_DIR:-}" ]; then
-  if [ -n "${COMFYUI_PATH:-}" ]; then
-    COMFY_DIR="$COMFYUI_PATH"
-  else
-    # shellcheck source=linux/comfyui/_pick_slot.sh
-    . "$ROOT/install/linux/comfyui/_pick_slot.sh"
-    pick_comfy_slot selected || exit 1
-  fi
+  # shellcheck source=linux/comfyui/_pick_slot.sh
+  . "$ROOT/install/linux/comfyui/_pick_slot.sh"
+  pick_comfy_slot selected || exit 1
 fi
 if [ -z "${COMFY_PYTHON:-}" ]; then
   if [ -x "$COMFY_DIR/../python_embeded/python" ]; then
@@ -115,11 +111,9 @@ if [ -z "$COMFYUI_LOG" ]; then
 fi
 
 cd "$COMFY_DIR" || exit 1
-COMFY_ARGS=(--listen "$COMFYUI_HOST" --port "$COMFYUI_PORT" $COMFYUI_LAUNCH --preview-method auto --output-directory "$COMFY_OUT")
+COMFY_ARGS=(--listen "$COMFYUI_HOST" --port "$COMFYUI_PORT" $COMFYUI_LAUNCH --preview-method auto --output-directory "$COMFY_OUT" --models-directory "$MODELS_DIR")
 if [ -f "$YAML" ]; then
   COMFY_ARGS+=(--extra-model-paths-config "$YAML")
-else
-  COMFY_ARGS+=(--models-directory "$MODELS_DIR")
 fi
 # shellcheck disable=SC2206
 if [ -n "${COMFYUI_ARGS:-}" ]; then

@@ -65,13 +65,25 @@ class ManagerCatalogTests(unittest.TestCase):
             dest.mkdir()
             rows = [
                 {"id": "local", "name": "Local", "path": str(Path(tmp) / "local")},
-                {"id": "comfyui", "name": "ComfyUI", "path": str(dest)},
+                {"id": "extra", "name": "Extra", "path": str(dest)},
             ]
             with (
                 patch.object(catalog.dirs, "listed_dirs", return_value=rows),
-                patch("features.settings.service.load", return_value={"managerDownloadDirId": "comfyui"}),
+                patch("features.settings.service.load", return_value={"managerDownloadDirId": "extra"}),
             ):
                 self.assertEqual(catalog.install_root(), dest)
+
+    def test_install_root_falls_back_when_dir_id_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "local"
+            local.mkdir()
+            rows = [{"id": "local", "name": "Local", "path": str(local)}]
+            with (
+                patch.object(catalog.dirs, "listed_dirs", return_value=rows),
+                patch.object(catalog, "models_root", return_value=local),
+                patch("features.settings.service.load", return_value={"managerDownloadDirId": "comfyui"}),
+            ):
+                self.assertEqual(catalog.install_root(), local)
 
 
 if __name__ == "__main__":

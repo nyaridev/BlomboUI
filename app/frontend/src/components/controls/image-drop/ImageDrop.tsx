@@ -1,4 +1,5 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
+import { filesFromClipboard } from '@/lib/clipboardFiles.ts'
 import { useEffect, useRef, useState } from 'react'
 
 function isImage(file: File) {
@@ -43,13 +44,14 @@ export function ImageDrop({
   onSelect,
   className = 'h-48',
   accept = 'image/*',
-  placeholder = 'Drop an image here, or click to pick',
+  placeholder = 'Drop or paste an image here, or click to pick',
   initialLabel = null,
   initialSrc = null,
 }: ImageDropProps) {
   const [src, setSrc] = useState<string | null>(initialSrc)
   const [label, setLabel] = useState<string | null>(initialLabel)
   const [over, setOver] = useState(false)
+  const [hover, setHover] = useState(false)
   const [thumbs, setThumbs] = useState<string[]>([])
   const input = useRef<HTMLInputElement>(null)
   const dragDepth = useRef(0)
@@ -86,7 +88,7 @@ export function ImageDrop({
     onFile?.(file)
   }
 
-  function fromList(list: FileList | null) {
+  function fromList(list: FileList | File[] | null) {
     const picked = [...(list ?? [])].filter((file) => allowed(file, accept))
     if (!picked.length) {
       return
@@ -99,6 +101,25 @@ export function ImageDrop({
     take(picked[0] ?? null)
   }
 
+  const fromListRef = useRef(fromList)
+  fromListRef.current = fromList
+
+  useEffect(() => {
+    if (!hover) {
+      return
+    }
+    function onPaste(event: ClipboardEvent) {
+      const next = filesFromClipboard(event)
+      if (!next.length) {
+        return
+      }
+      event.preventDefault()
+      fromListRef.current(next)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [hover])
+
   return (
     <div
       className={[
@@ -107,6 +128,8 @@ export function ImageDrop({
         over ? 'border-accent' : 'border-line',
       ].join(' ')}
       onClick={() => input.current?.click()}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       onDragEnter={(event) => {
         event.preventDefault()
         dragDepth.current += 1

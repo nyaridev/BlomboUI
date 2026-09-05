@@ -351,7 +351,7 @@ export function ImageInfo({ text, raw, metadata, busy, civitai, loraCivitai }: I
     return <p className="text-sm text-muted">Reading…</p>
   }
   if (!text && !Object.keys(raw).length) {
-    return <p className="text-sm text-muted">Drop images, videos, or a .safetensors file</p>
+    return <p className="text-sm text-muted">Drop or paste images, videos, or a .safetensors file</p>
   }
   const blob = isV2(metadata) ? metadata : null
   const hits = loraCivitai || {}

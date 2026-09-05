@@ -6,10 +6,7 @@
 
 :: set PYTHON=
 :: set GIT=
-:: set VENV_DIR=
-:: set COMFYUI_PATH=
 :: set MODELS_ROOT=
-:: set OUTPUTS_ROOT=
 :: set WILDCARDS_ROOT=
 
 set COMMANDLINE_ARGS=--uv --hot_reload_vite

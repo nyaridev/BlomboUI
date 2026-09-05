@@ -98,8 +98,8 @@ def ensure_dirs() -> None:
     for name in ("data", "tmp", "comfyui"):
         (RUNTIME / name).mkdir(exist_ok=True)
     USER.mkdir(exist_ok=True)
-    models = USER / "models"
-    models.mkdir(exist_ok=True)
+    models = env_path("MODELS_ROOT") or (USER / "models")
+    models.mkdir(parents=True, exist_ok=True)
     for sub in MODEL_SUBDIRS:
         (models / sub).mkdir(exist_ok=True)
     (USER / "output").mkdir(exist_ok=True)
@@ -108,7 +108,8 @@ def ensure_dirs() -> None:
     (USER / "data" / "sqlite" / "default").mkdir(parents=True, exist_ok=True)
     (RUNTIME / "data" / "sqlite").mkdir(parents=True, exist_ok=True)
     (RUNTIME / "data" / "sqlite" / "default").mkdir(parents=True, exist_ok=True)
-    (USER / "wildcards").mkdir(exist_ok=True)
+    wildcards = env_path("WILDCARDS_ROOT") or (USER / "wildcards")
+    wildcards.mkdir(parents=True, exist_ok=True)
     (USER / "autocompletion").mkdir(exist_ok=True)
     (USER / "gallery_thumbs").mkdir(exist_ok=True)
     (USER / "gallery_thumbs" / "default").mkdir(exist_ok=True)
@@ -143,20 +144,12 @@ def ensure_dirs() -> None:
 
 
 def resolve() -> dict[str, str | None]:
-    comfy = env_path("COMFYUI_PATH") or bundled_comfy()
+    comfy = bundled_comfy()
     models = env_path("MODELS_ROOT") or (USER / "models")
     wildcards = env_path("WILDCARDS_ROOT") or (USER / "wildcards")
-    outputs = env_path("OUTPUTS_ROOT") or kept_output() or (USER / "output" / active_profile_id())
+    outputs = kept_output() or (USER / "output" / active_profile_id())
     py = comfy_python(comfy)
-    bundled = bundled_comfy()
-
-    if (comfy / "main.py").is_file():
-        try:
-            mode = "bundled" if comfy.resolve() == bundled.resolve() else "external"
-        except OSError:
-            mode = "external"
-    else:
-        mode = "missing"
+    mode = "bundled" if (comfy / "main.py").is_file() else "missing"
 
     return {
         "blombo.python": sys.executable,
@@ -212,12 +205,9 @@ def _is_install_output(folder: Path) -> bool:
     return False
 
 
-def write_extra_model_paths(models_root: Path) -> Path:
+def write_extra_model_paths() -> Path:
     path = RUNTIME / "data" / "extra_model_paths.yaml"
-    roots: list[tuple[str, Path]] = [("blomboui", models_root)]
-    for name, folder in user_model_dirs():
-        roots.append((name, folder))
-    return write_extra_model_paths_file(path, roots)
+    return write_extra_model_paths_file(path, user_model_dirs())
 
 
 def user_model_dirs() -> list[tuple[str, Path]]:
@@ -243,14 +233,14 @@ def user_model_dirs() -> list[tuple[str, Path]]:
         return []
     out: list[tuple[str, Path]] = []
     seen_names: set[str] = set()
-    seen_paths: set[str] = {str((USER / "models").resolve()).replace("\\", "/").rstrip("/").casefold()}
+    seen_paths: set[str] = {str((env_path("MODELS_ROOT") or (USER / "models")).resolve()).replace("\\", "/").rstrip("/").casefold()}
     for item in raw:
         if not isinstance(item, dict):
             continue
         ident = str(item.get("id") or "").strip().lower()
         name = str(item.get("name") or "").strip()
         folder = Path(str(item.get("path") or "").strip())
-        if ident == "local" or not name or name.lower() in seen_names or not folder.is_dir():
+        if ident in {"local", "comfyui"} or not name or name.lower() in seen_names or not folder.is_dir():
             continue
         resolved = str(folder.resolve()).replace("\\", "/").rstrip("/").casefold()
         if resolved in seen_paths:

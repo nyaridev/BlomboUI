@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 from bootstrap.env import ensure_dirs, resolve, write_extra_model_paths, write_launcher_env
 
 
@@ -11,8 +9,7 @@ def main() -> int:
     ensure_dirs()
     settings = resolve()
     write_launcher_env(settings)
-    models = Path(settings["models.root"] or "")
-    write_extra_model_paths(models)
+    write_extra_model_paths()
     return 0
 
 

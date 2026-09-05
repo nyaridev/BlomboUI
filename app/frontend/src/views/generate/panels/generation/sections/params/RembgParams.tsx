@@ -39,7 +39,7 @@ export function RembgParams() {
           files={rembgFiles}
           onFiles={setRembgFiles}
           className="min-h-48"
-          placeholder="Drop images here, or click to pick"
+          placeholder="Drop or paste images here, or click to pick"
         />
       )}
       <div className="flex min-w-0 flex-col gap-1">

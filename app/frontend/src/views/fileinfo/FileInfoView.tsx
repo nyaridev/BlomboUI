@@ -12,8 +12,8 @@ import {
   type CivitaiVersion,
   type ModelLists,
 } from '@/lib/api.ts'
+import { filesFromClipboard } from '@/lib/clipboardFiles.ts'
 import { civitaiSaveThumbView } from '@/lib/gallery/thumbView.ts'
-import { SAMPLERS, SCHEDULERS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 import { PARAM_KEYS, pickParams, useGenerateStore } from '@/stores/generateStore.ts'
 import { useModelsStore } from '@/stores/modelsStore.ts'
 import { useEffect, useRef, useState, type DragEvent } from 'react'
@@ -24,6 +24,7 @@ import { applyPngInfo, parsePngInfo, pngInfoSendable } from '@/views/fileinfo/pa
 import { SafetensorsInfo } from '@/views/fileinfo/panels/safetensors/SafetensorsInfo.tsx'
 import { embeddedHashes, readSafetensorsMetadata, type SafetensorsMeta } from '@/views/fileinfo/panels/safetensors/safetensors.ts'
 import { allowed, isMedia, isSafetensors, mediaItem, pngModels, revokeItems } from '@/views/fileinfo/fileDrop.ts'
+import { SAMPLERS, SCHEDULERS } from '@/views/generate/panels/generation/sections/params/resolutions.ts'
 
 async function lookupCivitai(hashes: string[]): Promise<CivitaiVersion | null> {
   const seen = new Set<string>()
@@ -54,6 +55,7 @@ export function FileInfoView() {
   const [busy, setBusy] = useState(false)
   const [sending, setSending] = useState(false)
   const [over, setOver] = useState(false)
+  const [hover, setHover] = useState(false)
   const [previewItems, setPreviewItems] = useState<MediaCarouselItem[]>([])
   const mediaFiles = useRef<File[]>([])
   const [library, setLibrary] = useState<{ kind: keyof ModelLists; path: string } | null>(null)
@@ -396,7 +398,7 @@ export function FileInfoView() {
     return () => revokeItems(previewItems)
   }, [previewItems])
 
-  function fromList(files: FileList | null) {
+  function fromList(files: FileList | File[] | null) {
     const list = [...(files || [])].filter(allowed)
     if (!list.length) {
       return
@@ -407,6 +409,25 @@ export function FileInfoView() {
     }
     void onMedia(list.filter(isMedia))
   }
+
+  const fromListRef = useRef(fromList)
+  fromListRef.current = fromList
+
+  useEffect(() => {
+    if (!hover) {
+      return
+    }
+    function onPaste(event: ClipboardEvent) {
+      const next = filesFromClipboard(event)
+      if (!next.length) {
+        return
+      }
+      event.preventDefault()
+      fromListRef.current(next)
+    }
+    document.addEventListener('paste', onPaste)
+    return () => document.removeEventListener('paste', onPaste)
+  }, [hover])
 
   function onDragEnter(event: DragEvent) {
     event.preventDefault()
@@ -441,6 +462,8 @@ export function FileInfoView() {
         'relative flex h-full min-h-0 w-full min-w-0 flex-col overflow-y-auto',
         over ? 'outline outline-2 outline-accent outline-offset-[-2px]' : '',
       ].join(' ')}
+      onPointerEnter={() => setHover(true)}
+      onPointerLeave={() => setHover(false)}
       onDragEnter={onDragEnter}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
@@ -463,7 +486,7 @@ export function FileInfoView() {
           className="flex min-h-full w-full flex-1 cursor-pointer items-center justify-center px-6"
           onClick={() => picker.current?.click()}
         >
-          <p className="text-sm text-muted">Drop images, videos, or a .safetensors file, or click to pick</p>
+          <p className="text-sm text-muted">Drop or paste images, videos, or a .safetensors file, or click to pick</p>
         </button>
       ) : (
         <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-4 overflow-x-clip px-10 py-4">

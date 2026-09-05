@@ -35,6 +35,24 @@ class SettingsTests(unittest.TestCase):
         self.assertFalse(result["civitaiDownload"]["updateModelInfo"])
         self.assertEqual(result["civitaiDownload"]["authorAliases"], {"THEANTLERS": "ta"})
 
+    def test_model_dirs_drop_comfyui(self) -> None:
+        result = settings._clean(
+            {
+                "modelDirs": [
+                    {"id": "local", "name": "Local", "path": ""},
+                    {"id": "comfyui", "name": "ComfyUI", "path": ""},
+                    {"id": "extra", "name": "Extra", "path": "D:/models"},
+                ],
+                "managerDownloadDirId": "comfyui",
+                "civitaiDownload": {"modelDirId": "comfyui", "wildcardDirId": "local"},
+            }
+        )
+
+        self.assertEqual([item["id"] for item in result["modelDirs"]], ["local", "extra"])
+        self.assertNotIn("managerDownloadDirId", result)
+        self.assertEqual(result["civitaiDownload"]["wildcardDirId"], "local")
+        self.assertNotIn("modelDirId", result["civitaiDownload"])
+
     def test_civitai_marks_keeps_text_and_forces_ink(self) -> None:
         result = settings._clean(
             {

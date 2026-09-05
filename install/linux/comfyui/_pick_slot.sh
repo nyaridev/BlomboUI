@@ -11,20 +11,6 @@ pick_comfy_slot() {
 
   : "${COMFY_ROOT:=$ROOT/runtime/comfyui}"
 
-  if [ -n "${COMFYUI_PATH:-}" ]; then
-    : "${COMFY_DIR:=$COMFYUI_PATH}"
-    if [ -z "${COMFY_PYTHON:-}" ]; then
-      if [ -x "$COMFY_DIR/../python_embeded/python" ]; then
-        COMFY_PYTHON="$(CDPATH= cd -- "$COMFY_DIR/../python_embeded" && pwd)/python"
-      elif [ -x "$COMFY_DIR/venv/bin/python" ]; then
-        COMFY_PYTHON="$COMFY_DIR/venv/bin/python"
-      elif [ -x "$COMFY_DIR/.venv/bin/python" ]; then
-        COMFY_PYTHON="$COMFY_DIR/.venv/bin/python"
-      fi
-    fi
-    export COMFY_DIR COMFY_PYTHON
-    return 0
-  fi
   if [ -n "${COMFY_DIR:-}" ] && [ -f "$COMFY_DIR/main.py" ] && [ -n "${COMFY_PYTHON:-}" ] && [ -x "$COMFY_PYTHON" ]; then
     return 0
   fi

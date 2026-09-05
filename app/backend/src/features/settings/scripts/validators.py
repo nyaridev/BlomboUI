@@ -130,7 +130,7 @@ def _civitai_download(raw: dict[str, Any]) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for key in ("modelDirId", "wildcardDirId"):
         value = str(raw.get(key) or "").strip()[:80]
-        if value and "/" not in value and "\\" not in value:
+        if value and value != "comfyui" and "/" not in value and "\\" not in value:
             out[key] = value
     for key in (
         "modelIntelligent",
@@ -368,7 +368,7 @@ def _dir_list(raw: Any) -> list[dict[str, str]] | None:
         ident = str(item.get("id") or "").strip()[:80]
         name = str(item.get("name") or "").strip()[:40]
         path = str(item.get("path") or "").strip()[:500]
-        if not ident or not name or ident in seen:
+        if not ident or ident == "comfyui" or not name or ident in seen:
             continue
         if any(ch in name for ch in '/\\'):
             continue

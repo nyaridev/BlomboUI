@@ -166,7 +166,6 @@ export type UserSettings = {
 
 export type AppPaths = {
   models: string
-  comfyModels?: string
   wildcards: string
   output: string
   userName: string

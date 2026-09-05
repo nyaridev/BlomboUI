@@ -18,6 +18,10 @@ class ExtraModelPathsTests(unittest.TestCase):
         self.assertIn("    upscale_models: upscale_models", text)
         self.assertIn("    vae_approx: vae_approx", text)
         self.assertIn("    clip_vision: clip_vision", text)
+        self.assertIn("    LLM: LLM", text)
+        self.assertIn("    audio_encoders: audio_encoders", text)
+        self.assertIn("    model_patches: model_patches", text)
+        self.assertIn("    latent_upscale_models: latent_upscale_models", text)
         for name in MODEL_SUBDIRS:
             self.assertIn(f"    {name}: {name}", text)
 
@@ -31,6 +35,13 @@ class ExtraModelPathsTests(unittest.TestCase):
 
         self.assertTrue(text.startswith("My_Models:\n"))
         self.assertEqual(yaml_ident("My Models"), "My_Models")
+
+    def test_write_file_drops_yaml_when_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            dest = Path(tmp) / "extra_model_paths.yaml"
+            dest.write_text("stale:\n", encoding="utf-8")
+            write_file(dest, [])
+            self.assertFalse(dest.exists())
 
 
 if __name__ == "__main__":

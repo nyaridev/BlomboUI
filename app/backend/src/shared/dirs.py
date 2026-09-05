@@ -8,7 +8,7 @@ import threading
 from pathlib import Path
 
 from features.settings import service as settings
-from config import RUNTIME, USER, active_profile_id, models_root, outputs_root, set_output_override, wildcards_root, comfy_models_root
+from config import RUNTIME, USER, active_profile_id, models_root, outputs_root, set_output_override, wildcards_root
 from shared.extra_model_paths import write_file as write_extra_model_paths_file
 
 _PICK_LOCK = threading.Lock()
@@ -47,12 +47,6 @@ def extra_dirs(key: str) -> list[dict[str, str]]:
         folder = norm_dir(str(root))
         if folder:
             paths.add(folder)
-    if key == "modelDirs":
-        folder = norm_dir(str(comfy_models_root()))
-        if folder and folder not in paths:
-            paths.add(folder)
-            names.add("comfyui")
-            out.append({"id": COMFY_ID, "name": "ComfyUI", "path": str(comfy_models_root().resolve())})
     for item in stored_dirs(key):
         if item["id"] in {LOCAL_ID, COMFY_ID} or item["name"].lower() in _RESERVED:
             continue
@@ -93,8 +87,8 @@ def extra_root(key: str, name: str) -> Path | None:
 
 def listed_dirs(key: str) -> list[dict[str, str]]:
     if key == "modelDirs":
-        rows = _with_locked(stored_dirs(key), LOCAL_ID, "Local", models_root())
-        return _with_locked(rows, COMFY_ID, "ComfyUI", comfy_models_root(), default_index=1)
+        rows = [item for item in stored_dirs(key) if item["id"] != COMFY_ID]
+        return _with_locked(rows, LOCAL_ID, "Local", models_root())
     if key == "wildcardDirs":
         return _with_locked(stored_dirs(key), LOCAL_ID, "Local", wildcards_root())
     if key == "galleryDirs":
@@ -149,7 +143,6 @@ def _local_root(key: str) -> Path | None:
 def resolved() -> dict[str, str]:
     return {
         "models": str(models_root().resolve()),
-        "comfyModels": str(comfy_models_root().resolve()),
         "wildcards": str(wildcards_root().resolve()),
         "output": str(outputs_root().resolve()),
         "userName": getpass.getuser() or "User",
@@ -177,7 +170,7 @@ def apply_output_override() -> None:
 
 def write_extra_model_paths() -> Path:
     dest = RUNTIME / "data" / "extra_model_paths.yaml"
-    roots: list[tuple[str, Path]] = [("blomboui", models_root())]
+    roots: list[tuple[str, Path]] = []
     for item in extra_dirs("modelDirs"):
         if item["id"] == COMFY_ID:
             continue

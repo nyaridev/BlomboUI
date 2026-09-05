@@ -6,10 +6,7 @@
 
 # PYTHON=
 # GIT=
-# VENV_DIR=
-# COMFYUI_PATH=
 # MODELS_ROOT=
-# OUTPUTS_ROOT=
 # WILDCARDS_ROOT=
 
 COMMANDLINE_ARGS="--uv --hot_reload_vite"
@@ -34,7 +31,7 @@ COMFYUI_ARGS=""
 # -----------------------------------------------------------------------------
 
 export COMMANDLINE_ARGS COMFYUI_ARGS
-export PYTHON GIT VENV_DIR COMFYUI_PATH MODELS_ROOT OUTPUTS_ROOT WILDCARDS_ROOT
+export PYTHON GIT MODELS_ROOT WILDCARDS_ROOT
 if [ "${BLOMBO_LOAD_SETTINGS_ONLY:-}" = 1 ]; then
   return 0 2>/dev/null || exit 0
 fi

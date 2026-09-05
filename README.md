@@ -32,7 +32,7 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
     cd BlomboUI
     ```
 
-2. Optional: edit `webui-user.bat` (paths, `COMMANDLINE_ARGS`). Already have ComfyUI? Set `COMFYUI_PATH`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
+2. Optional: edit `webui-user.bat` (`COMMANDLINE_ARGS`, `MODELS_ROOT`, `WILDCARDS_ROOT`). See [Configuration](#configuration).
 
 3. Double-click `webui-user.bat`.
 
@@ -51,7 +51,7 @@ Thin desktop UI. Graphs stay in ComfyUI. Two Python environments on purpose: the
     cd BlomboUI
     ```
 
-2. Optional: edit `webui-user.sh` (paths, `COMMANDLINE_ARGS`). Already have ComfyUI? Set `COMFYUI_PATH`. Point models at another folder with `MODELS_ROOT`. See [Configuration](#configuration).
+2. Optional: edit `webui-user.sh` (`COMMANDLINE_ARGS`, `MODELS_ROOT`, `WILDCARDS_ROOT`). See [Configuration](#configuration).
 
 3. Make the launcher executable and run it:
 
@@ -134,15 +134,14 @@ Edit `webui-user.bat` or `webui-user.sh`. Do not edit the files under `install/`
 
 ### Paths
 
-| Variable         | Default                                      |
-| ---------------- | -------------------------------------------- |
-| `COMFYUI_PATH`   | bundled slot under `runtime/comfyui/<slot>/` |
-| `MODELS_ROOT`    | `./user/models`                              |
-| `OUTPUTS_ROOT`   | `./user/output`                              |
-| `WILDCARDS_ROOT` | `./user/wildcards`                           |
-| `VENV_DIR`       | `runtime/.venv`                              |
+| Variable         | Default            |
+| ---------------- | ------------------ |
+| `MODELS_ROOT`    | `./user/models`    |
+| `WILDCARDS_ROOT` | `./user/wildcards` |
 
-Launch asks which ComfyUI slot to use (`latest`, `0.28.0`, or a folder you add). `latest` is always listed first. Enter repeats the last choice (`runtime/comfyui/selected`). Each slot is `runtime/comfyui/<slot>/ComfyUI` plus that slot’s Python. Copy a file in `install/windows/comfyui/versions` or `install/linux/comfyui/versions` to add a combo (`COMFY_SLOT`, `COMFYUI_REF`, `COMFY_TORCH`, optional `COMFYUI_ARGS`). Uncomment `COMFYUI_ARGS` in a version file to override `webui-user` for that slot. `COMFYUI_PATH` skips the picker and uses an existing install.
+`MODELS_ROOT` is both Local models and ComfyUI’s models directory (checkpoints, LoRAs, LLM, SEEDVR2, sams, ultralytics, and the rest). Output is set in the app under Settings → Files → Output, per profile.
+
+Launch asks which ComfyUI slot to use (`latest`, `0.28.0`, or a folder you add). `latest` is always listed first. Enter repeats the last choice (`runtime/comfyui/selected`). Each slot is `runtime/comfyui/<slot>/ComfyUI` plus that slot’s Python. Copy a file in `install/windows/comfyui/versions` or `install/linux/comfyui/versions` to add a combo (`COMFY_SLOT`, `COMFYUI_REF`, `COMFY_TORCH`, optional `COMFYUI_ARGS`). Uncomment `COMFYUI_ARGS` in a version file to override `webui-user` for that slot.
 
 ### App flags (`COMMANDLINE_ARGS`)
 

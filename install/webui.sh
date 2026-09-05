@@ -4,13 +4,9 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 # shellcheck source=linux/_ui.sh
 . "$ROOT/install/linux/_ui.sh"
 
-if [ -n "${COMFYUI_PATH:-}" ]; then
-  COMFY_EXTERNAL=1
-fi
-
 PYTHON="${PYTHON:-python3}"
 GIT="${GIT:-git}"
-VENV_DIR="${VENV_DIR:-$ROOT/runtime/.venv}"
+VENV_DIR="$ROOT/runtime/.venv"
 BACKEND_HOST="${BACKEND_HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-4173}"
 FRONTEND_HOST="${FRONTEND_HOST:-127.0.0.1}"
@@ -94,11 +90,6 @@ resolve_comfy_python() {
   fi
 }
 
-if [ -n "${COMFYUI_PATH:-}" ]; then
-  COMFY_DIR="$COMFYUI_PATH"
-  resolve_comfy_python
-fi
-
 BACKEND_PID=""
 FRONTEND_PID=""
 COMFY_PID=""
@@ -136,20 +127,13 @@ if [ -z "${MODELS_ROOT:-}" ]; then
   export MODELS_ROOT
 fi
 
-if [ -z "${COMFYUI_PATH:-}" ]; then
-  ui_section "ComfyUI version"
-  # shellcheck source=linux/comfyui/_pick_slot.sh
-  . "$ROOT/install/linux/comfyui/_pick_slot.sh"
-  pick_comfy_slot || exit 1
-  resolve_comfy_python
-fi
+ui_section "ComfyUI version"
+# shellcheck source=linux/comfyui/_pick_slot.sh
+. "$ROOT/install/linux/comfyui/_pick_slot.sh"
+pick_comfy_slot || exit 1
+resolve_comfy_python
 
 if [ ! -f "$COMFY_DIR/main.py" ]; then
-  if [ -n "${COMFYUI_PATH:-}" ]; then
-    ui_error "COMFYUI_PATH does not contain ComfyUI."
-    ui_info "Missing: $COMFY_DIR/main.py"
-    exit 1
-  fi
   ui_section "ComfyUI install"
   ui_info "ComfyUI was not found. Installing..."
   "$ROOT/install/linux/comfyui/install_comfyui.sh" || exit 1
@@ -160,15 +144,12 @@ fi
 
 if [ -z "$COMFY_PYTHON" ]; then
   ui_error "ComfyUI Python was not found."
-  ui_info "Run install/linux/comfyui/install_comfyui.sh, or point COMFYUI_PATH at a portable ComfyUI."
+  ui_info "Run install/linux/comfyui/install_comfyui.sh."
   exit 1
 fi
 
 mkdir -p "$ROOT/runtime/tmp" "$COMFY_OUT"
-if [ -z "${COMFYUI_PATH:-}" ]; then
-  COMFYUI_PATH="$COMFY_DIR"
-fi
-export COMFY_DIR COMFY_PYTHON COMFYUI_PATH
+export COMFY_DIR COMFY_PYTHON
 
 if ! "$VENV_PYTHON" -m bootstrap; then
   ui_error "Could not write launcher environment files."
@@ -208,17 +189,15 @@ elif [ -n "${DEV_DEBUG:-}" ]; then
   ui_ok "ComfyUI custom nodes are already installed."
 fi
 
-if [ -z "${COMFY_EXTERNAL:-}" ]; then
-  if [ -n "${DEV_DEBUG:-}" ]; then
-    ui_section "CUDA Torch"
-  fi
-  if ! "$COMFY_PYTHON" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
-    ui_warn "CUDA Torch was not found. Installing CUDA Torch ${COMFY_TORCH:-2.10.0+cu130}..."
-    TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
-    "$TORCH_SH" || exit 1
-  elif [ -n "${DEV_DEBUG:-}" ]; then
-    ui_ok "CUDA Torch is available."
-  fi
+if [ -n "${DEV_DEBUG:-}" ]; then
+  ui_section "CUDA Torch"
+fi
+if ! "$COMFY_PYTHON" -I -c "import torch; raise SystemExit(0 if torch.cuda.is_available() else 1)" >/dev/null 2>&1; then
+  ui_warn "CUDA Torch was not found. Installing CUDA Torch ${COMFY_TORCH:-2.10.0+cu130}..."
+  TORCH_SH="$ROOT/install/linux/comfyui/torch/${COMFY_TORCH:-2.10.0+cu130}.sh"
+  "$TORCH_SH" || exit 1
+elif [ -n "${DEV_DEBUG:-}" ]; then
+  ui_ok "CUDA Torch is available."
 fi
 
 if ! "$COMFY_PYTHON" -I -c "from llama_cpp.llama_chat_format import Qwen3VLChatHandler" >/dev/null 2>&1 \

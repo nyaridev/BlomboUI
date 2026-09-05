@@ -2,17 +2,12 @@
 :: Resolve COMFY_SLOT / COMFY_DIR / COMFY_PYTHON.
 ::   call _pick_slot.bat           prompt (Enter = last)
 ::   call _pick_slot.bat /selected last slot only; prompt if none
-:: Skips when COMFYUI_PATH is set, or when COMFY_DIR + COMFY_PYTHON already work.
+:: Skips when COMFY_DIR + COMFY_PYTHON already work.
 
 if not defined ROOT for %%I in ("%~dp0..\..\..") do set ROOT=%%~fI
 if not defined COMFY_ROOT set COMFY_ROOT=%ROOT%\runtime\comfyui
 set VERSIONS=%~dp0versions
 
-if defined COMFYUI_PATH if not defined COMFY_DIR for %%I in (%COMFYUI_PATH%) do set COMFY_DIR=%%~fI
-if defined COMFYUI_PATH if not defined COMFY_PYTHON if exist "%COMFY_DIR%\..\python_embeded\python.exe" for %%I in ("%COMFY_DIR%\..\python_embeded\python.exe") do set COMFY_PYTHON=%%~fI
-if defined COMFYUI_PATH if not defined COMFY_PYTHON if exist "%COMFY_DIR%\venv\Scripts\python.exe" set COMFY_PYTHON=%COMFY_DIR%\venv\Scripts\python.exe
-if defined COMFYUI_PATH if not defined COMFY_PYTHON if exist "%COMFY_DIR%\.venv\Scripts\python.exe" set COMFY_PYTHON=%COMFY_DIR%\.venv\Scripts\python.exe
-if defined COMFYUI_PATH exit /b 0
 if defined COMFY_DIR if exist "%COMFY_DIR%\main.py" if defined COMFY_PYTHON if exist "%COMFY_PYTHON%" exit /b 0
 
 if not exist "%COMFY_ROOT%\" mkdir "%COMFY_ROOT%"

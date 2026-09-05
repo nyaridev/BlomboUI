@@ -125,7 +125,7 @@ export function CivitaiSection({
   } else if (status === 'idle') {
     body = (
       <Message onClick={onPick}>
-        <p className="text-sm text-muted">Drop images, videos, or a .safetensors file, or click to pick</p>
+        <p className="text-sm text-muted">Drop or paste images, videos, or a .safetensors file, or click to pick</p>
       </Message>
     )
   } else if (status === 'looking') {

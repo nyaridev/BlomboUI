@@ -25,3 +25,5 @@ user/
 Thumbs.db
 .idea/
 .vscode/
+
+webui-user-local.bat

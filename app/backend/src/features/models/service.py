@@ -3,6 +3,7 @@ from __future__ import annotations
 from features.models.scripts.hashes import start, stop, warm
 from features.models.scripts.model_meta import delete_thumb, save_thumb, set_info, thumb_media, thumb_mtime
 from features.models.scripts.model_thumbs import drop_scope, list_saved, resolved_file
+from features.models.scripts.model_sidecar import restore_all
 from features.models.scripts.manager_catalog import CatalogError as ManagerCatalogError
 from features.models.scripts.manager_catalog import install as install_manager_model
 from features.models.scripts.manager_catalog import list_models as list_manager_models
@@ -65,6 +66,7 @@ __all__ = [
     "read_thumb_meta",
     "refresh_models",
     "resolved_file",
+    "restore_all",
     "save_thumb",
     "set_info",
     "start",

@@ -80,6 +80,8 @@ CREATE TABLE IF NOT EXISTS thumbnail_index (
     context TEXT NOT NULL,
     mtime INTEGER NOT NULL DEFAULT 0,
     tags_json TEXT NOT NULL DEFAULT '[]',
+    file TEXT NOT NULL DEFAULT '',
+    raw TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (kind, ident, context)
 );
 CREATE TABLE IF NOT EXISTS download_history (
@@ -166,8 +168,17 @@ def connect() -> sqlite3.Connection:
             _CONN.execute("PRAGMA foreign_keys = ON")
             _CONN.execute("PRAGMA journal_mode=WAL")
             _CONN.executescript(SCHEMA)
+            _migrate_columns(_CONN)
             _CONN.commit()
         return _CONN
+
+
+def _migrate_columns(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(thumbnail_index)")}
+    if "file" not in cols:
+        conn.execute("ALTER TABLE thumbnail_index ADD COLUMN file TEXT NOT NULL DEFAULT ''")
+    if "raw" not in cols:
+        conn.execute("ALTER TABLE thumbnail_index ADD COLUMN raw TEXT NOT NULL DEFAULT ''")
 
 
 def execute(sql: str, params: tuple | list = ()) -> sqlite3.Cursor:

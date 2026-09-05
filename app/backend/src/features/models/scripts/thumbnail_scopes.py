@@ -108,6 +108,34 @@ def create_scope(raw: dict[str, Any]) -> dict[str, Any]:
     return dict(row)
 
 
+def ensure_scope(raw: dict[str, Any]) -> tuple[dict[str, Any] | None, bool]:
+    ident = str(raw.get("id") or "").strip().lower()
+    name = str(raw.get("name") or "").strip()
+    group = str(raw.get("group") or "").strip().lower()
+    if ident == GLOBAL_ID:
+        return None, False
+    if ident and _ID.fullmatch(ident):
+        existing = get_scope(ident)
+        if existing and existing["id"] != GLOBAL_ID:
+            return existing, False
+    rows = _load()
+    if name:
+        for item in rows:
+            if item["name"].strip().lower() == name.lower() and str(item.get("group") or "").strip().lower() == group:
+                return dict(item), False
+        hits = [item for item in rows if item["name"].strip().lower() == name.lower()]
+        if hits:
+            return dict(hits[0]), False
+    if name and ident and _ID.fullmatch(ident):
+        row = _row(raw, ident)
+        if row["name"]:
+            _store(row)
+            return dict(row), True
+    if name:
+        return create_scope(raw), True
+    return None, False
+
+
 def update_scope(ident: str, raw: dict[str, Any]) -> dict[str, Any]:
     name = str(ident or "").strip().lower()
     if name == GLOBAL_ID:

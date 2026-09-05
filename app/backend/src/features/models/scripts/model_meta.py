@@ -247,7 +247,29 @@ def set_info(
     row["modified"] = int(time.time())
     data[ident] = row
     _write(kind, data)
+    from features.models.scripts import model_sidecar
+
+    model_sidecar.write_info(kind, ident, row)
     return _info_out(row)
+
+
+def apply_cache(kind: str, rel: str, info: dict) -> None:
+    ident = _file_ident(rel)
+    if not ident:
+        return
+    data = _load(kind)
+    row = data.get(ident) or _blank_row()
+    row["types"] = _clean_types(info.get("types"))
+    row["prompt"] = str(info.get("prompt") or "")
+    row["negative_prompt"] = str(info.get("negative_prompt") or "")
+    row["notes"] = str(info.get("notes") or "")
+    row["strength"] = _strength(info.get("strength"))
+    row["slider"] = bool(info.get("slider"))
+    row["auto_apply"] = info.get("auto_apply") if isinstance(info.get("auto_apply"), bool) else None
+    row["apply_at"] = info.get("apply_at") if info.get("apply_at") in {"start", "end"} else None
+    row["modified"] = int(time.time())
+    data[ident] = row
+    _write(kind, data)
 
 
 def thumb_file(kind: str, rel: str, context: str = model_thumbs.GLOBAL) -> Path | None:
@@ -304,7 +326,13 @@ def take_bundle(kind: str, ident: str, dest: Path) -> dict[str, dict]:
             keep[key] = row
     if taken:
         _write(kind, keep)
-    model_thumbs.take(kind, src, dest)
+    from features.models.scripts.model_thumb_storage import drop_ident, load_index
+
+    rows = load_index().get(kind)
+    if isinstance(rows, dict):
+        for key in list(rows):
+            if _key_matches(str(key), src):
+                drop_ident(kind, str(key))
     return taken
 
 
@@ -320,7 +348,8 @@ def put_bundle(kind: str, rows: dict[str, dict], thumbs: Path) -> None:
             changed = True
         if changed:
             _write(kind, data)
-    model_thumbs.put(kind, thumbs)
+    if thumbs.is_dir():
+        model_thumbs.put(kind, thumbs)
 
 
 def reconcile(kind: str, present: list[str]) -> None:

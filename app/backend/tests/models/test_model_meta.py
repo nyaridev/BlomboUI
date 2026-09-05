@@ -11,6 +11,7 @@ from PIL import Image
 
 from infrastructure.storage import user as db
 from features.models.scripts import model_meta
+from features.models.scripts import model_sidecar
 from infrastructure.storage.repositories import model_meta as model_meta_db
 from features.models.scripts import model_thumb_storage
 from features.models.scripts import model_thumbs
@@ -26,11 +27,11 @@ def _png() -> bytes:
 class ModelMetaTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
-        self.new_thumbs = self.tmp / "model_thumbs"
+        self.files = self.tmp / "files"
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
-            patch.object(model_thumbs, "THUMBS", self.new_thumbs),
+            patch.object(model_sidecar, "FILES", self.files),
         ]
         for item in self.patches:
             item.start()
@@ -61,15 +62,17 @@ class ModelMetaTests(unittest.TestCase):
     def test_move_thumbs_merges_when_dest_folder_already_exists(self) -> None:
         old = "Models_001/Illustrious/Style/LuL1ZS/l1zs_life_is_pi.safetensors"
         new = "External/Illustrious/Style/LuL1ZS/l1zs_life_is_pi.safetensors"
-        src = self.new_thumbs / "loras" / Path(old)
-        src.mkdir(parents=True)
-        (src / "global.jpg").write_bytes(_png())
-        dest = self.new_thumbs / "loras" / Path(new)
+        src = model_sidecar.data_dir("loras", old)
+        assert src is not None
+        (src / "thumbs").mkdir(parents=True)
+        (src / "thumbs" / "global.jpg").write_bytes(_png())
+        dest = model_sidecar.data_dir("loras", new)
+        assert dest is not None
         dest.mkdir(parents=True)
         model_thumbs.move_thumbs("loras", old, new)
         self.assertFalse(src.exists())
-        self.assertTrue((dest / "global.jpg").is_file())
-        self.assertFalse((dest / Path(old).name).exists())
+        self.assertTrue((dest / "thumbs" / "global.jpg").is_file())
+        self.assertFalse((dest / "thumbs" / Path(old).name).exists())
 
     def test_rebuild_index_drops_missing_files(self) -> None:
         model_meta_db.replace_thumb_index(
@@ -95,6 +98,39 @@ class ModelMetaTests(unittest.TestCase):
         info = model_meta.get_info("loras", "style.safetensors")
         self.assertIsNone(info["auto_apply"])
         self.assertEqual(info["apply_at"], "end")
+
+    def test_set_info_writes_sidecar_json(self) -> None:
+        import json
+
+        model = self.files / "loras" / "style.safetensors"
+        model.parent.mkdir(parents=True)
+        model.write_bytes(b"x")
+        model_meta.set_info("loras", "style.safetensors", ["Pony"], notes="hello", prompt="tag")
+        path = model_sidecar.json_path("loras", "style.safetensors")
+        self.assertTrue(path and path.is_file())
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(data["info"]["notes"], "hello")
+        self.assertEqual(data["info"]["prompt"], "tag")
+        self.assertEqual(data["info"]["types"], ["Pony"])
+
+    def test_restore_rematch_creates_missing_scope(self) -> None:
+        from features.models.scripts import thumbnail_scopes
+
+        model = self.files / "loras" / "char.safetensors"
+        model.parent.mkdir(parents=True)
+        model.write_bytes(b"x")
+        ruby = thumbnail_scopes.create_scope({"name": "Ruby", "group": "characters", "anyGroups": [["ruby"]]})
+        model_thumbs.save_thumb("loras", "char.safetensors", _png(), ruby["id"], {"tags": ["ruby"]})
+        thumbnail_scopes.delete_scope(ruby["id"])
+        model_meta_db.replace_info("loras", {})
+        model_thumb_storage.write_index({})
+        result = model_sidecar.restore_all()
+        self.assertGreaterEqual(result["models"], 1)
+        self.assertGreaterEqual(result["thumbs"], 1)
+        self.assertGreaterEqual(result["scopesCreated"], 1)
+        names = [row["name"] for row in thumbnail_scopes.list_scopes()]
+        self.assertIn("Ruby", names)
+        self.assertTrue(model_thumbs.contexts("loras", "char.safetensors"))
 
 
 if __name__ == "__main__":

@@ -15,6 +15,7 @@ from infrastructure.storage import user as db
 
 from features.issues import service as issues
 from features.gallery.scripts import removed
+from features.models.scripts import model_sidecar
 from features.models.scripts import model_thumbs
 from features.models.scripts import thumbnail_embed
 from features.models.scripts import thumbnail_scopes
@@ -30,12 +31,12 @@ def _png(color=(12, 80, 160)) -> bytes:
 class ScopeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
-        thumbs = self.tmp / "model_thumbs"
+        self.files = self.tmp / "files"
         trash = self.tmp / "removed"
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
-            patch.object(model_thumbs, "THUMBS", thumbs),
+            patch.object(model_sidecar, "FILES", self.files),
             patch.object(removed, "REMOVED", trash),
         ]
         for item in self.patches:

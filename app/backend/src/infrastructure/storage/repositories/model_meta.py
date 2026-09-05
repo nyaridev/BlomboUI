@@ -67,7 +67,7 @@ def replace_info(kind: str, data: dict[str, dict[str, Any]]) -> None:
 def load_thumb_index() -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
     out: dict[str, dict[str, dict[str, dict[str, Any]]]] = {}
     for row in db.query(
-        "SELECT kind, ident, context, mtime, tags_json FROM thumbnail_index ORDER BY rowid"
+        "SELECT kind, ident, context, mtime, tags_json, file, raw FROM thumbnail_index ORDER BY rowid"
     ):
         try:
             tags = json.loads(row["tags_json"])
@@ -78,6 +78,8 @@ def load_thumb_index() -> dict[str, dict[str, dict[str, dict[str, Any]]]]:
         ] = {
             "mtime": int(row["mtime"] or 0),
             "tags": tags if isinstance(tags, list) else [],
+            "file": str(row["file"] or "") if "file" in row.keys() else "",
+            "raw": str(row["raw"] or "") if "raw" in row.keys() else "",
         }
     return out
 
@@ -97,8 +99,8 @@ def replace_thumb_index(data: dict[str, Any]) -> None:
                     tags = row.get("tags") if isinstance(row.get("tags"), list) else []
                     conn.execute(
                         """
-                        INSERT INTO thumbnail_index (kind, ident, context, mtime, tags_json)
-                        VALUES (?, ?, ?, ?, ?)
+                        INSERT INTO thumbnail_index (kind, ident, context, mtime, tags_json, file, raw)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             str(kind),
@@ -106,6 +108,8 @@ def replace_thumb_index(data: dict[str, Any]) -> None:
                             str(context),
                             int(row.get("mtime") or 0),
                             json.dumps(tags),
+                            str(row.get("file") or ""),
+                            str(row.get("raw") or ""),
                         ),
                     )
 

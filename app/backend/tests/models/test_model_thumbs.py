@@ -10,6 +10,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from infrastructure.storage import user as db
+from features.models.scripts import model_sidecar
 from features.models.scripts import model_thumbs
 from features.models.scripts import thumbnail_scopes
 from features.settings import service as settings
@@ -25,11 +26,11 @@ def _png(size=(16, 16), color=(12, 80, 160)) -> bytes:
 class ThumbEncodeTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = Path(tempfile.mkdtemp())
-        thumbs = self.tmp / "model_thumbs"
+        self.files = self.tmp / "files"
         self.patches = [
             patch.object(db, "_CONN", None),
             patch.object(db, "db_path", return_value=self.tmp / "blombo.sqlite"),
-            patch.object(model_thumbs, "THUMBS", thumbs),
+            patch.object(model_sidecar, "FILES", self.files),
         ]
         for item in self.patches:
             item.start()

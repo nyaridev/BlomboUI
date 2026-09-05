@@ -287,6 +287,14 @@ export async function deleteModelThumb(
   return data.thumb
 }
 
+export async function restoreModelData(): Promise<{ models: number; thumbs: number; scopesCreated: number }> {
+  const res = await fetch(api('/user-models/restore-data'), { method: 'POST' })
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  return (await res.json()) as { models: number; thumbs: number; scopesCreated: number }
+}
+
 export async function refreshModels(kind?: keyof ModelLists, view?: ThumbView): Promise<Partial<ModelLists>> {
   const extra: Record<string, string> = {}
   if (kind) {

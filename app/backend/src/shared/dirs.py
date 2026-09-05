@@ -148,6 +148,7 @@ def _local_root(key: str) -> Path | None:
 
 def resolved() -> dict[str, str]:
     return {
+        "models": str(models_root().resolve()),
         "comfyModels": str(comfy_models_root().resolve()),
         "wildcards": str(wildcards_root().resolve()),
         "output": str(outputs_root().resolve()),

@@ -5,7 +5,6 @@ from io import BytesIO
 from pathlib import Path
 from typing import Any
 
-from infrastructure.storage.repositories import model_meta as model_meta_db
 from config import model_thumbs_root
 from features.models.scripts import thumbnail_embed
 from features.models.scripts import thumbnail_scopes
@@ -20,6 +19,7 @@ from .model_thumb_storage import (
     set_index,
     write_index,
 )
+from features.models.scripts import model_sidecar
 
 ROOT = None
 THUMBS = None
@@ -53,6 +53,9 @@ def thumbs_root() -> Path:
 
 
 def thumb_dir(kind: str, ident: str) -> Path:
+    folder = model_sidecar.thumbs_dir(kind, ident)
+    if folder is not None:
+        return folder
     return thumbs_root() / kind / ident
 
 
@@ -67,6 +70,14 @@ def raw_paths(kind: str, ident: str, context: str = GLOBAL) -> list[Path]:
 
 
 def thumb_at(kind: str, ident: str, context: str = GLOBAL) -> Path | None:
+    folder = thumb_dir(kind, ident)
+    row = ident_index(kind, ident).get(context)
+    if isinstance(row, dict):
+        name = str(row.get("file") or "")
+        if name:
+            path = folder / name
+            if path.is_file():
+                return path
     for path in thumb_paths(kind, ident, context):
         if path.is_file():
             return path
@@ -246,7 +257,14 @@ def save_thumb(
         if old != dest and old.is_file():
             old.unlink()
     stamp = int(dest.stat().st_mtime)
-    set_index(kind, ident, key, stamp, payload.get("tags") if isinstance(payload.get("tags"), list) else [])
+    tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
+    raw_name = ""
+    for item in raw_paths(kind, ident, key):
+        if item.is_file():
+            raw_name = item.name
+            break
+    set_index(kind, ident, key, stamp, tags, dest.name, raw_name)
+    model_sidecar.record_thumb(kind, ident, key, dest.name, raw_name, tags)
     return stamp
 
 
@@ -257,18 +275,20 @@ def delete_thumb(kind: str, rel: str, context: str | None = None, all_contexts: 
     if all_contexts:
         folder = thumb_dir(kind, ident)
         if folder.is_dir():
-            for path in list(folder.glob("*")):
+            for path in list(folder.rglob("*")):
                 if path.is_file():
                     path.unlink(missing_ok=True)
-            prune_empty(folder, thumbs_root() / kind)
         drop_ident(kind, ident)
+        model_sidecar.clear_thumb(kind, ident, all_contexts=True)
+        _prune_thumb_dir(kind, ident)
         return
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context or GLOBAL))
     for path in [*thumb_paths(kind, ident, key), *raw_paths(kind, ident, key)]:
         if path.is_file():
             path.unlink()
     drop_context(kind, ident, key)
-    prune_empty(thumb_dir(kind, ident), thumbs_root() / kind)
+    model_sidecar.clear_thumb(kind, ident, key)
+    _prune_thumb_dir(kind, ident)
 
 
 def drop_scope(scope_id: str) -> None:
@@ -278,7 +298,6 @@ def drop_scope(scope_id: str) -> None:
     data = load_index()
     changed = False
     for kind, rows in list(data.items()):
-        root = thumbs_root() / kind
         if not isinstance(rows, dict):
             continue
         for ident, contexts in list(rows.items()):
@@ -292,10 +311,11 @@ def drop_scope(scope_id: str) -> None:
                     if path.is_file():
                         path.unlink()
                 contexts.pop(key, None)
+                model_sidecar.clear_thumb(kind, ident, key)
                 changed = True
             if not contexts:
                 rows.pop(ident, None)
-                prune_empty(thumb_dir(kind, ident), root)
+                _prune_thumb_dir(kind, ident)
         if not rows:
             data.pop(kind, None)
     if changed:
@@ -303,17 +323,10 @@ def drop_scope(scope_id: str) -> None:
 
 
 def iter_idents(kind: str) -> list[str]:
-    folder = thumbs_root() / kind
-    if not folder.is_dir():
-        return []
-    out: list[str] = []
-    for path in folder.rglob("*"):
-        if not path.is_file():
-            continue
-        ident = _ident_of(folder, path)
-        if ident and ident not in out:
-            out.append(ident)
-    return out
+    rows = load_index().get(kind)
+    if isinstance(rows, dict):
+        return list(rows)
+    return []
 
 
 def move_thumbs(kind: str, old: str, new: str) -> None:
@@ -331,6 +344,9 @@ def move_thumbs(kind: str, old: str, new: str) -> None:
         return None
 
     idents = [ident for ident in iter_idents(kind) if mapped(ident)]
+    if mapped(src_ident):
+        idents.append(src_ident)
+    idents = list(dict.fromkeys(idents))
     idents.sort(key=len, reverse=True)
     for ident in idents:
         nxt = mapped(ident)
@@ -360,7 +376,6 @@ def take(kind: str, ident: str, dest: Path) -> None:
     if not src:
         return
     dest.mkdir(parents=True, exist_ok=True)
-    root = thumbs_root() / kind
     for thumb_ident in list(iter_idents(kind)):
         if thumb_ident != src and not thumb_ident.startswith(src + "#"):
             continue
@@ -370,36 +385,42 @@ def take(kind: str, ident: str, dest: Path) -> None:
         for file in list(folder.iterdir()):
             if not file.is_file():
                 continue
-            try:
-                rel = file.relative_to(root)
-            except ValueError:
-                rel = Path(thumb_ident) / file.name
-            out = dest / rel
+            out = dest / Path(thumb_ident) / file.name
             out.parent.mkdir(parents=True, exist_ok=True)
             relocate(file, out)
-        prune_empty(folder, root)
         drop_ident(kind, thumb_ident)
+        model_sidecar.clear_thumb(kind, thumb_ident, all_contexts=True)
+        _prune_thumb_dir(kind, thumb_ident)
 
 
 def put(kind: str, thumbs: Path) -> None:
     if not thumbs.is_dir():
         return
-    root = thumbs_root() / kind
-    root.mkdir(parents=True, exist_ok=True)
     for file in thumbs.rglob("*"):
         if not file.is_file():
             continue
-        dest = root / file.relative_to(thumbs)
+        rel = file.relative_to(thumbs).as_posix()
+        ident = str(Path(rel).parent.as_posix()).replace("\\", "/")
+        ident = _ident(ident) or ""
+        if not ident:
+            continue
+        dest = thumb_dir(kind, ident) / file.name
         dest.parent.mkdir(parents=True, exist_ok=True)
         if dest.exists():
             continue
         relocate(file, dest)
-        ident = _ident_of(root, dest)
         context = _context_of(dest)
-        if ident and context:
-            payload = thumbnail_embed.read_file(dest)
-            tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
-            set_index(kind, ident, context, _mtime(dest), tags)
+        if not ident or not context:
+            continue
+        payload = thumbnail_embed.read_file(dest)
+        tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
+        raw_name = ""
+        for item in raw_paths(kind, ident, context):
+            if item.is_file():
+                raw_name = item.name
+                break
+        set_index(kind, ident, context, _mtime(dest), tags, dest.name, raw_name)
+        model_sidecar.record_thumb(kind, ident, context, dest.name, raw_name, tags)
 
 
 def contexts(kind: str, rel: str) -> dict[str, dict[str, Any]]:
@@ -455,26 +476,7 @@ def list_saved() -> list[dict[str, Any]]:
 
 
 def rebuild_index() -> None:
-    data: dict[str, dict[str, dict[str, Any]]] = {}
-    if thumbs_root().is_dir():
-        for kind_dir in thumbs_root().iterdir():
-            if not kind_dir.is_dir():
-                continue
-            kind = kind_dir.name
-            for path in kind_dir.rglob("*"):
-                if not path.is_file():
-                    continue
-                ident = _ident_of(kind_dir, path)
-                context = _context_of(path)
-                if not ident or not context:
-                    continue
-                payload = thumbnail_embed.read_file(path)
-                tags = payload.get("tags") if isinstance(payload.get("tags"), list) else []
-                data.setdefault(kind, {}).setdefault(ident, {})[context] = {
-                    "mtime": _mtime(path),
-                    "tags": [str(item) for item in tags if str(item).strip()],
-                }
-    write_index(data)
+    model_sidecar.rebuild_index()
 
 
 def _ident(rel: str) -> str | None:
@@ -626,21 +628,35 @@ def _write_still(image: Any, fmt: str, quality: int, payload: dict[str, Any], ba
 
 
 
+def _prune_thumb_dir(kind: str, ident: str) -> None:
+    folder = thumb_dir(kind, ident)
+    stop = model_sidecar.data_dir(kind, ident)
+    if stop is not None:
+        prune_empty(folder, stop)
+        model_sidecar.prune(kind, ident)
+        return
+    prune_empty(folder, thumbs_root() / kind)
+
+
 def _move_ident(kind: str, old: str, new: str) -> None:
-    src = thumb_dir(kind, old)
-    if not src.exists():
+    _, old_tile = model_sidecar.split_ident(old)
+    _, new_tile = model_sidecar.split_ident(new)
+    if old_tile or new_tile:
+        src = thumb_dir(kind, old)
+        if not src.exists():
+            return
+        dest = thumb_dir(kind, new)
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        relocate(src, dest)
+        stop = model_sidecar.data_dir(kind, old)
+        if stop is not None:
+            prune_empty(src.parent, stop)
         return
-    dest = thumb_dir(kind, new)
-    if dest.is_file():
-        dest.unlink(missing_ok=True)
-    if dest.is_dir():
-        for child in list(src.iterdir()):
-            relocate(child, dest / child.name)
-        prune_empty(src, thumbs_root() / kind)
+    src = model_sidecar.data_dir(kind, old)
+    dest = model_sidecar.data_dir(kind, new)
+    if src is None or dest is None or not src.exists():
         return
-    dest.parent.mkdir(parents=True, exist_ok=True)
     relocate(src, dest)
-    prune_empty(src.parent, thumbs_root() / kind)
 
 
 

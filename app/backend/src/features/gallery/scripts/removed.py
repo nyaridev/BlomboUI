@@ -120,9 +120,19 @@ def restore(item_id: str) -> dict[str, str]:
         raise RemovedError("a file already occupies that path")
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.move(str(src), str(dest))
+    stem_data = folder / f"{Path(name).stem}_data"
+    name_data = folder / f"{name}_data"
+    sidecar = stem_data if stem_data.is_dir() else name_data if name_data.is_dir() else None
+    if sidecar is not None:
+        target = dest.parent / sidecar.name
+        if not target.exists():
+            shutil.move(str(sidecar), str(target))
     rows = _load_json(folder / "meta.json")
     meta = rows if isinstance(rows, dict) else {}
     model_meta.put_bundle(kind, {str(key): dict(val) for key, val in meta.items() if isinstance(val, dict)}, folder / "thumbs")
+    from features.models.scripts import model_sidecar as sidecar_mod
+
+    sidecar_mod.hydrate(kind, ident)
     shutil.rmtree(folder, ignore_errors=True)
     models.refresh_models(kind)
     return {"path": ident, "kind": "file"}
@@ -214,7 +224,7 @@ def thumb_file(
         path = folder / str(man.get("name") or "")
         return path if path.is_file() else None
     ident = _ident(str(man.get("ident") or ""))
-    thumbs = folder / "thumbs"
+    thumbs = _item_thumbs(folder, man)
     key = thumbnail_scopes.context_key(thumbnail_scopes.parse_context(context))
     exact = _trash_thumb(thumbs, ident, key)
     if mode != "likely":
@@ -276,8 +286,13 @@ def _trash_file(kind: str, ident: str) -> str:
     dest = trash_root() / uid
     dest.mkdir(parents=True, exist_ok=True)
     size = int(source.stat().st_size)
-    shutil.move(str(source), str(dest / source.name))
+    from features.models.scripts import model_sidecar
+
+    sidecar = model_sidecar.dir_for_file(source)
     meta = model_meta.take_bundle(kind, ident, dest / "thumbs")
+    shutil.move(str(source), str(dest / source.name))
+    if sidecar.exists():
+        shutil.move(str(sidecar), str(dest / sidecar.name))
     (dest / "meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     man = {
         "kind": kind,
@@ -517,12 +532,25 @@ def _entry(kind: str, rel: str) -> Path:
         raise RemovedError(str(exc), exc.status) from exc
 
 
+def _item_thumbs(folder: Path, man: dict[str, Any]) -> Path:
+    name = str(man.get("name") or "")
+    stem = Path(name).stem
+    for candidate in (folder / f"{stem}_data" / "thumbs", folder / f"{name}_data" / "thumbs", folder / "thumbs"):
+        if candidate.is_dir():
+            return candidate
+    return folder / "thumbs"
+
+
 def _trash_thumb(thumbs: Path, ident: str, context: str) -> Path | None:
     if ident:
         for ext in model_meta.THUMB_EXTS:
             path = Path(str(thumbs / ident / context) + ext)
             if path.is_file():
                 return path
+    for ext in model_meta.THUMB_EXTS:
+        path = Path(str(thumbs / context) + ext)
+        if path.is_file():
+            return path
     return None
 
 
@@ -531,14 +559,13 @@ def _trash_thumbs(thumbs: Path, ident: str) -> list[Path]:
         return []
     out: list[Path] = []
     for folder in thumbs.iterdir():
-        if not folder.is_dir():
-            continue
-        if folder.name != ident and not folder.name.startswith(f"{ident}#"):
-            continue
-        out.extend(path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS)
-    if out:
-        return out
-    return []
+        if folder.is_dir():
+            if folder.name != ident and not folder.name.startswith(f"{ident}#"):
+                continue
+            out.extend(path for path in folder.rglob("*") if path.is_file() and path.suffix.lower() in model_meta.THUMB_EXTS)
+        elif folder.is_file() and folder.suffix.lower() in model_meta.THUMB_EXTS:
+            out.append(folder)
+    return out
 
 
 def _hours() -> int:

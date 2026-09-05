@@ -112,14 +112,11 @@ def ensure_dirs() -> None:
     (USER / "autocompletion").mkdir(exist_ok=True)
     (USER / "gallery_thumbs").mkdir(exist_ok=True)
     (USER / "gallery_thumbs" / "default").mkdir(exist_ok=True)
-    (USER / "model_thumbs").mkdir(exist_ok=True)
-    (USER / "model_thumbs" / "default").mkdir(exist_ok=True)
     ident = active_profile_id()
     (USER / "output" / ident).mkdir(exist_ok=True)
     (USER / "data" / "sqlite" / ident).mkdir(parents=True, exist_ok=True)
     (RUNTIME / "data" / "sqlite" / ident).mkdir(parents=True, exist_ok=True)
     (USER / "gallery_thumbs" / ident).mkdir(exist_ok=True)
-    (USER / "model_thumbs" / ident).mkdir(exist_ok=True)
     download_thumbs = USER / "data" / "history" / ident / "download"
     browse_thumbs = USER / "data" / "history" / ident / "browse"
     download_thumbs.mkdir(parents=True, exist_ok=True)

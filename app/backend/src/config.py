@@ -81,7 +81,6 @@ def ensure_profile_dirs(ident: str | None = None) -> None:
     _profile_folder(RUNTIME / "data" / "sqlite", name)
     _profile_folder(USER / "output", name)
     _profile_folder(USER / "gallery_thumbs", name)
-    _profile_folder(USER / "model_thumbs", name)
     (DATA / "history" / name / "download").mkdir(parents=True, exist_ok=True)
     (DATA / "history" / name / "browse").mkdir(parents=True, exist_ok=True)
     _profile_folder(USER / "removed", name)

@@ -84,7 +84,15 @@ def ident_index(kind: str, ident: str) -> dict[str, Any]:
     return item if isinstance(item, dict) else {}
 
 
-def set_index(kind: str, ident: str, context: str, mtime: int, tags: list[Any]) -> None:
+def set_index(
+    kind: str,
+    ident: str,
+    context: str,
+    mtime: int,
+    tags: list[Any],
+    file: str = "",
+    raw: str = "",
+) -> None:
     data = load_index()
     rows = data.setdefault(kind, {})
     if not isinstance(rows, dict):
@@ -94,7 +102,12 @@ def set_index(kind: str, ident: str, context: str, mtime: int, tags: list[Any]) 
     if not isinstance(item, dict):
         item = {}
         rows[ident] = item
-    item[context] = {"mtime": int(mtime or time.time()), "tags": [str(tag) for tag in tags if str(tag).strip()]}
+    item[context] = {
+        "mtime": int(mtime or time.time()),
+        "tags": [str(tag) for tag in tags if str(tag).strip()],
+        "file": str(file or ""),
+        "raw": str(raw or ""),
+    }
     write_index(data)
 
 

@@ -181,7 +181,12 @@ def move_entry(rel: str, folder: str) -> dict[str, str]:
             raise WildcardError("cannot move a folder into itself")
     dest = dest_parent / source.name
     _require_unique(dest_parent, source.name, source)
+    sidecar_src = source if source.is_file() else None
     _relocate(source, dest)
+    if sidecar_src is not None and dest.is_file():
+        from features.models.scripts import model_sidecar
+
+        model_sidecar.relocate_sidecar(sidecar_src, dest)
     nxt = _join(folder, source.name)
     if nxt != rel:
         model_meta.remap_ident("wildcards", rel, nxt)
@@ -196,7 +201,12 @@ def rename_entry(rel: str, name: str) -> dict[str, str]:
     leaf = _clean_name(name, source.is_file(), source.suffix)
     dest = source.with_name(leaf)
     _require_unique(source.parent, leaf, source)
+    sidecar_src = source if source.is_file() else None
     _relocate(source, dest)
+    if sidecar_src is not None and dest.is_file():
+        from features.models.scripts import model_sidecar
+
+        model_sidecar.relocate_sidecar(sidecar_src, dest)
     nxt = _join(_parent_rel(rel), leaf)
     if nxt != rel:
         model_meta.remap_ident("wildcards", rel, nxt)
@@ -233,7 +243,7 @@ def _walk(folder: Path | None, prefix: str) -> list[dict[str, Any]]:
     files_out: list[dict[str, Any]] = []
     for entry in entries:
         name = entry.name
-        if name in _SKIP or name.startswith("."):
+        if name in _SKIP or name.startswith(".") or name.endswith("_data"):
             continue
         rel = _join(prefix, name)
         if entry.is_dir():

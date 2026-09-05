@@ -28,6 +28,16 @@ class ListedDirsTests(unittest.TestCase):
         self.assertEqual(rows[1]["name"], "ComfyUI")
         self.assertEqual(rows[1]["path"], str(comfy.resolve()))
 
+    def test_resolved_includes_models_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "models"
+            local.mkdir()
+            with patch.object(dirs, "models_root", return_value=local):
+                paths = dirs.resolved()
+        self.assertEqual(paths["models"], str(local.resolve()))
+        self.assertIn("comfyModels", paths)
+        self.assertIn("wildcards", paths)
+
 
 if __name__ == "__main__":
     unittest.main()

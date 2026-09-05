@@ -200,17 +200,20 @@ def kind_root(kind: str) -> Path:
     return models_root() / kind
 
 
-def model_file(kind: str, rel: str) -> Path | None:
+def model_path(kind: str, rel: str) -> Path | None:
     name = str(rel or "").replace("\\", "/").strip().lstrip("/").split("#", 1)[0]
     if not name or ".." in Path(name).parts:
         return None
     first, _, rest = name.partition("/")
     extra = dirs.extra_root("wildcardDirs" if kind == "wildcards" else "modelDirs", first)
     if extra is not None:
-        path = extra / rest if kind == "wildcards" else extra / kind / rest
-        return path if path.is_file() else None
-    path = kind_root(kind) / name
-    return path if path.is_file() else None
+        return extra / rest if kind == "wildcards" else extra / kind / rest
+    return kind_root(kind) / name
+
+
+def model_file(kind: str, rel: str) -> Path | None:
+    path = model_path(kind, rel)
+    return path if path is not None and path.is_file() else None
 
 
 def model_info(

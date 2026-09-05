@@ -22,6 +22,11 @@ def _file_error(exc: models.ModelFileError) -> ApiError:
     return ApiError("not_found" if exc.status == 404 else "bad_request", str(exc), exc.status)
 
 
+@api.post("/user-models/restore-data")
+def post_restore_model_data() -> dict:
+    return models.restore_all()
+
+
 @api.get("/user-models")
 def get_models(context: str = "", mode: str = "exact", fallback: bool = False, optional: str = "") -> dict:
     key, view, use_global, opt = resolve_view(context, mode, fallback, optional)

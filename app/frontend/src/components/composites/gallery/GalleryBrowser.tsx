@@ -4,6 +4,7 @@ import {
   collectDirPaths,
   displayToIdent,
   LOCAL_DIR,
+  mergeGalleryTrees,
   toDisplayRoots,
   treeDisplayPath,
 } from '@/lib/gallery/tree.ts'
@@ -183,17 +184,23 @@ export function GalleryBrowser({
     [extraNames, items],
   )
   const loadTree = useCallback(async () => {
-    if (itemKind) {
-      setFsRoots([])
-      return
-    }
     try {
-      const roots = kind === 'wildcards' ? await getWildcardTree() : await getModelTree(kind)
-      setFsRoots(toDisplayRoots(roots, extraNames))
+      const kinds: (keyof ModelLists)[] = otherGallery
+        ? [...OTHER_KIND_IDS]
+        : itemKind && kind === 'checkpoints'
+          ? ['checkpoints', 'diffusion_models']
+          : [kind]
+      const lists = await Promise.all(
+        kinds.map(async (treeKind) => {
+          const roots = treeKind === 'wildcards' ? await getWildcardTree() : await getModelTree(treeKind)
+          return toDisplayRoots(roots, extraNames)
+        }),
+      )
+      setFsRoots(lists.length === 1 ? lists[0] : mergeGalleryTrees(lists))
     } catch {
       /* keep current */
     }
-  }, [extraNames, itemKind, kind])
+  }, [extraNames, itemKind, kind, otherGallery])
   const tree = useMemo(
     () => (fileOps && fsRoots.length ? fsRoots : buildGalleryTree(paths)),
     [fileOps, fsRoots, paths],

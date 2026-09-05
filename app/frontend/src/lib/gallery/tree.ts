@@ -23,6 +23,38 @@ function sortNodes(nodes: GalleryNode[]) {
   }
 }
 
+function cloneNode(node: GalleryNode): GalleryNode {
+  return { name: node.name, path: node.path, kind: node.kind, children: node.children.map(cloneNode) }
+}
+
+function mergeNodeLists(left: GalleryNode[], right: GalleryNode[]): GalleryNode[] {
+  const byPath = new Map<string, GalleryNode>()
+  function ingest(nodes: GalleryNode[]) {
+    for (const node of nodes) {
+      const existing = byPath.get(node.path)
+      if (!existing) {
+        byPath.set(node.path, cloneNode(node))
+        continue
+      }
+      if (existing.kind === 'dir' && node.kind === 'dir') {
+        existing.children = mergeNodeLists(existing.children, node.children)
+        sortNodes(existing.children)
+      }
+    }
+  }
+  ingest(left)
+  ingest(right)
+  return [...byPath.values()]
+}
+
+export function mergeGalleryTrees(lists: GalleryNode[][]): GalleryNode[] {
+  let out: GalleryNode[] = []
+  for (const list of lists) {
+    out = mergeNodeLists(out, list)
+  }
+  return out
+}
+
 export function buildGalleryTree(items: string[]): GalleryNode[] {
   const root: GalleryNode[] = []
   const dirs = new Map<string, GalleryNode>()

@@ -36,10 +36,29 @@ def migrate(root: Path | None = None) -> str:
         runtime / "data" / "sqlite" / "cache_gallery.sqlite",
         runtime / "data" / "sqlite" / DEFAULT / "cache_gallery.sqlite",
     )
-    _move_tree_contents(user / "gallery_thumbs", user / "gallery_thumbs" / DEFAULT)
-    _move_tree_contents(user / "model_thumbs", user / "model_thumbs" / DEFAULT)
-    _move_dir(data / "history" / "download", data / "history" / DEFAULT / "download")
-    _move_dir(data / "history" / "browse", data / "history" / DEFAULT / "browse")
+    old_gallery = user / "gallery_thumbs"
+    if old_gallery.is_dir():
+        dest = runtime / "data" / "gallery_thumbs" / DEFAULT
+        nested = old_gallery / DEFAULT
+        if nested.is_dir():
+            _move_tree_contents(nested, dest)
+            _rmtree(nested)
+        _move_tree_contents(old_gallery, dest)
+        _rmtree(old_gallery)
+    old_models = user / "model_thumbs"
+    if old_models.is_dir():
+        _move_tree_contents(old_models, old_models / DEFAULT)
+    old_history = data / "history"
+    if old_history.is_dir():
+        dest = data / "history_thumbs" / DEFAULT
+        nested = old_history / DEFAULT
+        if nested.is_dir():
+            _move_dir(nested / "download", dest / "download")
+            _move_dir(nested / "browse", dest / "browse")
+            _rmtree(nested)
+        _move_dir(old_history / "download", dest / "download")
+        _move_dir(old_history / "browse", dest / "browse")
+        _rmtree(old_history)
     _move_tree_contents(user / "removed", user / "removed" / DEFAULT)
     custom_output = _custom_output(runtime)
     if custom_output is None:

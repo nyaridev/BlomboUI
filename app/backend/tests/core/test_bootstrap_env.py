@@ -52,6 +52,86 @@ class ResolveTests(unittest.TestCase):
         self.assertEqual(Path(data["wildcards.root"]), wildcards.resolve())
         self.assertEqual(Path(data["outputs.root"]), (user / "output" / "default").resolve())
 
+    def test_resolve_strips_quoted_models_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            user = root / "user"
+            runtime = root / "runtime"
+            models = root / "shared" / "models"
+            models.mkdir(parents=True)
+            user.mkdir()
+            runtime.mkdir()
+            with (
+                patch.object(env, "USER", user),
+                patch.object(env, "RUNTIME", runtime),
+                patch.object(env, "active_profile_id", return_value="default"),
+                patch.object(env, "bundled_comfy", return_value=runtime / "comfyui" / "ComfyUI"),
+                patch.object(env, "comfy_python", return_value=None),
+                patch.dict(os.environ, {"MODELS_ROOT": f'"{models}"'}, clear=False),
+            ):
+                data = env.resolve()
+
+        self.assertEqual(Path(data["models.root"]), models.resolve())
+
+    def test_ensure_dirs_skips_gallery_thumbs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            user = root / "user"
+            runtime = root / "runtime"
+            runtime.mkdir()
+            with (
+                patch.object(env, "USER", user),
+                patch.object(env, "RUNTIME", runtime),
+                patch.object(env, "active_profile_id", return_value="default"),
+            ):
+                env.ensure_dirs()
+            self.assertFalse((user / "gallery_thumbs").exists())
+            self.assertFalse((user / "model_thumbs").exists())
+            self.assertFalse((runtime / "data" / "gallery_thumbs").exists())
+            self.assertFalse((user / "data" / "history").exists())
+            self.assertTrue((user / "data" / "history_thumbs" / "default" / "download").is_dir())
+            self.assertTrue((user / "data" / "history_thumbs" / "default" / "browse").is_dir())
+
+    def test_ensure_dirs_moves_legacy_gallery_thumbs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            user = root / "user"
+            runtime = root / "runtime"
+            runtime.mkdir()
+            old = user / "gallery_thumbs" / "default"
+            old.mkdir(parents=True)
+            (old / "a.jpg").write_bytes(b"jpg")
+            with (
+                patch.object(env, "USER", user),
+                patch.object(env, "RUNTIME", runtime),
+                patch.object(env, "active_profile_id", return_value="default"),
+            ):
+                env.ensure_dirs()
+            dest = runtime / "data" / "gallery_thumbs" / "default" / "a.jpg"
+            self.assertTrue(dest.is_file())
+            self.assertEqual(dest.read_bytes(), b"jpg")
+            self.assertFalse((user / "gallery_thumbs").exists())
+
+    def test_ensure_dirs_moves_legacy_history_thumbs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            user = root / "user"
+            runtime = root / "runtime"
+            runtime.mkdir()
+            old = user / "data" / "history" / "default" / "browse"
+            old.mkdir(parents=True)
+            (old / "a.jpg").write_bytes(b"jpg")
+            with (
+                patch.object(env, "USER", user),
+                patch.object(env, "RUNTIME", runtime),
+                patch.object(env, "active_profile_id", return_value="default"),
+            ):
+                env.ensure_dirs()
+            dest = user / "data" / "history_thumbs" / "default" / "browse" / "a.jpg"
+            self.assertTrue(dest.is_file())
+            self.assertEqual(dest.read_bytes(), b"jpg")
+            self.assertFalse((user / "data" / "history").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -26,6 +26,7 @@ if not defined MODELS_DIR (
         set MODELS_DIR=%ROOT%\user\models
     )
 )
+if defined MODELS_DIR for %%I in (%MODELS_DIR%) do set MODELS_DIR=%%~fI
 
 echo.%COMMANDLINE_ARGS% | findstr /i /c:"--comfyui-window" >nul
 if not errorlevel 1 set COMFYUI_SEPARATE_WINDOW=1
@@ -75,6 +76,7 @@ if not exist "%MODELS_DIR%\" (
 )
 call "%ROOT%\install\windows\_ui.bat" ok "Models directory: %MODELS_DIR%"
 if not defined MODELS_ROOT set MODELS_ROOT=%MODELS_DIR%
+set COMFYUI_MODEL_PATH=%MODELS_DIR%
 
 call "%ROOT%\install\windows\_ui.bat" section "ComfyUI version"
 call "%ROOT%\install\windows\comfyui\_pick_slot.bat"

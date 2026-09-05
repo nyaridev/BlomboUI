@@ -14,10 +14,14 @@ FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 COMFYUI_HOST="${COMFYUI_HOST:-127.0.0.1}"
 COMFYUI_PORT="${COMFYUI_PORT:-8188}"
 if [ -n "${MODELS_ROOT:-}" ]; then
+  MODELS_ROOT="${MODELS_ROOT#\"}"
+  MODELS_ROOT="${MODELS_ROOT%\"}"
   MODELS_DIR="${MODELS_DIR:-$MODELS_ROOT}"
 else
   MODELS_DIR="${MODELS_DIR:-$ROOT/user/models}"
 fi
+MODELS_DIR="${MODELS_DIR#\"}"
+MODELS_DIR="${MODELS_DIR%\"}"
 
 ALL_ARGS="${COMMANDLINE_ARGS:-} $*"
 case " $ALL_ARGS " in
@@ -126,6 +130,7 @@ if [ -z "${MODELS_ROOT:-}" ]; then
   MODELS_ROOT="$MODELS_DIR"
   export MODELS_ROOT
 fi
+export COMFYUI_MODEL_PATH="$MODELS_DIR"
 
 ui_section "ComfyUI version"
 # shellcheck source=linux/comfyui/_pick_slot.sh

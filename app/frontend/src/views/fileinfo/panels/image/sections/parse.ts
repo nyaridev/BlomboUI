@@ -85,6 +85,58 @@ export function pngInfoSendable(text: string, metadata: Record<string, unknown> 
   return Boolean(parsed.prompt || parsed.checkpoint || parsed.steps)
 }
 
+export function paramsForGenerate(
+  text: string,
+  metadata: Record<string, unknown> | null | undefined,
+): PngInfoParams {
+  const parsed = parsePngInfo(text)
+  const params = metaParams(metadata)
+  const promptRaw = stringField(params, 'prompt_raw')
+  if (promptRaw) {
+    parsed.prompt = promptRaw
+  }
+  const negativeRaw = stringField(params, 'negative_prompt_raw')
+  if (negativeRaw) {
+    parsed.negativePrompt = negativeRaw
+  }
+  parsed.seedAfter = 'fixed'
+  return parsed
+}
+
+export function applyFixedSeedAfter(
+  next: TemplateParams,
+  metadata: Record<string, unknown> | null | undefined,
+): TemplateParams {
+  const params = metaParams(metadata)
+  let out: TemplateParams = { ...next, seedAfter: 'fixed' }
+  if (params?.hires && typeof params.hires === 'object') {
+    out = { ...out, hires: { ...out.hires, seedAfter: 'fixed' } }
+  }
+  if (params?.adetailer && typeof params.adetailer === 'object') {
+    out = {
+      ...out,
+      adetailer: {
+        ...out.adetailer,
+        units: out.adetailer.units.map((unit) => ({ ...unit, seedAfter: 'fixed' })),
+      },
+    }
+  }
+  return out
+}
+
+function metaParams(metadata: Record<string, unknown> | null | undefined) {
+  const params = metadata?.params
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return null
+  }
+  return params as Record<string, unknown>
+}
+
+function stringField(params: Record<string, unknown> | null, key: string) {
+  const value = params?.[key]
+  return typeof value === 'string' && value.trim() ? value : ''
+}
+
 function applySettings(out: PngInfoParams, line: string) {
   const fields: Record<string, string> = {}
   for (const chunk of line.split(', ')) {

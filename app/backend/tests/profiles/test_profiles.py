@@ -52,6 +52,11 @@ class ProfileServiceTests(unittest.TestCase):
         self.assertTrue(data["profiles"][0]["locked"])
         self.assertTrue((self.data / "sqlite" / "default").is_dir())
         self.assertTrue((self.runtime / "data" / "sqlite" / "default").is_dir())
+        self.assertFalse((self.user / "gallery_thumbs").exists())
+        self.assertFalse((self.user / "model_thumbs").exists())
+        self.assertFalse((self.data / "history").exists())
+        self.assertTrue((self.data / "history_thumbs" / "default" / "download").is_dir())
+        self.assertTrue((self.data / "history_thumbs" / "default" / "browse").is_dir())
 
     def test_paths_nest_under_active_id(self) -> None:
         self.assertEqual(config.user_db_path(), self.data / "sqlite" / "default" / "blombo.sqlite")
@@ -61,9 +66,34 @@ class ProfileServiceTests(unittest.TestCase):
             self.runtime / "data" / "sqlite" / "default" / "cache_gallery.sqlite",
         )
         self.assertEqual(config.outputs_root(), (self.user / "output" / "default").resolve())
-        self.assertEqual(config.gallery_thumbs_root(), self.user / "gallery_thumbs" / "default")
+        self.assertEqual(config.gallery_thumbs_root(), self.runtime / "data" / "gallery_thumbs" / "default")
         self.assertEqual(config.model_thumbs_root(), self.user / "model_thumbs" / "default")
         self.assertEqual(config.removed_root(), self.user / "removed" / "default")
+        self.assertEqual(config.download_thumbs_root(), self.data / "history_thumbs" / "default" / "download")
+        self.assertEqual(config.browse_thumbs_root(), self.data / "history_thumbs" / "default" / "browse")
+        self.assertFalse((self.user / "gallery_thumbs").exists())
+        self.assertFalse((self.user / "model_thumbs").exists())
+        self.assertFalse((self.data / "history").exists())
+
+    def test_moves_legacy_gallery_thumbs(self) -> None:
+        old = self.user / "gallery_thumbs" / "default"
+        old.mkdir(parents=True)
+        (old / "a.jpg").write_bytes(b"jpg")
+        config.ensure_profile_dirs("default")
+        dest = self.runtime / "data" / "gallery_thumbs" / "default" / "a.jpg"
+        self.assertTrue(dest.is_file())
+        self.assertEqual(dest.read_bytes(), b"jpg")
+        self.assertFalse((self.user / "gallery_thumbs").exists())
+
+    def test_moves_legacy_history_thumbs(self) -> None:
+        old = self.data / "history" / "default" / "download"
+        old.mkdir(parents=True)
+        (old / "a.jpg").write_bytes(b"jpg")
+        config.ensure_profile_dirs("default")
+        dest = self.data / "history_thumbs" / "default" / "download" / "a.jpg"
+        self.assertTrue(dest.is_file())
+        self.assertEqual(dest.read_bytes(), b"jpg")
+        self.assertFalse((self.data / "history").exists())
 
     def test_create_rename_delete(self) -> None:
         created = profiles.create("Anime")
@@ -138,12 +168,28 @@ class ProfileServiceTests(unittest.TestCase):
 
     def test_purge_removes_dirs(self) -> None:
         created = profiles.create("Anime")
-        profiles.delete(created["id"])
-        profiles.purge(created["id"])
+        ident = created["id"]
+        thumbs = self.runtime / "data" / "gallery_thumbs" / ident
+        thumbs.mkdir(parents=True)
+        (thumbs / "a.jpg").write_bytes(b"jpg")
+        leftover = self.user / "gallery_thumbs" / ident
+        leftover.mkdir(parents=True)
+        (leftover / "b.jpg").write_bytes(b"jpg")
+        history = self.data / "history_thumbs" / ident / "download"
+        history.mkdir(parents=True, exist_ok=True)
+        (history / "c.jpg").write_bytes(b"jpg")
+        old_history = self.data / "history" / ident
+        old_history.mkdir(parents=True)
+        profiles.delete(ident)
+        profiles.purge(ident)
         data = profiles.list_profiles()
         self.assertEqual(data["removed"], [])
-        self.assertNotIn(created["id"], [item["id"] for item in data["profiles"]])
-        self.assertFalse((self.data / "sqlite" / created["id"]).exists())
+        self.assertNotIn(ident, [item["id"] for item in data["profiles"]])
+        self.assertFalse((self.data / "sqlite" / ident).exists())
+        self.assertFalse(thumbs.exists())
+        self.assertFalse(leftover.exists())
+        self.assertFalse(history.exists())
+        self.assertFalse(old_history.exists())
 
     def test_purge_expired_deletes_old_removed(self) -> None:
         created = profiles.create("Anime")

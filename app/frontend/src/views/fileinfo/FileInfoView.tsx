@@ -20,7 +20,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { CivitaiSection } from '@/views/fileinfo/panels/civitai/CivitaiSection.tsx'
 import { ImageInfo } from '@/views/fileinfo/panels/image/ImageInfo.tsx'
-import { applyPngInfo, parsePngInfo, pngInfoSendable } from '@/views/fileinfo/panels/image/sections/parse.ts'
+import { applyFixedSeedAfter, applyPngInfo, paramsForGenerate, parsePngInfo, pngInfoSendable } from '@/views/fileinfo/panels/image/sections/parse.ts'
 import { SafetensorsInfo } from '@/views/fileinfo/panels/safetensors/SafetensorsInfo.tsx'
 import { embeddedHashes, readSafetensorsMetadata, type SafetensorsMeta } from '@/views/fileinfo/panels/safetensors/safetensors.ts'
 import { allowed, isMedia, isSafetensors, mediaItem, pngModels, revokeItems } from '@/views/fileinfo/fileDrop.ts'
@@ -334,8 +334,10 @@ export function FileInfoView() {
     }
     setSending(true)
     try {
-      const parsed = parsePngInfo(text)
-      const workflow = useGenerateStore.getState().workflow
+      const state = useGenerateStore.getState()
+      const current = pickParams(state)
+      const parsed = paramsForGenerate(text, pngMeta)
+      const workflow = state.workflow
       let allowed = new Set<string>(PARAM_KEYS)
       try {
         const items = await getWorkflows()
@@ -359,7 +361,9 @@ export function FileInfoView() {
       } catch {
         /* use local lists */
       }
-      applyParams(applyPngInfo(pickParams(useGenerateStore.getState()), parsed, allowed, { samplers, schedulers }))
+      applyParams(
+        applyFixedSeedAfter(applyPngInfo(current, parsed, allowed, { samplers, schedulers }), pngMeta),
+      )
       navigate('/')
     } finally {
       setSending(false)

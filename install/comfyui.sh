@@ -47,10 +47,15 @@ case "${COMFYUI_HOST:-}" in
   0.0.0.0|::|"[::]") COMFYUI_HOST=127.0.0.1 ;;
 esac
 if [ -n "${MODELS_ROOT:-}" ]; then
+  MODELS_ROOT="${MODELS_ROOT#\"}"
+  MODELS_ROOT="${MODELS_ROOT%\"}"
   MODELS_DIR="${MODELS_DIR:-$MODELS_ROOT}"
 else
   MODELS_DIR="${MODELS_DIR:-$ROOT/user/models}"
 fi
+MODELS_DIR="${MODELS_DIR#\"}"
+MODELS_DIR="${MODELS_DIR%\"}"
+export COMFYUI_MODEL_PATH="$MODELS_DIR"
 COMFY_ROOT="${COMFY_ROOT:-$ROOT/runtime/comfyui}"
 if [ -z "${COMFY_DIR:-}" ]; then
   # shellcheck source=linux/comfyui/_pick_slot.sh

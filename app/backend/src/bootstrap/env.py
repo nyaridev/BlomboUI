@@ -9,6 +9,7 @@ import sqlite3
 import sys
 from pathlib import Path
 
+from config import move_legacy_gallery_thumbs, move_legacy_history_thumbs
 from shared.extra_model_paths import MODEL_SUBDIRS, write_file as write_extra_model_paths_file
 
 APP = Path(__file__).resolve().parents[3]
@@ -111,19 +112,18 @@ def ensure_dirs() -> None:
     wildcards = env_path("WILDCARDS_ROOT") or (USER / "wildcards")
     wildcards.mkdir(parents=True, exist_ok=True)
     (USER / "autocompletion").mkdir(exist_ok=True)
-    (USER / "gallery_thumbs").mkdir(exist_ok=True)
-    (USER / "gallery_thumbs" / "default").mkdir(exist_ok=True)
     ident = active_profile_id()
     (USER / "output" / ident).mkdir(exist_ok=True)
     (USER / "data" / "sqlite" / ident).mkdir(parents=True, exist_ok=True)
     (RUNTIME / "data" / "sqlite" / ident).mkdir(parents=True, exist_ok=True)
-    (USER / "gallery_thumbs" / ident).mkdir(exist_ok=True)
-    download_thumbs = USER / "data" / "history" / ident / "download"
-    browse_thumbs = USER / "data" / "history" / ident / "browse"
+    move_legacy_gallery_thumbs(USER, RUNTIME, ident)
+    move_legacy_history_thumbs(USER, ident)
+    download_thumbs = USER / "data" / "history_thumbs" / ident / "download"
+    browse_thumbs = USER / "data" / "history_thumbs" / ident / "browse"
     download_thumbs.mkdir(parents=True, exist_ok=True)
     browse_thumbs.mkdir(parents=True, exist_ok=True)
-    (USER / "data" / "history" / "default" / "download").mkdir(parents=True, exist_ok=True)
-    (USER / "data" / "history" / "default" / "browse").mkdir(parents=True, exist_ok=True)
+    (USER / "data" / "history_thumbs" / "default" / "download").mkdir(parents=True, exist_ok=True)
+    (USER / "data" / "history_thumbs" / "default" / "browse").mkdir(parents=True, exist_ok=True)
     old_thumbs = USER / "download_thumbs"
     if old_thumbs.is_dir():
         for path in old_thumbs.iterdir():

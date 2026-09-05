@@ -38,6 +38,9 @@ class MigrateProfilesTests(unittest.TestCase):
         thumbs = user / "gallery_thumbs"
         thumbs.mkdir(parents=True)
         (thumbs / "a.jpg").write_bytes(b"jpg")
+        history = user / "data" / "history" / "download"
+        history.mkdir(parents=True)
+        (history / "h.jpg").write_bytes(b"jpg")
         out = user / "output"
         out.mkdir(parents=True)
         (out / "pic.png").write_bytes(b"png")
@@ -48,7 +51,10 @@ class MigrateProfilesTests(unittest.TestCase):
         self.assertEqual((sqlite / "default" / "blombo.sqlite").read_text(encoding="utf-8"), "user-db")
         self.assertFalse((sqlite / "blombo.sqlite").exists())
         self.assertEqual((cache / "default" / "cache.sqlite").read_text(encoding="utf-8"), "cache-db")
-        self.assertTrue((thumbs / "default" / "a.jpg").is_file())
+        self.assertTrue((runtime / "data" / "gallery_thumbs" / "default" / "a.jpg").is_file())
+        self.assertFalse(thumbs.exists())
+        self.assertTrue((user / "data" / "history_thumbs" / "default" / "download" / "h.jpg").is_file())
+        self.assertFalse((user / "data" / "history").exists())
         self.assertTrue((out / "default" / "pic.png").is_file())
         self.assertEqual(self.mod.migrate(self.tmp), "skip: profile.sqlite already exists")
 

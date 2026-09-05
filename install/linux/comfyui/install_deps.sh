@@ -21,6 +21,20 @@ export GIT_TERMINAL_PROMPT=0
 export GIT_ASKPASS=echo
 export GIT_LFS_SKIP_SMUDGE=1
 
+if [ -z "${COMFYUI_MODEL_PATH:-}" ]; then
+  if [ -n "${MODELS_DIR:-}" ]; then
+    COMFYUI_MODEL_PATH="$MODELS_DIR"
+  elif [ -n "${MODELS_ROOT:-}" ]; then
+    COMFYUI_MODEL_PATH="$MODELS_ROOT"
+  else
+    COMFYUI_MODEL_PATH="$ROOT/user/models"
+  fi
+fi
+COMFYUI_MODEL_PATH="${COMFYUI_MODEL_PATH#\"}"
+COMFYUI_MODEL_PATH="${COMFYUI_MODEL_PATH%\"}"
+mkdir -p "$COMFYUI_MODEL_PATH"
+export COMFYUI_MODEL_PATH
+
 # -----------------------------------------------------------------------------
 # Node installer
 # -----------------------------------------------------------------------------

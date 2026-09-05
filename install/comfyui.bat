@@ -27,6 +27,8 @@ if not defined MODELS_DIR (
         set MODELS_DIR=%ROOT%\user\models
     )
 )
+if defined MODELS_DIR for %%I in (%MODELS_DIR%) do set MODELS_DIR=%%~fI
+set COMFYUI_MODEL_PATH=%MODELS_DIR%
 if not defined COMFY_ROOT set COMFY_ROOT=%ROOT%\runtime\comfyui
 if not defined COMFY_DIR (
     call "%ROOT%\install\windows\comfyui\_pick_slot.bat" /selected

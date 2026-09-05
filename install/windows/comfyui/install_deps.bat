@@ -21,6 +21,18 @@ set GIT_TERMINAL_PROMPT=0
 set GIT_ASKPASS=echo
 set GIT_LFS_SKIP_SMUDGE=1
 
+if not defined COMFYUI_MODEL_PATH (
+    if defined MODELS_DIR (
+        for %%I in (%MODELS_DIR%) do set COMFYUI_MODEL_PATH=%%~fI
+    ) else if defined MODELS_ROOT (
+        for %%I in (%MODELS_ROOT%) do set COMFYUI_MODEL_PATH=%%~fI
+    ) else (
+        set COMFYUI_MODEL_PATH=%ROOT%\user\models
+    )
+)
+if defined COMFYUI_MODEL_PATH for %%I in (%COMFYUI_MODEL_PATH%) do set COMFYUI_MODEL_PATH=%%~fI
+if not exist "%COMFYUI_MODEL_PATH%\" mkdir "%COMFYUI_MODEL_PATH%"
+
 :: -----------------------------------------------------------------------------
 :: Preflight
 :: -----------------------------------------------------------------------------

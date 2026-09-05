@@ -73,6 +73,10 @@ def _profile_folder(root: Path, ident: str | None = None) -> Path:
     return folder
 
 
+def _profile_path(root: Path, ident: str | None = None) -> Path:
+    return root / (ident or active_profile_id())
+
+
 def ensure_profile_dirs(ident: str | None = None) -> None:
     name = ident or active_profile_id()
     if not valid_profile_id(name):
@@ -80,9 +84,10 @@ def ensure_profile_dirs(ident: str | None = None) -> None:
     _profile_folder(DATA / "sqlite", name)
     _profile_folder(RUNTIME / "data" / "sqlite", name)
     _profile_folder(USER / "output", name)
-    _profile_folder(USER / "gallery_thumbs", name)
-    (DATA / "history" / name / "download").mkdir(parents=True, exist_ok=True)
-    (DATA / "history" / name / "browse").mkdir(parents=True, exist_ok=True)
+    move_legacy_gallery_thumbs(USER, RUNTIME, name)
+    move_legacy_history_thumbs(USER, name)
+    (DATA / "history_thumbs" / name / "download").mkdir(parents=True, exist_ok=True)
+    (DATA / "history_thumbs" / name / "browse").mkdir(parents=True, exist_ok=True)
     _profile_folder(USER / "removed", name)
 
 
@@ -99,23 +104,109 @@ def cache_gallery_db_path() -> Path:
 
 
 def gallery_thumbs_root() -> Path:
-    return _profile_folder(USER / "gallery_thumbs")
+    return _profile_path(RUNTIME / "data" / "gallery_thumbs")
 
 
 def model_thumbs_root() -> Path:
-    return _profile_folder(USER / "model_thumbs")
+    return _profile_path(USER / "model_thumbs")
+
+
+def move_legacy_gallery_thumbs(user: Path, runtime: Path, ident: str | None = None) -> None:
+    src_root = user / "gallery_thumbs"
+    if not src_root.is_dir():
+        return
+    dest_root = runtime / "data" / "gallery_thumbs"
+    loose = dest_root / (ident or active_profile_id())
+    for path in list(src_root.iterdir()):
+        if path.is_dir():
+            name = path.name.strip().lower()
+            if not valid_profile_id(name):
+                continue
+            dest = dest_root / name
+            dest.mkdir(parents=True, exist_ok=True)
+            for child in list(path.iterdir()):
+                _replace_into(child, dest / child.name)
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+            continue
+        if path.is_file():
+            loose.mkdir(parents=True, exist_ok=True)
+            _replace_into(path, loose / path.name)
+    try:
+        src_root.rmdir()
+    except OSError:
+        pass
+
+
+def _replace_into(src: Path, dest: Path) -> None:
+    if dest.exists():
+        if src.is_file():
+            src.unlink(missing_ok=True)
+        return
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        src.replace(dest)
+    except OSError:
+        if src.is_file():
+            dest.write_bytes(src.read_bytes())
+            src.unlink(missing_ok=True)
 
 
 def download_thumbs_root() -> Path:
-    folder = DATA / "history" / active_profile_id() / "download"
+    folder = DATA / "history_thumbs" / active_profile_id() / "download"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
 def browse_thumbs_root() -> Path:
-    folder = DATA / "history" / active_profile_id() / "browse"
+    folder = DATA / "history_thumbs" / active_profile_id() / "browse"
     folder.mkdir(parents=True, exist_ok=True)
     return folder
+
+
+def move_legacy_history_thumbs(user: Path, ident: str | None = None) -> None:
+    src_root = user / "data" / "history"
+    if not src_root.is_dir():
+        return
+    dest_root = user / "data" / "history_thumbs"
+    loose = dest_root / (ident or active_profile_id())
+    for path in list(src_root.iterdir()):
+        name = path.name.strip().lower()
+        if path.is_dir() and name in {"download", "browse"}:
+            dest = loose / name
+            dest.mkdir(parents=True, exist_ok=True)
+            for child in list(path.iterdir()):
+                _replace_into(child, dest / child.name)
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+            continue
+        if path.is_dir() and valid_profile_id(name):
+            dest = dest_root / name
+            dest.mkdir(parents=True, exist_ok=True)
+            for child in list(path.iterdir()):
+                target = dest / child.name
+                if child.is_dir():
+                    target.mkdir(parents=True, exist_ok=True)
+                    for item in list(child.iterdir()):
+                        _replace_into(item, target / item.name)
+                    try:
+                        child.rmdir()
+                    except OSError:
+                        pass
+                    continue
+                _replace_into(child, target)
+            try:
+                path.rmdir()
+            except OSError:
+                pass
+    try:
+        src_root.rmdir()
+    except OSError:
+        pass
 
 
 def removed_root() -> Path:

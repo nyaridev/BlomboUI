@@ -158,8 +158,10 @@ def _purge_dirs(ident: str) -> None:
     folders = [
         config.DATA / "sqlite" / ident,
         config.RUNTIME / "data" / "sqlite" / ident,
+        config.RUNTIME / "data" / "gallery_thumbs" / ident,
         config.USER / "gallery_thumbs" / ident,
         config.USER / "model_thumbs" / ident,
+        config.DATA / "history_thumbs" / ident,
         config.DATA / "history" / ident,
         config.USER / "removed" / ident,
         config.USER / "output" / ident,

@@ -89,10 +89,10 @@ function mergeFront(incoming: GalleryItem[], prev: GalleryItem[]) {
   return [...incoming, ...prev.filter((item) => !seen.has(item.id))]
 }
 
-function dropPreviews<T extends { previews?: GalleryPreview[] }>(items: T[], id: string): T[] {
+function dropPreviews<T extends { previews?: GalleryPreview[] }>(items: T[], ids: Set<string>): T[] {
   return items.map((item) => ({
     ...item,
-    previews: item.previews?.filter((preview) => preview.id !== id) ?? item.previews,
+    previews: item.previews?.filter((preview) => !ids.has(preview.id)) ?? item.previews,
   }))
 }
 
@@ -150,7 +150,7 @@ export function GalleryView() {
   const [renameFolder, setRenameFolder] = useState<GalleryLibrary | null>(null)
   const [folderView, setFolderView] = useState<'galleries' | 'images'>('galleries')
   const [remove, setRemove] = useState<GalleryLibrary | null>(null)
-  const [trashImage, setTrashImage] = useState<GalleryItem | null>(null)
+  const [trashImages, setTrashImages] = useState<GalleryItem[]>([])
   const [loadingMore, setLoadingMore] = useState(false)
   const loadingMoreRef = useRef(false)
   const folderId = nav.startsWith('folder:') ? nav.slice(7) : ''
@@ -571,28 +571,36 @@ export function GalleryView() {
   }
 
   function dropItem(id: string) {
-    setResults((prev) => prev.filter((item) => item.id !== id))
+    dropItems([id])
+  }
+
+  function dropItems(ids: string[]) {
+    const gone = new Set(ids)
+    if (!gone.size) {
+      return
+    }
+    setResults((prev) => prev.filter((item) => !gone.has(item.id)))
     setHome((prev) => ({
       ...prev,
-      recent: prev.recent.filter((item) => item.id !== id),
-      tags: dropPreviews(prev.tags, id),
-      checkpoints: dropPreviews(prev.checkpoints, id),
-      loras: dropPreviews(prev.loras, id),
-      wildcards: dropPreviews(prev.wildcards, id),
+      recent: prev.recent.filter((item) => !gone.has(item.id)),
+      tags: dropPreviews(prev.tags, gone),
+      checkpoints: dropPreviews(prev.checkpoints, gone),
+      loras: dropPreviews(prev.loras, gone),
+      wildcards: dropPreviews(prev.wildcards, gone),
     }))
-    setBrowse((prev) => dropPreviews(prev, id))
+    setBrowse((prev) => dropPreviews(prev, gone))
     browseCacheRef.current = Object.fromEntries(
       Object.entries(browseCacheRef.current).map(([key, page]) => [
         key,
-        page ? { ...page, items: dropPreviews(page.items, id) } : page,
+        page ? { ...page, items: dropPreviews(page.items, gone) } : page,
       ]),
     )
-    setLibraries((prev) => dropPreviews(prev, id))
+    setLibraries((prev) => dropPreviews(prev, gone))
     setPreview((value) => {
       if (!value) {
         return value
       }
-      const items = value.items.filter((item) => item.id !== id)
+      const items = value.items.filter((item) => !gone.has(item.id))
       if (!items.length) {
         return null
       }
@@ -601,16 +609,28 @@ export function GalleryView() {
   }
 
   async function confirmTrashImage() {
-    if (!trashImage) {
+    if (!trashImages.length) {
       return
     }
-    const id = trashImage.id
-    setTrashImage(null)
-    try {
-      await removeGalleryItem(id)
-      dropItem(id)
-    } catch (err) {
-      toast(err instanceof Error ? err.message : 'Could not move to trash', 'error')
+    const pending = trashImages
+    setTrashImages([])
+    const removed: string[] = []
+    let fail = 0
+    let lastError = 'Could not move to trash'
+    for (const item of pending) {
+      try {
+        await removeGalleryItem(item.id)
+        removed.push(item.id)
+      } catch (err) {
+        fail += 1
+        lastError = err instanceof Error ? err.message : lastError
+      }
+    }
+    if (removed.length) {
+      dropItems(removed)
+    }
+    if (fail) {
+      toast(fail === 1 ? lastError : `Could not move ${fail} images to trash`, 'error')
     }
   }
 
@@ -836,7 +856,7 @@ export function GalleryView() {
               loadingMore={loadingMore}
               onMore={loadMore}
               onFavorite={onItemFavorite}
-              onRemove={setTrashImage}
+              onRemove={setTrashImages}
               onFileInfo={onItemFileInfo}
               onMissing={dropItem}
             />
@@ -857,7 +877,7 @@ export function GalleryView() {
               onWildcard={(name) => setFilters({ ...EMPTY_FILTERS, wildcards: [name] })}
               onLibrary={applyLibrary}
               onFavorite={onItemFavorite}
-              onRemove={setTrashImage}
+              onRemove={(item) => setTrashImages([item])}
               onFileInfo={onItemFileInfo}
               onMissing={dropItem}
             />
@@ -906,7 +926,7 @@ export function GalleryView() {
               favorite={Boolean(current.favorite)}
               onFileInfo={() => onItemFileInfo(current)}
               onFavorite={() => void onItemFavorite(current)}
-              onRemove={() => setTrashImage(current)}
+              onRemove={() => setTrashImages([current])}
             />
           }
           onClose={() => setPreview(null)}
@@ -969,13 +989,13 @@ export function GalleryView() {
           ]}
         />
       ) : null}
-      {trashImage ? (
+      {trashImages.length ? (
         <ConfirmDialog
-          title="Move to Trash?"
+          title={trashImages.length > 1 ? `Move ${trashImages.length} images to Trash?` : 'Move to Trash?'}
           body="This can be restored from Settings → Trash."
-          onClose={() => setTrashImage(null)}
+          onClose={() => setTrashImages([])}
           actions={[
-            { label: 'Cancel', onClick: () => setTrashImage(null), kind: 'ghost' },
+            { label: 'Cancel', onClick: () => setTrashImages([]), kind: 'ghost' },
             { label: 'Remove', onClick: () => void confirmTrashImage(), kind: 'primary', danger: true },
           ]}
         />

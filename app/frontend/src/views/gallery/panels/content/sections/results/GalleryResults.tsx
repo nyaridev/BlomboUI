@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/composites/chrome/AppIcon.tsx'
 import { ContextMenu, ContextMenuItem } from '@/components/composites/chrome/ContextMenu.tsx'
 import { LightboxView } from '@/components/composites/models/LightboxView.tsx'
+import { TILE_GLOW, TILE_ON } from '@/components/composites/models/TilePreview.tsx'
 import { PreviewMedia } from '@/components/composites/models/PreviewMedia.tsx'
 import { galleryItemImageUrl, galleryItemThumbUrl, type GalleryItem } from '@/lib/api/gallery.ts'
 import { middleOpen } from '@/lib/gallery/openImage.ts'
@@ -76,6 +77,7 @@ function Thumb({
   item,
   width,
   height,
+  selected,
   onSelect,
   onMenu,
   onMissing,
@@ -83,7 +85,8 @@ function Thumb({
   item: GalleryItem
   width: number
   height: number
-  onSelect: () => void
+  selected: boolean
+  onSelect: (event: MouseEvent<HTMLButtonElement>) => void
   onMenu: (event: MouseEvent<HTMLButtonElement>) => void
   onMissing: (id: string) => void
 }) {
@@ -93,6 +96,9 @@ function Thumb({
   const asVideo = item.media_kind === 'video' && videoFormat === 'video'
 
   function onMiddle(event: MouseEvent<HTMLButtonElement>) {
+    if (event.shiftKey) {
+      event.preventDefault()
+    }
     middleOpen(event, full)
   }
 
@@ -100,7 +106,11 @@ function Thumb({
     <button
       ref={ref}
       type="button"
-      className="relative shrink-0 overflow-hidden rounded-md border border-line bg-panel [content-visibility:auto]"
+      aria-pressed={selected}
+      className={[
+        'relative shrink-0 overflow-hidden rounded-md border border-line bg-panel [content-visibility:auto]',
+        selected ? TILE_GLOW : '',
+      ].join(' ')}
       style={{ width, height, aspectRatio: aspectCss(item) }}
       onClick={onSelect}
       onMouseDown={onMiddle}
@@ -114,8 +124,9 @@ function Thumb({
           onError={() => onMissing(item.id)}
         />
       ) : null}
+      {selected ? <span aria-hidden="true" className={['pointer-events-none absolute inset-0 z-20 rounded', TILE_ON].join(' ')} /> : null}
       {item.favorite ? (
-        <span className="pointer-events-none absolute top-1.5 right-1.5 text-yellow">
+        <span className="pointer-events-none absolute top-1.5 right-1.5 z-30 text-yellow">
           <AppIcon id="star" size={14} className="fill-current drop-shadow" />
         </span>
       ) : null}
@@ -140,22 +151,50 @@ export function GalleryResults({
   loadingMore: boolean
   onMore: () => void
   onFavorite: (item: GalleryItem) => void
-  onRemove: (item: GalleryItem) => void
+  onRemove: (items: GalleryItem[]) => void
   onFileInfo: (item: GalleryItem) => void
   onMissing: (id: string) => void
 }) {
   const [index, setIndex] = useState<number | null>(null)
-  const [menu, setMenu] = useState<{ x: number; y: number; item: GalleryItem } | null>(null)
+  const [anchor, setAnchor] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [menu, setMenu] = useState<{ x: number; y: number; item: GalleryItem; targets: GalleryItem[] } | null>(null)
   const [box, setBox] = useState({ width: 0, gap: 8, targetH: 208 })
   const scrollerRef = useRef<HTMLDivElement>(null)
   const [sentinel, setSentinel] = useState<HTMLDivElement | null>(null)
   const setSentinelRef = useCallback((node: HTMLDivElement | null) => setSentinel(node), [])
   const current = index != null ? items[index] : null
   const many = items.length > 1
+  const selected = useMemo(() => new Set(selectedIds), [selectedIds])
   const rows = useMemo(
     () => packRows(items, box.width, box.gap, box.targetH),
     [items, box.width, box.gap, box.targetH],
   )
+
+  function clearSelection() {
+    setSelectedIds([])
+    setAnchor(null)
+  }
+
+  function onThumbClick(event: MouseEvent<HTMLButtonElement>, itemIndex: number) {
+    if (event.shiftKey) {
+      event.preventDefault()
+      if (anchor == null) {
+        setAnchor(itemIndex)
+        setSelectedIds([items[itemIndex].id])
+        return
+      }
+      const from = Math.min(anchor, itemIndex)
+      const to = Math.max(anchor, itemIndex)
+      setSelectedIds(items.slice(from, to + 1).map((item) => item.id))
+      return
+    }
+    if (selectedIds.length) {
+      clearSelection()
+      return
+    }
+    setIndex(itemIndex)
+  }
 
   useEffect(() => {
     if (index == null) {
@@ -165,6 +204,21 @@ export function GalleryResults({
       setIndex(items.length ? items.length - 1 : null)
     }
   }, [items, index])
+
+  useEffect(() => {
+    const ids = new Set(items.map((item) => item.id))
+    setSelectedIds((current) => {
+      const keep = current.filter((id) => ids.has(id))
+      return keep.length === current.length ? current : keep
+    })
+    setAnchor((value) => (value == null || value >= items.length ? null : value))
+  }, [items])
+
+  useEffect(() => {
+    if (!selectedIds.length) {
+      setAnchor(null)
+    }
+  }, [selectedIds])
 
   useEffect(() => {
     const root = scrollerRef.current
@@ -213,11 +267,21 @@ export function GalleryResults({
                   item={item}
                   width={row.height * aspect}
                   height={row.height}
-                  onSelect={() => setIndex(itemIndex)}
+                  selected={selected.has(item.id)}
+                  onSelect={(event) => onThumbClick(event, itemIndex)}
                   onMissing={onMissing}
                   onMenu={(event) => {
                     event.preventDefault()
-                    setMenu({ x: event.clientX, y: event.clientY, item })
+                    const on = selected.has(item.id)
+                    if (!on && selectedIds.length) {
+                      clearSelection()
+                    }
+                    setMenu({
+                      x: event.clientX,
+                      y: event.clientY,
+                      item,
+                      targets: on ? items.filter((entry) => selected.has(entry.id)) : [item],
+                    })
                   }}
                 />
               ))}
@@ -256,10 +320,10 @@ export function GalleryResults({
             }}
           />
           <ContextMenuItem
-            label="Remove"
+            label={menu.targets.length > 1 ? `Remove ${menu.targets.length} images` : 'Remove'}
             danger
             onClick={() => {
-              onRemove(menu.item)
+              onRemove(menu.targets)
               setMenu(null)
             }}
           />
@@ -280,7 +344,7 @@ export function GalleryResults({
                 onFileInfo(current)
               }}
               onFavorite={() => onFavorite(current)}
-              onRemove={() => onRemove(current)}
+              onRemove={() => onRemove([current])}
             />
           }
           onClose={() => setIndex(null)}

@@ -4,7 +4,7 @@ import { TilePreview } from '@/components/composites/models/TilePreview.tsx'
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
 import { galleryPackKey } from '@/stores/settings/constants.ts'
-import { modelLabel, modelPath, useModelsStore } from '@/stores/modelsStore.ts'
+import { modelLabel, modelPath, useBaseModels, useModelsStore } from '@/stores/modelsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { useEffect, useMemo, useRef, useState } from 'react'
 
@@ -29,7 +29,10 @@ export function ModelPickTile({
   chromeKey,
   size = 'row',
 }: ModelPickTileProps) {
-  const items = useModelsStore((s) => s[kind])
+  const stored = useModelsStore((s) => s[kind])
+  const base = useBaseModels()
+  const items = kind === 'checkpoints' ? base.items : stored
+  const itemKind = kind === 'checkpoints' ? base.itemKind : undefined
   const load = useModelsStore((s) => s.load)
   const triggerRef = useRef<HTMLButtonElement>(null)
   const [open, setOpen] = useState(false)
@@ -92,7 +95,7 @@ export function ModelPickTile({
             onClick={() => (open ? setOpen(false) : show())}
           >
             <TilePreview
-              src={empty || unresolved || !item ? null : modelThumbSrc(kind, item, view)}
+              src={empty || unresolved || !item ? null : modelThumbSrc(itemKind?.(item) ?? kind, item, view)}
               mark={empty ? '' : unresolved ? '?' : ''}
               label={!empty ? name : undefined}
               eager
@@ -129,7 +132,7 @@ export function ModelPickTile({
         >
           <span className="relative w-10 shrink-0">
             <TilePreview
-              src={item ? modelThumbSrc(kind, item, view) : null}
+              src={item ? modelThumbSrc(itemKind?.(item) ?? kind, item, view) : null}
               mark={empty ? '' : unresolved ? '?' : ''}
               eager
               className="w-10"
@@ -165,6 +168,8 @@ export function ModelPickTile({
       {open && anchor ? (
         <FloatingModelsView
           kind={kind}
+          items={items}
+          itemKind={itemKind}
           value={value}
           chromeKey={chromeKey}
           anchor={anchor}

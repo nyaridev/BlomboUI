@@ -1,4 +1,5 @@
 import { ResizeGrip } from '@/components/controls/resizable-panel/ResizeGrip.tsx'
+import { fitContentHeight } from '@/components/controls/textarea/fitContentHeight.ts'
 import { PromptField } from '@/views/generate/panels/chrome/sections/prompt/PromptSuggest.tsx'
 import { useGenerateStore } from '@/stores/generateStore.ts'
 import { useLayoutEffect, useRef, useState } from 'react'
@@ -57,10 +58,20 @@ export function PromptStack({ negativeDisabled }: { negativeDisabled: boolean })
   const minH = fallback.minH
   const maxH = fallback.maxH
   const stackRef = useRef<HTMLDivElement>(null)
+  const promptBox = useRef<HTMLDivElement>(null)
+  const negativeBox = useRef<HTMLDivElement>(null)
   const ready = useRef(false)
   const [defaults, setDefaults] = useState({ prompt: fallback.prompt, negative: fallback.negative })
   const [promptH, setPromptH] = useState(defaults.prompt)
   const [negativeH, setNegativeH] = useState(defaults.negative)
+
+  function resetField(box: HTMLElement | null, fallback: number) {
+    const el = box?.querySelector('textarea')
+    if (!(el instanceof HTMLTextAreaElement)) {
+      return fallback
+    }
+    return fitContentHeight(el, fallback, minH, maxH)
+  }
 
   useLayoutEffect(() => {
     if (ready.current) {
@@ -75,17 +86,17 @@ export function PromptStack({ negativeDisabled }: { negativeDisabled: boolean })
 
   return (
     <div ref={stackRef} className="flex min-w-0 flex-1 flex-col gap-2">
-      <div className="relative" style={{ height: promptH }}>
+      <div ref={promptBox} className="relative" style={{ height: promptH }}>
         <PromptField value={prompt} onChange={onPrompt} placeholder="Positive" side="prompt" />
         <ResizeGrip
           value={promptH}
           onChange={setPromptH}
-          onReset={() => setPromptH(defaults.prompt)}
+          onReset={() => setPromptH(resetField(promptBox.current, defaults.prompt))}
           min={minH}
           max={maxH}
         />
       </div>
-      <div className="relative" style={{ height: negativeH }}>
+      <div ref={negativeBox} className="relative" style={{ height: negativeH }}>
         <PromptField
           value={negativePrompt}
           onChange={onNegative}
@@ -96,7 +107,7 @@ export function PromptStack({ negativeDisabled }: { negativeDisabled: boolean })
         <ResizeGrip
           value={negativeH}
           onChange={setNegativeH}
-          onReset={() => setNegativeH(defaults.negative)}
+          onReset={() => setNegativeH(resetField(negativeBox.current, defaults.negative))}
           min={minH}
           max={maxH}
         />

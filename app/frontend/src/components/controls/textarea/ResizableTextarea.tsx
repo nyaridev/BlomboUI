@@ -1,4 +1,5 @@
 import { ResizeGrip } from '@/components/controls/resizable-panel/ResizeGrip.tsx'
+import { fitContentHeight } from '@/components/controls/textarea/fitContentHeight.ts'
 import { PrimitiveTextarea } from '@/components/primitives/PrimitiveInput.tsx'
 import { useLayoutEffect, useRef, useState, type TextareaHTMLAttributes } from 'react'
 
@@ -35,7 +36,15 @@ export function ResizableTextarea({
       <ResizeGrip
         value={applied ?? minHeight}
         onChange={setHeight}
-        onReset={() => setHeight(null)}
+        onReset={() => {
+          const el = textarea.current
+          if (!el || defaultHeight == null) {
+            setHeight(null)
+            return
+          }
+          const next = fitContentHeight(el, defaultHeight, minHeight, maxHeight)
+          setHeight(next <= defaultHeight ? null : next)
+        }}
         min={minHeight}
         max={maxHeight}
       />

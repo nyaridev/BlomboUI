@@ -64,6 +64,7 @@ type GalleryViewProps = {
   chromeKey?: string
   fill?: boolean
   fileOps?: boolean
+  useFsTree?: boolean
   tileScale?: number
   itemKind?: (item: ModelEntry) => keyof ModelLists
   autoCheckpoint?: string
@@ -79,6 +80,7 @@ export function GalleryBrowser({
   chromeKey,
   fill = false,
   fileOps = true,
+  useFsTree = fileOps,
   tileScale: tileScaleOverride,
   itemKind,
   autoCheckpoint,
@@ -202,8 +204,8 @@ export function GalleryBrowser({
     }
   }, [extraNames, itemKind, kind, otherGallery])
   const tree = useMemo(
-    () => (fileOps && fsRoots.length ? fsRoots : buildGalleryTree(paths)),
-    [fileOps, fsRoots, paths],
+    () => (useFsTree && fsRoots.length ? fsRoots : buildGalleryTree(paths)),
+    [fsRoots, paths, useFsTree],
   )
   const treeDirs = useMemo(() => collectDirPaths(tree), [tree])
   const fileActions = useGalleryFileOps({

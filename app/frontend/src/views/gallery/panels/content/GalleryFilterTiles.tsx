@@ -3,7 +3,7 @@ import { FloatingModelsView } from '@/components/composites/models/FloatingModel
 import { modelThumbSrc } from '@/lib/gallery/thumbView.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
 import { galleryPackKey } from '@/stores/settings/constants.ts'
-import { useModelsStore } from '@/stores/modelsStore.ts'
+import { useBaseModels, useModelsStore } from '@/stores/modelsStore.ts'
 import { useThumbView } from '@/stores/thumbnailScopeStore.ts'
 import { ModelTile } from '@/views/generate/panels/chrome/sections/tiles/ModelTile.tsx'
 import { RowLabel } from '@/views/generate/panels/chrome/sections/tiles/modelTileParts.tsx'
@@ -60,7 +60,7 @@ export function GalleryFilterTiles({
   const [picked, setPicked] = useState<ModelTileStyle>('text')
   const style = fixedStyle ?? picked
   const spec = modelTileSpec(style)
-  const checkpoints = useModelsStore((s) => s.checkpoints)
+  const { items: baseItems, itemKind: baseItemKind } = useBaseModels()
   const loraItems = useModelsStore((s) => s.loras)
   const wildcardItems = useModelsStore((s) => s.wildcards)
   const load = useModelsStore((s) => s.load)
@@ -118,7 +118,8 @@ export function GalleryFilterTiles({
             chromeKey={`${chromePrefix}-checkpoints`}
             style={style}
             chips={models}
-            items={checkpoints}
+            items={baseItems}
+            itemKind={baseItemKind}
             onChange={onModels}
           />
           <span className="mx-1 w-px shrink-0 self-stretch bg-line" />
@@ -157,6 +158,7 @@ function FilterGroup({
   style,
   chips,
   items,
+  itemKind,
   onChange,
 }: {
   label: string
@@ -166,6 +168,7 @@ function FilterGroup({
   style: ModelTileStyle
   chips: string[]
   items: ModelEntry[]
+  itemKind?: (item: ModelEntry) => keyof ModelLists
   onChange: (value: string[]) => void
 }) {
   const spec = modelTileSpec(style)
@@ -210,7 +213,7 @@ function FilterGroup({
               style={style}
               role={role}
               name={displayName(item, chip)}
-              src={modelThumbSrc(kind, item, view)}
+              src={modelThumbSrc(item ? (itemKind?.(item) ?? kind) : kind, item, view)}
               unresolved={!item}
               onOpen={showPicker}
               onClear={() => onChange(chips.filter((entry) => entry !== chip))}
@@ -223,6 +226,8 @@ function FilterGroup({
       {anchor ? (
         <FloatingModelsView
           kind={kind}
+          items={items}
+          itemKind={itemKind}
           selected={selected}
           chromeKey={chromeKey}
           dismissOutside={false}

@@ -54,7 +54,7 @@ export function ResizeGrip({
     <button
       type="button"
       aria-label="Resize"
-      title="Drag to resize. Double-click to reset."
+      title="Drag to resize. Double-click to fit."
       className="resize-grip"
       onPointerDown={onDown}
       onDoubleClick={(event) => {

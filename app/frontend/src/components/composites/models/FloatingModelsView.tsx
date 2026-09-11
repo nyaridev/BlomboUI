@@ -1,6 +1,6 @@
 import { GalleryBrowser } from '@/components/composites/gallery/GalleryBrowser.tsx'
 import { isForeignOverlay, isTopOverlay, placePanel } from '@/components/composites/models/overlayPanel.ts'
-import { useModelsStore } from '@/stores/modelsStore.ts'
+import { useBaseModels, useModelsStore } from '@/stores/modelsStore.ts'
 import { useSettingsStore } from '@/stores/settingsStore.ts'
 import type { ModelEntry, ModelLists } from '@/lib/api.ts'
 import { useEffect, useRef } from 'react'
@@ -36,7 +36,9 @@ export function FloatingModelsView({
   autoCheckpoint,
 }: FloatingModelsViewProps) {
   const stored = useModelsStore((s) => s[kind])
-  const items = itemsProp ?? stored
+  const base = useBaseModels()
+  const items = itemsProp ?? (kind === 'checkpoints' ? base.items : stored)
+  const resolvedKind = itemKind ?? (kind === 'checkpoints' ? base.itemKind : undefined)
   const load = useModelsStore((s) => s.load)
   const galleryTileScale = useSettingsStore((s) => s.galleryTileScale)
   const panelRef = useRef<HTMLDivElement>(null)
@@ -84,7 +86,7 @@ export function FloatingModelsView({
       <GalleryBrowser
         kind={kind}
         items={items}
-        itemKind={itemKind}
+        itemKind={resolvedKind}
         value={value}
         selected={selected}
         onSelect={(path) => {
@@ -96,6 +98,7 @@ export function FloatingModelsView({
         chromeKey={chromeKey || `pick-${kind}`}
         fill
         fileOps={false}
+        useFsTree
         tileScale={galleryTileScale * 0.5}
         autoCheckpoint={autoCheckpoint}
       />

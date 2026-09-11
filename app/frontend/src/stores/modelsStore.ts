@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { create } from 'zustand'
 import { getModels, refreshModels, type ModelEntry, type ModelLists } from '@/lib/api.ts'
 import { useIssuesStore } from '@/stores/issuesStore.ts'
@@ -310,4 +311,15 @@ export function modelLabel(id: unknown) {
   }
   const base = path.replace(/\\/g, '/').split('/').pop() || path
   return base.replace(/\.[^/.]+$/, '')
+}
+
+export function useBaseModels() {
+  const checkpoints = useModelsStore((s) => s.checkpoints)
+  const diffusionModels = useModelsStore((s) => s.diffusion_models)
+  const items = useMemo(() => [...checkpoints, ...diffusionModels], [checkpoints, diffusionModels])
+  const itemKind = useMemo(() => {
+    const unetPaths = new Set(diffusionModels.map((item) => modelPath(item)))
+    return (item: ModelEntry): keyof ModelLists => (unetPaths.has(modelPath(item)) ? 'diffusion_models' : 'checkpoints')
+  }, [diffusionModels])
+  return { items, itemKind }
 }

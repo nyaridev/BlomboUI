@@ -4,6 +4,7 @@ import { SegmentSwitch } from '@/components/controls/button/SegmentSwitch.tsx'
 import { SelectField } from '@/components/controls/select/SelectField.tsx'
 import { SliderField } from '@/components/controls/slider/SliderField.tsx'
 import { ResizableTextarea } from '@/components/controls/textarea/ResizableTextarea.tsx'
+import { getQwenVlModels } from '@/lib/api.ts'
 import { ParamSection } from '@/views/generate/panels/generation/sections/params/ParamSection.tsx'
 import {
   SEED_AFTER,
@@ -12,7 +13,7 @@ import {
   type CaptionSettings,
   type SeedAfter,
 } from '@/stores/generateStore.ts'
-import { type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 
 const BOX = 'rounded-md border border-line bg-panel p-2.5'
 const WD14_DEFAULT = 'wd-v1-4-moat-tagger-v2'
@@ -97,6 +98,10 @@ function joinCaptionParts(...parts: string[]) {
     .join(', ')
 }
 
+function withCurrent(current: string, listed: string[]) {
+  return [...new Set([current, ...listed].filter(Boolean))]
+}
+
 export function CaptionFields({
   value,
   onChange,
@@ -111,6 +116,27 @@ export function CaptionFields({
   lastSeed?: number | null
 }) {
   const boxed = wrap == null
+  const [qwenNative, setQwenNative] = useState<string[]>(QWEN_MODELS)
+  const [qwenGguf, setQwenGguf] = useState<string[]>(QWEN_GGUF_MODELS)
+  useEffect(() => {
+    let active = true
+    void getQwenVlModels()
+      .then((listed) => {
+        if (!active) {
+          return
+        }
+        if (listed.native.length) {
+          setQwenNative(listed.native)
+        }
+        if (listed.gguf.length) {
+          setQwenGguf(listed.gguf)
+        }
+      })
+      .catch(() => undefined)
+    return () => {
+      active = false
+    }
+  }, [])
   function set(next: Partial<CaptionSettings>) {
     if (!locked) {
       onChange(next)
@@ -122,6 +148,8 @@ export function CaptionFields({
   const wd14 = value.engine === 'wd14'
   const gguf = !wd14 && value.qwenBackend === 'gguf'
   const native = !wd14 && !gguf
+  const nativeOptions = withCurrent(value.qwenModel, qwenNative.length ? qwenNative : QWEN_MODELS)
+  const ggufOptions = withCurrent(value.qwenGgufModel, qwenGguf.length ? qwenGguf : QWEN_GGUF_MODELS)
   const modelSelect = wd14 ? (
     <SelectField
       value={WD14_MODELS.includes(value.wd14Model) ? value.wd14Model : WD14_DEFAULT}
@@ -130,15 +158,15 @@ export function CaptionFields({
     />
   ) : gguf ? (
     <SelectField
-      value={QWEN_GGUF_MODELS.includes(value.qwenGgufModel) ? value.qwenGgufModel : QWEN_GGUF_MODELS[1]}
+      value={value.qwenGgufModel}
       onChange={(qwenGgufModel) => set({ qwenGgufModel })}
-      options={QWEN_GGUF_MODELS}
+      options={ggufOptions}
     />
   ) : (
     <SelectField
-      value={QWEN_MODELS.includes(value.qwenModel) ? value.qwenModel : QWEN_MODELS[4]}
+      value={value.qwenModel}
       onChange={(qwenModel) => set({ qwenModel })}
-      options={QWEN_MODELS}
+      options={nativeOptions}
     />
   )
   return (

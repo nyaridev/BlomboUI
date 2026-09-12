@@ -70,6 +70,11 @@ def seedvr2_models() -> dict:
     return {"models": generate.list_seedvr2_models()}
 
 
+@api.get("/comfy/qwen-vl-models")
+def qwen_vl_models() -> dict:
+    return generate.list_qwen_vl_models()
+
+
 @api.post("/jobs/uploads")
 async def post_job_uploads(files: list[UploadFile] = File(...)) -> dict:
     blobs: list[tuple[str, bytes]] = []

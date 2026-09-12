@@ -389,6 +389,67 @@ class CaptionTargetSizeTests(unittest.TestCase):
         shutil.rmtree(src.parent, ignore_errors=True)
 
 
+class CaptionQwenListTests(unittest.TestCase):
+    def test_list_qwen_vl_models_scan_rules(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "local"
+            extra = Path(tmp) / "extra"
+            llm = local / "LLM"
+            catalog_native = llm / "Qwen-VL" / "Qwen3-VL-4B-Instruct"
+            catalog_native.mkdir(parents=True)
+            (catalog_native / "config.json").write_text("{}", encoding="utf-8")
+            custom = llm / "Qwen-VL" / "MyCaption"
+            custom.mkdir(parents=True)
+            (custom / "model.safetensors").write_bytes(b"x")
+            unsloth = llm / "unsloth" / "Qwen3.5-4B"
+            unsloth.mkdir(parents=True)
+            (unsloth / "config.json").write_text("{}", encoding="utf-8")
+            extra_native = extra / "LLM" / "ExtraNative"
+            extra_native.mkdir(parents=True)
+            (extra_native / "config.json").write_text("{}", encoding="utf-8")
+            gguf_dir = llm / "GGUF" / "sub"
+            gguf_dir.mkdir(parents=True)
+            (gguf_dir / "Custom-Q4.gguf").write_bytes(b"x")
+            (gguf_dir / "mmproj-F16.gguf").write_bytes(b"x")
+            (gguf_dir / "Qwen3VL-4B-Instruct-Q8_0.gguf").write_bytes(b"x")
+            extra_gguf = extra / "LLM" / "other"
+            extra_gguf.mkdir(parents=True)
+            (extra_gguf / "Extra-Q8.gguf").write_bytes(b"x")
+            (llm / "skip.txt").write_text("no", encoding="utf-8")
+            with patch.object(caption, "models_root", return_value=local), patch.object(
+                caption.dirs, "extra_named", return_value={"Extra": extra}
+            ):
+                listed = caption.list_qwen_vl_models()
+                blob = caption.clean_caption(
+                    {
+                        "engine": "qwen",
+                        "qwen_model": "MyCaption",
+                        "qwen_gguf_model": "Extra-Q8.gguf",
+                    }
+                )
+                missing = caption.clean_caption(
+                    {
+                        "engine": "qwen",
+                        "qwen_model": "MissingNative",
+                        "qwen_gguf_model": "missing.gguf",
+                    }
+                )
+        self.assertEqual(listed["native"][: len(caption.QWEN_MODELS)], list(caption.QWEN_MODELS))
+        self.assertEqual(listed["gguf"][: len(caption.QWEN_GGUF_MODELS)], list(caption.QWEN_GGUF_MODELS))
+        self.assertEqual(listed["native"][len(caption.QWEN_MODELS) :], ["ExtraNative", "MyCaption"])
+        self.assertEqual(listed["gguf"][len(caption.QWEN_GGUF_MODELS) :], ["Custom-Q4.gguf", "Extra-Q8.gguf"])
+        self.assertNotIn("Qwen-VL/MyCaption", listed["native"])
+        self.assertNotIn("Qwen-VL/Qwen3-VL-4B-Instruct", listed["native"])
+        self.assertEqual(listed["native"].count("Qwen3-VL-4B-Instruct"), 1)
+        self.assertEqual(listed["native"].count("unsloth/Qwen3.5-4B"), 1)
+        self.assertNotIn("mmproj-F16.gguf", listed["gguf"])
+        self.assertEqual(listed["gguf"].count("Qwen3VL-4B-Instruct-Q8_0.gguf"), 1)
+        self.assertEqual(blob["qwen_model"], "MyCaption")
+        self.assertEqual(blob["qwen_gguf_model"], "Extra-Q8.gguf")
+        self.assertEqual(missing["qwen_model"], caption.QWEN_MODEL_DEFAULT)
+        self.assertEqual(missing["qwen_gguf_model"], caption.QWEN_GGUF_DEFAULT)
+
+
 class CaptionTemplateTests(unittest.TestCase):
     def test_default_apply(self) -> None:
         expected = list(templates._CAPTION_APPLY) + ["outputPath"]

@@ -220,3 +220,13 @@ export async function getSeedvr2Models(): Promise<string[]> {
   const data = (await res.json()) as { models: string[] }
   return Array.isArray(data.models) ? data.models.filter((item) => typeof item === 'string') : []
 }
+
+export async function getQwenVlModels(): Promise<{ native: string[]; gguf: string[] }> {
+  const res = await fetch(api('/comfy/qwen-vl-models'))
+  if (!res.ok) {
+    throw new Error(await readError(res))
+  }
+  const data = (await res.json()) as { native?: unknown; gguf?: unknown }
+  const names = (raw: unknown) => (Array.isArray(raw) ? raw.filter((item): item is string => typeof item === 'string') : [])
+  return { native: names(data.native), gguf: names(data.gguf) }
+}

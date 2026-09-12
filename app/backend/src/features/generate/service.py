@@ -24,6 +24,7 @@ from features.generate.scripts.job.jobs import (
 )
 from features.generate.scripts.workflow.attention import installed
 from features.generate.scripts.workflow.rembg import save_uploads
+from features.generate.scripts.workflow.caption import list_qwen_vl_models
 from features.generate.scripts.workflow.upscale import list_seedvr2_models
 from features.generate.scripts.templates import (
     TemplateError,
@@ -55,6 +56,7 @@ __all__ = [
     "latest_job",
     "list_templates",
     "list_workflows",
+    "list_qwen_vl_models",
     "list_seedvr2_models",
     "preview_bytes",
     "preview_media",

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import copy
 import math
+import os
 from pathlib import Path
 from typing import Any
 
+from config import models_root
 from features.generate.scripts.workflow.rembg import list_input_images, source_path
+from shared import dirs
 
 PATH_DEFAULT = "image_caption/[date]"
 NAME_DEFAULT = "[index]"
@@ -79,6 +82,10 @@ QWEN_PRESETS = (
     "🧩Prompt Refine & Expand",
 )
 _SEED_AFTER = {"randomize", "fixed", "increment", "decrement"}
+_NATIVE_WEIGHTS = {".safetensors", ".bin"}
+_QWEN_NATIVE_BASES = {Path(name).name for name in QWEN_MODELS}
+QWEN_MODEL_DEFAULT = "Qwen3-VL-4B-Instruct"
+QWEN_GGUF_DEFAULT = "Qwen3VL-4B-Instruct-Q8_0.gguf"
 BASE_PROMPT = (
     "Mark the subject as `Subject`.\n"
     "\n"
@@ -90,6 +97,99 @@ BASE_PROMPT = (
     "\n"
     "Output only the caption. No comments and notes allowed."
 )
+
+
+def _llm_roots() -> list[Path]:
+    roots: list[Path] = []
+    seen: set[str] = set()
+    for folder in (models_root(), *dirs.extra_named("modelDirs").values()):
+        root = folder / "LLM"
+        key = str(root)
+        try:
+            key = str(root.resolve())
+        except OSError:
+            pass
+        if key in seen:
+            continue
+        seen.add(key)
+        if root.is_dir():
+            roots.append(root)
+    return roots
+
+
+def _posix_rel(root: Path, path: Path) -> str:
+    rel = path.relative_to(root).as_posix().strip("/")
+    return "" if rel in {".", ""} else rel
+
+
+def _native_display_name(rel: str) -> str:
+    text = rel.strip("/")
+    prefix = "Qwen-VL/"
+    if text.lower().startswith(prefix.lower()):
+        text = text[len(prefix) :]
+    return text.strip("/")
+
+
+def _is_native_dir(folder: Path) -> bool:
+    try:
+        entries = folder.iterdir()
+    except OSError:
+        return False
+    for path in entries:
+        if not path.is_file():
+            continue
+        if path.name.lower() == "config.json":
+            return True
+        if path.suffix.lower() in _NATIVE_WEIGHTS:
+            return True
+    return False
+
+
+def _native_known(name: str) -> bool:
+    if name in QWEN_MODELS:
+        return True
+    base = Path(name).name
+    return base in _QWEN_NATIVE_BASES
+
+
+def _scan_llm_extras() -> tuple[set[str], set[str]]:
+    native: set[str] = set()
+    gguf: set[str] = set()
+    for root in _llm_roots():
+        for dirpath, _dirnames, filenames in os.walk(root):
+            folder = Path(dirpath)
+            try:
+                rel = _posix_rel(root, folder)
+            except ValueError:
+                continue
+            gguf_tree = any(part.lower() == "gguf" for part in Path(rel).parts) if rel else False
+            for name in filenames:
+                path = folder / name
+                if not path.is_file() or path.suffix.lower() != ".gguf":
+                    continue
+                if name.lower().startswith("mmproj"):
+                    continue
+                gguf.add(name)
+            if gguf_tree or not rel or not _is_native_dir(folder):
+                continue
+            display = _native_display_name(rel)
+            if display and not _native_known(display):
+                native.add(display)
+    return native, gguf
+
+
+def _merge_catalog(catalog: tuple[str, ...], extras: set[str]) -> list[str]:
+    seen = set(catalog)
+    extra_names = sorted((name for name in extras if name not in seen), key=str.lower)
+    return [*catalog, *extra_names]
+
+
+def list_qwen_vl_models() -> dict[str, list[str]]:
+    native_extra, gguf_extra = _scan_llm_extras()
+    return {
+        "native": _merge_catalog(QWEN_MODELS, native_extra),
+        "gguf": _merge_catalog(QWEN_GGUF_MODELS, gguf_extra),
+    }
 
 
 def is_caption(values: dict[str, Any]) -> bool:
@@ -144,12 +244,13 @@ def clean_caption(raw: Any) -> dict[str, Any]:
     qwen_backend = str(src.get("qwen_backend") or src.get("qwenBackend") or "native")
     if qwen_backend not in {"native", "gguf"}:
         qwen_backend = "native"
-    qwen_model = str(src.get("qwen_model") or src.get("qwenModel") or "Qwen3-VL-4B-Instruct")
-    if qwen_model not in QWEN_MODELS:
-        qwen_model = "Qwen3-VL-4B-Instruct"
-    qwen_gguf_model = str(src.get("qwen_gguf_model") or src.get("qwenGgufModel") or "Qwen3VL-4B-Instruct-Q8_0.gguf")
-    if qwen_gguf_model not in QWEN_GGUF_MODELS:
-        qwen_gguf_model = "Qwen3VL-4B-Instruct-Q8_0.gguf"
+    listed = list_qwen_vl_models()
+    qwen_model = str(src.get("qwen_model") or src.get("qwenModel") or QWEN_MODEL_DEFAULT)
+    if qwen_model not in listed["native"]:
+        qwen_model = QWEN_MODEL_DEFAULT
+    qwen_gguf_model = str(src.get("qwen_gguf_model") or src.get("qwenGgufModel") or QWEN_GGUF_DEFAULT)
+    if qwen_gguf_model not in listed["gguf"]:
+        qwen_gguf_model = QWEN_GGUF_DEFAULT
     quant = str(src.get("quantization") or "8-bit (Balanced)")
     if quant not in _QUANTS:
         quant = "8-bit (Balanced)"

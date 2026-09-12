@@ -198,6 +198,41 @@ def clip_loader_choices() -> dict[str, list[str]]:
     }
 
 
+_QWEN_NATIVE_NODES = ("AILab_QwenVL", "AILab_QwenVL_Advanced")
+_QWEN_GGUF_NODES = ("AILab_QwenVL_GGUF", "AILab_QwenVL_GGUF_Advanced")
+_QWEN_PLACEHOLDER = "(edit gguf_models.json)"
+
+
+def _combo_nodes(nodes: tuple[str, ...], field: str) -> list[str]:
+    out: list[str] = []
+    seen: set[str] = set()
+    for node in nodes:
+        try:
+            raw = _request("GET", f"/object_info/{node}", timeout=5)
+        except ComfyError:
+            continue
+        try:
+            info = json.loads(raw.decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+        if not isinstance(info, dict):
+            continue
+        for item in _combo(info, node, field):
+            name = str(item).strip()
+            if not name or name == _QWEN_PLACEHOLDER or name in seen:
+                continue
+            seen.add(name)
+            out.append(name)
+    return out
+
+
+def qwen_vl_choices() -> dict[str, list[str]]:
+    return {
+        "native": _combo_nodes(_QWEN_NATIVE_NODES, "model_name"),
+        "gguf": _combo_nodes(_QWEN_GGUF_NODES, "model_name"),
+    }
+
+
 def warmup_model_lists(kind: str | None = None) -> None:
     if not reachable():
         return

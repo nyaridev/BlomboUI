@@ -418,6 +418,10 @@ class CaptionQwenListTests(unittest.TestCase):
             (llm / "skip.txt").write_text("no", encoding="utf-8")
             with patch.object(caption, "models_root", return_value=local), patch.object(
                 caption.dirs, "extra_named", return_value={"Extra": extra}
+            ), patch.object(
+                caption,
+                "_node_catalog",
+                return_value={"native": list(caption.QWEN_MODELS), "gguf": list(caption.QWEN_GGUF_MODELS)},
             ):
                 listed = caption.list_qwen_vl_models()
                 blob = caption.clean_caption(
@@ -448,6 +452,47 @@ class CaptionQwenListTests(unittest.TestCase):
         self.assertEqual(blob["qwen_gguf_model"], "Extra-Q8.gguf")
         self.assertEqual(missing["qwen_model"], caption.QWEN_MODEL_DEFAULT)
         self.assertEqual(missing["qwen_gguf_model"], caption.QWEN_GGUF_DEFAULT)
+
+    def test_list_qwen_vl_models_uses_node_combos(self) -> None:
+        node_native = ["Qwen3-VL-4B-Instruct", "NodeNative"]
+        node_gguf = ["Qwen3VL-4B-Instruct-Q8_0.gguf", "NodeExtra-Q4.gguf", "Qwen3VL-32B-Instruct-Q4_K_M.gguf"]
+        with tempfile.TemporaryDirectory() as tmp:
+            local = Path(tmp) / "local"
+            (local / "LLM").mkdir(parents=True)
+            with patch.object(caption, "models_root", return_value=local), patch.object(
+                caption.dirs, "extra_named", return_value={}
+            ), patch.object(
+                caption,
+                "_live_node_catalog",
+                return_value={"native": node_native, "gguf": node_gguf},
+            ), patch.object(caption, "_pack_json_catalog", return_value={"native": [], "gguf": []}):
+                listed = caption.list_qwen_vl_models()
+                blob = caption.clean_caption(
+                    {
+                        "engine": "qwen",
+                        "qwen_backend": "gguf",
+                        "qwen_gguf_model": "Qwen3VL-32B-Instruct-Q4_K_M.gguf",
+                    }
+                )
+        self.assertEqual(listed["native"], node_native)
+        self.assertEqual(listed["gguf"], node_gguf)
+        self.assertEqual(blob["qwen_gguf_model"], "Qwen3VL-32B-Instruct-Q4_K_M.gguf")
+
+    def test_gguf_vl_keys_match_node_filter(self) -> None:
+        keys = caption._gguf_vl_keys(
+            {
+                "qwenVL_model": {
+                    "Qwen3-VL-4B-Instruct-GGUF": {
+                        "mmproj_file": "mmproj-F16.gguf",
+                        "model_files": ["Qwen3VL-4B-Instruct-Q8_0.gguf", "Qwen3VL-32B-Instruct-Q4_K_M.gguf"],
+                    }
+                },
+                "Qwen_model": {
+                    "Qwen3-4B-GGUF": {"model_files": ["Qwen3-4B-Q8_0.gguf"]},
+                },
+            }
+        )
+        self.assertEqual(keys, ["Qwen3VL-32B-Instruct-Q4_K_M.gguf", "Qwen3VL-4B-Instruct-Q8_0.gguf"])
 
 
 class CaptionTemplateTests(unittest.TestCase):

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import copy
+import json
 import math
 import os
 from pathlib import Path
 from typing import Any
 
-from config import models_root
+from config import RUNTIME, comfy_models_root, launcher_env, models_root
 from features.generate.scripts.workflow.rembg import list_input_images, source_path
 from shared import dirs
 
@@ -83,7 +84,6 @@ QWEN_PRESETS = (
 )
 _SEED_AFTER = {"randomize", "fixed", "increment", "decrement"}
 _NATIVE_WEIGHTS = {".safetensors", ".bin"}
-_QWEN_NATIVE_BASES = {Path(name).name for name in QWEN_MODELS}
 QWEN_MODEL_DEFAULT = "Qwen3-VL-4B-Instruct"
 QWEN_GGUF_DEFAULT = "Qwen3VL-4B-Instruct-Q8_0.gguf"
 BASE_PROMPT = (
@@ -145,16 +145,124 @@ def _is_native_dir(folder: Path) -> bool:
     return False
 
 
-def _native_known(name: str) -> bool:
-    if name in QWEN_MODELS:
+def _known_name(name: str, catalog: list[str]) -> bool:
+    if name in catalog:
         return True
-    base = Path(name).name
-    return base in _QWEN_NATIVE_BASES
+    bases = {Path(item).name for item in catalog}
+    return Path(name).name in bases
 
 
-def _scan_llm_extras() -> tuple[set[str], set[str]]:
+def _read_json(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _qwenvl_node_dir() -> Path | None:
+    env = launcher_env()
+    raw = str(env.get("comfyui.path") or "").strip()
+    roots = [Path(raw)] if raw else []
+    roots.append(comfy_models_root().parent)
+    roots.append(RUNTIME / "comfyui" / "ComfyUI")
+    seen: set[str] = set()
+    for root in roots:
+        folder = root / "custom_nodes" / "ComfyUI-QwenVL"
+        key = str(folder)
+        if key in seen:
+            continue
+        seen.add(key)
+        if folder.is_dir():
+            return folder
+    return None
+
+
+def _hf_vl_keys(data: dict[str, Any]) -> list[str]:
+    if "hf_vl_models" in data or "hf_text_models" in data:
+        models = data.get("hf_vl_models") or {}
+    else:
+        models = {key: value for key, value in data.items() if not str(key).startswith("_")}
+    if not isinstance(models, dict):
+        return []
+    return [str(key) for key in models if str(key).strip()]
+
+
+def _gguf_vl_keys(data: dict[str, Any]) -> list[str]:
+    flattened: dict[str, dict[str, Any]] = {}
+    seen: set[str] = set()
+    repos = data.get("qwenVL_model") or data.get("vl_repos") or data.get("repos") or {}
+    if isinstance(repos, dict):
+        for repo_key, repo in repos.items():
+            if not isinstance(repo, dict):
+                continue
+            mmproj = repo.get("mmproj_file") or repo.get("mmproj_filename")
+            for model_file in repo.get("model_files") or []:
+                display = Path(str(model_file)).name
+                if display in seen:
+                    display = f"{display} ({repo_key})"
+                seen.add(display)
+                flattened[display] = {"mmproj_filename": mmproj}
+    legacy = data.get("models") or {}
+    if isinstance(legacy, dict):
+        for name, entry in legacy.items():
+            if isinstance(entry, dict):
+                flattened[str(name)] = entry
+    keys = [
+        key
+        for key, entry in flattened.items()
+        if (entry or {}).get("mmproj_filename") or (entry or {}).get("mmproj_file")
+    ]
+    return sorted(keys)
+
+
+def _pack_json_catalog() -> dict[str, list[str]]:
+    folder = _qwenvl_node_dir()
+    if folder is None:
+        return {"native": [], "gguf": []}
+    native = _hf_vl_keys(_read_json(folder / "hf_models.json"))
+    custom = _read_json(folder / "custom_models.json")
+    for name in _hf_vl_keys(custom):
+        if name not in native:
+            native.append(name)
+    legacy = custom.get("hf_models") or custom.get("models") or {}
+    if isinstance(legacy, dict):
+        for name in legacy:
+            text = str(name).strip()
+            if text and text not in native:
+                native.append(text)
+    return {"native": native, "gguf": _gguf_vl_keys(_read_json(folder / "gguf_models.json"))}
+
+
+def _live_node_catalog() -> dict[str, list[str]]:
+    try:
+        from infrastructure.comfy import client as comfy
+
+        listed = comfy.qwen_vl_choices()
+    except Exception:
+        listed = {"native": [], "gguf": []}
+    if not isinstance(listed, dict):
+        return {"native": [], "gguf": []}
+    native = listed.get("native") if isinstance(listed.get("native"), list) else []
+    gguf = listed.get("gguf") if isinstance(listed.get("gguf"), list) else []
+    return {
+        "native": [str(item) for item in native if str(item).strip()],
+        "gguf": [str(item) for item in gguf if str(item).strip()],
+    }
+
+
+def _node_catalog() -> dict[str, list[str]]:
+    live = _live_node_catalog()
+    packed = _pack_json_catalog()
+    native = live["native"] or packed["native"] or list(QWEN_MODELS)
+    gguf = live["gguf"] or packed["gguf"] or list(QWEN_GGUF_MODELS)
+    return {"native": native, "gguf": gguf}
+
+
+def _scan_llm_extras(known_native: list[str], known_gguf: list[str]) -> tuple[set[str], set[str]]:
     native: set[str] = set()
     gguf: set[str] = set()
+    known_gguf_set = set(known_gguf)
     for root in _llm_roots():
         for dirpath, _dirnames, filenames in os.walk(root):
             folder = Path(dirpath)
@@ -169,26 +277,28 @@ def _scan_llm_extras() -> tuple[set[str], set[str]]:
                     continue
                 if name.lower().startswith("mmproj"):
                     continue
-                gguf.add(name)
+                if name not in known_gguf_set:
+                    gguf.add(name)
             if gguf_tree or not rel or not _is_native_dir(folder):
                 continue
             display = _native_display_name(rel)
-            if display and not _native_known(display):
+            if display and not _known_name(display, known_native):
                 native.add(display)
     return native, gguf
 
 
-def _merge_catalog(catalog: tuple[str, ...], extras: set[str]) -> list[str]:
+def _merge_catalog(catalog: list[str], extras: set[str]) -> list[str]:
     seen = set(catalog)
     extra_names = sorted((name for name in extras if name not in seen), key=str.lower)
     return [*catalog, *extra_names]
 
 
 def list_qwen_vl_models() -> dict[str, list[str]]:
-    native_extra, gguf_extra = _scan_llm_extras()
+    catalog = _node_catalog()
+    native_extra, gguf_extra = _scan_llm_extras(catalog["native"], catalog["gguf"])
     return {
-        "native": _merge_catalog(QWEN_MODELS, native_extra),
-        "gguf": _merge_catalog(QWEN_GGUF_MODELS, gguf_extra),
+        "native": _merge_catalog(catalog["native"], native_extra),
+        "gguf": _merge_catalog(catalog["gguf"], gguf_extra),
     }
 
 

@@ -14,6 +14,7 @@ export interface Flags {
   port: number;
   open: OpenMode;
   dataDir?: string;
+  runtimeDir?: string;
 }
 
 export interface ServerConfig {
@@ -40,6 +41,7 @@ export function parseFlags(argv: string[]): Flags {
       const mode = argv[++i];
       if (mode === "web" || mode === "app" || mode === "none") flags.open = mode;
     } else if (arg === "--data") flags.dataDir = argv[++i];
+    else if (arg === "--runtime") flags.runtimeDir = argv[++i];
   }
   return flags;
 }
@@ -58,7 +60,7 @@ export function createConfig(flags: Flags): ServerConfig {
     version: pkg.version,
     root,
     dataDir: path.resolve(flags.dataDir ?? path.join(root, "data")),
-    runtimeDir: path.join(root, "runtime"),
+    runtimeDir: path.resolve(flags.runtimeDir ?? path.join(root, "runtime")),
     clientDist: path.join(root, "dist", "client"),
     presetsDir: path.join(root, "presets"),
     tauriExe: path.join(root, "src-tauri", "target", "release", exe),

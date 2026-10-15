@@ -218,3 +218,22 @@
   --accent-ink: var(--cyan-ink);
   --on-accent: #041a1d;
 }
+
+/*
+ * UI font (Settings → Appearance). Utilities and the body read --font-ui through --font-sans,
+ * so switching is one attribute on <html data-font>. Geist and Inter are bundled; Segoe UI and
+ * the system font come from the computer. "custom" sets --font-ui inline on <html>.
+ */
+:root,
+[data-font="geist"] {
+  --font-ui: "Geist Variable", "Segoe UI", system-ui, sans-serif;
+}
+[data-font="inter"] {
+  --font-ui: "Inter Variable", "Geist Variable", "Segoe UI", system-ui, sans-serif;
+}
+[data-font="segoe"] {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+[data-font="system"] {
+  --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;
+}

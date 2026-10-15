@@ -18,6 +18,7 @@ import type { ComfyLogLine, ComfyStatus } from "../../../shared/comfy.ts";
 import { PORTS } from "../../../shared/constants.ts";
 import type { Profile } from "../../../shared/profile.ts";
 import { NodeDef, type ObjectInfo } from "../../../shared/workflow/graph.ts";
+import { stripAnsi } from "../../lib/ansi.ts";
 import { Emitter } from "../../lib/emitter.ts";
 import { writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { ComfyClient, type ComfyPreview, type ComfyWsMessage } from "./client.ts";
@@ -234,6 +235,8 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       args.push("--extra-model-paths-config", file);
     }
     if (target.outputs.trim()) args.push("--output-directory", target.outputs.trim());
+    // A CPU-only PyTorch makes ComfyUI crash looking for CUDA unless it's told.
+    if (layout.torch === "cpu") args.push("--cpu");
 
     const spec = this.opts.launch
       ? this.opts.launch(layout, args)
@@ -552,8 +555,8 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     }
   }
 
-  private log(stream: ComfyLogLine["stream"], text: string): void {
-    const line: ComfyLogLine = { at: Date.now(), stream, text };
+  private log(stream: ComfyLogLine["stream"], raw: string): void {
+    const line: ComfyLogLine = { at: Date.now(), stream, text: stripAnsi(raw) };
     this.lines.push(line);
     if (this.lines.length > MAX_LOG_LINES) this.lines.splice(0, this.lines.length - MAX_LOG_LINES);
     // Batch lines: ComfyUI prints hundreds while importing nodes.

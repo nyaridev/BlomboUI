@@ -10,14 +10,18 @@ import type { ApiErrorBody } from "../shared/api.ts";
 import type { Services } from "./context.ts";
 import { HttpError } from "./lib/http.ts";
 import { comfyRoutes } from "./routes/comfy.ts";
+import { fileInfoRoutes } from "./routes/fileinfo.ts";
+import { galleryRoutes } from "./routes/gallery.ts";
 import { jobRoutes } from "./routes/jobs.ts";
+import { modelRoutes } from "./routes/models.ts";
 import { profileRoutes } from "./routes/profiles.ts";
+import { settingsRoutes } from "./routes/settings.ts";
 import { systemRoutes } from "./routes/system.ts";
 import { wildcardRoutes } from "./routes/wildcards.ts";
 import { workflowRoutes } from "./routes/workflows.ts";
 
 export function createApp(services: Services) {
-  const { config, profiles, supervisor, workflows, queue } = services;
+  const { config, profiles, supervisor, workflows, queue, settings, gallery, models } = services;
   const app = new Hono();
 
   app.onError((error, c) => {
@@ -33,10 +37,14 @@ export function createApp(services: Services) {
   const api = new Hono();
   api.route("/system", systemRoutes(config, profiles));
   api.route("/profiles", profileRoutes(profiles, services.installPresets));
-  api.route("/comfy", comfyRoutes(supervisor));
+  api.route("/comfy", comfyRoutes(supervisor, services.installer, config.runtimeDir));
   api.route("/workflows", workflowRoutes(config, workflows, supervisor));
   api.route("/jobs", jobRoutes(queue));
   api.route("/wildcards", wildcardRoutes(profiles));
+  api.route("/settings", settingsRoutes(profiles, settings));
+  api.route("/gallery", galleryRoutes(gallery));
+  api.route("/models", modelRoutes(models));
+  api.route("/fileinfo", fileInfoRoutes(gallery, models));
   api.all("*", (c) => c.json({ error: "Unknown API route.", code: "not_found" }, 404));
   app.route("/api", api);
 

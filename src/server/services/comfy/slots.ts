@@ -6,8 +6,8 @@
  *   ├── python_embeded/python.exe   (portable build) or python/, .venv/, venv/
  *   └── blombo/                     files Blombo writes: extra_model_paths.yaml, comfy.pid
  *
- * Installing slots (downloading ComfyUI and Torch) is the installer's job; this module only
- * finds what's there.
+ * Installing slots (downloading ComfyUI and Torch) is installer.ts's job; this module only finds
+ * what's there. A slot with blombo/installing in it is unfinished and isn't started.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -21,6 +21,8 @@ export interface SlotLayout {
   python: string;
   /** Blombo's own files for this slot. */
   stateDir: string;
+  /** PyTorch build the installer put in (blombo/slot.json); null for slots made by hand. */
+  torch: "cuda" | "cpu" | null;
 }
 
 export type SlotLookup = { ok: true; layout: SlotLayout } | { ok: false; reason: string };
@@ -55,7 +57,12 @@ export async function findSlot(runtimeDir: string, slot: string): Promise<SlotLo
   if (!(await exists(dir)))
     return {
       ok: false,
-      reason: `ComfyUI slot "${slot}" isn't installed yet (${dir}). Install it, or point the profile at an existing ComfyUI URL.`,
+      reason: `ComfyUI slot "${slot}" isn't installed yet. Install it in Settings → ComfyUI, or point the profile at a ComfyUI you run yourself.`,
+    };
+  if (await exists(path.join(dir, "blombo", "installing")))
+    return {
+      ok: false,
+      reason: `ComfyUI slot "${slot}" isn't finished installing. Open Settings → ComfyUI to finish the install.`,
     };
   const comfyDir = path.join(dir, "ComfyUI");
   const main = path.join(comfyDir, "main.py");
@@ -63,11 +70,13 @@ export async function findSlot(runtimeDir: string, slot: string): Promise<SlotLo
     return { ok: false, reason: `Slot "${slot}" has no ComfyUI/main.py. Reinstall the slot.` };
   for (const rel of PYTHONS) {
     const python = path.join(dir, rel);
-    if (await exists(python))
+    if (await exists(python)) {
+      const stateDir = path.join(dir, "blombo");
       return {
         ok: true,
-        layout: { slot, dir, comfyDir, main, python, stateDir: path.join(dir, "blombo") },
+        layout: { slot, dir, comfyDir, main, python, stateDir, torch: await slotTorch(stateDir) },
       };
+    }
   }
   return {
     ok: false,
@@ -75,7 +84,18 @@ export async function findSlot(runtimeDir: string, slot: string): Promise<SlotLo
   };
 }
 
-/** Installed slot names (folders that contain ComfyUI/main.py). */
+async function slotTorch(stateDir: string): Promise<SlotLayout["torch"]> {
+  try {
+    const meta = JSON.parse(await fs.readFile(path.join(stateDir, "slot.json"), "utf8")) as {
+      variant?: unknown;
+    };
+    return meta.variant === "cpu" || meta.variant === "cuda" ? meta.variant : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Installed slot names (folders with ComfyUI/main.py that aren't mid-install). */
 export async function listSlots(runtimeDir: string): Promise<string[]> {
   const root = slotsRoot(runtimeDir);
   let entries: string[] = [];
@@ -88,6 +108,10 @@ export async function listSlots(runtimeDir: string): Promise<string[]> {
   }
   const out: string[] = [];
   for (const name of entries)
-    if (await exists(path.join(root, name, "ComfyUI", "main.py"))) out.push(name);
+    if (
+      (await exists(path.join(root, name, "ComfyUI", "main.py"))) &&
+      !(await exists(path.join(root, name, "blombo", "installing")))
+    )
+      out.push(name);
   return out.sort();
 }

@@ -40,3 +40,32 @@ export function fakePng(
   parts.push(chunk("IEND", new Uint8Array()));
   return concat(...parts);
 }
+
+/** A real, decodable PNG (sharp) with text chunks spliced in after IHDR, CRCs included. */
+export async function realPng(
+  width: number,
+  height: number,
+  text: Record<string, string> = {},
+  color = { r: 40, g: 90, b: 160 },
+): Promise<Uint8Array> {
+  const { default: sharp } = await import("sharp");
+  const { crc32 } = await import("node:zlib");
+  const png = new Uint8Array(
+    await sharp({ create: { width, height, channels: 3, background: color } })
+      .png()
+      .toBuffer(),
+  );
+  const ihdrEnd = 8 + 12 + 13;
+  const chunks = Object.entries(text).map(([k, v]) => {
+    // iTXt: keyword\0 compression flag, method, language\0, translated keyword\0, text
+    const body = concat(latin1(`${k}\0`), new Uint8Array([0, 0]), latin1("\0\0"), utf8(v));
+    const full = new Uint8Array(12 + body.byteLength);
+    const fv = new DataView(full.buffer);
+    fv.setUint32(0, body.byteLength);
+    full.set(latin1("iTXt"), 4);
+    full.set(body, 8);
+    fv.setUint32(8 + body.byteLength, crc32(full.subarray(4, 8 + body.byteLength)));
+    return full;
+  });
+  return concat(png.subarray(0, ihdrEnd), ...chunks, png.subarray(ihdrEnd));
+}

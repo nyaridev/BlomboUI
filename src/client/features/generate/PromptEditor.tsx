@@ -72,7 +72,7 @@ const promptHighlight = ViewPlugin.fromClass(
 const theme = EditorView.theme({
   "&": { fontSize: "13.5px", color: "var(--fg)", backgroundColor: "transparent", height: "100%" },
   "&.cm-focused": { outline: "none" },
-  ".cm-scroller": { fontFamily: "var(--font-sans)", lineHeight: "1.65", overflow: "auto" },
+  ".cm-scroller": { fontFamily: "var(--font-ui)", lineHeight: "1.65", overflow: "auto" },
   ".cm-content": { padding: "10px 0", caretColor: "var(--accent-ink)" },
   ".cm-line": { padding: "0 12px" },
   ".cm-cursor": { borderLeftColor: "var(--accent-ink)", borderLeftWidth: "2px" },

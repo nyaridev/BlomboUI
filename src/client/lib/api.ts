@@ -11,8 +11,22 @@ import type {
 } from "@shared/api";
 import type { ComfyLogLine, ComfyStatus, FreeMemoryBody } from "@shared/comfy";
 import type { ModelKind } from "@shared/constants";
+import type { FileInfo } from "@shared/fileinfo";
+import type {
+  GalleryFacets,
+  GalleryOverview,
+  GalleryPage,
+  GalleryQueryInput,
+  ImageDetails,
+  SyncState,
+  TrashEntry,
+} from "@shared/gallery";
+import type { InstallBody, InstallState, SlotsResponse } from "@shared/install";
 import type { GenerateBody, GenerateResponse, QueueSnapshot } from "@shared/jobs";
+import type { LocalModel, ModelDetails, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
+import type { LibraryEntry, Settings, SettingsPatch } from "@shared/settings";
+import type { RollBody, RollResult, WildcardFile, WildcardTree } from "@shared/wildcards";
 import type {
   ImportResult,
   PatchValuesBody,
@@ -117,7 +131,79 @@ export const api = {
   setLoop: (on: boolean) => request<QueueSnapshot>("PUT", "/jobs/loop", { on }),
 
   wildcards: () => request<{ root: string; names: string[] }>("GET", "/wildcards"),
+  wildcardTree: () => request<WildcardTree>("GET", "/wildcards/tree"),
+  wildcardFile: (path: string) =>
+    request<WildcardFile>("GET", `/wildcards/file?path=${encodeURIComponent(path)}`),
+  saveWildcard: (path: string, text: string, baseMtime: number | null) =>
+    request<WildcardFile>("PUT", "/wildcards/file", { path, text, baseMtime }),
+  createWildcard: (path: string, type: "file" | "folder") =>
+    request<{ ok: true }>("POST", "/wildcards/create", { path, type }),
+  moveWildcard: (from: string, to: string) =>
+    request<{ ok: true }>("POST", "/wildcards/move", { from, to }),
+  trashWildcard: (path: string) => request<{ ok: true }>("POST", "/wildcards/trash", { path }),
+  revealWildcard: (path: string) => request<{ ok: true }>("POST", "/wildcards/reveal", { path }),
+  rollWildcards: (body: RollBody) => request<RollResult>("POST", "/wildcards/roll", body),
+
+  settings: () => request<Settings>("GET", "/settings"),
+  updateSettings: (patch: SettingsPatch) => request<Settings>("PATCH", "/settings", patch),
+
+  galleryOverview: () => request<GalleryOverview>("GET", "/gallery/overview"),
+  galleryImages: (q: GalleryQueryInput) =>
+    request<GalleryPage>("GET", `/gallery/images?${query(q)}`),
+  galleryFacets: (library: string) =>
+    request<GalleryFacets>("GET", `/gallery/facets?library=${encodeURIComponent(library)}`),
+  galleryImage: (id: number) => request<ImageDetails>("GET", `/gallery/images/${id}`),
+  favorite: (ids: number[], favorite: boolean) =>
+    request<{ ok: true }>("POST", "/gallery/favorite", { ids, favorite }),
+  trashImages: (ids: number[]) =>
+    request<{ moved: number; ids: string[] }>("POST", "/gallery/trash", { ids }),
+  galleryTrash: () => request<TrashEntry[]>("GET", "/gallery/trash"),
+  restoreImages: (ids: string[]) =>
+    request<{ restored: number }>("POST", "/gallery/trash/restore", { ids }),
+  emptyTrash: (ids?: string[]) =>
+    request<{ deleted: number }>("POST", "/gallery/trash/empty", { ids }),
+  gallerySync: () => request<SyncState>("POST", "/gallery/sync"),
+  revealImage: (id: number) => request<{ ok: true }>("POST", `/gallery/images/${id}/reveal`),
+  addLibrary: (name: string, path: string) =>
+    request<LibraryEntry>("POST", "/gallery/libraries", { name, path }),
+  renameLibrary: (id: string, name: string) =>
+    request<{ ok: true }>("PATCH", `/gallery/libraries/${encodeURIComponent(id)}`, { name }),
+  removeLibrary: (id: string) =>
+    request<void>("DELETE", `/gallery/libraries/${encodeURIComponent(id)}`),
+
+  localModels: (rescan = false) =>
+    request<ModelList>("GET", `/models/local${rescan ? "?rescan=1" : ""}`),
+  modelDetails: (id: string) =>
+    request<ModelDetails>("GET", `/models/local/details?id=${encodeURIComponent(id)}`),
+  renameModel: (id: string, name: string) =>
+    request<LocalModel>("POST", "/models/rename", { id, name }),
+  moveModel: (id: string, folder: string) =>
+    request<LocalModel>("POST", "/models/move", { id, folder }),
+  revealModel: (id: string) => request<{ ok: true }>("POST", "/models/reveal", { id }),
+
+  fileInfo: (file: Blob, filename: string) =>
+    request<FileInfo>(
+      "POST",
+      `/fileinfo?filename=${encodeURIComponent(filename)}`,
+      undefined,
+      file,
+    ),
+  galleryFileInfo: (id: number) => request<FileInfo>("GET", `/fileinfo/gallery/${id}`),
+  modelFileInfo: (id: string) =>
+    request<FileInfo>("GET", `/fileinfo/model?id=${encodeURIComponent(id)}`),
+
+  comfySlots: () => request<SlotsResponse>("GET", "/comfy/slots"),
+  installComfy: (body: InstallBody) => request<InstallState>("POST", "/comfy/install", body),
+  cancelInstall: () => request<InstallState>("POST", "/comfy/install/cancel"),
 };
+
+/** Query string from defined values only. */
+function query(params: Record<string, unknown>): string {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(params))
+    if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
+  return q.toString();
+}
 
 /** Avatar URL with a cache-buster tied to the profile record, so a new upload shows at once. */
 export function avatarUrl(

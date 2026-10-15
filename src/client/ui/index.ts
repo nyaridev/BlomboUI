@@ -17,6 +17,17 @@ export {
 } from "./feedback";
 export { Menu, type MenuEntry, Popover, Tooltip } from "./floating";
 export { Field, TextArea, TextField } from "./inputs";
+export {
+  CopyButton,
+  DropZone,
+  EmptyState,
+  InlineInput,
+  ProgressBar,
+  type Property,
+  PropertyList,
+  TreeRow,
+  Veil,
+} from "./library";
 export { type CardKind, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
 export { NumberField } from "./NumberField";
 export { Select, type SelectOption } from "./Select";

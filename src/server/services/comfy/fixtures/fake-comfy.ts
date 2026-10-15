@@ -2,13 +2,16 @@
  * A fake ComfyUI for tests: the HTTP endpoints and WebSocket events Blombo uses, with no GPU.
  * Queued prompts "run" in a few milliseconds: execution_start → progress → a binary preview →
  * executed → execution_success. Import startFakeComfy() in-process, or run this file with
- * `node fake-comfy.ts --port N [--step-ms 40]` to stand in for a managed slot's main.py.
+ * `node fake-comfy.ts --port N [--step-ms 40] [--output-directory DIR]` to stand in for a
+ * managed slot's main.py. With an output directory, each run writes a small PNG there (with the
+ * prompt and extra chunks, like ComfyUI's SaveImage) so the gallery can index it.
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { crc32, deflateSync } from "node:zlib";
 import { type WebSocket, WebSocketServer } from "ws";
 
 export interface FakeComfy {
@@ -35,7 +38,54 @@ const PNG = Buffer.from(
   "base64",
 );
 
-export function startFakeComfy(port = 0, stepDelayMs = 5): Promise<FakeComfy> {
+/** A small solid-color PNG with tEXt chunks, like ComfyUI's SaveImage writes. */
+function pngWithText(
+  width: number,
+  height: number,
+  rgb: [number, number, number],
+  text: Record<string, string>,
+): Buffer {
+  const chunk = (type: string, data: Buffer) => {
+    const head = Buffer.alloc(8);
+    head.writeUInt32BE(data.byteLength, 0);
+    head.write(type, 4, "latin1");
+    const crc = Buffer.alloc(4);
+    crc.writeUInt32BE(crc32(Buffer.concat([head.subarray(4), data])) >>> 0, 0);
+    return Buffer.concat([head, data, crc]);
+  };
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 2; // RGB
+  const row = Buffer.alloc(1 + width * 3);
+  for (let x = 0; x < width; x++) row.set(rgb, 1 + x * 3);
+  const raw = Buffer.concat(Array.from({ length: height }, () => row));
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunk("IHDR", ihdr),
+    ...Object.entries(text).map(([k, v]) => chunk("tEXt", Buffer.from(`${k}\0${v}`, "latin1"))),
+    chunk("IDAT", deflateSync(raw)),
+    chunk("IEND", Buffer.alloc(0)),
+  ]);
+}
+
+/** ComfyUI's filename_prefix date tokens. */
+function expandPrefix(prefix: string): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return prefix
+    .replace(/%year%/g, String(d.getFullYear()))
+    .replace(/%month%/g, pad(d.getMonth() + 1))
+    .replace(/%day%/g, pad(d.getDate()));
+}
+
+export function startFakeComfy(
+  port = 0,
+  stepDelayMs = 5,
+  outputDir: string | null = null,
+): Promise<FakeComfy> {
+  let counter = 0;
   const sockets = new Map<string, WebSocket>();
   const prompts: FakeComfy["prompts"] = [];
   const history: Record<string, unknown> = {};
@@ -54,7 +104,12 @@ export function startFakeComfy(port = 0, stepDelayMs = 5): Promise<FakeComfy> {
     sockets.get(clientId)?.send(Buffer.concat([head, meta, PNG]));
   };
 
-  const run = async (clientId: string, promptId: string, steps: number) => {
+  const run = async (
+    clientId: string,
+    promptId: string,
+    steps: number,
+    job: { prompt: FakeComfy["prompts"][number]["prompt"]; extra: unknown },
+  ) => {
     const wait = () => new Promise((r) => setTimeout(r, stepDelayMs));
     interrupted = false;
     send(clientId, "execution_start", { prompt_id: promptId });
@@ -67,9 +122,38 @@ export function startFakeComfy(port = 0, stepDelayMs = 5): Promise<FakeComfy> {
       send(clientId, "progress", { value: i, max: steps, prompt_id: promptId, node: "3" });
       if (i === 1) sendPreview(clientId, promptId);
     }
-    const images = [
+    let images = [
       { filename: `ComfyUI_${promptId.slice(0, 5)}_00001_.png`, subfolder: "", type: "output" },
     ];
+    if (outputDir) {
+      const save = Object.values(job.prompt).find((n) => "filename_prefix" in n.inputs);
+      const prefix = expandPrefix(String(save?.inputs.filename_prefix ?? "ComfyUI")).replace(
+        /\\/g,
+        "/",
+      );
+      const subfolder = prefix.includes("/") ? prefix.slice(0, prefix.lastIndexOf("/")) : "";
+      const base = prefix.split("/").pop() || "ComfyUI";
+      const dir = path.join(outputDir, ...subfolder.split("/").filter(Boolean));
+      fs.mkdirSync(dir, { recursive: true });
+      // Like ComfyUI: the next number that isn't taken in that folder.
+      let filename = "";
+      do {
+        counter++;
+        filename = `${base}_${String(counter).padStart(5, "0")}_.png`;
+      } while (fs.existsSync(path.join(dir, filename)));
+      const latent = Object.values(job.prompt).find(
+        (n) => "width" in n.inputs && "height" in n.inputs,
+      );
+      const w = Math.max(8, Math.min(1024, Number(latent?.inputs.width ?? 64) / 8));
+      const h = Math.max(8, Math.min(1024, Number(latent?.inputs.height ?? 64) / 8));
+      const text: Record<string, string> = { prompt: JSON.stringify(job.prompt) };
+      const extra = (job.extra as { extra_pnginfo?: Record<string, unknown> } | null)
+        ?.extra_pnginfo;
+      for (const [k, v] of Object.entries(extra ?? {})) text[k] = JSON.stringify(v);
+      const hue = (counter * 47) % 255;
+      fs.writeFileSync(path.join(dir, filename), pngWithText(w, h, [hue, 120, 255 - hue], text));
+      images = [{ filename, subfolder, type: "output" }];
+    }
     history[promptId] = {
       outputs: { "9": { images } },
       status: { status_str: "success", completed: true },
@@ -127,7 +211,10 @@ export function startFakeComfy(port = 0, stepDelayMs = 5): Promise<FakeComfy> {
         const promptId = randomUUID();
         json(res, 200, { prompt_id: promptId, number: prompts.length, node_errors: {} });
         const sampler = Object.values(parsed.prompt).find((n) => "steps" in n.inputs);
-        void run(parsed.client_id, promptId, Number(sampler?.inputs.steps ?? 3));
+        void run(parsed.client_id, promptId, Number(sampler?.inputs.steps ?? 3), {
+          prompt: parsed.prompt,
+          extra: parsed.extra_data,
+        });
         return;
       }
       if (p.startsWith("/history/")) {
@@ -189,12 +276,18 @@ export function startFakeComfy(port = 0, stepDelayMs = 5): Promise<FakeComfy> {
   });
 }
 
-// Run as a stand-in for ComfyUI's main.py: node fake-comfy.ts [--port N] (other flags ignored).
+// Run as a stand-in for ComfyUI's main.py: node fake-comfy.ts [--port N] [--step-ms N]
+// [--output-directory DIR] (other flags ignored).
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const at = process.argv.indexOf("--port");
-  const port = at > 0 ? Number(process.argv[at + 1]) : 8188;
+  const arg = (name: string) => {
+    const at = process.argv.indexOf(name);
+    return at > 0 ? process.argv[at + 1] : undefined;
+  };
   console.log("Total VRAM 16384 MB (fake)");
-  const ms = process.argv.indexOf("--step-ms");
-  const fake = await startFakeComfy(port, ms > 0 ? Number(process.argv[ms + 1]) : 5);
+  const fake = await startFakeComfy(
+    Number(arg("--port") ?? 8188),
+    Number(arg("--step-ms") ?? 5),
+    arg("--output-directory") ?? null,
+  );
   console.log(`To see the GUI go to: ${fake.url}`);
 }

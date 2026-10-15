@@ -5,18 +5,6 @@ import type { ViewId } from "@shared/constants";
 const INFO: Partial<
   Record<ViewId, { icon: IconName; title: string; phase: string; text: string }>
 > = {
-  wildcards: {
-    icon: "wildcards",
-    title: "Wildcard Manager",
-    phase: "Phase 2",
-    text: "File tree, YAML editor with folding, lint and reference autocomplete, roll preview.",
-  },
-  "file-info": {
-    icon: "file-info",
-    title: "File Info",
-    phase: "Phase 2",
-    text: "PNG info, safetensors metadata, Civitai lookup, and importing workflows embedded in images.",
-  },
   history: {
     icon: "history",
     title: "History",

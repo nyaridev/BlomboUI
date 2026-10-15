@@ -5,6 +5,8 @@
  * Preview frames are decoded off the main paint with createImageBitmap.
  */
 import type { ComfyLogLine, ComfyStatus, SystemStats } from "@shared/comfy";
+import type { GalleryImage, SyncState } from "@shared/gallery";
+import type { InstallState } from "@shared/install";
 import type { JobProgress, QueueSnapshot } from "@shared/jobs";
 import {
   type AppError,
@@ -14,7 +16,8 @@ import {
   ServerMessage,
 } from "@shared/live";
 import { create } from "zustand";
-import { qk, queryClient } from "./queries";
+import { type GalleryPages, qk, queryClient } from "./queries";
+import { useSession } from "./session";
 
 export interface LivePreview {
   jobSeq: number;
@@ -31,6 +34,12 @@ interface LiveState {
   preview: LivePreview | null;
   errors: AppError[];
   logs: ComfyLogLine[];
+  /** Gallery folder scan progress (while a gallery view follows the topic). */
+  gallerySync: SyncState | null;
+  /** Images added since the open gallery list was loaded, for lists that can't show them. */
+  galleryNew: number;
+  /** The ComfyUI installer, while an installer view is open. */
+  install: InstallState | null;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -42,6 +51,9 @@ export const useLive = create<LiveState>(() => ({
   preview: null,
   errors: [],
   logs: [],
+  gallerySync: null,
+  galleryNew: 0,
+  install: null,
 }));
 
 const BASE_TOPICS: LiveTopic[] = ["comfy", "system", "jobs"];
@@ -173,7 +185,69 @@ function onJson(text: string): void {
     case "profile.switched":
       void queryClient.invalidateQueries({ queryKey: ["workflows"] });
       break;
+    case "gallery.added":
+      onGalleryAdded(msg.image);
+      break;
+    case "gallery.changed":
+      useLive.setState({ galleryNew: 0 });
+      void queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      break;
+    case "gallery.sync": {
+      const wasRunning = s.gallerySync?.running;
+      useLive.setState({ gallerySync: msg.sync });
+      if (wasRunning && !msg.sync.running)
+        void queryClient.invalidateQueries({ queryKey: ["gallery"] });
+      break;
+    }
+    case "install":
+      useLive.setState({ install: msg.install });
+      if (msg.install.state === "done")
+        void queryClient.invalidateQueries({ queryKey: qk.comfySlots });
+      break;
+    case "models.changed":
+      void queryClient.invalidateQueries({ queryKey: ["local-models"] });
+      void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
+      break;
   }
+}
+
+/**
+ * A new image: lists showing everything newest-first get it on top at once; filtered or
+ * differently sorted lists count it so the view can offer to refresh.
+ */
+function onGalleryAdded(image: GalleryImage): void {
+  const profileId = useSession.getState().profileId;
+  let shown = false;
+  for (const [key, data] of queryClient.getQueriesData<GalleryPages>({
+    queryKey: [...qk.gallery(profileId), "images"],
+  })) {
+    const q = (key[3] ?? {}) as Record<string, unknown>;
+    const plain =
+      (q.library === "all" || q.library === image.library) &&
+      !q.q &&
+      !q.model &&
+      !q.lora &&
+      q.favorites !== "1" &&
+      (q.sort ?? "newest") === "newest";
+    if (!plain || !data?.pages[0]) continue;
+    // A file written again (same path) moves to the top with its new thumbnail.
+    const known = data.pages.some((p) => p.items.some((i) => i.id === image.id));
+    const pages = data.pages.map((p) => ({
+      ...p,
+      items: p.items.filter((i) => i.id !== image.id),
+    }));
+    const first = pages[0] as (typeof pages)[number];
+    queryClient.setQueryData<GalleryPages>(key, {
+      ...data,
+      pages: [
+        { ...first, items: [image, ...first.items], total: first.total + (known ? 0 : 1) },
+        ...pages.slice(1),
+      ],
+    });
+    shown = true;
+  }
+  if (!shown) useLive.setState((st) => ({ galleryNew: st.galleryNew + 1 }));
+  void queryClient.invalidateQueries({ queryKey: qk.galleryOverview(profileId) });
 }
 
 async function onBinary(data: ArrayBuffer): Promise<void> {

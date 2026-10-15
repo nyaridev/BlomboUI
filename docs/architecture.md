@@ -72,13 +72,13 @@ BlomboUI-new/
 │   │   └── styles/        tokens.css · base.css
 │   └── comfy-bridge/      ComfyUI extension (JS) shipped into each managed ComfyUI
 ├── presets/
-│   ├── workflows/     built-in workflow packages (sd15, sdxl, illustrious, noobai, anima, krea2,
-│   │                  background-removal, upscale, caption, dataset)
+│   ├── workflows/     built-in workflow packages: sd15, sdxl, illustrious (planned: noobai, anima,
+│   │                  krea2, background-removal, upscale, caption, dataset)
 │   ├── stages/        graph patches: hires, adetailer, controlnet, upscale
 │   └── layouts/       built-in Generate layouts
 ├── installer/         ComfyUI slots, Torch builds, attention kernels
 ├── src-tauri/         desktop shell
-├── tools/             ensure-build · ensure-app · sync-rules · dev-window
+├── tools/             ensure-build · ensure-app · sync-rules · dev-window · make-icons · build-presets
 ├── docs/              architecture · design-system · workflows · adr/
 ├── data/              (gitignored) profiles.json + profiles/<id>/
 └── runtime/           (gitignored) comfyui/<slot>/, cache/, logs/
@@ -95,6 +95,7 @@ data/
     ├── settings.json             everything in Settings (Zod-validated, versioned, migrated)
     ├── workflows/<workflowId>/   workflow.json · graph.json · prompt.json · thumb.webp
     ├── layouts/<layoutId>.json   Generate layouts
+    ├── trash/                    deleted workflows (restore by moving them back)
     └── blombo.sqlite             gallery index (FTS), jobs, history, errors, stats, model hashes
 runtime/cache/<id>/thumbs/        thumbnail cache (safe to delete)
 ```
@@ -113,13 +114,13 @@ graph.json      ComfyUI UI format (nodes + links). Used for "Edit in ComfyUI"
 prompt.json     ComfyUI API format (class_type + inputs). Used to run
 ```
 
-**Import** accepts a ComfyUI API JSON, a UI JSON, a ComfyUI PNG or WebP with embedded metadata, or a `.blombo` bundle. The **analyzer** reads the graph with ComfyUI's `/object_info`. It finds semantic **roles** such as `prompt.positive`, `model.checkpoint`, `sampler.steps`, `latent.width` and `lora.stack`. It turns the remaining widget inputs into typed parameters, then proposes a manifest that the user confirms on a setup screen.
+**Import** accepts a ComfyUI API JSON, a UI JSON, or a ComfyUI PNG or WebP with embedded metadata (`.blombo` bundles come with export). The **analyzer** reads the graph with ComfyUI's `/object_info`. It finds semantic **roles** such as `prompt.positive`, `model.checkpoint`, `sampler.steps`, `latent.width` and `lora.stack`, and exposes inputs of nodes titled `$Something`. Today the workflow is saved straight away and the findings (missing nodes or models) are shown as a notice; a setup screen to confirm roles comes later.
 
 **Running** compiles the package:
 
 ```text
 prompt.json → apply values to bindings → expand wildcards → <lora:…> tags into the LoRA stack
-→ splice enabled stages (hires, adetailer, controlnet) at role ports → seeds, filenames → POST /prompt
+→ (later: splice enabled stages at role ports) → seed → filename prefix → POST /prompt
 ```
 
 **Editing in ComfyUI**: "Edit in ComfyUI" opens ComfyUI in a new window with an edit session. The bundled **blombo-bridge** extension loads the graph and shows a **Save to Blombo** button. Saving sends the UI and API graphs back. Blombo re-runs the analyzer and keeps existing bindings and values where node ids and inputs still match. It flags anything that was added or removed.
@@ -139,14 +140,24 @@ ADR [0005](adr/0005-layout-documents.md).
 
 ## Live bus
 
-`/api/live` is a single WebSocket per client. Topics: `job` (queued/progress/stage/preview/done/error), `system` (VRAM, temperature, Comfy status, once per second while visible), `downloads`, `gallery` (inserts), `models` (rescans), `errors`, `profile`. Preview frames are binary messages. The server owns one ComfyUI WebSocket and fans events out to clients.
+`/api/live` is a single WebSocket per window (`services/live.ts` on the server, `lib/live.ts` on the client). Messages are the `ServerMessage` union in `shared/live.ts`. A window subscribes to topics:
+
+| Topic | Messages |
+|---|---|
+| `comfy` | `comfy.status`: running / starting / stopped / crashed / missing / unreachable, with a message that says what to do |
+| `system` | `system`: GPU name, VRAM, temperature and load at 1 Hz, sampled only while a window is visible (`nvidia-smi -lms 1000`, else ComfyUI's `/system_stats`) |
+| `jobs` | `queue` snapshots on every change, `job.progress` per step, `job.image` as outputs land, and binary preview frames |
+| `logs` | `comfy.log` batches, only while a log view is open |
+| (all) | `hello` on connect, `error`, `profile.switched` |
+
+Preview frames are binary: a 4-byte job sequence number, 1 byte for the image type, then ComfyUI's JPEG or PNG preview bytes unchanged. A window whose socket is backed up skips frames. Downloads, gallery inserts and model rescans join the bus with their services.
 
 ADR [0008](adr/0008-live-bus.md).
 
 ## Client architecture
 
 - **Routing**: TanStack Router. `/` is the profile screen. `/p/:profile/*` holds the app. Generate and Gallery stay mounted (kept alive and hidden) so switching tabs is instant. Other views load lazily.
-- **State**: server data lives in TanStack Query (keys in `lib/queries.ts`). UI state lives in small Zustand slices per feature (`generate/state/*.ts`), never one giant store. Generate values persist to the workflow through a debounced PATCH.
+- **State**: server data lives in TanStack Query (keys in `lib/queries.ts`, profile-scoped keys include the open profile id). UI state lives in small Zustand slices per feature (`generate/state.ts`), never one giant store. Live data lives in the `useLive` store (`lib/live.ts`); components select single values so a progress tick doesn't re-render lists. Generate values persist to the workflow through a debounced PATCH; the Generate request carries them too, so a click never waits for a save.
 - **Design system**: `ui/` holds hand-built controls on tokens. Behavior comes from Floating UI (positioning, dismiss, focus, list navigation) and native elements. Motion presets are in `lib/motion.ts`. No component library styling. ADR [0007](adr/0007-design-system.md).
 - **Performance**: TanStack Virtual for the gallery, model grids and file trees; thumbnails come from `/api/thumbs/:hash` with immutable caching; the prompt editor uses CodeMirror decorations instead of overlay mirroring; previews decode with `createImageBitmap` off the main paint.
 
@@ -154,8 +165,8 @@ ADR [0008](adr/0008-live-bus.md).
 
 - Routes are thin: parse with Zod, call a service, return JSON. Errors are thrown `HttpError`s.
 - Services own one concern each. Long work (hashing, gallery sync, downloads, thumbnail generation) runs on a small task runner with progress events on the bus.
-- The **ComfyUI supervisor** starts, stops and restarts ComfyUI for the active slot. It streams logs to the UI, writes `extra_model_paths.yaml`, and installs or updates blombo-bridge.
-- The **job queue** is server-side and survives a page reload. It supports reordering, "generate forever", and cancelling one job or all.
+- The **ComfyUI supervisor** (`services/comfy/supervisor.ts`) follows the open profile's target. A **managed slot** (`runtime/comfyui/<slot>/` with `ComfyUI/main.py` and its own Python) is started with `--extra-model-paths-config` (written from the profile's models folder), `--output-directory` (the outputs folder) and `--preview-method auto` on the first free port from 8188; its stdout and stderr become the log. An **external** ComfyUI is only connected to, and Blombo keeps reconnecting while it's away. In dev mode a managed ComfyUI outlives server restarts and is re-adopted from `blombo/comfy.pid`, so editing server code doesn't reload models. Installing slots is the installer's job (later); a missing slot reports `missing` with what to do. Installing blombo-bridge comes with ADR-0009.
+- The **job queue** (`services/jobs.ts`) is server-side and survives a page reload. Each click queues runs (one ComfyUI prompt each, with its own seed per the seed mode); the queue compiles and submits one at a time, so wildcards and seeds are fresh per run. Interrupt stops the running image, Cancel also clears the queue and "generate forever". A validation error from ComfyUI is rewritten with the workflow's labels ("… isn't in your checkpoints folder") and stops the rest of that batch. Reordering comes later.
 
 ## Scope
 

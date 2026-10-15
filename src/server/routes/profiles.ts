@@ -8,7 +8,10 @@ import type { ProfileService } from "../services/profiles.ts";
 
 const MAX_AVATAR_BYTES = 12 * 1024 * 1024;
 
-export function profileRoutes(profiles: ProfileService) {
+export function profileRoutes(
+  profiles: ProfileService,
+  installPresets: (profileId: string, presetIds: string[]) => Promise<void>,
+) {
   const r = new Hono();
 
   const id = (raw: string) => {
@@ -28,7 +31,9 @@ export function profileRoutes(profiles: ProfileService) {
 
   r.post("/", async (c) => {
     const body = await readJson(c, CreateProfileBody);
-    return c.json(await profiles.create(body), 201);
+    const profile = await profiles.create(body);
+    await installPresets(profile.id, body.presets);
+    return c.json(profile, 201);
   });
 
   r.put("/order", async (c) => {

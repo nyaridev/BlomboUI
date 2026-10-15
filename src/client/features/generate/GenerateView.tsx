@@ -1,26 +1,24 @@
 /**
  * Generate. Default arrangement: loaded models on top, prompts with the generate
- * stack beside them, workspace tabs, parameter column + image stage. The params column is
- * data-driven (layout document) and editable in Customize mode.
+ * stack beside them, workspace tabs, parameter column + image stage. Everything shows the
+ * active workflow's bindings and values; the params column is a layout document that's
+ * editable in Customize mode.
  */
-import {
-  MOCK_CHECKPOINTS,
-  MOCK_LORAS,
-  MOCK_OTHER,
-  type MockModel,
-} from "@client/features/preview/mock";
 import { glide } from "@client/lib/motion";
-import { Button, ModelCard, Tabs, TextField } from "@client/ui";
+import { Button, Spinner, Tabs } from "@client/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { useState } from "react";
+import { useLayoutEffect, useState } from "react";
 import { ImageStage } from "./blocks/ImageStage";
 import { ModelsStrip } from "./blocks/ModelsStrip";
 import { GenerateActions, Prompts } from "./blocks/Prompts";
 import { CustomizeBar, Inspector, LayoutPicker } from "./Customize";
+import { ModelGrid, type PickerTab } from "./ModelGrid";
 import { ParamsColumn } from "./ParamsColumn";
-import { useLayout } from "./state";
+import { StartWithWorkflow } from "./StartWithWorkflow";
+import { useLayout, useValues } from "./state";
+import { useActiveWorkflow } from "./workflow";
 
-type WorkTab = "generation" | "checkpoints" | "loras" | "wildcards" | "other";
+type WorkTab = "generation" | PickerTab;
 
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: glide } };
 
@@ -28,6 +26,29 @@ export function GenerateView() {
   const [tab, setTab] = useState<WorkTab>("generation");
   const customizing = useLayout((s) => s.customizing);
   const setCustomizing = useLayout((s) => s.setCustomizing);
+  const active = useActiveWorkflow();
+  const load = useValues((s) => s.load);
+  const loaded = useValues((s) => s.workflowId);
+
+  // Show the workflow's saved values when it becomes active (before paint, so a switch never
+  // shows one workflow's controls with the other's values).
+  useLayoutEffect(() => {
+    if (active.manifest) load(active.manifest);
+  }, [active.manifest, load]);
+
+  if (active.empty) return <StartWithWorkflow />;
+  // Only the first load shows a spinner; switching keeps the view mounted.
+  if (!active.manifest || loaded === null) {
+    return (
+      <div className="grid h-full place-items-center text-fg-3">
+        {active.error ? (
+          <p className="max-w-sm text-center text-sm">{active.error.message}</p>
+        ) : (
+          <Spinner size={22} />
+        )}
+      </div>
+    );
+  }
 
   return (
     <motion.div
@@ -84,53 +105,9 @@ export function GenerateView() {
             </div>
           </div>
         ) : (
-          <ModelGrid kind={tab} />
+          <ModelGrid tab={tab} onDone={() => setTab("generation")} />
         )}
       </motion.div>
     </motion.div>
-  );
-}
-
-function ModelGrid({ kind }: { kind: Exclude<WorkTab, "generation"> }) {
-  const [query, setQuery] = useState("");
-  const [picked, setPicked] = useState<string | null>("WAI Illustrious v14");
-  const source: MockModel[] =
-    kind === "checkpoints"
-      ? MOCK_CHECKPOINTS
-      : kind === "loras"
-        ? MOCK_LORAS
-        : kind === "wildcards"
-          ? MOCK_OTHER.filter((m) => m.kind === "wildcards")
-          : MOCK_OTHER.filter((m) => m.kind !== "wildcards");
-  const list = source.filter((m) => m.name.toLowerCase().includes(query.toLowerCase()));
-  return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
-      <div className="flex items-center gap-2">
-        <TextField
-          icon="search"
-          placeholder={`Search ${kind}`}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onClear={() => setQuery("")}
-          className="w-80"
-        />
-        <span className="text-xs text-fg-3">{list.length} items</span>
-      </div>
-      <div className="scroll-quiet grid min-h-0 flex-1 auto-rows-max grid-cols-[repeat(auto-fill,minmax(170px,1fr))] gap-3 overflow-auto pr-1">
-        {list.map((m) => (
-          <ModelCard
-            key={m.name}
-            name={m.name}
-            kind={m.kind}
-            baseModel={m.base}
-            thumb={m.thumb}
-            favorite={m.favorite}
-            selected={picked === m.name}
-            onClick={() => setPicked(m.name)}
-            onFavorite={() => undefined}
-          />
-        ))}
-      </div>
-    </div>
   );
 }

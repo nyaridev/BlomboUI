@@ -1,33 +1,95 @@
 /**
  * Generate UI state, split in small stores so a slider only re-renders itself:
- *  - useValues:  binding values + prompts (persists to the workflow in Phase 1)
- *  - useStages:  Hires / ADetailer / ControlNet settings
+ *  - useValues:  the active workflow's values (binding id → value) and run settings. Edits save
+ *                into the workflow in the background (debounced PATCH); there are no templates.
+ *  - useStages:  Hires / ADetailer / ControlNet settings (stages arrive in a later phase)
  *  - useLayout:  the layout document, Customize mode, selection, undo/redo, presets
  */
-import { MOCK_NEGATIVE, MOCK_PROMPT } from "@client/features/preview/mock";
+import { api } from "@client/lib/api";
+import { qk, queryClient } from "@client/lib/queries";
+import { useSession } from "@client/lib/session";
+import { toast } from "@client/ui";
 import type { Block, LayoutDocument } from "@shared/layout/schema";
+import type { RunSettings, WorkflowManifest } from "@shared/workflow/manifest";
 import { create } from "zustand";
 import { COMPACT_LAYOUT, DEFAULT_LAYOUT } from "./layout/defaultLayout";
-import { PREVIEW_VALUES } from "./preview-workflow";
 
 /* ── values ──────────────────────────────────────────────────────────────── */
 
 interface ValuesState {
+  workflowId: string | null;
   values: Record<string, unknown>;
-  prompt: string;
-  negative: string;
+  run: RunSettings;
+  /** Show a workflow's saved values (only when switching workflows, so edits aren't lost). */
+  load: (manifest: WorkflowManifest) => void;
   setValue: (id: string, value: unknown) => void;
-  setPrompt: (v: string) => void;
-  setNegative: (v: string) => void;
+  setRun: (patch: Partial<RunSettings>) => void;
+  /** Values the server changed (the next seed after a run); not saved again. */
+  merge: (values: Record<string, unknown>) => void;
 }
 
-export const useValues = create<ValuesState>((set) => ({
-  values: PREVIEW_VALUES,
-  prompt: MOCK_PROMPT,
-  negative: MOCK_NEGATIVE,
-  setValue: (id, value) => set((s) => ({ values: { ...s.values, [id]: value } })),
-  setPrompt: (prompt) => set({ prompt }),
-  setNegative: (negative) => set({ negative }),
+const SAVE_DELAY_MS = 400;
+let pending: {
+  workflowId: string;
+  values: Record<string, unknown>;
+  run: Partial<RunSettings>;
+} | null = null;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+
+async function save(): Promise<void> {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  const batch = pending;
+  pending = null;
+  if (!batch) return;
+  try {
+    const saved = await api.patchValues(batch.workflowId, { values: batch.values, run: batch.run });
+    // Keep the cached manifest current without replacing its live model choices.
+    const key = qk.workflow(useSession.getState().profileId, batch.workflowId);
+    queryClient.setQueryData<WorkflowManifest>(key, (old) =>
+      old ? { ...old, values: saved.values, run: saved.run, updatedAt: saved.updatedAt } : old,
+    );
+  } catch (error) {
+    toast(`Couldn't save the change: ${error instanceof Error ? error.message : error}`, "error");
+  }
+}
+
+function queueSave(workflowId: string, values: Record<string, unknown>, run: Partial<RunSettings>) {
+  if (pending && pending.workflowId !== workflowId) void save();
+  pending = pending
+    ? { workflowId, values: { ...pending.values, ...values }, run: { ...pending.run, ...run } }
+    : { workflowId, values, run };
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => void save(), SAVE_DELAY_MS);
+}
+
+/** Drop the queued save: the Generate request carries the same values. */
+export function takePendingSave(): void {
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = null;
+  pending = null;
+}
+
+export const useValues = create<ValuesState>((set, get) => ({
+  workflowId: null,
+  values: {},
+  run: { seedMode: "random", count: 1 },
+  load: (m) => {
+    if (get().workflowId === m.id) return;
+    if (pending) void save();
+    set({ workflowId: m.id, values: { ...m.values }, run: { ...m.run } });
+  },
+  setValue: (id, value) => {
+    const wf = get().workflowId;
+    set((s) => ({ values: { ...s.values, [id]: value } }));
+    if (wf) queueSave(wf, { [id]: value }, {});
+  },
+  setRun: (patch) => {
+    const wf = get().workflowId;
+    set((s) => ({ run: { ...s.run, ...patch } }));
+    if (wf) queueSave(wf, {}, patch);
+  },
+  merge: (values) => set((s) => ({ values: { ...s.values, ...values } })),
 }));
 
 export function useValue<T>(id: string): [T, (v: T) => void] {

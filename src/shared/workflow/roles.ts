@@ -37,5 +37,31 @@ export const ROLES = [
 
 export type Role = (typeof ROLES)[number];
 
+/** Default UI labels for role bindings. */
+export const ROLE_LABELS: Partial<Record<Role, string>> = {
+  "prompt.positive": "Prompt",
+  "prompt.negative": "Negative prompt",
+  "model.checkpoint": "Checkpoint",
+  "model.unet": "Diffusion model",
+  "model.vae": "VAE",
+  "model.clip": "Text encoder",
+  "model.clip2": "Text encoder 2",
+  "lora.stack": "LoRAs",
+  "sampler.seed": "Seed",
+  "sampler.steps": "Steps",
+  "sampler.cfg": "CFG scale",
+  "sampler.name": "Sampler",
+  "sampler.scheduler": "Scheduler",
+  "sampler.denoise": "Denoise",
+  "latent.width": "Width",
+  "latent.height": "Height",
+  "latent.batch": "Batch size",
+  "clip.skip": "CLIP skip",
+  "image.input": "Input image",
+  "mask.input": "Mask",
+  "output.image": "Filename prefix",
+  "output.text": "Text output",
+};
+
 export const STAGES = ["controlnet", "hires", "adetailer", "upscale"] as const;
 export type StageId = (typeof STAGES)[number];

@@ -24,7 +24,7 @@ import {
   type ParamBlock,
 } from "@shared/layout/schema";
 import type { Binding } from "@shared/workflow/manifest";
-import { SAMPLER_GROUPS, SAMPLER_LABELS, SCHEDULER_LABELS } from "../preview-workflow";
+import { modelDisplayName, samplerGroup, samplerLabel, schedulerLabel } from "../labels";
 import { useValue } from "../state";
 
 export function defaultStyle(family: ControlFamily | null): string {
@@ -32,9 +32,15 @@ export function defaultStyle(family: ControlFamily | null): string {
 }
 
 export function optionLabel(binding: Binding, value: string): string {
-  if (binding.role === "sampler.name") return SAMPLER_LABELS[value] ?? value;
-  if (binding.role === "sampler.scheduler") return SCHEDULER_LABELS[value] ?? value;
+  if (binding.role === "sampler.name") return samplerLabel(value);
+  if (binding.role === "sampler.scheduler") return schedulerLabel(value);
+  if (binding.type === "model" || binding.type === "image") return modelDisplayName(value);
   return value.charAt(0).toUpperCase() + value.slice(1).replace(/_/g, " ");
+}
+
+/** Model and image inputs with choices behave like enums (a dropdown of files). */
+export function bindingFamily(binding: Binding) {
+  return controlFamily(binding.type) ?? (binding.options ? "enum" : null);
 }
 
 function numberPresets(b: Binding): number[] {
@@ -49,7 +55,7 @@ function numberPresets(b: Binding): number[] {
 
 export function ParamControl({ binding, block }: { binding: Binding; block: ParamBlock }) {
   const [value, setValue] = useValue<unknown>(binding.id);
-  const family = controlFamily(binding.type);
+  const family = bindingFamily(binding);
   const style = block.control ?? defaultStyle(family);
   const size = block.size ?? "md";
   const label = block.label === "hidden" ? undefined : (block.title ?? binding.label);
@@ -172,7 +178,7 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
           options={options.map((o) => ({
             value: o,
             label: optionLabel(binding, o),
-            group: binding.role === "sampler.name" ? SAMPLER_GROUPS[o] : undefined,
+            group: binding.role === "sampler.name" ? samplerGroup(o) : undefined,
           }))}
         />
       );
@@ -199,9 +205,10 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
     );
   }
 
-  const text = typeof value === "string" ? value : "";
+  const text =
+    typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
   const input =
-    style === "textarea" ? (
+    style === "textarea" || (!block.control && binding.multiline) ? (
       <TextArea value={text} onChange={(e) => setValue(e.target.value)} />
     ) : (
       <TextField value={text} onChange={(e) => setValue(e.target.value)} size={size} />

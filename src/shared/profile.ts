@@ -59,7 +59,20 @@ export const CreateProfileBody = z.object({
 });
 export type CreateProfileBody = z.infer<typeof CreateProfileBody>;
 
-export const UpdateProfileBody = CreateProfileBody.omit({ presets: true }).partial();
+/**
+ * A partial update: only the fields sent change. Written out without defaults on purpose; a
+ * `.partial()` of the create schema would fill the missing fields with their defaults.
+ */
+export const UpdateProfileBody = z.object({
+  name: Profile.shape.name.optional(),
+  accent: z.enum(ACCENTS).optional(),
+  theme: z.enum(THEMES).optional(),
+  paths: z
+    .object({ models: z.string(), outputs: z.string(), wildcards: z.string() })
+    .partial()
+    .optional(),
+  comfy: ComfyTarget.optional(),
+});
 export type UpdateProfileBody = z.infer<typeof UpdateProfileBody>;
 
 export const CheckPathBody = z.object({ path: z.string() });

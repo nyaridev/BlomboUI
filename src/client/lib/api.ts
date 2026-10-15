@@ -9,7 +9,18 @@ import type {
   ProfilesResponse,
   SystemInfo,
 } from "@shared/api";
+import type { ComfyLogLine, ComfyStatus, FreeMemoryBody } from "@shared/comfy";
+import type { ModelKind } from "@shared/constants";
+import type { GenerateBody, GenerateResponse, QueueSnapshot } from "@shared/jobs";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
+import type {
+  ImportResult,
+  PatchValuesBody,
+  PresetSummary,
+  UpdateWorkflowBody,
+  WorkflowManifest,
+  WorkflowSummary,
+} from "@shared/workflow/manifest";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -64,6 +75,48 @@ export const api = {
   uploadAvatar: (id: string, file: Blob) =>
     request<Profile>("PUT", `/profiles/${id}/avatar`, undefined, file),
   removeAvatar: (id: string) => request<Profile>("DELETE", `/profiles/${id}/avatar`),
+
+  comfy: () => request<ComfyStatus>("GET", "/comfy"),
+  comfyStart: () => request<ComfyStatus>("POST", "/comfy/start"),
+  comfyStop: () => request<ComfyStatus>("POST", "/comfy/stop"),
+  comfyRestart: () => request<ComfyStatus>("POST", "/comfy/restart"),
+  comfyLogs: () => request<{ lines: ComfyLogLine[] }>("GET", "/comfy/logs"),
+  comfyFree: (body: Partial<FreeMemoryBody>) => request<{ ok: true }>("POST", "/comfy/free", body),
+  comfyRefresh: () => request<{ ok: true }>("POST", "/comfy/refresh"),
+  models: (kind: ModelKind) =>
+    request<{ kind: ModelKind; names: string[]; available: boolean }>(
+      "GET",
+      `/comfy/models/${kind}`,
+    ),
+
+  workflows: () => request<WorkflowSummary[]>("GET", "/workflows"),
+  workflow: (id: string) => request<WorkflowManifest>("GET", `/workflows/${id}`),
+  presets: () => request<PresetSummary[]>("GET", "/workflows/presets"),
+  installPreset: (id: string) =>
+    request<WorkflowManifest>("POST", `/workflows/presets/${id}/install`),
+  importWorkflow: (file: File) =>
+    request<ImportResult>(
+      "POST",
+      `/workflows/import?filename=${encodeURIComponent(file.name)}`,
+      undefined,
+      file,
+    ),
+  patchValues: (id: string, body: PatchValuesBody) =>
+    request<WorkflowManifest>("PATCH", `/workflows/${id}/values`, body),
+  updateWorkflow: (id: string, body: UpdateWorkflowBody) =>
+    request<WorkflowManifest>("PATCH", `/workflows/${id}`, body),
+  duplicateWorkflow: (id: string, name?: string) =>
+    request<WorkflowManifest>("POST", `/workflows/${id}/duplicate`, { name }),
+  deleteWorkflow: (id: string) => request<void>("DELETE", `/workflows/${id}`),
+
+  queue: () => request<QueueSnapshot>("GET", "/jobs"),
+  generate: (body: GenerateBody) => request<GenerateResponse>("POST", "/jobs", body),
+  interrupt: () => request<QueueSnapshot>("POST", "/jobs/interrupt"),
+  cancelAll: () => request<QueueSnapshot>("POST", "/jobs/cancel"),
+  cancelJob: (id: string) => request<QueueSnapshot>("DELETE", `/jobs/${id}`),
+  setLoop: (on: boolean) => request<QueueSnapshot>("PUT", "/jobs/loop", { on }),
+
+  wildcards: () => request<{ root: string; names: string[] }>("GET", "/wildcards"),
 };
 
 /** Avatar URL with a cache-buster tied to the profile record, so a new upload shows at once. */

@@ -7,11 +7,12 @@
  *   --open   web → default browser, app → Tauri window, none → nothing
  *   --data   profiles folder (default ./data)
  */
+import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { APP_NAME, PORTS } from "../shared/constants.ts";
 import { createApp } from "./app.ts";
 import { createConfig, parseFlags } from "./config.ts";
-import { ProfileService } from "./services/profiles.ts";
+import { createServices } from "./context.ts";
 import { openInAppWindow, openInBrowser } from "./services/window.ts";
 
 const config = createConfig(parseFlags(process.argv.slice(2)));
@@ -28,11 +29,11 @@ async function isBlomboRunning(): Promise<boolean> {
 
 function openWindow(): void {
   if (config.open === "web") void openInBrowser(url);
-  if (config.open === "app") openInAppWindow(config, url);
+  if (config.open === "app") openInAppWindow(config, url, () => shutdown());
 }
 
-const profiles = new ProfileService(config);
-const app = createApp({ config, profiles });
+const services = createServices(config);
+const app = createApp(services);
 
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, () => {
   const mode = config.dev ? "dev" : config.open === "app" ? "app" : "web";
@@ -42,6 +43,8 @@ const server = serve({ fetch: app.fetch, port: config.port, hostname: config.hos
   else console.log(`  ✦ Open ${url}\n`);
   openWindow();
 });
+// serve() returns a plain HTTP server here (no TLS / HTTP2 options are passed).
+services.bus.attach(server as Server);
 
 server.on("error", async (error: NodeJS.ErrnoException) => {
   if (error.code === "EADDRINUSE" && (await isBlomboRunning())) {
@@ -54,9 +57,17 @@ server.on("error", async (error: NodeJS.ErrnoException) => {
   process.exit(1);
 });
 
+let stopping = false;
 const shutdown = () => {
+  if (stopping) return;
+  stopping = true;
   server.close();
-  process.exit(0);
+  // Give ComfyUI a moment to stop (it's left running in dev so models stay loaded).
+  const force = setTimeout(() => process.exit(0), 8000);
+  void services.shutdown().finally(() => {
+    clearTimeout(force);
+    process.exit(0);
+  });
 };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);

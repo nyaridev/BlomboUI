@@ -11,7 +11,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Tauri](https://img.shields.io/badge/Desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![ComfyUI](https://img.shields.io/badge/Engine-ComfyUI-1F1F1F)](https://github.com/comfyanonymous/ComfyUI)
-[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20Phase%200-orange)](#roadmap)
+[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20Phase%201-orange)](#roadmap)
 
 [Quick start](#quick-start) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Development](#development) · [Docs](#documentation) · [Roadmap](#roadmap)
 
@@ -33,7 +33,7 @@ The first run installs dependencies and builds what's needed. After that, launch
 
 On first launch you'll see the **profile screen**. Create a profile: give it a name, a picture and a color, point it at your models, outputs and wildcards folders, choose a ComfyUI install, and pick starter workflows. Open it and you're on the Generate screen.
 
-> **Status:** Phase 0. The app shell, profiles, design system and the Generate / Gallery / Models / Settings screens are in place as previews. The ComfyUI engine connection lands in Phase 1; until then those screens show sample data. See the [roadmap](#roadmap).
+> **Status:** Phase 1. Generate runs on ComfyUI: a managed slot or your own ComfyUI URL, built-in SD 1.5 / SDXL / Illustrious workflows, importing any ComfyUI workflow (JSON, PNG, WebP), wildcards and `<lora:…>` tags, a server-side queue, and live progress and previews. Gallery, Models and Settings still show sample data, and ComfyUI slots aren't installed by the app yet (point a profile at an existing ComfyUI, or place one in `runtime/comfyui/<slot>/`). See the [roadmap](#roadmap).
 
 ## What it does
 
@@ -129,8 +129,8 @@ npm run dev
 
 | Phase | Scope | State |
 |---|---|---|
-| **0 · Foundation** | Design system, icons, Design Lab, app shell, profiles, launchers, Tauri window, docs | **in progress** |
-| **1 · Generate core** | ComfyUI supervisor, live bus, workflow packages, analyzer, presets, compiler, prompts + autocomplete, image stage | next |
+| **0 · Foundation** | Design system, icons, Design Lab, app shell, profiles, launchers, Tauri window, docs | done |
+| **1 · Generate core** | ComfyUI supervisor, live bus, workflow packages, analyzer, presets, compiler, queue, image stage (autocomplete and the import setup screen still open) | **in review** |
 | **2 · Library** | Gallery index and showcase, File Info, local models, Wildcard Manager | |
 | **3 · Online** | Civitai browser and downloads, ComfyUI Manager store | |
 | **4 · Power** | Hires / ADetailer / ControlNet stages, Customize presets and export, ComfyUI bridge, scripts, batch utilities | |

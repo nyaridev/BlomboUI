@@ -2,9 +2,12 @@
  * Stage blocks (ADR-0004). Each one is a Collapsible with an enable switch and a one-line
  * summary, so you can read the setup without opening it. Stage fields inherit base values
  * (dimmed, with a link) until you unlink them.
+ *
+ * Not on the Generate screen yet: stages are graph patches that arrive in a later phase (see the
+ * roadmap), and the column shows a placeholder until then. Model lists here come from ComfyUI.
  */
-import { MOCK_OTHER } from "@client/features/preview/mock";
 import { cn } from "@client/lib/cn";
+import { useModels } from "@client/lib/queries";
 import {
   Art,
   Button,
@@ -20,17 +23,16 @@ import {
   TextArea,
 } from "@client/ui";
 import { useState } from "react";
-import { SAMPLER_LABELS } from "../preview-workflow";
+import { modelDisplayName, samplerLabel } from "../labels";
 import { type AdUnit, type CnUnit, useStages, useValues } from "../state";
 
-const UPSCALERS = [
-  "4x-UltraSharp",
-  "4x_NMKD-Siax_200k",
-  "RealESRGAN_x4plus_anime_6B",
-  "Latent (bicubic)",
-].map((v) => ({ value: v, label: v }));
+function useModelOptions(kind: "upscale_models" | "controlnet") {
+  const names = useModels(kind).data?.names ?? [];
+  return names.map((v) => ({ value: v, label: modelDisplayName(v) }));
+}
 
 export function HiresStage() {
+  const upscalers = useModelOptions("upscale_models");
   const h = useStages((s) => s.hires);
   const patch = useStages((s) => s.patch);
   const base = useValues((s) => s.values);
@@ -72,7 +74,7 @@ export function HiresStage() {
           <Select
             value={h.upscaler}
             onChange={(upscaler) => set({ upscaler })}
-            options={UPSCALERS}
+            options={upscalers}
             className="w-full"
           />
         </Field>
@@ -118,14 +120,14 @@ export function HiresStage() {
         </div>
         <InheritRow
           label="Sampler"
-          inherited={SAMPLER_LABELS[String(base["sampler.name"])] ?? String(base["sampler.name"])}
+          inherited={samplerLabel(String(base["sampler.name"]))}
           overridden={h.samplerOverride}
           onOverride={(samplerOverride) => set({ samplerOverride })}
         >
           <Select
             value={h.sampler}
             onChange={(sampler) => set({ sampler })}
-            options={Object.entries(SAMPLER_LABELS).map(([value, label]) => ({ value, label }))}
+            options={[h.sampler].map((value) => ({ value, label: samplerLabel(value) }))}
             className="w-full"
           />
         </InheritRow>
@@ -272,10 +274,7 @@ export function ControlNetStage() {
   const unit = cn_.units.find((u) => u.id === cn_.active) ?? (cn_.units[0] as CnUnit);
   const setUnit = (v: Partial<CnUnit>) =>
     patch("controlnet", { units: cn_.units.map((u) => (u.id === unit.id ? { ...u, ...v } : u)) });
-  const models = MOCK_OTHER.filter((m) => m.kind === "controlnet").map((m) => ({
-    value: m.name,
-    label: m.name,
-  }));
+  const models = useModelOptions("controlnet");
   return (
     <Collapsible
       title="ControlNet"

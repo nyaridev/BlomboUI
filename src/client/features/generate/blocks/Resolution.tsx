@@ -3,6 +3,7 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { IconButton, NumberField, SectionTitle } from "@client/ui";
 import { useValue } from "../state";
+import { useRoleBinding } from "../workflow";
 
 const ASPECTS: Array<[string, number, number]> = [
   ["1:1", 1024, 1024],
@@ -16,8 +17,25 @@ const ASPECTS: Array<[string, number, number]> = [
 ];
 
 export function Resolution() {
-  const [w, setW] = useValue<number>("latent.width");
-  const [h, setH] = useValue<number>("latent.height");
+  const width = useRoleBinding("latent.width");
+  const height = useRoleBinding("latent.height");
+  if (!width || !height) return null;
+  return <ResolutionCard widthId={width.id} heightId={height.id} step={width.step ?? 8} />;
+}
+
+function ResolutionCard({
+  widthId,
+  heightId,
+  step,
+}: {
+  widthId: string;
+  heightId: string;
+  step: number;
+}) {
+  const [rawW, setW] = useValue<number>(widthId);
+  const [rawH, setH] = useValue<number>(heightId);
+  const w = typeof rawW === "number" && rawW > 0 ? rawW : 1024;
+  const h = typeof rawH === "number" && rawH > 0 ? rawH : 1024;
   const mp = (w * h) / 1_000_000;
   const ratio = w / h;
   const active = ASPECTS.find(
@@ -76,7 +94,7 @@ export function Resolution() {
             onChange={setW}
             min={64}
             max={4096}
-            step={8}
+            step={step}
             unit="px"
             label="Width"
           />
@@ -97,7 +115,7 @@ export function Resolution() {
             onChange={setH}
             min={64}
             max={4096}
-            step={8}
+            step={step}
             unit="px"
             label="Height"
           />

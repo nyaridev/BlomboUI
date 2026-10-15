@@ -7,18 +7,17 @@ import path from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import type { ApiErrorBody } from "../shared/api.ts";
-import type { ServerConfig } from "./config.ts";
+import type { Services } from "./context.ts";
 import { HttpError } from "./lib/http.ts";
+import { comfyRoutes } from "./routes/comfy.ts";
+import { jobRoutes } from "./routes/jobs.ts";
 import { profileRoutes } from "./routes/profiles.ts";
 import { systemRoutes } from "./routes/system.ts";
-import type { ProfileService } from "./services/profiles.ts";
+import { wildcardRoutes } from "./routes/wildcards.ts";
+import { workflowRoutes } from "./routes/workflows.ts";
 
-export interface AppDeps {
-  config: ServerConfig;
-  profiles: ProfileService;
-}
-
-export function createApp({ config, profiles }: AppDeps) {
+export function createApp(services: Services) {
+  const { config, profiles, supervisor, workflows, queue } = services;
   const app = new Hono();
 
   app.onError((error, c) => {
@@ -33,7 +32,11 @@ export function createApp({ config, profiles }: AppDeps) {
 
   const api = new Hono();
   api.route("/system", systemRoutes(config, profiles));
-  api.route("/profiles", profileRoutes(profiles));
+  api.route("/profiles", profileRoutes(profiles, services.installPresets));
+  api.route("/comfy", comfyRoutes(supervisor));
+  api.route("/workflows", workflowRoutes(config, workflows, supervisor));
+  api.route("/jobs", jobRoutes(queue));
+  api.route("/wildcards", wildcardRoutes(profiles));
   api.all("*", (c) => c.json({ error: "Unknown API route.", code: "not_found" }, 404));
   app.route("/api", api);
 

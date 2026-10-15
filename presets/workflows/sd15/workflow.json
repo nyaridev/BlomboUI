@@ -1,0 +1,216 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "sd15",
+  "name": "SD 1.5",
+  "kind": "generate",
+  "family": "SD 1.5",
+  "description": "Classic Stable Diffusion 1.5 text-to-image. Fast, light on VRAM, huge model and LoRA ecosystem.",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "sd15",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "prompt.positive",
+      "node": "3",
+      "input": "text",
+      "type": "prompt",
+      "label": "Prompt",
+      "hidden": false,
+      "role": "prompt.positive"
+    },
+    {
+      "id": "prompt.negative",
+      "node": "4",
+      "input": "text",
+      "type": "prompt",
+      "label": "Negative prompt",
+      "hidden": false,
+      "role": "prompt.negative"
+    },
+    {
+      "id": "model.checkpoint",
+      "node": "1",
+      "input": "ckpt_name",
+      "type": "model",
+      "label": "Checkpoint",
+      "hidden": false,
+      "role": "model.checkpoint",
+      "modelKind": "checkpoints"
+    },
+    {
+      "id": "sampler.name",
+      "node": "6",
+      "input": "sampler_name",
+      "type": "enum",
+      "label": "Sampler",
+      "hidden": false,
+      "role": "sampler.name",
+      "options": [
+        "euler",
+        "euler_ancestral",
+        "heun",
+        "dpm_2",
+        "dpmpp_2m",
+        "dpmpp_2m_sde",
+        "dpmpp_3m_sde",
+        "uni_pc"
+      ]
+    },
+    {
+      "id": "sampler.scheduler",
+      "node": "6",
+      "input": "scheduler",
+      "type": "enum",
+      "label": "Scheduler",
+      "hidden": false,
+      "role": "sampler.scheduler",
+      "options": [
+        "normal",
+        "karras",
+        "exponential",
+        "sgm_uniform",
+        "simple",
+        "beta"
+      ]
+    },
+    {
+      "id": "sampler.steps",
+      "node": "6",
+      "input": "steps",
+      "type": "int",
+      "label": "Steps",
+      "hidden": false,
+      "role": "sampler.steps",
+      "min": 1,
+      "max": 150,
+      "step": 1,
+      "presets": [
+        20,
+        25,
+        30,
+        40
+      ]
+    },
+    {
+      "id": "sampler.cfg",
+      "node": "6",
+      "input": "cfg",
+      "type": "float",
+      "label": "CFG scale",
+      "hidden": false,
+      "role": "sampler.cfg",
+      "min": 1,
+      "max": 20,
+      "step": 0.5,
+      "presets": [
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "id": "sampler.seed",
+      "node": "6",
+      "input": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "hidden": false,
+      "role": "sampler.seed"
+    },
+    {
+      "id": "latent.width",
+      "node": "5",
+      "input": "width",
+      "type": "int",
+      "label": "Width",
+      "hidden": false,
+      "role": "latent.width",
+      "min": 64,
+      "max": 4096,
+      "step": 8
+    },
+    {
+      "id": "latent.height",
+      "node": "5",
+      "input": "height",
+      "type": "int",
+      "label": "Height",
+      "hidden": false,
+      "role": "latent.height",
+      "min": 64,
+      "max": 4096,
+      "step": 8
+    },
+    {
+      "id": "latent.batch",
+      "node": "5",
+      "input": "batch_size",
+      "type": "int",
+      "label": "Batch size",
+      "hidden": false,
+      "role": "latent.batch",
+      "min": 1,
+      "max": 16,
+      "step": 1,
+      "presets": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "id": "sampler.denoise",
+      "node": "6",
+      "input": "denoise",
+      "type": "float",
+      "label": "Denoise",
+      "hidden": true,
+      "role": "sampler.denoise",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "presets": [
+        0.3,
+        0.5,
+        0.75,
+        1
+      ]
+    },
+    {
+      "id": "output.image",
+      "node": "8",
+      "input": "filename_prefix",
+      "type": "string",
+      "label": "Filename prefix",
+      "hidden": true,
+      "role": "output.image"
+    }
+  ],
+  "values": {
+    "prompt.positive": "a cozy reading nook by a rainy window, warm lamp light, potted plants, stacks of books, soft focus background, highly detailed",
+    "prompt.negative": "lowres, blurry, jpeg artifacts, watermark, text, deformed, bad anatomy",
+    "model.checkpoint": "v1-5-pruned-emaonly.safetensors",
+    "sampler.name": "dpmpp_2m",
+    "sampler.scheduler": "karras",
+    "sampler.steps": 25,
+    "sampler.cfg": 7,
+    "sampler.seed": 0,
+    "latent.width": 512,
+    "latent.height": 768,
+    "latent.batch": 1,
+    "sampler.denoise": 1,
+    "output.image": "ComfyUI"
+  },
+  "run": {
+    "seedMode": "random",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "createdAt": "2026-10-15T00:00:00.000Z",
+  "updatedAt": "2026-10-15T00:00:00.000Z"
+}

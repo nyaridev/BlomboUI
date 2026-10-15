@@ -71,7 +71,7 @@ export function Header({
       </nav>
 
       <div className="ml-auto flex items-center gap-2">
-        <SystemCluster onOpenErrors={() => go("errors")} />
+        <SystemCluster />
         <span className="mx-1 h-6 w-px bg-line" />
         <AvatarMenu profile={profile} profileId={profileId} onNavigate={go} />
       </div>

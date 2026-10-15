@@ -145,6 +145,8 @@ export function PromptEditor({
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
+  /** True while the editor is being set from `value`, so that isn't reported as an edit. */
+  const syncing = useRef(false);
   onChangeRef.current = onChange;
   onSubmitRef.current = onSubmit;
 
@@ -174,7 +176,7 @@ export function PromptEditor({
           promptHighlight,
           theme,
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) onChangeRef.current(u.state.doc.toString());
+            if (u.docChanged && !syncing.current) onChangeRef.current(u.state.doc.toString());
           }),
         ],
       }),
@@ -190,7 +192,13 @@ export function PromptEditor({
     const v = view.current;
     if (!v) return;
     const current = v.state.doc.toString();
-    if (current !== value) v.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    if (current === value) return;
+    syncing.current = true;
+    try {
+      v.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    } finally {
+      syncing.current = false;
+    }
   }, [value]);
 
   return (

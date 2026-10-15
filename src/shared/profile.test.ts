@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CreateProfileBody, slugifyProfileName } from "./profile.ts";
+import { CreateProfileBody, slugifyProfileName, UpdateProfileBody } from "./profile.ts";
 
 describe("slugifyProfileName", () => {
   it("lowercases and dashes words", () => {
@@ -25,5 +25,14 @@ describe("CreateProfileBody", () => {
   });
   it("rejects an empty name", () => {
     expect(() => CreateProfileBody.parse({ name: "  ", paths: {} })).toThrow();
+  });
+});
+
+describe("UpdateProfileBody", () => {
+  it("keeps only the fields that were sent", () => {
+    expect(UpdateProfileBody.parse({ theme: "light" })).toEqual({ theme: "light" });
+    expect(UpdateProfileBody.parse({ paths: { models: "D:/M" } })).toEqual({
+      paths: { models: "D:/M" },
+    });
   });
 });

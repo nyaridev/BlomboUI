@@ -1,6 +1,6 @@
 /** Avatar button + menu: profile card, the secondary views, and switching profiles. */
-import { useSystemPreview } from "@client/features/preview/systemPreview";
 import { avatarUrl } from "@client/lib/api";
+import { useLive } from "@client/lib/live";
 import { glide } from "@client/lib/motion";
 import { Avatar, Badge, Menu } from "@client/ui";
 import type { ViewId } from "@shared/constants";
@@ -18,7 +18,7 @@ export function AvatarMenu({
   onNavigate: (view: ViewId) => void;
 }) {
   const navigate = useNavigate();
-  const errors = useSystemPreview((s) => s.errors.length);
+  const errors = useLive((s) => s.errors.length);
   const name = profile?.name ?? "Profile";
   const src = profile ? avatarUrl(profile, profile.lastOpenedAt ?? profile.createdAt) : null;
 

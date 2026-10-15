@@ -29,7 +29,7 @@ runtime/cache/<id>/                   thumbnails, temp (safe to delete)
   2. Folders: models, outputs, wildcards, with an existence check and "create if missing"
   3. ComfyUI: managed slot (`latest` or pinned) or an existing install or URL
   4. Starter workflows (preset checklist), theme, optional Civitai API key
-- **Secrets** (the Civitai key) are stored in `profile.json` with a `secret:` marker and never sent back in full to the client.
+- **Secrets** (the Civitai key) are stored in their own file, `data/profiles/<id>/secrets.json`, and never sent back to the client: the API answers only whether a key is set and its last four characters. *(Changed in Phase 3 from a `secret:` marker inside `profile.json`: a separate file can't leak through anything that reads, copies or shares `profile.json`, and profile updates can't drop it.)*
 
 ## Consequences
 

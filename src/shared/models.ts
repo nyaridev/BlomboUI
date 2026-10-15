@@ -66,8 +66,49 @@ export const LocalModel = z.object({
   baseModel: z.string().nullable(),
   triggerWords: z.array(z.string()),
   hasInfo: z.boolean(),
+  /**
+   * The Civitai model and version this file is, from its .civitai.info file or, without one,
+   * from a lookup by hash (`lookup`; nothing is written next to the model then).
+   */
+  civitai: z
+    .object({ modelId: z.number(), versionId: z.number(), lookup: z.boolean() })
+    .nullable()
+    .default(null),
 });
 export type LocalModel = z.infer<typeof LocalModel>;
+
+/** Background hashing and Civitai lookup of local models (Models → Local shows it). */
+export const LookupState = z.object({
+  running: z.boolean(),
+  /** Models checked so far in this run, out of `total`. */
+  done: z.number().int(),
+  total: z.number().int(),
+  /** Matched on Civitai in this run. */
+  found: z.number().int(),
+  /** The file being hashed right now. */
+  current: z.string().nullable(),
+  /** Why the last run stopped early (Civitai unreachable…). */
+  error: z.string().nullable(),
+});
+export type LookupState = z.infer<typeof LookupState>;
+
+/** What a lookup by hash learned about a local model. */
+export const LookupInfo = z.object({
+  modelId: z.number(),
+  versionId: z.number(),
+  name: z.string(),
+  version: z.string().nullable(),
+  type: z.string().nullable(),
+  baseModel: z.string().nullable(),
+  trainedWords: z.array(z.string()),
+  nsfw: z.boolean(),
+  creator: z.string().nullable(),
+  /** Proxied first image. */
+  image: z.string().nullable(),
+  imageNsfw: z.boolean(),
+  description: z.string().nullable(),
+});
+export type LookupInfo = z.infer<typeof LookupInfo>;
 
 export const ModelList = z.object({
   root: z.string(),

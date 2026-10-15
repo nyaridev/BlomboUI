@@ -106,6 +106,91 @@ export function movePath(from: string, to: string): Promise<void> {
   return sameFile ? enqueue(from, task) : enqueue(from, () => enqueue(to, task));
 }
 
+/**
+ * Write a new file, never replacing one: resolves false (and writes nothing) when `file` already
+ * exists. For sidecars saved next to user files (a downloaded model's preview and info).
+ */
+export function writeFileIfAbsent(file: string, data: Uint8Array | string): Promise<boolean> {
+  return enqueue(file, async () => {
+    if (await exists(file)) return false;
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    const tmp = tmpName(file);
+    await fs.writeFile(tmp, data);
+    await renameWithRetry(tmp, file);
+    return true;
+  });
+}
+
+/* ── downloads ──────────────────────────────────────────────────────────────
+ * A download is written to "<target>.part" next to where it lands (same drive, so finishing is
+ * a rename) and appended to as bytes arrive, so an interrupted download resumes where it
+ * stopped. Finishing moves it into place without ever replacing a file.
+ */
+
+export const PART_SUFFIX = ".part";
+
+export interface PartFile {
+  path: string;
+  /** Bytes already in the file (0 for a fresh start). */
+  offset: number;
+  write(chunk: Uint8Array): Promise<void>;
+  close(): Promise<void>;
+}
+
+/** Open `<target>.part`: appended to when `resume` and it exists, else started empty. */
+export async function openPartFile(target: string, resume: boolean): Promise<PartFile> {
+  const file = target + PART_SUFFIX;
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  let offset = 0;
+  if (resume)
+    offset = await fs.stat(file).then(
+      (s) => s.size,
+      () => 0,
+    );
+  const handle = await fs.open(file, offset > 0 ? "a" : "w");
+  return {
+    path: file,
+    offset,
+    write: async (chunk) => {
+      let done = 0;
+      while (done < chunk.byteLength) {
+        const { bytesWritten } = await handle.write(chunk, done, chunk.byteLength - done);
+        done += bytesWritten;
+      }
+    },
+    close: () => handle.close(),
+  };
+}
+
+/** Move a finished `.part` into place at `target`, or a free name next to it. Returns the path. */
+export async function commitPart(part: string, target: string): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    const final = await freePath(target);
+    try {
+      await movePath(part, final);
+      return final;
+    } catch (error) {
+      // Someone took the name between the check and the move: pick the next free one.
+      if (!(error instanceof HttpError && error.code === "exists") || attempt >= 3) throw error;
+    }
+  }
+}
+
+/** Remove a download's own partial file (only ever a `.part`). */
+export async function removePart(part: string): Promise<void> {
+  if (!part.endsWith(PART_SUFFIX)) return;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      await fs.rm(part, { force: true });
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (!RETRY_CODES.has(code) || attempt >= 6) throw error;
+      await new Promise((r) => setTimeout(r, 15 * 2 ** attempt));
+    }
+  }
+}
+
 /** `target`, or "name (2).ext", "name (3).ext"… when it's taken. */
 export async function freePath(target: string): Promise<string> {
   if (!(await exists(target))) return target;

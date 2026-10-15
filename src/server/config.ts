@@ -15,6 +15,8 @@ export interface Flags {
   open: OpenMode;
   dataDir?: string;
   runtimeDir?: string;
+  civitaiUrl?: string;
+  catalogUrl?: string;
 }
 
 export interface ServerConfig {
@@ -29,7 +31,15 @@ export interface ServerConfig {
   clientDist: string;
   presetsDir: string;
   tauriExe: string;
+  /** Civitai's site and API (a fake one in tests and dev checks). */
+  civitaiUrl: string;
+  /** The ComfyUI model catalog (ComfyUI-Manager's model-list.json). */
+  catalogUrl: string;
 }
+
+export const CIVITAI_URL = "https://civitai.com";
+export const CATALOG_URL =
+  "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/model-list.json";
 
 export function parseFlags(argv: string[]): Flags {
   const flags: Flags = { dev: false, port: PORTS.server, open: "none" };
@@ -42,6 +52,8 @@ export function parseFlags(argv: string[]): Flags {
       if (mode === "web" || mode === "app" || mode === "none") flags.open = mode;
     } else if (arg === "--data") flags.dataDir = argv[++i];
     else if (arg === "--runtime") flags.runtimeDir = argv[++i];
+    else if (arg === "--civitai") flags.civitaiUrl = argv[++i];
+    else if (arg === "--catalog") flags.catalogUrl = argv[++i];
   }
   return flags;
 }
@@ -64,5 +76,7 @@ export function createConfig(flags: Flags): ServerConfig {
     clientDist: path.join(root, "dist", "client"),
     presetsDir: path.join(root, "presets"),
     tauriExe: path.join(root, "src-tauri", "target", "release", exe),
+    civitaiUrl: (flags.civitaiUrl ?? CIVITAI_URL).replace(/\/+$/, ""),
+    catalogUrl: flags.catalogUrl ?? CATALOG_URL,
   };
 }

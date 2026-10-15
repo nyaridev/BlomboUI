@@ -97,3 +97,21 @@ export function slugifyProfileName(name: string): string {
     .slice(0, 40);
   return slug || "profile";
 }
+
+/**
+ * data/profiles/<id>/secrets.json: the profile's Civitai API key. Kept apart from profile.json so
+ * copying or sharing a profile's settings never carries it, and never sent to the client (the
+ * API answers only whether a key is set, with its last four characters).
+ */
+export const ProfileSecrets = z.object({
+  version: z.literal(1).default(1),
+  civitai: z
+    .object({
+      key: z.string().nullable().default(null),
+      /** The Civitai user the key belongs to, from the last check. */
+      username: z.string().nullable().default(null),
+      checkedAt: z.string().nullable().default(null),
+    })
+    .prefault({}),
+});
+export type ProfileSecrets = z.infer<typeof ProfileSecrets>;

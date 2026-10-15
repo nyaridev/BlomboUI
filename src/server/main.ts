@@ -2,12 +2,14 @@
  * BlomboUI server entry. Runs directly on Node (native TypeScript type stripping):
  *
  *   node src/server/main.ts [--dev] [--port 4380] [--open web|app|none] [--data <dir>]
- *                           [--runtime <dir>]
+ *                           [--runtime <dir>] [--civitai <url>] [--catalog <url>]
  *
  *   --dev    dev mode (Vite serves the client on :4382 and proxies /api here)
  *   --open   web → default browser, app → Tauri window, none → nothing
  *   --data     profiles folder (default ./data)
  *   --runtime  ComfyUI slots, tools and caches (default ./runtime)
+ *   --civitai  Civitai's address (default https://civitai.com; the fake one for checks)
+ *   --catalog  the ComfyUI model catalog URL (default ComfyUI-Manager's model-list.json)
  */
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";

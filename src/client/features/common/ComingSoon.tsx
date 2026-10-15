@@ -5,12 +5,6 @@ import type { ViewId } from "@shared/constants";
 const INFO: Partial<
   Record<ViewId, { icon: IconName; title: string; phase: string; text: string }>
 > = {
-  history: {
-    icon: "history",
-    title: "History",
-    phase: "Phase 3",
-    text: "Downloads, Civitai browsing and generation history.",
-  },
   errors: {
     icon: "errors",
     title: "Errors",

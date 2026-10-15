@@ -30,6 +30,11 @@ const FOLDERS: Array<[string, string[]]> = [
   ["ultralytics_segm", ["ultralytics/segm"]],
 ];
 
+/** Folders under the models root that ComfyUI reads through extra_model_paths.yaml. */
+export function comfyFolderKeys(): string[] {
+  return [...new Set(FOLDERS.flatMap(([, dirs]) => dirs))];
+}
+
 /** YAML text pointing every ComfyUI model folder at `modelsRoot`. Empty root → no file needed. */
 export function extraModelPathsYaml(modelsRoot: string): string | null {
   const root = modelsRoot.trim();

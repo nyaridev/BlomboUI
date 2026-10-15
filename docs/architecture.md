@@ -92,12 +92,15 @@ data/
     ├── profile.json              name, avatar, accent, paths (models, outputs, wildcards), comfy slot
     ├── avatar.webp
     ├── settings.json             everything in Settings (Zod-validated, versioned, migrated)
+    ├── secrets.json              the Civitai API key (never sent to the client)
     ├── workflows/<workflowId>/   workflow.json · graph.json · prompt.json · thumb.webp
     ├── layouts/<layoutId>.json   Generate layouts
     ├── trash/                    workflows/ · gallery/<id>/<file> · wildcards/<stamp>/<path>
-    └── blombo.sqlite             gallery index (FTS5) + favorites + trash list; later jobs,
-                                  history, errors, stats, model hashes
+    └── blombo.sqlite             gallery index (FTS5) + favorites + trash list, downloads,
+                                  Civitai views and searches, model hashes and lookups
 runtime/cache/<id>/thumbs/        gallery/ and models/ WebP thumbnails (safe to delete)
+runtime/cache/civitai/            api/ answers and images/ (the image proxy), safe to delete
+runtime/cache/manager/            the ComfyUI model catalog (model-list.json), a day at a time
 runtime/comfyui/<slot>/           managed ComfyUI: ComfyUI/ · .venv/ · blombo/ (pid, slot.json)
 runtime/tools/                    uv, its Python downloads and package cache (installer)
 runtime/app/                      the desktop window's WebView2 profile and window.json
@@ -124,6 +127,18 @@ or the registry (ADR-0002). Moving the folder moves the app.
 - **Wildcards** (`services/wildcards.ts`): `.txt` files (one option per line) and YAML files (nested keys, list leaves; keys are global) resolve `__name__` references for Generate and the Wildcard Manager. Saving is atomic and refuses a file that changed on disk since it was opened; deleting moves to the profile's trash. The roll preview runs the same seeded expansion as the compiler, with the editor's unsaved text.
 
 ADR [0011](adr/0011-gallery-index.md) (gallery index) · ADR [0010](adr/0010-in-app-comfyui-installer.md) (installer).
+
+## Online (Civitai, downloads, Manager store, History)
+
+- **The client never talks to Civitai.** `services/civitai/` calls Civitai's API v1 with the profile's key (`secrets.json`; the API reports only whether one is set and its last four characters), caches answers in memory and `runtime/cache/civitai/api/` keyed by which key asked, and normalizes them into `shared/civitai.ts` shapes. Descriptions are parsed into plain blocks (`shared/richtext.ts`) and rendered as React elements. Every picture goes through the image proxy, `/api/civitai/image?u=…`: Civitai's hosts only (checked at each redirect), image bytes only, cached in `runtime/cache/civitai/images/` with immutable caching. `lib/remote.ts` follows redirects by hand so the key is sent only to Civitai's own origin.
+- **Models → Civitai:** a filter bar (search, types, base model, sort, period, NSFW), recent searches and saved filters (settings), a virtualized grid of the one ModelCard that loads pages as you scroll, and opened model tabs. A model page has an image carousel, the version picker, files, trigger words, the description and **Download** with a preview of where the file lands. Marks ("Installed", "Update", "Downloading") come from the models folder and the live queue.
+- **Downloads** (`services/downloads.ts`, ADR-0012) are a server queue: a few at a time, progress on the bus, each file written to `<target>.part` next to where it lands and resumed with range requests, Civitai's SHA256 checked, never overwriting (`lib/fsx.ts`: `openPartFile`, `commitPart`, `writeFileIfAbsent`). Civitai files land in `<kind>/<base model>/<category>/<creator>/<name>` per Settings → Civitai (`shared/downloads.ts`, pure) with `.civitai.info` and `.preview.png` next to them. Every download is a row in the profile database; unfinished ones come back paused. The header shows a downloads chip beside the generation queue.
+- **Lookup by hash** (`services/lookup.ts`): local models without a Civitai info file are hashed in the background, smallest first, and looked up on Civitai; answers live in the profile database (by path + size + mtime) and fill names, thumbnails, base models and trigger words in Models → Local and the Generate pickers. Nothing is written next to the models.
+- **Models → Manager** (`services/manager.ts`): ComfyUI-Manager's `model-list.json` (cached a day, used offline) as a store with categories, sizes and installed state; Install goes through the same queue into the folder the catalog names.
+- **History** (avatar menu): every download with retry, show in Models, reveal and its Civitai page; the Civitai models you opened; your searches. Limits are in Settings → Civitai.
+- **Checks without the real site:** `services/civitai/fixtures/fake-civitai.ts` serves the API, images, ranged downloads, an early-access file and a catalog; `--civitai` and `--catalog` point the server at it.
+
+ADR [0012](adr/0012-civitai-proxy-and-downloads.md).
 
 ## Workflows (the core)
 
@@ -171,9 +186,10 @@ ADR [0005](adr/0005-layout-documents.md).
 | `logs` | `comfy.log` batches, only while a log view is open |
 | `gallery` | `gallery.added` (a new image, indexed), `gallery.changed` (lists should refetch), `gallery.sync` (scan progress), while a gallery view is mounted |
 | `install` | `install`: the ComfyUI installer's steps, progress and log, while Settings → ComfyUI is open |
-| (all) | `hello` on connect, `error`, `profile.switched`, `models.changed` (model files renamed or moved) |
+| `downloads` | `downloads` queue snapshots on every change, `download.progress` byte counts at 4 Hz (every window follows it: the header shows the queue) |
+| (all) | `hello` on connect (with the download queue), `error`, `profile.switched`, `models.changed` (model files renamed, moved, downloaded or matched on Civitai), `models.lookup` (background hashing progress) |
 
-Preview frames are binary: a 4-byte job sequence number, 1 byte for the image type, then ComfyUI's JPEG or PNG preview bytes unchanged. A window whose socket is backed up skips frames. Downloads join the bus with their service.
+Preview frames are binary: a 4-byte job sequence number, 1 byte for the image type, then ComfyUI's JPEG or PNG preview bytes unchanged. A window whose socket is backed up skips frames.
 
 ADR [0008](adr/0008-live-bus.md).
 

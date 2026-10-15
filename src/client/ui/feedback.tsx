@@ -218,3 +218,34 @@ export function StageProgress({
 export function ToneText({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={toneText[tone]}>{children}</span>;
 }
+
+/** A small circular progress (0–1) in the current text color, for header chips. */
+export function ProgressRing({ value, size = 20 }: { value: number; size?: number }) {
+  const r = 8;
+  const c = 2 * Math.PI * r;
+  return (
+    <svg width={size} height={size} viewBox="0 0 20 20" className="-rotate-90" aria-hidden="true">
+      <circle
+        cx="10"
+        cy="10"
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeOpacity=".2"
+        strokeWidth="2.5"
+      />
+      <circle
+        cx="10"
+        cy="10"
+        r={r}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeDasharray={c}
+        strokeDashoffset={c * (1 - value)}
+        style={{ transition: "stroke-dashoffset .4s ease-out" }}
+      />
+    </svg>
+  );
+}

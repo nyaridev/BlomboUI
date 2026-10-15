@@ -7,6 +7,7 @@
  * `.default()` would return the literal object without filling it.
  */
 import { z } from "zod";
+import { BrowseFilter, SavedFilter } from "./civitai.ts";
 
 export const SETTINGS_VERSION = 1;
 
@@ -53,11 +54,65 @@ export const ModelSettings = z.object({
   blurNsfw: z.boolean().default(true),
 });
 
+/** Parts of the folder a Civitai download is sorted into, in order ("Illustrious/Creator"). */
+export const DOWNLOAD_FOLDER_PARTS = ["baseModel", "category", "creator"] as const;
+export type DownloadFolderPart = (typeof DOWNLOAD_FOLDER_PARTS)[number];
+
+export const DOWNLOAD_FOLDER_LABELS: Record<DownloadFolderPart, string> = {
+  baseModel: "Base model",
+  category: "Category",
+  creator: "Creator",
+};
+
+/** How a downloaded file is named: Civitai's file name, or built from the model's name. */
+export const DOWNLOAD_NAMING = ["original", "model", "model-version"] as const;
+export type DownloadNaming = (typeof DOWNLOAD_NAMING)[number];
+
+/** A creator's folder name: "some_user_123" → "Some User". */
+export const AuthorAlias = z.object({
+  from: z.string().trim().min(1).max(60),
+  to: z.string().trim().min(1).max(60),
+});
+export type AuthorAlias = z.infer<typeof AuthorAlias>;
+
+export const CivitaiSettings = z.object({
+  /** What the Civitai browser starts with. */
+  browse: BrowseFilter.omit({ query: true, username: true }).prefault({}),
+  downloads: z
+    .object({
+      /** Files downloading at the same time. */
+      parallel: z.number().int().min(1).max(4).default(2),
+      /** Subfolders inside the kind folder, in order. Empty: straight into loras/, checkpoints/… */
+      folderBy: z.array(z.enum(DOWNLOAD_FOLDER_PARTS)).max(3).default(["baseModel"]),
+      naming: z.enum(DOWNLOAD_NAMING).default("original"),
+      aliases: z.array(AuthorAlias).max(200).default([]),
+      /** Save Civitai's info (.civitai.info) next to the model. */
+      saveInfo: z.boolean().default(true),
+      /** Save the first image as the model's preview (.preview.png). */
+      savePreview: z.boolean().default(true),
+    })
+    .prefault({}),
+  /** Show "Installed" marks on Civitai models you already have. */
+  marks: z.boolean().default(true),
+  /** Hash local models in the background and look them up on Civitai (thumbnails, trigger words). */
+  lookup: z.boolean().default(true),
+  history: z
+    .object({
+      downloads: z.number().int().min(20).max(5000).default(500),
+      views: z.number().int().min(20).max(2000).default(200),
+      searches: z.number().int().min(0).max(100).default(20),
+    })
+    .prefault({}),
+  savedFilters: z.array(SavedFilter).max(50).default([]),
+});
+export type CivitaiSettings = z.infer<typeof CivitaiSettings>;
+
 export const Settings = z.object({
   version: z.literal(SETTINGS_VERSION).default(SETTINGS_VERSION),
   appearance: AppearanceSettings.prefault({}),
   gallery: GallerySettings.prefault({}),
   models: ModelSettings.prefault({}),
+  civitai: CivitaiSettings.prefault({}),
 });
 export type Settings = z.infer<typeof Settings>;
 
@@ -68,7 +123,7 @@ export type Settings = z.infer<typeof Settings>;
  */
 const Section = z.record(z.string(), z.unknown());
 export const SettingsPatch = z
-  .object({ appearance: Section, gallery: Section, models: Section })
+  .object({ appearance: Section, gallery: Section, models: Section, civitai: Section })
   .partial()
   .strict();
 export type SettingsPatch = z.infer<typeof SettingsPatch>;
@@ -80,13 +135,23 @@ export function migrateSettings(raw: unknown): Settings {
   return Settings.parse({ ...input, version: SETTINGS_VERSION });
 }
 
+/**
+ * Apply a patch: plain objects merge key by key at every depth (so a patch of
+ * `{ civitai: { browse: { sort } } }` keeps the other browse values); arrays and values replace.
+ */
 export function mergeSettings(current: Settings, patch: SettingsPatch): Settings {
-  return Settings.parse({
-    ...current,
-    appearance: { ...current.appearance, ...patch.appearance },
-    gallery: { ...current.gallery, ...patch.gallery },
-    models: { ...current.models, ...patch.models },
-  });
+  return Settings.parse(deepMerge(current, patch));
+}
+
+function isPlain(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+
+export function deepMerge<T>(base: T, patch: unknown): T {
+  if (!isPlain(base) || !isPlain(patch)) return (patch === undefined ? base : patch) as T;
+  const out: Record<string, unknown> = { ...base };
+  for (const [k, v] of Object.entries(patch)) out[k] = deepMerge(out[k], v);
+  return out as T;
 }
 
 /** A readable id from a name ("My Renders" → "my-renders"). */

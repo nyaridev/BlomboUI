@@ -1,7 +1,9 @@
 /**
  * The profile's one SQLite file (ADR-0006): data/profiles/<id>/blombo.sqlite, opened with
- * node:sqlite in WAL mode. It holds rebuildable indexes (the gallery) plus small user marks
- * that must survive a rebuild (favorites, the trash list), each in its own table.
+ * node:sqlite in WAL mode. It holds rebuildable indexes (the gallery, model hashes and Civitai
+ * lookups) plus small user marks and logs that must survive a rebuild (favorites, the trash
+ * list, download and browse history), each in its own table. `ProfileDbs` hands every service
+ * the same connection, so a profile never has two databases.
  *
  * Migrations are ordered SQL steps tracked with `PRAGMA user_version`. Full-text search uses
  * FTS5 with the trigram tokenizer (substring matches in prompts); when this SQLite lacks it,
@@ -69,6 +71,56 @@ const MIGRATIONS: string[] = [
     trashed_at REAL NOT NULL
   );
   `,
+  // 2: downloads, Civitai history, model hashes and lookups
+  `
+  CREATE TABLE downloads (
+    id TEXT PRIMARY KEY,
+    source TEXT NOT NULL,
+    name TEXT NOT NULL,
+    dest TEXT NOT NULL,
+    kind TEXT,
+    size INTEGER,
+    received INTEGER NOT NULL DEFAULT 0,
+    state TEXT NOT NULL,
+    error TEXT,
+    created_at REAL NOT NULL,
+    started_at REAL,
+    finished_at REAL,
+    model_id INTEGER,
+    version_id INTEGER,
+    entry_id TEXT,
+    thumb TEXT,
+    job TEXT NOT NULL
+  );
+  CREATE INDEX downloads_created ON downloads (created_at DESC);
+  CREATE TABLE civitai_views (
+    model_id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL,
+    creator TEXT,
+    image TEXT,
+    viewed_at REAL NOT NULL
+  );
+  CREATE INDEX civitai_views_at ON civitai_views (viewed_at DESC);
+  CREATE TABLE civitai_searches (
+    query TEXT PRIMARY KEY,
+    at REAL NOT NULL
+  );
+  CREATE TABLE model_hashes (
+    path TEXT PRIMARY KEY,
+    size INTEGER NOT NULL,
+    mtime REAL NOT NULL,
+    sha256 TEXT NOT NULL,
+    hashed_at REAL NOT NULL
+  );
+  CREATE INDEX model_hashes_sha ON model_hashes (sha256);
+  CREATE TABLE civitai_lookups (
+    sha256 TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    info TEXT,
+    fetched_at REAL NOT NULL
+  );
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {
@@ -129,5 +181,45 @@ export function transaction<T>(db: DatabaseSync, fn: () => T): T {
   } catch (error) {
     db.exec("ROLLBACK");
     throw error;
+  }
+}
+
+/**
+ * Open profile databases, one connection per profile, shared by every service (gallery,
+ * downloads, model lookups). Services ask for the connection each time they need it rather than
+ * keeping it, so switching profiles can close the old one at any moment.
+ */
+export class ProfileDbs {
+  private readonly fileOf: (profileId: string) => string;
+  private readonly open = new Map<string, ProfileDb>();
+
+  constructor(fileOf: (profileId: string) => string) {
+    this.fileOf = fileOf;
+  }
+
+  get(profileId: string): ProfileDb {
+    const cached = this.open.get(profileId);
+    if (cached) return cached;
+    const pdb = openProfileDb(this.fileOf(profileId));
+    this.open.set(profileId, pdb);
+    return pdb;
+  }
+
+  /** Close every connection except the one for `keep` (the profile that's open). */
+  closeOthers(keep: string | null): void {
+    for (const [id, pdb] of this.open)
+      if (id !== keep) {
+        pdb.close();
+        this.open.delete(id);
+      }
+  }
+
+  close(profileId: string): void {
+    this.open.get(profileId)?.close();
+    this.open.delete(profileId);
+  }
+
+  closeAll(): void {
+    this.closeOthers(null);
   }
 }

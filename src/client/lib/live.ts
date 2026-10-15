@@ -5,6 +5,7 @@
  * Preview frames are decoded off the main paint with createImageBitmap.
  */
 import type { ComfyLogLine, ComfyStatus, SystemStats } from "@shared/comfy";
+import type { Download, DownloadProgress } from "@shared/downloads";
 import type { GalleryImage, SyncState } from "@shared/gallery";
 import type { InstallState } from "@shared/install";
 import type { JobProgress, QueueSnapshot } from "@shared/jobs";
@@ -15,6 +16,7 @@ import {
   type LiveTopic,
   ServerMessage,
 } from "@shared/live";
+import type { LookupState } from "@shared/models";
 import { create } from "zustand";
 import { type GalleryPages, qk, queryClient } from "./queries";
 import { useSession } from "./session";
@@ -40,6 +42,12 @@ interface LiveState {
   galleryNew: number;
   /** The ComfyUI installer, while an installer view is open. */
   install: InstallState | null;
+  /** The download queue: running, queued and paused first, then this session's finished ones. */
+  downloads: Download[];
+  /** Bytes and speed of running downloads, kept apart so ticks don't re-render lists. */
+  downloadProgress: Record<string, DownloadProgress>;
+  /** Background hashing and Civitai matching of local models. */
+  lookup: LookupState | null;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -54,9 +62,12 @@ export const useLive = create<LiveState>(() => ({
   gallerySync: null,
   galleryNew: 0,
   install: null,
+  downloads: [],
+  downloadProgress: {},
+  lookup: null,
 }));
 
-const BASE_TOPICS: LiveTopic[] = ["comfy", "system", "jobs"];
+const BASE_TOPICS: LiveTopic[] = ["comfy", "system", "jobs", "downloads"];
 const BACKOFF_MS = [400, 1000, 2000, 4000, 8000];
 const MAX_LOGS = 2000;
 
@@ -142,6 +153,7 @@ function onJson(text: string): void {
   switch (msg.t) {
     case "hello":
       useLive.setState({ comfy: msg.comfy, queue: msg.queue });
+      if (msg.downloads) onDownloads(msg.downloads.items);
       break;
     case "comfy.status": {
       const wasRunning = s.comfy?.state === "running";
@@ -208,6 +220,42 @@ function onJson(text: string): void {
       void queryClient.invalidateQueries({ queryKey: ["local-models"] });
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
       break;
+    case "models.lookup":
+      useLive.setState({ lookup: msg.lookup });
+      break;
+    case "downloads":
+      onDownloads(msg.downloads.items);
+      break;
+    case "download.progress": {
+      const next = { ...s.downloadProgress };
+      for (const p of msg.items) next[p.id] = p;
+      useLive.setState({ downloadProgress: next });
+      break;
+    }
+  }
+}
+
+/**
+ * A new queue snapshot. When a download finishes, what depends on the models folder refetches:
+ * Civitai pages (installed marks), the Manager store (installed state) and the history.
+ */
+function onDownloads(items: Download[]): void {
+  const prev = new Map(useLive.getState().downloads.map((d) => [d.id, d.state]));
+  const progress = useLive.getState().downloadProgress;
+  const kept: Record<string, DownloadProgress> = {};
+  for (const d of items)
+    if (d.state === "running" && progress[d.id]) kept[d.id] = progress[d.id] as DownloadProgress;
+  useLive.setState({ downloads: items, downloadProgress: kept });
+  const changed = items.some((d) => prev.get(d.id) !== d.state);
+  if (!changed) return;
+  void queryClient.invalidateQueries({ queryKey: ["download-history"] });
+  if (items.some((d) => d.state === "done" && prev.has(d.id) && prev.get(d.id) !== "done")) {
+    void queryClient.invalidateQueries({ queryKey: ["catalog"] });
+    void queryClient.invalidateQueries({
+      queryKey: ["civitai"],
+      predicate: (q) => q.queryKey[2] === "model",
+    });
+    void queryClient.invalidateQueries({ queryKey: ["download-plan"] });
   }
 }
 

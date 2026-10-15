@@ -9,8 +9,24 @@ import type {
   ProfilesResponse,
   SystemInfo,
 } from "@shared/api";
+import {
+  type BrowseFilter,
+  browseQuery,
+  type CivitaiAccount,
+  type CivitaiModel,
+  type CivitaiPage,
+  type CivitaiSearch,
+  type CivitaiView,
+} from "@shared/civitai";
 import type { ComfyLogLine, ComfyStatus, FreeMemoryBody } from "@shared/comfy";
 import type { ModelKind } from "@shared/constants";
+import type {
+  Download,
+  DownloadHistoryPage,
+  DownloadPlan,
+  DownloadsSnapshot,
+  EnqueueBody,
+} from "@shared/downloads";
 import type { FileInfo } from "@shared/fileinfo";
 import type {
   GalleryFacets,
@@ -23,7 +39,8 @@ import type {
 } from "@shared/gallery";
 import type { InstallBody, InstallState, SlotsResponse } from "@shared/install";
 import type { GenerateBody, GenerateResponse, QueueSnapshot } from "@shared/jobs";
-import type { LocalModel, ModelDetails, ModelList } from "@shared/models";
+import type { Catalog } from "@shared/manager";
+import type { LocalModel, LookupState, ModelDetails, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
 import type { LibraryEntry, Settings, SettingsPatch } from "@shared/settings";
 import type { RollBody, RollResult, WildcardFile, WildcardTree } from "@shared/wildcards";
@@ -191,6 +208,40 @@ export const api = {
   galleryFileInfo: (id: number) => request<FileInfo>("GET", `/fileinfo/gallery/${id}`),
   modelFileInfo: (id: string) =>
     request<FileInfo>("GET", `/fileinfo/model?id=${encodeURIComponent(id)}`),
+
+  modelLookup: () => request<LookupState>("GET", "/models/lookup"),
+  startModelLookup: () => request<LookupState>("POST", "/models/lookup"),
+
+  civitaiAccount: () => request<CivitaiAccount>("GET", "/civitai/account"),
+  setCivitaiKey: (key: string, check = true) =>
+    request<CivitaiAccount>("PUT", "/civitai/account/key", { key, check }),
+  removeCivitaiKey: () => request<CivitaiAccount>("DELETE", "/civitai/account/key"),
+  civitaiModels: (filter: BrowseFilter, cursor: string | null) =>
+    request<CivitaiPage>("GET", `/civitai/models?${browseQuery(filter, cursor)}`),
+  civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
+  civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),
+  clearCivitaiViews: () => request<{ ok: true }>("DELETE", "/civitai/history/views"),
+  civitaiSearches: () => request<CivitaiSearch[]>("GET", "/civitai/history/searches"),
+  forgetCivitaiSearch: (q?: string) =>
+    request<{ ok: true }>(
+      "DELETE",
+      `/civitai/history/searches${q === undefined ? "" : `?q=${encodeURIComponent(q)}`}`,
+    ),
+
+  downloads: () => request<DownloadsSnapshot>("GET", "/downloads"),
+  planDownload: (body: EnqueueBody) => request<DownloadPlan>("POST", "/downloads/plan", body),
+  download: (body: EnqueueBody) => request<Download>("POST", "/downloads", body),
+  pauseDownload: (id: string) => request<Download>("POST", `/downloads/${id}/pause`),
+  resumeDownload: (id: string) => request<Download>("POST", `/downloads/${id}/resume`),
+  cancelDownload: (id: string) => request<Download>("POST", `/downloads/${id}/cancel`),
+  clearDownloads: () => request<DownloadsSnapshot>("POST", "/downloads/clear"),
+  revealDownload: (id: string) => request<{ ok: true }>("POST", `/downloads/${id}/reveal`),
+  downloadHistory: (offset: number, limit: number) =>
+    request<DownloadHistoryPage>("GET", `/downloads/history?offset=${offset}&limit=${limit}`),
+  clearDownloadHistory: () => request<{ ok: true }>("DELETE", "/downloads/history"),
+
+  catalog: (refresh = false) =>
+    request<Catalog>("GET", `/manager/catalog${refresh ? "?refresh=1" : ""}`),
 
   comfySlots: () => request<SlotsResponse>("GET", "/comfy/slots"),
   installComfy: (body: InstallBody) => request<InstallState>("POST", "/comfy/install", body),

@@ -2,7 +2,16 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
-import { freePath, movePath, resolveInside, writeJsonAtomic } from "./fsx.ts";
+import {
+  commitPart,
+  freePath,
+  movePath,
+  openPartFile,
+  removePart,
+  resolveInside,
+  writeFileIfAbsent,
+  writeJsonAtomic,
+} from "./fsx.ts";
 
 const dir = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-fsx-"));
 afterAll(() => fs.rm(dir, { recursive: true, force: true }));
@@ -48,5 +57,45 @@ describe("resolveInside", () => {
   it("allows nested paths and refuses escapes", () => {
     expect(resolveInside(dir, "a/b.json")).toBe(path.join(dir, "a", "b.json"));
     expect(() => resolveInside(dir, "../outside.json")).toThrow();
+  });
+});
+
+describe("downloads", () => {
+  it("resumes a part file and commits it without replacing a file", async () => {
+    const target = path.join(dir, "dl", "model.safetensors");
+    const first = await openPartFile(target, true);
+    expect(first.offset).toBe(0);
+    await first.write(new TextEncoder().encode("abc"));
+    await first.close();
+    const again = await openPartFile(target, true);
+    expect(again.offset).toBe(3);
+    await again.write(new TextEncoder().encode("def"));
+    await again.close();
+    await fs.writeFile(target, "someone else's file");
+    const final = await commitPart(again.path, target);
+    expect(final).toBe(path.join(dir, "dl", "model (2).safetensors"));
+    expect(await fs.readFile(final, "utf8")).toBe("abcdef");
+    expect(await fs.readFile(target, "utf8")).toBe("someone else's file");
+  });
+
+  it("starts over when not resuming and removes only part files", async () => {
+    const target = path.join(dir, "dl", "fresh.bin");
+    await fs.writeFile(`${target}.part`, "old");
+    const part = await openPartFile(target, false);
+    expect(part.offset).toBe(0);
+    await part.close();
+    expect(await fs.readFile(part.path, "utf8")).toBe("");
+    await fs.writeFile(target, "keep");
+    await removePart(target);
+    await removePart(part.path);
+    expect(await fs.readFile(target, "utf8")).toBe("keep");
+    await expect(fs.stat(part.path)).rejects.toThrow();
+  });
+
+  it("writes sidecars only when absent", async () => {
+    const file = path.join(dir, "dl", "model.civitai.info");
+    expect(await writeFileIfAbsent(file, "{}")).toBe(true);
+    expect(await writeFileIfAbsent(file, "changed")).toBe(false);
+    expect(await fs.readFile(file, "utf8")).toBe("{}");
   });
 });

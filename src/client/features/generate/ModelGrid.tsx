@@ -2,13 +2,15 @@
  * Model pickers beside Generation: checkpoints (or diffusion models), LoRAs, wildcards and other
  * model kinds, listed from ComfyUI and the profile's wildcards folder. Picking sets the
  * workflow's model, adds a <lora:…> tag or a __wildcard__ to the prompt. The grid is virtualized:
- * LoRA folders often hold thousands of files.
+ * LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
+ * the models folder's sidecars and the Civitai lookup (Models → Local's list).
  */
 import { Icon } from "@client/icons/Icon";
 import { useElementWidth } from "@client/lib/hooks";
-import { useModels, useWildcards } from "@client/lib/queries";
+import { useLocalModels, useModels, useSettings, useWildcards } from "@client/lib/queries";
 import { type CardKind, ModelCard, Segmented, Spinner, TextField, toast } from "@client/ui";
 import type { ModelKind } from "@shared/constants";
+import type { LocalModel } from "@shared/models";
 import { findLoraTags, formatLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -35,7 +37,11 @@ interface Item {
   name: string;
   kind: CardKind;
   folder: string | null;
+  local?: LocalModel;
 }
+
+/** "kind:style/foo.safetensors" (lowercase, forward slashes) for joining ComfyUI's names. */
+const joinKey = (kind: string, rel: string) => `${kind}:${rel.replace(/\\/g, "/").toLowerCase()}`;
 
 /** Without an extension, as LoRA tags are usually written. */
 const tagName = (file: string) =>
@@ -59,6 +65,16 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
           : null;
   const models = useModels(kind);
   const wildcards = useWildcards();
+  const localList = useLocalModels().data;
+  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
+  // ComfyUI lists names inside each kind folder; the local list has the same files with
+  // thumbnails and info. Join them on the path below the kind folder.
+  const local = useMemo(() => {
+    const map = new Map<string, LocalModel>();
+    for (const m of localList?.models ?? [])
+      map.set(joinKey(m.kind, m.id.split("/").slice(1).join("/")), m);
+    return map;
+  }, [localList]);
 
   // Which binding a pick sets (models), or how it edits the prompt (LoRAs, wildcards, embeddings).
   const target: Binding | undefined =
@@ -84,8 +100,9 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
       name: modelDisplayName(n),
       kind: (kind ?? "checkpoints") as CardKind,
       folder: modelFolder(n),
+      local: kind ? local.get(joinKey(kind, n)) : undefined,
     }));
-  }, [tab, models.data, wildcards.data, kind]);
+  }, [tab, models.data, wildcards.data, kind, local]);
 
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
@@ -178,7 +195,7 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
           }
         />
       ) : (
-        <VirtualGrid items={list} isSelected={isSelected} onPick={pick} />
+        <VirtualGrid items={list} isSelected={isSelected} onPick={pick} blurNsfw={blurNsfw} />
       )}
     </div>
   );
@@ -199,10 +216,12 @@ function VirtualGrid({
   items,
   isSelected,
   onPick,
+  blurNsfw,
 }: {
   items: Item[];
   isSelected: (i: Item) => boolean;
   onPick: (i: Item) => void;
+  blurNsfw: boolean;
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const width = useElementWidth(scroller);
@@ -240,7 +259,11 @@ function VirtualGrid({
                 key={item.id}
                 name={item.name}
                 kind={item.kind}
-                baseModel={item.folder ?? undefined}
+                baseModel={item.local?.baseModel ?? item.folder ?? undefined}
+                thumb={item.local?.thumb ?? null}
+                nsfw={item.local?.nsfw}
+                blurNsfw={blurNsfw}
+                meta={item.local?.triggerWords[0]}
                 selected={isSelected(item)}
                 onClick={() => onPick(item)}
               />

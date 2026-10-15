@@ -6,7 +6,7 @@ description: Definition of done, testing and review checklist for every change
 
 1. `npm run check` passes (TypeScript 7 typecheck, Biome, Vitest, rules sync).
 2. New logic has tests next to it (`*.test.ts`): shared helpers, server services, pure client helpers.
-3. UI changes were clicked through in `npm run dev` in the **Blombo** and **Light** themes, including hover, focus, disabled and empty states. New controls and variants are in the Design Lab.
+3. UI changes were clicked through in `npm run dev` in the **Blombo** and **Light** themes, including hover, focus, disabled and empty states, on a throwaway `--data` / `--runtime` folder with the fake ComfyUI (never real profiles, outputs or models). New controls and variants are in the Design Lab.
 4. Viewing or opening anything doesn't modify user files. Writes go through `lib/fsx.ts`.
 5. Docs match reality: `docs/design-system.md` for UI patterns, `docs/workflows.md` for workflow format, `AGENTS.md` for commands and architecture, an ADR for big decisions. After editing `.claude/rules/`, run `npm run rules:sync`.
 

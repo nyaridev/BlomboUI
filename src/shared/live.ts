@@ -7,13 +7,17 @@
  *   system  GPU stats at 1 Hz, sampled only while at least one window is visible
  *   jobs    queue snapshots, per-step progress, finished images, preview frames
  *   logs    ComfyUI log lines (only while a log view is open)
- * Errors and profile switches go to everyone.
+ *   gallery new images, index changes and sync progress (while a gallery is mounted)
+ *   install ComfyUI slot installer progress (while an installer view is open)
+ * Errors, profile switches and model-folder changes go to everyone.
  */
 import { z } from "zod";
 import { ComfyLogLine, ComfyStatus, SystemStats } from "./comfy.ts";
+import { GalleryImage, SyncState } from "./gallery.ts";
+import { InstallState } from "./install.ts";
 import { JobImage, JobProgress, QueueSnapshot } from "./jobs.ts";
 
-export const LIVE_TOPICS = ["comfy", "system", "jobs", "logs"] as const;
+export const LIVE_TOPICS = ["comfy", "system", "jobs", "logs", "gallery", "install"] as const;
 export const LiveTopic = z.enum(LIVE_TOPICS);
 export type LiveTopic = z.infer<typeof LiveTopic>;
 
@@ -46,6 +50,14 @@ export const ServerMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("job.image"), jobId: z.string(), image: JobImage }),
   z.object({ t: z.literal("error"), error: AppError }),
   z.object({ t: z.literal("profile.switched"), profileId: z.string() }),
+  /** A finished job's image was indexed (newest first in the default view). */
+  z.object({ t: z.literal("gallery.added"), image: GalleryImage }),
+  /** Images were trashed, restored, favorited or re-indexed: lists should refetch. */
+  z.object({ t: z.literal("gallery.changed") }),
+  z.object({ t: z.literal("gallery.sync"), sync: SyncState }),
+  z.object({ t: z.literal("install"), install: InstallState }),
+  /** Model files were renamed or moved. */
+  z.object({ t: z.literal("models.changed") }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

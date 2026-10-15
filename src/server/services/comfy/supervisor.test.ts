@@ -90,6 +90,18 @@ describe("findSlot", () => {
     await makeSlot("found");
     const found = await findSlot(runtimeDir, "found");
     expect(found.ok && found.layout.slot).toBe("found");
+    expect(found.ok && found.layout.torch).toBeNull();
+  });
+
+  it("reads the PyTorch build the installer recorded", async () => {
+    await makeSlot("cpu-slot");
+    await fs.mkdir(path.join(runtimeDir, "comfyui", "cpu-slot", "blombo"), { recursive: true });
+    await fs.writeFile(
+      path.join(runtimeDir, "comfyui", "cpu-slot", "blombo", "slot.json"),
+      JSON.stringify({ variant: "cpu" }),
+    );
+    const found = await findSlot(runtimeDir, "cpu-slot");
+    expect(found.ok && found.layout.torch).toBe("cpu");
   });
 });
 

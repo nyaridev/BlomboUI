@@ -34,9 +34,11 @@ function enqueue<T>(file: string, task: () => Promise<T>): Promise<T> {
   const prev = queues.get(key) ?? Promise.resolve();
   const next = prev.catch(() => undefined).then(task);
   queues.set(key, next);
-  void next.finally(() => {
+  // Cleanup only; the caller handles the result (a failed task must not be an unhandled rejection).
+  const forget = () => {
     if (queues.get(key) === next) queues.delete(key);
-  });
+  };
+  next.then(forget, forget);
   return next;
 }
 
@@ -71,6 +73,49 @@ export function writeFileAtomic(file: string, data: Uint8Array | string): Promis
 
 export function writeJsonAtomic(file: string, value: unknown): Promise<void> {
   return writeFileAtomic(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+/**
+ * Move a file or folder: rename when possible, copy then remove across drives. Never replaces
+ * an existing target (throws 409), so user files can't be overwritten by a move. Queued on both
+ * paths like writes, and retried through Windows' brief file locks.
+ */
+export function movePath(from: string, to: string): Promise<void> {
+  // A case-only rename ("foo" → "Foo") is the same file on Windows: allowed, queued once.
+  const sameFile = path.resolve(from).toLowerCase() === path.resolve(to).toLowerCase();
+  const task = async () => {
+    if (!sameFile && (await exists(to)))
+      throw new HttpError(409, `"${path.basename(to)}" already exists there.`, "exists");
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    for (let attempt = 0; ; attempt++) {
+      try {
+        await fs.rename(from, to);
+        return;
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code ?? "";
+        if (code === "EXDEV") {
+          await fs.cp(from, to, { recursive: true, errorOnExist: true, force: false });
+          await fs.rm(from, { recursive: true, force: true });
+          return;
+        }
+        if (!RETRY_CODES.has(code) || attempt >= 6) throw error;
+        await new Promise((r) => setTimeout(r, 15 * 2 ** attempt));
+      }
+    }
+  };
+  return sameFile ? enqueue(from, task) : enqueue(from, () => enqueue(to, task));
+}
+
+/** `target`, or "name (2).ext", "name (3).ext"… when it's taken. */
+export async function freePath(target: string): Promise<string> {
+  if (!(await exists(target))) return target;
+  const ext = path.extname(target);
+  const stem = target.slice(0, target.length - ext.length);
+  for (let n = 2; n < 10_000; n++) {
+    const candidate = `${stem} (${n})${ext}`;
+    if (!(await exists(candidate))) return candidate;
+  }
+  throw new HttpError(409, "Too many files with that name.", "exists");
 }
 
 /** Resolve `rel` inside `root`, refusing anything that escapes it. */

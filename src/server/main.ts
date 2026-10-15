@@ -2,10 +2,12 @@
  * BlomboUI server entry. Runs directly on Node (native TypeScript type stripping):
  *
  *   node src/server/main.ts [--dev] [--port 4380] [--open web|app|none] [--data <dir>]
+ *                           [--runtime <dir>]
  *
  *   --dev    dev mode (Vite serves the client on :4382 and proxies /api here)
  *   --open   web → default browser, app → Tauri window, none → nothing
- *   --data   profiles folder (default ./data)
+ *   --data     profiles folder (default ./data)
+ *   --runtime  ComfyUI slots, tools and caches (default ./runtime)
  */
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";

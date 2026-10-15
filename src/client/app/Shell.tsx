@@ -4,7 +4,7 @@
  */
 import { startLive } from "@client/lib/live";
 import { glide } from "@client/lib/motion";
-import { useProfile } from "@client/lib/queries";
+import { useProfile, useSettings } from "@client/lib/queries";
 import { openProfileOnce } from "@client/lib/session";
 import { toast } from "@client/ui";
 import type { ViewId } from "@shared/constants";
@@ -25,6 +25,12 @@ const KEEP_ALIVE: ViewId[] = ["generate", "gallery"];
 const ModelsView = lazy(() =>
   import("../features/models/ModelsView").then((m) => ({ default: m.ModelsView })),
 );
+const FileInfoView = lazy(() =>
+  import("../features/fileinfo/FileInfoView").then((m) => ({ default: m.FileInfoView })),
+);
+const WildcardsView = lazy(() =>
+  import("../features/wildcards/WildcardsView").then((m) => ({ default: m.WildcardsView })),
+);
 const SettingsView = lazy(() =>
   import("../features/settings/SettingsView").then((m) => ({ default: m.SettingsView })),
 );
@@ -40,6 +46,10 @@ function renderView(view: ViewId): ReactNode {
       return <GalleryView />;
     case "models":
       return <ModelsView />;
+    case "file-info":
+      return <FileInfoView />;
+    case "wildcards":
+      return <WildcardsView />;
     case "settings":
       return <SettingsView />;
     case "lab":
@@ -73,6 +83,12 @@ export function Shell() {
   useEffect(() => {
     if (profile) setTheme({ theme: profile.theme, accent: profile.accent });
   }, [profile?.theme, profile?.accent, profile, setTheme]);
+
+  // The UI font comes from the profile's settings.
+  const appearance = useSettings().data?.appearance;
+  useEffect(() => {
+    if (appearance) setTheme({ font: appearance.font, customFont: appearance.customFont });
+  }, [appearance, setTheme]);
 
   useEffect(() => {
     setVisited((v) => (v.has(view) ? v : new Set([...v, view])));

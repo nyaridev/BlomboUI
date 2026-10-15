@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/inter";
 @import "./tokens.css";
 @import "./base.css";
 
@@ -66,7 +67,7 @@
   --color-syn-escape: var(--syn-escape);
   --color-syn-invalid: var(--syn-invalid);
 
-  --font-sans: "Geist Variable", "Segoe UI", system-ui, sans-serif;
+  --font-sans: var(--font-ui);
   --font-mono: "Geist Mono Variable", "Cascadia Mono", ui-monospace, monospace;
 
   --text-2xs: 11px;

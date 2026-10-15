@@ -94,3 +94,20 @@ export function pickFolder(title: string, initial?: string): Promise<string | nu
     child.on("close", () => resolve(out.trim() || null));
   });
 }
+
+/**
+ * Show a file in the OS file manager (Explorer selects it). Callers pass paths they resolved
+ * themselves from their own data, never a path straight from a request.
+ */
+export function revealInFileManager(target: string): Promise<void> {
+  return new Promise((resolve) => {
+    const child =
+      process.platform === "win32"
+        ? spawn("explorer.exe", [`/select,${target}`], { windowsHide: false, detached: true })
+        : spawn("xdg-open", [path.dirname(target)], { detached: true, stdio: "ignore" });
+    child.on("error", () => resolve());
+    child.unref();
+    // explorer.exe exits with 1 even when it worked; don't wait for it.
+    setTimeout(resolve, 50);
+  });
+}

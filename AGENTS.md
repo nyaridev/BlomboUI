@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0009)
+- `docs/adr/`: decisions and why (0001–0011)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 
 ## Commands
@@ -23,31 +23,38 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `npm run rules:sync` | Regenerate `.cursor/rules/*.mdc` from `.claude/rules/*.md` |
 | `node tools/make-icons.ts` | Regenerate desktop icons from `src-tauri/app-icon.svg` |
 | `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
-| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end |
+| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too |
+| `node src/server/main.ts --dev --port 4391 --data <tmp> --runtime <tmp>` + `BLOMBO_API_PORT=4391 BLOMBO_WEB_PORT=4392 vite` | A second, throwaway dev instance (own profiles, slots and caches) next to one that's already running |
 
 ## Architecture map
 
 ```text
 src/
 ├── shared/       Vocabulary + Zod schemas + pure logic used by both sides
-│                 constants · profile · api · comfy · jobs · live · random · layout/schema
-│                 workflow/{roles,manifest,graph} · prompt/{tokenize,loras,wildcards}
+│                 constants · profile · settings · api · comfy · jobs · live · random
+│                 gallery · imageinfo · fileinfo · safetensors · models · wildcards · install
+│                 layout/schema · workflow/{roles,manifest,graph} · prompt/{tokenize,loras,wildcards}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
-│   ├── main.ts       flags (--dev --port --open web|app|none --data), single instance, shutdown
+│   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime), single instance
 │   ├── context.ts    builds the services and wires their events together
 │   ├── app.ts        /api routes + built client in production
 │   ├── routes/       thin: validate (Zod) → service → JSON
-│   │                 profiles · system · comfy · workflows · jobs · wildcards
-│   ├── services/     profiles · system · window · live (bus) · jobs (queue) · wildcards
-│   │   ├── comfy/        supervisor (slots, start/stop, logs) · client (HTTP + socket) · stats · paths
-│   │   └── workflows/    store · analyze · convert · import · compile · presets · nodes
-│   │                 (planned: gallery · models · civitai · downloads · autocomplete)
-│   └── lib/          fsx (atomic, queued writes; resolveInside) · http (HttpError, readJson)
-│                     emitter · imagemeta (PNG/WebP text chunks)
+│   │                 profiles · system · settings · comfy · workflows · jobs · wildcards
+│   │                 gallery · models · fileinfo
+│   ├── services/     profiles · settings · system · window · live (bus) · jobs (queue)
+│   │                 wildcards · models · fileinfo
+│   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (uv, progress)
+│   │   ├── gallery/      index (sync, search, favorites, trash, libraries) · meta
+│   │   └── workflows/    store · analyze · convert · import · compile · presets · nodes · summary
+│   │                 (planned: civitai · downloads · autocomplete)
+│   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram)
+│   └── lib/          fsx (atomic, queued writes; movePath; resolveInside) · http · send
+│                     emitter · imagemeta (header-only PNG/WebP/JPEG) · exif · thumbs (sharp) · ansi
 ├── client/       React 19 · Vite 8 · Tailwind 4 · TanStack Router/Query · Zustand · Motion ·
 │   │             Floating UI · dnd-kit · CodeMirror 6
 │   ├── app/          router · Shell (keep-alive views) · header/ · theme
-│   ├── features/     profiles · generate · gallery · models · settings · lab · common · preview
+│   ├── features/     profiles · generate · gallery · fileinfo · models · wildcards · settings
+│   │                 lab · common · preview
 │   ├── ui/           the design system (hand-built controls). Import from "@client/ui"
 │   ├── icons/        hand-drawn SVG icon set + Logo
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
@@ -65,7 +72,9 @@ runtime/          (gitignored) ComfyUI slots, caches, logs
 
 **Generating:** the Generate button posts the current values to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → seed → filename prefix), sends it to ComfyUI and turns its socket events into progress, previews and images. The queue lives on the server, so reloads and other windows see the same thing.
 
-**Preview data:** screens that still import `features/preview/*` (Models view, Settings stats, the Lab's sample prompt) show sample data. Generate and the header are wired. Never build new features on preview data; replace the imports as services land.
+**Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar thumbnails and info; the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
+
+**Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) and the Civitai and Manager tabs of Models are still samples. Never build new features on preview data; replace the imports as services land.
 
 ## Golden rules
 
@@ -95,7 +104,7 @@ runtime/          (gitignored) ComfyUI slots, caches, logs
 1. **Shared first:** vocabulary in `constants.ts`, Zod schemas, API response types.
 2. **Server:** service in `services/`, thin route in `routes/`, register in `app.ts`.
 3. **Client:** API call in `lib/api.ts`, query or mutation in `lib/queries.ts`, UI in `features/<area>/` using `ui/` components. Handle loading, empty and error states.
-4. **Verify:** tests for logic, `npm run check`, then click through it in `npm run dev` in Blombo and Light themes.
+4. **Verify:** tests for logic, `npm run check`, then click through it in `npm run dev` in Blombo and Light themes. Use a throwaway `--data`/`--runtime` folder and the fake ComfyUI, never real profiles, outputs or models.
 5. **Docs:** `docs/design-system.md` for a new UI pattern, `docs/workflows.md` for workflow format changes, this file for new commands or architecture, an ADR for a big decision.
 
 ### Add or change a built-in workflow preset
@@ -109,6 +118,12 @@ Detection is by input names first (`seed`, `steps`, `positive`, `ckpt_name`…).
 ### Add a Generate parameter or control style
 - A parameter comes from a workflow **binding** (role or `$`-titled node), never hand-placed JSX.
 - A new control style: add it to `CONTROL_STYLES` in `shared/layout/schema.ts`, render it in `features/generate/blocks/ParamControl.tsx`, add an Inspector label and glyph in `Customize.tsx`, show it in the Lab.
+
+### Add a setting
+One Zod field with a default in `shared/settings.ts` (inside its section). Read it with `useSettings()`, change it with `useUpdateSettings()` (a partial patch, merged and validated on the server). A setting that changes the shape of `settings.json` needs a migration step in `migrateSettings` and a test.
+
+### Touch user files (outputs, models, wildcards)
+Reads only through the service that owns the folder. Moves and renames go through `movePath` in `lib/fsx.ts` (refuses to overwrite, retries Windows locks); removing means moving into `data/profiles/<id>/trash/`. Resolve every request path with `resolveInside()` and validate names in the service too, not only in the route.
 
 ### Add a UI control
 Build it in `src/client/ui/`, export from `ui/index.ts`, add every state to `features/lab/DesignLab.tsx`, document it in `docs/design-system.md`.

@@ -33,7 +33,7 @@ export const useActiveChoice = create<{
   },
 }));
 
-function pick(list: WorkflowSummary[], wanted: string | undefined): string | null {
+export function pickWorkflow(list: WorkflowSummary[], wanted: string | undefined): string | null {
   if (wanted && list.some((w) => w.id === wanted)) return wanted;
   return list.find((w) => w.kind === "generate")?.id ?? list[0]?.id ?? null;
 }
@@ -43,7 +43,7 @@ export function useActiveWorkflowId(): string | null {
   const profileId = useSession((s) => s.profileId);
   const wanted = useActiveChoice((s) => (profileId ? s.byProfile[profileId] : undefined));
   const { data } = useWorkflows();
-  return data ? pick(data, wanted) : null;
+  return data ? pickWorkflow(data, wanted) : null;
 }
 
 export function useActiveWorkflow(): {

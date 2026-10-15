@@ -1,14 +1,22 @@
 /**
  * Settings: centered, organized pages. Overview first: the profile, the settings people change
- * most, and usage stats. Appearance is live (theme + accent save to the profile).
+ * most, and usage stats from the gallery index. Appearance is live (theme and accent save to the
+ * profile, the UI font and NSFW blur to its settings).
  */
 import { useTheme } from "@client/app/theme";
-import { MOCK_STATS } from "@client/features/preview/mock";
 import { Icon, type IconName } from "@client/icons/Icon";
 import { avatarUrl } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
+import { useLive } from "@client/lib/live";
 import { snappy } from "@client/lib/motion";
-import { useProfile, useUpdateProfile } from "@client/lib/queries";
+import {
+  useGalleryFacets,
+  useGalleryOverview,
+  useProfile,
+  useSettings,
+  useUpdateProfile,
+  useUpdateSettings,
+} from "@client/lib/queries";
 import {
   Avatar,
   Badge,
@@ -16,32 +24,24 @@ import {
   Field,
   Panel,
   Segmented,
+  Slider,
   Switch,
   TextField,
   Tooltip,
 } from "@client/ui";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
+import { fontStack, UI_FONT_LABELS, UI_FONTS, type UiFont } from "@shared/settings";
 import { useParams } from "@tanstack/react-router";
 import { motion } from "motion/react";
-import { type ReactNode, useState } from "react";
-
-type PageId =
-  | "overview"
-  | "appearance"
-  | "generate"
-  | "files"
-  | "gallery"
-  | "models"
-  | "civitai"
-  | "autocomplete"
-  | "comfy"
-  | "shortcuts"
-  | "about";
+import { type ReactNode, useEffect, useState } from "react";
+import { ComfyPage } from "./ComfyPage";
+import { FoldersPage } from "./FoldersPage";
+import { type SettingsPage as PageId, useSettingsNav } from "./nav";
 
 const PAGES: Array<{ id: PageId; label: string; icon: IconName; group: string }> = [
   { id: "overview", label: "Overview", icon: "gauge", group: "" },
   { id: "appearance", label: "Appearance", icon: "palette", group: "Profile" },
-  { id: "files", label: "Folders & saving", icon: "folder", group: "Profile" },
+  { id: "files", label: "Folders", icon: "folder", group: "Profile" },
   { id: "generate", label: "Generate", icon: "generate", group: "Tools" },
   { id: "gallery", label: "Gallery", icon: "gallery", group: "Tools" },
   { id: "models", label: "Models", icon: "models", group: "Tools" },
@@ -53,7 +53,9 @@ const PAGES: Array<{ id: PageId; label: string; icon: IconName; group: string }>
 ];
 
 export function SettingsView() {
-  const [page, setPage] = useState<PageId>("overview");
+  const page = useSettingsNav((s) => s.page);
+  const setPage = useSettingsNav((s) => s.go);
+  const profile = useCurrentProfile();
   const [query, setQuery] = useState("");
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
@@ -109,6 +111,26 @@ export function SettingsView() {
             <Overview onGo={setPage} />
           ) : page === "appearance" ? (
             <Appearance />
+          ) : page === "files" ? (
+            <>
+              <PageHeader
+                title="Folders"
+                text="Where this profile's models, images and wildcards live."
+              />
+              <FoldersPage profile={profile} />
+            </>
+          ) : page === "comfy" ? (
+            <>
+              <PageHeader
+                title="ComfyUI"
+                text="The engine that generates. Blombo can install and run it for you."
+              />
+              <ComfyPage profile={profile} />
+            </>
+          ) : page === "gallery" ? (
+            <GalleryPage />
+          ) : page === "models" ? (
+            <ModelsPage />
           ) : (
             <PlannedPage id={page} />
           )}
@@ -144,7 +166,12 @@ function StatTile({
         <Icon name={icon} size={13} />
         {label}
       </span>
-      <span className="text-2xl font-semibold tracking-tight text-fg tabular">{value}</span>
+      <span
+        className="truncate text-2xl font-semibold tracking-tight text-fg tabular"
+        title={value}
+      >
+        {value}
+      </span>
       {sub ? <span className="text-xs text-fg-3">{sub}</span> : null}
     </div>
   );
@@ -160,13 +187,14 @@ function RankList({
   icon: IconName;
   rows: Array<{ name: string; count: number }>;
 }) {
-  const max = Math.max(...rows.map((r) => r.count));
+  const max = Math.max(1, ...rows.map((r) => r.count));
   return (
     <Panel className="flex flex-col gap-3 p-4">
       <span className="flex items-center gap-1.5 text-sm font-medium text-fg">
         <Icon name={icon} size={15} className="text-fg-3" />
         {title}
       </span>
+      {rows.length === 0 ? <p className="text-xs text-fg-3">Nothing yet.</p> : null}
       <ol className="flex flex-col gap-2.5">
         {rows.map((r, i) => (
           <li key={r.name} className="flex flex-col gap-1">
@@ -195,8 +223,14 @@ function RankList({
 }
 
 function WeekBars({ values }: { values: number[] }) {
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-  const max = Math.max(...values);
+  const days = values.map((_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (values.length - 1 - i));
+    return i === values.length - 1
+      ? "Today"
+      : d.toLocaleDateString(undefined, { weekday: "short" });
+  });
+  const max = Math.max(1, ...values);
   return (
     <Panel className="flex flex-col gap-3 p-4">
       <div className="flex items-baseline justify-between">
@@ -239,12 +273,18 @@ function useCurrentProfile() {
 
 function Overview({ onGo }: { onGo: (p: PageId) => void }) {
   const profile = useCurrentProfile();
-  const s = MOCK_STATS;
+  const overview = useGalleryOverview().data;
+  const facets = useGalleryFacets("all").data;
+  const comfy = useLive((st) => st.comfy);
+  const counts = overview?.counts;
+  const total = counts?.all ?? 0;
+  const top = facets?.models[0];
+  const n = (v: number | undefined) => (v === undefined ? "—" : v.toLocaleString());
   return (
     <>
       <PageHeader
         title="Overview"
-        text="Your profile at a glance. Usage numbers below are preview data until the gallery indexer lands."
+        text="Your profile at a glance. Numbers come from the gallery's index."
       />
       <Panel className="mb-6 flex items-center gap-5 p-5">
         <Avatar
@@ -277,30 +317,47 @@ function Overview({ onGo }: { onGo: (p: PageId) => void }) {
       <div className="mb-6 grid grid-cols-4 gap-3">
         <StatTile
           icon="image"
-          label="Images generated"
-          value={s.images.toLocaleString()}
-          sub={`${s.thisWeek} this week`}
-        />
-        <StatTile
-          icon="clock"
-          label="Time generating"
-          value={`${s.hours.toFixed(0)} h`}
-          sub="GPU busy time"
+          label="Images"
+          value={n(counts?.all)}
+          sub={counts ? `${n(counts.week)} this week` : undefined}
         />
         <StatTile
           icon="heart"
           label="Favorites"
-          value={s.favorites.toLocaleString()}
-          sub={`${((s.favorites / s.images) * 100).toFixed(1)}% of images`}
+          value={n(counts?.favorites)}
+          sub={
+            counts && total
+              ? `${((counts.favorites / total) * 100).toFixed(1)}% of images`
+              : undefined
+          }
         />
-        <StatTile icon="crown" label="Favorite model" value="WAI v14" sub="43% of images" />
+        <StatTile
+          icon="crown"
+          label="Favorite model"
+          value={top ? top.name : "—"}
+          sub={
+            top && total
+              ? `${Math.round((top.count / total) * 100)}% of images`
+              : "Generate to find out"
+          }
+        />
+        <StatTile
+          icon="trash"
+          label="In the trash"
+          value={n(counts?.trash)}
+          sub="Restore from the gallery"
+        />
       </div>
 
       <div className="mb-6 grid grid-cols-2 gap-3">
-        <WeekBars values={s.perDay} />
-        <RankList title="Most used models" icon="models" rows={s.topModels} />
-        <RankList title="Most used LoRAs" icon="layers" rows={s.topLoras} />
-        <RankList title="Most used wildcards" icon="wildcards" rows={s.topWildcards} />
+        <WeekBars values={overview?.perDay ?? [0, 0, 0, 0, 0, 0, 0]} />
+        <RankList title="Most used models" icon="models" rows={facets?.models.slice(0, 5) ?? []} />
+        <RankList title="Most used LoRAs" icon="layers" rows={facets?.loras.slice(0, 5) ?? []} />
+        <RankList
+          title="Libraries"
+          icon="gallery"
+          rows={overview?.libraries.map((l) => ({ name: l.name, count: l.count })) ?? []}
+        />
       </div>
 
       <h2 className="label-caps mb-3">Quick settings</h2>
@@ -308,27 +365,26 @@ function Overview({ onGo }: { onGo: (p: PageId) => void }) {
         <QuickRow
           icon="palette"
           title="Appearance"
-          text="Theme and profile color"
+          text="Theme, profile color and font"
           onClick={() => onGo("appearance")}
         />
         <QuickRow
           icon="folder"
-          title="Output folder and file names"
-          text={profile?.paths.outputs || "Not set"}
+          title="Folders"
+          text={profile?.paths.outputs || "No outputs folder yet"}
           onClick={() => onGo("files")}
+          warn={!profile?.paths.outputs}
         />
         <QuickRow
           icon="workflow"
           title="ComfyUI"
-          text="Managed · slot latest · bridge installed"
+          text={
+            profile?.comfy.mode === "external"
+              ? `Your own at ${profile.comfy.url}`
+              : `Managed · slot ${profile?.comfy.mode === "managed" ? profile.comfy.slot : "—"}${comfy?.state === "missing" ? " · not installed yet" : ""}`
+          }
           onClick={() => onGo("comfy")}
-        />
-        <QuickRow
-          icon="globe"
-          title="Civitai account"
-          text="No API key yet. Downloads of some models need one."
-          onClick={() => onGo("civitai")}
-          warn
+          warn={comfy?.state === "missing"}
         />
       </Panel>
     </>
@@ -374,7 +430,8 @@ function Appearance() {
   const accent = useTheme((s) => s.accent);
   const [motionPref, setMotionPref] = useState("full");
   const [density, setDensity] = useState("comfortable");
-  const [blur, setBlur] = useState(true);
+  const settings = useSettings().data;
+  const updateSettings = useUpdateSettings();
   const save = (patch: { theme?: (typeof THEMES)[number]; accent?: (typeof ACCENTS)[number] }) => {
     preview(patch);
     if (profile) update.mutate({ id: profile.id, body: patch });
@@ -443,6 +500,11 @@ function Appearance() {
             ))}
           </div>
         </Field>
+        <FontPicker
+          font={settings?.appearance.font ?? "geist"}
+          custom={settings?.appearance.customFont ?? ""}
+          onChange={(appearance) => updateSettings.mutate({ appearance })}
+        />
         <Field
           label="Motion"
           layout="left"
@@ -471,9 +533,13 @@ function Appearance() {
         <Field
           label="Blur NSFW thumbnails"
           layout="left"
-          hint="Civitai results and model cards. Hover or click to reveal."
+          hint="Model cards (and Civitai results later) marked NSFW stay blurred until you click them."
         >
-          <Switch checked={blur} onCheckedChange={setBlur} label="Blur NSFW thumbnails" />
+          <Switch
+            checked={settings?.models.blurNsfw ?? true}
+            onCheckedChange={(blurNsfw) => updateSettings.mutate({ models: { blurNsfw } })}
+            label="Blur NSFW thumbnails"
+          />
         </Field>
       </div>
     </>
@@ -481,17 +547,6 @@ function Appearance() {
 }
 
 const PLANNED: Partial<Record<PageId, { title: string; phase: string; items: string[] }>> = {
-  files: {
-    title: "Folders & saving",
-    phase: "Phase 1",
-    items: [
-      "Models, outputs, wildcards folders",
-      "File name patterns for images, grids, hires",
-      "PNG / WebP / JPEG, quality, large-file JPEG",
-      "Temp folder cleanup",
-      "Save interrupted images",
-    ],
-  },
   generate: {
     title: "Generate",
     phase: "Phase 1",
@@ -502,26 +557,6 @@ const PLANNED: Partial<Record<PageId, { title: string; phase: string; items: str
       "Batch grids (format, rows, max)",
       "LoRA strength ranges and auto-apply",
       "Prompt weight step",
-    ],
-  },
-  gallery: {
-    title: "Gallery",
-    phase: "Phase 2",
-    items: [
-      "Default layout and tile size",
-      "Thumbnail size and format",
-      "Page size",
-      "Trash: auto-purge after hours / GB",
-    ],
-  },
-  models: {
-    title: "Models",
-    phase: "Phase 2",
-    items: [
-      "Hidden model types",
-      "Thumbnail scopes defaults",
-      "Model info layout",
-      "Manager download folder and parallel installs",
     ],
   },
   civitai: {
@@ -544,17 +579,6 @@ const PLANNED: Partial<Record<PageId, { title: string; phase: string; items: str
       "Wildcard / LoRA / trigger-word completion",
       "Frequent tags",
       "Thumbnails in suggestions",
-    ],
-  },
-  comfy: {
-    title: "ComfyUI",
-    phase: "Phase 1",
-    items: [
-      "Managed slot or external URL",
-      "Launch arguments and port",
-      "Install / update blombo-bridge",
-      "Torch, SageAttention, FlashAttention per slot",
-      "Live logs",
     ],
   },
   shortcuts: {
@@ -594,6 +618,166 @@ function PlannedPage({ id }: { id: PageId }) {
           ))}
         </ul>
       </Panel>
+    </>
+  );
+}
+
+/* ── font ───────────────────────────────────────────────────────────────── */
+
+function FontPicker({
+  font,
+  custom,
+  onChange,
+}: {
+  font: UiFont;
+  custom: string;
+  onChange: (patch: { font?: UiFont; customFont?: string }) => void;
+}) {
+  const [draft, setDraft] = useState(custom);
+  useEffect(() => setDraft(custom), [custom]);
+  // Type a family name and it previews as you type; it saves when you stop.
+  useEffect(() => {
+    if (font !== "custom" || draft === custom) return;
+    const t = setTimeout(() => onChange({ customFont: draft }), 500);
+    return () => clearTimeout(t);
+  }, [draft, custom, font, onChange]);
+  const sample = (f: UiFont) =>
+    f === "custom"
+      ? (fontStack("custom", draft) ?? "var(--font-ui)")
+      : {
+          geist: '"Geist Variable", sans-serif',
+          inter: '"Inter Variable", sans-serif',
+          segoe: '"Segoe UI Variable Text", "Segoe UI", sans-serif',
+          system: "system-ui, sans-serif",
+        }[f];
+  return (
+    <Field
+      label="Font"
+      layout="left"
+      hint="Geist and Inter come with Blombo. The others use fonts on this computer. Numbers and code stay in Geist Mono."
+    >
+      <div className="flex flex-col gap-2">
+        <div className="grid grid-cols-5 gap-2" role="radiogroup" aria-label="UI font">
+          {UI_FONTS.map((f) => (
+            <button
+              key={f}
+              type="button"
+              role="radio"
+              aria-checked={font === f}
+              onClick={() => onChange({ font: f })}
+              className={cn(
+                "flex flex-col gap-1.5 rounded-lg border bg-surface p-2.5 text-left transition-colors focus-ring",
+                font === f
+                  ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
+                  : "border-line hover:border-line-strong",
+              )}
+            >
+              <span
+                className="text-xl leading-none font-semibold text-fg"
+                style={{ fontFamily: sample(f) }}
+              >
+                Aa
+              </span>
+              <span className="truncate text-2xs text-fg-2">{UI_FONT_LABELS[f]}</span>
+            </button>
+          ))}
+        </div>
+        {font === "custom" ? (
+          <TextField
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Font name, e.g. Fira Sans"
+            icon="font"
+            className="w-72"
+            aria-label="Installed font name"
+          />
+        ) : null}
+      </div>
+    </Field>
+  );
+}
+
+/* ── gallery and models pages ───────────────────────────────────────────── */
+
+function GalleryPage() {
+  const settings = useSettings().data?.gallery;
+  const update = useUpdateSettings();
+  const [size, setSize] = useState<number | null>(null);
+  const tile = size ?? settings?.tileSize ?? 220;
+  useEffect(() => {
+    if (size === null || size === settings?.tileSize) return;
+    const t = setTimeout(() => update.mutate({ gallery: { tileSize: size } }), 400);
+    return () => clearTimeout(t);
+  }, [size, settings?.tileSize, update]);
+  return (
+    <>
+      <PageHeader
+        title="Gallery"
+        text="How the gallery lays out your images. Saved to this profile."
+      />
+      <div className="flex flex-col gap-8">
+        <Field
+          label="Layout"
+          layout="left"
+          hint="Justified rows keep every image's shape; the grid crops to squares."
+        >
+          <Segmented
+            value={settings?.layout ?? "justified"}
+            onChange={(layout) => update.mutate({ gallery: { layout } })}
+            options={[
+              { value: "justified", label: "Justified rows", icon: "layout-rows" },
+              { value: "grid", label: "Square grid", icon: "layout-grid" },
+            ]}
+          />
+        </Field>
+        <Field label="Tile size" layout="left" hint="Row height (justified) or tile width (grid).">
+          <div className="w-72">
+            <Slider
+              value={tile}
+              onChange={setSize}
+              min={120}
+              max={400}
+              step={10}
+              unit="px"
+              label="Tile size"
+            />
+          </div>
+        </Field>
+        <Field
+          label="Libraries"
+          layout="left"
+          hint="Add, rename or remove folders from the gallery's sidebar."
+        >
+          <span className="pt-1.5 text-sm text-fg-2">
+            {settings?.libraries.length
+              ? settings.libraries.map((l) => l.name).join(", ")
+              : "Only the outputs folder so far."}
+          </span>
+        </Field>
+      </div>
+    </>
+  );
+}
+
+function ModelsPage() {
+  const settings = useSettings().data;
+  const update = useUpdateSettings();
+  return (
+    <>
+      <PageHeader title="Models" text="The Models view and model cards. Saved to this profile." />
+      <div className="flex flex-col gap-8">
+        <Field
+          label="Blur NSFW thumbnails"
+          layout="left"
+          hint="Thumbnails whose info file marks them NSFW stay blurred until you click them."
+        >
+          <Switch
+            checked={settings?.models.blurNsfw ?? true}
+            onCheckedChange={(blurNsfw) => update.mutate({ models: { blurNsfw } })}
+            label="Blur NSFW thumbnails"
+          />
+        </Field>
+      </div>
     </>
   );
 }

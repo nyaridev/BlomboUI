@@ -1,8 +1,19 @@
 /** TanStack Query keys and hooks. Server state lives here, never in Zustand. */
 import type { ModelKind } from "@shared/constants";
+import type { GalleryPage, GalleryQueryInput } from "@shared/gallery";
+import type { LocalModel, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
+import type { Settings, SettingsPatch } from "@shared/settings";
 import type { WorkflowManifest } from "@shared/workflow/manifest";
-import { QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  type InfiniteData,
+  keepPreviousData,
+  QueryClient,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { api } from "./api";
 import { useSession } from "./session";
 
@@ -18,6 +29,25 @@ export const qk = {
   models: (kind: ModelKind) => ["models", kind] as const,
   modelsAll: ["models"] as const,
   wildcards: (profileId: string | null) => ["wildcards", profileId] as const,
+  wildcardTree: (profileId: string | null) => ["wildcard-tree", profileId] as const,
+  wildcardFile: (profileId: string | null, path: string | null) =>
+    ["wildcard-file", profileId, path] as const,
+  settings: (profileId: string | null) => ["settings", profileId] as const,
+  /** Everything under ["gallery", profileId] refetches when the index changes. */
+  gallery: (profileId: string | null) => ["gallery", profileId] as const,
+  galleryOverview: (profileId: string | null) => ["gallery", profileId, "overview"] as const,
+  galleryImages: (profileId: string | null, q: GalleryQueryInput) =>
+    ["gallery", profileId, "images", q] as const,
+  galleryFacets: (profileId: string | null, library: string) =>
+    ["gallery", profileId, "facets", library] as const,
+  galleryImage: (profileId: string | null, id: number | null) =>
+    ["gallery", profileId, "image", id] as const,
+  galleryTrash: (profileId: string | null) => ["gallery", profileId, "trash"] as const,
+  /** Files in the models folder (not ComfyUI's lists, which are `models`). */
+  localModels: (profileId: string | null) => ["local-models", profileId] as const,
+  modelDetails: (profileId: string | null, id: string | null) =>
+    ["local-models", profileId, "details", id] as const,
+  comfySlots: ["comfy-slots"] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -154,4 +184,255 @@ export function useWildcards() {
     enabled: profileId !== null,
     staleTime: 60_000,
   });
+}
+
+/* ── settings ────────────────────────────────────────────────────────────── */
+
+export function useSettings() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.settings(profileId),
+    queryFn: api.settings,
+    enabled: profileId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** Saves a settings patch; the cache updates at once so the UI follows the click. */
+export function useUpdateSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (patch: SettingsPatch) => api.updateSettings(patch),
+    onMutate: (patch) => {
+      const key = qk.settings(useSession.getState().profileId);
+      const prev = qc.getQueryData<Settings>(key);
+      if (prev)
+        qc.setQueryData<Settings>(key, {
+          ...prev,
+          appearance: { ...prev.appearance, ...patch.appearance } as Settings["appearance"],
+          gallery: { ...prev.gallery, ...patch.gallery } as Settings["gallery"],
+          models: { ...prev.models, ...patch.models } as Settings["models"],
+        });
+      return { prev, key };
+    },
+    onError: (_e, _p, ctx) => {
+      if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
+    },
+    onSuccess: (saved) => qc.setQueryData(qk.settings(useSession.getState().profileId), saved),
+  });
+}
+
+/* ── gallery ─────────────────────────────────────────────────────────────── */
+
+export const GALLERY_PAGE = 300;
+
+export function useGalleryOverview() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.galleryOverview(profileId),
+    queryFn: api.galleryOverview,
+    enabled: profileId !== null,
+  });
+}
+
+export function useGalleryImages(q: GalleryQueryInput) {
+  const profileId = useSession((s) => s.profileId);
+  return useInfiniteQuery({
+    queryKey: qk.galleryImages(profileId, q),
+    queryFn: ({ pageParam }) => api.galleryImages({ ...q, offset: pageParam, limit: GALLERY_PAGE }),
+    initialPageParam: 0,
+    getNextPageParam: (last: GalleryPage, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.items.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    enabled: profileId !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export type GalleryPages = InfiniteData<GalleryPage, number>;
+
+export function useGalleryFacets(library: string) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.galleryFacets(profileId, library),
+    queryFn: () => api.galleryFacets(library),
+    enabled: profileId !== null,
+    staleTime: 60_000,
+  });
+}
+
+export function useGalleryImage(id: number | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.galleryImage(profileId, id),
+    queryFn: () => api.galleryImage(id as number),
+    enabled: profileId !== null && id !== null,
+    staleTime: 60_000,
+  });
+}
+
+export function useGalleryTrash(enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.galleryTrash(profileId),
+    queryFn: api.galleryTrash,
+    enabled: enabled && profileId !== null,
+  });
+}
+
+function useGalleryChanged() {
+  const qc = useQueryClient();
+  return () => qc.invalidateQueries({ queryKey: qk.gallery(useSession.getState().profileId) });
+}
+
+export function useFavorite() {
+  const qc = useQueryClient();
+  const changed = useGalleryChanged();
+  return useMutation({
+    mutationFn: ({ ids, favorite }: { ids: number[]; favorite: boolean }) =>
+      api.favorite(ids, favorite),
+    // Flip the hearts in every loaded list right away.
+    onMutate: ({ ids, favorite }) => {
+      const set = new Set(ids);
+      qc.setQueriesData<GalleryPages>(
+        { queryKey: [...qk.gallery(useSession.getState().profileId), "images"] },
+        (old) =>
+          old && {
+            ...old,
+            pages: old.pages.map((p) => ({
+              ...p,
+              items: p.items.map((i) => (set.has(i.id) ? { ...i, favorite } : i)),
+            })),
+          },
+      );
+    },
+    onSettled: changed,
+  });
+}
+
+export function useTrashImages() {
+  const changed = useGalleryChanged();
+  return useMutation({ mutationFn: (ids: number[]) => api.trashImages(ids), onSettled: changed });
+}
+
+export function useRestoreImages() {
+  const changed = useGalleryChanged();
+  return useMutation({ mutationFn: (ids: string[]) => api.restoreImages(ids), onSettled: changed });
+}
+
+export function useEmptyTrash() {
+  const changed = useGalleryChanged();
+  return useMutation({ mutationFn: (ids?: string[]) => api.emptyTrash(ids), onSettled: changed });
+}
+
+export function useAddLibrary() {
+  const qc = useQueryClient();
+  const changed = useGalleryChanged();
+  return useMutation({
+    mutationFn: ({ name, path }: { name: string; path: string }) => api.addLibrary(name, path),
+    onSuccess: () => {
+      void changed();
+      void qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+}
+
+export function useRemoveLibrary() {
+  const qc = useQueryClient();
+  const changed = useGalleryChanged();
+  return useMutation({
+    mutationFn: (id: string) => api.removeLibrary(id),
+    onSuccess: () => {
+      void changed();
+      void qc.invalidateQueries({ queryKey: ["settings"] });
+    },
+  });
+}
+
+/* ── local models ────────────────────────────────────────────────────────── */
+
+export function useLocalModels() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.localModels(profileId),
+    queryFn: () => api.localModels(),
+    enabled: profileId !== null,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useModelDetails(id: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.modelDetails(profileId, id),
+    queryFn: () => api.modelDetails(id as string),
+    enabled: profileId !== null && id !== null,
+  });
+}
+
+/** After a rename or move: swap the model in the cached list at once, then refetch. */
+function useModelsChanged() {
+  const qc = useQueryClient();
+  return (model: LocalModel, oldId: string) => {
+    qc.setQueryData<ModelList>(
+      qk.localModels(useSession.getState().profileId),
+      (old) => old && { ...old, models: old.models.map((m) => (m.id === oldId ? model : m)) },
+    );
+    void qc.invalidateQueries({ queryKey: ["local-models"] });
+    void qc.invalidateQueries({ queryKey: qk.modelsAll });
+  };
+}
+
+export function useRenameModel() {
+  const changed = useModelsChanged();
+  return useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => api.renameModel(id, name),
+    onSuccess: (model, vars) => changed(model, vars.id),
+  });
+}
+
+export function useMoveModel() {
+  const changed = useModelsChanged();
+  return useMutation({
+    mutationFn: ({ id, folder }: { id: string; folder: string }) => api.moveModel(id, folder),
+    onSuccess: (model, vars) => changed(model, vars.id),
+  });
+}
+
+/* ── wildcards (manager) ─────────────────────────────────────────────────── */
+
+export function useWildcardTree() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.wildcardTree(profileId),
+    queryFn: api.wildcardTree,
+    enabled: profileId !== null,
+  });
+}
+
+export function useWildcardFile(path: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.wildcardFile(profileId, path),
+    queryFn: () => api.wildcardFile(path as string),
+    enabled: profileId !== null && path !== null,
+    // The editor owns the text once loaded; a refetch would fight it.
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** After creating, moving or trashing wildcard files. */
+export function useWildcardsChanged() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["wildcard-tree"] });
+    void qc.invalidateQueries({ queryKey: ["wildcards"] });
+  };
+}
+
+/* ── ComfyUI slots ───────────────────────────────────────────────────────── */
+
+export function useComfySlots() {
+  return useQuery({ queryKey: qk.comfySlots, queryFn: api.comfySlots });
 }

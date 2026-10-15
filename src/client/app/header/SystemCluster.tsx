@@ -10,6 +10,7 @@ import { dismissErrors, useLive } from "@client/lib/live";
 import { snappy } from "@client/lib/motion";
 import { openWindow } from "@client/lib/platform";
 import { qk, queryClient } from "@client/lib/queries";
+import { useSession } from "@client/lib/session";
 import {
   Button,
   CountBubble,
@@ -21,8 +22,10 @@ import {
   toast,
 } from "@client/ui";
 import type { ComfyState } from "@shared/comfy";
+import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
+import { useSettingsNav } from "../../features/settings/nav";
 import { ComfyLogs } from "./ComfyLogs";
 
 function heatColor(c: number): string {
@@ -179,6 +182,8 @@ function QueueChip() {
 
 function ComfyStatusButton() {
   const comfy = useLive((s) => s.comfy);
+  const navigate = useNavigate();
+  const profileId = useSession((s) => s.profileId);
   const connected = useLive((s) => s.connected);
   const queued = useLive(
     (s) => s.queue.jobs.filter((j) => j.state === "queued" || j.state === "running").length,
@@ -279,7 +284,25 @@ function ComfyStatusButton() {
                 Log
               </Button>
               <span className="ml-auto" />
-              {managed && (state === "stopped" || state === "crashed" || state === "missing") ? (
+              {managed && state === "missing" ? (
+                <Button
+                  size="sm"
+                  variant="primary"
+                  icon="download"
+                  onClick={() => {
+                    close();
+                    useSettingsNav.getState().go("comfy");
+                    if (profileId)
+                      void navigate({
+                        to: "/p/$profileId/$view",
+                        params: { profileId, view: "settings" },
+                      });
+                  }}
+                >
+                  Install
+                </Button>
+              ) : null}
+              {managed && (state === "stopped" || state === "crashed") ? (
                 <Button
                   size="sm"
                   variant="ghost"

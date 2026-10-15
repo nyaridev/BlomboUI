@@ -1,7 +1,10 @@
 import { Hono } from "hono";
 import { ComfyFileRef, FreeMemoryBody } from "../../shared/comfy.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
+import { InstallBody, type SlotsResponse } from "../../shared/install.ts";
 import { HttpError, readJson } from "../lib/http.ts";
+import type { ComfyInstaller } from "../services/comfy/installer.ts";
+import { listSlots } from "../services/comfy/slots.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 
 function requireApi(supervisor: ComfySupervisor) {
@@ -15,8 +18,29 @@ function requireApi(supervisor: ComfySupervisor) {
   return api;
 }
 
-export function comfyRoutes(supervisor: ComfySupervisor) {
+export function comfyRoutes(
+  supervisor: ComfySupervisor,
+  installer: ComfyInstaller,
+  runtimeDir: string,
+) {
   const r = new Hono();
+
+  /** Installed managed slots and the installer's state. */
+  r.get("/slots", async (c) => {
+    const body: SlotsResponse = { slots: await listSlots(runtimeDir), install: installer.state() };
+    return c.json(body);
+  });
+
+  r.post("/install", async (c) => {
+    const body = await readJson(c, InstallBody);
+    await installer.start(body);
+    return c.json(installer.state(), 202);
+  });
+
+  r.post("/install/cancel", (c) => {
+    installer.cancel();
+    return c.json(installer.state());
+  });
 
   r.get("/", (c) => c.json(supervisor.status()));
   r.post("/start", async (c) => c.json(await supervisor.start()));

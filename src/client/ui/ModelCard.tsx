@@ -1,13 +1,14 @@
 /**
  * The one model card used everywhere (Generate pickers, Models view, Civitai results).
  * When there is no thumbnail it shows a designed face: kind color, kind icon, monogram and
- * base-model badge, so a wall of un-thumbnailed LoRAs still reads well.
+ * base-model badge, so a wall of un-thumbnailed LoRAs still reads well. Thumbnails marked NSFW
+ * are blurred until clicked when `blurNsfw` is on (the profile's setting, on by default).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { hashString } from "@client/lib/seeded";
 import type { ModelKind } from "@shared/constants";
-import type { ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import { Art, positioned } from "./Art";
 
 export type CardKind = ModelKind | "wildcards";
@@ -102,6 +103,12 @@ export interface ModelCardProps {
   thumb?: string | null;
   selected?: boolean;
   favorite?: boolean;
+  /** The thumbnail is marked NSFW. */
+  nsfw?: boolean;
+  /** Blur NSFW thumbnails until clicked. */
+  blurNsfw?: boolean;
+  /** Small line under the name (file size, trigger word…). */
+  meta?: ReactNode;
   onClick?: () => void;
   onFavorite?: () => void;
   footer?: ReactNode;
@@ -120,9 +127,14 @@ export function ModelCard({
   onFavorite,
   footer,
   ratio = 3 / 4,
+  nsfw,
+  blurNsfw,
+  meta,
   className,
 }: ModelCardProps) {
   const style = KIND_STYLE[kind];
+  const [revealed, setRevealed] = useState(false);
+  const veiled = Boolean(thumb && nsfw && blurNsfw && !revealed);
   return (
     <div
       className={cn(
@@ -144,14 +156,21 @@ export function ModelCard({
         {thumb?.startsWith("art:") ? (
           <Art
             seed={thumb.slice(4)}
-            className="absolute inset-0 transition-transform duration-500 group-hover:scale-[1.04]"
+            className={cn(
+              "absolute inset-0 transition-[filter,transform] duration-500 group-hover:scale-[1.04]",
+              veiled && "scale-110 blur-xl saturate-50",
+            )}
           />
         ) : thumb ? (
           <img
             src={thumb}
             alt=""
             loading="lazy"
-            className="absolute inset-0 h-full w-full object-cover"
+            decoding="async"
+            className={cn(
+              "absolute inset-0 h-full w-full object-cover transition-[filter,transform] duration-300",
+              veiled && "scale-110 blur-xl saturate-50",
+            )}
           />
         ) : (
           <FallbackFace name={name} kind={kind} className="absolute inset-0" />
@@ -174,9 +193,25 @@ export function ModelCard({
           <span className="flex items-center gap-1 text-2xs text-white/60">
             <Icon name={style.icon} size={11} />
             {style.label}
+            {meta ? <span className="ml-auto truncate font-mono text-white/55">{meta}</span> : null}
           </span>
         </div>
       </button>
+      {veiled ? (
+        <button
+          type="button"
+          onClick={() => setRevealed(true)}
+          aria-label={`${name}: NSFW thumbnail, click to reveal`}
+          className="absolute inset-x-0 top-0 z-10 flex flex-col items-center justify-center gap-1.5 text-white focus-ring"
+          style={{ aspectRatio: String(ratio) }}
+        >
+          <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-2xs font-semibold tracking-wide uppercase">
+            <Icon name="eye-off" size={12} />
+            NSFW
+          </span>
+          <span className="text-2xs text-white/75">Click to reveal</span>
+        </button>
+      ) : null}
       {onFavorite ? (
         <button
           type="button"

@@ -34,7 +34,8 @@ All raw colors live in `src/client/styles/tokens.css`. Tailwind sees only tokens
 
 ## Type
 
-- **Geist Variable** for UI, **Geist Mono Variable** for numbers, paths, seeds and code. Both are bundled with `@fontsource`, so they work offline.
+- **Geist Variable** for UI by default, **Geist Mono Variable** for numbers, paths, seeds and code. Both are bundled with `@fontsource`, so they work offline.
+- **The UI font is a setting** (Settings → Appearance → Font): Geist, Inter (bundled), Segoe UI, the system font, or any font installed on the computer. It's one token, `--font-ui` in `tokens.css`, switched by `<html data-font>` (a custom family is set inline); `font-sans` and the body read it, so everything follows at once. Mono never changes. Components never name a font family; use `font-sans` / `font-mono`.
 - Scale (Tailwind names): `2xs` 11 · `xs` 12 · `sm` 13 (UI base) · `base` 14 · `lg` 16 · `xl` 20 · `2xl` 26 · `3xl` 34.
 - `label-caps`: 11 px, 600, uppercase, 0.08em tracking, `fg-3`. For group titles inside panels.
 - Numbers that line up use `tabular` (tabular figures). Seeds, sizes and VRAM are mono.
@@ -88,9 +89,17 @@ Presets in `src/client/lib/motion.ts`:
 | `Collapsible`, `InheritRow` | The stage pattern: header with summary + enable switch; inherited fields show the base value with a link toggle |
 | `Badge`, `Kbd`, `StatusDot`, `Spinner`, `Skeleton`, `Meter`, `StageProgress` | Feedback |
 | `Avatar` | Image or monogram on the profile accent, with an accent ring |
-| `ModelCard`, `FallbackFace` | The one model card; designed fallback when there's no thumbnail |
+| `ModelCard`, `FallbackFace` | The one model card; designed fallback when there's no thumbnail. `nsfw` + `blurNsfw` blur the thumbnail until clicked (the first click only reveals); `meta` adds a small mono line (size) |
 | `Art` | Seeded placeholder "renders" for previews and empty states |
 | `toast()` + `Toaster` | `info` · `success` · `warning` · `error`, optional action |
+| `EmptyState` | Icon tile + title + one sentence on what will appear + the action that makes it appear; `tone="warning"` when something's wrong (a missing folder) |
+| `DropZone` | Drop a file or click to pick one; `compact` once something is loaded, `busy` while reading |
+| `Veil` | Blurs sensitive content with a "NSFW · Click to reveal" pill; the reveal click never reaches what's underneath |
+| `ProgressBar` | Determinate (0–1) or indeterminate (`null`); `accent` / `success` / `danger`; `sm` / `md` |
+| `CopyButton` | Icon button that copies text and shows a check for a moment |
+| `PropertyList` | Label/value rows for metadata; skips empty values; optional per-row copy and mono |
+| `TreeRow` | One file-tree row: indent, chevron for folders, icon, label, unsaved dot, trailing actions on hover |
+| `InlineInput` | Borderless input for dense lists (wildcard lines); a field appears on hover and focus; `muted` for comments |
 
 **Adding a control or variant:** build it in `ui/`, export it from `ui/index.ts`, show every state in the Design Lab (normal, hover, focus, active, disabled, invalid, selected, open) in at least the Blombo and Light themes. It isn't done until it's in the Lab.
 
@@ -99,7 +108,11 @@ Presets in `src/client/lib/motion.ts`:
 - **App frame:** 56 px header (brand + workflow switcher · centered main tabs · system cluster · avatar). No footer.
 - **Generate:** models strip → prompts + Generate stack → workspace tabs → params column (layout document) + image stage.
 - **Settings:** centered, max 1120 px, left page rail with groups, Overview first.
-- **Gallery:** library sidebar (248 px) + content; hero, then day sections in justified rows; lightbox with a 360 px details sheet.
+- **Gallery:** sidebar (248 px: All images, Favorites, This week, libraries with covers and counts, Trash, scan status) + toolbar (search, Model / LoRA / Favorites filters, tile size, justified or grid, sort) + a virtualized list: the showcase hero (home view only: everything, newest first, unfiltered), then day headers and justified rows (the default) or square tiles. Lightbox: the image (click to zoom to 100% and drag to pan), a filmstrip, and a 360 px details sheet with Use these settings, Import workflow, File info, Reveal, Copy, Remove. Keys: ← → browse, F favorite, Z zoom, Delete move to trash, Esc close.
+- **File Info:** centered (max 1120 px); a drop zone, then a sticky file card (preview, size, origin) beside readable sections: how it was made, all parameters, the ComfyUI graph, raw chunks; for safetensors: overview, trigger words, training, a tag cloud (size = how often), all metadata with a filter.
+- **Models → Local:** search + kind chips with counts + sort + rescan above a virtualized card grid; selecting a card opens a 380 px info sheet (thumbnail, trigger words, file facts, Civitai link, description, files next to it) with Rename, Move, Reveal and File info.
+- **Wildcard Manager:** file tree (280 px, search, new file and folder, drag onto a folder to move, row menu) · editor (Raw: CodeMirror with folding, lint, `__` completion; Lines: one row per option, YAML keys on the left) · roll preview (320 px).
+- **Settings → ComfyUI:** which ComfyUI the profile uses, then the installer: slot, PyTorch build, version, and a step list with a progress bar on the active step and the tools' output under "Show details".
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
 
 ## Copy

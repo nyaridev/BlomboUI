@@ -1,27 +1,15 @@
 /**
- * Models: Local · Civitai · Manager. One ModelCard everywhere. PREVIEW data; the Civitai panel
- * shows the planned faster browser (filter bar, search history, tabs) and Manager the store look.
+ * Models: Local · Civitai · Manager. One ModelCard everywhere. Local runs on the profile's
+ * models folder (LocalModels.tsx). Civitai and Manager are still previews of the planned
+ * browser and store (Phase 3) and use sample data.
  */
-import {
-  MOCK_CHECKPOINTS,
-  MOCK_LORAS,
-  MOCK_OTHER,
-  type MockModel,
-} from "@client/features/preview/mock";
-import { Icon, type IconName } from "@client/icons/Icon";
+import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import {
-  Badge,
-  Button,
-  Chip,
-  IconButton,
-  ModelCard,
-  Select,
-  Tabs,
-  TextField,
-  toast,
-} from "@client/ui";
+import { formatBytes } from "@client/lib/number";
+import { useLocalModels } from "@client/lib/queries";
+import { Badge, Button, Chip, IconButton, ModelCard, Select, Tabs, TextField } from "@client/ui";
 import { useState } from "react";
+import { LocalModels } from "./LocalModels";
 
 type Sub = "local" | "civitai" | "manager";
 
@@ -42,93 +30,21 @@ export function ModelsView() {
           ]}
           className="border-b-0"
         />
-        <span className="ml-auto pb-1.5 text-xs text-fg-3">
-          B:\AI\Diffusion\Models · 1,284 files · 412 GB
-        </span>
+        <FolderSummary />
       </div>
-      {sub === "local" ? <Local /> : sub === "civitai" ? <Civitai /> : <Manager />}
+      {sub === "local" ? <LocalModels /> : sub === "civitai" ? <Civitai /> : <Manager />}
     </div>
   );
 }
 
-const KINDS: Array<{ id: string; label: string; icon: IconName; count: number }> = [
-  { id: "all", label: "All", icon: "stack", count: 1284 },
-  { id: "checkpoints", label: "Checkpoints", icon: "models", count: 64 },
-  { id: "loras", label: "LoRAs", icon: "layers", count: 1032 },
-  { id: "vae", label: "VAE", icon: "wave", count: 6 },
-  { id: "upscale", label: "Upscalers", icon: "upscale", count: 14 },
-  { id: "controlnet", label: "ControlNet", icon: "pose", count: 9 },
-  { id: "detectors", label: "Detectors", icon: "face-scan", count: 11 },
-  { id: "embeddings", label: "Embeddings", icon: "hash", count: 48 },
-];
-
-function Local() {
-  const [kind, setKind] = useState("all");
-  const [sel, setSel] = useState<string | null>(null);
-  const items: MockModel[] = [
-    ...MOCK_CHECKPOINTS,
-    ...MOCK_LORAS,
-    ...MOCK_OTHER.filter((m) => m.kind !== "wildcards"),
-  ];
+/** "B:\Models · 1,284 files · 412 GB" for the open profile. */
+function FolderSummary() {
+  const list = useLocalModels().data;
+  if (!list?.root) return null;
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 p-5">
-      <div className="flex flex-wrap items-center gap-2">
-        <TextField
-          icon="search"
-          placeholder="Search name, trigger word, base model…"
-          className="w-[360px]"
-        />
-        <div className="flex flex-wrap gap-1">
-          {KINDS.map((k) => (
-            <Chip
-              key={k.id}
-              size="sm"
-              icon={k.icon}
-              count={k.count}
-              selected={kind === k.id}
-              onClick={() => setKind(k.id)}
-            >
-              {k.label}
-            </Chip>
-          ))}
-        </div>
-        <div className="ml-auto flex items-center gap-1.5">
-          <Select
-            size="sm"
-            value="recent"
-            onChange={() => undefined}
-            className="w-[150px]"
-            options={[
-              { value: "recent", label: "Recently used", icon: "clock" },
-              { value: "name", label: "Name", icon: "sort" },
-              { value: "added", label: "Date added", icon: "calendar" },
-            ]}
-          />
-          <Button
-            size="sm"
-            icon="globe"
-            onClick={() => toast("Fetching missing thumbnails from Civitai…", "info")}
-          >
-            Fill thumbnails
-          </Button>
-        </div>
-      </div>
-      <div className="scroll-quiet grid min-h-0 flex-1 auto-rows-max grid-cols-[repeat(auto-fill,minmax(176px,1fr))] gap-3 overflow-y-auto pr-1">
-        {items.map((m) => (
-          <ModelCard
-            key={m.name}
-            name={m.name}
-            kind={m.kind}
-            baseModel={m.base}
-            thumb={m.thumb}
-            favorite={m.favorite}
-            selected={sel === m.name}
-            onClick={() => setSel(m.name)}
-            onFavorite={() => undefined}
-          />
-        ))}
-      </div>
-    </div>
+    <span className="ml-auto truncate pb-1.5 font-mono text-xs text-fg-3" title={list.root}>
+      {list.root} · {list.models.length.toLocaleString()} files · {formatBytes(list.totalSize)}
+    </span>
   );
 }
 

@@ -18,16 +18,22 @@ import {
   Checkbox,
   Chip,
   Collapsible,
+  CopyButton,
   Dialog,
+  DropZone,
+  EmptyState,
   Field,
   IconButton,
   InheritRow,
+  InlineInput,
   Kbd,
   Menu,
   Meter,
   ModelCard,
   NumberField,
   Popover,
+  ProgressBar,
+  PropertyList,
   ScrubField,
   Segmented,
   Select,
@@ -41,7 +47,9 @@ import {
   TextArea,
   TextField,
   Tooltip,
+  TreeRow,
   toast,
+  Veil,
 } from "@client/ui";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import { Link } from "@tanstack/react-router";
@@ -61,6 +69,7 @@ const SECTIONS = [
   ["feedback", "Feedback"],
   ["surfaces", "Surfaces"],
   ["cards", "Cards"],
+  ["library", "Library"],
   ["prompt", "Prompt editor"],
 ] as const;
 
@@ -127,6 +136,10 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [stageOn, setStageOn] = useState(true);
   const [ov, setOv] = useState(false);
   const [prompt, setPrompt] = useState(MOCK_PROMPT);
+  const [treeOpen, setTreeOpen] = useState(true);
+  const [treeSel, setTreeSel] = useState("outfits/fantasy.txt");
+  const [lines, setLines] = useState(["silver cloak", "# a comment", "__colors__ armor"]);
+  const [progress, setProgress] = useState(0.42);
   const errors = useLive((s) => s.errors.length);
 
   return (
@@ -826,9 +839,165 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <ModelCard name="qwen_3_4b" kind="text_encoders" />
             <ModelCard name="characters/heroes" kind="wildcards" />
             <ModelCard name="anima-base-fp8" kind="diffusion_models" baseModel="Anima" />
+            <ModelCard
+              name="NSFW thumbnail (blurred)"
+              kind="loras"
+              baseModel="IL"
+              thumb="art:nsfw-a"
+              nsfw
+              blurNsfw
+              meta="144 MB"
+            />
             <div className="flex flex-col gap-2">
               <Art seed="lab-a" ratio={3 / 4} className="rounded-lg" />
               <span className="text-2xs text-fg-3">Procedural placeholder art</span>
+            </div>
+          </div>
+        </Section>
+
+        <Section
+          id="library"
+          title="Library"
+          text="Gallery, File Info, Models and Wildcard Manager pieces."
+        >
+          <div className="grid grid-cols-2 gap-6">
+            <div className="flex flex-col gap-4">
+              <Row label="ProgressBar">
+                <div className="flex w-full flex-col gap-2">
+                  <ProgressBar value={progress} label="Determinate" />
+                  <ProgressBar value={null} label="Indeterminate" />
+                  <ProgressBar value={1} label="Done" tone="success" size="sm" />
+                  <ProgressBar value={0.6} label="Failed" tone="danger" size="sm" />
+                  <Slider
+                    value={Math.round(progress * 100)}
+                    onChange={(v) => setProgress(v / 100)}
+                    min={0}
+                    max={100}
+                    size="sm"
+                    label="Progress value"
+                    unit="%"
+                  />
+                </div>
+              </Row>
+              <Row label="CopyButton">
+                <CopyButton text="284119032" label="Copy seed" />
+                <CopyButton text="hello" label="Copy (sm)" size="sm" />
+              </Row>
+              <Row label="InlineInput">
+                <div className="flex w-full flex-col gap-0.5 rounded-md border border-line bg-surface-2 p-1.5">
+                  {lines.map((l, i) => (
+                    <InlineInput
+                      key={i}
+                      value={l}
+                      muted={l.trim().startsWith("#")}
+                      onChange={(e) =>
+                        setLines(lines.map((x, j) => (j === i ? e.target.value : x)))
+                      }
+                      aria-label={`Demo line ${i + 1}`}
+                    />
+                  ))}
+                  <InlineInput
+                    value="disabled line"
+                    disabled
+                    aria-label="Disabled line"
+                    onChange={() => undefined}
+                  />
+                </div>
+              </Row>
+              <Row label="PropertyList">
+                <PropertyList
+                  className="w-full"
+                  items={[
+                    { label: "Model", value: "waiIllustrious_v14", copy: "waiIllustrious_v14" },
+                    { label: "Seed", value: 284119032, copy: "284119032", mono: true },
+                    { label: "Sampler", value: "dpmpp_2m · karras" },
+                    { label: "Empty", value: null },
+                  ]}
+                />
+              </Row>
+              <Row label="TreeRow">
+                <div className="w-64 rounded-md border border-line bg-surface p-1.5">
+                  <TreeRow
+                    depth={0}
+                    label="outfits"
+                    icon="folder"
+                    open={treeOpen}
+                    onClick={() => setTreeOpen(!treeOpen)}
+                  />
+                  {treeOpen ? (
+                    <>
+                      <TreeRow
+                        depth={1}
+                        label="fantasy.txt"
+                        icon="file-text"
+                        selected={treeSel === "outfits/fantasy.txt"}
+                        dirty
+                        onClick={() => setTreeSel("outfits/fantasy.txt")}
+                        actions={<IconButton icon="more-horizontal" label="Options" size="xs" />}
+                      />
+                      <TreeRow
+                        depth={1}
+                        label="packs.yaml"
+                        icon="raw-mode"
+                        meta="2 KB"
+                        selected={treeSel === "outfits/packs.yaml"}
+                        onClick={() => setTreeSel("outfits/packs.yaml")}
+                      />
+                    </>
+                  ) : null}
+                </div>
+              </Row>
+            </div>
+            <div className="flex flex-col gap-4">
+              <Row label="DropZone">
+                <div className="flex w-full flex-col gap-2">
+                  <DropZone
+                    onFile={(f) => toast(`Dropped ${f.name}`, "info")}
+                    title="Drop a file here, or click to pick one"
+                    hint="PNG, WebP, JPEG · .safetensors"
+                    icon="file-info"
+                  />
+                  <DropZone onFile={() => undefined} title="Compact" compact />
+                  <DropZone onFile={() => undefined} title="Busy" compact busy />
+                </div>
+              </Row>
+              <Row label="Veil (NSFW)">
+                <div className="h-32 w-28 overflow-hidden rounded-md">
+                  <Veil active>
+                    <Art seed="veil-a" className="h-full w-full" />
+                  </Veil>
+                </div>
+                <div className="h-32 w-28 overflow-hidden rounded-md">
+                  <Veil active compact>
+                    <Art seed="veil-b" className="h-full w-full" />
+                  </Veil>
+                </div>
+                <div className="h-32 w-28 overflow-hidden rounded-md">
+                  <Veil active={false}>
+                    <Art seed="veil-c" className="h-full w-full" />
+                  </Veil>
+                </div>
+              </Row>
+              <Row label="EmptyState">
+                <div className="w-full rounded-lg border border-line">
+                  <EmptyState
+                    icon="gallery"
+                    title="Your images will appear here"
+                    text="Generate something, or add a folder from the sidebar."
+                    action={<Button variant="primary">Open Generate</Button>}
+                  />
+                </div>
+              </Row>
+              <Row label="EmptyState (warning)">
+                <div className="w-full rounded-lg border border-line">
+                  <EmptyState
+                    icon="folder"
+                    tone="warning"
+                    title="The models folder isn't there"
+                    text="Pick it again in Settings → Folders."
+                  />
+                </div>
+              </Row>
             </div>
           </div>
         </Section>

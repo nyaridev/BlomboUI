@@ -17,9 +17,9 @@ Full spec: `docs/design-system.md`. Live reference: the Design Lab (`/lab`).
 - Status is never color alone: pair it with an icon or a word.
 - Check every change in the **Blombo** and **Light** themes, and with a non-blue accent.
 
-**Type.** Geist / Geist Mono. UI base `text-sm` (13 px). Group titles `label-caps`. Numbers `tabular`; seeds, sizes and paths `font-mono`. Headings `text-balance`.
+**Type.** Geist / Geist Mono by default; the UI font is a setting through the `--font-ui` token, so never name a font family in components (use `font-sans` / `font-mono`). UI base `text-sm` (13 px). Group titles `label-caps`. Numbers `tabular`; seeds, sizes and paths `font-mono`. Headings `text-balance`.
 
-**Components.** Import from `@client/ui` only (`Button`, `IconButton`, `Slider`, `ScrubField`, `NumberField`, `Select`, `Segmented`, `Switch`, `Checkbox`, `Chip`, `Tabs`, `Tooltip`, `Popover`, `Menu`, `Dialog`, `Collapsible`, `InheritRow`, `ModelCard`, `Avatar`, `toast`…). Don't restyle a control locally: add a variant in `ui/` and show it in the Lab.
+**Components.** Import from `@client/ui` only (`Button`, `IconButton`, `Slider`, `ScrubField`, `NumberField`, `Select`, `Segmented`, `Switch`, `Checkbox`, `Chip`, `Tabs`, `Tooltip`, `Popover`, `Menu`, `Dialog`, `Collapsible`, `InheritRow`, `ModelCard`, `Avatar`, `EmptyState`, `DropZone`, `Veil`, `ProgressBar`, `CopyButton`, `PropertyList`, `TreeRow`, `InlineInput`, `toast`…). Don't restyle a control locally: add a variant in `ui/` and show it in the Lab. Sensitive thumbnails use `Veil` / `ModelCard nsfw blurNsfw` (blurred until clicked, per the profile setting).
 
 **Icons.** `<Icon name>` from `@client/icons/Icon`, names from `icons/paths.ts`. Name new icons by action. Icon-only buttons are `IconButton` with a `label`.
 

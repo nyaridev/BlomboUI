@@ -40,7 +40,7 @@ export function ProfileScreen() {
   const profiles = data?.profiles ?? [];
 
   useEffect(() => {
-    if (!wizard) setTheme({ theme: "blombo", accent: "blue" });
+    if (!wizard) setTheme({ theme: "blombo", accent: "blue", font: "geist", customFont: "" });
   }, [wizard, setTheme]);
 
   const open = async (p: Profile) => {

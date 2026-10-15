@@ -22,39 +22,50 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `npm run typecheck` / `lint` / `format` / `test` | Individually (TypeScript 7, Biome, Vitest) |
 | `npm run rules:sync` | Regenerate `.cursor/rules/*.mdc` from `.claude/rules/*.md` |
 | `node tools/make-icons.ts` | Regenerate desktop icons from `src-tauri/app-icon.svg` |
+| `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
+| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end |
 
 ## Architecture map
 
 ```text
 src/
 ├── shared/       Vocabulary + Zod schemas + pure logic used by both sides
-│                 constants · profile · api · workflow/{roles,manifest} · layout/schema · prompt/tokenize
+│                 constants · profile · api · comfy · jobs · live · random · layout/schema
+│                 workflow/{roles,manifest,graph} · prompt/{tokenize,loras,wildcards}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
-│   ├── main.ts       flags (--dev --port --open web|app|none --data), single instance
+│   ├── main.ts       flags (--dev --port --open web|app|none --data), single instance, shutdown
+│   ├── context.ts    builds the services and wires their events together
 │   ├── app.ts        /api routes + built client in production
 │   ├── routes/       thin: validate (Zod) → service → JSON
-│   ├── services/     profiles · system · window   (planned: comfy · workflows · jobs · gallery ·
-│   │                 models · civitai · downloads · wildcards · autocomplete · live)
+│   │                 profiles · system · comfy · workflows · jobs · wildcards
+│   ├── services/     profiles · system · window · live (bus) · jobs (queue) · wildcards
+│   │   ├── comfy/        supervisor (slots, start/stop, logs) · client (HTTP + socket) · stats · paths
+│   │   └── workflows/    store · analyze · convert · import · compile · presets · nodes
+│   │                 (planned: gallery · models · civitai · downloads · autocomplete)
 │   └── lib/          fsx (atomic, queued writes; resolveInside) · http (HttpError, readJson)
+│                     emitter · imagemeta (PNG/WebP text chunks)
 ├── client/       React 19 · Vite 8 · Tailwind 4 · TanStack Router/Query · Zustand · Motion ·
 │   │             Floating UI · dnd-kit · CodeMirror 6
 │   ├── app/          router · Shell (keep-alive views) · header/ · theme
 │   ├── features/     profiles · generate · gallery · models · settings · lab · common · preview
 │   ├── ui/           the design system (hand-built controls). Import from "@client/ui"
 │   ├── icons/        hand-drawn SVG icon set + Logo
-│   ├── lib/          api · queries · session · motion · platform · hooks · number · seeded · cn
+│   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
+│   │                 number · seeded · cn
 │   └── styles/       tokens.css (all raw colors) · index.css (Tailwind theme) · base.css
 └── comfy-bridge/ (planned) ComfyUI extension: "Edit in ComfyUI" / "Save to Blombo"
 src-tauri/        Desktop shell: native window on --url, capability for localhost IPC
-presets/          (planned) built-in workflows, stages, layouts
-tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons
+presets/          workflows/ (sd15, sdxl, illustrious) · planned: stages/, layouts/
+tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit
 runtime/          (gitignored) ComfyUI slots, caches, logs
 ```
 
-**Data flow today:** client → `/api` (Zod-validated) → service → files in `data/`. **Soon:** one WebSocket live bus (`/api/live`) for progress, previews, GPU stats, downloads and errors; the server owns the single ComfyUI socket (ADR-0008).
+**Data flow:** client → `/api` (Zod-validated) → service → files in `data/` and ComfyUI's HTTP API. Live state comes back over one WebSocket per window, `/api/live` (ADR-0008): ComfyUI status, GPU stats at 1 Hz, queue snapshots, step progress, binary preview frames, errors, and ComfyUI's log while a log view is open. The server owns the single ComfyUI socket (`services/comfy/client.ts`) and fans it out (`services/live.ts`); the client keeps it in `lib/live.ts`.
 
-**Phase 0 note:** screens under `features/` that import `features/preview/*` show **preview data**. They are design previews, not wired to ComfyUI yet. Replace the preview imports as real services land; never ship new features on top of preview data.
+**Generating:** the Generate button posts the current values to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → seed → filename prefix), sends it to ComfyUI and turns its socket events into progress, previews and images. The queue lives on the server, so reloads and other windows see the same thing.
+
+**Preview data:** screens that still import `features/preview/*` (Models view, Settings stats, the Lab's sample prompt) show sample data. Generate and the header are wired. Never build new features on preview data; replace the imports as services land.
 
 ## Golden rules
 
@@ -86,6 +97,14 @@ runtime/          (gitignored) ComfyUI slots, caches, logs
 3. **Client:** API call in `lib/api.ts`, query or mutation in `lib/queries.ts`, UI in `features/<area>/` using `ui/` components. Handle loading, empty and error states.
 4. **Verify:** tests for logic, `npm run check`, then click through it in `npm run dev` in Blombo and Light themes.
 5. **Docs:** `docs/design-system.md` for a new UI pattern, `docs/workflows.md` for workflow format changes, this file for new commands or architecture, an ADR for a big decision.
+
+### Add or change a built-in workflow preset
+1. Edit `presets/workflows/<id>/prompt.json` (a ComfyUI API graph; values in it are the defaults) and the name, family, description and `preset.version` in `workflow.json`.
+2. Run `node tools/build-presets.ts` to regenerate bindings, values and `graph.json`. The preset test fails if you forget.
+3. Bump `preset.version` when changing a shipped preset so profiles can be offered the update later.
+
+### Teach the analyzer a node
+Detection is by input names first (`seed`, `steps`, `positive`, `ckpt_name`…). Only when that can't work, add the class to `services/workflows/nodes.ts`, add a fixture graph under `services/workflows/fixtures/` and a case to `analyze.test.ts`.
 
 ### Add a Generate parameter or control style
 - A parameter comes from a workflow **binding** (role or `$`-titled node), never hand-placed JSX.

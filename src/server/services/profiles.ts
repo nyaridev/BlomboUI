@@ -13,16 +13,25 @@ import {
   type UpdateProfileBody,
 } from "../../shared/profile.ts";
 import type { ServerConfig } from "../config.ts";
+import { Emitter } from "../lib/emitter.ts";
 import { exists, readJsonFile, writeFileAtomic, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 
 const AVATAR_SIZE = 256;
 
-export class ProfileService {
+type ProfileEvents = {
+  /** A profile was opened (also when the same one is opened again, e.g. after a reload). */
+  opened: (profile: Profile, previousId: string | null) => void;
+  /** A profile's settings changed. */
+  updated: (profile: Profile) => void;
+};
+
+export class ProfileService extends Emitter<ProfileEvents> {
   private readonly config: ServerConfig;
   private activeId: string | null = null;
 
   constructor(config: ServerConfig) {
+    super();
     this.config = config;
   }
 
@@ -91,7 +100,6 @@ export class ProfileService {
     await fs.mkdir(path.join(this.dir(id), "layouts"), { recursive: true });
     await writeJsonAtomic(this.profileFile(id), profile);
     await writeJsonAtomic(this.registryFile, { ...reg, order: [...reg.order, id] });
-    // ponytail: preset installation lands with the workflow service (Phase 1); body.presets is kept on the request schema already.
     return profile;
   }
 
@@ -103,6 +111,7 @@ export class ProfileService {
       paths: { ...current.paths, ...patch.paths },
     });
     await writeJsonAtomic(this.profileFile(id), next);
+    this.emit("updated", next);
     return next;
   }
 
@@ -141,6 +150,7 @@ export class ProfileService {
     await writeJsonAtomic(this.profileFile(id), opened);
     this.activeId = id;
     const comfyRestart = previous !== null && previous.paths.models !== profile.paths.models;
+    this.emit("opened", opened, previous?.id ?? null);
     return { profile: opened, comfyRestart };
   }
 

@@ -1,6 +1,6 @@
 # ADR-0001: TypeScript end to end (Node + Hono server, React client)
 
-**Status:** Proposed
+**Status:** Accepted (confirmed in the feature review)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

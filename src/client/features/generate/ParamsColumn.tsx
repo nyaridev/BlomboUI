@@ -1,12 +1,13 @@
 /**
- * The params region, rendered from the layout document (ADR-0005). In Customize mode blocks get
- * drag handles (dnd-kit), a click selects one, and the Inspector edits its style. Controls are
- * inert while customizing so a click always means "select this block".
+ * The params region, rendered from the layout document (ADR-0005) and the active workflow's
+ * bindings. In Customize mode blocks get drag handles (dnd-kit), a click selects one, and the
+ * Inspector edits its style. Controls are inert while customizing so a click always means
+ * "select this block".
  */
 
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { Collapsible, SectionTitle } from "@client/ui";
+import { Badge, Collapsible, SectionTitle } from "@client/ui";
 import {
   closestCenter,
   DndContext,
@@ -25,15 +26,13 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Block, CardBlock, ParamBlock } from "@shared/layout/schema";
-import { controlFamily } from "@shared/layout/schema";
 import { type Binding, resolveBind } from "@shared/workflow/manifest";
 import type { ReactNode } from "react";
-import { defaultStyle, ParamControl } from "./blocks/ParamControl";
+import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
 import { Seed } from "./blocks/Seed";
-import { AdetailerStage, ControlNetStage, HiresStage } from "./blocks/Stages";
-import { PREVIEW_BINDINGS } from "./preview-workflow";
 import { useLayout } from "./state";
+import { useBindings } from "./workflow";
 
 /** Roles rendered by feature blocks (prompts, models strip, seed, resolution), not by params-rest. */
 const FEATURE_ROLES = new Set([
@@ -43,16 +42,23 @@ const FEATURE_ROLES = new Set([
   "model.unet",
   "model.vae",
   "model.clip",
+  "model.clip2",
+  "lora.stack",
   "sampler.seed",
   "latent.width",
   "latent.height",
   "latent.batch",
+  "output.image",
 ]);
 
-export function blockLabel(
-  block: Block,
-  bindings: Binding[] = PREVIEW_BINDINGS,
-): { label: string; icon: IconName } {
+const STAGE_INFO = {
+  hires: { label: "Hires fix", icon: "upscale" },
+  adetailer: { label: "ADetailer", icon: "face-scan" },
+  controlnet: { label: "ControlNet", icon: "pose" },
+  upscale: { label: "Upscale", icon: "upscale" },
+} as const satisfies Record<string, { label: string; icon: IconName }>;
+
+export function blockLabel(block: Block, bindings: Binding[]): { label: string; icon: IconName } {
   switch (block.type) {
     case "param": {
       const b = resolveBind(bindings, block.bind);
@@ -61,17 +67,7 @@ export function blockLabel(
     case "card":
       return { label: block.title, icon: "layout-grid" };
     case "stage":
-      return {
-        label: {
-          hires: "Hires fix",
-          adetailer: "ADetailer",
-          controlnet: "ControlNet",
-          upscale: "Upscale",
-        }[block.stage],
-        icon: { hires: "upscale", adetailer: "face-scan", controlnet: "pose", upscale: "upscale" }[
-          block.stage
-        ] as IconName,
-      };
+      return { label: STAGE_INFO[block.stage].label, icon: STAGE_INFO[block.stage].icon };
     case "params-rest":
       return { label: block.title ?? "More from this workflow", icon: "workflow" };
     case "feature":
@@ -84,11 +80,11 @@ export function blockLabel(
   }
 }
 
-function placedBindingIds(blocks: Block[]): Set<string> {
+function placedBindingIds(blocks: Block[], bindings: Binding[]): Set<string> {
   const out = new Set<string>();
   const visit = (b: Block) => {
     if (b.type === "param") {
-      const found = resolveBind(PREVIEW_BINDINGS, b.bind);
+      const found = resolveBind(bindings, b.bind);
       if (found) out.add(found.id);
     }
     if (b.type === "card") b.children.forEach(visit);
@@ -97,11 +93,18 @@ function placedBindingIds(blocks: Block[]): Set<string> {
   return out;
 }
 
-function RestBlock({ title, placed }: { title: string; placed: Set<string> }) {
-  const rest = PREVIEW_BINDINGS.filter(
-    (b) => !b.hidden && !placed.has(b.id) && !(b.role && FEATURE_ROLES.has(b.role)),
+interface RenderContext {
+  bindings: Binding[];
+  placed: Set<string>;
+  customizing: boolean;
+}
+
+function RestBlock({ title, ctx }: { title: string; ctx: RenderContext }) {
+  const rest = ctx.bindings.filter(
+    (b) => !b.hidden && !ctx.placed.has(b.id) && !(b.role && FEATURE_ROLES.has(b.role)),
   );
-  if (!rest.length) return null;
+  if (!rest.length)
+    return ctx.customizing ? <Ghost text="Nothing else to show for this workflow" /> : null;
   return (
     <Collapsible
       title={title}
@@ -117,42 +120,51 @@ function RestBlock({ title, placed }: { title: string; placed: Set<string> }) {
               type: "param",
               id: `rest-${b.id}`,
               bind: `id:${b.id}`,
-              control: defaultStyle(controlFamily(b.type)),
+              control: defaultStyle(bindingFamily(b)),
             }}
           />
         ))}
         <p className="flex items-start gap-1.5 text-2xs text-fg-3">
           <Icon name="info" size={12} className="mt-px" />
-          Detected from the workflow (nodes titled with $). Move them anywhere with Customize.
+          Found in the workflow (nodes titled with $ in ComfyUI). Move them anywhere with Customize.
         </p>
       </div>
     </Collapsible>
   );
 }
 
-function renderBlock(block: Block, placed: Set<string>, customizing: boolean): ReactNode {
+/** Stages (Hires fix, ADetailer, ControlNet) are graph patches that arrive in a later phase. */
+function PendingStage({ stage }: { stage: keyof typeof STAGE_INFO }) {
+  const info = STAGE_INFO[stage];
+  return (
+    <div className="flex h-11 items-center gap-2.5 rounded-lg border border-dashed border-line px-3 text-sm text-fg-3">
+      <Icon name={info.icon} size={15} />
+      <span>{info.label}</span>
+      <Badge className="ml-auto">coming later</Badge>
+    </div>
+  );
+}
+
+function renderBlock(block: Block, ctx: RenderContext): ReactNode {
   switch (block.type) {
     case "param": {
-      const b = resolveBind(PREVIEW_BINDINGS, block.bind);
-      return b ? (
-        <ParamControl binding={b} block={block} />
-      ) : (
-        <Ghost text={`No ${block.bind.slice(5)} in this workflow`} />
-      );
+      const b = resolveBind(ctx.bindings, block.bind);
+      if (b) return <ParamControl binding={b} block={block} />;
+      // A block for a parameter this workflow doesn't have: a ghost while customizing, else nothing.
+      return ctx.customizing ? (
+        <Ghost text={`No ${block.bind.replace(/^(role|id):/, "")} in this workflow`} />
+      ) : null;
     }
     case "card":
-      return <Card block={block} placed={placed} customizing={customizing} />;
+      return <Card block={block} ctx={ctx} />;
     case "feature":
       if (block.feature === "resolution") return <Resolution />;
       if (block.feature === "seed") return <Seed />;
       return null;
     case "stage":
-      if (block.stage === "hires") return <HiresStage />;
-      if (block.stage === "adetailer") return <AdetailerStage />;
-      if (block.stage === "controlnet") return <ControlNetStage />;
-      return null;
+      return <PendingStage stage={block.stage} />;
     case "params-rest":
-      return <RestBlock title={block.title ?? "More from this workflow"} placed={placed} />;
+      return <RestBlock title={block.title ?? "More from this workflow"} ctx={ctx} />;
   }
 }
 
@@ -164,16 +176,13 @@ function Ghost({ text }: { text: string }) {
   );
 }
 
-function Card({
-  block,
-  placed,
-  customizing,
-}: {
-  block: CardBlock;
-  placed: Set<string>;
-  customizing: boolean;
-}) {
-  const visible = block.children.filter((c) => customizing || !c.hidden);
+function Card({ block, ctx }: { block: CardBlock; ctx: RenderContext }) {
+  const { customizing, bindings } = ctx;
+  // Children whose parameter the workflow lacks take no space outside Customize.
+  const visible = block.children.filter(
+    (c) => customizing || (!c.hidden && (c.type !== "param" || resolveBind(bindings, c.bind))),
+  );
+  if (!visible.length && !customizing) return null;
   const grid = (
     <div className={cn("grid grid-cols-12 gap-x-3", customizing ? "gap-y-6 pt-3" : "gap-y-3.5")}>
       {visible.map((child) => (
@@ -184,7 +193,7 @@ function Card({
           span={child.span ?? 12}
           compact
         >
-          {renderBlock(child, placed, customizing)}
+          {renderBlock(child, ctx)}
         </Sortable>
       ))}
     </div>
@@ -218,6 +227,7 @@ function Sortable({
 }) {
   const selected = useLayout((s) => s.selected === block.id);
   const select = useLayout((s) => s.select);
+  const bindings = useBindings();
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: block.id,
     disabled: !customizing,
@@ -227,8 +237,8 @@ function Sortable({
     transition,
     gridColumn: span ? `span ${span} / span ${span}` : undefined,
   };
-  if (!customizing) return <div style={style}>{children}</div>;
-  const { label, icon } = blockLabel(block);
+  if (!customizing) return children ? <div style={style}>{children}</div> : null;
+  const { label, icon } = blockLabel(block, bindings);
   // A card is a container: it's selected through its label chip, and its children stay
   // individually selectable. Every other block is selected by clicking anywhere on it.
   const container = block.type === "card";
@@ -299,8 +309,9 @@ export function ParamsColumn() {
   const customizing = useLayout((s) => s.customizing);
   const moveParams = useLayout((s) => s.moveParams);
   const moveInCard = useLayout((s) => s.moveInCard);
+  const bindings = useBindings();
   const blocks = doc.regions.params;
-  const placed = placedBindingIds(blocks);
+  const ctx: RenderContext = { bindings, placed: placedBindingIds(blocks, bindings), customizing };
   const visible = blocks.filter((b) => customizing || !b.hidden);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -332,7 +343,7 @@ export function ParamsColumn() {
     <div className={cn("flex flex-col", customizing ? "gap-5 pt-2" : "gap-2.5")}>
       {visible.map((b) => (
         <Sortable key={b.id} block={b} customizing={customizing}>
-          {renderBlock(b, placed, customizing)}
+          {renderBlock(b, ctx)}
         </Sortable>
       ))}
     </div>

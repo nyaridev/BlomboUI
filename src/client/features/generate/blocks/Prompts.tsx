@@ -1,20 +1,16 @@
 /** Prompt editors and the Generate / Interrupt / Cancel stack beside them. */
-import { useSystemPreview } from "@client/features/preview/systemPreview";
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
+import { useLive } from "@client/lib/live";
 import { bouncy } from "@client/lib/motion";
-import { IconButton, Kbd, NumberField, Switch, Tooltip, toast } from "@client/ui";
+import { IconButton, Kbd, NumberField, Switch, Tooltip } from "@client/ui";
 import { estimateTokens } from "@shared/prompt/tokenize";
 import { motion } from "motion/react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
+import { cancelAll, generate, interrupt, setLoop, useLoopIntent } from "../actions";
 import { PromptEditor } from "../PromptEditor";
-import { useValues } from "../state";
-
-export function startPreviewRun() {
-  const s = useSystemPreview.getState();
-  if (s.running) s.set({ queue: s.queue + 1 });
-  else s.set({ running: true, progress: 0 });
-}
+import { useValue, useValues } from "../state";
+import { useRoleBinding } from "../workflow";
 
 function TokenCount({ text }: { text: string }) {
   const { tokens, chunks } = useMemo(() => estimateTokens(text), [text]);
@@ -26,64 +22,95 @@ function TokenCount({ text }: { text: string }) {
   );
 }
 
-export function Prompts() {
-  const prompt = useValues((s) => s.prompt);
-  const negative = useValues((s) => s.negative);
-  const setPrompt = useValues((s) => s.setPrompt);
-  const setNegative = useValues((s) => s.setNegative);
+function PromptField({
+  id,
+  label,
+  placeholder,
+  minRows,
+  className,
+  tools,
+}: {
+  id: string;
+  label: string;
+  placeholder: string;
+  minRows: number;
+  className: string;
+  tools?: boolean;
+}) {
+  const [value, setValue] = useValue<string>(id);
+  const text = typeof value === "string" ? value : "";
   return (
-    <div className="flex min-w-0 flex-1 flex-col gap-2">
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-0.5">
-          <span className="text-xs font-medium text-fg-2">Prompt</span>
-          <TokenCount text={prompt} />
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2 px-0.5">
+        <span className="text-xs font-medium text-fg-2">{label}</span>
+        <TokenCount text={text} />
+        {tools ? (
           <span className="ml-auto flex items-center">
-            <IconButton icon="history" label="Prompt history" size="xs" />
-            <IconButton icon="tag" label="Snippets" size="xs" />
             <IconButton
               icon="eraser"
-              label="Clear prompt"
+              label={`Clear ${label.toLowerCase()}`}
               size="xs"
-              onClick={() => setPrompt("")}
+              onClick={() => setValue("")}
             />
           </span>
-        </div>
-        <PromptEditor
-          label="Prompt"
-          value={prompt}
-          onChange={setPrompt}
-          minRows={3}
-          placeholder="Describe the image. Ctrl+Enter generates."
-          onSubmit={startPreviewRun}
-          className="h-[118px]"
-        />
+        ) : null}
       </div>
-      <div className="flex flex-col gap-1">
-        <div className="flex items-center gap-2 px-0.5">
-          <span className="text-xs font-medium text-fg-2">Negative</span>
-          <TokenCount text={negative} />
+      <PromptEditor
+        label={label}
+        value={text}
+        onChange={setValue}
+        minRows={minRows}
+        placeholder={placeholder}
+        onSubmit={() => void generate()}
+        className={className}
+      />
+    </div>
+  );
+}
+
+export function Prompts() {
+  const positive = useRoleBinding("prompt.positive");
+  const negative = useRoleBinding("prompt.negative");
+  return (
+    <div className="flex min-w-0 flex-1 flex-col gap-2">
+      {positive ? (
+        <PromptField
+          id={positive.id}
+          label={positive.label === "Prompt" ? "Prompt" : positive.label}
+          placeholder="Describe the image. Ctrl+Enter generates."
+          minRows={3}
+          className="h-[118px]"
+          tools
+        />
+      ) : (
+        <div className="grid h-[140px] place-items-center rounded-md border border-dashed border-line px-4 text-center text-xs text-fg-3">
+          This workflow has no prompt. Its settings are below; Generate runs it as it is.
         </div>
-        <PromptEditor
-          label="Negative prompt"
-          value={negative}
-          onChange={setNegative}
-          minRows={1}
+      )}
+      {negative ? (
+        <PromptField
+          id={negative.id}
+          label="Negative"
           placeholder="What to avoid"
-          onSubmit={startPreviewRun}
+          minRows={1}
           className="h-[64px]"
         />
-      </div>
+      ) : null}
     </div>
   );
 }
 
 export function GenerateActions() {
-  const running = useSystemPreview((s) => s.running);
-  const progress = useSystemPreview((s) => s.progress);
-  const queue = useSystemPreview((s) => s.queue);
-  const set = useSystemPreview((s) => s.set);
-  const [count, setCount] = useState(1);
-  const [loop, setLoop] = useState(false);
+  const running = useLive((s) => s.queue.jobs.some((j) => j.state === "running"));
+  const queued = useLive((s) => s.queue.jobs.filter((j) => j.state === "queued").length);
+  const serverLoop = useLive((s) => s.queue.loop);
+  const progress = useLive((s) => s.progress?.progress.overall ?? 0);
+  const ready = useValues((s) => s.workflowId !== null);
+  const count = useValues((s) => s.run.count);
+  const setRun = useValues((s) => s.setRun);
+  const loopIntent = useLoopIntent((s) => s.on);
+  const busy = running || queued > 0;
+  const loop = serverLoop || loopIntent;
 
   return (
     <div className="flex w-[232px] shrink-0 flex-col gap-2">
@@ -91,9 +118,10 @@ export function GenerateActions() {
         type="button"
         whileTap={{ scale: 0.97 }}
         transition={bouncy}
-        onClick={startPreviewRun}
+        disabled={!ready}
+        onClick={() => void generate()}
         className={cn(
-          "group relative flex h-[92px] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl text-on-generate focus-ring",
+          "group relative flex h-[92px] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl text-on-generate focus-ring disabled:opacity-50",
           "bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] shadow-[inset_0_1px_0_rgb(255_255_255/.28),inset_0_-2px_0_rgb(0_0_0/.15)]",
           "transition-[box-shadow,filter] duration-200 hover:shadow-glow hover:brightness-105",
         )}
@@ -105,13 +133,13 @@ export function GenerateActions() {
           />
         ) : null}
         <span className="relative flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Icon name={running ? "plus" : "sparkle"} size={20} strokeWidth={2} />
-          {running ? "Add to queue" : "Generate"}
+          <Icon name={busy ? "plus" : "sparkle"} size={20} strokeWidth={2} />
+          {busy ? "Add to queue" : "Generate"}
         </span>
         <span className="relative flex items-center gap-1.5 text-xs text-white/80">
-          {running ? (
+          {busy ? (
             <span className="tabular">
-              {Math.round(progress * 100)}% · {queue} queued
+              {Math.round(progress * 100)}% · {queued} queued
             </span>
           ) : (
             <>
@@ -122,14 +150,11 @@ export function GenerateActions() {
         </span>
       </motion.button>
       <div className="grid grid-cols-2 gap-1.5">
-        <Tooltip content="Finish this image's current stage, skip the rest">
+        <Tooltip content="Stop this image; queued runs continue">
           <button
             type="button"
             disabled={!running}
-            onClick={() => {
-              set({ progress: 1 });
-              toast("Interrupted, saving what's done", "info");
-            }}
+            onClick={() => void interrupt()}
             className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-line bg-field text-sm text-fg-2 transition-colors hover:border-line-strong hover:text-fg disabled:opacity-40 focus-ring"
           >
             <Icon name="skip" size={15} /> Interrupt
@@ -138,11 +163,8 @@ export function GenerateActions() {
         <Tooltip content="Stop and clear the queue">
           <button
             type="button"
-            disabled={!running}
-            onClick={() => {
-              set({ running: false, progress: 0, queue: 0 });
-              toast("Cancelled the run and cleared the queue", "warning");
-            }}
+            disabled={!busy && !serverLoop}
+            onClick={() => void cancelAll()}
             className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-red/30 bg-red/10 text-sm text-red-ink transition-colors hover:bg-red/20 disabled:opacity-40 focus-ring"
           >
             <Icon name="stop" size={14} /> Cancel
@@ -152,9 +174,9 @@ export function GenerateActions() {
       <div className="flex items-center gap-2">
         <NumberField
           value={count}
-          onChange={setCount}
+          onChange={(n) => setRun({ count: n })}
           min={1}
-          max={99}
+          max={100}
           label="Runs"
           size="sm"
           className="w-[84px]"
@@ -166,7 +188,7 @@ export function GenerateActions() {
           <Switch
             size="sm"
             checked={loop}
-            onCheckedChange={setLoop}
+            onCheckedChange={(on) => void setLoop(on, serverLoop)}
             label="Generate forever"
             tone="generate"
           />

@@ -14,14 +14,14 @@ import {
   TextField,
   toast,
 } from "@client/ui";
-import { CONTROL_STYLES, controlFamily } from "@shared/layout/schema";
+import { CONTROL_STYLES } from "@shared/layout/schema";
 import { resolveBind } from "@shared/workflow/manifest";
 import { motion } from "motion/react";
 import { useState } from "react";
-import { defaultStyle } from "./blocks/ParamControl";
+import { bindingFamily, defaultStyle } from "./blocks/ParamControl";
 import { blockLabel } from "./ParamsColumn";
-import { PREVIEW_BINDINGS } from "./preview-workflow";
 import { findBlock, useLayout } from "./state";
+import { useBindings } from "./workflow";
 
 const STYLE_LABELS: Record<string, string> = {
   slider: "Slider",
@@ -165,6 +165,7 @@ export function Inspector() {
   const selectedId = useLayout((s) => s.selected);
   const update = useLayout((s) => s.updateBlock);
   const select = useLayout((s) => s.select);
+  const bindings = useBindings();
   const block = findBlock(doc.regions.params, selectedId);
   const inCard = doc.regions.params.some(
     (b) => b.type === "card" && b.children.some((c) => c.id === selectedId),
@@ -208,11 +209,11 @@ export function Inspector() {
           <div className="scroll-quiet flex flex-col gap-4 overflow-auto p-3.5">
             <div className="flex items-center gap-2">
               <span className="grid h-8 w-8 place-items-center rounded-md bg-field text-fg-2">
-                <Icon name={blockLabel(block).icon} size={16} />
+                <Icon name={blockLabel(block, bindings).icon} size={16} />
               </span>
               <div className="flex min-w-0 flex-col">
                 <span className="truncate text-sm font-medium text-fg">
-                  {blockLabel(block).label}
+                  {blockLabel(block, bindings).label}
                 </span>
                 <span className="text-2xs text-fg-3">
                   {block.type === "param"
@@ -226,8 +227,8 @@ export function Inspector() {
 
             {block.type === "param"
               ? (() => {
-                  const binding = resolveBind(PREVIEW_BINDINGS, block.bind);
-                  const family = binding ? controlFamily(binding.type) : null;
+                  const binding = resolveBind(bindings, block.bind);
+                  const family = binding ? bindingFamily(binding) : null;
                   const styles = family ? CONTROL_STYLES[family] : [];
                   const style = block.control ?? defaultStyle(family);
                   return (

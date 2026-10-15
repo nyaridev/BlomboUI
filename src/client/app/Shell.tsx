@@ -2,6 +2,7 @@
  * The app frame for an open profile: header + views. Generate and Gallery stay mounted after
  * the first visit (hidden when inactive) so switching back is instant and keeps their state.
  */
+import { startLive } from "@client/lib/live";
 import { glide } from "@client/lib/motion";
 import { useProfile } from "@client/lib/queries";
 import { openProfileOnce } from "@client/lib/session";
@@ -56,6 +57,10 @@ export function Shell() {
   const profile = useProfile(profileId);
   const setTheme = useTheme((s) => s.set);
   const [visited, setVisited] = useState<Set<ViewId>>(() => new Set([view]));
+
+  useEffect(() => {
+    startLive();
+  }, []);
 
   useEffect(() => {
     openProfileOnce(profileId).catch(() => {

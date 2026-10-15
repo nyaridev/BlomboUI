@@ -5,11 +5,11 @@
 import { useTheme } from "@client/app/theme";
 import { PromptEditor } from "@client/features/generate/PromptEditor";
 import { MOCK_PROMPT } from "@client/features/preview/mock";
-import { useSystemPreview } from "@client/features/preview/systemPreview";
 import { Icon } from "@client/icons/Icon";
 import { Logo, Wordmark } from "@client/icons/Logo";
 import { ICON_NAMES } from "@client/icons/paths";
 import { cn } from "@client/lib/cn";
+import { dismissErrors, useLive } from "@client/lib/live";
 import {
   Art,
   Avatar,
@@ -127,8 +127,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [stageOn, setStageOn] = useState(true);
   const [ov, setOv] = useState(false);
   const [prompt, setPrompt] = useState(MOCK_PROMPT);
-  const errors = useSystemPreview((s) => s.errors.length);
-  const setSys = useSystemPreview((s) => s.set);
+  const errors = useLive((s) => s.errors.length);
 
   return (
     <div className="min-h-full bg-bg">
@@ -679,13 +678,24 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             </Button>
           </Row>
           <Row label="Header errors badge">
-            <Button size="sm" onClick={() => setSys({ errors: [] })} disabled={!errors}>
+            <Button size="sm" onClick={dismissErrors} disabled={!errors}>
               Clear errors
             </Button>
             <Button
               size="sm"
               onClick={() =>
-                setSys({ errors: [{ id: "x", title: "Example", detail: "", at: "now" }] })
+                useLive.setState((s) => ({
+                  errors: [
+                    {
+                      id: `lab-${Date.now()}`,
+                      at: Date.now(),
+                      source: "server",
+                      title: "Example error",
+                      detail: "Something failed. This says what to do next.",
+                    },
+                    ...s.errors,
+                  ],
+                }))
               }
             >
               Add error

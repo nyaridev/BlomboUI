@@ -7,7 +7,7 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { ApiError } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
-import { useCreateProfile, useUploadAvatar } from "@client/lib/queries";
+import { useCreateProfile, usePresets, useUploadAvatar } from "@client/lib/queries";
 import {
   Avatar,
   Button,
@@ -32,19 +32,6 @@ const STEPS: Array<{ id: string; title: string; hint: string; icon: IconName }> 
   { id: "start", title: "Start", hint: "Look and workflows", icon: "sparkle" },
 ];
 
-const PRESETS = [
-  { id: "illustrious", label: "Illustrious", hint: "Anime / illustration, SDXL-based" },
-  { id: "noobai", label: "NoobAI", hint: "Illustrious family, v-pred" },
-  { id: "sdxl", label: "SDXL", hint: "General purpose" },
-  { id: "sd15", label: "SD 1.5", hint: "Classic, fast" },
-  { id: "anima", label: "Anima", hint: "Diffusion model + Qwen encoder" },
-  { id: "krea2", label: "Krea 2", hint: "Diffusion model" },
-  { id: "rembg", label: "Background removal", hint: "RMBG 2.0 / BiRefNet" },
-  { id: "upscale", label: "Image upscale", hint: "Upscale models or SeedVR2" },
-  { id: "caption", label: "Captioning", hint: "WD14 tagger / Qwen-VL" },
-  { id: "dataset", label: "Dataset prep", hint: "Crop and pad sprites" },
-];
-
 export function ProfileWizard({
   open,
   onOpenChange,
@@ -66,7 +53,8 @@ export function ProfileWizard({
   const [comfyMode, setComfyMode] = useState<"managed" | "external">("managed");
   const [slot, setSlot] = useState("latest");
   const [comfyUrl, setComfyUrl] = useState("http://127.0.0.1:8188");
-  const [presets, setPresets] = useState<string[]>(["illustrious", "sdxl", "rembg", "upscale"]);
+  const [presets, setPresets] = useState<string[]>(["illustrious", "sdxl"]);
+  const available = usePresets().data ?? [];
   const fileRef = useRef<HTMLInputElement>(null);
   const create = useCreateProfile();
   const upload = useUploadAvatar();
@@ -453,15 +441,15 @@ export function ProfileWizard({
                       hint="Copied into this profile. Each one is yours to change."
                     >
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-lg border border-line bg-surface p-3">
-                        {PRESETS.map((p) => (
+                        {available.map((p) => (
                           <Checkbox
                             key={p.id}
                             checked={presets.includes(p.id)}
                             onCheckedChange={(c) =>
                               setPresets(c ? [...presets, p.id] : presets.filter((x) => x !== p.id))
                             }
-                            label={p.label}
-                            description={p.hint}
+                            label={p.name}
+                            description={p.description}
                           />
                         ))}
                       </div>

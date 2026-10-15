@@ -15,7 +15,8 @@ export async function openInBrowser(url: string): Promise<void> {
   }
 }
 
-export function openInAppWindow(config: ServerConfig, url: string): void {
+/** Opens the Tauri window; `onClose` runs when it's closed (the server stops with it). */
+export function openInAppWindow(config: ServerConfig, url: string, onClose: () => void): void {
   if (!existsSync(config.tauriExe)) {
     console.warn("The desktop app is not built yet (run start-app.bat). Opening the browser.");
     void openInBrowser(url);
@@ -24,7 +25,7 @@ export function openInAppWindow(config: ServerConfig, url: string): void {
   const child = spawn(config.tauriExe, ["--url", url], { stdio: "inherit", windowsHide: false });
   child.on("exit", (code) => {
     console.log(`App window closed (${code ?? 0}). Stopping BlomboUI.`);
-    process.exit(0);
+    onClose();
   });
   child.on("error", (error) => {
     console.warn(`Could not start the app window: ${String(error)}. Opening the browser.`);

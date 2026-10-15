@@ -1,72 +1,105 @@
-/** Seed + batch: one card. Mode decides what happens after each run. */
+/** Seed + batch: one card. The mode decides which seed each run gets. */
+import { useLive } from "@client/lib/live";
 import { IconButton, NumberField, SectionTitle, Segmented, TextField, toast } from "@client/ui";
-import { useState } from "react";
-import { useValue } from "../state";
+import { randomSeed } from "@shared/random";
+import type { SeedMode } from "@shared/workflow/manifest";
+import { useValue, useValues } from "../state";
+import { useRoleBinding } from "../workflow";
 
-type SeedMode = "random" | "fixed" | "inc" | "dec";
+const MODES: Array<{ value: SeedMode; label: string }> = [
+  { value: "random", label: "Random" },
+  { value: "fixed", label: "Fixed" },
+  { value: "increment", label: "+1" },
+  { value: "decrement", label: "−1" },
+];
 
 export function Seed() {
-  const [seed, setSeed] = useValue<number>("sampler.seed");
-  const [batch, setBatch] = useValue<number>("latent.batch");
-  const [mode, setMode] = useState<SeedMode>("random");
-  const [count, setCount] = useState(4);
-  const last = 1_948_221_506;
+  const seedBinding = useRoleBinding("sampler.seed");
+  const batchBinding = useRoleBinding("latent.batch");
+  const [seed, setSeed] = useValue<number>(seedBinding?.id ?? "sampler.seed");
+  const [batch, setBatch] = useValue<number>(batchBinding?.id ?? "latent.batch");
+  const mode = useValues((s) => s.run.seedMode);
+  const count = useValues((s) => s.run.count);
+  const setRun = useValues((s) => s.setRun);
+  const last = useLive(
+    (s) => s.queue.jobs.find((j) => j.state === "done" && j.seed !== null)?.seed ?? null,
+  );
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-3">
       <SectionTitle icon="seed">Seed & batch</SectionTitle>
-      <div className="flex gap-1.5">
-        <TextField
-          value={mode === "random" ? "Random each run" : String(seed)}
-          onChange={(e) => {
-            const n = Number(e.target.value.replace(/\D/g, ""));
-            if (Number.isFinite(n)) setSeed(n);
-          }}
-          disabled={mode === "random"}
-          mono
-          icon="hash"
-          className="flex-1"
-          aria-label="Seed"
-        />
-        <IconButton
-          icon="dice"
-          label="New random seed"
-          variant="secondary"
-          onClick={() => setSeed(Math.floor(Math.random() * 2 ** 32))}
-        />
-        <IconButton
-          icon="undo"
-          label={`Reuse last seed (${last})`}
-          variant="secondary"
-          onClick={() => {
-            setSeed(last);
-            setMode("fixed");
-            toast(`Seed ${last} reused`, "info");
-          }}
-        />
-      </div>
-      <Segmented
-        full
-        size="sm"
-        value={mode}
-        onChange={setMode}
-        label="After each run"
-        options={[
-          { value: "random", label: "Random" },
-          { value: "fixed", label: "Fixed" },
-          { value: "inc", label: "+1" },
-          { value: "dec", label: "−1" },
-        ]}
-      />
+      {seedBinding ? (
+        <>
+          <div className="flex gap-1.5">
+            <TextField
+              value={mode === "random" ? "Random each run" : String(seed ?? 0)}
+              onChange={(e) => {
+                const n = Number(e.target.value.replace(/\D/g, ""));
+                if (Number.isFinite(n)) setSeed(n);
+              }}
+              disabled={mode === "random"}
+              mono
+              icon="hash"
+              className="flex-1"
+              aria-label="Seed"
+            />
+            <IconButton
+              icon="dice"
+              label="New random seed"
+              variant="secondary"
+              onClick={() => {
+                setSeed(randomSeed());
+                if (mode === "random") setRun({ seedMode: "fixed" });
+              }}
+            />
+            <IconButton
+              icon="undo"
+              label={last !== null ? `Reuse last seed (${last})` : "Reuse last seed (none yet)"}
+              variant="secondary"
+              disabled={last === null}
+              onClick={() => {
+                if (last === null) return;
+                setSeed(last);
+                setRun({ seedMode: "fixed" });
+                toast(`Seed ${last} reused`, "info");
+              }}
+            />
+          </div>
+          <Segmented
+            full
+            size="sm"
+            value={mode}
+            onChange={(seedMode) => setRun({ seedMode })}
+            label="Seed for each run"
+            options={MODES}
+          />
+        </>
+      ) : (
+        <p className="text-xs text-fg-3">This workflow has no seed to set.</p>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-2xs text-fg-3">Batch count</span>
-          <NumberField value={count} onChange={setCount} min={1} max={100} label="Batch count" />
+          <NumberField
+            value={count}
+            onChange={(n) => setRun({ count: n })}
+            min={1}
+            max={100}
+            label="Batch count"
+          />
         </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-2xs text-fg-3">Batch size</span>
-          <NumberField value={batch} onChange={setBatch} min={1} max={16} label="Batch size" />
-        </div>
+        {batchBinding ? (
+          <div className="flex min-w-0 flex-col gap-1">
+            <span className="text-2xs text-fg-3">Batch size</span>
+            <NumberField
+              value={typeof batch === "number" ? batch : 1}
+              onChange={setBatch}
+              min={batchBinding.min ?? 1}
+              max={batchBinding.max ?? 16}
+              label="Batch size"
+            />
+          </div>
+        ) : null}
       </div>
     </div>
   );

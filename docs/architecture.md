@@ -76,12 +76,11 @@ BlomboUI-new/
 │   │                  krea2, background-removal, upscale, caption, dataset)
 │   ├── stages/        graph patches: hires, adetailer, controlnet, upscale
 │   └── layouts/       built-in Generate layouts
-├── installer/         ComfyUI slots, Torch builds, attention kernels
 ├── src-tauri/         desktop shell
 ├── tools/             ensure-build · ensure-app · sync-rules · dev-window · make-icons · build-presets
 ├── docs/              architecture · design-system · workflows · adr/
 ├── data/              (gitignored) profiles.json + profiles/<id>/
-└── runtime/           (gitignored) comfyui/<slot>/, cache/, logs/
+└── runtime/           (gitignored) comfyui/<slot>/, tools/, cache/, logs/, app/
 ```
 
 ## Profiles and storage
@@ -101,6 +100,10 @@ data/
 runtime/cache/<id>/thumbs/        gallery/ and models/ WebP thumbnails (safe to delete)
 runtime/comfyui/<slot>/           managed ComfyUI: ComfyUI/ · .venv/ · blombo/ (pid, slot.json)
 runtime/tools/                    uv, its Python downloads and package cache (installer)
+runtime/app/                      the desktop window's WebView2 profile and window.json
+
+Everything BlomboUI writes stays in its folder: it has no installer and never writes to AppData
+or the registry (ADR-0002). Moving the folder moves the app.
 ```
 
 - The first launch opens the **profile screen**. Creating a profile walks through name, avatar, folders, ComfyUI slot, theme and starter workflows.

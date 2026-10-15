@@ -1,9 +1,11 @@
 /**
  * Opening the UI: default browser (start-web) or the Tauri window (start-app).
- * The Tauri binary is a thin shell around this server; closing it stops the server.
+ * The Tauri binary is a thin shell around this server; closing it stops the server. It keeps its
+ * WebView2 profile and window placement in runtime/app/, so BlomboUI writes nothing to AppData.
  */
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
+import path from "node:path";
 import open from "open";
 import type { ServerConfig } from "../config.ts";
 
@@ -22,7 +24,11 @@ export function openInAppWindow(config: ServerConfig, url: string, onClose: () =
     void openInBrowser(url);
     return;
   }
-  const child = spawn(config.tauriExe, ["--url", url], { stdio: "inherit", windowsHide: false });
+  const child = spawn(
+    config.tauriExe,
+    ["--url", url, "--data-dir", path.join(config.runtimeDir, "app")],
+    { stdio: "inherit", windowsHide: false },
+  );
   child.on("exit", (code) => {
     console.log(`App window closed (${code ?? 0}). Stopping BlomboUI.`);
     onClose();

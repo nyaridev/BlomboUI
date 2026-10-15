@@ -31,6 +31,8 @@
 
 The first run installs dependencies and builds what's needed. After that, launches take a second or two.
 
+There's no installer: BlomboUI runs from this folder, and everything it saves stays here, in `data/` (your profiles) and `runtime/` (ComfyUI, caches, the desktop window's data). Move or back up the folder and everything comes along; delete it and nothing is left behind (your own models and outputs folders aren't touched).
+
 On first launch you'll see the **profile screen**. Create a profile: give it a name, a picture and a color, point it at your models, outputs and wildcards folders, choose a ComfyUI install, and pick starter workflows. Open it and you're on the Generate screen.
 
 > **Status:** Phase 2. Generate runs on ComfyUI (a managed slot the app installs for you, or your own ComfyUI URL), with built-in SD 1.5 / SDXL / Illustrious workflows, importing any ComfyUI workflow (JSON, PNG, WebP), wildcards and `<lora:…>` tags, a server-side queue, and live progress and previews. The gallery indexes your outputs and extra folders (search, favorites, trash, a lightbox with "use these settings"), File Info reads images and safetensors files, Models → Local shows your model files, and the Wildcard Manager edits .txt and .yaml wildcards. Civitai and the Manager store are still previews. See the [roadmap](#roadmap).
@@ -90,7 +92,7 @@ BlomboUI/
 ├── docs/            architecture · design-system · workflows · adr/ · review/
 ├── tools/           build checks, dev window, icon generator, AI rules sync
 ├── data/            your profiles (created on first run, not in git)
-└── runtime/         ComfyUI installs, caches, logs (not in git)
+└── runtime/         ComfyUI installs, caches, logs, desktop window data (not in git)
 ```
 
 ## Development

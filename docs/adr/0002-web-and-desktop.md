@@ -14,6 +14,7 @@ The user wants `start-web.bat` (browser) and `start-app.bat` (desktop window). R
 - **`start-web.bat`** installs dependencies on first run, builds if the sources changed, starts the server and opens the browser.
 - **`start-app.bat`** does the same, then opens a **Tauri 2** window on the server URL. Closing the window stops the server. The Tauri binary is built once with `cargo` and rebuilt when `src-tauri/` changes (`tools/ensure-app.ts`, same pattern as Game Forge).
 - The Tauri window grants Tauri IPC to `http://127.0.0.1:*` through a capability, so the page can open extra windows (ComfyUI editor) and send native notifications. All of this sits behind `client/lib/platform.ts`, which falls back to `window.open` and the web Notifications API in the browser.
+- **No installer for BlomboUI** (owner, 2026-10-15). It runs from the cloned folder through the launchers, and everything it writes stays in that folder: profiles in `data/`, ComfyUI slots, tools and caches in `runtime/`. The desktop window gets `--data-dir runtime/app`, where it keeps its WebView2 profile (`webview/`) and its last placement (`window.json`) instead of AppData; that's why it remembers its size itself rather than with the window-state plugin, which can only write to AppData. ComfyUI slots can still be installed by the app, into `runtime/comfyui/` (ADR-0010).
 
 ## Options considered
 
@@ -28,10 +29,11 @@ The user wants `start-web.bat` (browser) and `start-app.bat` (desktop window). R
 
 - One code path. Every feature works in both modes, and platform hooks have a web fallback.
 - Folder pickers run on the server (PowerShell `FolderBrowserDialog` on Windows), so they work the same in both modes.
-- Revisit: shipping a signed installer later (Tauri bundle plus Node sidecar).
+- Moving or copying the folder moves the whole app with its profiles; deleting it removes everything (Node, Rust and the user's own model and output folders aside).
+- An installer (Tauri bundle plus a Node sidecar) is out of scope until the owner asks for one.
 
 ## Action items
 
-1. [ ] `src-tauri/` with `main.rs` (`--url`, window-state plugin, multi-window capability).
+1. [x] `src-tauri/` with `main.rs` (`--url`, `--data-dir`, remembered placement, multi-window capability).
 2. [ ] `tools/ensure-build.ts`, `tools/ensure-app.ts`, launchers with Node version checks.
 3. [ ] `client/lib/platform.ts` with `openWindow`, `notify`, `revealPath`.

@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0011)
+- `docs/adr/`: decisions and why (0001–0012)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 
 ## Commands
@@ -25,6 +25,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
 | `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too |
 | `node src/server/main.ts --dev --port 4391 --data <tmp> --runtime <tmp>` + `BLOMBO_API_PORT=4391 BLOMBO_WEB_PORT=4392 vite` | A second, throwaway dev instance (own profiles, slots and caches) next to one that's already running |
+| `node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` | A fake Civitai and model catalog (API, images, ranged downloads, an early-access file). Start the server with `--civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json` to browse and download without the real site; its API key is `FAKE_KEY` in that file |
 
 ## Architecture map
 
@@ -33,28 +34,32 @@ src/
 ├── shared/       Vocabulary + Zod schemas + pure logic used by both sides
 │                 constants · profile · settings · api · comfy · jobs · live · random
 │                 gallery · imageinfo · fileinfo · safetensors · models · wildcards · install
+│                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
 │                 layout/schema · workflow/{roles,manifest,graph} · prompt/{tokenize,loras,wildcards}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
-│   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime), single instance
+│   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime --civitai --catalog)
 │   ├── context.ts    builds the services and wires their events together
 │   ├── app.ts        /api routes + built client in production
 │   ├── routes/       thin: validate (Zod) → service → JSON
 │   │                 profiles · system · settings · comfy · workflows · jobs · wildcards
-│   │                 gallery · models · fileinfo
+│   │                 gallery · models · fileinfo · civitai · downloads · manager
 │   ├── services/     profiles · settings · system · window · live (bus) · jobs (queue)
-│   │                 wildcards · models · fileinfo
+│   │                 wildcards · models · fileinfo · downloads (queue) · lookup (hash → Civitai)
+│   │                 manager (ComfyUI model catalog)
 │   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (uv, progress)
+│   │   ├── civitai/      api (cached client) · images (proxy) · normalize · fixtures/fake-civitai
 │   │   ├── gallery/      index (sync, search, favorites, trash, libraries) · meta
 │   │   └── workflows/    store · analyze · convert · import · compile · presets · nodes · summary
-│   │                 (planned: civitai · downloads · autocomplete)
-│   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram)
-│   └── lib/          fsx (atomic, queued writes; movePath; resolveInside) · http · send
+│   │                 (planned: autocomplete)
+│   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram) · ProfileDbs (shared connections)
+│   └── lib/          fsx (atomic, queued writes; movePath; resolveInside; part files) · http · send
+│                     remote (redirects by hand, key only to its origin, image sniffing)
 │                     emitter · imagemeta (header-only PNG/WebP/JPEG) · exif · thumbs (sharp) · ansi
 ├── client/       React 19 · Vite 8 · Tailwind 4 · TanStack Router/Query · Zustand · Motion ·
 │   │             Floating UI · dnd-kit · CodeMirror 6
 │   ├── app/          router · Shell (keep-alive views) · header/ · theme
-│   ├── features/     profiles · generate · gallery · fileinfo · models · wildcards · settings
-│   │                 lab · common · preview
+│   ├── features/     profiles · generate · gallery · fileinfo · models (local, civitai/, Manager)
+│   │                 wildcards · settings · downloads · history · lab · common · preview
 │   ├── ui/           the design system (hand-built controls). Import from "@client/ui"
 │   ├── icons/        hand-drawn SVG icon set + Logo
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
@@ -74,7 +79,9 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar thumbnails and info; the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
 
-**Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) and the Civitai and Manager tabs of Models are still samples. Never build new features on preview data; replace the imports as services land.
+**Online:** the server talks to Civitai for the client (cached API answers and an image proxy in `runtime/cache/civitai/`; the profile's key in `secrets.json`, never sent to the page). Downloads are a server queue with resume, hash checks and smart folders, progress on the bus (`downloads` topic) and history in the profile database; local models without info files are matched on Civitai by hash in the background; Models → Manager installs from ComfyUI-Manager's catalog through the same queue (ADR-0012).
+
+**Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) is still a sample. Never build new features on preview data.
 
 **Portable, no installer:** BlomboUI runs from the cloned folder through the launchers. Everything it writes stays in `data/` and `runtime/`; nothing goes to AppData or the registry (the desktop window keeps its WebView2 profile and size in `runtime/app/`). Only ComfyUI slots can be installed by the app, into `runtime/comfyui/`.
 
@@ -126,6 +133,9 @@ One Zod field with a default in `shared/settings.ts` (inside its section). Read 
 
 ### Touch user files (outputs, models, wildcards)
 Reads only through the service that owns the folder. Moves and renames go through `movePath` in `lib/fsx.ts` (refuses to overwrite, retries Windows locks); removing means moving into `data/profiles/<id>/trash/`. Resolve every request path with `resolveInside()` and validate names in the service too, not only in the route.
+
+### Touch Civitai or downloads
+Everything goes through the server: `services/civitai/` (API client with cache, image proxy, normalize) and `services/downloads.ts` (queue). Never call Civitai from the client and never put a remote image URL in the page; use `proxiedImage()`. Fetch with `fetchFollow` from `lib/remote.ts` (pass `auth` so the key goes only to Civitai's origin, `allow` for the image hosts). Writes into the models folder go through `openPartFile` / `commitPart` / `writeFileIfAbsent`. Tests and dev checks use the fake Civitai (`setupOnline()` in `services/civitai/fixtures/setup.ts` runs the real wiring against it), never the real site or a real key.
 
 ### Add a UI control
 Build it in `src/client/ui/`, export from `ui/index.ts`, add every state to `features/lab/DesignLab.tsx`, document it in `docs/design-system.md`.

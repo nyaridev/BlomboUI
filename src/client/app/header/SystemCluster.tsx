@@ -17,6 +17,7 @@ import {
   IconButton,
   Meter,
   Popover,
+  ProgressRing,
   StatusDot,
   Tooltip,
   toast,
@@ -27,6 +28,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { useSettingsNav } from "../../features/settings/nav";
 import { ComfyLogs } from "./ComfyLogs";
+import { DownloadsChip } from "./DownloadsChip";
 
 function heatColor(c: number): string {
   if (c >= 85) return "var(--red-ink)";
@@ -69,6 +71,7 @@ export function SystemCluster() {
   return (
     <div className="flex items-center gap-1.5">
       <QueueChip />
+      <DownloadsChip />
 
       {gpu ? (
         <Tooltip
@@ -408,35 +411,5 @@ function ErrorsButton() {
         </motion.div>
       ) : null}
     </AnimatePresence>
-  );
-}
-
-function ProgressRing({ value }: { value: number }) {
-  const r = 8;
-  const c = 2 * Math.PI * r;
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" className="-rotate-90">
-      <circle
-        cx="10"
-        cy="10"
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeOpacity=".2"
-        strokeWidth="2.5"
-      />
-      <circle
-        cx="10"
-        cy="10"
-        r={r}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeDasharray={c}
-        strokeDashoffset={c * (1 - value)}
-        style={{ transition: "stroke-dashoffset .4s ease-out" }}
-      />
-    </svg>
   );
 }

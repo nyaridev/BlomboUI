@@ -3,6 +3,7 @@
  * When there is no thumbnail it shows a designed face: kind color, kind icon, monogram and
  * base-model badge, so a wall of un-thumbnailed LoRAs still reads well. Thumbnails marked NSFW
  * are blurred until clicked when `blurNsfw` is on (the profile's setting, on by default).
+ * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading").
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -95,6 +96,18 @@ export function FallbackFace({
   );
 }
 
+export interface CardMark {
+  label: string;
+  icon: IconName;
+  tone: "success" | "accent" | "warning";
+}
+
+const MARK_ICON: Record<CardMark["tone"], string> = {
+  success: "text-green",
+  accent: "text-accent",
+  warning: "text-yellow",
+};
+
 export interface ModelCardProps {
   name: string;
   kind: CardKind;
@@ -109,6 +122,10 @@ export interface ModelCardProps {
   blurNsfw?: boolean;
   /** Small line under the name (file size, trigger word…). */
   meta?: ReactNode;
+  /** Status pill in the top-right corner of the image. */
+  mark?: CardMark | null;
+  /** The type as its source names it ("LyCORIS", "Workflows"), instead of the kind's label. */
+  typeLabel?: string;
   onClick?: () => void;
   onFavorite?: () => void;
   footer?: ReactNode;
@@ -130,9 +147,12 @@ export function ModelCard({
   nsfw,
   blurNsfw,
   meta,
+  mark,
+  typeLabel,
   className,
 }: ModelCardProps) {
   const style = KIND_STYLE[kind];
+  const label = typeLabel ?? style.label;
   const [revealed, setRevealed] = useState(false);
   const veiled = Boolean(thumb && nsfw && blurNsfw && !revealed);
   return (
@@ -149,7 +169,7 @@ export function ModelCard({
         type="button"
         onClick={onClick}
         aria-pressed={selected}
-        aria-label={`${style.label}: ${name}`}
+        aria-label={`${label}: ${name}`}
         className="relative block w-full overflow-hidden text-left focus-ring"
         style={{ aspectRatio: String(ratio) }}
       >
@@ -187,12 +207,17 @@ export function ModelCard({
           <span className="absolute top-2 right-2 grid h-5 w-5 place-items-center rounded-full bg-accent text-on-accent shadow">
             <Icon name="check" size={13} strokeWidth={2.5} />
           </span>
+        ) : mark ? (
+          <span className="absolute top-2 right-2 inline-flex h-5 items-center gap-1 rounded-full bg-black/60 pr-2 pl-1.5 text-[10px] font-semibold text-white backdrop-blur-[2px]">
+            <Icon name={mark.icon} size={11} strokeWidth={2.25} className={MARK_ICON[mark.tone]} />
+            {mark.label}
+          </span>
         ) : null}
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-2.5">
           <span className="line-clamp-2 text-sm leading-tight font-medium text-white">{name}</span>
           <span className="flex items-center gap-1 text-2xs text-white/60">
             <Icon name={style.icon} size={11} />
-            {style.label}
+            {label}
             {meta ? <span className="ml-auto truncate font-mono text-white/55">{meta}</span> : null}
           </span>
         </div>

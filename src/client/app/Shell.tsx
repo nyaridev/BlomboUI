@@ -34,6 +34,9 @@ const WildcardsView = lazy(() =>
 const SettingsView = lazy(() =>
   import("../features/settings/SettingsView").then((m) => ({ default: m.SettingsView })),
 );
+const HistoryView = lazy(() =>
+  import("../features/history/HistoryView").then((m) => ({ default: m.HistoryView })),
+);
 const DesignLab = lazy(() =>
   import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })),
 );
@@ -52,6 +55,8 @@ function renderView(view: ViewId): ReactNode {
       return <WildcardsView />;
     case "settings":
       return <SettingsView />;
+    case "history":
+      return <HistoryView />;
     case "lab":
       return <DesignLab />;
     default:

@@ -39,7 +39,7 @@ import {
 } from "../../../shared/imageinfo.ts";
 import type { LiveTopic, ServerMessage } from "../../../shared/live.ts";
 import { type LibraryEntry, slugId } from "../../../shared/settings.ts";
-import { openProfileDb, type ProfileDb, transaction } from "../../db/profileDb.ts";
+import { type ProfileDb, type ProfileDbs, transaction } from "../../db/profileDb.ts";
 import { freePath, movePath } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import { readImageHead } from "../../lib/imagemeta.ts";
@@ -55,6 +55,8 @@ const EXTENSIONS = new Set<string>(IMAGE_EXTENSIONS);
 
 export interface GalleryDeps {
   profiles: ProfileService;
+  /** The profile databases (shared with downloads and model lookups). */
+  dbs: ProfileDbs;
   settings: SettingsService;
   runtimeDir: string;
   publish: (topic: LiveTopic | null, msg: ServerMessage) => void;
@@ -140,8 +142,8 @@ export class GalleryService {
   /** Switch databases right away (a running sync sees it and stops). */
   private openNow(profileId: string): Open {
     this.syncRun?.abort.abort();
-    this.current?.pdb.close();
-    const pdb = openProfileDb(path.join(this.deps.profiles.dir(profileId), "blombo.sqlite"));
+    this.deps.dbs.closeOthers(profileId);
+    const pdb = this.deps.dbs.get(profileId);
     const thumbs = new ThumbCache(
       path.join(this.deps.runtimeDir, "cache", profileId, "thumbs", "gallery"),
     );
@@ -156,7 +158,7 @@ export class GalleryService {
       run.abort.abort();
       await run.done.catch(() => undefined);
     }
-    this.current?.pdb.close();
+    if (this.current) this.deps.dbs.close(this.current.profileId);
     this.current = null;
   }
 

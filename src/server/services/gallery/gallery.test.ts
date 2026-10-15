@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { GalleryQuery } from "../../../shared/gallery.ts";
 import type { ServerMessage } from "../../../shared/live.ts";
 import { createConfig, parseFlags } from "../../config.ts";
+import { ProfileDbs } from "../../db/profileDb.ts";
 import { realPng } from "../../lib/test-images.ts";
 import { ProfileService } from "../profiles.ts";
 import { SettingsService } from "../settings.ts";
@@ -26,6 +27,7 @@ const profiles = new ProfileService(config);
 const settings = new SettingsService((id) => profiles.dir(id));
 const gallery = new GalleryService({
   profiles,
+  dbs: new ProfileDbs((id) => path.join(profiles.dir(id), "blombo.sqlite")),
   settings,
   runtimeDir: config.runtimeDir,
   publish: (_topic, msg) => messages.push(msg),

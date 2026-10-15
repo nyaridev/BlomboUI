@@ -152,12 +152,15 @@ export function Veil({
   children,
   label = "NSFW",
   compact,
+  onReveal,
   className,
 }: {
   active: boolean;
   children: ReactNode;
   label?: string;
   compact?: boolean;
+  /** Called when it's clicked open (a carousel remembers which images were revealed). */
+  onReveal?: () => void;
   className?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
@@ -166,6 +169,7 @@ export function Veil({
     e.stopPropagation();
     e.preventDefault();
     setRevealed(true);
+    onReveal?.();
   };
   return (
     <div className={cn("relative h-full w-full overflow-hidden", className)}>

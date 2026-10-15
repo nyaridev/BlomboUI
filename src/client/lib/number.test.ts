@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decimalsOf, parseNumberInput, snap } from "./number";
+import { decimalsOf, formatEta, parseNumberInput, snap } from "./number";
 
 describe("number helpers", () => {
   it("counts step decimals", () => {
@@ -21,5 +21,14 @@ describe("number helpers", () => {
     expect(parseNumberInput("512*2")).toBe(1024);
     expect(parseNumberInput("abc")).toBeNull();
     expect(parseNumberInput("")).toBeNull();
+  });
+});
+
+describe("formatEta", () => {
+  it("says how long is left", () => {
+    expect(formatEta(30_000, 1000)).toBe("30 s left");
+    expect(formatEta(600_000, 1000)).toBe("10 min left");
+    expect(formatEta(7_500_000, 1000)).toBe("2 h 5 min left");
+    expect(formatEta(100, 0)).toBeNull();
   });
 });

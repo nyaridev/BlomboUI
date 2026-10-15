@@ -34,6 +34,7 @@ import { fontStack, UI_FONT_LABELS, UI_FONTS, type UiFont } from "@shared/settin
 import { useParams } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { type ReactNode, useEffect, useState } from "react";
+import { CivitaiPage } from "./CivitaiPage";
 import { ComfyPage } from "./ComfyPage";
 import { FoldersPage } from "./FoldersPage";
 import { type SettingsPage as PageId, useSettingsNav } from "./nav";
@@ -131,6 +132,15 @@ export function SettingsView() {
             <GalleryPage />
           ) : page === "models" ? (
             <ModelsPage />
+          ) : page === "civitai" ? (
+            <CivitaiPage
+              header={
+                <PageHeader
+                  title="Civitai"
+                  text="Your account, browsing, where downloads land, and what Blombo remembers."
+                />
+              }
+            />
           ) : (
             <PlannedPage id={page} />
           )}
@@ -557,18 +567,6 @@ const PLANNED: Partial<Record<PageId, { title: string; phase: string; items: str
       "Batch grids (format, rows, max)",
       "LoRA strength ranges and auto-apply",
       "Prompt weight step",
-    ],
-  },
-  civitai: {
-    title: "Civitai",
-    phase: "Phase 3",
-    items: [
-      "API key",
-      "Browse defaults (sort, period, base models, NSFW)",
-      "Download sorting (base model / category / creator)",
-      "Author aliases and naming",
-      "Labels for downloaded models",
-      "History limits",
     ],
   },
   autocomplete: {

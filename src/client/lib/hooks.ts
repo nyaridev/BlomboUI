@@ -1,4 +1,7 @@
+import type { ViewId } from "@shared/constants";
+import { useNavigate } from "@tanstack/react-router";
 import { type RefObject, useEffect, useState } from "react";
+import { useSession } from "./session";
 
 /** Width of an element, kept current with ResizeObserver. */
 export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
@@ -27,4 +30,15 @@ export function useHotkey(key: string, handler: (e: KeyboardEvent) => void, enab
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [key, handler, enabled]);
+}
+
+/** Go to a view of the open profile ("models", "history"…), from anywhere in the app. */
+export function useGoToView(): (view: ViewId) => void {
+  const navigate = useNavigate();
+  return (view) => {
+    const profileId = useSession.getState().profileId;
+    if (!profileId) return;
+    if (view === "generate") void navigate({ to: "/p/$profileId", params: { profileId } });
+    else void navigate({ to: "/p/$profileId/$view", params: { profileId, view } });
+  };
 }

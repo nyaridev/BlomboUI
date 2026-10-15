@@ -41,7 +41,9 @@ export function Header({
   const isMain = NAV.some((n) => n.value === view);
 
   return (
-    <header className="relative z-20 flex h-14 items-center gap-3 border-b border-line bg-surface px-3">
+    // Three columns: the main tabs stay centered while there's room, and the status cluster
+    // (which grows with the queue and download chips) pushes them aside instead of covering them.
+    <header className="relative z-20 grid h-14 grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)] items-center gap-3 border-b border-line bg-surface px-3">
       <div className="flex items-center gap-2.5">
         <button
           type="button"
@@ -54,10 +56,7 @@ export function Header({
         <WorkflowSwitcher />
       </div>
 
-      <nav
-        className="absolute left-1/2 -translate-x-1/2 max-[1180px]:static max-[1180px]:translate-x-0"
-        aria-label="Main"
-      >
+      <nav aria-label="Main">
         <Tabs
           label="Main views"
           items={NAV.map((n) => ({
@@ -70,7 +69,7 @@ export function Header({
         />
       </nav>
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className="flex items-center justify-end gap-2">
         <SystemCluster />
         <span className="mx-1 h-6 w-px bg-line" />
         <AvatarMenu profile={profile} profileId={profileId} onNavigate={go} />

@@ -69,3 +69,12 @@ export function parseNumberInput(text: string): number | null {
     return null;
   }
 }
+
+/** Time left for a download at its current speed ("3 min left"), or null. */
+export function formatEta(remaining: number, speed: number): string | null {
+  if (speed <= 0 || remaining <= 0) return null;
+  const s = Math.round(remaining / speed);
+  if (s < 60) return `${s} s left`;
+  if (s < 3600) return `${Math.round(s / 60)} min left`;
+  return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min left`;
+}

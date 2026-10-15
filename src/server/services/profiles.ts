@@ -9,6 +9,7 @@ import {
   type CreateProfileBody,
   Profile,
   ProfileRegistry,
+  ProfileSecrets,
   slugifyProfileName,
   type UpdateProfileBody,
 } from "../../shared/profile.ts";
@@ -45,6 +46,34 @@ export class ProfileService extends Emitter<ProfileEvents> {
 
   private profileFile(id: string) {
     return path.join(this.dir(id), "profile.json");
+  }
+
+  private secretsFile(id: string) {
+    return path.join(this.dir(id), "secrets.json");
+  }
+
+  /** The profile's secrets (server only; never return them from a route). */
+  async secrets(id: string): Promise<ProfileSecrets> {
+    try {
+      return await readJsonFile(this.secretsFile(id), ProfileSecrets, {});
+    } catch (error) {
+      console.warn(`secrets.json of "${id}" couldn't be read; treating it as empty.`, error);
+      return ProfileSecrets.parse({});
+    }
+  }
+
+  async updateSecrets(
+    id: string,
+    patch: { civitai?: Partial<ProfileSecrets["civitai"]> },
+  ): Promise<ProfileSecrets> {
+    await this.get(id);
+    const current = await this.secrets(id);
+    const next = ProfileSecrets.parse({
+      ...current,
+      civitai: { ...current.civitai, ...patch.civitai },
+    });
+    await writeJsonAtomic(this.secretsFile(id), next);
+    return next;
   }
 
   avatarFile(id: string) {

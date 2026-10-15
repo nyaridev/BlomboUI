@@ -2,11 +2,13 @@
  * Models → Local: every file in the profile's models folder, by kind, as the one ModelCard.
  * Sidecar images become thumbnails (blurred when marked NSFW, per the profile setting), and the
  * info sheet shows the sidecar info and the safetensors header, with rename, move, reveal and
- * File Info. The grid is virtualized: a few thousand LoRAs scroll like a dozen.
+ * File Info. The grid is virtualized: a few thousand LoRAs scroll like a dozen. Models without
+ * an info file are matched on Civitai by hash in the background (status in the toolbar).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useElementWidth } from "@client/lib/hooks";
+import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import {
   qk,
@@ -30,7 +32,9 @@ import {
   PropertyList,
   Select,
   Skeleton,
+  Spinner,
   TextField,
+  Tooltip,
   toast,
 } from "@client/ui";
 import { MODEL_KINDS, type ModelKind } from "@shared/constants";
@@ -41,6 +45,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFileInfoTarget } from "../fileinfo/state";
+import { openCivitaiModel } from "./civitai/state";
+import { useModelsNav } from "./nav";
 
 type Sort = "name" | "size" | "added";
 const MIN_CARD = 176;
@@ -55,6 +61,15 @@ export function LocalModels() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("name");
   const [selected, setSelected] = useState<string | null>(null);
+  // "Show in Models" from a download or a Civitai page selects the file here.
+  const wanted = useModelsNav((s) => s.select);
+  useEffect(() => {
+    if (!wanted || !list.data) return;
+    useModelsNav.getState().takeSelect();
+    setKind("all");
+    setQuery("");
+    setSelected(wanted);
+  }, [wanted, list.data]);
   const [rescanning, setRescanning] = useState(false);
 
   const models = list.data?.models ?? [];
@@ -164,6 +179,7 @@ export function LocalModels() {
             ))}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
+            <LookupStatus />
             <Select<Sort>
               size="sm"
               value={sort}
@@ -394,17 +410,29 @@ function InfoSheet({
                 },
                 {
                   label: "Civitai",
-                  value: d.civitai?.url ? (
-                    <a
-                      href={d.civitai.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1 text-accent-ink hover:underline"
-                    >
-                      {[d.civitai.name, d.civitai.version].filter(Boolean).join(" · ") ||
-                        "Open page"}
-                      <Icon name="external" size={12} />
-                    </a>
+                  value: d.civitai?.modelId ? (
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      <button
+                        type="button"
+                        className="text-left text-accent-ink hover:underline focus-ring"
+                        onClick={() =>
+                          openCivitaiModel(
+                            d.civitai?.modelId as number,
+                            d.civitai?.name ?? model.name,
+                          )
+                        }
+                      >
+                        {[d.civitai.name, d.civitai.version].filter(Boolean).join(" · ") ||
+                          "Open its page"}
+                      </button>
+                      {model.civitai?.lookup ? (
+                        <Tooltip content="Found on Civitai by the file's hash">
+                          <span className="text-fg-3">
+                            <Icon name="hash" size={12} />
+                          </span>
+                        </Tooltip>
+                      ) : null}
+                    </span>
                   ) : null,
                 },
                 { label: "Creator", value: d.civitai?.creator },
@@ -439,7 +467,8 @@ function InfoSheet({
             ) : null}
             {!d.civitai && !d.header?.training.baseModel && !model.hasInfo ? (
               <p className="rounded-md border border-dashed border-line px-3 py-2 text-xs text-fg-3">
-                No info file next to this model. Civitai lookup arrives with the Civitai browser.
+                No info file next to this model, and Civitai didn't recognize it by its hash (or
+                hasn't been asked yet: see Settings → Civitai).
               </p>
             ) : null}
           </>
@@ -653,4 +682,39 @@ function MoveDialog({
       </div>
     </Dialog>
   );
+}
+
+/** "Matching on Civitai 12 / 340" while local models are hashed and looked up. */
+function LookupStatus() {
+  const lookup = useLive((s) => s.lookup);
+  // The bus reports changes; ask once for where it stands now.
+  useEffect(() => {
+    if (!useLive.getState().lookup)
+      void api.modelLookup().then(
+        (l) => useLive.setState({ lookup: l }),
+        () => undefined,
+      );
+  }, []);
+  if (!lookup) return null;
+  if (lookup.running)
+    return (
+      <Tooltip
+        content={lookup.current ? `Hashing ${lookup.current}` : "Matching local models on Civitai"}
+      >
+        <span className="flex items-center gap-1.5 text-xs text-fg-3 tabular">
+          <Spinner size={13} />
+          Matching on Civitai {lookup.done} / {lookup.total}
+        </span>
+      </Tooltip>
+    );
+  if (lookup.error)
+    return (
+      <Tooltip content={lookup.error}>
+        <span className="flex items-center gap-1 text-xs text-warning">
+          <Icon name="info" size={13} />
+          Civitai matching paused
+        </span>
+      </Tooltip>
+    );
+  return null;
 }

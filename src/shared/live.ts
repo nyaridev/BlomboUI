@@ -9,15 +9,26 @@
  *   logs    ComfyUI log lines (only while a log view is open)
  *   gallery new images, index changes and sync progress (while a gallery is mounted)
  *   install ComfyUI slot installer progress (while an installer view is open)
+ *   downloads the download queue and its progress (the header shows it, so every window follows)
  * Errors, profile switches and model-folder changes go to everyone.
  */
 import { z } from "zod";
 import { ComfyLogLine, ComfyStatus, SystemStats } from "./comfy.ts";
+import { DownloadProgress, DownloadsSnapshot } from "./downloads.ts";
 import { GalleryImage, SyncState } from "./gallery.ts";
 import { InstallState } from "./install.ts";
 import { JobImage, JobProgress, QueueSnapshot } from "./jobs.ts";
+import { LookupState } from "./models.ts";
 
-export const LIVE_TOPICS = ["comfy", "system", "jobs", "logs", "gallery", "install"] as const;
+export const LIVE_TOPICS = [
+  "comfy",
+  "system",
+  "jobs",
+  "logs",
+  "gallery",
+  "install",
+  "downloads",
+] as const;
 export const LiveTopic = z.enum(LIVE_TOPICS);
 export type LiveTopic = z.infer<typeof LiveTopic>;
 
@@ -36,6 +47,7 @@ export const ServerMessage = z.discriminatedUnion("t", [
     comfy: ComfyStatus,
     queue: QueueSnapshot,
     profileId: z.string().nullable(),
+    downloads: DownloadsSnapshot.optional(),
   }),
   z.object({ t: z.literal("comfy.status"), status: ComfyStatus }),
   z.object({ t: z.literal("comfy.log"), lines: z.array(ComfyLogLine) }),
@@ -56,8 +68,14 @@ export const ServerMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("gallery.changed") }),
   z.object({ t: z.literal("gallery.sync"), sync: SyncState }),
   z.object({ t: z.literal("install"), install: InstallState }),
-  /** Model files were renamed or moved. */
+  /** Model files were renamed, moved, downloaded or matched on Civitai. */
   z.object({ t: z.literal("models.changed") }),
+  /** Background hashing and Civitai lookup of local models. */
+  z.object({ t: z.literal("models.lookup"), lookup: LookupState }),
+  /** The download queue changed (added, started, finished, removed). */
+  z.object({ t: z.literal("downloads"), downloads: DownloadsSnapshot }),
+  /** Bytes received, batched a few times a second. */
+  z.object({ t: z.literal("download.progress"), items: z.array(DownloadProgress) }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

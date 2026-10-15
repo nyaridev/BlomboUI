@@ -5,6 +5,10 @@
  * A scan reads each folder once and only the small sidecar JSON files, so a thousand LoRAs list
  * quickly; the result is cached until a rename, a move or a rescan. Renaming or moving takes the
  * sidecars along. Nothing is ever deleted from the models folder.
+ *
+ * Models without a .civitai.info file are filled in from the background lookup by hash
+ * (services/lookup.ts): name, thumbnail, base model and trigger words, kept in the profile's
+ * database, never written next to the model.
  */
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
@@ -12,6 +16,7 @@ import path from "node:path";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import {
   type LocalModel,
+  type LookupInfo,
   MODEL_EXTENSIONS,
   MODEL_FOLDERS,
   type ModelDetails,
@@ -34,6 +39,8 @@ export interface ModelDeps {
   runtimeDir: string;
   /** Model files changed on disk (ComfyUI's lists and open windows should refresh). */
   onChanged: () => void;
+  /** What a lookup by hash found for a file (same size and mtime), if anything. */
+  lookup?: (profileId: string, id: string, size: number, mtime: number) => LookupInfo | null;
 }
 
 interface Sidecars {
@@ -47,6 +54,7 @@ interface Entry {
   model: LocalModel;
   abs: string;
   sidecars: Sidecars;
+  lookup: LookupInfo | null;
 }
 
 interface CivitaiInfo {
@@ -163,7 +171,7 @@ export class ModelService {
       for (const kind of MODEL_KINDS)
         for (const folder of MODEL_FOLDERS[kind]) {
           const base = path.join(root, folder);
-          if (await isDir(base)) await this.scanFolder(root, base, kind, entries);
+          if (await isDir(base)) await this.scanFolder(profileId, root, base, kind, entries);
         }
     const models = [...entries.values()]
       .map((e) => e.model)
@@ -183,6 +191,7 @@ export class ModelService {
   }
 
   private async scanFolder(
+    profileId: string,
     root: string,
     dir: string,
     kind: ModelKind,
@@ -203,7 +212,7 @@ export class ModelService {
       if (e.name.startsWith(".")) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
-        await this.scanFolder(root, full, kind, out, depth + 1);
+        await this.scanFolder(profileId, root, full, kind, out, depth + 1);
         continue;
       }
       if (!e.isFile() || !EXTENSIONS.has(path.extname(e.name).toLowerCase())) continue;
@@ -224,24 +233,32 @@ export class ModelService {
         if (t)
           thumb = `/api/models/thumb?id=${encodeURIComponent(id)}&v=${t.size.toString(36)}-${Math.round(t.mtimeMs).toString(36)}`;
       }
+      const ids = civitaiIds(civitai);
+      // Without a Civitai info file, what a lookup by hash found fills the gaps.
+      const found = ids
+        ? null
+        : (this.deps.lookup?.(profileId, id, stat.size, stat.mtimeMs) ?? null);
       const trained = Array.isArray(civitai?.trainedWords)
         ? civitai.trainedWords.filter((w): w is string => typeof w === "string" && w.trim() !== "")
-        : [];
+        : (found?.trainedWords ?? []);
       const activation = str(a1111?.["activation text"]);
       out.set(id, {
         abs: full,
         sidecars,
+        lookup: found,
         model: {
           id,
           kind,
-          name: str(civitai?.model?.name) ?? stem,
+          name: str(civitai?.model?.name) ?? found?.name ?? stem,
           file: e.name,
           folder: toRel(path.relative(kindRoot, dir)),
           size: stat.size,
           mtime: stat.mtimeMs,
-          thumb,
-          nsfw: isNsfw(civitai),
-          baseModel: shortBaseModel(str(civitai?.baseModel) ?? str(a1111?.["sd version"])),
+          thumb: thumb ?? found?.image ?? null,
+          nsfw: thumb ? isNsfw(civitai) : found ? found.imageNsfw || found.nsfw : isNsfw(civitai),
+          baseModel: shortBaseModel(
+            str(civitai?.baseModel) ?? str(a1111?.["sd version"]) ?? found?.baseModel ?? null,
+          ),
           triggerWords: trained.length
             ? trained.map((w) => w.trim())
             : activation
@@ -251,6 +268,11 @@ export class ModelService {
                   .filter(Boolean)
               : [],
           hasInfo: Boolean(civitai || a1111),
+          civitai: ids
+            ? { ...ids, lookup: false }
+            : found
+              ? { modelId: found.modelId, versionId: found.versionId, lookup: true }
+              : null,
         },
       });
     }
@@ -293,8 +315,11 @@ export class ModelService {
         headerError = `Couldn't read the file header: ${error instanceof Error ? error.message : error}`;
       }
     }
-    const modelId = typeof civitai?.modelId === "number" ? civitai.modelId : null;
-    const versionId = typeof civitai?.id === "number" ? civitai.id : null;
+    const found = entry.lookup;
+    const modelId =
+      typeof civitai?.modelId === "number" ? civitai.modelId : (found?.modelId ?? null);
+    const versionId = typeof civitai?.id === "number" ? civitai.id : (found?.versionId ?? null);
+    const site = "https://civitai.com";
     const weight = Number(a1111?.["preferred weight"]);
     const kindRoot = kindFolderOf(root, path.dirname(entry.abs));
     return {
@@ -302,20 +327,25 @@ export class ModelService {
       path: entry.abs,
       sidecars: entry.sidecars.all,
       description:
-        str(civitai?.model?.description) ?? str(civitai?.description) ?? str(a1111?.description),
+        str(civitai?.model?.description) ??
+        str(civitai?.description) ??
+        str(a1111?.description) ??
+        found?.description ??
+        null,
       notes: str(a1111?.notes),
-      civitai: civitai
-        ? {
-            modelId,
-            versionId,
-            name: str(civitai.model?.name),
-            version: str(civitai.name),
-            creator: str(civitai.creator?.username),
-            url: modelId
-              ? `https://civitai.com/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ""}`
-              : null,
-          }
-        : null,
+      civitai:
+        civitai || found
+          ? {
+              modelId,
+              versionId,
+              name: str(civitai?.model?.name) ?? found?.name ?? null,
+              version: str(civitai?.name) ?? found?.version ?? null,
+              creator: str(civitai?.creator?.username) ?? found?.creator ?? null,
+              url: modelId
+                ? `${site}/models/${modelId}${versionId ? `?modelVersionId=${versionId}` : ""}`
+                : null,
+            }
+          : null,
       weight: Number.isFinite(weight) && weight > 0 ? weight : null,
       header,
       headerError,
@@ -404,6 +434,12 @@ export class ModelService {
 }
 
 /* ── helpers ──────────────────────────────────────────────────────────────── */
+
+/** Civitai model and version ids from a .civitai.info file. */
+function civitaiIds(info: CivitaiInfo | null): { modelId: number; versionId: number } | null {
+  if (!info || typeof info.modelId !== "number" || typeof info.id !== "number") return null;
+  return { modelId: info.modelId, versionId: info.id };
+}
 
 const toRel = (p: string) => p.split(path.sep).join("/");
 

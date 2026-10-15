@@ -1,9 +1,11 @@
 /** TanStack Query keys and hooks. Server state lives here, never in Zustand. */
+import type { BrowseFilter, CivitaiPage } from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
+import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
 import type { GalleryPage, GalleryQueryInput } from "@shared/gallery";
 import type { LocalModel, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
-import type { Settings, SettingsPatch } from "@shared/settings";
+import { deepMerge, type Settings, type SettingsPatch } from "@shared/settings";
 import type { WorkflowManifest } from "@shared/workflow/manifest";
 import {
   type InfiniteData,
@@ -48,6 +50,19 @@ export const qk = {
   modelDetails: (profileId: string | null, id: string | null) =>
     ["local-models", profileId, "details", id] as const,
   comfySlots: ["comfy-slots"] as const,
+  civitaiAccount: (profileId: string | null) => ["civitai-account", profileId] as const,
+  /** Everything under ["civitai", profileId] holds Civitai answers (marks change on downloads). */
+  civitai: (profileId: string | null) => ["civitai", profileId] as const,
+  civitaiModels: (profileId: string | null, filter: BrowseFilter) =>
+    ["civitai", profileId, "models", filter] as const,
+  civitaiModel: (profileId: string | null, id: number | null) =>
+    ["civitai", profileId, "model", id] as const,
+  civitaiViews: (profileId: string | null) => ["civitai", profileId, "views"] as const,
+  civitaiSearches: (profileId: string | null) => ["civitai", profileId, "searches"] as const,
+  downloadPlan: (profileId: string | null, body: EnqueueBody | null) =>
+    ["download-plan", profileId, body] as const,
+  downloadHistory: (profileId: string | null) => ["download-history", profileId] as const,
+  catalog: (profileId: string | null) => ["catalog", profileId] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -206,13 +221,8 @@ export function useUpdateSettings() {
     onMutate: (patch) => {
       const key = qk.settings(useSession.getState().profileId);
       const prev = qc.getQueryData<Settings>(key);
-      if (prev)
-        qc.setQueryData<Settings>(key, {
-          ...prev,
-          appearance: { ...prev.appearance, ...patch.appearance } as Settings["appearance"],
-          gallery: { ...prev.gallery, ...patch.gallery } as Settings["gallery"],
-          models: { ...prev.models, ...patch.models } as Settings["models"],
-        });
+      // Merged the way the server merges (nested objects key by key, arrays replaced).
+      if (prev) qc.setQueryData<Settings>(key, deepMerge(prev, patch));
       return { prev, key };
     },
     onError: (_e, _p, ctx) => {
@@ -435,4 +445,112 @@ export function useWildcardsChanged() {
 
 export function useComfySlots() {
   return useQuery({ queryKey: qk.comfySlots, queryFn: api.comfySlots });
+}
+
+/* ── Civitai ─────────────────────────────────────────────────────────────── */
+
+export function useCivitaiAccount() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiAccount(profileId),
+    queryFn: api.civitaiAccount,
+    enabled: profileId !== null,
+  });
+}
+
+export function useCivitaiModels(filter: BrowseFilter | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useInfiniteQuery({
+    queryKey: qk.civitaiModels(profileId, filter as BrowseFilter),
+    queryFn: ({ pageParam }) => api.civitaiModels(filter as BrowseFilter, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: CivitaiPage) => last.nextCursor,
+    enabled: profileId !== null && filter !== null,
+    // The server caches Civitai's answers; browsing back to a filter is instant.
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useCivitaiModel(id: number | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiModel(profileId, id),
+    queryFn: () => api.civitaiModel(id as number),
+    enabled: profileId !== null && id !== null,
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useCivitaiViews(enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiViews(profileId),
+    queryFn: api.civitaiViews,
+    enabled: enabled && profileId !== null,
+  });
+}
+
+export function useCivitaiSearches() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiSearches(profileId),
+    queryFn: api.civitaiSearches,
+    enabled: profileId !== null,
+  });
+}
+
+/* ── downloads ───────────────────────────────────────────────────────────── */
+
+/** Where a download would land (the preview under the Download button). */
+export function useDownloadPlan(body: EnqueueBody | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.downloadPlan(profileId, body),
+    queryFn: () => api.planDownload(body as EnqueueBody),
+    enabled: profileId !== null && body !== null,
+    staleTime: 15_000,
+    retry: false,
+  });
+}
+
+/** Start a download; the queue itself comes over the live bus. */
+export function useStartDownload() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: EnqueueBody) => api.download(body),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["download-plan"] });
+      void qc.invalidateQueries({ queryKey: ["download-history"] });
+    },
+  });
+}
+
+export const HISTORY_PAGE = 100;
+
+export function useDownloadHistory(enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useInfiniteQuery({
+    queryKey: qk.downloadHistory(profileId),
+    queryFn: ({ pageParam }) => api.downloadHistory(pageParam, HISTORY_PAGE),
+    initialPageParam: 0,
+    getNextPageParam: (last: DownloadHistoryPage, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.items.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    enabled: enabled && profileId !== null,
+  });
+}
+
+/* ── Manager store ───────────────────────────────────────────────────────── */
+
+export function useCatalog() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.catalog(profileId),
+    queryFn: () => api.catalog(),
+    enabled: profileId !== null,
+    staleTime: 10 * 60_000,
+    retry: false,
+  });
 }

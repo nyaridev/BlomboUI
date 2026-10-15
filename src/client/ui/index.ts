@@ -2,12 +2,14 @@
 export { Art, artStyle } from "./Art";
 export { Avatar } from "./Avatar";
 export { Button, type ButtonProps, IconButton, type IconButtonProps } from "./Button";
+export { Carousel, type CarouselImage } from "./Carousel";
 export { Dialog } from "./Dialog";
 export {
   Badge,
   CountBubble,
   Kbd,
   Meter,
+  ProgressRing,
   Skeleton,
   Spinner,
   StageProgress,
@@ -28,7 +30,7 @@ export {
   TreeRow,
   Veil,
 } from "./library";
-export { type CardKind, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
+export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
 export { NumberField } from "./NumberField";
 export { Select, type SelectOption } from "./Select";
 export { type NumberControlProps, ScrubField, Slider } from "./Slider";

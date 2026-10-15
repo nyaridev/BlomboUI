@@ -15,6 +15,8 @@ import {
   Avatar,
   Badge,
   Button,
+  Carousel,
+  type CarouselImage,
   Checkbox,
   Chip,
   Collapsible,
@@ -33,6 +35,7 @@ import {
   NumberField,
   Popover,
   ProgressBar,
+  ProgressRing,
   PropertyList,
   ScrubField,
   Segmented,
@@ -53,7 +56,7 @@ import {
 } from "@client/ui";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
 const SECTIONS = [
   ["brand", "Brand"],
@@ -72,6 +75,40 @@ const SECTIONS = [
   ["library", "Library"],
   ["prompt", "Prompt editor"],
 ] as const;
+
+/**
+ * Sample images for the carousel, drawn from the palette tokens (so the Lab needs no image
+ * files and no raw colors).
+ */
+function useSampleImages(): CarouselImage[] {
+  const [images, setImages] = useState<CarouselImage[]>([]);
+  useEffect(() => {
+    const css = getComputedStyle(document.documentElement);
+    const make = (a: string, b: string, w: number) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = Math.round(w * 1.25);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return "";
+      const g = ctx.createLinearGradient(0, 0, w, canvas.height);
+      g.addColorStop(0, css.getPropertyValue(`--${a}`).trim());
+      g.addColorStop(1, css.getPropertyValue(`--${b}`).trim());
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, canvas.height);
+      return canvas.toDataURL("image/png");
+    };
+    const pairs: Array<[string, string, Partial<CarouselImage>]> = [
+      ["blue", "purple", {}],
+      ["orange", "pink", { video: true }],
+      ["green", "cyan", { nsfw: true }],
+      ["yellow", "red", {}],
+    ];
+    setImages(
+      pairs.map(([a, b, extra]) => ({ thumb: make(a, b, 80), full: make(a, b, 480), ...extra })),
+    );
+  }, []);
+  return images;
+}
 
 function Section({
   id,
@@ -140,6 +177,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [treeSel, setTreeSel] = useState("outfits/fantasy.txt");
   const [lines, setLines] = useState(["silver cloak", "# a comment", "__colors__ armor"]);
   const [progress, setProgress] = useState(0.42);
+  const samples = useSampleImages();
   const errors = useLive((s) => s.errors.length);
 
   return (
@@ -840,6 +878,27 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <ModelCard name="characters/heroes" kind="wildcards" />
             <ModelCard name="anima-base-fp8" kind="diffusion_models" baseModel="Anima" />
             <ModelCard
+              name="Installed mark"
+              kind="loras"
+              baseModel="IL"
+              thumb="art:mark-a"
+              mark={{ label: "Installed", icon: "check", tone: "success" }}
+            />
+            <ModelCard
+              name="Update mark"
+              kind="checkpoints"
+              baseModel="SDXL"
+              thumb="art:mark-b"
+              mark={{ label: "Update", icon: "arrow-up", tone: "warning" }}
+            />
+            <ModelCard
+              name="Downloading mark"
+              kind="loras"
+              baseModel="Pony"
+              mark={{ label: "Downloading", icon: "download", tone: "accent" }}
+              footer={<span className="text-2xs text-fg-3">With a footer (Civitai stats)</span>}
+            />
+            <ModelCard
               name="NSFW thumbnail (blurred)"
               kind="loras"
               baseModel="IL"
@@ -878,6 +937,17 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                     unit="%"
                   />
                 </div>
+              </Row>
+              <Row label="ProgressRing">
+                <span className="text-accent-ink">
+                  <ProgressRing value={progress} />
+                </span>
+                <span className="text-generate-ink">
+                  <ProgressRing value={0.8} size={28} />
+                </span>
+                <span className="text-fg-3">
+                  <ProgressRing value={0} />
+                </span>
               </Row>
               <Row label="CopyButton">
                 <CopyButton text="284119032" label="Copy seed" />
@@ -960,6 +1030,15 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                   <DropZone onFile={() => undefined} title="Compact" compact />
                   <DropZone onFile={() => undefined} title="Busy" compact busy />
                 </div>
+              </Row>
+              <Row label="Carousel">
+                <Carousel images={samples} label="Sample images" className="w-56" />
+                <Carousel
+                  images={[]}
+                  label="No images"
+                  className="w-28"
+                  empty={<Art seed="carousel-empty" className="h-full w-full" />}
+                />
               </Row>
               <Row label="Veil (NSFW)">
                 <div className="h-32 w-28 overflow-hidden rounded-md">

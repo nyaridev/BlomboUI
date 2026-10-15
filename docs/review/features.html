@@ -1,0 +1,562 @@
+<title>BlomboUI v2 Feature Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: sticky control bar, left rail of areas, one long reviewable list. Dark-first, mirrors the app palette. */
+:root {
+  --bg: #080a0d; --surface: #0e1117; --surface-2: #141922; --field: #1a2029; --line: #232b36; --line-strong: #313c4a;
+  --fg: #e3e9f0; --fg-2: #a8b4c0; --fg-3: #6b7885;
+  --accent: #3a66ff; --accent-fg: #8fb0ff; --generate: #ff6a1a;
+  --keep: #2fd27f; --later: #f2b632; --drop: #ff5a78;
+  --t-new: #b07bff; --t-imp: #4fc3ff; --t-v1: #8a96a2; --t-idea: #ff9a4a; --t-rem: #ff5a78;
+  --font: "Geist", "Segoe UI", system-ui, sans-serif; --mono: "Geist Mono", ui-monospace, "Cascadia Mono", monospace;
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) {
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #f5f7fa; --field: #eef1f5; --line: #d6dde5; --line-strong: #bcc6d1;
+  --fg: #141a21; --fg-2: #3e4955; --fg-3: #687583; --accent: #2f5ad8; --accent-fg: #2448b8; --generate: #d65410;
+  --keep: #12935a; --later: #a87400; --drop: #c8264a; --t-new: #7a3ad8; --t-imp: #0f7fb5; --t-v1: #5c6874; --t-idea: #c25e10; --t-rem: #c8264a;
+  color-scheme: light; } }
+:root[data-theme="light"] {
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #f5f7fa; --field: #eef1f5; --line: #d6dde5; --line-strong: #bcc6d1;
+  --fg: #141a21; --fg-2: #3e4955; --fg-3: #687583; --accent: #2f5ad8; --accent-fg: #2448b8; --generate: #d65410;
+  --keep: #12935a; --later: #a87400; --drop: #c8264a; --t-new: #7a3ad8; --t-imp: #0f7fb5; --t-v1: #5c6874; --t-idea: #c25e10; --t-rem: #c8264a;
+  color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+.wrap { max-width: 1180px; margin: 0 auto; padding-inline: 20px; padding-block: 0 80px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+a { color: var(--accent-fg); }
+button { font: inherit; color: inherit; }
+:focus-visible { outline: 2px solid var(--accent-fg); outline-offset: 2px; border-radius: 6px; }
+
+/* Hero */
+.hero { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: end; padding-block: 40px 24px; border-bottom: 1px solid var(--line); }
+.eyebrow { font: 500 11px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--fg-3); display: flex; gap: 10px; align-items: center; }
+.eyebrow .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--generate); box-shadow: 0 0 12px var(--generate); }
+.hero h1 { font-size: clamp(28px, 4vw, 40px); font-weight: 650; letter-spacing: -.02em; margin-top: 14px; }
+.hero p { color: var(--fg-2); max-width: 64ch; margin: 10px 0 0; }
+.tally { display: grid; grid-template-columns: repeat(3, auto); gap: 6px; }
+.tally div { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; min-width: 88px; }
+.tally b { display: block; font: 600 22px/1.1 var(--mono); font-variant-numeric: tabular-nums; }
+.tally span { font-size: 11px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .08em; }
+.tally .k b { color: var(--keep); } .tally .l b { color: var(--later); } .tally .d b { color: var(--drop); }
+
+/* Sticky bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 10; background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-bottom: 1px solid var(--line); }
+.bar-in { max-width: 1180px; margin: 0 auto; padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip { height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg-2); cursor: pointer; font-size: 12.5px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.chip:hover { border-color: var(--line-strong); color: var(--fg); }
+.chip[aria-pressed="true"] { background: var(--field); border-color: var(--accent); color: var(--fg); }
+.chip i { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.search { flex: 1 1 200px; min-width: 0; height: 30px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); padding: 0 14px; font: inherit; font-size: 13px; }
+.search::placeholder { color: var(--fg-3); }
+.sync { font: 500 11px var(--mono); color: var(--fg-3); white-space: nowrap; }
+.sync.ok::before { content: "● "; color: var(--keep); } .sync.local::before { content: "● "; color: var(--later); }
+
+/* Body grid */
+.grid { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 36px; padding-top: 28px; }
+.rail { position: sticky; top: 70px; align-self: start; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.rail a { color: var(--fg-2); text-decoration: none; padding: 6px 10px; border-radius: 8px; display: flex; justify-content: space-between; gap: 8px; }
+.rail a:hover { background: var(--surface); color: var(--fg); }
+.rail a small { color: var(--fg-3); font: 11px var(--mono); }
+.rail hr { border: 0; border-top: 1px solid var(--line); margin: 8px 0; width: 100%; }
+main { min-width: 0; display: flex; flex-direction: column; gap: 44px; }
+
+section > header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+section h2 { font-size: 20px; font-weight: 650; letter-spacing: -.01em; }
+section > header p { margin: 4px 0 0; color: var(--fg-3); font-size: 13px; }
+.count { font: 12px var(--mono); color: var(--fg-3); white-space: nowrap; }
+
+/* Overview */
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; min-width: 0; }
+.card h3 { font-size: 13px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.card h3 code { font: 500 11px var(--mono); color: var(--fg-3); }
+.card p { margin: 6px 0 0; color: var(--fg-2); font-size: 13px; }
+.stack { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+.stack span { font: 11.5px var(--mono); padding: 2px 8px; border-radius: 6px; background: var(--field); color: var(--fg-2); }
+.flow { margin-top: 10px; overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; font: 12.5px/1.8 var(--mono); color: var(--fg-2); white-space: pre; }
+.flow b { color: var(--fg); font-weight: 500; } .flow em { color: var(--generate); font-style: normal; }
+
+/* Roadmap */
+.phases { display: grid; gap: 8px; }
+.phase { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.phase .ph { font: 600 12px var(--mono); color: var(--accent-fg); padding-top: 2px; }
+.phase h3 { font-size: 14px; font-weight: 600; }
+.phase p { margin: 3px 0 0; color: var(--fg-2); font-size: 13px; }
+.phase.now { border-color: var(--accent); }
+.phase.now .ph::after { content: " ← now"; color: var(--generate); }
+
+/* Feature rows */
+.area { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.row { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 12px 14px; border-top: 1px solid var(--line); transition: background .15s; }
+.row:first-child { border-top: 0; }
+.row:hover { background: var(--surface-2); }
+.row.is-drop { background: color-mix(in srgb, var(--drop) 6%, var(--surface)); }
+.row.is-drop .ft { text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--drop) 70%, transparent); color: var(--fg-3); }
+.row.is-later { background: color-mix(in srgb, var(--later) 5%, var(--surface)); }
+.tag { justify-self: start; font: 600 10px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; padding: 5px 7px; border-radius: 6px; border: 1px solid currentColor; margin-top: 2px; white-space: nowrap; }
+.tag.new { color: var(--t-new); } .tag.imp { color: var(--t-imp); } .tag.v1 { color: var(--t-v1); } .tag.idea { color: var(--t-idea); } .tag.rem { color: var(--t-rem); }
+.ft { font-weight: 600; font-size: 14px; }
+.fd { color: var(--fg-2); font-size: 13px; margin-top: 2px; }
+.note-btn { background: none; border: 0; color: var(--fg-3); font-size: 12px; cursor: pointer; padding: 4px 0 0; }
+.note-btn:hover { color: var(--accent-fg); }
+.note-btn.has { color: var(--accent-fg); }
+textarea { width: 100%; margin-top: 8px; min-height: 64px; resize: vertical; background: var(--field); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font: 13px/1.45 var(--font); }
+textarea:focus { outline: none; border-color: var(--accent); }
+
+.seg { display: inline-flex; background: var(--field); border: 1px solid var(--line); border-radius: 999px; padding: 2px; gap: 2px; }
+.seg button { border: 0; background: none; height: 26px; padding: 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--fg-3); cursor: pointer; transition: background .15s, color .15s; }
+.seg button:hover { color: var(--fg); }
+.seg button[aria-pressed="true"][data-v="keep"] { background: color-mix(in srgb, var(--keep) 18%, transparent); color: var(--keep); }
+.seg button[aria-pressed="true"][data-v="later"] { background: color-mix(in srgb, var(--later) 18%, transparent); color: var(--later); }
+.seg button[aria-pressed="true"][data-v="drop"] { background: color-mix(in srgb, var(--drop) 18%, transparent); color: var(--drop); }
+.empty { padding: 16px; color: var(--fg-3); font-size: 13px; }
+
+/* Questions */
+.qs { display: grid; gap: 10px; }
+.q { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; }
+.q h3 { font-size: 14px; font-weight: 600; }
+.q p { margin: 4px 0 0; color: var(--fg-2); font-size: 13px; }
+.q .opts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.q .opts .chip[aria-pressed="true"] { border-color: var(--generate); }
+.q .rec { font: 500 10px var(--mono); color: var(--generate); margin-left: 4px; }
+
+.ideas-form { display: flex; gap: 8px; margin-top: 10px; }
+.ideas-form textarea { margin: 0; min-height: 42px; }
+.btn { height: 34px; padding: 0 16px; border-radius: 8px; border: 0; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; white-space: nowrap; align-self: start; }
+.btn:hover { filter: brightness(1.1); }
+.idea-list { margin-top: 10px; display: grid; gap: 6px; }
+.idea-item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; }
+.idea-item button { background: none; border: 0; color: var(--fg-3); cursor: pointer; font-size: 12px; }
+.idea-item button:hover { color: var(--drop); }
+
+@media (max-width: 860px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .rail { display: none; }
+  .hero { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 560px) {
+  .row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .phase { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .tally { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tally div { min-width: 0; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="wrap">
+  <div class="hero">
+    <div>
+      <div class="eyebrow"><span class="dot"></span>BlomboUI v2 · planning</div>
+      <h1>Feature review</h1>
+      <p>Every feature planned for BlomboUI, grouped by area. Everything starts as <b>Keep</b>. Mark what you don't want as <b>Drop</b>, or <b>Later</b> to defer it, and add a note wherever you want something different. Claude reads your choices from here.</p>
+      <p>To review the look, run <code>start-dev.bat</code> in <code>A:\Projects\_\BlomboUI-new</code>: create a profile, open it, try <b>Customize</b> on the Generate screen, and open the <b>Design Lab</b> from the avatar menu (or <code>/lab</code>).</p>
+    </div>
+    <div class="tally" aria-live="polite">
+      <div class="k"><b id="nKeep">0</b><span>Keep</span></div>
+      <div class="l"><b id="nLater">0</b><span>Later</span></div>
+      <div class="d"><b id="nDrop">0</b><span>Drop</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="bar">
+  <div class="bar-in">
+    <div class="chips" id="filters" role="group" aria-label="Filter by type"></div>
+    <input id="q" class="search" type="search" placeholder="Search features…" aria-label="Search features">
+    <span id="sync" class="sync">connecting…</span>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="grid">
+    <nav class="rail" id="rail" aria-label="Sections"></nav>
+    <main id="main">
+      <section id="overview">
+        <header><div><h2>The plan in one screen</h2><p>Full reasoning is in docs/architecture.md and docs/adr/ in BlomboUI-new.</p></div></header>
+        <div class="cards">
+          <div class="card"><h3>One language <code>ADR-0001</code></h3><p>The server moves from Python/FastAPI to TypeScript on Node. One Zod schema per shape, shared by client and server. Python stays inside ComfyUI only.</p><div class="stack"><span>Node 22+</span><span>Hono</span><span>Zod</span><span>node:sqlite</span><span>sharp</span></div></div>
+          <div class="card"><h3>Web + desktop <code>ADR-0002</code></h3><p>One local server. start-web.bat opens your browser. start-app.bat opens a Tauri window on the same UI.</p><div class="stack"><span>Tauri 2</span><span>:4380</span></div></div>
+          <div class="card"><h3>Workflow packages <code>ADR-0003</code></h3><p>Any ComfyUI graph plus a manifest that binds UI to inputs. Drag and drop to import. Presets use the same format. Templates are gone.</p><div class="stack"><span>roles</span><span>analyzer</span><span>.blombo export</span></div></div>
+          <div class="card"><h3>Stages <code>ADR-0004</code></h3><p>Hires fix, ADetailer and ControlNet are graph patches that attach to role ports, so they work on imported workflows too.</p></div>
+          <div class="card"><h3>Layout documents <code>ADR-0005</code></h3><p>The Generate screen is data. The default keeps the familiar arrangement. Customize mode moves blocks and switches control styles. Layouts save as presets.</p><div class="stack"><span>dnd-kit</span><span>presets</span></div></div>
+          <div class="card"><h3>Profiles as folders <code>ADR-0006</code></h3><p>Profile screen on launch, creation wizard, hot switching. Settings, workflows and layouts are JSON files. SQLite holds only indexes.</p></div>
+          <div class="card"><h3>Own design system <code>ADR-0007</code></h3><p>Hand-built controls on tokens, Floating UI for behavior, Motion springs, a custom SVG icon set. No shadcn look.</p><div class="stack"><span>React 19</span><span>Tailwind 4</span><span>Motion</span><span>Floating UI</span></div></div>
+          <div class="card"><h3>Live bus <code>ADR-0008</code></h3><p>One WebSocket for progress, previews, VRAM and temperature, downloads and errors. No more polling every 2–4 seconds.</p></div>
+          <div class="card"><h3>ComfyUI bridge <code>ADR-0009</code></h3><p>A bundled ComfyUI extension: "Edit in ComfyUI" opens the graph, and "Save to Blombo" writes it back.</p></div>
+        </div>
+        <div class="flow">Generate pipeline
+<b>workflow.json</b> values ─▶ bind into <b>prompt.json</b> ─▶ expand <em>__wildcards__</em> ─▶ <em>&lt;lora:…&gt;</em> → LoRA stack
+   ─▶ splice stages (controlnet ▸ base ▸ hires ▸ adetailer ▸ upscale) at role ports ─▶ seeds + filenames ─▶ <b>ComfyUI /prompt</b>
+   ◀── progress · previews · images over ws ◀── Blombo live bus ◀── one ComfyUI socket</div>
+      </section>
+
+      <section id="roadmap">
+        <header><div><h2>Roadmap</h2><p>Phases build on each other. Each phase ends with something you can open and use.</p></div></header>
+        <div class="phases">
+          <div class="phase now"><div class="ph">Phase 0</div><div><h3>Foundation and style review</h3><p>Design system, icons, Design Lab, preview screens, app shell, profile screen, launchers, Tauri window, docs and agent rules.</p></div></div>
+          <div class="phase"><div class="ph">Phase 1</div><div><h3>Generate core</h3><p>ComfyUI supervisor, live bus, workflow packages, analyzer, presets, compiler, default Generate layout, prompts and autocomplete, loaded-models strip, image stage.</p></div></div>
+          <div class="phase"><div class="ph">Phase 2</div><div><h3>Library</h3><p>Gallery showcase, File Info, local models and the unified model card, Wildcard Manager.</p></div></div>
+          <div class="phase"><div class="ph">Phase 3</div><div><h3>Online</h3><p>Civitai browser, model pages, download queue, ComfyUI Manager store.</p></div></div>
+          <div class="phase"><div class="ph">Phase 4</div><div><h3>Power features</h3><p>Hires, ADetailer and ControlNet stages, Customize mode, layout presets, ComfyUI bridge, scripts, batch utilities.</p></div></div>
+          <div class="phase"><div class="ph">Phase 5</div><div><h3>Polish</h3><p>Settings overview stats, Help and prompt guide, Scopes, command palette, notifications.</p></div></div>
+        </div>
+      </section>
+
+      <div id="areas"></div>
+
+      <section id="questions">
+        <header><div><h2>Open questions</h2><p>Pick an answer or write your own. "Rec" marks Claude's recommendation.</p></div></header>
+        <div class="qs" id="qs"></div>
+      </section>
+
+      <section id="ideas">
+        <header><div><h2>Your additions</h2><p>Anything missing from the list. One idea per entry.</p></div></header>
+        <form class="ideas-form" id="ideaForm">
+          <textarea id="ideaText" placeholder="e.g. A quick toggle to hide NSFW thumbnails everywhere" aria-label="New idea"></textarea>
+          <button class="btn" type="submit">Add</button>
+        </form>
+        <div class="idea-list" id="ideaList"></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<script>
+const TAGS = { new: "New", imp: "Improved", v1: "Core", idea: "Idea", rem: "Removed" };
+const AREAS = [
+  ["launch", "Launch & profiles", [
+    ["profile-screen","new","Profile screen on launch","Cards with avatar, accent ring, last used and image count. Create, open or manage profiles."],
+    ["profile-wizard","new","Create-profile wizard","Name, avatar upload, accent color, models / outputs / wildcards folders, ComfyUI slot, starter workflows, theme, optional Civitai key."],
+    ["profile-open-anim","new","Smooth open transition","The avatar morphs into the header avatar while the Generate screen staggers in."],
+    ["profile-hot-switch","imp","Switch profiles without restarting","The app swaps profiles live. ComfyUI restarts only if the models folder is different."],
+    ["profile-autoopen","idea","Open a profile automatically","Optional \"open this profile on launch\" that skips the picker. Hold Shift to see it anyway."],
+    ["profile-manage","v1","Rename, delete, restore","Delete moves the profile to trash, with restore."],
+    ["profile-export","idea","Export / import a profile","Zip a whole profile to back it up or move it to another PC."],
+  ]],
+  ["shell", "Header & app shell", [
+    ["header-workflow","imp","Workflow switcher in the header","A pill with the workflow icon and name that opens the rich workflow picker."],
+    ["header-nav","imp","Icon + label navigation","Generate, Gallery, Models, Wildcards, File Info as pill tabs with a sliding indicator."],
+    ["header-system","imp","VRAM and GPU temperature","A compact meter with live values pushed from the server, color-coded heat."],
+    ["header-actions","imp","Clear system buttons","Unload models, free cache and rescan models get purpose-drawn icons, tooltips and shortcuts."],
+    ["header-comfy","imp","ComfyUI status popover","Status dot opens: state, slot, restart, open ComfyUI, live logs."],
+    ["header-errors","new","Error badge only when needed","A red badge appears in the header only while there are unread errors."],
+    ["avatar-menu","new","Avatar menu","Round avatar with profile accent. Menu: switch profile, Settings, History, Errors, Scopes, Help, shortcuts, about."],
+    ["queue-indicator","idea","Queue indicator","Shows queued jobs and a progress ring for the current one, from any view."],
+    ["command-palette","idea","Command palette (Ctrl+K)","Jump to any view, workflow, model, LoRA or setting by typing."],
+    ["hotkeys","v1","Keyboard shortcuts","Ctrl+1–9 views, R rescan, Ctrl+Enter generate and more, listed in Settings."],
+    ["launchers","new","start-web.bat and start-app.bat","Browser mode and a Tauri desktop window running the same UI."],
+    ["toasts","v1","Toasts","Redesigned, stacked, with actions (Undo, Open, Retry)."],
+    ["os-notify","idea","Native notifications","Notify when a long job or download finishes while the app is in the background."],
+    ["comfy-supervisor","imp","ComfyUI managed by the app","Start, restart, stop, live log viewer, slots (latest or pinned version)."],
+    ["comfy-installer-ui","idea","ComfyUI install inside the UI","First-run install with a progress view instead of console windows."],
+    ["torch-tools","v1","Torch and attention installers","Torch builds, SageAttention, FlashAttention, llama.cpp per ComfyUI slot."],
+  ]],
+  ["workflows", "Workflows", [
+    ["wf-picker","imp","Modern workflow picker","Search, categories, favorites, recents, thumbnails, quick actions (duplicate, export, edit)."],
+    ["wf-import","new","Drag & drop any ComfyUI workflow","API JSON, UI JSON, or a ComfyUI PNG/WebP with embedded workflow."],
+    ["wf-analyzer","new","Automatic setup","Finds prompts, models, sampler, size, LoRAs, inputs and outputs, then shows a setup screen to confirm or adjust."],
+    ["wf-dollar","idea","$Title exposes a node","Nodes titled like \"$Detail strength\" in ComfyUI become Blombo controls automatically."],
+    ["wf-presets","v1","Generation presets","SD 1.5, SDXL, Illustrious, NoobAI, Anima, Krea2."],
+    ["wf-utility","v1","Utility presets","Background removal (RMBG, BiRefNet), image upscale (model, SeedVR2), captioning (WD14, Qwen-VL), dataset prep."],
+    ["wf-values","new","Changes save into the workflow","Every value you change is saved with the workflow, so you no longer need templates."],
+    ["wf-duplicate","new","Duplicate workflow","A new name with the same settings. Later changes only affect the copy."],
+    ["wf-reset","idea","Reset to preset","Restore a preset-based workflow to its shipped defaults."],
+    ["wf-edit-comfy","new","Edit in ComfyUI","Opens ComfyUI in a new window with this workflow loaded."],
+    ["wf-bridge","new","\"Save to Blombo\" extension","Bundled with every managed ComfyUI. Saving overwrites the Blombo workflow and keeps your values."],
+    ["wf-send","idea","\"Send to Blombo\" from any canvas","Import whatever is open in ComfyUI as a new workflow."],
+    ["wf-export","new","Export / import .blombo","Workflow + graphs + linked layout + thumbnail in one file."],
+    ["wf-health","idea","Workflow health check","Lists missing custom nodes and models, with one-click install through the Manager."],
+    ["wf-batch","imp","One batch runner","File and folder workflows (rembg, upscale, caption, dataset) share one runner with sidecar outputs."],
+    ["templates","rem","Templates","Removed: workflow values and Duplicate replace them. Mark Keep if you still want them."],
+  ]],
+  ["generate", "Generate", [
+    ["gen-models","imp","Loaded models strip on top","Checkpoint, VAE, text encoder, LoRA tiles with strength, wildcards. Reorder, tile styles."],
+    ["gen-prompts","imp","Prompt editors","Positive and negative prompts with colors for weights, LoRAs, wildcards and syntax errors."],
+    ["gen-autocomplete","v1","Autocomplete","Danbooru tags, wildcards, LoRAs, LoRA trigger words, frequent tags, with thumbnails."],
+    ["gen-weight","v1","Weight nudge","Ctrl+↑/↓ adjusts (tag:1.1) weights and LoRA strength at the cursor."],
+    ["gen-actions","v1","Generate / Interrupt / Cancel","Next to the prompts, with batch count."],
+    ["gen-queue","idea","Queue and generate forever","Add jobs while one runs, reorder, cancel one, loop until stopped."],
+    ["gen-params","v1","Core parameters","Sampler, scheduler, steps, CFG, clip skip, clip type and device, batch size and count, hidden samplers."],
+    ["gen-resolution","imp","Resolution picker","Visual aspect grid, swap, megapixels mode, custom presets."],
+    ["gen-seed","v1","Seed control","Randomize, fixed, increment, decrement, reuse last seed."],
+    ["gen-tabs","v1","Model galleries in the workspace","Checkpoint, LoRA, Wildcards and Other tabs beside Generation."],
+    ["gen-autolora","v1","Auto-apply LoRA and skips","Auto-apply default and per-LoRA/wildcard skip toggles."],
+    ["gen-hires","imp","Hires fix, easier","Inherits base values with a one-click override per field. Scale or target size, upscale model, save before."],
+    ["gen-adetailer","imp","ADetailer, easier","Units as tabs, detector + SAM, the same inherit/override pattern, run after Hires."],
+    ["gen-controlnet","new","ControlNet","Units with an image source (upload, gallery, last output), preprocessor preview, model, strength, start/end."],
+    ["gen-attention","v1","Attention engine","SageAttention and torch compile options per stage."],
+    ["gen-scripts","v1","Scripts","Prompt matrix, XY plot, scope thumbnails."],
+    ["gen-stage","imp","Image stage","Progress split by stage, ETA, live previews, compare wipe, thumbnail strip."],
+    ["gen-grid","v1","Batch grids","Grid format, rows, maximum, include interrupted images."],
+    ["gen-output","v1","Output override","Output folder and filename pattern per workflow."],
+    ["gen-customize","new","Customize mode","Move every block and pick its control style (slider, number, segmented, chips, switch…), size, width and label."],
+    ["gen-layouts","new","Layout presets","Save, restore and reset layouts, and link a layout to a workflow."],
+    ["gen-img2img","idea","Img2img from any image","\"Use as input\" from the gallery, stage, or drag & drop."],
+    ["gen-inpaint","idea","Inpaint canvas","Paint a mask on an image (later phase)."],
+    ["gen-history","idea","Prompt history and snippets","Recall recent prompts and save reusable fragments."],
+    ["gen-params-drop","idea","Drop a PNG to reuse its settings","Drop any generated image to load its parameters."],
+    ["gen-perf","idea","Performance readout","it/s and time per stage on the image stage."],
+  ]],
+  ["gallery", "Gallery", [
+    ["gal-home","imp","Showcase home","Featured favorite, recent sessions and library covers."],
+    ["gal-grid","imp","Fast justified grid","Virtualized rows that handle tens of thousands of images, with a smooth zoom slider."],
+    ["gal-libraries","v1","Libraries","Folder libraries with a tree sidebar, custom order and editing."],
+    ["gal-search","imp","Search and filters","Search prompts and metadata. Filter by model, LoRA, date, size, favorites."],
+    ["gal-lightbox","imp","Lightbox","Full screen, filmstrip, metadata sheet, compare, zoom and pan."],
+    ["gal-favorites","v1","Favorites","Heart any image."],
+    ["gal-trash","v1","Trash","Remove with restore, auto-purge by hours or size."],
+    ["gal-live","v1","Live updates","New images appear as they are generated."],
+    ["gal-relink","v1","Relink and sync","Find moved files and resync folders."],
+    ["gal-ratings","idea","Ratings and tags","Star ratings and your own tags for sorting the best results."],
+    ["gal-collections","idea","Collections","Virtual albums across folders."],
+    ["gal-actions","imp","Image actions","Send to Generate, use as ControlNet or input, File Info, reveal in Explorer, copy."],
+  ]],
+  ["fileinfo", "File Info", [
+    ["fi-png","v1","PNG info","A1111 and ComfyUI parameters parsed into readable sections."],
+    ["fi-safetensors","v1","Safetensors metadata","Training tags, base model, network settings."],
+    ["fi-civitai","v1","Civitai lookup by hash","Matches a file to its Civitai model and image metadata."],
+    ["fi-display","imp","Redesigned display","Cards, copy buttons, \"use these parameters\", tag cloud for training data."],
+    ["fi-import","new","Import the embedded workflow","Turn a ComfyUI image's workflow into a Blombo workflow."],
+  ]],
+  ["models", "Models", [
+    ["mdl-local","imp","Local models","All kinds: checkpoints, diffusion, LoRAs, VAE, text encoders, upscale, SAM, detectors, ControlNet, embeddings."],
+    ["mdl-card","imp","One model card everywhere","The same card in Generate, Models and pickers. A designed fallback face when there's no thumbnail."],
+    ["mdl-info","imp","Model info sheet","Versions, trigger words, recommended settings, your notes, files."],
+    ["mdl-files","v1","File operations","Rename, move, folders, open in Explorer."],
+    ["mdl-thumbs","v1","Thumbnails","Static or animated. Set from any image, or scrape from Civitai (missing, force, full)."],
+    ["mdl-hashes","v1","Background hashing","Models are hashed quietly for Civitai matching."],
+    ["mdl-favs","idea","Favorite and recent models","Shown first in every picker."],
+    ["civ-browse","imp","Civitai browser","Faster, with a clear filter bar, search history and saved filters."],
+    ["civ-page","imp","In-app model page","Loads fast: image carousel, versions, files, download button, description."],
+    ["civ-tabs","v1","Opened model tabs","Keep several models open side by side."],
+    ["civ-download","v1","Smart downloads","Sort by base model, category or creator, naming, author aliases, auto-refresh."],
+    ["civ-marks","v1","Downloaded marks","Labels with icons on models you already have."],
+    ["civ-queue","v1","Download queue","Parallel downloads, retry, history."],
+    ["mgr-store","imp","Manager as a store","ComfyUI model catalog with categories, installed state, sizes, one-click install."],
+  ]],
+  ["wildcards", "Wildcard Manager", [
+    ["wc-tree","imp","File tree","Drag & drop, rename, folders, search."],
+    ["wc-yaml","imp","Better YAML editor","Syntax colors, folding, lint, autocomplete for wildcard references, outline."],
+    ["wc-modes","v1","Raw and structured modes","Edit as text or as line lists."],
+    ["wc-format","v1","Format and open","Format YAML, open in Explorer."],
+    ["wc-roll","idea","Roll preview","Sample a wildcard to preview what it expands to."],
+    ["wc-usage","idea","Usage stats","See which wildcards you use most."],
+  ]],
+  ["scopes", "Scopes", [
+    ["sc-keep","v1","Thumbnail scopes","Per-context thumbnails, groups and lookup."],
+    ["sc-place","imp","Moved out of the main tabs","Reached from the avatar menu and the Models view, with a smoother editor."],
+    ["sc-auto","v1","Auto scopes","Pick scopes from prompt tags automatically."],
+  ]],
+  ["settings", "Settings", [
+    ["set-overview","new","Overview page","Profile card, key settings, stats: images generated, time spent, favorite model, LoRA and wildcard."],
+    ["set-layout","imp","Centered, organized pages","Clear groups, search, and custom controls throughout."],
+    ["set-themes","v1","Themes","Blombo, Slate, Midnight, Ember, Moss, Light, plus a profile accent color."],
+    ["set-saving","v1","Saving","Formats, quality, naming patterns, JPEG for large files, temp cleanup."],
+    ["set-autocomplete","v1","Autocomplete settings","Tag lists and behavior."],
+    ["set-civitai","v1","Civitai settings","Account, browse defaults, labels, downloads, metadata."],
+    ["set-models","v1","Models settings","Folders, hidden types, manager, thumbnails."],
+    ["set-gallery","v1","Gallery settings","Page size, thumbnail quality, tile scale."],
+    ["set-comfy","new","ComfyUI page","Slot, launch arguments, port, bridge install, logs."],
+    ["set-lab","new","Design Lab","Every control, icon and theme in one place (for tuning the look)."],
+  ]],
+  ["more", "History, errors & help", [
+    ["hist-dl","v1","Download history","Every download with retry and open."],
+    ["hist-browse","v1","Civitai browse history","Recently viewed models."],
+    ["hist-gen","idea","Generation history","A log of every job, with re-run."],
+    ["err-log","v1","Error log","Details, copy, clear."],
+    ["err-access","new","Errors in header and menu","Header badge when errors exist, and always reachable from the avatar menu."],
+    ["help-view","new","Help view","Getting started, loading models, importing workflows, editing in ComfyUI."],
+    ["help-prompt","new","Prompt guide","(tag:1.5), [tag], escaping \\( \\), <lora:name:0.8>, __wildcards__, BREAK, with a live playground."],
+    ["help-tour","idea","First-run tour","A short guided tour of the Generate screen."],
+  ]],
+];
+const QUESTIONS = [
+  ["q-backend","Move the app server to Node + TypeScript?","ADR-0001. One language and one schema. Python remains only inside ComfyUI.",["Yes, Node + TypeScript","Keep Python / FastAPI"],0],
+  ["q-wf-scope","Where should workflows live?","Per profile lets each profile have its own setup. Shared means every profile sees the same list.",["Per profile, with \"copy to profile\"","Shared across profiles","Both: shared library + per-profile values"],0],
+  ["q-comfy-install","How should ComfyUI be installed on first run?","The alternative is console prompts in the launcher.",["Inside the app with progress","Keep the console launcher"],0],
+  ["q-linux","Linux support in v2?","Linux would need .sh launchers next to the .bat ones.",["Windows first, Linux later","Both from day one"],0],
+  ["q-gallery-layout","Default gallery layout?","Both are planned as options. This only picks the default.",["Justified rows","Masonry","Uniform squares"],0],
+  ["q-scopes","Where should Scopes live?","You asked to keep it, but hidden.",["Avatar menu + a tab inside Models","Avatar menu only"],0],
+  ["q-footer","Keep the footer bar?","A footer bar with links. They could live in the avatar menu under About instead.",["Remove it","Keep a slim status footer"],0],
+  ["q-nsfw","Blur NSFW thumbnails by default?","Applies to Civitai browsing and model cards.",["Blur, click to reveal","Show everything","Hide NSFW entirely"],0],
+  ["q-font","UI font?","Geist is the proposal shown on this page.",["Geist","Keep Segoe UI","Something else (note)"],0],
+];
+
+const state = { v: {}, note: {}, ans: {}, ideas: [], filter: "all", q: "", db: null };
+const $ = (s, el = document) => el.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const defaultV = () => "keep";
+
+function verdict(id) { return state.v[id] || defaultV(id); }
+
+function renderFilters() {
+  const items = [["all","All"],["new","New"],["imp","Improved"],["v1","Core"],["idea","Ideas"],["drop","Marked drop"],["later","Marked later"],["note","With notes"]];
+  const color = { new: "var(--t-new)", imp: "var(--t-imp)", v1: "var(--t-v1)", idea: "var(--t-idea)", drop: "var(--drop)", later: "var(--later)", note: "var(--accent-fg)" };
+  $("#filters").innerHTML = items.map(([k, l]) => `<button class="chip" data-f="${k}" aria-pressed="${state.filter === k}">${color[k] ? `<i style="background:${color[k]}"></i>` : ""}${l}</button>`).join("");
+}
+
+function matches(f) {
+  const [id, tag, title, desc] = f;
+  if (state.q && !(title + " " + desc).toLowerCase().includes(state.q)) return false;
+  switch (state.filter) {
+    case "all": return true;
+    case "drop": return verdict(id) === "drop";
+    case "later": return verdict(id) === "later";
+    case "note": return Boolean(state.note[id]);
+    default: return tag === state.filter;
+  }
+}
+
+function rowHtml(f) {
+  const [id, tag, title, desc] = f;
+  const v = verdict(id);
+  const note = state.note[id] || "";
+  return `<div class="row is-${v}" data-id="${id}">
+    <span class="tag ${tag}">${TAGS[tag]}</span>
+    <div style="min-width:0">
+      <div class="ft">${esc(title)}</div>
+      <div class="fd">${esc(desc)}</div>
+      <button class="note-btn ${note ? "has" : ""}" data-note="${id}" aria-expanded="false">${note ? "✎ Note: " + esc(note.slice(0, 70)) + (note.length > 70 ? "…" : "") : "+ Add note"}</button>
+    </div>
+    <div class="seg" role="group" aria-label="Decision for ${esc(title)}">
+      ${["keep","later","drop"].map((k) => `<button data-v="${k}" data-id="${id}" aria-pressed="${v === k}">${k[0].toUpperCase() + k.slice(1)}</button>`).join("")}
+    </div>
+  </div>`;
+}
+
+function renderAreas() {
+  const host = $("#areas");
+  host.innerHTML = AREAS.map(([aid, name, feats]) => {
+    const shown = feats.filter(matches);
+    const drops = feats.filter((f) => verdict(f[0]) === "drop").length;
+    return `<section id="${aid}" style="margin-bottom:44px">
+      <header><div><h2>${esc(name)}</h2></div><span class="count">${feats.length} features${drops ? ` · <span style="color:var(--drop)">${drops} dropped</span>` : ""}</span></header>
+      <div class="area">${shown.length ? shown.map(rowHtml).join("") : `<div class="empty">Nothing here matches this filter.</div>`}</div>
+    </section>`;
+  }).join("");
+  renderTally();
+  renderRail();
+}
+
+function renderRail() {
+  $("#rail").innerHTML = `<a href="#overview">Overview</a><a href="#roadmap">Roadmap</a><hr>` +
+    AREAS.map(([aid, name, feats]) => `<a href="#${aid}">${esc(name)}<small>${feats.length}</small></a>`).join("") +
+    `<hr><a href="#questions">Open questions<small>${QUESTIONS.length}</small></a><a href="#ideas">Your additions<small>${state.ideas.length}</small></a>`;
+}
+
+function renderTally() {
+  let k = 0, l = 0, d = 0;
+  for (const [, , feats] of AREAS) for (const f of feats) { const v = verdict(f[0]); if (v === "drop") d++; else if (v === "later") l++; else k++; }
+  $("#nKeep").textContent = k; $("#nLater").textContent = l; $("#nDrop").textContent = d;
+}
+
+function renderQuestions() {
+  $("#qs").innerHTML = QUESTIONS.map(([id, title, desc, opts, rec]) => {
+    const a = state.ans[id] || {};
+    return `<div class="q" data-q="${id}">
+      <h3>${esc(title)}</h3><p>${esc(desc)}</p>
+      <div class="opts">${opts.map((o, i) => `<button class="chip" data-qid="${id}" data-opt="${esc(o)}" aria-pressed="${a.choice === o}">${esc(o)}${i === rec ? '<span class="rec">REC</span>' : ""}</button>`).join("")}</div>
+      <textarea id="ans-${id}" data-qtext="${id}" placeholder="Anything to add? (optional)">${esc(a.text || "")}</textarea>
+    </div>`;
+  }).join("");
+}
+
+function renderIdeas() {
+  $("#ideaList").innerHTML = state.ideas.map((it) => `<div class="idea-item"><span>${esc(it.text)}</span><button data-del="${it.id}" aria-label="Remove idea">Remove</button></div>`).join("");
+  renderRail();
+}
+
+/* ---------- persistence: db when available, else this browser only ---------- */
+const LS = "blombo-review-v1";
+function lsSave() { try { localStorage.setItem(LS, JSON.stringify({ v: state.v, note: state.note, ans: state.ans, ideas: state.ideas })); } catch {} }
+function lsLoad() { try { const s = JSON.parse(localStorage.getItem(LS) || "null"); if (s) Object.assign(state, { v: s.v || {}, note: s.note || {}, ans: s.ans || {}, ideas: s.ideas || [] }); } catch {} }
+
+const pending = new Map();
+async function writeDoc(path, body) {
+  if (!state.db) { lsSave(); return; }
+  const prev = pending.get(path) || Promise.resolve();
+  const next = prev.then(() => state.db.doc(path).set(body)).catch((e) => { console.warn("save failed", e); setSync("local", "save failed — kept in this browser"); lsSave(); });
+  pending.set(path, next);
+  return next;
+}
+async function delDoc(path) { if (!state.db) { lsSave(); return; } try { await state.db.doc(path).delete(); } catch (e) { console.warn(e); } }
+function saveVerdict(id) { writeDoc("verdicts/" + id, { v: verdict(id), note: state.note[id] || "", at: new Date().toISOString() }); }
+function setSync(kind, text) { const el = $("#sync"); el.className = "sync " + kind; el.textContent = text; }
+
+const timers = {};
+function debounce(key, fn, ms = 600) { clearTimeout(timers[key]); timers[key] = setTimeout(fn, ms); }
+
+/* ---------- events ---------- */
+document.addEventListener("click", (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.f) { state.filter = t.dataset.f; renderFilters(); renderAreas(); return; }
+  if (t.dataset.v && t.dataset.id) {
+    const id = t.dataset.id; state.v[id] = t.dataset.v; saveVerdict(id);
+    const row = t.closest(".row"); row.outerHTML = rowHtml(AREAS.flatMap((a) => a[2]).find((f) => f[0] === id));
+    renderTally(); return;
+  }
+  if (t.dataset.note) {
+    const id = t.dataset.note; const holder = t.parentElement;
+    if (holder.querySelector("textarea")) { holder.querySelector("textarea").focus(); return; }
+    const ta = document.createElement("textarea"); ta.id = "note-" + id; ta.value = state.note[id] || ""; ta.placeholder = "What should change?";
+    ta.addEventListener("input", () => { state.note[id] = ta.value.trim(); debounce("n" + id, () => saveVerdict(id)); });
+    ta.addEventListener("blur", () => { clearTimeout(timers["n" + id]); saveVerdict(id); t.textContent = state.note[id] ? "✎ Note: " + state.note[id].slice(0, 70) : "+ Add note"; t.classList.toggle("has", Boolean(state.note[id])); });
+    holder.appendChild(ta); t.setAttribute("aria-expanded", "true"); ta.focus(); return;
+  }
+  if (t.dataset.qid) {
+    const id = t.dataset.qid; const a = state.ans[id] = { ...(state.ans[id] || {}) };
+    a.choice = a.choice === t.dataset.opt ? "" : t.dataset.opt;
+    writeDoc("answers/" + id, { choice: a.choice || "", text: a.text || "" });
+    t.parentElement.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.opt === a.choice)));
+    return;
+  }
+  if (t.dataset.del) { const id = t.dataset.del; state.ideas = state.ideas.filter((x) => x.id !== id); renderIdeas(); delDoc("ideas/" + id); }
+});
+document.addEventListener("input", (e) => {
+  const ta = e.target;
+  if (ta.dataset && ta.dataset.qtext) {
+    const id = ta.dataset.qtext; const a = state.ans[id] = { ...(state.ans[id] || {}) }; a.text = ta.value;
+    debounce("q" + id, () => writeDoc("answers/" + id, { choice: a.choice || "", text: a.text || "" }));
+  }
+});
+$("#q").addEventListener("input", (e) => { state.q = e.target.value.trim().toLowerCase(); renderAreas(); });
+$("#ideaForm").addEventListener("submit", (e) => {
+  e.preventDefault(); const text = $("#ideaText").value.trim(); if (!text) return;
+  const id = "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  state.ideas.push({ id, text, at: new Date().toISOString() }); $("#ideaText").value = ""; renderIdeas();
+  writeDoc("ideas/" + id, { text, at: new Date().toISOString() });
+});
+
+/* ---------- boot ---------- */
+renderFilters(); renderAreas(); renderQuestions(); renderIdeas();
+(async () => {
+  let db = null;
+  try { db = window.claude && window.claude.use ? await window.claude.use("db") : null; } catch { db = null; }
+  if (!db) { lsLoad(); renderAreas(); renderQuestions(); renderIdeas(); setSync("local", "saved in this browser only"); return; }
+  state.db = db; setSync("ok", "synced with Claude");
+  const onErr = (e) => { console.warn("db", e); setSync("local", "offline — changes may not reach Claude"); };
+  db.collection("verdicts").onSnapshot((snap) => {
+    const v = {}, note = {};
+    for (const d of snap.docs) { const b = d.data() || {}; if (b.v) v[d.id] = b.v; if (b.note) note[d.id] = b.note; }
+    const typing = document.activeElement && document.activeElement.id && document.activeElement.id.startsWith("note-");
+    state.v = v; state.note = { ...note, ...(typing ? { [document.activeElement.id.slice(5)]: document.activeElement.value.trim() } : {}) };
+    if (!typing) renderAreas(); else renderTally();
+  }, onErr);
+  db.collection("answers").onSnapshot((snap) => {
+    const ans = {}; for (const d of snap.docs) ans[d.id] = d.data() || {};
+    state.ans = ans;
+    const typing = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.qtext;
+    if (!typing) renderQuestions();
+  }, onErr);
+  db.collection("ideas").orderBy("at").onSnapshot((snap) => {
+    state.ideas = snap.docs.map((d) => ({ id: d.id, ...(d.data() || {}) })); renderIdeas();
+  }, onErr);
+})();
+</script>

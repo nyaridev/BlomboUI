@@ -1,0 +1,23 @@
+---
+description: Definition of done, testing and review checklist for every change
+alwaysApply: true
+---
+<!-- Generated from .claude/rules/quality.md by `npm run rules:sync`. Edit the source, not this file. -->
+
+# Definition of done
+
+1. `npm run check` passes (TypeScript 7 typecheck, Biome, Vitest, rules sync).
+2. New logic has tests next to it (`*.test.ts`): shared helpers, server services, pure client helpers.
+3. UI changes were clicked through in `npm run dev` in the **Blombo** and **Light** themes, including hover, focus, disabled and empty states. New controls and variants are in the Design Lab.
+4. Viewing or opening anything doesn't modify user files. Writes go through `lib/fsx.ts`.
+5. Docs match reality: `docs/design-system.md` for UI patterns, `docs/workflows.md` for workflow format, `AGENTS.md` for commands and architecture, an ADR for big decisions. After editing `.claude/rules/`, run `npm run rules:sync`.
+
+# Review checklist
+
+- Request bodies validated with shared Zod schemas; paths through `resolveInside()`.
+- No raw colors or one-off control styling outside `ui/` and `tokens.css`.
+- No polling loops against the server; live state comes from the live bus.
+- Lists that can grow are virtualized; store selectors are narrow.
+- Error states say what went wrong and what to do; empty states say what will appear and how.
+- No hardcoded ComfyUI class types outside the analyzer.
+- Nothing from `data/` or `runtime/` is committed.

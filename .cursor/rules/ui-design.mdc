@@ -1,0 +1,32 @@
+---
+description: Visual design rules for the BlomboUI client (tokens, components, motion, icons, copy)
+globs: src/client/**/*.tsx,src/client/**/*.css
+alwaysApply: false
+---
+<!-- Generated from .claude/rules/ui-design.md by `npm run rules:sync`. Edit the source, not this file. -->
+
+# UI design rules
+
+Full spec: `docs/design-system.md`. Live reference: the Design Lab (`/lab`).
+
+**Direction.** Dark, calm, precise. The images are the color; the UI stays out of their way. Hand-built controls, no component-library look. **No glassmorphism, no decorative gradients, no emoji icons.** Orange belongs to Generate only.
+
+**Color**
+- Raw colors only in `src/client/styles/tokens.css`. Tailwind's default palette is cleared, so use token classes: `bg-surface`, `bg-surface-2`, `bg-field`, `bg-sunken`, `border-line`, `text-fg/fg-2/fg-3/fg-4`, `text-accent-ink`, `bg-accent`, palette `bg-purple/15 text-purple-ink`.
+- Surface ladder: `bg → surface → surface-2 → surface-3 (floating)`. A control uses the token that contrasts with its immediate container.
+- Status is never color alone: pair it with an icon or a word.
+- Check every change in the **Blombo** and **Light** themes, and with a non-blue accent.
+
+**Type.** Geist / Geist Mono. UI base `text-sm` (13 px). Group titles `label-caps`. Numbers `tabular`; seeds, sizes and paths `font-mono`. Headings `text-balance`.
+
+**Components.** Import from `@client/ui` only (`Button`, `IconButton`, `Slider`, `ScrubField`, `NumberField`, `Select`, `Segmented`, `Switch`, `Checkbox`, `Chip`, `Tabs`, `Tooltip`, `Popover`, `Menu`, `Dialog`, `Collapsible`, `InheritRow`, `ModelCard`, `Avatar`, `toast`…). Don't restyle a control locally: add a variant in `ui/` and show it in the Lab.
+
+**Icons.** `<Icon name>` from `@client/icons/Icon`, names from `icons/paths.ts`. Name new icons by action. Icon-only buttons are `IconButton` with a `label`.
+
+**Motion** (`lib/motion.ts`): `snappy` for direct responses, `bouncy` for arrivals, `glide` for large surfaces. 120–350 ms. Shared morphs via `layoutId`. A sliding indicator sits on `z-0` under `z-10` labels.
+
+**Positioning gotcha.** Base styles live in `@layer base` so utilities win. When a component adds `relative` by default, let callers pass `absolute` (see `positioned()` in `ui/Art.tsx`) instead of stacking both.
+
+**Copy.** Sentence case. Buttons say what happens. Errors say what to do next. In the UI it's *workflow*, *layout*, *profile*, *stage*; *binding* and *manifest* appear only in the Inspector's technical badges.
+
+**Accessibility.** Visible focus (`focus-ring`), labels on icon-only controls, arrow keys in segmented/tabs/menus/selects, Enter/Escape in editable values.

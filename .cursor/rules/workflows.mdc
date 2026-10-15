@@ -1,0 +1,20 @@
+---
+description: Workflow packages, roles, stages, layouts and the ComfyUI bridge
+globs: src/shared/workflow/**,src/shared/layout/**,src/client/features/generate/**,src/server/services/workflows/**,src/server/services/comfy/**,src/comfy-bridge/**,presets/**
+alwaysApply: false
+---
+<!-- Generated from .claude/rules/workflows.md by `npm run rules:sync`. Edit the source, not this file. -->
+
+# Workflow rules
+
+Spec: `docs/workflows.md`. Decisions: ADR-0003, 0004, 0005, 0009.
+
+- A workflow is a package: `workflow.json` (manifest) + `graph.json` (UI) + `prompt.json` (API). Built-in presets use exactly the same format as imports.
+- **Bindings, not class types.** UI parameters map to `(node, input)` with a type and optional **role**. Smart features key off roles (`shared/workflow/roles.ts`). Never branch UI on a ComfyUI `class_type`.
+- The **analyzer** is the only place that knows node classes. It produces bindings; everything downstream reads bindings.
+- **Values live in the workflow.** There are no templates. Duplicate creates an independent copy with `parentId`.
+- **Re-sync after editing in ComfyUI** keeps values by `(node, input)`, then `(class_type, title, input)`, and reports added and removed parameters. Never silently drop a user's value.
+- **Stages** (hires, adetailer, controlnet, upscale) are graph patches with `PORT:<ROLE>` stubs, spliced at role ports in a fixed order. Stage fields inherit base values until unlinked (`InheritRow`).
+- **Layouts** are documents. Blocks bind by `role:` (portable) or `id:` (one workflow). Missing targets render as ghosts in Customize mode and nothing otherwise. `params-rest` shows unplaced bindings, so imports work without layout edits.
+- New control style → `CONTROL_STYLES` + `ParamControl` + Inspector label/glyph + Design Lab.
+- Fixture graphs for analyzer tests live next to the analyzer. Cover: SD1.5, SDXL, a diffusion-model graph (UNET + CLIP + VAE), rgthree LoRA stacks, subgraphs, `$`-titled nodes.

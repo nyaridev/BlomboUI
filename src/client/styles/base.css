@@ -1,0 +1,121 @@
+/* Base element styles and the few shared recipes that aren't components. */
+
+/*
+ * Element defaults live in the base layer so Tailwind utilities (outline-none, bg-*, …) can
+ * override them. Unlayered CSS would beat every utility regardless of specificity.
+ */
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01", "cv11";
+    overflow: hidden;
+  }
+
+  ::selection {
+    background: color-mix(in oklab, var(--accent) 45%, transparent);
+    color: var(--fg);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  button {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: default;
+  }
+
+  /* Visible keyboard focus everywhere, never on mouse click. */
+  :focus-visible {
+    outline: 2px solid var(--accent-ink);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+@utility focus-ring {
+  &:focus-visible {
+    outline: 2px solid var(--accent-ink);
+    outline-offset: 2px;
+  }
+}
+
+/* Uppercase micro label used above groups and inside cards. */
+@utility label-caps {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+
+/* Raised card: border + hairline highlight. Use for objects, not for every block. */
+@utility card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Thin, quiet scroll areas inside panels. */
+@utility scroll-quiet {
+  overflow: auto;
+  scrollbar-gutter: stable;
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  &:hover::-webkit-scrollbar-thumb {
+    background-color: var(--line-strong);
+  }
+}
+
+/* Checkerboard behind transparent images (background removal results). */
+@utility checker {
+  background-color: var(--sunken);
+  background-image: conic-gradient(
+    var(--field) 25%,
+    transparent 0 50%,
+    var(--field) 0 75%,
+    transparent 0
+  );
+  background-size: 16px 16px;
+}
+
+@layer base {
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

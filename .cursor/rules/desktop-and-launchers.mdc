@@ -7,7 +7,8 @@ alwaysApply: false
 
 # Desktop and launchers
 
-- The Tauri app is a **thin shell** (ADR-0002): `blombo-ui.exe --url http://127.0.0.1:4380`. The server starts first (`--open app`) and spawns it; closing the main window stops the server. Keep all product logic in the web app.
+- The Tauri app is a **thin shell** (ADR-0002): `blombo-ui.exe --url http://127.0.0.1:4380 --data-dir <repo>/runtime/app`. The server starts first (`--open app`) and spawns it; closing the main window stops the server. Keep all product logic in the web app.
+- **BlomboUI has no installer.** It runs from the cloned folder through `start-web.bat` / `start-app.bat`, and everything it writes stays in that folder (`data/`, `runtime/`). Nothing goes to AppData, the registry or system folders: the window's WebView2 profile and placement live in `runtime/app/`, and anything new must follow (no Tauri plugins or tools that store under AppData). ComfyUI slots may be installed by the app, into `runtime/` only.
 - IPC is granted to localhost pages by `src-tauri/capabilities/localhost.json`. Extra windows use labels starting with `w` (see `lib/platform.ts`). Add a permission there only with a matching use in `platform.ts`.
 - `tools/ensure-build.ts` and `tools/ensure-app.ts` rebuild only when sources are newer than the output. Add new source folders to their lists.
 - `.bat` files are **CRLF** (`.gitattributes` enforces it). Every launcher checks Node ≥ 22.18, installs dependencies on first run, and pauses with a clear message on failure.

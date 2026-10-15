@@ -1,6 +1,7 @@
 /**
  * `npm run dev:app`: opens the desktop window on the Vite dev server (hot reload) once it's up.
- * Closing the window ends the dev session.
+ * Closing the window ends the dev session. Like start-app, the window keeps its data in
+ * runtime/app/ rather than AppData.
  */
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -31,5 +32,7 @@ for (;;) {
   await new Promise((resolve) => setTimeout(resolve, 400));
 }
 
-const child = spawn(exe, ["--url", url], { stdio: "inherit" });
+const child = spawn(exe, ["--url", url, "--data-dir", path.join(root, "runtime", "app")], {
+  stdio: "inherit",
+});
 child.on("exit", (code) => process.exit(code ?? 0));

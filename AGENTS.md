@@ -65,7 +65,7 @@ src-tauri/        Desktop shell: native window on --url, capability for localhos
 presets/          workflows/ (sd15, sdxl, illustrious) · planned: stages/, layouts/
 tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit
-runtime/          (gitignored) ComfyUI slots, caches, logs
+runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop window data)
 ```
 
 **Data flow:** client → `/api` (Zod-validated) → service → files in `data/` and ComfyUI's HTTP API. Live state comes back over one WebSocket per window, `/api/live` (ADR-0008): ComfyUI status, GPU stats at 1 Hz, queue snapshots, step progress, binary preview frames, errors, and ComfyUI's log while a log view is open. The server owns the single ComfyUI socket (`services/comfy/client.ts`) and fans it out (`services/live.ts`); the client keeps it in `lib/live.ts`.
@@ -75,6 +75,8 @@ runtime/          (gitignored) ComfyUI slots, caches, logs
 **Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar thumbnails and info; the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
 
 **Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) and the Civitai and Manager tabs of Models are still samples. Never build new features on preview data; replace the imports as services land.
+
+**Portable, no installer:** BlomboUI runs from the cloned folder through the launchers. Everything it writes stays in `data/` and `runtime/`; nothing goes to AppData or the registry (the desktop window keeps its WebView2 profile and size in `runtime/app/`). Only ComfyUI slots can be installed by the app, into `runtime/comfyui/`.
 
 ## Golden rules
 

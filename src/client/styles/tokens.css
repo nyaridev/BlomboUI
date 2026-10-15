@@ -1,0 +1,220 @@
+/*
+ * Design tokens: the ONLY place raw colors live (ADR-0007, docs/design-system.md).
+ * Components use Tailwind classes mapped below (bg-surface, text-fg-2, border-line …) or var(--token).
+ *
+ * Surfaces climb in elevation:  bg → surface → surface-2 → surface-3 (floating)
+ * Inputs sit on their container: field (on surface / surface-2), sunken for tracks and wells.
+ * Text steps down:               fg → fg-2 (labels) → fg-3 (muted) → fg-4 (disabled, hints)
+ */
+
+:root,
+[data-theme="blombo"] {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #080a0d;
+  --surface: #0e1117;
+  --surface-2: #141922;
+  --surface-3: #1a202a;
+  --field: #1a2029;
+  --field-hover: #212834;
+  --sunken: #0a0d11;
+  --line: #232b36;
+  --line-strong: #313c4a;
+  --overlay: rgb(3 5 8 / 0.72);
+
+  /* text */
+  --fg: #e3e9f0;
+  --fg-2: #a8b4c0;
+  --fg-3: #6b7885;
+  --fg-4: #4a5562;
+
+  /* palette families: base for fills, -ink for text/icons on dark */
+  --red: #c02040;
+  --red-ink: #ff5a78;
+  --orange: #e04800;
+  --orange-ink: #ff8a40;
+  --yellow: #e0a000;
+  --yellow-ink: #ffe050;
+  --green: #00a050;
+  --green-ink: #40f090;
+  --cyan: #00a0b0;
+  --cyan-ink: #40f0f0;
+  --blue: #2a56e8;
+  --blue-ink: #7aa2ff;
+  --purple: #7020e0;
+  --purple-ink: #b07cff;
+  --pink: #e02080;
+  --pink-ink: #ff60c0;
+
+  /* brand */
+  --accent: var(--blue);
+  --accent-ink: var(--blue-ink);
+  --on-accent: #ffffff;
+  --generate: #e64a06;
+  --generate-hi: #ff7a2e;
+  --generate-ink: #ff9a5c;
+  --on-generate: #ffffff;
+
+  /* status */
+  --success: var(--green-ink);
+  --warning: var(--yellow-ink);
+  --danger: var(--red-ink);
+  --info: var(--blue-ink);
+
+  /* prompt syntax */
+  --syn-weight: #fde68a;
+  --syn-lora: #c4b5fd;
+  --syn-wildcard: #a5f3fc;
+  --syn-break: #ff9a5c;
+  --syn-escape: #8a96a2;
+  --syn-invalid: #ff5a78;
+  --syn-comment: #4a5562;
+
+  /* depth: a hairline top highlight instead of glass or heavy shadows */
+  --edge-hi: rgb(255 255 255 / 0.035);
+  --shadow-pop: 0 18px 48px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.35);
+  --shadow-card: 0 1px 0 var(--edge-hi) inset, 0 1px 2px rgb(0 0 0 / 0.25);
+  --glow-generate:
+    0 0 0 1px color-mix(in oklab, var(--generate-hi) 55%, transparent),
+    0 8px 28px -6px color-mix(in oklab, var(--generate) 70%, transparent);
+}
+
+[data-theme="slate"] {
+  --bg: #11151a;
+  --surface: #171c24;
+  --surface-2: #1d232d;
+  --surface-3: #232a35;
+  --field: #252c38;
+  --field-hover: #2c3442;
+  --sunken: #12161c;
+  --line: #2c3542;
+  --line-strong: #3a4554;
+  --fg: #e8eef4;
+  --fg-2: #c4ced6;
+  --fg-3: #8794a0;
+  --fg-4: #5b6672;
+}
+
+[data-theme="midnight"] {
+  --bg: #070b14;
+  --surface: #0c1420;
+  --surface-2: #111a28;
+  --surface-3: #172133;
+  --field: #152033;
+  --field-hover: #1b2840;
+  --sunken: #080d17;
+  --line: #223044;
+  --line-strong: #2e3f57;
+  --fg: #e2eaf4;
+  --fg-2: #b8c8d8;
+  --fg-3: #7a8ea4;
+  --fg-4: #4c5d72;
+}
+
+[data-theme="ember"] {
+  --bg: #100c0a;
+  --surface: #181410;
+  --surface-2: #1f1a15;
+  --surface-3: #27211a;
+  --field: #282018;
+  --field-hover: #31281e;
+  --sunken: #120e0b;
+  --line: #3a3028;
+  --line-strong: #4a3e33;
+  --fg: #f2eae2;
+  --fg-2: #d0c4b4;
+  --fg-3: #9a8c7c;
+  --fg-4: #66594c;
+}
+
+[data-theme="moss"] {
+  --bg: #0a100c;
+  --surface: #101810;
+  --surface-2: #151f16;
+  --surface-3: #1b271d;
+  --field: #1a241c;
+  --field-hover: #212d23;
+  --sunken: #0b110d;
+  --line: #2a3830;
+  --line-strong: #37483d;
+  --fg: #e4eee8;
+  --fg-2: #b8ccc0;
+  --fg-3: #7a9084;
+  --fg-4: #4e6157;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #e8ecf0;
+  --surface: #f6f8fa;
+  --surface-2: #ffffff;
+  --surface-3: #ffffff;
+  --field: #ffffff;
+  --field-hover: #f2f5f8;
+  --sunken: #e1e6eb;
+  --line: #d2d9e0;
+  --line-strong: #b8c2cc;
+  --overlay: rgb(20 26 33 / 0.45);
+  --fg: #172029;
+  --fg-2: #3a4450;
+  --fg-3: #5c6874;
+  --fg-4: #8b96a1;
+  --red-ink: #c02040;
+  --orange-ink: #c24e10;
+  --yellow-ink: #8f6a00;
+  --green-ink: #0a7d45;
+  --cyan-ink: #087a86;
+  --blue-ink: #2448c8;
+  --purple-ink: #6a2ad0;
+  --pink-ink: #c01a70;
+  --generate: #d65410;
+  --generate-hi: #f07228;
+  --generate-ink: #c24e10;
+  --syn-weight: #8a6100;
+  --syn-lora: #6a3fd0;
+  --syn-wildcard: #087a86;
+  --syn-break: #c24e10;
+  --syn-escape: #6b7885;
+  --syn-invalid: #c02040;
+  --syn-comment: #9aa5b0;
+  --edge-hi: rgb(255 255 255 / 0.7);
+  --shadow-pop: 0 18px 40px -14px rgb(23 32 41 / 0.28), 0 2px 6px rgb(23 32 41 / 0.08);
+  --shadow-card: 0 1px 2px rgb(23 32 41 / 0.06);
+}
+
+/* Profile accent. Set on <html data-accent="…">. Light-on-color families get dark text. */
+[data-accent="blue"] {
+  --accent: var(--blue);
+  --accent-ink: var(--blue-ink);
+}
+[data-accent="purple"] {
+  --accent: var(--purple);
+  --accent-ink: var(--purple-ink);
+}
+[data-accent="pink"] {
+  --accent: var(--pink);
+  --accent-ink: var(--pink-ink);
+}
+[data-accent="red"] {
+  --accent: var(--red);
+  --accent-ink: var(--red-ink);
+}
+[data-accent="orange"] {
+  --accent: var(--orange);
+  --accent-ink: var(--orange-ink);
+}
+[data-accent="yellow"] {
+  --accent: var(--yellow);
+  --accent-ink: var(--yellow-ink);
+  --on-accent: #1a1405;
+}
+[data-accent="green"] {
+  --accent: var(--green);
+  --accent-ink: var(--green-ink);
+}
+[data-accent="cyan"] {
+  --accent: var(--cyan);
+  --accent-ink: var(--cyan-ink);
+  --on-accent: #041a1d;
+}

@@ -1,0 +1,17 @@
+# dependencies & builds
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/
+
+# user data (profiles, settings, workflows, databases) and runtime (ComfyUI slots, caches, logs)
+data/
+runtime/
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+.vscode/*
+!.vscode/extensions.json
+.idea/

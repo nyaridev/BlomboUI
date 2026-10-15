@@ -1,0 +1,20 @@
+[package]
+name = "blombo-ui"
+version = "2.0.0-alpha.0"
+description = "BlomboUI desktop window"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-window-state = "2"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

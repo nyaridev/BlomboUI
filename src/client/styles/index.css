@@ -1,0 +1,102 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "./tokens.css";
+@import "./base.css";
+
+/*
+ * Tailwind sees only our tokens: the default palette is cleared so a raw `bg-red-500` can't
+ * sneak in. Every color utility maps to a token that themes and profile accents override.
+ */
+@theme inline {
+  --color-*: initial;
+  --color-white: #ffffff;
+  --color-black: #000000;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-field: var(--field);
+  --color-field-hover: var(--field-hover);
+  --color-sunken: var(--sunken);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-overlay: var(--overlay);
+
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-3: var(--fg-3);
+  --color-fg-4: var(--fg-4);
+
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
+  --color-generate: var(--generate);
+  --color-generate-hi: var(--generate-hi);
+  --color-generate-ink: var(--generate-ink);
+  --color-on-generate: var(--on-generate);
+
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-info: var(--info);
+
+  --color-red: var(--red);
+  --color-red-ink: var(--red-ink);
+  --color-orange: var(--orange);
+  --color-orange-ink: var(--orange-ink);
+  --color-yellow: var(--yellow);
+  --color-yellow-ink: var(--yellow-ink);
+  --color-green: var(--green);
+  --color-green-ink: var(--green-ink);
+  --color-cyan: var(--cyan);
+  --color-cyan-ink: var(--cyan-ink);
+  --color-blue: var(--blue);
+  --color-blue-ink: var(--blue-ink);
+  --color-purple: var(--purple);
+  --color-purple-ink: var(--purple-ink);
+  --color-pink: var(--pink);
+  --color-pink-ink: var(--pink-ink);
+
+  --color-syn-weight: var(--syn-weight);
+  --color-syn-lora: var(--syn-lora);
+  --color-syn-wildcard: var(--syn-wildcard);
+  --color-syn-break: var(--syn-break);
+  --color-syn-escape: var(--syn-escape);
+  --color-syn-invalid: var(--syn-invalid);
+
+  --font-sans: "Geist Variable", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", "Cascadia Mono", ui-monospace, monospace;
+
+  --text-2xs: 11px;
+  --text-2xs--line-height: 1.35;
+  --text-xs: 12px;
+  --text-xs--line-height: 1.4;
+  --text-sm: 13px;
+  --text-sm--line-height: 1.45;
+  --text-base: 14px;
+  --text-base--line-height: 1.5;
+  --text-lg: 16px;
+  --text-lg--line-height: 1.4;
+  --text-xl: 20px;
+  --text-xl--line-height: 1.3;
+  --text-2xl: 26px;
+  --text-2xl--line-height: 1.2;
+  --text-3xl: 34px;
+  --text-3xl--line-height: 1.1;
+
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 22px;
+
+  --shadow-pop: var(--shadow-pop);
+  --shadow-card: var(--shadow-card);
+  --shadow-glow: var(--glow-generate);
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}

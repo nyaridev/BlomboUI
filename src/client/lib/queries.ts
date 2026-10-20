@@ -69,6 +69,12 @@ export const qk = {
   stageReport: (profileId: string | null, workflowId: string | null, stages: unknown) =>
     ["stage-report", profileId, workflowId, stages] as const,
   tagLists: (profileId: string | null) => ["tag-lists", profileId] as const,
+  /** Is blombo-bridge loaded in the open profile's ComfyUI (follows ComfyUI's status). */
+  bridgeStatus: (profileId: string | null) => ["bridge-status", profileId] as const,
+  /** What a batch workflow is missing (refetched when models or custom nodes change). */
+  batchCheck: (profileId: string | null, workflowId: string | null) =>
+    ["batch-check", profileId, workflowId] as const,
+  batch: ["batch"] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -209,6 +215,31 @@ export function useStageReport(workflowId: string | null, stages: unknown) {
     placeholderData: keepPreviousData,
     staleTime: 30_000,
   });
+}
+
+export function useBridgeStatus(enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.bridgeStatus(profileId),
+    queryFn: api.bridgeStatus,
+    enabled: enabled && profileId !== null,
+    staleTime: 30_000,
+  });
+}
+
+export function useBatchCheck(workflowId: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.batchCheck(profileId, workflowId),
+    queryFn: () => api.batchCheck(workflowId as string),
+    enabled: profileId !== null && workflowId !== null,
+    staleTime: 30_000,
+  });
+}
+
+/** The batch runner when the view opened; the live bus has it after that. */
+export function useBatchSnapshot() {
+  return useQuery({ queryKey: qk.batch, queryFn: api.batch });
 }
 
 export function useTagLists() {

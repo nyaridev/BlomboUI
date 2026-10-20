@@ -10,6 +10,14 @@ import type {
   SystemInfo,
 } from "@shared/api";
 import type { CompleteMode, Suggestion, TagListInfo, TagListsResponse } from "@shared/autocomplete";
+import type {
+  BatchCheck,
+  BatchRun,
+  BatchSnapshot,
+  StagedFile,
+  StartBatchBody,
+} from "@shared/batch";
+import type { BridgeStatus, EditSession } from "@shared/bridge";
 import {
   type BrowseFilter,
   browseQuery,
@@ -98,6 +106,8 @@ export const api = {
   checkPath: (path: string) => request<CheckPathResult>("POST", "/system/check-path", { path }),
   pickFolder: (title: string, initial?: string) =>
     request<{ path: string | null }>("POST", "/system/pick-folder", { title, initial }),
+  pickImages: (title: string) =>
+    request<{ paths: string[] }>("POST", "/system/pick-images", { title }),
 
   profiles: () => request<ProfilesResponse>("GET", "/profiles"),
   createProfile: (body: CreateProfileBody) => request<Profile>("POST", "/profiles", body),
@@ -143,6 +153,25 @@ export const api = {
   duplicateWorkflow: (id: string, name?: string) =>
     request<WorkflowManifest>("POST", `/workflows/${id}/duplicate`, { name }),
   deleteWorkflow: (id: string) => request<void>("DELETE", `/workflows/${id}`),
+  /** Edit in ComfyUI: a single-use token and the ComfyUI address that opens it. */
+  editSession: (id: string) => request<EditSession>("POST", `/workflows/${id}/edit-session`),
+  bridgeStatus: () => request<BridgeStatus>("GET", "/comfy/bridge"),
+  installBridge: (folder: string) =>
+    request<{ path: string; result: string }>("POST", "/comfy/bridge/install", { folder }),
+
+  batch: () => request<BatchSnapshot>("GET", "/batch"),
+  batchCheck: (workflowId: string) =>
+    request<BatchCheck>("GET", `/batch/check/${encodeURIComponent(workflowId)}`),
+  startBatch: (body: StartBatchBody) => request<BatchRun>("POST", "/batch", body),
+  cancelBatch: () => request<BatchSnapshot>("POST", "/batch/cancel"),
+  clearBatch: () => request<BatchSnapshot>("POST", "/batch/clear"),
+  stageBatchFile: (file: File) =>
+    request<StagedFile>(
+      "POST",
+      `/batch/files?filename=${encodeURIComponent(file.name)}`,
+      undefined,
+      file,
+    ),
 
   layouts: () => request<LayoutList>("GET", "/layouts"),
   createLayout: (body: CreateLayoutBody) => request<LayoutDocument>("POST", "/layouts", body),
@@ -191,6 +220,8 @@ export const api = {
   cancelAll: () => request<QueueSnapshot>("POST", "/jobs/cancel"),
   cancelJob: (id: string) => request<QueueSnapshot>("DELETE", `/jobs/${id}`),
   setLoop: (on: boolean) => request<QueueSnapshot>("PUT", "/jobs/loop", { on }),
+  cancelGroup: (id: string) =>
+    request<QueueSnapshot>("POST", `/jobs/groups/${encodeURIComponent(id)}/cancel`),
 
   wildcards: () => request<{ root: string; names: string[] }>("GET", "/wildcards"),
   wildcardTree: () => request<WildcardTree>("GET", "/wildcards/tree"),
@@ -304,6 +335,11 @@ function query(params: Record<string, unknown>): string {
   for (const [k, v] of Object.entries(params))
     if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   return q.toString();
+}
+
+/** The .blombo download of a workflow. */
+export function workflowExportUrl(id: string): string {
+  return `/api/workflows/${encodeURIComponent(id)}/export`;
 }
 
 /** A stage's control image (named by its content, so it's cached for good). */

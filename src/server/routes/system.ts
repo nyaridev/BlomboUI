@@ -6,7 +6,7 @@ import { CheckPathBody } from "../../shared/profile.ts";
 import type { ServerConfig } from "../config.ts";
 import { readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
-import { checkPath, pickFolder } from "../services/system.ts";
+import { checkPath, pickFolder, pickImages } from "../services/system.ts";
 
 export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
   const r = new Hono();
@@ -37,6 +37,14 @@ export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
       }),
     );
     return c.json({ path: await pickFolder(body.title, body.initial) });
+  });
+
+  r.post("/pick-images", async (c) => {
+    const body = await readJson(
+      c,
+      z.object({ title: z.string().max(120).default("Choose images") }),
+    );
+    return c.json({ paths: await pickImages(body.title) });
   });
 
   return r;

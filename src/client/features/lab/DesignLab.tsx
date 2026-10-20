@@ -3,6 +3,7 @@
  * Rule (ADR-0007): a control or variant isn't finished until it's shown here.
  */
 import { useTheme } from "@client/app/theme";
+import { BatchRunView } from "@client/features/generate/batch/BatchView";
 import { PromptEditor } from "@client/features/generate/PromptEditor";
 import { MOCK_PROMPT } from "@client/features/preview/mock";
 import { Icon } from "@client/icons/Icon";
@@ -56,6 +57,7 @@ import {
   UnitTabs,
   Veil,
 } from "@client/ui";
+import type { BatchRun } from "@shared/batch";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useState } from "react";
@@ -76,8 +78,43 @@ const SECTIONS = [
   ["stages", "Stages"],
   ["cards", "Cards"],
   ["library", "Library"],
+  ["batch", "Batch"],
   ["prompt", "Prompt editor"],
 ] as const;
+
+/** A finished-looking batch for the Batch section (Lab only). */
+const SAMPLE_BATCH: BatchRun = {
+  id: "lab",
+  workflowId: "caption",
+  workflowName: "Caption images",
+  state: "running",
+  sourceLabel: "D:\\shots (6 images)",
+  output: "D:\\shots",
+  startedAt: "2026-10-20T12:00:00.000Z",
+  finishedAt: null,
+  error: null,
+  items: [
+    ["IMG_0001.png", "done", ["IMG_0001.txt"], null],
+    ["IMG_0002.png", "skipped", ["IMG_0002.txt"], null],
+    [
+      "IMG_0003.png",
+      "error",
+      [],
+      "Couldn't read D:\\shots\\IMG_0003.png. Was it moved or deleted?",
+    ],
+    ["IMG_0004.png", "running", [], null],
+    ["IMG_0005.png", "queued", [], null],
+    ["IMG_0006.png", "cancelled", [], null],
+  ].map(([name, state, outputs, error], index) => ({
+    index,
+    name: name as string,
+    jobId: null,
+    state: state as BatchRun["items"][number]["state"],
+    progress: 0,
+    outputs: outputs as string[],
+    error: error as string | null,
+  })),
+};
 
 /**
  * Sample images for the carousel, drawn from the palette tokens (so the Lab needs no image
@@ -1149,6 +1186,14 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                   />
                   <DropZone onFile={() => undefined} title="Compact" compact />
                   <DropZone onFile={() => undefined} title="Busy" compact busy />
+                  <DropZone
+                    multiple
+                    compact
+                    icon="image"
+                    onFiles={(files) => toast(`Dropped ${files.length} files`, "info")}
+                    title="Multiple: drop images here"
+                    hint="onFiles gets every file (the batch runner)"
+                  />
                 </div>
               </Row>
               <Row label="Carousel">
@@ -1198,6 +1243,16 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 </div>
               </Row>
             </div>
+          </div>
+        </Section>
+
+        <Section
+          id="batch"
+          title="Batch"
+          text="The batch runner's run: overall progress, the output folder and every file (virtualized), with its state as an icon and a word."
+        >
+          <div className="max-w-xl">
+            <BatchRunView run={SAMPLE_BATCH} />
           </div>
         </Section>
 

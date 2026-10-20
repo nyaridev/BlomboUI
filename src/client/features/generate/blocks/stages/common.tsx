@@ -50,8 +50,8 @@ const MANAGER_QUERY: Partial<Record<ModelKind, string>> = {
   sams: "sam",
 };
 
-/** One problem, with the action that fixes it. */
-function ProblemNotice({ problem }: { problem: StageProblem }) {
+/** One problem, with the action that fixes it (stages and batch workflows). */
+export function ProblemNotice({ problem }: { problem: StageProblem }) {
   const goTo = useGoToView();
   const kind = problem.modelKind;
   const category = kind ? MANAGER_CATEGORY[kind] : undefined;

@@ -7,8 +7,10 @@ import { api } from "@client/lib/api";
 import { qk, queryClient } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
+import type { WorkflowDetail } from "@shared/workflow/manifest";
 import type { StageReport } from "@shared/workflow/stages";
 import { create } from "zustand";
+import { buildScript, useScript } from "./scripts";
 import { takePendingSave, useValues } from "./state";
 
 /** "Generate forever" chosen for the next click (the server owns it once running). */
@@ -61,6 +63,18 @@ export async function generate(): Promise<void> {
     return;
   }
   if (blockedByStage(workflowId)) return;
+  // A script on: Generate runs it (one click, many images).
+  const draft = useScript.getState().draft;
+  let script: ReturnType<typeof buildScript> | null = null;
+  if (draft.kind !== "off") {
+    const profileId = useSession.getState().profileId;
+    const detail = queryClient.getQueryData<WorkflowDetail>(qk.workflow(profileId, workflowId));
+    script = buildScript(draft, detail?.bindings ?? [], values);
+    if (!script.script) {
+      toast(script.error ?? "The script isn't ready yet.", "warning");
+      return;
+    }
+  }
   takePendingSave();
   try {
     const res = await api.generate({
@@ -69,9 +83,15 @@ export async function generate(): Promise<void> {
       stages,
       count: run.count,
       seedMode: run.seedMode,
-      loop: useLoopIntent.getState().on,
+      loop: script ? false : useLoopIntent.getState().on,
+      ...(script?.script ? { script: script.script } : {}),
     });
     if (Object.keys(res.values).length) merge(res.values);
+    if (script?.plan)
+      toast(
+        `Queued ${script.plan.title}: ${res.jobs.length} image${res.jobs.length === 1 ? "" : "s"}`,
+        "info",
+      );
   } catch (e) {
     toast(message(e), "error");
   }

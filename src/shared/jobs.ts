@@ -4,6 +4,7 @@
  */
 import { z } from "zod";
 import { ComfyFileRef } from "./comfy.ts";
+import { Script } from "./scripts.ts";
 import { SeedMode, StagesRecord } from "./workflow/manifest.ts";
 import { RunSegment } from "./workflow/stages.ts";
 
@@ -33,6 +34,32 @@ export const JobProgress = z.object({
 });
 export type JobProgress = z.infer<typeof JobProgress>;
 
+/**
+ * Jobs that one click queued together: a script's cells or a batch's files. The script and batch
+ * services follow their group and put the results together (a grid, thumbnails, output files).
+ */
+export const JobGroup = z.object({
+  id: z.string(),
+  kind: z.enum(["matrix", "xy", "thumbs", "batch", "grid"]),
+  /** "XY plot · CFG scale × Steps", "Remove background". */
+  title: z.string(),
+  /** This job's place in the group (0-based) and the group's size. */
+  index: z.number().int(),
+  total: z.number().int(),
+  /** This job's cell or file ("CFG scale: 7", "IMG_0042.jpg"). */
+  label: z.string(),
+});
+export type JobGroup = z.infer<typeof JobGroup>;
+
+/** A picture Blombo made itself (a script's grid), served from the Blombo server. */
+export const JobFile = z.object({
+  url: z.string(),
+  path: z.string(),
+  width: z.number().int(),
+  height: z.number().int(),
+});
+export type JobFile = z.infer<typeof JobFile>;
+
 export const Job = z.object({
   id: z.string(),
   /** Small increasing number; preview frames carry it instead of the id. */
@@ -53,9 +80,14 @@ export const Job = z.object({
   finishedAt: z.string().nullable(),
   progress: JobProgress,
   images: z.array(JobImage),
+  /** Text a node showed (a tagger's tags, a captioner's caption), in order. */
+  texts: z.array(z.string()).default([]),
   /** What went wrong and what to do; set when state is "error". */
   error: z.string().nullable(),
   promptId: z.string().nullable(),
+  group: JobGroup.nullable().default(null),
+  /** For a script's grid (group kind "grid"): the image Blombo put together. */
+  file: JobFile.nullable().default(null),
 });
 export type Job = z.infer<typeof Job>;
 
@@ -79,6 +111,8 @@ export const GenerateBody = z.object({
   seedMode: SeedMode.optional(),
   /** Keep queuing new runs (new seeds) until stopped. */
   loop: z.boolean().default(false),
+  /** Run a script instead (prompt matrix, XY plot, scope thumbnails); `count` is ignored. */
+  script: Script.optional(),
 });
 export type GenerateBody = z.infer<typeof GenerateBody>;
 

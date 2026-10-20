@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { APP_NAME } from "../../shared/constants.ts";
 import {
   DuplicateWorkflowBody,
   PatchValuesBody,
@@ -8,9 +9,11 @@ import {
 } from "../../shared/workflow/manifest.ts";
 import type { ServerConfig } from "../config.ts";
 import { HttpError, readJson } from "../lib/http.ts";
+import type { BridgeService } from "../services/bridge.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 import type { LayoutService } from "../services/layouts.ts";
 import { refreshBindings } from "../services/workflows/analyze.ts";
+import { exportBundle } from "../services/workflows/bundle.ts";
 import { importWorkflow } from "../services/workflows/import.ts";
 import { installPreset, presetSummaries } from "../services/workflows/presets.ts";
 import type { WorkflowService } from "../services/workflows/store.ts";
@@ -22,6 +25,7 @@ export function workflowRoutes(
   workflows: WorkflowService,
   supervisor: ComfySupervisor,
   layouts: LayoutService,
+  bridge: BridgeService,
 ) {
   const r = new Hono();
 
@@ -55,6 +59,7 @@ export function workflowRoutes(
       },
       workflows,
       await supervisor.objectInfo(),
+      layouts,
     );
     return c.json(result, 201);
   });
@@ -70,6 +75,27 @@ export function workflowRoutes(
     };
     return c.json(detail);
   });
+
+  /** A .blombo bundle of the workflow (download). */
+  r.get("/:id/export", async (c) => {
+    const out = await exportBundle(c.req.param("id"), {
+      workflows,
+      layouts,
+      app: { name: APP_NAME, version: config.version },
+    });
+    return new Response(out.bytes as Uint8Array<ArrayBuffer>, {
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${out.name.replace(/[^ -~]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(out.name)}`,
+        "cache-control": "no-store",
+      },
+    });
+  });
+
+  /** Edit in ComfyUI: a single-use token and the ComfyUI address that opens it (ADR-0009). */
+  r.post("/:id/edit-session", async (c) =>
+    c.json(await bridge.createSession(c.req.param("id")), 201),
+  );
 
   r.patch("/:id/values", async (c) => {
     const body = await readJson(c, PatchValuesBody);

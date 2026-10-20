@@ -1,5 +1,5 @@
 /**
- * A stage's "needs custom nodes" notice. For a ComfyUI Blombo manages it offers Install (the
+ * A "needs custom nodes" notice (a stage's, or a batch workflow's). For a ComfyUI Blombo manages it offers Install (the
  * server downloads the packs at their pinned commits, installs their packages and restarts
  * ComfyUI) and shows that install's progress in place; for your own ComfyUI it links the packs
  * and ComfyUI, because Blombo doesn't change a ComfyUI it doesn't run. The progress comes over
@@ -51,6 +51,7 @@ export function NodesNotice({ problem }: { problem: StageProblem }) {
   const recheck = async () => {
     await api.comfyRefresh().catch(() => undefined);
     void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
+    void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
   };
 
   if (ours?.state === "running") return <Progress install={ours} />;

@@ -12,9 +12,12 @@ import type { AppError } from "../shared/live.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
 import { AutocompleteService } from "./services/autocomplete.ts";
+import { BatchService } from "./services/batch.ts";
+import { BridgeService } from "./services/bridge.ts";
 import { CivitaiApi } from "./services/civitai/api.ts";
 import { ImageProxy } from "./services/civitai/images.ts";
 import { CivitaiService } from "./services/civitai/index.ts";
+import { installBridge } from "./services/comfy/bridge.ts";
 import { fakeInstallOps } from "./services/comfy/fixtures/fake-install-ops.ts";
 import { ComfyInstaller } from "./services/comfy/installer.ts";
 import { NodePackInstaller } from "./services/comfy/nodepacks.ts";
@@ -29,9 +32,10 @@ import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
 import { ProfileService } from "./services/profiles.ts";
+import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
 import { StageService } from "./services/stages.ts";
-import { installPreset } from "./services/workflows/presets.ts";
+import { installPreset, listPresets } from "./services/workflows/presets.ts";
 import { WorkflowService } from "./services/workflows/store.ts";
 
 export interface Services {
@@ -54,6 +58,9 @@ export interface Services {
   layouts: LayoutService;
   stages: StageService;
   autocomplete: AutocompleteService;
+  bridge: BridgeService;
+  scripts: ScriptService;
+  batch: BatchService;
   /** Install starter presets into a new profile; unknown ids are skipped with a warning. */
   installPresets: (profileId: string, presetIds: string[]) => Promise<void>;
   shutdown: () => Promise<void>;
@@ -62,9 +69,20 @@ export interface Services {
 export function createServices(config: ServerConfig): Services {
   const profiles = new ProfileService(config);
   const workflows = new WorkflowService(profiles);
+  // ComfyUI's page reaches this server here (the bridge's Save to Blombo, Send to Blombo).
+  const apiOrigin = `http://${config.host}:${config.port}`;
+  const bridgeSource = path.join(config.root, "src", "comfy-bridge");
   const supervisor = new ComfySupervisor({
     runtimeDir: config.runtimeDir,
     keepAlive: config.dev,
+    // Every managed slot gets the current blombo-bridge before ComfyUI starts (ADR-0009).
+    prepareSlot: async (layout) => {
+      const result = await installBridge(path.join(layout.comfyDir, "custom_nodes"), {
+        source: bridgeSource,
+        api: apiOrigin,
+      });
+      return result === "current" ? null : `Blombo bridge ${result} in custom_nodes/.`;
+    },
     // --fake-comfy (dev checks): the fake ComfyUI stands in for the slot's main.py and only
     // shows the stage packs that are in the slot's custom_nodes/.
     launch: config.fakeComfy
@@ -228,7 +246,11 @@ export function createServices(config: ServerConfig): Services {
   const nodePacks = new NodePackInstaller({
     runtimeDir: config.runtimeDir,
     ops: config.fakeComfy ? fakeInstallOps() : undefined,
-    known: async () => (await stages.packages()).flatMap((s) => s.pkg.packs),
+    // Packs Blombo's own packages list: stages and the built-in batch workflows.
+    known: async () => [
+      ...(await stages.packages()).flatMap((s) => s.pkg.packs),
+      ...(await listPresets(config.presetsDir)).flatMap((p) => p.manifest.packs),
+    ],
     blocked: () => {
       if (installer.running) return "ComfyUI is being installed. Wait for it to finish.";
       const busy = jobs.snapshot().jobs.some((j) => j.state === "running" || j.state === "queued");
@@ -260,6 +282,34 @@ export function createServices(config: ServerConfig): Services {
   });
   nodePacks.on("state", (install) => bus.publish("install", { t: "nodes.install", install }));
   nodePacks.on("installed", () => supervisor.refreshObjectInfo());
+
+  const bridge = new BridgeService({
+    workflows,
+    profiles,
+    supervisor,
+    publish: (msg) => bus.publish(null, msg),
+    apiOrigin,
+    source: bridgeSource,
+  });
+  const scripts = new ScriptService({
+    queue: jobs,
+    profiles,
+    supervisor,
+    publish: (msg) => bus.publish(null, msg),
+    ingest: (ref) => gallery.ingestOutput(ref),
+    onThumbs: () => {
+      models.invalidate();
+      bus.publish(null, { t: "models.changed" });
+    },
+  });
+  const batch = new BatchService({
+    queue: jobs,
+    workflows,
+    profiles,
+    supervisor,
+    publish: (topic, msg) => bus.publish(topic, msg),
+    runtimeDir: config.runtimeDir,
+  });
 
   supervisor.on("status", (status) => {
     bus.publish("comfy", { t: "comfy.status", status });
@@ -322,6 +372,9 @@ export function createServices(config: ServerConfig): Services {
     layouts,
     stages,
     autocomplete,
+    bridge,
+    scripts,
+    batch,
     installPresets: async (profileId, presetIds) => {
       for (const id of presetIds) {
         try {

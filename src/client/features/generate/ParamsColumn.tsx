@@ -30,6 +30,7 @@ import { type Binding, resolveBind } from "@shared/workflow/manifest";
 import type { ReactNode } from "react";
 import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
+import { ScriptsBlock } from "./blocks/Scripts";
 import { Seed } from "./blocks/Seed";
 import { AdetailerStage, ControlNetStage, HiresStage } from "./blocks/stages";
 import { useLayout } from "./state";
@@ -74,9 +75,15 @@ export function blockLabel(block: Block, bindings: Binding[]): { label: string; 
     case "feature":
       return {
         label:
-          { resolution: "Size", seed: "Seed & batch" }[block.feature as "resolution" | "seed"] ??
-          block.feature,
-        icon: block.feature === "resolution" ? "aspect-ratio" : "seed",
+          { resolution: "Size", seed: "Seed & batch", scripts: "Scripts" }[
+            block.feature as "resolution" | "seed" | "scripts"
+          ] ?? block.feature,
+        icon:
+          block.feature === "resolution"
+            ? "aspect-ratio"
+            : block.feature === "scripts"
+              ? "layout-grid"
+              : "seed",
       };
   }
 }
@@ -98,11 +105,25 @@ interface RenderContext {
   bindings: Binding[];
   placed: Set<string>;
   customizing: boolean;
+  /** A batch workflow: its input image comes from the runner, and Generate-only blocks hide. */
+  batch: boolean;
+}
+
+/** Blocks that only mean something for Generate (not for a batch workflow). */
+function generateOnly(block: Block): boolean {
+  return (
+    block.type === "stage" ||
+    (block.type === "feature" && ["scripts", "resolution", "seed"].includes(block.feature))
+  );
 }
 
 function RestBlock({ title, ctx }: { title: string; ctx: RenderContext }) {
   const rest = ctx.bindings.filter(
-    (b) => !b.hidden && !ctx.placed.has(b.id) && !(b.role && FEATURE_ROLES.has(b.role)),
+    (b) =>
+      !b.hidden &&
+      !ctx.placed.has(b.id) &&
+      !(b.role && FEATURE_ROLES.has(b.role)) &&
+      !(ctx.batch && b.role === "image.input"),
   );
   if (!rest.length)
     return ctx.customizing ? <Ghost text="Nothing else to show for this workflow" /> : null;
@@ -144,6 +165,7 @@ function StageBlock({ stage }: { stage: keyof typeof STAGE_INFO }) {
 }
 
 function renderBlock(block: Block, ctx: RenderContext): ReactNode {
+  if (ctx.batch && generateOnly(block)) return null;
   switch (block.type) {
     case "param": {
       const b = resolveBind(ctx.bindings, block.bind);
@@ -158,6 +180,7 @@ function renderBlock(block: Block, ctx: RenderContext): ReactNode {
     case "feature":
       if (block.feature === "resolution") return <Resolution />;
       if (block.feature === "seed") return <Seed />;
+      if (block.feature === "scripts") return <ScriptsBlock />;
       return null;
     case "stage":
       return <StageBlock stage={block.stage} />;
@@ -302,15 +325,20 @@ function Sortable({
   );
 }
 
-export function ParamsColumn() {
+export function ParamsColumn({ batch = false }: { batch?: boolean }) {
   const doc = useLayout((s) => s.doc);
   const customizing = useLayout((s) => s.customizing);
   const moveParams = useLayout((s) => s.moveParams);
   const moveInCard = useLayout((s) => s.moveInCard);
   const bindings = useBindings();
   const blocks = doc?.regions.params ?? [];
-  const ctx: RenderContext = { bindings, placed: placedBindingIds(blocks, bindings), customizing };
-  const visible = blocks.filter((b) => customizing || !b.hidden);
+  const ctx: RenderContext = {
+    bindings,
+    placed: placedBindingIds(blocks, bindings),
+    customizing,
+    batch,
+  };
+  const visible = blocks.filter((b) => (customizing || !b.hidden) && !(batch && generateOnly(b)));
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),

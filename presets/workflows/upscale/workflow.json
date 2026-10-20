@@ -1,0 +1,78 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "upscale",
+  "name": "Upscale images",
+  "kind": "batch",
+  "family": "Utility",
+  "description": "Enlarges each image with an upscale model (4x), then resizes to the final scale. Uses only ComfyUI's own nodes.",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "upscale",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "image.input",
+      "node": "1",
+      "input": "image",
+      "type": "image",
+      "label": "Input image",
+      "hidden": false,
+      "role": "image.input"
+    },
+    {
+      "id": "n2.model_name",
+      "node": "2",
+      "input": "model_name",
+      "type": "model",
+      "label": "Upscale model",
+      "hidden": false,
+      "modelKind": "upscale_models",
+      "group": "More from this workflow"
+    },
+    {
+      "id": "n4.upscale_method",
+      "node": "4",
+      "input": "upscale_method",
+      "type": "enum",
+      "label": "Final size · Upscale method",
+      "hidden": false,
+      "options": [
+        "nearest-exact",
+        "bilinear",
+        "area",
+        "bicubic",
+        "lanczos"
+      ],
+      "group": "Final size"
+    },
+    {
+      "id": "n4.scale_by",
+      "node": "4",
+      "input": "scale_by",
+      "type": "float",
+      "label": "Final size · Scale by",
+      "hidden": false,
+      "min": 0.01,
+      "max": 8,
+      "step": 0.01,
+      "group": "Final size"
+    }
+  ],
+  "values": {
+    "image.input": "example.png",
+    "n2.model_name": "4x-UltraSharp.pth",
+    "n4.upscale_method": "lanczos",
+    "n4.scale_by": 0.5
+  },
+  "run": {
+    "seedMode": "fixed",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "packs": [],
+  "createdAt": "2026-10-20T00:00:00.000Z",
+  "updatedAt": "2026-10-20T00:00:00.000Z"
+}

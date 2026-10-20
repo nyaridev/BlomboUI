@@ -13,6 +13,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { ComingSoon } from "../features/common/ComingSoon";
 import { GalleryView } from "../features/gallery/GalleryView";
+import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
 import { Header } from "./header/Header";
 import { viewFromPath } from "./router";
@@ -72,6 +73,7 @@ export function Shell() {
   const profile = useProfile(profileId);
   const setTheme = useTheme((s) => s.set);
   const [visited, setVisited] = useState<Set<ViewId>>(() => new Set([view]));
+  useBridgeToasts();
 
   useEffect(() => {
     startLive();

@@ -7,13 +7,16 @@ alwaysApply: false
 
 # Workflow rules
 
-Spec: `docs/workflows.md`. Decisions: ADR-0003, 0004, 0005, 0009.
+Spec: `docs/workflows.md`. Decisions: ADR-0003, 0004, 0005, 0009, 0013, 0014.
 
 - A workflow is a package: `workflow.json` (manifest) + `graph.json` (UI) + `prompt.json` (API). Built-in presets use exactly the same format as imports.
 - **Bindings, not class types.** UI parameters map to `(node, input)` with a type and optional **role**. Smart features key off roles (`shared/workflow/roles.ts`). Never branch UI on a ComfyUI `class_type`.
 - The **analyzer** is the only place that knows node classes. It produces bindings; everything downstream reads bindings.
 - **Values live in the workflow.** There are no templates. Duplicate creates an independent copy with `parentId`.
-- **Re-sync after editing in ComfyUI** keeps values by `(node, input)`, then `(class_type, title, input)`, and reports added and removed parameters. Never silently drop a user's value.
+- **Re-sync after editing in ComfyUI** (`services/workflows/resync.ts`) keeps values by `(node, input)`, then `(class_type, title, input)`, then role, and reports added, removed and changed parameters. The canvas opens with the workflow's values (`applyWidgetValues`), so a value that comes back different was changed in ComfyUI and wins. Never silently drop a user's value: removed ones stay under their old ids.
+- **blombo-bridge** (`src/comfy-bridge/`, ADR-0009) is plain JS on ComfyUI's public `app` API; testable logic lives in `web/blombo-core.js`. Bump `BRIDGE_VERSION` (`shared/bridge.ts`) whenever it changes. `/api/bridge/*` answers only the open profile's ComfyUI origin.
+- **Batch workflows** (`kind: "batch"`, ADR-0014) need an `image.input` binding; the runner feeds it and writes images and text outputs (`TEXT_OUTPUT_KEYS`). Built-in ones pin their custom node packs in `packs`; only the presets folder's packs are trusted by the installer.
+- **Scripts** (`shared/scripts.ts`) are planned by one pure function used by both sides; they become groups of runs in the one queue. Don't add a second queue.
 - **Stages** (hires, adetailer, controlnet; upscale later) are packages in `presets/stages/<id>/` (one per stage and family): an API graph with `PORT:<PORT>` stubs, `OUT:<PORT>` republishers and `_meta.blombo` `when` / `else` / `inputsWhen`, plus `stage.json` (ports, packs, fields, defaults). `services/workflows/stages.ts` splices them at the ports `findPorts()` finds, in a fixed order (controlnet → base → hires → adetailer units). Keep the splicer generic: a new stage behavior is a package or a flag, not per-stage graph code. Stage settings are Zod schemas in `shared/workflow/stages.ts`, saved in `manifest.stages`; inheritable fields follow the base until listed in `unlinked` (`InheritRow`).
 - **Missing requirements** are reported by the dry-run check (`/api/stages/check`) with the fix (Models → Manager, the pack's repository), never only at submit. Every class a stage graph uses must be in the fake ComfyUI's `object_info.json`, and each package has a compiled-graph test.
 - **Layouts** are documents. Blocks bind by `role:` (portable) or `id:` (one workflow). Missing targets render as ghosts in Customize mode and nothing otherwise. `params-rest` shows unplaced bindings, so imports work without layout edits. Built-ins live in `presets/layouts/`, the profile's in `layouts/` (`services/layouts.ts`); a workflow links one with `manifest.layout` and the workflow detail carries the layout it shows. Never keep layouts in browser storage.

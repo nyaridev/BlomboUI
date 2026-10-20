@@ -7,6 +7,13 @@
  * prompt and extra chunks, like ComfyUI's SaveImage) so the gallery can index it. With
  * `--custom-nodes DIR`, the nodes of the packs that stage packages list (in their stage.json)
  * only appear when the pack's folder is in DIR, as if ComfyUI loaded what's in custom_nodes/.
+ *
+ * Like ComfyUI it serves custom nodes' web folders (/extensions, /extensions/<folder>/<file>), so
+ * the blombo-bridge extension can run against it: "/" is a small stand-in for ComfyUI's page
+ * (fake-comfy-page/) whose /scripts/app.js has the parts of ComfyUI's `app` the bridge uses, and
+ * /fake/convert turns its UI graph into an API graph with Blombo's own converter.
+ * PreviewImage results are kept in memory as temp images; output nodes that return text (a
+ * tagger) report some tags, so batch captioning has something to write.
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -15,6 +22,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { crc32, deflateSync } from "node:zlib";
 import { type WebSocket, WebSocketServer } from "ws";
+import { ObjectInfo, UiGraph } from "../../../../shared/workflow/graph.ts";
+import { uiToApi } from "../../workflows/convert.ts";
 
 export interface FakeComfy {
   url: string;
@@ -36,13 +45,21 @@ const objectInfo = fs.readFileSync(
   path.join(here, "..", "..", "workflows", "fixtures", "object_info.json"),
   "utf8",
 );
-const presetsDir = path.join(here, "..", "..", "..", "..", "..", "presets", "stages");
+const presetsDir = path.join(here, "..", "..", "..", "..", "..", "presets");
+const pageDir = path.join(here, "fake-comfy-page");
 
-/** Node class → the custom_nodes folder of the stage pack that provides it. */
+/** Node class → the custom_nodes folder of the pack that provides it (stages and batch presets). */
 function packClasses(): Map<string, string> {
   const out = new Map<string, string>();
-  for (const id of fs.readdirSync(presetsDir)) {
-    const file = path.join(presetsDir, id, "stage.json");
+  const files = [
+    ...fs
+      .readdirSync(path.join(presetsDir, "stages"))
+      .map((id) => path.join(presetsDir, "stages", id, "stage.json")),
+    ...fs
+      .readdirSync(path.join(presetsDir, "workflows"))
+      .map((id) => path.join(presetsDir, "workflows", id, "workflow.json")),
+  ];
+  for (const file of files) {
     if (!fs.existsSync(file)) continue;
     const pkg = JSON.parse(fs.readFileSync(file, "utf8")) as {
       packs?: Array<{ url: string; folder?: string; nodes: string[] }>;
@@ -51,6 +68,37 @@ function packClasses(): Map<string, string> {
       for (const cls of pack.nodes) out.set(cls, pack.folder ?? pack.url.split("/").pop() ?? "");
   }
   return out;
+}
+
+const CONTENT_TYPES: Record<string, string> = {
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json",
+  ".css": "text/css",
+  ".html": "text/html; charset=utf-8",
+  ".png": "image/png",
+};
+
+/** The extension URLs ComfyUI's page imports: every .js in a custom node's web folder. */
+function extensionList(customNodesDir: string | null): string[] {
+  if (!customNodesDir || !fs.existsSync(customNodesDir)) return [];
+  const out: string[] = [];
+  for (const folder of fs.readdirSync(customNodesDir)) {
+    const web = path.join(customNodesDir, folder, "web");
+    if (!fs.existsSync(web)) continue;
+    for (const f of fs.readdirSync(web))
+      if (f.endsWith(".js"))
+        out.push(`/extensions/${encodeURIComponent(folder)}/${encodeURIComponent(f)}`);
+  }
+  return out;
+}
+
+/** A custom node's web file, or null (no escaping the folder). */
+function extensionFile(customNodesDir: string | null, rel: string): string | null {
+  if (!customNodesDir) return null;
+  const [folder, ...rest] = rel.split("/").map(decodeURIComponent);
+  if (!folder || rest.some((p) => p === ".." || p === "") || folder === "..") return null;
+  const file = path.join(customNodesDir, folder, "web", ...rest);
+  return fs.existsSync(file) && fs.statSync(file).isFile() ? file : null;
 }
 
 /** object_info without the pack nodes whose folder isn't in `customNodesDir`. */
@@ -143,6 +191,7 @@ export function startFakeComfy(
   const prompts: FakeComfy["prompts"] = [];
   const uploads: string[] = [];
   const history: Record<string, unknown> = {};
+  const temps = new Map<string, Buffer>();
   let failure: unknown = null;
   let interrupted = false;
 
@@ -185,11 +234,32 @@ export function startFakeComfy(
         if (i === 1 && p === 0) sendPreview(clientId, promptId);
       }
     }
+    const info = JSON.parse(objectInfo) as Record<
+      string,
+      { output_node?: boolean; output?: string[] }
+    >;
+    const outputs: Record<string, Record<string, unknown>> = {};
+    // Nodes that show text (a tagger): some tags, a little different per run.
+    for (const [id, node] of Object.entries(job.prompt)) {
+      const def = info[node.class_type];
+      if (def?.output_node && def.output?.includes("STRING"))
+        outputs[id] = { tags: [`1girl, solo, smile, outdoors, run ${++counter}`] };
+    }
+    // Preview nodes: a temp image, kept in memory for /view.
+    for (const [id, node] of Object.entries(job.prompt)) {
+      if (!Array.isArray(node.inputs.images) || "filename_prefix" in node.inputs) continue;
+      const filename = `ComfyUI_temp_${promptId.slice(0, 5)}_${id}_.png`;
+      temps.set(filename, pngWithText(48, 48, [(counter * 53) % 255, 200, 90], {}));
+      outputs[id] = { images: [{ filename, subfolder: "", type: "temp" }] };
+    }
+    const saveId = Object.keys(job.prompt).find(
+      (id) => "filename_prefix" in (job.prompt[id]?.inputs ?? {}),
+    );
     let images = [
       { filename: `ComfyUI_${promptId.slice(0, 5)}_00001_.png`, subfolder: "", type: "output" },
     ];
-    if (outputDir) {
-      const save = Object.values(job.prompt).find((n) => "filename_prefix" in n.inputs);
+    if (outputDir && saveId) {
+      const save = job.prompt[saveId];
       const prefix = expandPrefix(String(save?.inputs.filename_prefix ?? "ComfyUI")).replace(
         /\\/g,
         "/",
@@ -217,12 +287,19 @@ export function startFakeComfy(
       fs.writeFileSync(path.join(dir, filename), pngWithText(w, h, [hue, 120, 255 - hue], text));
       images = [{ filename, subfolder, type: "output" }];
     }
-    history[promptId] = {
-      outputs: { "9": { images } },
-      status: { status_str: "success", completed: true },
-    };
-    send(clientId, "executed", { node: "9", output: { images }, prompt_id: promptId });
+    if (saveId || Object.keys(outputs).length === 0) outputs[saveId ?? "9"] = { images };
+    history[promptId] = { outputs, status: { status_str: "success", completed: true } };
+    for (const [node, output] of Object.entries(outputs))
+      send(clientId, "executed", { node, output, prompt_id: promptId });
     send(clientId, "execution_success", { prompt_id: promptId });
+  };
+
+  const file = (res: http.ServerResponse, f: string) => {
+    res.writeHead(200, {
+      "content-type": CONTENT_TYPES[path.extname(f)] ?? "application/octet-stream",
+      "cache-control": "no-store",
+    });
+    res.end(fs.readFileSync(f));
   };
 
   const json = (res: http.ServerResponse, status: number, body: unknown) => {
@@ -297,8 +374,34 @@ export function startFakeComfy(
       }
       if (p === "/free") return json(res, 200, {});
       if (p === "/view") {
+        const name = url.searchParams.get("filename") ?? "";
+        const sub = url.searchParams.get("subfolder") ?? "";
+        const type = url.searchParams.get("type") ?? "output";
+        let bytes: Buffer = PNG;
+        if (type === "temp" && temps.has(name)) bytes = temps.get(name) as Buffer;
+        else if (
+          type === "output" &&
+          outputDir &&
+          !/\.\.|[\\/]/.test(name) &&
+          !sub.includes("..")
+        ) {
+          const file = path.join(outputDir, ...sub.split("/").filter(Boolean), name);
+          if (fs.existsSync(file)) bytes = fs.readFileSync(file);
+        }
         res.writeHead(200, { "content-type": "image/png" });
-        return res.end(PNG);
+        return res.end(bytes);
+      }
+      if (p === "/" || p === "/index.html") return file(res, path.join(pageDir, "index.html"));
+      if (p === "/scripts/app.js") return file(res, path.join(pageDir, "app.js"));
+      if (p === "/extensions") return json(res, 200, extensionList(customNodesDir));
+      if (p.startsWith("/extensions/")) {
+        const f = extensionFile(customNodesDir, p.slice("/extensions/".length));
+        return f ? file(res, f) : json(res, 404, { error: "not found" });
+      }
+      if (p === "/fake/convert" && req.method === "POST") {
+        const ui = UiGraph.safeParse(JSON.parse(body || "{}"));
+        if (!ui.success) return json(res, 400, { error: "not a UI graph" });
+        return json(res, 200, uiToApi(ui.data, ObjectInfo.parse(JSON.parse(objectInfo))).prompt);
       }
       if (p === "/internal/logs/raw")
         return json(res, 200, { entries: [{ t: "now", m: "fake log line\n" }] });

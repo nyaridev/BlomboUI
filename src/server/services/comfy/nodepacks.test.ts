@@ -85,9 +85,11 @@ function fakeOps(opts: { failPip?: string; hang?: boolean } = {}) {
         calls.push(`  -r ${path.basename(path.dirname(args[5] ?? ""))} -c ${args.includes("-c")}`);
         o.onLine("Downloading ultralytics (1.0MiB)");
         if (opts.hang)
-          await new Promise<void>((_, reject) =>
-            o.signal.addEventListener("abort", () => reject(new Error("stopped"))),
-          );
+          await new Promise<void>((_, reject) => {
+            // Stopped before it got here: the abort event has already fired.
+            if (o.signal.aborted) reject(new Error("stopped"));
+            o.signal.addEventListener("abort", () => reject(new Error("stopped")));
+          });
         o.onLine("Downloaded ultralytics");
         if (opts.failPip && args[5]?.includes(opts.failPip)) return 2;
       }
@@ -260,7 +262,9 @@ describe("NodePackInstaller", () => {
     const installer = make(runtime, comfy, hang.ops);
     const done = finished(installer);
     await installer.start([IMPACT.url]);
-    await new Promise((r) => setTimeout(r, 30));
+    // Cancel while the packages install (ComfyUI is stopped by then), however slow the machine.
+    for (let i = 0; i < 400 && !hang.calls.some((c) => c.includes("-r ")); i++)
+      await new Promise((r) => setTimeout(r, 10));
     installer.cancel();
     const state = await done;
     expect(state.state).toBe("cancelled");

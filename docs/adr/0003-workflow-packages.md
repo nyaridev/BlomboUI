@@ -83,3 +83,10 @@ Roles let generic features (prompt editor, LoRA tags, wildcards, resolution pick
 2. [ ] Analyzer with a fixture suite: every built-in preset plus 10 community workflows (SD1.5, SDXL, Flux, Wan image, Krea, rgthree LoRA stacks, subgraphs).
 3. [ ] Compiler: values → prompt, wildcards, LoRA tags → stack, seeds, filename prefixes.
 4. [ ] Import endpoints, the setup screen, duplicate, reset, export and import of `.blombo`.
+
+## Implementation notes (Phase 4b)
+
+- **`.blombo` bundles** (`services/workflows/bundle.ts`): a zip of `blombo.json` (`blombo.bundle/1`), `workflow.json`, `prompt.json`, `graph.json`, the linked layout (`layout.json`) and `thumb.webp`. Import reads only those entries (each checked with the shared schemas, 64 MB at most), keeps the bundle's bindings, values, stages and run settings, reuses an identical layout already in the profile or adds it (renamed when the name is taken), and names a clashing workflow "<name> copy".
+- **Re-sync** matches by (node, input), then (class_type, title, input), then by role; a value changed in ComfyUI wins over Blombo's (see ADR-0009's notes). Removed parameters keep their values under the old ids.
+- **Batch workflows** and their runner: ADR-0014.
+

@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0013)
+- `docs/adr/`: decisions and why (0001–0014)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 
 ## Commands
@@ -23,8 +23,8 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `npm run rules:sync` | Regenerate `.cursor/rules/*.mdc` from `.claude/rules/*.md` |
 | `node tools/make-icons.ts` | Regenerate desktop icons from `src-tauri/app-icon.svg` |
 | `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
-| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use (with `--custom-nodes DIR`, only the packs whose folder is in DIR); it takes `/upload/image` and reports progress per sampler node, so stage segments show |
-| `node src/server/main.ts --dev … --fake-comfy` | Dev checks only: managed slots run the fake ComfyUI (with `--custom-nodes` on the slot's `custom_nodes/`), and custom node installs use fake downloads and a fake uv (`services/comfy/fixtures/fake-install-ops.ts`). Make a slot by hand in the throwaway runtime (`comfyui/<slot>/ComfyUI/main.py` and `.venv/Scripts/python.exe`, both empty) to click through **Install** on a stage notice |
+| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use and the batch presets' nodes (with `--custom-nodes DIR`, only the packs whose folder is in DIR); it takes `/upload/image`, reports progress per sampler node (so stage segments show), keeps Preview Image results as temp images, returns tags for tagger nodes, and `/view` serves the images it wrote. With `--custom-nodes`, `/` is a stand-in ComfyUI page that loads custom nodes' web extensions (blombo-bridge) |
+| `node src/server/main.ts --dev … --fake-comfy` | Dev checks only: managed slots run the fake ComfyUI (with `--custom-nodes` on the slot's `custom_nodes/`), and custom node installs use fake downloads and a fake uv (`services/comfy/fixtures/fake-install-ops.ts`). Make a slot by hand in the throwaway runtime (`comfyui/<slot>/ComfyUI/main.py` and `.venv/Scripts/python.exe`, both empty) to click through **Install** on a stage or batch notice. The slot gets blombo-bridge on start, so **Edit in ComfyUI** opens the fake ComfyUI page with the bridge's bar (Save to Blombo, Save as copy, Send to Blombo) |
 | `node src/server/main.ts --dev --port 4391 --data <tmp> --runtime <tmp>` + `BLOMBO_API_PORT=4391 BLOMBO_WEB_PORT=4392 vite` | A second, throwaway dev instance (own profiles, slots and caches) next to one that's already running |
 | `node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` | A fake Civitai and model catalog (API, images, ranged downloads, an early-access file). Start the server with `--civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json` to browse and download without the real site; its API key is `FAKE_KEY` in that file |
 
@@ -36,8 +36,9 @@ src/
 │                 constants · profile · settings · api · comfy · jobs · live · random
 │                 gallery · imageinfo · fileinfo · safetensors · models · wildcards · install
 │                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
-│                 autocomplete (tag CSV, prompt context, formatting)
-│                 layout/schema · workflow/{roles,manifest,graph,stages}
+│                 autocomplete (tag CSV, prompt context, formatting) · bridge (edit sessions)
+│                 scripts (matrix / XY / thumbnails planner) · batch (runner shapes)
+│                 layout/schema · workflow/{roles,manifest,graph,stages,packs}
 │                 prompt/{tokenize,loras,wildcards,weight}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
 │   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime --civitai --catalog)
@@ -46,22 +47,25 @@ src/
 │   ├── routes/       thin: validate (Zod) → service → JSON
 │   │                 profiles · system · settings · comfy · workflows · jobs · wildcards
 │   │                 gallery · models · fileinfo · civitai · downloads · manager
-│   │                 stages · layouts · autocomplete
+│   │                 stages · layouts · autocomplete · bridge (/api/bridge, CORS) · scripts · batch
 │   ├── services/     profiles · settings · system · window · live (bus) · jobs (queue)
 │   │                 wildcards · models · fileinfo · downloads (queue) · lookup (hash → Civitai)
 │   │                 manager (ComfyUI model catalog) · stages (packages, control images,
 │   │                 checks, map preview) · layouts (profile layouts/) · autocomplete (tag lists,
-│   │                 LoRAs, wildcards, frequent tags)
+│   │                 LoRAs, wildcards, frequent tags) · bridge (edit sessions, Save to Blombo)
+│   │                 scripts (groups → grids, scope thumbnails) · batch (the batch runner) · scopes
 │   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (slots, progress)
 │   │   │                 nodepacks (stage custom nodes into a slot) · uv (shared by both installers)
+│   │   │                 bridge (copy blombo-bridge into custom_nodes) · fixtures/fake-comfy(-page)
 │   │   ├── civitai/      api (cached client) · images (proxy) · normalize · fixtures/fake-civitai
 │   │   ├── gallery/      index (sync, search, favorites, trash, libraries) · meta
 │   │   └── workflows/    store · analyze (roles, ports) · convert · import · compile · loras
-│   │                     stages (the splicer) · presets · nodes · summary
+│   │                     stages (the splicer) · presets · nodes · summary · resync · bundle (.blombo)
 │   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram) · ProfileDbs (shared connections)
 │   └── lib/          fsx (atomic, queued writes; movePath; resolveInside; part files) · http · send
 │                     remote (redirects by hand, key only to its origin, image sniffing)
 │                     emitter · imagemeta (header-only PNG/WebP/JPEG) · exif · thumbs (sharp) · ansi
+│                     grid (labeled script grids, sharp)
 ├── client/       React 19 · Vite 8 · Tailwind 4 · TanStack Router/Query · Zustand · Motion ·
 │   │             Floating UI · dnd-kit · CodeMirror 6
 │   ├── app/          router · Shell (keep-alive views) · header/ · theme
@@ -72,9 +76,11 @@ src/
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
 │   │                 number · seeded · cn
 │   └── styles/       tokens.css (all raw colors) · index.css (Tailwind theme) · base.css
-└── comfy-bridge/ (planned) ComfyUI extension: "Edit in ComfyUI" / "Save to Blombo"
+└── comfy-bridge/ blombo-bridge, the ComfyUI extension (ADR-0009): __init__.py + web/blombo.js +
+                  web/blombo-core.js (plain JS; tests import the core through its .d.ts)
 src-tauri/        Desktop shell: native window on --url, capability for localhost IPC
-presets/          workflows/ (sd15, sdxl, illustrious) · stages/ (hires, adetailer, controlnet ×
+presets/          workflows/ (sd15, sdxl, illustrious; batch: remove-background, upscale, caption,
+                  dataset-prep) · stages/ (hires, adetailer, controlnet ×
                   checkpoint/diffusion) · layouts/ (default, compact) · tags/ (starter list)
 tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit
@@ -83,7 +89,9 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Data flow:** client → `/api` (Zod-validated) → service → files in `data/` and ComfyUI's HTTP API. Live state comes back over one WebSocket per window, `/api/live` (ADR-0008): ComfyUI status, GPU stats at 1 Hz, queue snapshots, step progress, binary preview frames, errors, and ComfyUI's log while a log view is open. The server owns the single ComfyUI socket (`services/comfy/client.ts`) and fans it out (`services/live.ts`); the client keeps it in `lib/live.ts`.
 
-**Generating:** the Generate button posts the current values and stage settings to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → stages spliced at the ports → seed → filename prefix), uploads ControlNet images, sends it to ComfyUI and turns its socket events into progress (split into segments: base passes, then each stage), previews and images. The queue lives on the server, so reloads and other windows see the same thing. Stage blocks ask `/api/stages/check` what's missing before you run.
+**Generating:** the Generate button posts the current values and stage settings to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → stages spliced at the ports → seed → filename prefix), uploads ControlNet images, sends it to ComfyUI and turns its socket events into progress (split into segments: base passes, then each stage), previews and images. The queue lives on the server, so reloads and other windows see the same thing. Stage blocks ask `/api/stages/check` what's missing before you run. With a **script** on (Scripts block: prompt matrix, XY plot, scope thumbnails; `shared/scripts.ts`), the same button queues a **group** of runs with one seed; `services/scripts.ts` puts a matrix or plot into a labeled grid (`lib/grid.ts`) or files scope thumbnails. `kind: "batch"` workflows show the **batch runner** instead (`services/batch.ts`): one queued run per input file, results and sidecar captions written to the output folder (ADR-0014).
+
+**Round trips with ComfyUI:** Edit in ComfyUI asks `/api/workflows/:id/edit-session` for a single-use token and opens ComfyUI with it; the blombo-bridge extension (`src/comfy-bridge/`, copied into managed slots before they start) loads the canvas and calls `/api/bridge/*` (CORS for that ComfyUI only) to save back; `services/workflows/resync.ts` carries values over and reports what changed, and `workflow.saved` on the live bus updates every window (ADR-0009). Export / import of `.blombo` bundles: `services/workflows/bundle.ts`.
 
 **Generate screen:** the params column is a layout document; built-in layouts are in `presets/layouts/`, the profile's in `layouts/`, and a workflow links one (`manifest.layout`; `GET /api/workflows/:id` returns the layout it shows). The prompt editor's autocomplete asks `/api/autocomplete` (tag lists in `presets/tags/` and the profile's `tags/`, LoRAs and trigger words, wildcards, frequent tags from the profile database); Ctrl+↑/↓ changes weights.
 
@@ -93,7 +101,7 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) is still a sample. Never build new features on preview data.
 
-**Portable, no installer:** BlomboUI runs from the cloned folder through the launchers. Everything it writes stays in `data/` and `runtime/`; nothing goes to AppData or the registry (the desktop window keeps its WebView2 profile and size in `runtime/app/`). Only ComfyUI slots, and the custom node packs stages need inside them, can be installed by the app, into `runtime/comfyui/`.
+**Portable, no installer:** BlomboUI runs from the cloned folder through the launchers. Everything it writes stays in `data/` and `runtime/`; nothing goes to AppData or the registry (the desktop window keeps its WebView2 profile and size in `runtime/app/`). Only ComfyUI slots, and the custom node packs stages and batch presets need inside them (plus blombo-bridge), can be installed by the app, into `runtime/comfyui/`. Batch results and Install bridge for your own ComfyUI write only where you pick.
 
 ## Golden rules
 
@@ -136,6 +144,14 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 2. New settings fields go into the stage's schema in `shared/workflow/stages.ts` (with defaults) and its block in `features/generate/blocks/stages/`; values reach the graph through `instancesFor()` in `services/workflows/stages.ts`.
 3. Add every class the graph uses to the fake ComfyUI's `fixtures/object_info.json`, and a compiled-graph case to `services/workflows/stages.test.ts`. The package test fails if a class is unknown.
 4. A pack the graph needs goes in `packs` with its GitHub URL, the classes it provides and a pinned `ref` (a full commit hash, e.g. from `git ls-remote <url> HEAD`), so the stage notice can install it (ADR-0013). Use the same `ref` in every package that lists the pack.
+
+### Add or change a batch preset
+1. Write `presets/workflows/<id>/prompt.json` with a `LoadImage` (the input the runner feeds), the work, and a `PreviewImage` for images (or a node that shows text, for captions); title nodes `$Something` to expose their settings. In `workflow.json` set `kind: "batch"`, the family `Utility`, a description, `preset.version`, and the `packs` its custom nodes come from (GitHub URL, classes, pinned `ref`), as for stages.
+2. Add every class to the fake ComfyUI's `fixtures/object_info.json` (text-showing nodes need `output_node: true` and a `STRING` output), run `node tools/build-presets.ts`, and keep `presets.test.ts` green.
+3. Text a node shows comes back through `TEXT_OUTPUT_KEYS` in `services/workflows/nodes.ts`; add a key there only if a captioner uses a new one.
+
+### Change blombo-bridge
+Edit `src/comfy-bridge/web/` (plain ES modules; logic that can be tested goes in `blombo-core.js` and its `.d.ts`), then bump `BRIDGE_VERSION` in `shared/bridge.ts` so managed slots get the new copy on their next start and Settings → ComfyUI says an external install is out of date. Check it with the fake ComfyUI page (`--fake-comfy` slot, Edit in ComfyUI) and `services/bridge.test.ts`. The extension only uses ComfyUI's public `app` API (`registerExtension`, `loadGraphData`, `graphToPrompt`, `extensionManager.toast`, commands and `menuCommands`).
 
 ### Teach the analyzer a node
 Detection is by input names first (`seed`, `steps`, `positive`, `ckpt_name`…). Only when that can't work, add the class to `services/workflows/nodes.ts`, add a fixture graph under `services/workflows/fixtures/` and a case to `analyze.test.ts`.

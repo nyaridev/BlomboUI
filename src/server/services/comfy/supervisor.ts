@@ -46,6 +46,11 @@ export interface SupervisorOptions {
   launch?: (layout: SlotLayout, args: string[]) => LaunchSpec;
   findSlot?: typeof findSlot;
   preferredPort?: number;
+  /**
+   * Runs before a managed slot starts (Blombo's own custom nodes go in here); returns a line for
+   * the log, or null. A failure is logged and doesn't stop ComfyUI from starting.
+   */
+  prepareSlot?: (layout: SlotLayout) => Promise<string | null>;
 }
 
 type SupervisorEvents = {
@@ -211,6 +216,17 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     }
     const layout = lookup.layout;
     this.layout = layout;
+    if (this.opts.prepareSlot)
+      try {
+        const note = await this.opts.prepareSlot(layout);
+        if (note) this.log("sys", note);
+      } catch (error) {
+        this.log(
+          "sys",
+          `Couldn't prepare the slot: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    if (gen !== this.generation) return this.current;
 
     if (await this.adopt(layout, target, gen)) return this.current;
     if (gen !== this.generation) return this.current;

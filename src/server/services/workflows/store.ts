@@ -16,16 +16,31 @@ import {
   WorkflowManifest,
   type WorkflowSummary,
 } from "../../../shared/workflow/manifest.ts";
-import { exists, writeJsonAtomic } from "../../lib/fsx.ts";
+import { exists, writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import type { ProfileService } from "../profiles.ts";
 
 const WRITE_DELAY_MS = 400;
 
-export type NewWorkflow = Omit<WorkflowManifest, "format" | "id" | "createdAt" | "updatedAt"> & {
+export type NewWorkflow = Omit<
+  WorkflowManifest,
+  "format" | "id" | "createdAt" | "updatedAt" | "packs"
+> & {
+  packs?: WorkflowManifest["packs"];
   prompt: ApiPrompt;
   graph: unknown | null;
+  /** thumb.webp bytes (a .blombo bundle's). */
+  thumb?: Uint8Array | null;
 };
+
+/** What a graph saved from ComfyUI replaces (services/workflows/resync.ts made the rest). */
+export interface GraphUpdate {
+  prompt: ApiPrompt;
+  graph: unknown;
+  bindings: WorkflowManifest["bindings"];
+  values: WorkflowManifest["values"];
+  kind: WorkflowManifest["kind"];
+}
 
 interface Pending {
   file: string;
@@ -124,6 +139,15 @@ export class WorkflowService {
     }
   }
 
+  /** thumb.webp of a package, or null. */
+  async thumb(id: string, profileId?: string): Promise<Uint8Array | null> {
+    try {
+      return new Uint8Array(await fs.readFile(path.join(this.dir(id, profileId), "thumb.webp")));
+    } catch {
+      return null;
+    }
+  }
+
   /** A free id based on a name ("Night Portrait" → "night-portrait", "night-portrait-2"…). */
   async uniqueId(name: string, profileId?: string): Promise<string> {
     const base = slugifyProfileName(name).replace(/^-+/, "") || "workflow";
@@ -133,7 +157,7 @@ export class WorkflowService {
   }
 
   async create(input: NewWorkflow, profileId?: string, idHint?: string): Promise<WorkflowManifest> {
-    const { prompt, graph, ...rest } = input;
+    const { prompt, graph, thumb, ...rest } = input;
     const now = new Date().toISOString();
     const id = await this.uniqueId(idHint ?? input.name, profileId);
     const manifest = WorkflowManifest.parse({
@@ -146,8 +170,39 @@ export class WorkflowService {
     const dir = this.dir(id, profileId);
     await writeJsonAtomic(path.join(dir, "prompt.json"), prompt);
     if (graph) await writeJsonAtomic(path.join(dir, "graph.json"), graph);
+    if (thumb) await writeFileAtomic(path.join(dir, "thumb.webp"), thumb);
     await writeJsonAtomic(path.join(dir, "workflow.json"), manifest);
     return manifest;
+  }
+
+  /**
+   * Replace the graphs of a workflow (Save to Blombo). The previous version is copied to the
+   * profile's trash first, so a save that went wrong can be undone by hand.
+   */
+  async replaceGraphs(id: string, update: GraphUpdate): Promise<WorkflowManifest> {
+    const current = await this.get(id);
+    const dir = this.dir(id);
+    const backup = path.join(
+      this.root(),
+      "..",
+      "trash",
+      "workflows",
+      `${id}-before-edit-${Date.now()}`,
+    );
+    await fs.mkdir(path.dirname(backup), { recursive: true });
+    await this.flush();
+    await fs.cp(dir, backup, { recursive: true });
+    const next = WorkflowManifest.parse({
+      ...current,
+      kind: update.kind,
+      bindings: update.bindings,
+      values: update.values,
+      updatedAt: new Date().toISOString(),
+    });
+    await writeJsonAtomic(path.join(dir, "prompt.json"), update.prompt);
+    await writeJsonAtomic(path.join(dir, "graph.json"), update.graph);
+    await this.writeNow(this.manifestFile(id), next);
+    return next;
   }
 
   /** Merge values (debounced write). Unknown binding ids are kept: a re-sync may bring them back. */
@@ -189,6 +244,7 @@ export class WorkflowService {
         preset: null,
         prompt: await this.prompt(id),
         graph: await this.graph(id),
+        thumb: await this.thumb(id),
       },
       undefined,
       copyName,

@@ -96,6 +96,48 @@ export function pickFolder(title: string, initial?: string): Promise<string | nu
 }
 
 /**
+ * Opens the OS file dialog for several images and resolves with their paths (empty when
+ * cancelled). Windows uses PowerShell's OpenFileDialog; Linux tries zenity.
+ */
+export function pickImages(title: string): Promise<string[]> {
+  return new Promise((resolve) => {
+    let command: string;
+    let args: string[];
+    if (process.platform === "win32") {
+      const esc = (s: string) => s.replace(/'/g, "''");
+      const script = [
+        "Add-Type -AssemblyName System.Windows.Forms",
+        "$d = New-Object System.Windows.Forms.OpenFileDialog",
+        `$d.Title = '${esc(title)}'`,
+        "$d.Multiselect = $true",
+        "$d.Filter = 'Images|*.png;*.jpg;*.jpeg;*.webp;*.bmp|All files|*.*'",
+        "$f = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false}",
+        "if ($d.ShowDialog($f) -eq 'OK') { [Console]::Out.Write(($d.FileNames -join \"`n\")) }",
+      ].join("; ");
+      command = "powershell.exe";
+      args = ["-NoProfile", "-STA", "-Command", script];
+    } else {
+      command = "zenity";
+      args = ["--file-selection", "--multiple", "--separator=\n", `--title=${title}`];
+    }
+    const child = spawn(command, args, { windowsHide: true });
+    let out = "";
+    child.stdout.on("data", (chunk: Buffer) => {
+      out += chunk.toString("utf8");
+    });
+    child.on("error", () => resolve([]));
+    child.on("close", () =>
+      resolve(
+        out
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean),
+      ),
+    );
+  });
+}
+
+/**
  * Show a file in the OS file manager (Explorer selects it). Callers pass paths they resolved
  * themselves from their own data, never a path straight from a request.
  */

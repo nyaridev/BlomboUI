@@ -10,6 +10,8 @@ import type { ApiErrorBody } from "../shared/api.ts";
 import type { Services } from "./context.ts";
 import { HttpError } from "./lib/http.ts";
 import { autocompleteRoutes } from "./routes/autocomplete.ts";
+import { batchRoutes } from "./routes/batch.ts";
+import { bridgeAdminRoutes, bridgeRoutes } from "./routes/bridge.ts";
 import { civitaiRoutes } from "./routes/civitai.ts";
 import { comfyRoutes } from "./routes/comfy.ts";
 import { downloadRoutes } from "./routes/downloads.ts";
@@ -20,6 +22,7 @@ import { layoutRoutes } from "./routes/layouts.ts";
 import { managerRoutes } from "./routes/manager.ts";
 import { modelRoutes } from "./routes/models.ts";
 import { profileRoutes } from "./routes/profiles.ts";
+import { scriptRoutes } from "./routes/scripts.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 import { stageRoutes } from "./routes/stages.ts";
 import { systemRoutes } from "./routes/system.ts";
@@ -43,15 +46,22 @@ export function createApp(services: Services) {
   const api = new Hono();
   api.route("/system", systemRoutes(config, profiles));
   api.route("/profiles", profileRoutes(profiles, services.installPresets));
+  api.route("/bridge", bridgeRoutes(services.bridge));
+  api.route("/comfy/bridge", bridgeAdminRoutes(services.bridge));
   api.route(
     "/comfy",
     comfyRoutes(supervisor, services.installer, services.nodePacks, config.runtimeDir),
   );
-  api.route("/workflows", workflowRoutes(config, workflows, supervisor, services.layouts));
+  api.route(
+    "/workflows",
+    workflowRoutes(config, workflows, supervisor, services.layouts, services.bridge),
+  );
+  api.route("/scripts", scriptRoutes(services.scripts));
+  api.route("/batch", batchRoutes(services.batch));
   api.route("/layouts", layoutRoutes(services.layouts, workflows));
   api.route("/stages", stageRoutes(services.stages));
   api.route("/autocomplete", autocompleteRoutes(services.autocomplete));
-  api.route("/jobs", jobRoutes(queue));
+  api.route("/jobs", jobRoutes(queue, services.scripts));
   api.route("/wildcards", wildcardRoutes(profiles));
   api.route("/settings", settingsRoutes(profiles, settings));
   api.route("/gallery", galleryRoutes(gallery));

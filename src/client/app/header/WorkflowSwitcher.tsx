@@ -1,8 +1,9 @@
 /**
  * Workflow switcher: a pill in the header that opens a searchable picker of the profile's
- * workflows, built-in presets to add, quick actions, and a drop target for importing ComfyUI
- * workflows (ADR-0003).
+ * workflows, built-in presets to add, quick actions (Edit in ComfyUI, Duplicate, Export, Delete),
+ * and a drop target for importing ComfyUI workflows and .blombo files (ADR-0003, ADR-0009).
  */
+import { editInComfy, exportWorkflow } from "@client/features/generate/bridge";
 import { useImportFlow } from "@client/features/generate/importFlow";
 import { useActiveChoice, useActiveWorkflow } from "@client/features/generate/workflow";
 import { Icon } from "@client/icons/Icon";
@@ -211,7 +212,17 @@ export function WorkflowSwitcher() {
             ) : null}
           </div>
 
-          <div className="grid grid-cols-3 gap-1 border-t border-line p-1.5">
+          <div className="grid grid-cols-4 gap-1 border-t border-line p-1.5">
+            <FooterAction
+              icon="external"
+              label="Edit in ComfyUI"
+              disabled={!current}
+              onClick={() => {
+                if (!current) return;
+                close();
+                void editInComfy(current.id);
+              }}
+            />
             <FooterAction
               icon="duplicate"
               label="Duplicate"
@@ -233,7 +244,16 @@ export function WorkflowSwitcher() {
                 )
               }
             />
-            <FooterAction icon="import" label="Import…" disabled={busy} onClick={pickFile} />
+            <FooterAction
+              icon="export"
+              label="Export"
+              disabled={!current}
+              onClick={() => {
+                if (!current) return;
+                exportWorkflow(current.id);
+                toast(`Exporting "${current.name}" as a .blombo file`, "info");
+              }}
+            />
             <FooterAction
               icon="trash"
               label={armDelete ? "Click to confirm" : "Delete"}
@@ -256,7 +276,8 @@ export function WorkflowSwitcher() {
 
           <div className="flex items-center border-t border-line px-3 py-2 text-2xs text-fg-3">
             <span className="flex items-center gap-1.5">
-              <Icon name="import" size={12} /> Drop a ComfyUI .json, PNG or WebP here to import it
+              <Icon name="import" size={12} /> Drop a ComfyUI .json, PNG, WebP or a .blombo file
+              here to import it
             </span>
           </div>
 
@@ -266,7 +287,7 @@ export function WorkflowSwitcher() {
                 <Icon name="import" size={28} className="text-accent-ink" />
                 <span className="text-sm font-medium text-fg">Drop to import workflow</span>
                 <span className="text-xs text-fg-3">
-                  API JSON, UI JSON, or a ComfyUI PNG / WebP
+                  API JSON, UI JSON, a ComfyUI PNG / WebP, or .blombo
                 </span>
               </div>
             </div>
@@ -284,7 +305,7 @@ function FooterAction({
   disabled,
   danger,
 }: {
-  icon: "duplicate" | "import" | "trash";
+  icon: "duplicate" | "external" | "export" | "trash";
   label: string;
   onClick: () => void;
   disabled?: boolean;
@@ -296,7 +317,7 @@ function FooterAction({
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        "flex h-8 items-center justify-center gap-1.5 rounded-md text-xs font-medium transition-colors focus-ring disabled:opacity-40",
+        "flex h-8 items-center justify-center gap-1.5 rounded-md px-1 text-xs font-medium whitespace-nowrap transition-colors focus-ring disabled:opacity-40",
         danger ? "bg-red/12 text-red-ink" : "text-fg-2 hover:bg-field hover:text-fg",
       )}
     >

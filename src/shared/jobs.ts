@@ -4,7 +4,8 @@
  */
 import { z } from "zod";
 import { ComfyFileRef } from "./comfy.ts";
-import { SeedMode } from "./workflow/manifest.ts";
+import { SeedMode, StagesRecord } from "./workflow/manifest.ts";
+import { RunSegment } from "./workflow/stages.ts";
 
 export const JOB_STATES = [
   "queued",
@@ -27,6 +28,8 @@ export const JobProgress = z.object({
   node: z.string().nullable(),
   /** 0–1 across the whole job. */
   overall: z.number(),
+  /** Index into the job's segments of the part that's running. */
+  segment: z.number().int().default(0),
 });
 export type JobProgress = z.infer<typeof JobProgress>;
 
@@ -40,8 +43,11 @@ export const Job = z.object({
   seed: z.number().nullable(),
   width: z.number().nullable(),
   height: z.number().nullable(),
-  /** Number of sampler passes the progress bar is split into. */
-  passes: z.number().int().min(1),
+  /**
+   * The parts of the run the progress bar is split into: the workflow's own sampling passes,
+   * then each enabled stage ("Hires fix", "ADetailer · Face"). Filled in when it's compiled.
+   */
+  segments: z.array(RunSegment),
   createdAt: z.string(),
   startedAt: z.string().nullable(),
   finishedAt: z.string().nullable(),
@@ -67,6 +73,8 @@ export const GenerateBody = z.object({
   workflowId: z.string().min(1),
   /** The client's current values; merged over the saved ones so nothing waits for a save. */
   values: z.record(z.string(), z.unknown()).default({}),
+  /** The client's current stage settings, saved like the values. */
+  stages: StagesRecord.optional(),
   count: z.number().int().min(1).max(100).default(1),
   seedMode: SeedMode.optional(),
   /** Keep queuing new runs (new seeds) until stopped. */

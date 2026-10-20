@@ -4,7 +4,10 @@
  * next click (the seed, when it increments).
  */
 import { api } from "@client/lib/api";
+import { qk, queryClient } from "@client/lib/queries";
+import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
+import type { StageReport } from "@shared/workflow/stages";
 import { create } from "zustand";
 import { takePendingSave, useValues } from "./state";
 
@@ -16,17 +19,54 @@ export const useLoopIntent = create<{ on: boolean; set: (on: boolean) => void }>
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
+/**
+ * An enabled stage that's missing something would only fail once ComfyUI gets it; say so now,
+ * with a way out. Uses the last check the stage blocks made (it follows the settings).
+ */
+function blockedByStage(workflowId: string): boolean {
+  const { stages, setStage } = useValues.getState();
+  const profileId = useSession.getState().profileId;
+  // The check for these exact settings, or else the newest one (settings changed a moment ago).
+  const found = queryClient
+    .getQueryCache()
+    .findAll({ queryKey: qk.stageReport(profileId, workflowId, undefined).slice(0, 3) })
+    .filter((q) => q.state.data)
+    .sort((a, b) => b.state.dataUpdatedAt - a.state.dataUpdatedAt);
+  const current = JSON.stringify(stages);
+  const match = found.find((q) => JSON.stringify(q.queryKey[3]) === current) ?? found[0];
+  const report = match?.state.data as StageReport | undefined;
+  if (!report?.checked) return false;
+  for (const s of report.stages) {
+    const key = s.stage as "hires" | "adetailer" | "controlnet";
+    if (!stages[key]?.enabled) continue;
+    // Problems of units that are off don't matter.
+    const units: Array<{ id: string; enabled: boolean }> = key === "hires" ? [] : stages[key].units;
+    const problem = s.problems.find(
+      (p) => !p.unit || units.some((u) => u.id === p.unit && u.enabled),
+    );
+    if (!problem) continue;
+    toast(problem.message, "warning", {
+      label: "Turn it off",
+      run: () => setStage(key, { ...stages[key], enabled: false } as never),
+    });
+    return true;
+  }
+  return false;
+}
+
 export async function generate(): Promise<void> {
-  const { workflowId, values, run, merge } = useValues.getState();
+  const { workflowId, values, run, stages, merge } = useValues.getState();
   if (!workflowId) {
     toast("Pick or add a workflow first.", "warning");
     return;
   }
+  if (blockedByStage(workflowId)) return;
   takePendingSave();
   try {
     const res = await api.generate({
       workflowId,
       values,
+      stages,
       count: run.count,
       seedMode: run.seedMode,
       loop: useLoopIntent.getState().on,

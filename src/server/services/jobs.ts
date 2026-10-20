@@ -22,12 +22,13 @@ import {
   type SeedMode,
   type WorkflowManifest,
 } from "../../shared/workflow/manifest.ts";
+import { hiresSize, readStages } from "../../shared/workflow/stages.ts";
 import { HttpError } from "../lib/http.ts";
 import { ComfyHttpError, type ComfyPreview, type ComfyWsMessage } from "./comfy/client.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { ProfileService } from "./profiles.ts";
+import type { StageService } from "./stages.ts";
 import { loadWildcards } from "./wildcards.ts";
-import { countSamplers } from "./workflows/analyze.ts";
 import { CompileError, compile } from "./workflows/compile.ts";
 import { LORA_LOADER } from "./workflows/nodes.ts";
 import type { WorkflowService } from "./workflows/store.ts";
@@ -36,17 +37,19 @@ export interface QueueDeps {
   supervisor: ComfySupervisor;
   workflows: WorkflowService;
   profiles: ProfileService;
+  stages: StageService;
   publish: (topic: LiveTopic | null, msg: ServerMessage) => void;
   publishBinary: (topic: LiveTopic, frame: Uint8Array) => void;
   reportError: (source: "job" | "comfy", title: string, detail: string) => void;
+  /** The prompts of each click, for the frequent-tags list. */
+  recordPrompts?: (texts: string[]) => void;
 }
 
 interface Run {
   job: Job;
   manifest: WorkflowManifest;
   values: Record<string, unknown>;
-  lastNode: string | null;
-  passesDone: number;
+  stages: WorkflowManifest["stages"];
 }
 
 const KEEP_FINISHED = 40;
@@ -141,6 +144,7 @@ export class JobQueue {
     const saved = await this.deps.workflows.patchValues(body.workflowId, {
       values: body.values,
       run: { count: body.count, ...(body.seedMode ? { seedMode: body.seedMode } : {}) },
+      ...(body.stages ? { stages: body.stages } : {}),
     });
     if (saved.kind !== "generate")
       throw new HttpError(
@@ -153,6 +157,12 @@ export class JobQueue {
     const base = toSeed(seedBinding ? saved.values[seedBinding.id] : null) ?? randomSeed();
     const jobs: Job[] = [];
     for (let i = 0; i < body.count; i++) jobs.push(this.add(saved, nextSeed(mode, base, i)));
+    this.deps.recordPrompts?.(
+      saved.bindings
+        .filter((b) => b.role === "prompt.positive")
+        .map((b) => saved.values[b.id])
+        .filter((v): v is string => typeof v === "string"),
+    );
 
     const values: Record<string, unknown> = {};
     if (seedBinding && (mode === "increment" || mode === "decrement")) {
@@ -216,6 +226,13 @@ export class JobQueue {
     const width = bindingFor(manifest.bindings, "latent.width");
     const height = bindingFor(manifest.bindings, "latent.height");
     const hasSeed = Boolean(bindingFor(manifest.bindings, "sampler.seed"));
+    const w = width ? num(manifest.values[width.id]) : null;
+    const h = height ? num(manifest.values[height.id]) : null;
+    // With Hires fix on, the image comes out at the Hires size.
+    const hires = readStages(manifest.stages).hires;
+    const size = hires.enabled
+      ? hiresSize(hires, w !== null && h !== null ? { width: w, height: h } : null)
+      : null;
     const job: Job = {
       id: randomUUID(),
       seq: ++this.seq,
@@ -223,13 +240,13 @@ export class JobQueue {
       workflowName: manifest.name,
       state: "queued",
       seed: hasSeed ? seed : null,
-      width: width ? num(manifest.values[width.id]) : null,
-      height: height ? num(manifest.values[height.id]) : null,
-      passes: 1,
+      width: size?.width ?? w,
+      height: size?.height ?? h,
+      segments: [{ id: "base", label: "Sampling", nodes: [] }],
       createdAt: new Date().toISOString(),
       startedAt: null,
       finishedAt: null,
-      progress: { value: 0, max: 1, node: null, overall: 0 },
+      progress: { value: 0, max: 1, node: null, overall: 0, segment: 0 },
       images: [],
       error: null,
       promptId: null,
@@ -238,8 +255,7 @@ export class JobQueue {
       job,
       manifest,
       values: { ...manifest.values },
-      lastNode: null,
-      passesDone: 0,
+      stages: structuredClone(manifest.stages),
     });
     return job;
   }
@@ -288,7 +304,17 @@ export class JobQueue {
       const texts = run.manifest.bindings
         .filter((b) => b.type === "prompt")
         .map((b) => String(run.values[b.id] ?? prompt[b.node]?.inputs[b.input] ?? ""));
+      const stages = readStages(run.stages);
+      // Stage prompts of their own may use wildcards too.
+      for (const s of [stages.hires, ...stages.adetailer.units])
+        for (const field of ["prompt", "negative"] as const)
+          if (s.unlinked.includes(field)) texts.push(s[field]);
       const wildcards = await loadWildcards(profile?.paths.wildcards ?? "", texts);
+      const anyStage =
+        stages.hires.enabled || stages.adetailer.enabled || stages.controlnet.enabled;
+      const controlFiles = stages.controlnet.enabled
+        ? stages.controlnet.units.flatMap((u) => (u.enabled && u.image ? [u.image.file] : []))
+        : [];
       const compiled = compile({
         manifest: run.manifest,
         prompt,
@@ -297,8 +323,12 @@ export class JobQueue {
         wildcards,
         loraFiles,
         filenamePrefix: `%year%-%month%-%day%/${run.job.workflowId}`,
+        stages,
+        stagePackages: anyStage ? await this.deps.stages.packages() : [],
+        stageImages: controlFiles.length ? await this.deps.stages.upload(controlFiles) : {},
+        objectInfo: info,
       });
-      run.job.passes = countSamplers(compiled.prompt);
+      run.job.segments = compiled.segments;
       const res = await api.queuePrompt(compiled.prompt, {
         preview_method: "auto",
         extra_pnginfo: {
@@ -413,13 +443,18 @@ export class JobQueue {
         const node = d.node === null || d.node === undefined ? null : String(d.node);
         const value = Number(d.value) || 0;
         const max = Math.max(1, Number(d.max) || 1);
-        if (node !== run.lastNode) {
-          if (run.lastNode !== null) run.passesDone++;
-          run.lastNode = node;
-        }
-        const passes = Math.max(run.job.passes, run.passesDone + 1);
-        const overall = Math.min(0.99, (run.passesDone + value / max) / passes);
-        run.job.progress = { value, max, node, overall };
+        const segments = run.job.segments;
+        const prev = run.job.progress;
+        // The part of the run this node belongs to; an unknown node stays in the current one.
+        const found = node === null ? -1 : segments.findIndex((s) => s.nodes.includes(node));
+        const segment = found >= 0 ? found : prev.segment;
+        const n = Math.max(1, segments.length);
+        // A detailer runs its steps once per face: never let the bar go backwards.
+        const overall = Math.min(
+          0.99,
+          Math.max(segment === prev.segment ? prev.overall : 0, (segment + value / max) / n),
+        );
+        run.job.progress = { value, max, node, overall, segment };
         this.deps.publish("jobs", {
           t: "job.progress",
           jobId: run.job.id,

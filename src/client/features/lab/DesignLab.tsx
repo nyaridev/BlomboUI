@@ -32,6 +32,7 @@ import {
   Menu,
   Meter,
   ModelCard,
+  Notice,
   NumberField,
   Popover,
   ProgressBar,
@@ -52,6 +53,7 @@ import {
   Tooltip,
   TreeRow,
   toast,
+  UnitTabs,
   Veil,
 } from "@client/ui";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
@@ -71,6 +73,7 @@ const SECTIONS = [
   ["overlays", "Overlays"],
   ["feedback", "Feedback"],
   ["surfaces", "Surfaces"],
+  ["stages", "Stages"],
   ["cards", "Cards"],
   ["library", "Library"],
   ["prompt", "Prompt editor"],
@@ -165,6 +168,12 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [steps, setSteps] = useState(28);
   const [cfg, setCfg] = useState(5.5);
   const [denoise, setDenoise] = useState(0.38);
+  const [unit, setUnit] = useState("face");
+  const [units, setUnits] = useState([
+    { id: "face", name: "Face", enabled: true },
+    { id: "hands", name: "Hands", enabled: true, warning: true },
+    { id: "person", name: "Person", enabled: false },
+  ]);
   const [num, setNum] = useState(832);
   const [sel, setSel] = useState("dpmpp_2m");
   const [tab, setTab] = useState("generate");
@@ -843,6 +852,69 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               <div className="card p-4 text-sm text-fg-2">
                 .card utility: border, hairline highlight, radius-lg
               </div>
+            </div>
+          </div>
+        </Section>
+
+        <Section
+          id="stages"
+          title="Stages"
+          text="Notices say what's missing and offer the fix. Unit tabs run in order; off units are struck through, units missing something carry a mark."
+        >
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-3">
+              <Notice
+                tone="info"
+                actions={
+                  <Button size="sm" icon="store">
+                    Find in Manager
+                  </Button>
+                }
+              >
+                ADetailer · Face: pick a detector.
+              </Notice>
+              <Notice
+                tone="warning"
+                actions={
+                  <>
+                    <Button size="sm" icon="external">
+                      Open ComfyUI
+                    </Button>
+                    <Button size="sm" variant="ghost" icon="refresh">
+                      Check again
+                    </Button>
+                  </>
+                }
+              >
+                ADetailer needs FaceDetailer (ComfyUI Impact Pack). Install the missing custom nodes
+                in ComfyUI, then restart ComfyUI.
+              </Notice>
+              <Notice tone="danger" title="Couldn't read the list">
+                Use one tag per line: name, category, count, aliases.
+              </Notice>
+            </div>
+            <div className="flex flex-col gap-4 rounded-lg border border-line bg-surface-2 p-3">
+              <UnitTabs
+                units={units}
+                active={unit}
+                onActive={setUnit}
+                layoutGroup="lab"
+                onAdd={() =>
+                  setUnits((u) => [
+                    ...u,
+                    { id: `u${u.length + 1}`, name: `Unit ${u.length + 1}`, enabled: true },
+                  ])
+                }
+              />
+              <UnitTabs
+                units={units.slice(0, 1)}
+                active="face"
+                onActive={() => undefined}
+                layoutGroup="lab-single"
+              />
+              <p className="text-xs text-fg-3">
+                Arrow keys move between units. The second strip has no add button (at its limit).
+              </p>
             </div>
           </div>
         </Section>

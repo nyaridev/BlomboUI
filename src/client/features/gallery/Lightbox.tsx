@@ -24,6 +24,7 @@ import { motion } from "motion/react";
 import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
+import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
 
 export function Lightbox({
@@ -464,6 +465,15 @@ function Details({
         </Button>
         <Button icon="copy" onClick={() => void copyImage()}>
           Copy
+        </Button>
+        <Button
+          icon="pose"
+          title="Use this image in a ControlNet unit on the Generate screen"
+          onClick={() =>
+            void controlImageFromGallery(image.id).then((ok) => ok && onGo("generate"))
+          }
+        >
+          Use for ControlNet
         </Button>
         <Button
           icon="trash"

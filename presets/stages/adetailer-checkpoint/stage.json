@@ -1,0 +1,42 @@
+{
+  "format": "blombo.stage/1",
+  "id": "adetailer-checkpoint",
+  "stage": "adetailer",
+  "family": "checkpoint",
+  "name": "ADetailer",
+  "description": "Finds faces, hands or people with a detector (and optionally SAM) and redraws each one at a higher resolution, one unit after another.",
+  "attach": "after_decode",
+  "requires": ["MODEL", "CLIP", "VAE", "POSITIVE", "NEGATIVE", "IMAGE"],
+  "provides": ["IMAGE"],
+  "packs": [
+    {
+      "name": "ComfyUI Impact Pack",
+      "url": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
+      "nodes": ["FaceDetailer", "SAMLoader"]
+    },
+    {
+      "name": "ComfyUI Impact Subpack",
+      "url": "https://github.com/ltdrdata/ComfyUI-Impact-Subpack",
+      "nodes": ["UltralyticsDetectorProvider"]
+    }
+  ],
+  "fields": [
+    { "field": "detector", "node": "detector", "input": "model_name", "modelKind": "ultralytics", "label": "Detector" },
+    { "field": "sam", "node": "sam", "input": "model_name", "modelKind": "sams", "label": "SAM model" },
+    { "field": "prompt", "node": "pos", "input": "text" },
+    { "field": "negative", "node": "neg", "input": "text" },
+    { "field": "seed", "node": "detailer", "input": "seed" },
+    { "field": "steps", "node": "detailer", "input": "steps" },
+    { "field": "cfg", "node": "detailer", "input": "cfg" },
+    { "field": "sampler", "node": "detailer", "input": "sampler_name", "label": "Sampler" },
+    { "field": "scheduler", "node": "detailer", "input": "scheduler", "label": "Scheduler" },
+    { "field": "denoise", "node": "detailer", "input": "denoise" },
+    { "field": "confidence", "node": "detailer", "input": "bbox_threshold" },
+    { "field": "dilation", "node": "detailer", "input": "bbox_dilation" },
+    { "field": "cropFactor", "node": "detailer", "input": "bbox_crop_factor" },
+    { "field": "feather", "node": "detailer", "input": "feather" },
+    { "field": "guideSize", "node": "detailer", "input": "guide_size" },
+    { "field": "maxSize", "node": "detailer", "input": "max_size" }
+  ],
+  "defaults": {}
+}

@@ -48,6 +48,10 @@ export const IMAGE_OUTPUT_CLASSES = new Set([
 /** Image inputs recognized without object_info. */
 export const IMAGE_INPUT_CLASSES = new Set(["LoadImage"]);
 
+/** The small graph that previews a ControlNet map: load the image, preview the result. */
+export const LOAD_IMAGE = "LoadImage";
+export const PREVIEW_IMAGE = "PreviewImage";
+
 /** Nodes that exist only in the ComfyUI frontend and never reach the API graph. */
 export const FRONTEND_ONLY_CLASSES = new Set([
   "Reroute",

@@ -63,6 +63,11 @@ export const qk = {
     ["download-plan", profileId, body] as const,
   downloadHistory: (profileId: string | null) => ["download-history", profileId] as const,
   catalog: (profileId: string | null) => ["catalog", profileId] as const,
+  layouts: (profileId: string | null) => ["layouts", profileId] as const,
+  /** Stage checks follow the settings being checked (and refetch when models or nodes change). */
+  stageReport: (profileId: string | null, workflowId: string | null, stages: unknown) =>
+    ["stage-report", profileId, workflowId, stages] as const,
+  tagLists: (profileId: string | null) => ["tag-lists", profileId] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -147,7 +152,8 @@ function useWorkflowsChanged() {
     const profileId = useSession.getState().profileId;
     void qc.invalidateQueries({ queryKey: ["workflows"] });
     void qc.invalidateQueries({ queryKey: ["presets"] });
-    if (manifest) qc.setQueryData(qk.workflow(profileId, manifest.id), manifest);
+    // The detail adds the layout and live choices: load it fresh.
+    if (manifest) void qc.invalidateQueries({ queryKey: qk.workflow(profileId, manifest.id) });
   };
 }
 
@@ -177,6 +183,39 @@ export function useDeleteWorkflow() {
   return useMutation({
     mutationFn: (id: string) => api.deleteWorkflow(id),
     onSuccess: () => changed(),
+  });
+}
+
+/* ── layouts, stages, autocomplete ─────────────────────────────────────────── */
+
+export function useLayouts() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.layouts(profileId),
+    queryFn: api.layouts,
+    enabled: profileId !== null,
+    staleTime: 60_000,
+  });
+}
+
+/** What each stage needs for the active workflow with the given settings (debounced by caller). */
+export function useStageReport(workflowId: string | null, stages: unknown) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.stageReport(profileId, workflowId, stages),
+    queryFn: () => api.checkStages(workflowId as string, stages),
+    enabled: profileId !== null && workflowId !== null,
+    placeholderData: keepPreviousData,
+    staleTime: 30_000,
+  });
+}
+
+export function useTagLists() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.tagLists(profileId),
+    queryFn: api.tagLists,
+    enabled: profileId !== null,
   });
 }
 

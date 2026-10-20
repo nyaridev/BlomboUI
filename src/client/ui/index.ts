@@ -34,6 +34,7 @@ export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } fro
 export { NumberField } from "./NumberField";
 export { Select, type SelectOption } from "./Select";
 export { type NumberControlProps, ScrubField, Slider } from "./Slider";
+export { Notice, type UnitTab, UnitTabs } from "./stage";
 export { Collapsible, Divider, InheritRow, Panel, SectionTitle } from "./surfaces";
 export { type TabItem, Tabs } from "./Tabs";
 export { Toaster, toast } from "./toast";

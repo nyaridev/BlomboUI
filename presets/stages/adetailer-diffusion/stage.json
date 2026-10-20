@@ -1,0 +1,124 @@
+{
+  "format": "blombo.stage/1",
+  "id": "adetailer-diffusion",
+  "stage": "adetailer",
+  "family": "diffusion",
+  "name": "ADetailer",
+  "description": "ADetailer for diffusion-model graphs: the same detailer with an empty negative prompt (these models run without one) and a CFG of 1 unless the workflow sets its own.",
+  "attach": "after_decode",
+  "requires": [
+    "MODEL",
+    "CLIP",
+    "VAE",
+    "POSITIVE",
+    "IMAGE"
+  ],
+  "provides": [
+    "IMAGE"
+  ],
+  "packs": [
+    {
+      "name": "ComfyUI Impact Pack",
+      "url": "https://github.com/ltdrdata/ComfyUI-Impact-Pack",
+      "nodes": [
+        "FaceDetailer",
+        "SAMLoader"
+      ]
+    },
+    {
+      "name": "ComfyUI Impact Subpack",
+      "url": "https://github.com/ltdrdata/ComfyUI-Impact-Subpack",
+      "nodes": [
+        "UltralyticsDetectorProvider"
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "field": "detector",
+      "node": "detector",
+      "input": "model_name",
+      "modelKind": "ultralytics",
+      "label": "Detector"
+    },
+    {
+      "field": "sam",
+      "node": "sam",
+      "input": "model_name",
+      "modelKind": "sams",
+      "label": "SAM model"
+    },
+    {
+      "field": "prompt",
+      "node": "pos",
+      "input": "text"
+    },
+    {
+      "field": "seed",
+      "node": "detailer",
+      "input": "seed"
+    },
+    {
+      "field": "steps",
+      "node": "detailer",
+      "input": "steps"
+    },
+    {
+      "field": "cfg",
+      "node": "detailer",
+      "input": "cfg"
+    },
+    {
+      "field": "sampler",
+      "node": "detailer",
+      "input": "sampler_name",
+      "label": "Sampler"
+    },
+    {
+      "field": "scheduler",
+      "node": "detailer",
+      "input": "scheduler",
+      "label": "Scheduler"
+    },
+    {
+      "field": "denoise",
+      "node": "detailer",
+      "input": "denoise"
+    },
+    {
+      "field": "confidence",
+      "node": "detailer",
+      "input": "bbox_threshold"
+    },
+    {
+      "field": "dilation",
+      "node": "detailer",
+      "input": "bbox_dilation"
+    },
+    {
+      "field": "cropFactor",
+      "node": "detailer",
+      "input": "bbox_crop_factor"
+    },
+    {
+      "field": "feather",
+      "node": "detailer",
+      "input": "feather"
+    },
+    {
+      "field": "guideSize",
+      "node": "detailer",
+      "input": "guide_size"
+    },
+    {
+      "field": "maxSize",
+      "node": "detailer",
+      "input": "max_size"
+    }
+  ],
+  "defaults": {
+    "cfg": 1,
+    "scheduler": "simple",
+    "sampler": "euler"
+  }
+}

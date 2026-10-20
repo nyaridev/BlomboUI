@@ -22,6 +22,8 @@ export interface FakeComfy {
     prompt: Record<string, { class_type: string; inputs: Record<string, unknown> }>;
     extra: unknown;
   }>;
+  /** Images received by POST /upload/image ("subfolder/name"). */
+  uploads: string[];
   /** Make the next prompt fail validation with this node error. */
   failNext: (nodeErrors: unknown) => void;
   close: () => Promise<void>;
@@ -80,6 +82,25 @@ function expandPrefix(prefix: string): string {
     .replace(/%day%/g, pad(d.getDate()));
 }
 
+/** Nodes that sample, with their step counts (a sampler's steps may live on its scheduler). */
+function samplingNodes(
+  prompt: FakeComfy["prompts"][number]["prompt"],
+): Array<{ node: string; steps: number }> {
+  const ids = Object.keys(prompt).sort((a, b) => Number(a) - Number(b));
+  const out: Array<{ node: string; steps: number }> = [];
+  for (const id of ids) {
+    const inputs = prompt[id]?.inputs ?? {};
+    let steps = Number(inputs.steps);
+    if ("sigmas" in inputs && Array.isArray(inputs.sigmas))
+      steps = Number(prompt[String(inputs.sigmas[0])]?.inputs.steps);
+    const sampler =
+      "latent_image" in inputs || ("model" in inputs && "steps" in inputs && "positive" in inputs);
+    if (sampler)
+      out.push({ node: id, steps: Number.isFinite(steps) && steps > 0 ? Math.min(steps, 60) : 3 });
+  }
+  return out;
+}
+
 export function startFakeComfy(
   port = 0,
   stepDelayMs = 5,
@@ -88,6 +109,7 @@ export function startFakeComfy(
   let counter = 0;
   const sockets = new Map<string, WebSocket>();
   const prompts: FakeComfy["prompts"] = [];
+  const uploads: string[] = [];
   const history: Record<string, unknown> = {};
   let failure: unknown = null;
   let interrupted = false;
@@ -113,14 +135,23 @@ export function startFakeComfy(
     const wait = () => new Promise((r) => setTimeout(r, stepDelayMs));
     interrupted = false;
     send(clientId, "execution_start", { prompt_id: promptId });
-    for (let i = 1; i <= steps; i++) {
-      await wait();
-      if (interrupted) {
-        send(clientId, "execution_interrupted", { prompt_id: promptId, node_id: "3" });
-        return;
+    // Each sampling node reports its own steps, in order (stages add their own passes).
+    const passes = samplingNodes(job.prompt);
+    for (const [p, pass] of (passes.length ? passes : [{ node: "3", steps }]).entries()) {
+      for (let i = 1; i <= pass.steps; i++) {
+        await wait();
+        if (interrupted) {
+          send(clientId, "execution_interrupted", { prompt_id: promptId, node_id: pass.node });
+          return;
+        }
+        send(clientId, "progress", {
+          value: i,
+          max: pass.steps,
+          prompt_id: promptId,
+          node: pass.node,
+        });
+        if (i === 1 && p === 0) sendPreview(clientId, promptId);
       }
-      send(clientId, "progress", { value: i, max: steps, prompt_id: promptId, node: "3" });
-      if (i === 1) sendPreview(clientId, promptId);
     }
     let images = [
       { filename: `ComfyUI_${promptId.slice(0, 5)}_00001_.png`, subfolder: "", type: "output" },
@@ -221,6 +252,13 @@ export function startFakeComfy(
         const id = decodeURIComponent(p.slice("/history/".length));
         return json(res, 200, history[id] ? { [id]: history[id] } : {});
       }
+      if (p === "/upload/image" && req.method === "POST") {
+        // Enough of multipart for one file: its name and the subfolder field.
+        const name = /filename="([^"]+)"/.exec(body)?.[1] ?? "upload.png";
+        const subfolder = /name="subfolder"\r\n\r\n([^\r]*)/.exec(body)?.[1] ?? "";
+        uploads.push(subfolder ? `${subfolder}/${name}` : name);
+        return json(res, 200, { name, subfolder, type: "input" });
+      }
       if (p === "/interrupt") {
         interrupted = true;
         return json(res, 200, {});
@@ -261,6 +299,7 @@ export function startFakeComfy(
         url: `http://127.0.0.1:${actual}`,
         port: actual,
         prompts,
+        uploads,
         failNext: (e) => {
           failure = e;
         },

@@ -58,8 +58,9 @@ BlomboUI-new/
 │   │   ├── main.ts        flags (--dev --port --open web|app|none), wiring, single instance
 │   │   ├── app.ts         routes + static client
 │   │   ├── routes/        one file per area, thin: validate → service → respond
-│   │   ├── services/      profiles · settings · comfy/ · workflows/ · jobs/ · gallery/ · models/
-│   │   │                  civitai/ · downloads/ · wildcards/ · autocomplete/ · live (event bus)
+│   │   ├── services/      profiles · settings · comfy/ · workflows/ · jobs · gallery/ · models
+│   │   │                  civitai/ · downloads · wildcards · stages · layouts · autocomplete
+│   │   │                  live (event bus)
 │   │   ├── db/            sqlite open/migrate + repositories
 │   │   └── lib/           fsx (safe paths, atomic writes), http (errors), images (sharp)
 │   ├── client/
@@ -74,8 +75,10 @@ BlomboUI-new/
 ├── presets/
 │   ├── workflows/     built-in workflow packages: sd15, sdxl, illustrious (planned: noobai, anima,
 │   │                  krea2, background-removal, upscale, caption, dataset)
-│   ├── stages/        graph patches: hires, adetailer, controlnet, upscale
-│   └── layouts/       built-in Generate layouts
+│   ├── stages/        graph patches per family: hires-*, adetailer-*, controlnet-* (checkpoint,
+│   │                  diffusion); upscale later
+│   ├── layouts/       built-in Generate layouts (default, compact)
+│   └── tags/          the bundled starter tag list for prompt autocomplete
 ├── src-tauri/         desktop shell
 ├── tools/             ensure-build · ensure-app · sync-rules · dev-window · make-icons · build-presets
 ├── docs/              architecture · design-system · workflows · adr/
@@ -94,10 +97,14 @@ data/
     ├── settings.json             everything in Settings (Zod-validated, versioned, migrated)
     ├── secrets.json              the Civitai API key (never sent to the client)
     ├── workflows/<workflowId>/   workflow.json · graph.json · prompt.json · thumb.webp
-    ├── layouts/<layoutId>.json   Generate layouts
-    ├── trash/                    workflows/ · gallery/<id>/<file> · wildcards/<stamp>/<path>
+    ├── layouts/<layoutId>.json   Generate layouts (workflows link one by id)
+    ├── inputs/<sha>.<ext>        ControlNet images, named by content, sent to ComfyUI per run
+    ├── tags/<name>.csv           tag lists added in Settings → Autocomplete
+    ├── trash/                    workflows/ · layouts/ · tags/ · gallery/<id>/<file> ·
+    │                             wildcards/<stamp>/<path>
     └── blombo.sqlite             gallery index (FTS5) + favorites + trash list, downloads,
-                                  Civitai views and searches, model hashes and lookups
+                                  Civitai views and searches, model hashes and lookups,
+                                  tag usage (frequent tags)
 runtime/cache/<id>/thumbs/        gallery/ and models/ WebP thumbnails (safe to delete)
 runtime/cache/civitai/            api/ answers and images/ (the image proxy), safe to delete
 runtime/cache/manager/            the ComfyUI model catalog (model-list.json), a day at a time
@@ -156,7 +163,8 @@ prompt.json     ComfyUI API format (class_type + inputs). Used to run
 
 ```text
 prompt.json → apply values to bindings → expand wildcards → <lora:…> tags into the LoRA stack
-→ (later: splice enabled stages at role ports) → seed → filename prefix → POST /prompt
+→ splice enabled stages at the ports (controlnet → base → hires → adetailer units)
+→ seed → filename prefix → POST /prompt
 ```
 
 **Editing in ComfyUI**: "Edit in ComfyUI" opens ComfyUI in a new window with an edit session. The bundled **blombo-bridge** extension loads the graph and shows a **Save to Blombo** button. Saving sends the UI and API graphs back. Blombo re-runs the analyzer and keeps existing bindings and values where node ids and inputs still match. It flags anything that was added or removed.
@@ -170,7 +178,9 @@ Details: [`workflows.md`](workflows.md) · ADR [0003](adr/0003-workflow-packages
 The Generate view renders a **layout**: regions (`models`, `prompt`, `actions`, `params`, `stage`) that hold **blocks**. A block is a bound parameter with a control variant (slider, number, segmented, select, chips, switch…), a feature block (LoRA strip, resolution picker, seed, Hires, ADetailer, ControlNet, image stage, queue), or a container (card, collapsible, tabs, row).
 
 - Blocks bind by **role or binding id**, so one layout works across workflows. A block whose binding a workflow lacks simply doesn't render.
-- **Customize** mode adds drag handles and an inspector (control style, size, width, label position, visibility). Layouts are saved as presets and can be linked per workflow.
+- **Customize** mode adds drag handles and an inspector (control style, size, width, label position, visibility). Layouts are files in the profile (`services/layouts.ts`): picking one links it to the workflow, **Reset to default** unlinks it, and the workflow's response carries the layout it shows.
+- **Stages** (`features/generate/blocks/stages/`): Hires fix, ADetailer and ControlNet blocks keep their settings with the workflow's values (`useValues().stages`, saved by the same debounced PATCH and sent with Generate). Each block asks `POST /api/stages/check` (debounced, refetched when models or custom nodes change) what's missing and which models ComfyUI offers, and shows notices with the fix. The image stage splits progress into the run's segments.
+- **Prompt autocomplete** (`features/generate/promptAssist.ts`, `services/autocomplete.ts`): CodeMirror asks the server as you type; the server searches the tag lists (bundled `presets/tags/*.csv` plus the profile's `tags/`, parsed once and kept sorted by popularity), LoRAs with their trigger words and thumbnails (Models → Local), wildcards, and the tags you generate with most (counted per click in the profile database). Ctrl+↑/↓ changes the weight at the cursor (`shared/prompt/weight.ts`). Settings → Autocomplete holds the sources, lists and insert behavior.
 
 ADR [0005](adr/0005-layout-documents.md).
 

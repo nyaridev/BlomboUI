@@ -18,6 +18,7 @@ import {
 } from "../../../shared/workflow/graph.ts";
 import type { Binding, BindingType, Finding } from "../../../shared/workflow/manifest.ts";
 import { ROLE_LABELS, type Role } from "../../../shared/workflow/roles.ts";
+import type { Port } from "../../../shared/workflow/stages.ts";
 import {
   CONDITIONING_PASS,
   FRONTEND_ONLY_CLASSES,
@@ -277,6 +278,45 @@ export function findLoraStack(prompt: ApiPrompt): string | null {
       LORA_STACK_CLASSES.has(g.classOf(id)),
     ) ?? null
   );
+}
+
+/** Where stages attach (ADR-0004): one link per port, found from the main sampler. */
+export type PortLinks = Partial<Record<Port, ApiLink>>;
+
+/**
+ * The splice points of a graph: the model, conditioning and latent going into the main sampler,
+ * the CLIP its prompt is encoded with, and the VAE and image of the decoder that reads its
+ * output. Run it after LoRAs are chained so MODEL and CLIP include them.
+ */
+export function findPorts(prompt: ApiPrompt): PortLinks {
+  const g = new GraphView(prompt, null);
+  const sid = mainSampler(g);
+  if (!sid) return {};
+  const parts = samplerParts(g, sid);
+  const ports: PortLinks = {};
+  if (parts.model) ports.MODEL = parts.model;
+  if (parts.positive) ports.POSITIVE = parts.positive;
+  if (parts.negative) ports.NEGATIVE = parts.negative;
+  const encoder = findEncoder(g, parts.positive);
+  const clip = encoder ? g.link(encoder, "clip") : null;
+  if (clip) ports.CLIP = clip;
+  // The decoder that reads this sampler's output (directly or through latent helpers).
+  for (const id of g.ids()) {
+    const samples = g.link(id, "samples");
+    const vae = g.link(id, "vae");
+    if (!samples || !vae || samples[0] !== sid) continue;
+    ports.LATENT = samples;
+    ports.VAE = vae;
+    ports.IMAGE = [id, 0];
+    break;
+  }
+  return ports;
+}
+
+/** Nodes that sample (their progress is a pass on the progress bar), in id order. */
+export function samplerNodes(prompt: ApiPrompt): string[] {
+  const g = new GraphView(prompt, null);
+  return g.ids().filter((id) => g.isSampler(id));
 }
 
 /** Current choices from object_info (new models, new samplers), without saving them. */

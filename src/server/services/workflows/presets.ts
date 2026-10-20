@@ -6,7 +6,9 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { ApiPrompt } from "../../../shared/workflow/graph.ts";
 import { type PresetSummary, WorkflowManifest } from "../../../shared/workflow/manifest.ts";
+import { StagePackage } from "../../../shared/workflow/stages.ts";
 import { HttpError } from "../../lib/http.ts";
+import type { LoadedStage } from "./stages.ts";
 import type { WorkflowService } from "./store.ts";
 
 export interface Preset {
@@ -49,6 +51,31 @@ export async function listPresets(presetsDir: string): Promise<Preset[]> {
       out.push(await readPreset(presetsDir, id));
     } catch (error) {
       console.warn(`Skipping preset "${id}": ${String(error)}`);
+    }
+  }
+  return out;
+}
+
+/** Stage packages (presets/stages/<id>/stage.json + prompt.json); broken ones are skipped. */
+export async function listStagePackages(presetsDir: string): Promise<LoadedStage[]> {
+  const root = path.join(presetsDir, "stages");
+  let ids: string[] = [];
+  try {
+    ids = (await fs.readdir(root, { withFileTypes: true }))
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name)
+      .sort();
+  } catch {
+    return [];
+  }
+  const out: LoadedStage[] = [];
+  for (const id of ids) {
+    try {
+      const pkg = StagePackage.parse(await readJson(path.join(root, id, "stage.json")));
+      const graph = ApiPrompt.parse(await readJson(path.join(root, id, "prompt.json")));
+      out.push({ pkg, graph });
+    } catch (error) {
+      console.warn(`Skipping stage package "${id}": ${String(error)}`);
     }
   }
   return out;

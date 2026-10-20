@@ -1,10 +1,11 @@
 /**
  * Prompt editor on CodeMirror 6. Highlighting comes from the shared tokenizer (weights, LoRAs,
  * wildcards, BREAK, escapes, and errors with a hover message). Decorations instead of an overlay
- * mirror, so long prompts stay fast.
+ * mirror, so long prompts stay fast. Autocomplete and Ctrl+↑/↓ weights come from promptAssist.
  */
 
 import { cn } from "@client/lib/cn";
+import { useSettings } from "@client/lib/queries";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorState } from "@codemirror/state";
 import {
@@ -18,6 +19,7 @@ import {
 } from "@codemirror/view";
 import { type Token, tokenizePrompt } from "@shared/prompt/tokenize";
 import { useEffect, useRef } from "react";
+import { type AssistSettings, promptAssist } from "./promptAssist";
 
 function className(t: Token): string {
   switch (t.type) {
@@ -145,6 +147,11 @@ export function PromptEditor({
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   const onSubmitRef = useRef(onSubmit);
+  const settings = useSettings().data;
+  const assist = useRef<AssistSettings | null>(null);
+  assist.current = settings
+    ? { autocomplete: settings.autocomplete, blurNsfw: settings.models.blurNsfw }
+    : null;
   /** True while the editor is being set from `value`, so that isn't reported as an edit. */
   const syncing = useRef(false);
   onChangeRef.current = onChange;
@@ -174,6 +181,7 @@ export function PromptEditor({
           EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" }),
           cmPlaceholder(placeholder ?? ""),
           promptHighlight,
+          promptAssist(() => assist.current),
           theme,
           EditorView.updateListener.of((u) => {
             if (u.docChanged && !syncing.current) onChangeRef.current(u.state.doc.toString());

@@ -216,6 +216,40 @@ export class ComfyClient extends Emitter<ClientEvents> {
     );
   }
 
+  /** Put an image into ComfyUI's input folder (LoadImage reads it as "<subfolder>/<name>"). */
+  async uploadImage(
+    bytes: Uint8Array,
+    name: string,
+    subfolder: string,
+  ): Promise<{ name: string; subfolder: string }> {
+    const form = new FormData();
+    form.set("image", new Blob([bytes as Uint8Array<ArrayBuffer>]), name);
+    form.set("subfolder", subfolder);
+    form.set("type", "input");
+    form.set("overwrite", "true");
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}/upload/image`, {
+        method: "POST",
+        body: form,
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (error) {
+      throw new ComfyHttpError(
+        0,
+        `ComfyUI at ${this.baseUrl} didn't answer (${describe(error)}).`,
+        null,
+      );
+    }
+    const body = (await res.json().catch(() => null)) as {
+      name?: string;
+      subfolder?: string;
+    } | null;
+    if (!res.ok || !body?.name)
+      throw new ComfyHttpError(res.status, `ComfyUI didn't take the image (${res.status}).`, body);
+    return { name: body.name, subfolder: body.subfolder ?? "" };
+  }
+
   interrupt(promptId?: string) {
     return this.request<unknown>("POST", "/interrupt", promptId ? { prompt_id: promptId } : {});
   }

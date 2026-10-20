@@ -4,7 +4,7 @@
  */
 import { useWorkflow, useWorkflows } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import type { Binding, WorkflowManifest, WorkflowSummary } from "@shared/workflow/manifest";
+import type { Binding, WorkflowDetail, WorkflowSummary } from "@shared/workflow/manifest";
 import { create } from "zustand";
 
 const KEY = "blombo.activeWorkflow";
@@ -48,7 +48,7 @@ export function useActiveWorkflowId(): string | null {
 
 export function useActiveWorkflow(): {
   id: string | null;
-  manifest: WorkflowManifest | undefined;
+  manifest: WorkflowDetail | undefined;
   loading: boolean;
   error: Error | null;
   empty: boolean;

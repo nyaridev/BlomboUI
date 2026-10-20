@@ -1,0 +1,25 @@
+{
+  "format": "blombo.stage/1",
+  "id": "hires-diffusion",
+  "stage": "hires",
+  "family": "diffusion",
+  "name": "Hires fix",
+  "description": "Hires fix for diffusion-model graphs (UNET + text encoders + VAE): a second pass with SamplerCustomAdvanced and a basic guider.",
+  "attach": "after_decode",
+  "requires": ["MODEL", "VAE", "POSITIVE", "IMAGE"],
+  "provides": ["IMAGE"],
+  "packs": [],
+  "fields": [
+    { "field": "upscaler", "node": "loader", "input": "model_name", "modelKind": "upscale_models", "label": "Upscaler" },
+    { "field": "width", "node": "resize", "input": "width" },
+    { "field": "height", "node": "resize", "input": "height" },
+    { "field": "prompt", "node": "pos", "input": "text" },
+    { "field": "seed", "node": "noise", "input": "noise_seed" },
+    { "field": "steps", "node": "sigmas", "input": "steps" },
+    { "field": "scheduler", "node": "sigmas", "input": "scheduler", "label": "Scheduler" },
+    { "field": "denoise", "node": "sigmas", "input": "denoise" },
+    { "field": "sampler", "node": "select", "input": "sampler_name", "label": "Sampler" },
+    { "field": "prefix", "node": "save-first", "input": "filename_prefix" }
+  ],
+  "defaults": { "cfg": 1, "scheduler": "simple", "sampler": "euler" }
+}

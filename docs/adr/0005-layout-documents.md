@@ -59,8 +59,16 @@ Describe the screen as data (`shared/layout/schema.ts`):
 - Each block renders on its own and subscribes only to its binding's value, so changing one value never re-renders the whole view.
 - Export bundles carry the linked layout. Importing a layout with unknown bindings shows ghosts instead of failing.
 
+## Implementation notes (Phase 4a)
+
+- Layout presets moved from the browser's storage to the profile: built-ins in `presets/layouts/*.json`, the profile's own in `data/profiles/<id>/layouts/<layoutId>.json` (`services/layouts.ts`). Presets left in a browser by earlier builds are moved into the profile once.
+- Picking a layout links it to the workflow (`manifest.layout`). Unlinked workflows show the profile's default (`settings.generate.layout`, "default" when unset); **Reset to default** unlinks. A linked layout that was deleted falls back to the default quietly.
+- `GET /api/workflows/:id` returns the manifest plus `layoutDoc` and `layoutSource`, so the Generate screen gets the right layout with the workflow.
+- Customize edits stay local until **Save** (profile layouts only; built-ins can't be overwritten), **Save as…** (creates and links) or **Discard**.
+
 ## Action items
 
-1. [ ] Layout schema, the default layout (models on top, prompts + actions, params + stage), and a layout renderer.
-2. [ ] Control registry plus per-type variants in `ui/`.
-3. [ ] Customize mode: DnD, inspector, undo, presets, export.
+1. [x] Layout schema, the default layout (models on top, prompts + actions, params + stage), and a layout renderer.
+2. [x] Control registry plus per-type variants in `ui/`.
+3. [x] Customize mode: DnD, inspector, undo, presets (saved in the profile, linked per workflow).
+4. [ ] Export layouts with workflows (`.blombo`, Phase 4b).

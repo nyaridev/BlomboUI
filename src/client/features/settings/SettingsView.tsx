@@ -34,6 +34,7 @@ import { fontStack, UI_FONT_LABELS, UI_FONTS, type UiFont } from "@shared/settin
 import { useParams } from "@tanstack/react-router";
 import { motion } from "motion/react";
 import { type ReactNode, useEffect, useState } from "react";
+import { AutocompletePage } from "./AutocompletePage";
 import { CivitaiPage } from "./CivitaiPage";
 import { ComfyPage } from "./ComfyPage";
 import { FoldersPage } from "./FoldersPage";
@@ -132,6 +133,15 @@ export function SettingsView() {
             <GalleryPage />
           ) : page === "models" ? (
             <ModelsPage />
+          ) : page === "autocomplete" ? (
+            <AutocompletePage
+              header={
+                <PageHeader
+                  title="Autocomplete"
+                  text="What the prompt editor suggests and how it goes in. Saved to this profile."
+                />
+              }
+            />
           ) : page === "civitai" ? (
             <CivitaiPage
               header={
@@ -567,16 +577,6 @@ const PLANNED: Partial<Record<PageId, { title: string; phase: string; items: str
       "Batch grids (format, rows, max)",
       "LoRA strength ranges and auto-apply",
       "Prompt weight step",
-    ],
-  },
-  autocomplete: {
-    title: "Autocomplete",
-    phase: "Phase 1",
-    items: [
-      "Tag lists (Danbooru, e621, custom CSV)",
-      "Wildcard / LoRA / trigger-word completion",
-      "Frequent tags",
-      "Thumbnails in suggestions",
     ],
   },
   shortcuts: {

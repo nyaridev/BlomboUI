@@ -7,7 +7,7 @@
 
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { Badge, Collapsible, SectionTitle } from "@client/ui";
+import { Collapsible, SectionTitle } from "@client/ui";
 import {
   closestCenter,
   DndContext,
@@ -31,6 +31,7 @@ import type { ReactNode } from "react";
 import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
 import { Seed } from "./blocks/Seed";
+import { AdetailerStage, ControlNetStage, HiresStage } from "./blocks/stages";
 import { useLayout } from "./state";
 import { useBindings } from "./workflow";
 
@@ -133,16 +134,13 @@ function RestBlock({ title, ctx }: { title: string; ctx: RenderContext }) {
   );
 }
 
-/** Stages (Hires fix, ADetailer, ControlNet) are graph patches that arrive in a later phase. */
-function PendingStage({ stage }: { stage: keyof typeof STAGE_INFO }) {
-  const info = STAGE_INFO[stage];
-  return (
-    <div className="flex h-11 items-center gap-2.5 rounded-lg border border-dashed border-line px-3 text-sm text-fg-3">
-      <Icon name={info.icon} size={15} />
-      <span>{info.label}</span>
-      <Badge className="ml-auto">coming later</Badge>
-    </div>
-  );
+/** Stage blocks (ADR-0004): graph patches spliced in at role ports when they're on. */
+function StageBlock({ stage }: { stage: keyof typeof STAGE_INFO }) {
+  if (stage === "hires") return <HiresStage />;
+  if (stage === "adetailer") return <AdetailerStage />;
+  if (stage === "controlnet") return <ControlNetStage />;
+  // Upscale has no package yet; nothing to show.
+  return null;
 }
 
 function renderBlock(block: Block, ctx: RenderContext): ReactNode {
@@ -162,7 +160,7 @@ function renderBlock(block: Block, ctx: RenderContext): ReactNode {
       if (block.feature === "seed") return <Seed />;
       return null;
     case "stage":
-      return <PendingStage stage={block.stage} />;
+      return <StageBlock stage={block.stage} />;
     case "params-rest":
       return <RestBlock title={block.title ?? "More from this workflow"} ctx={ctx} />;
   }
@@ -310,7 +308,7 @@ export function ParamsColumn() {
   const moveParams = useLayout((s) => s.moveParams);
   const moveInCard = useLayout((s) => s.moveInCard);
   const bindings = useBindings();
-  const blocks = doc.regions.params;
+  const blocks = doc?.regions.params ?? [];
   const ctx: RenderContext = { bindings, placed: placedBindingIds(blocks, bindings), customizing };
   const visible = blocks.filter((b) => customizing || !b.hidden);
   const sensors = useSensors(
@@ -350,7 +348,10 @@ export function ParamsColumn() {
   );
 
   return (
-    <div className="scroll-quiet h-full overflow-y-auto pr-1.5" style={{ width: doc.sizes.params }}>
+    <div
+      className="scroll-quiet h-full overflow-y-auto pr-1.5"
+      style={{ width: doc?.sizes.params ?? 420 }}
+    >
       {customizing ? (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
           <SortableContext items={visible.map((b) => b.id)} strategy={verticalListSortingStrategy}>

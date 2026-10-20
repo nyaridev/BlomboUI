@@ -121,6 +121,15 @@ const MIGRATIONS: string[] = [
     fetched_at REAL NOT NULL
   );
   `,
+  // 3: tags this profile prompts with (frequent tags in autocomplete)
+  `
+  CREATE TABLE tag_usage (
+    tag TEXT PRIMARY KEY,
+    uses INTEGER NOT NULL,
+    last_used REAL NOT NULL
+  );
+  CREATE INDEX tag_usage_uses ON tag_usage (uses DESC);
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

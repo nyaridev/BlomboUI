@@ -3,6 +3,7 @@ import type { BrowseFilter, CivitaiPage } from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
 import type { GalleryPage, GalleryQueryInput } from "@shared/gallery";
+import type { JobHistoryPage, JobHistoryQueryInput, SaveSnippetBody } from "@shared/history";
 import type { LocalModel, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
 import { deepMerge, type Settings, type SettingsPatch } from "@shared/settings";
@@ -45,6 +46,22 @@ export const qk = {
   galleryImage: (profileId: string | null, id: number | null) =>
     ["gallery", profileId, "image", id] as const,
   galleryTrash: (profileId: string | null) => ["gallery", profileId, "trash"] as const,
+  galleryTags: (profileId: string | null) => ["gallery", profileId, "tags"] as const,
+  collections: (profileId: string | null) => ["gallery", profileId, "collections"] as const,
+  /** The job log and what's built on it; refetched when runs finish. */
+  history: (profileId: string | null) => ["history", profileId] as const,
+  jobHistory: (profileId: string | null, q: JobHistoryQueryInput) =>
+    ["history", profileId, "jobs", q] as const,
+  jobRecord: (profileId: string | null, id: string | null) =>
+    ["history", profileId, "job", id] as const,
+  promptHistory: (profileId: string | null, q: string) =>
+    ["history", profileId, "prompts", q] as const,
+  usageStats: (profileId: string | null) => ["history", profileId, "stats"] as const,
+  modelMarks: (profileId: string | null) => ["history", profileId, "model-marks"] as const,
+  errorLog: (profileId: string | null) => ["error-log", profileId] as const,
+  snippets: (profileId: string | null) => ["snippets", profileId] as const,
+  /** Scopes and their pictures; refetched when model pictures change. */
+  scopes: (profileId: string | null) => ["scopes", profileId] as const,
   /** Files in the models folder (not ComfyUI's lists, which are `models`). */
   localModels: (profileId: string | null) => ["local-models", profileId] as const,
   modelDetails: (profileId: string | null, id: string | null) =>
@@ -392,6 +409,72 @@ export function useFavorite() {
   });
 }
 
+export function useRateImages() {
+  const qc = useQueryClient();
+  const changed = useGalleryChanged();
+  return useMutation({
+    mutationFn: ({ ids, rating }: { ids: number[]; rating: number }) => api.rateImages(ids, rating),
+    onMutate: ({ ids, rating }) => {
+      const set = new Set(ids);
+      qc.setQueriesData<GalleryPages>(
+        { queryKey: [...qk.gallery(useSession.getState().profileId), "images"] },
+        (old) =>
+          old && {
+            ...old,
+            pages: old.pages.map((p) => ({
+              ...p,
+              items: p.items.map((i) => (set.has(i.id) ? { ...i, rating } : i)),
+            })),
+          },
+      );
+    },
+    onSettled: changed,
+  });
+}
+
+export function useTagImages() {
+  const changed = useGalleryChanged();
+  return useMutation({
+    mutationFn: ({
+      ids,
+      add = [],
+      remove = [],
+    }: {
+      ids: number[];
+      add?: string[];
+      remove?: string[];
+    }) => api.tagImages(ids, add, remove),
+    onSettled: changed,
+  });
+}
+
+export function useGalleryTags() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.galleryTags(profileId),
+    queryFn: api.galleryTags,
+    enabled: profileId !== null,
+  });
+}
+
+export function useCollections() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.collections(profileId),
+    queryFn: api.collections,
+    enabled: profileId !== null,
+  });
+}
+
+export function useCollectImages() {
+  const changed = useGalleryChanged();
+  return useMutation({
+    mutationFn: ({ id, ids, remove }: { id: string; ids: number[]; remove?: boolean }) =>
+      api.collectImages(id, ids, remove),
+    onSettled: changed,
+  });
+}
+
 export function useTrashImages() {
   const changed = useGalleryChanged();
   return useMutation({ mutationFn: (ids: number[]) => api.trashImages(ids), onSettled: changed });
@@ -433,12 +516,12 @@ export function useRemoveLibrary() {
 
 /* ── local models ────────────────────────────────────────────────────────── */
 
-export function useLocalModels() {
+export function useLocalModels(enabled = true) {
   const profileId = useSession((s) => s.profileId);
   return useQuery({
     queryKey: qk.localModels(profileId),
     queryFn: () => api.localModels(),
-    enabled: profileId !== null,
+    enabled: enabled && profileId !== null,
     staleTime: 5 * 60_000,
   });
 }
@@ -628,5 +711,119 @@ export function useCatalog() {
     enabled: profileId !== null,
     staleTime: 10 * 60_000,
     retry: false,
+  });
+}
+
+/* ── history (job log, prompts, stats, errors, snippets) ────────────────── */
+
+export const HISTORY_JOBS_PAGE = 100;
+
+export function useJobHistory(q: JobHistoryQueryInput, enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useInfiniteQuery({
+    queryKey: qk.jobHistory(profileId, q),
+    queryFn: ({ pageParam }) =>
+      api.jobHistory({ ...q, offset: pageParam, limit: HISTORY_JOBS_PAGE }),
+    initialPageParam: 0,
+    getNextPageParam: (last: JobHistoryPage, pages) => {
+      const loaded = pages.reduce((n, p) => n + p.items.length, 0);
+      return loaded < last.total ? loaded : undefined;
+    },
+    enabled: enabled && profileId !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useJobRecord(id: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.jobRecord(profileId, id),
+    queryFn: () => api.jobRecord(id as string),
+    enabled: profileId !== null && id !== null,
+  });
+}
+
+export function usePromptHistory(q: string, enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.promptHistory(profileId, q),
+    queryFn: () => api.promptHistory(q, 60),
+    enabled: enabled && profileId !== null,
+    placeholderData: keepPreviousData,
+  });
+}
+
+export function useUsageStats() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.usageStats(profileId),
+    queryFn: api.usageStats,
+    enabled: profileId !== null,
+  });
+}
+
+export function useModelMarks() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.modelMarks(profileId),
+    queryFn: api.modelMarks,
+    enabled: profileId !== null,
+    staleTime: 60_000,
+  });
+}
+
+export function useSetModelFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ kind, name, favorite }: { kind: ModelKind; name: string; favorite: boolean }) =>
+      api.setModelFavorite(kind, name, favorite),
+    onSuccess: (marks) => qc.setQueryData(qk.modelMarks(useSession.getState().profileId), marks),
+  });
+}
+
+export function useErrorLog() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.errorLog(profileId),
+    queryFn: api.errorLog,
+    enabled: profileId !== null,
+  });
+}
+
+export function useSnippets(enabled = true) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.snippets(profileId),
+    queryFn: api.snippets,
+    enabled: enabled && profileId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+export function useSaveSnippet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: SaveSnippetBody) => api.saveSnippet(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["snippets"] }),
+  });
+}
+
+export function useRemoveSnippet() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.removeSnippet(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["snippets"] }),
+  });
+}
+
+/* ── scopes ──────────────────────────────────────────────────────────────── */
+
+export function useScopes() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.scopes(profileId),
+    queryFn: api.scopes,
+    enabled: profileId !== null,
+    staleTime: 60_000,
   });
 }

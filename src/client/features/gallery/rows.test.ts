@@ -12,6 +12,7 @@ const img = (id: number, day: string, w = 100, h = 100): GalleryImage => ({
   size: 1,
   mtime: new Date(`${day}T12:00:00`).getTime(),
   favorite: false,
+  rating: 0,
   model: null,
   thumb: "",
 });

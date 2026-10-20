@@ -7,6 +7,8 @@ import type { ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
+import { useSettingsNav } from "../../features/settings/nav";
+import { useShortcutLabel } from "../useShortcuts";
 
 export function AvatarMenu({
   profile,
@@ -18,6 +20,7 @@ export function AvatarMenu({
   onNavigate: (view: ViewId) => void;
 }) {
   const navigate = useNavigate();
+  const keys = useShortcutLabel();
   const errors = useLive((s) => s.errors.length);
   const name = profile?.name ?? "Profile";
   const src = profile ? avatarUrl(profile, profile.lastOpenedAt ?? profile.createdAt) : null;
@@ -41,32 +44,48 @@ export function AvatarMenu({
           id: "settings",
           label: "Settings",
           icon: "settings",
-          shortcut: "Ctrl ,",
+          shortcut: keys("view.settings"),
           onSelect: () => onNavigate("settings"),
         },
-        { id: "history", label: "History", icon: "history", onSelect: () => onNavigate("history") },
+        {
+          id: "history",
+          label: "History",
+          icon: "history",
+          shortcut: keys("view.history"),
+          onSelect: () => onNavigate("history"),
+        },
         {
           id: "errors",
           label: "Errors",
           icon: "errors",
           hint: errors ? <Badge tone="danger">{errors}</Badge> : undefined,
+          shortcut: errors ? undefined : keys("view.errors"),
           onSelect: () => onNavigate("errors"),
         },
-        { id: "scopes", label: "Scopes", icon: "scopes", onSelect: () => onNavigate("scopes") },
+        {
+          id: "scopes",
+          label: "Scopes",
+          icon: "scopes",
+          shortcut: keys("view.scopes"),
+          onSelect: () => onNavigate("scopes"),
+        },
         { type: "separator", id: "s1" },
         {
           id: "help",
           label: "Help & prompt guide",
           icon: "book",
-          shortcut: "F1",
+          shortcut: keys("view.help"),
           onSelect: () => onNavigate("help"),
         },
         {
           id: "keys",
           label: "Keyboard shortcuts",
           icon: "keyboard",
-          shortcut: "?",
-          onSelect: () => onNavigate("help"),
+          shortcut: keys("shortcuts"),
+          onSelect: () => {
+            useSettingsNav.getState().go("shortcuts");
+            onNavigate("settings");
+          },
         },
         { id: "lab", label: "Design Lab", icon: "lab", onSelect: () => onNavigate("lab") },
         { type: "separator", id: "s2" },

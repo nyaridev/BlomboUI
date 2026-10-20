@@ -5,13 +5,15 @@
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { useModels } from "@client/lib/queries";
+import { useModels, useSettings } from "@client/lib/queries";
 import { Badge, FallbackFace, IconButton, Slider, Tooltip } from "@client/ui";
+import type { ModelKind } from "@shared/constants";
 import { findLoraTags, type LoraTag, removeLoraTag, setLoraStrength } from "@shared/prompt/loras";
 import { findWildcards } from "@shared/prompt/wildcards";
 import type { Binding } from "@shared/workflow/manifest";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
+import { useModelThumb } from "../../scopes/thumbs";
 import { modelDisplayName, modelFolder } from "../labels";
 import { useValue } from "../state";
 import { useRoleBinding } from "../workflow";
@@ -19,6 +21,27 @@ import { useRoleBinding } from "../workflow";
 type PickTab = "checkpoints" | "loras" | "wildcards" | "other";
 
 const stem = (f: string) => modelDisplayName(f).toLowerCase();
+
+/** A tile's picture: the scope's or the model's own preview, else the designed fallback. */
+function TileFace({ kind, name, fallback }: { kind: ModelKind; name: string; fallback: string }) {
+  const { thumb, nsfw } = useModelThumb(kind, name);
+  const blur = useSettings().data?.models.blurNsfw ?? true;
+  if (thumb && !(nsfw && blur))
+    return <img src={thumb} alt="" loading="lazy" className="h-full w-full object-cover" />;
+  return (
+    <FallbackFace
+      name={fallback}
+      kind={
+        kind === "diffusion_models"
+          ? "diffusion_models"
+          : kind === "loras"
+            ? "loras"
+            : "checkpoints"
+      }
+      className="text-[6px]"
+    />
+  );
+}
 
 function ModelTile({ binding, onClick }: { binding: Binding; onClick: () => void }) {
   const [value] = useValue<string>(binding.id);
@@ -32,10 +55,10 @@ function ModelTile({ binding, onClick }: { binding: Binding; onClick: () => void
       className="group flex h-[68px] w-[260px] shrink-0 items-center gap-3 rounded-lg border border-line bg-surface-2 p-1.5 pr-3 text-left transition-colors hover:border-line-strong focus-ring"
     >
       <div className="h-full w-[46px] shrink-0 overflow-hidden rounded-md">
-        <FallbackFace
-          name={name || binding.label}
-          kind={binding.modelKind === "diffusion_models" ? "diffusion_models" : "checkpoints"}
-          className="text-[6px]"
+        <TileFace
+          kind={binding.modelKind ?? "checkpoints"}
+          name={name}
+          fallback={name || binding.label}
         />
       </div>
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -183,7 +206,7 @@ function LoraTile({
       )}
     >
       <div className="h-full w-[46px] shrink-0 overflow-hidden rounded-md">
-        <FallbackFace name={tag.name} kind="loras" className="text-[6px]" />
+        <TileFace kind="loras" name={tag.name} fallback={tag.name} />
       </div>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="flex items-center gap-1.5 pr-5">

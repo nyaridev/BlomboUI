@@ -3,10 +3,12 @@
  * stack beside them, workspace tabs, parameter column + image stage. Everything shows the
  * active workflow's bindings and values; the params column is a layout document that's
  * editable in Customize mode. A batch workflow shows the batch runner instead of the prompts
- * and the image stage.
+ * and the image stage. Dropping an image anywhere loads its settings (ImageDrop); the first
+ * visit starts the tour (GenerateTour).
  */
 import { glide } from "@client/lib/motion";
 import { Button, Spinner, Tabs } from "@client/ui";
+import { useLocation } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { BatchView } from "./batch/BatchView";
@@ -14,6 +16,8 @@ import { ImageStage } from "./blocks/ImageStage";
 import { ModelsStrip } from "./blocks/ModelsStrip";
 import { GenerateActions, Prompts } from "./blocks/Prompts";
 import { CustomizeBar, Inspector, LayoutPicker } from "./Customize";
+import { GenerateTour } from "./GenerateTour";
+import { ImageDropOverlay, useImageDrop } from "./ImageDrop";
 import { adoptBrowserLayouts } from "./layouts";
 import { ModelGrid, type PickerTab } from "./ModelGrid";
 import { ParamsColumn } from "./ParamsColumn";
@@ -33,6 +37,11 @@ export function GenerateView() {
   const load = useValues((s) => s.load);
   const loaded = useValues((s) => s.workflowId);
   const showLayout = useLayout((s) => s.show);
+  const drop = useImageDrop();
+  // Kept alive while hidden: the tour waits until Generate is the view on screen.
+  const visible = useLocation({
+    select: (l) => (l.pathname.split("/")[3] ?? "generate") === "generate",
+  });
 
   // Show the workflow's saved values when it becomes active (before paint, so a switch never
   // shows one workflow's controls with the other's values).
@@ -65,7 +74,8 @@ export function GenerateView() {
 
   return (
     <motion.div
-      className="flex h-full flex-col gap-3 p-3"
+      className="relative flex h-full flex-col gap-3 p-3"
+      {...drop.handlers}
       initial="hidden"
       animate="show"
       variants={{
@@ -73,13 +83,17 @@ export function GenerateView() {
         show: { transition: { staggerChildren: 0.07, delayChildren: 0.12 } },
       }}
     >
-      <motion.div variants={item}>
+      <motion.div variants={item} data-tour="models">
         <ModelsStrip onPick={(t) => setTab(t)} />
       </motion.div>
 
       <motion.div variants={item} className="flex gap-3">
-        <Prompts />
-        <GenerateActions />
+        <div data-tour="prompt" className="flex min-w-0 flex-1">
+          <Prompts />
+        </div>
+        <div data-tour="generate" className="contents">
+          <GenerateActions />
+        </div>
       </motion.div>
 
       <motion.div variants={item} className="flex min-h-0 flex-1 flex-col">
@@ -112,15 +126,21 @@ export function GenerateView() {
           <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
             <AnimatePresence>{customizing ? <CustomizeBar /> : null}</AnimatePresence>
             <div className="flex min-h-0 flex-1 gap-3">
-              <ParamsColumn />
+              <div data-tour="params" className="contents">
+                <ParamsColumn />
+              </div>
               <AnimatePresence>{customizing ? <Inspector /> : null}</AnimatePresence>
-              <ImageStage />
+              <div data-tour="stage" className="contents">
+                <ImageStage />
+              </div>
             </div>
           </div>
         ) : (
           <ModelGrid tab={tab} onDone={() => setTab("generation")} />
         )}
       </motion.div>
+      <ImageDropOverlay over={drop.over} busy={drop.busy} />
+      <GenerateTour ready={visible && tab === "generation" && !customizing} />
     </motion.div>
   );
 }

@@ -25,6 +25,8 @@ export const GalleryImage = z.object({
   /** File modification time, ms since the epoch. */
   mtime: z.number(),
   favorite: z.boolean(),
+  /** Your stars, 0 (none) to 5. */
+  rating: z.number().int().min(0).max(5).default(0),
   model: z.string().nullable(),
   /** Thumbnail URL; immutable (it changes when the file changes). */
   thumb: z.string(),
@@ -39,10 +41,14 @@ export const ImageDetails = GalleryImage.extend({
   hasWorkflow: z.boolean(),
   /** Full-size file URL. */
   file: z.string(),
+  /** Your own tags. */
+  tags: z.array(z.string()).default([]),
+  /** Ids of the collections it's in. */
+  collections: z.array(z.string()).default([]),
 });
 export type ImageDetails = z.infer<typeof ImageDetails>;
 
-export const GALLERY_SORTS = ["newest", "oldest", "name"] as const;
+export const GALLERY_SORTS = ["newest", "oldest", "name", "rating"] as const;
 
 export const GalleryQuery = z.object({
   /** "all" or a library id. */
@@ -56,6 +62,12 @@ export const GalleryQuery = z.object({
   lora: z.string().max(400).optional(),
   /** Only images modified at or after this time (ms). */
   since: z.coerce.number().optional(),
+  /** Only images with at least this many stars. */
+  rating: z.coerce.number().int().min(0).max(5).default(0),
+  /** Only images with this tag of yours. */
+  tag: z.string().max(60).optional(),
+  /** Only images in this collection. */
+  collection: z.string().max(60).optional(),
   sort: z.enum(GALLERY_SORTS).default("newest"),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(1000).default(300),
@@ -129,6 +141,42 @@ export const TrashEntry = z.object({
   thumb: z.string(),
 });
 export type TrashEntry = z.infer<typeof TrashEntry>;
+
+/** One of your tags: trimmed, lowercase, no commas. */
+export const ImageTag = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .transform((t) => t.toLowerCase().replace(/\s+/g, " "))
+  .refine((t) => !t.includes(","), "Tags can't contain commas");
+
+export const RatingBody = z.object({
+  ids: z.array(z.number().int()).min(1).max(5000),
+  rating: z.number().int().min(0).max(5),
+});
+export const TagsBody = z.object({
+  ids: z.array(z.number().int()).min(1).max(5000),
+  add: z.array(ImageTag).max(20).default([]),
+  remove: z.array(ImageTag).max(20).default([]),
+});
+export const TagCount = z.object({ tag: z.string(), count: z.number().int() });
+export type TagCount = z.infer<typeof TagCount>;
+
+/** A virtual album: images from any library, kept by library + path. */
+export const Collection = z.object({
+  id: z.string(),
+  name: z.string(),
+  count: z.number().int(),
+  cover: z.string().nullable(),
+  createdAt: z.number(),
+});
+export type Collection = z.infer<typeof Collection>;
+export const CollectionName = z.object({ name: z.string().trim().min(1).max(60) });
+export const CollectionItemsBody = z.object({
+  ids: z.array(z.number().int()).min(1).max(5000),
+  remove: z.boolean().default(false),
+});
 
 export const FavoriteBody = z.object({
   ids: z.array(z.number().int()).min(1).max(5000),

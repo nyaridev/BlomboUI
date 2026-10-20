@@ -244,7 +244,7 @@ export class ScriptService {
       createdAt: at,
       startedAt: at,
       finishedAt: at,
-      progress: { value: 1, max: 1, node: null, overall: 1, segment: 0 },
+      progress: { value: 1, max: 1, node: null, overall: 1, segment: 0, rate: null },
       images: [],
       texts: [],
       error: null,
@@ -258,6 +258,7 @@ export class ScriptService {
         label: g.plan.title,
       },
       file: { url: `/api/scripts/grids/${id}`, path: file, width: grid.width, height: grid.height },
+      timings: [],
     });
   }
 }

@@ -132,6 +132,26 @@ export class ProfileService extends Emitter<ProfileEvents> {
     return profile;
   }
 
+  /** A free profile id for a name ("My renders" → "my-renders", "my-renders-2"…). */
+  async freeId(name: string): Promise<string> {
+    const reg = await this.registry();
+    const base = slugifyProfileName(name);
+    let id = base;
+    for (let n = 2; reg.order.includes(id) || (await exists(this.dir(id))); n++)
+      id = `${base}-${n}`;
+    return id;
+  }
+
+  /** List a profile whose folder was just written (an imported export). */
+  async adopt(profile: Profile): Promise<Profile> {
+    const parsed = Profile.parse(profile);
+    await writeJsonAtomic(this.profileFile(parsed.id), parsed);
+    const reg = await this.registry();
+    if (!reg.order.includes(parsed.id))
+      await writeJsonAtomic(this.registryFile, { ...reg, order: [...reg.order, parsed.id] });
+    return parsed;
+  }
+
   async update(id: string, patch: UpdateProfileBody): Promise<Profile> {
     const current = await this.get(id);
     const next = Profile.parse({

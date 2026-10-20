@@ -4,10 +4,12 @@
  */
 import { Logo } from "@client/icons/Logo";
 import { cn } from "@client/lib/cn";
-import { Tabs } from "@client/ui";
+import { IconButton, Tabs } from "@client/ui";
 import type { MainView, ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
 import { useNavigate } from "@tanstack/react-router";
+import { usePalette } from "../commands";
+import { useShortcutLabel } from "../useShortcuts";
 import { AvatarMenu } from "./AvatarMenu";
 import { SystemCluster } from "./SystemCluster";
 import { WorkflowSwitcher } from "./WorkflowSwitcher";
@@ -39,6 +41,8 @@ export function Header({
       ? navigate({ to: "/p/$profileId", params: { profileId } })
       : navigate({ to: "/p/$profileId/$view", params: { profileId, view: v } });
   const isMain = NAV.some((n) => n.value === view);
+  const keys = useShortcutLabel();
+  const openPalette = usePalette((s) => s.set);
 
   return (
     // Three columns: the main tabs stay centered while there's room, and the status cluster
@@ -53,7 +57,9 @@ export function Header({
         >
           <Logo size={28} />
         </button>
-        <WorkflowSwitcher />
+        <div data-tour="workflow" className="contents">
+          <WorkflowSwitcher />
+        </div>
       </div>
 
       <nav aria-label="Main">
@@ -70,6 +76,12 @@ export function Header({
       </nav>
 
       <div className="flex items-center justify-end gap-2">
+        <IconButton
+          icon="search"
+          label="Search and commands"
+          shortcut={keys("palette")}
+          onClick={() => openPalette(true)}
+        />
         <SystemCluster />
         <span className="mx-1 h-6 w-px bg-line" />
         <AvatarMenu profile={profile} profileId={profileId} onNavigate={go} />

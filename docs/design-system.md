@@ -103,6 +103,11 @@ Presets in `src/client/lib/motion.ts`:
 | `PropertyList` | Label/value rows for metadata; skips empty values; optional per-row copy and mono |
 | `TreeRow` | One file-tree row: indent, chevron for folders, icon, label, unsaved dot, trailing actions on hover |
 | `InlineInput` | Borderless input for dense lists (wildcard lines); a field appears on hover and focus; `muted` for comments |
+| `StarRating` | 0–5 stars; click a star (again to clear), arrows and 0–5 keys, a radio group; `sm`; `readOnly` for display |
+| `CommandPalette` | A search field over grouped entries (icon or thumbnail, label, muted hint, keys); fuzzy matching (`lib/fuzzy`), ↑/↓, Enter, Esc; an empty query shows a few per group; at most 60 rows |
+| `Tour` | Steps that highlight a part of the page (`[data-tour=…]`, `display: contents` wrappers measured by their children) with a card beside it: step dots, Back / Next / Done, Skip; arrows, Enter, Esc |
+
+**Layers** (z-index, highest last): the lightbox 250 · dialogs 300 · the tour 310 · the command palette 320 · popovers and menus 350 · select lists 360 · tooltips 370 · toasts 400. Anything that floats sits above full-screen surfaces, so a popover opened from the lightbox or a dialog shows.
 
 **Adding a control or variant:** build it in `ui/`, export it from `ui/index.ts`, show every state in the Design Lab (normal, hover, focus, active, disabled, invalid, selected, open) in at least the Blombo and Light themes. It isn't done until it's in the Lab.
 
@@ -130,6 +135,19 @@ Presets in `src/client/lib/motion.ts`:
 - **Workflow switcher footer:** Edit in ComfyUI · Duplicate · Export · Delete (two clicks); import is the icon next to search and the drop target (ComfyUI JSON, PNG, WebP, `.blombo`).
 - **ComfyUI's page (blombo-bridge):** the extension's floating bar sits under ComfyUI's menu, centered, in ComfyUI's own CSS variables (it isn't Blombo's page, so it doesn't use Blombo's tokens): "Editing **name** from Blombo", a short note, **Save to Blombo** (primary), Save as copy, Cancel; results come as ComfyUI toasts.
 - **Settings → ComfyUI:** which ComfyUI the profile uses, then the Blombo bridge row (a status badge: Loaded / Not loaded / Out of date / ComfyUI is off, the version, Check again, what to do, and **Install bridge…** for your own ComfyUI or **Restart ComfyUI** for a slot), then the installer: slot, PyTorch build, version, and a step list with a progress bar on the active step and the tools' output under "Show details".
+- **Settings → Overview:** the profile card, four stat tiles (images generated with this week / today, GPU time, favorites of the gallery, speed with runs and failures), a 14-day bar chart (today in full accent, other days at 45%, a tooltip per day), four single-hue rank lists (models, LoRAs, wildcards, workflows), then quick settings rows. With no runs yet a panel points to Generate.
+- **Settings → Shortcuts:** a search field, "N changed from the defaults" and Reset all, then panels per group: label (a warning line with an icon when another action has the same keys), the default when changed, the keys as `Kbd`s in a button that records the next combo (Backspace for none, Esc cancels), and a reset icon. "In one view" lists fixed keys read-only.
+- **Settings → Notifications:** a `Notice` when this window can't show notifications or they're blocked, the on switch, three "when" switches with their words, the "long run" slider, Allow / Send a test.
+- **Settings → About:** version and data folder with Design Lab, Show in Explorer, Export "…", and a compact `DropZone` to import a profile zip.
+- **Help:** the settings layout (220 px topic rail with a sliding indicator that follows the section in view) and sections with numbered steps, tips (`info` icon), tables; the prompt guide is a table of syntax / example (`SyntaxText`, the editor's colors without an editor) / meaning; the playground is the real `PromptEditor` with tags as chips (weight > 1 in weight ink on yellow, < 1 muted, ×w in mono), LoRAs, wildcards (found / not in your folder badges), choices and syntax problems.
+- **Command palette:** centered at 12vh, 640 px, `surface-3`; groups Go to · Actions · Workflows · Settings · Help · Models · LoRAs; a footer with ↑ ↓ / Enter hints and the count. The header has a search icon button for it.
+- **Scopes:** "Cards show" select + "Pick from the prompt" switch (with what it picked now) above a 248 px rail of scopes by group (counts, a dot on the active one, New scope) and the scope's pane: name, group badge, its tags, Pictures | Lookup, edit; kind segmented, search, "Only without a picture", "N of M have a picture here", Make the missing ones; a virtualized ModelCard grid with a footer of Upload · From gallery · Remove. Lookup shows one model's picture in every scope as small 3:4 tiles. Edit and New use a dialog (name, group, comma-separated tags with a chip preview, Remove scope with a second click).
+- **History → Generations:** search, All / Done / Failed segmented, count, Clear (confirmation); rows with a 64 px thumbnail, workflow name, state badge, the group's title, the prompt in `SyntaxText`, a mono line (model, LoRA count, size, seed, duration, it/s with a per-stage tooltip), Run again and a ⋯ menu (new seed, Use these settings).
+- **Prompt history:** the clock icon beside a prompt opens a 460 px popover with Recent (search; prompts in `SyntaxText`, "3 min ago · 2 runs", + to add) and Snippets (insert at the cursor, remove on hover, a name field that saves the current prompt).
+- **Gallery marks:** the lightbox's details start with a `surface-2` box: Rating (`StarRating`), Tags (chips with × and an add field with suggestions), Albums (a collection picker with checkboxes and "New collection"). Tiles show `★ n` on rated images; the toolbar has Tag and Rating chips and a "Best rated" sort; the sidebar lists collections with covers and counts.
+- **Image stage timing:** a finished result's info chip adds "· 7.9 it/s" with a tooltip of time per part; while running, the progress card shows the server's it/s.
+- **Drop to reuse:** dragging a file over Generate shows a dashed accent overlay on `bg/80` ("Drop to use this image's settings"), then "Reading the image…".
+- **Model pickers:** favorites first (heart on the card), then recently used, then the rest; tiles in the models strip show the scope's or the model's picture.
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
 
 ## Copy
@@ -143,5 +161,5 @@ Presets in `src/client/lib/motion.ts`:
 
 - Visible focus ring (`focus-ring` utility / global `:focus-visible`) on everything interactive.
 - Every icon-only control has a label. Radios, tabs and sliders expose their ARIA roles and values.
-- Keyboard: arrows in segmented controls, tabs, menus and selects; Enter/Escape in editable values; `1`–`9` on the profile screen; `Ctrl+Enter` to generate.
+- Keyboard: arrows in segmented controls, tabs, menus and selects; Enter/Escape in editable values; `1`–`9` on the profile screen; app shortcuts from `shared/shortcuts.ts` (Ctrl+1–8 views, Ctrl+Enter generate, Ctrl+K palette, F1 help, R rescan…), rebindable in Settings → Shortcuts. Show keys with `useShortcutLabel()`, never a hardcoded string.
 - Contrast: text tokens on their surfaces meet WCAG AA in every theme; check new tokens in the Lab against `surface` and `surface-2`.

@@ -17,6 +17,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import {
+  type Collection,
   fileUrl,
   type GalleryFacets,
   type GalleryImage,
@@ -28,6 +29,7 @@ import {
   type LibraryInfo,
   OUTPUTS_LIBRARY,
   type SyncState,
+  type TagCount,
   type TrashEntry,
   thumbUrl,
 } from "../../../shared/gallery.ts";
@@ -83,6 +85,7 @@ interface ImageRow {
   height: number;
   model: string | null;
   favorite: number;
+  rating: number;
 }
 
 interface Open {
@@ -113,7 +116,7 @@ export function ftsQuery(terms: string[]): string | null {
 
 const SELECT = `
   SELECT i.id, i.library, i.path, i.name, i.folder, i.size, i.mtime, i.width, i.height, i.model,
-         COALESCE(m.favorite, 0) AS favorite
+         COALESCE(m.favorite, 0) AS favorite, COALESCE(m.rating, 0) AS rating
   FROM images i LEFT JOIN marks m ON m.library = i.library AND m.path = i.path`;
 
 export class GalleryService {
@@ -413,6 +416,26 @@ export class GalleryService {
     return image;
   }
 
+  /**
+   * Gallery rows for ComfyUI output refs (the job log's first images), without touching files.
+   * Refs outside the outputs library, or not indexed (yet), are left out.
+   */
+  findOutputs(
+    refs: Array<{ filename: string; subfolder: string; type: string }>,
+  ): Map<string, GalleryImage> {
+    const out = new Map<string, GalleryImage>();
+    if (!this.current) return out;
+    const { db } = this.current.pdb;
+    const find = db.prepare(`${SELECT} WHERE i.library = ? AND i.path = ?`);
+    for (const ref of refs) {
+      if (ref.type !== "output") continue;
+      const rel = [ref.subfolder, ref.filename].filter(Boolean).join("/").replace(/\\/g, "/");
+      const row = find.get(OUTPUTS_LIBRARY, rel) as ImageRow | undefined;
+      if (row) out.set(rel, this.toImage(row));
+    }
+    return out;
+  }
+
   /* ── queries ─────────────────────────────────────────────────────────── */
 
   private toImage(r: ImageRow): GalleryImage {
@@ -426,6 +449,7 @@ export class GalleryService {
       size: Number(r.size),
       mtime: Number(r.mtime),
       favorite: Boolean(r.favorite),
+      rating: Number(r.rating ?? 0),
       model: r.model,
       thumb: thumbUrl(Number(r.id), Number(r.size), Number(r.mtime)),
     };
@@ -459,6 +483,22 @@ export class GalleryService {
       where.push("i.mtime >= ?");
       params.push(q.since);
     }
+    if (q.rating > 0) {
+      where.push("COALESCE(m.rating, 0) >= ?");
+      params.push(q.rating);
+    }
+    if (q.tag) {
+      where.push(
+        "EXISTS (SELECT 1 FROM image_tags t WHERE t.library = i.library AND t.path = i.path AND t.tag = ?)",
+      );
+      params.push(q.tag.toLowerCase());
+    }
+    if (q.collection) {
+      where.push(
+        "EXISTS (SELECT 1 FROM collection_items c WHERE c.library = i.library AND c.path = i.path AND c.collection_id = ?)",
+      );
+      params.push(q.collection);
+    }
     const terms = q.q.toLowerCase().split(/\s+/).filter(Boolean).slice(0, 12);
     const match = fts ? ftsQuery(terms) : null;
     if (match) {
@@ -476,7 +516,9 @@ export class GalleryService {
         ? "i.mtime ASC, i.id ASC"
         : q.sort === "name"
           ? "i.name COLLATE NOCASE ASC, i.id ASC"
-          : "i.mtime DESC, i.id DESC";
+          : q.sort === "rating"
+            ? "COALESCE(m.rating, 0) DESC, i.mtime DESC, i.id DESC"
+            : "i.mtime DESC, i.id DESC";
     const rows = db
       .prepare(`${SELECT} ${clause} ORDER BY ${order} LIMIT ? OFFSET ?`)
       .all(...params, q.limit, q.offset) as unknown as ImageRow[];
@@ -579,8 +621,16 @@ export class GalleryService {
       ? settings.data
       : { workflowId: null, values: null, roles: {} as Record<string, unknown> };
     if (s.workflowId && !(await this.deps.workflowExists(s.workflowId))) s.workflowId = null;
+    const tags = db
+      .prepare("SELECT tag FROM image_tags WHERE library = ? AND path = ? ORDER BY tag")
+      .all(image.library, image.path) as Array<{ tag: string }>;
+    const collections = db
+      .prepare("SELECT collection_id AS id FROM collection_items WHERE library = ? AND path = ?")
+      .all(image.library, image.path) as Array<{ id: string }>;
     return {
       ...image,
+      tags: tags.map((t) => t.tag),
+      collections: collections.map((c) => c.id),
       summary: summary.success ? summary.data : { ...EMPTY_SUMMARY },
       settings: s,
       hasWorkflow: Boolean(raw.has_workflow),
@@ -624,6 +674,146 @@ export class GalleryService {
     this.deps.publish("gallery", { t: "gallery.changed" });
   }
 
+  /* ── ratings, tags, collections ─────────────────────────────────────── */
+
+  private marksOf(db: ProfileDb["db"], library: string, rel: string, rating: number) {
+    const tags = db
+      .prepare("SELECT tag FROM image_tags WHERE library = ? AND path = ?")
+      .all(library, rel) as Array<{ tag: string }>;
+    const collections = db
+      .prepare("SELECT collection_id AS id FROM collection_items WHERE library = ? AND path = ?")
+      .all(library, rel) as Array<{ id: string }>;
+    return { rating, tags: tags.map((t) => t.tag), collections: collections.map((c) => c.id) };
+  }
+
+  private rowsFor(ids: number[]): Array<{ library: string; path: string }> {
+    const find = this.need().pdb.db.prepare("SELECT library, path FROM images WHERE id = ?");
+    return ids.flatMap((id) => {
+      const row = find.get(id) as { library: string; path: string } | undefined;
+      return row ? [row] : [];
+    });
+  }
+
+  setRating(ids: number[], rating: number): void {
+    const { db } = this.need().pdb;
+    const rows = this.rowsFor(ids);
+    transaction(db, () => {
+      const set = db.prepare(
+        `INSERT INTO marks (library, path, favorite, rating) VALUES (?, ?, 0, ?)
+         ON CONFLICT (library, path) DO UPDATE SET rating = excluded.rating`,
+      );
+      for (const r of rows) set.run(r.library, r.path, rating);
+    });
+    this.deps.publish("gallery", { t: "gallery.changed" });
+  }
+
+  setTags(ids: number[], add: string[], remove: string[]): void {
+    const { db } = this.need().pdb;
+    const rows = this.rowsFor(ids);
+    transaction(db, () => {
+      const ins = db.prepare(
+        "INSERT OR IGNORE INTO image_tags (library, path, tag) VALUES (?, ?, ?)",
+      );
+      const del = db.prepare("DELETE FROM image_tags WHERE library = ? AND path = ? AND tag = ?");
+      for (const r of rows) {
+        for (const t of remove) del.run(r.library, r.path, t);
+        for (const t of add) ins.run(r.library, r.path, t);
+      }
+    });
+    this.deps.publish("gallery", { t: "gallery.changed" });
+  }
+
+  /** Your tags on images that are in the index, most used first. */
+  tags(): TagCount[] {
+    const rows = this.need()
+      .pdb.db.prepare(
+        `SELECT t.tag AS tag, COUNT(*) AS count FROM image_tags t
+         JOIN images i ON i.library = t.library AND i.path = t.path
+         GROUP BY t.tag ORDER BY count DESC, t.tag LIMIT 500`,
+      )
+      .all() as Array<{ tag: string; count: number }>;
+    return rows.map((r) => ({ tag: r.tag, count: Number(r.count) }));
+  }
+
+  collections(): Collection[] {
+    const { db } = this.need().pdb;
+    const rows = db
+      .prepare(
+        `SELECT c.id, c.name, c.created_at, COUNT(i.id) AS count FROM collections c
+         LEFT JOIN collection_items ci ON ci.collection_id = c.id
+         LEFT JOIN images i ON i.library = ci.library AND i.path = ci.path
+         GROUP BY c.id ORDER BY c.name COLLATE NOCASE`,
+      )
+      .all() as Array<{ id: string; name: string; created_at: number; count: number }>;
+    const cover = db.prepare(
+      `${SELECT} JOIN collection_items ci ON ci.library = i.library AND ci.path = i.path
+       WHERE ci.collection_id = ? ORDER BY ci.added_at DESC LIMIT 1`,
+    );
+    return rows.map((r) => {
+      const c = cover.get(r.id) as ImageRow | undefined;
+      return {
+        id: r.id,
+        name: r.name,
+        count: Number(r.count),
+        createdAt: Number(r.created_at),
+        cover: c ? this.toImage(c).thumb : null,
+      };
+    });
+  }
+
+  createCollection(name: string): Collection {
+    const { db } = this.need().pdb;
+    const taken = new Set(
+      (db.prepare("SELECT id FROM collections").all() as Array<{ id: string }>).map((r) => r.id),
+    );
+    const base = slugId(name, "collection");
+    let id = base;
+    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+    const at = Date.now();
+    db.prepare("INSERT INTO collections (id, name, created_at) VALUES (?, ?, ?)").run(id, name, at);
+    this.deps.publish("gallery", { t: "gallery.changed" });
+    return { id, name, count: 0, cover: null, createdAt: at };
+  }
+
+  renameCollection(id: string, name: string): void {
+    const res = this.need()
+      .pdb.db.prepare("UPDATE collections SET name = ? WHERE id = ?")
+      .run(name, id);
+    if (!res.changes)
+      throw new HttpError(404, "That collection doesn't exist anymore.", "no_collection");
+    this.deps.publish("gallery", { t: "gallery.changed" });
+  }
+
+  /** Remove a collection. Its images stay where they are. */
+  removeCollection(id: string): void {
+    const res = this.need().pdb.db.prepare("DELETE FROM collections WHERE id = ?").run(id);
+    if (!res.changes) throw new HttpError(404, "That collection is already gone.", "no_collection");
+    this.deps.publish("gallery", { t: "gallery.changed" });
+  }
+
+  setCollectionItems(id: string, ids: number[], remove: boolean): number {
+    const { db } = this.need().pdb;
+    if (!db.prepare("SELECT 1 FROM collections WHERE id = ?").get(id))
+      throw new HttpError(404, "That collection doesn't exist anymore.", "no_collection");
+    const rows = this.rowsFor(ids);
+    let n = 0;
+    transaction(db, () => {
+      const ins = db.prepare(
+        "INSERT OR IGNORE INTO collection_items (collection_id, library, path, added_at) VALUES (?, ?, ?, ?)",
+      );
+      const del = db.prepare(
+        "DELETE FROM collection_items WHERE collection_id = ? AND library = ? AND path = ?",
+      );
+      for (const r of rows)
+        n += Number(
+          (remove ? del.run(id, r.library, r.path) : ins.run(id, r.library, r.path, Date.now()))
+            .changes,
+        );
+    });
+    this.deps.publish("gallery", { t: "gallery.changed" });
+    return n;
+  }
+
   /* ── trash ───────────────────────────────────────────────────────────── */
 
   private trashDir(): string {
@@ -655,10 +845,11 @@ export class GalleryService {
           "trash_failed",
         );
       }
+      const extra = this.marksOf(db, row.library, row.path, Number(row.rating ?? 0));
       transaction(db, () => {
         db.prepare(
-          `INSERT INTO trash (id, library, path, file, size, width, height, mtime, favorite, trashed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO trash (id, library, path, file, size, width, height, mtime, favorite, trashed_at, extra)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         ).run(
           trashId,
           row.library,
@@ -670,8 +861,17 @@ export class GalleryService {
           row.mtime,
           row.favorite,
           Date.now(),
+          JSON.stringify(extra),
         );
         db.prepare("DELETE FROM marks WHERE library = ? AND path = ?").run(row.library, row.path);
+        db.prepare("DELETE FROM image_tags WHERE library = ? AND path = ?").run(
+          row.library,
+          row.path,
+        );
+        db.prepare("DELETE FROM collection_items WHERE library = ? AND path = ?").run(
+          row.library,
+          row.path,
+        );
         this.deleteRow(open, row.id);
       });
       moved.push(trashId);
@@ -716,6 +916,7 @@ export class GalleryService {
           favorite: number;
           size: number;
           mtime: number;
+          extra: string | null;
         }
       | undefined;
     if (!row) throw new HttpError(404, "That image isn't in the trash anymore.", "no_trash");
@@ -750,12 +951,23 @@ export class GalleryService {
       const rel = toRel(path.relative(lib.path, to));
       const stat = await fs.stat(to);
       this.upsert(open, lib.id, rel, stat, await readForIndex(to, stat));
+      const extra = parseExtra(row.extra);
       transaction(db, () => {
-        if (row.favorite)
+        if (row.favorite || extra.rating)
           db.prepare(
-            `INSERT INTO marks (library, path, favorite) VALUES (?, ?, 1)
-             ON CONFLICT (library, path) DO UPDATE SET favorite = 1`,
-          ).run(lib.id, rel);
+            `INSERT INTO marks (library, path, favorite, rating) VALUES (?, ?, ?, ?)
+             ON CONFLICT (library, path) DO UPDATE SET favorite = excluded.favorite,
+               rating = excluded.rating`,
+          ).run(lib.id, rel, row.favorite ? 1 : 0, extra.rating);
+        const tag = db.prepare(
+          "INSERT OR IGNORE INTO image_tags (library, path, tag) VALUES (?, ?, ?)",
+        );
+        for (const t of extra.tags) tag.run(lib.id, rel, t);
+        const add = db.prepare(
+          `INSERT OR IGNORE INTO collection_items (collection_id, library, path, added_at)
+           SELECT id, ?, ?, ? FROM collections WHERE id = ?`,
+        );
+        for (const c of extra.collections) add.run(lib.id, rel, Date.now(), c);
         db.prepare("DELETE FROM trash WHERE id = ?").run(id);
       });
       restored++;
@@ -832,6 +1044,27 @@ export class GalleryService {
 }
 
 /* ── helpers ──────────────────────────────────────────────────────────────── */
+
+/** Rating, tags and collections an image had when it went to the trash. */
+function parseExtra(text: string | null): {
+  rating: number;
+  tags: string[];
+  collections: string[];
+} {
+  const raw = (text ? safeJson(text) : null) as {
+    rating?: unknown;
+    tags?: unknown;
+    collections?: unknown;
+  } | null;
+  const strings = (v: unknown) =>
+    Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : [];
+  const rating = Number(raw?.rating ?? 0);
+  return {
+    rating: Number.isInteger(rating) && rating >= 0 && rating <= 5 ? rating : 0,
+    tags: strings(raw?.tags),
+    collections: strings(raw?.collections),
+  };
+}
 
 function safeJson(text: string): unknown {
   try {

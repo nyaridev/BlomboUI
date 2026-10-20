@@ -2,9 +2,13 @@ import { Hono } from "hono";
 import { z } from "zod";
 import {
   AddLibraryBody,
+  CollectionItemsBody,
+  CollectionName,
   FavoriteBody,
   GalleryQuery,
   ImageIdsBody,
+  RatingBody,
+  TagsBody,
   TrashIdsBody,
 } from "../../shared/gallery.ts";
 import { HttpError, readJson } from "../lib/http.ts";
@@ -58,6 +62,45 @@ export function galleryRoutes(gallery: GalleryService) {
     const body = await readJson(c, FavoriteBody);
     gallery.setFavorite(body.ids, body.favorite);
     return c.json({ ok: true });
+  });
+
+  r.post("/rating", async (c) => {
+    const body = await readJson(c, RatingBody);
+    gallery.setRating(body.ids, body.rating);
+    return c.json({ ok: true });
+  });
+
+  r.post("/tags", async (c) => {
+    const body = await readJson(c, TagsBody);
+    gallery.setTags(body.ids, body.add, body.remove);
+    return c.json({ ok: true });
+  });
+
+  r.get("/tags", (c) => c.json(gallery.tags()));
+
+  r.get("/collections", (c) => c.json(gallery.collections()));
+
+  r.post("/collections", async (c) => {
+    const { name } = await readJson(c, CollectionName);
+    return c.json(gallery.createCollection(name), 201);
+  });
+
+  r.patch("/collections/:id", async (c) => {
+    const { name } = await readJson(c, CollectionName);
+    gallery.renameCollection(c.req.param("id"), name);
+    return c.json({ ok: true });
+  });
+
+  r.delete("/collections/:id", (c) => {
+    gallery.removeCollection(c.req.param("id"));
+    return c.body(null, 204);
+  });
+
+  r.post("/collections/:id/items", async (c) => {
+    const body = await readJson(c, CollectionItemsBody);
+    return c.json({
+      changed: gallery.setCollectionItems(c.req.param("id"), body.ids, body.remove),
+    });
   });
 
   r.post("/trash", async (c) => {

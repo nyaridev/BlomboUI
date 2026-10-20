@@ -15,6 +15,7 @@ import {
   useFavorite,
   useGalleryImage,
   useImportWorkflow,
+  useRateImages,
   useTrashImages,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
@@ -26,6 +27,7 @@ import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
 import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
+import { Marks } from "./Marks";
 
 export function Lightbox({
   images,
@@ -47,6 +49,19 @@ export function Lightbox({
   const idx = images.findIndex((i) => i.id === current.id);
   const details = useGalleryImage(current.id);
   const favorite = useFavorite();
+  const rate = useRateImages();
+  // 1–5 set the stars, 0 clears (Settings → Shortcuts lists them).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || !/^[0-5]$/.test(e.key)) return;
+      e.preventDefault();
+      rate.mutate({ ids: [current.id], rating: Number(e.key) });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [current.id, rate]);
   const trash = useTrashImages();
   const [zoom, setZoom] = useState(false);
 
@@ -359,6 +374,7 @@ function Details({
         </span>
       </div>
       <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <Marks image={image} details={details} />
         {loading ? (
           <div className="flex flex-col gap-2">
             <Skeleton className="h-20 w-full" />

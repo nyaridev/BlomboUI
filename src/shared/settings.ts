@@ -36,10 +36,15 @@ export const LibraryEntry = z.object({
 });
 export type LibraryEntry = z.infer<typeof LibraryEntry>;
 
+/** Animation: everything, fades only, or whatever Windows says (reduce animations). */
+export const MOTION_PREFS = ["full", "reduced", "system"] as const;
+export type MotionPref = (typeof MOTION_PREFS)[number];
+
 export const AppearanceSettings = z.object({
   font: z.enum(UI_FONTS).default("geist"),
   /** Family name for the "custom" choice, as installed on this computer. */
   customFont: z.string().trim().max(80).default(""),
+  motion: z.enum(MOTION_PREFS).default("system"),
 });
 
 export const GallerySettings = z.object({
@@ -145,6 +150,35 @@ export const CivitaiSettings = z.object({
 });
 export type CivitaiSettings = z.infer<typeof CivitaiSettings>;
 
+/** OS notifications when something long finishes while Blombo is in the background. */
+export const NotificationSettings = z.object({
+  enabled: z.boolean().default(true),
+  /** A run (or the queue) that took at least `minSeconds`. */
+  jobs: z.boolean().default(true),
+  /** A script or batch finished. */
+  batches: z.boolean().default(true),
+  downloads: z.boolean().default(true),
+  minSeconds: z.number().int().min(0).max(3600).default(20),
+});
+export type NotificationSettings = z.infer<typeof NotificationSettings>;
+
+/**
+ * Shortcut overrides (shared/shortcuts.ts): an action and its key combo ("Ctrl+Shift+G"), or ""
+ * for none. Actions not listed keep their default. A list, so a patch replaces it whole (a
+ * reset removes an entry, which merging a record couldn't).
+ */
+export const ShortcutSettings = z.object({
+  overrides: z
+    .array(z.object({ action: z.string().min(1).max(60), keys: z.string().max(40) }))
+    .max(200)
+    .default([]),
+});
+
+export const HelpSettings = z.object({
+  /** The Generate screen's first-run tour was finished or skipped. */
+  tourDone: z.boolean().default(false),
+});
+
 export const Settings = z.object({
   version: z.literal(SETTINGS_VERSION).default(SETTINGS_VERSION),
   appearance: AppearanceSettings.prefault({}),
@@ -153,6 +187,9 @@ export const Settings = z.object({
   civitai: CivitaiSettings.prefault({}),
   generate: GenerateSettings.prefault({}),
   autocomplete: AutocompleteSettings.prefault({}),
+  notifications: NotificationSettings.prefault({}),
+  shortcuts: ShortcutSettings.prefault({}),
+  help: HelpSettings.prefault({}),
 });
 export type Settings = z.infer<typeof Settings>;
 
@@ -170,6 +207,9 @@ export const SettingsPatch = z
     civitai: Section,
     generate: Section,
     autocomplete: Section,
+    notifications: Section,
+    shortcuts: Section,
+    help: Section,
   })
   .partial()
   .strict();

@@ -1,5 +1,5 @@
 /**
- * Models: Local · Civitai · Manager. One ModelCard everywhere. Local runs on the profile's
+ * Models: Local · Civitai · Manager · Scopes. One ModelCard everywhere. Local runs on the profile's
  * models folder (LocalModels.tsx), Civitai is the in-app browser with model tabs
  * (civitai/CivitaiView.tsx), Manager is the ComfyUI model catalog as a store (ManagerStore.tsx).
  * Which tab is open lives in nav.ts so other views can deep-link here.
@@ -7,6 +7,7 @@
 import { formatBytes } from "@client/lib/number";
 import { useLocalModels } from "@client/lib/queries";
 import { Tabs } from "@client/ui";
+import { ScopesView } from "../scopes/ScopesView";
 import { CivitaiView } from "./civitai/CivitaiView";
 import { LocalModels } from "./LocalModels";
 import { ManagerStore } from "./ManagerStore";
@@ -27,12 +28,23 @@ export function ModelsView() {
             { value: "local", label: "Local", icon: "folder" },
             { value: "civitai", label: "Civitai", icon: "globe" },
             { value: "manager", label: "Manager", icon: "store" },
+            { value: "scopes", label: "Scopes", icon: "scopes" },
           ]}
           className="border-b-0"
         />
         <FolderSummary />
       </div>
-      {sub === "local" ? <LocalModels /> : sub === "civitai" ? <CivitaiView /> : <ManagerStore />}
+      {sub === "local" ? (
+        <LocalModels />
+      ) : sub === "civitai" ? (
+        <CivitaiView />
+      ) : sub === "scopes" ? (
+        <div className="min-h-0 flex-1">
+          <ScopesView embedded />
+        </div>
+      ) : (
+        <ManagerStore />
+      )}
     </div>
   );
 }

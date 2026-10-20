@@ -3,11 +3,19 @@
  * model kinds, listed from ComfyUI and the profile's wildcards folder. Picking sets the
  * workflow's model, adds a <lora:…> tag or a __wildcard__ to the prompt. The grid is virtualized:
  * LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
- * the models folder's sidecars and the Civitai lookup (Models → Local's list).
+ * the models folder's sidecars and the Civitai lookup (Models → Local's list), or the scope's
+ * picture (Scopes). Favorites come first, then what you used recently (the job log).
  */
 import { Icon } from "@client/icons/Icon";
 import { useElementWidth } from "@client/lib/hooks";
-import { useLocalModels, useModels, useSettings, useWildcards } from "@client/lib/queries";
+import {
+  useLocalModels,
+  useModelMarks,
+  useModels,
+  useSetModelFavorite,
+  useSettings,
+  useWildcards,
+} from "@client/lib/queries";
 import { type CardKind, ModelCard, Segmented, Spinner, TextField, toast } from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import type { LocalModel } from "@shared/models";
@@ -15,7 +23,9 @@ import { findLoraTags, formatLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useScopeThumb } from "../scopes/thumbs";
 import { modelDisplayName, modelFolder } from "./labels";
+import { pickerOrder } from "./pickerOrder";
 import { useValues } from "./state";
 import { useBindings } from "./workflow";
 
@@ -106,7 +116,21 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
 
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
-  const list = q ? items.filter((i) => i.id.toLowerCase().includes(q)) : items;
+  const marks = useModelMarks().data;
+  const setFavorite = useSetModelFavorite();
+  const favorites = useMemo(() => {
+    const prefix = `${kind ?? "wildcards"}/`;
+    return new Set(
+      (marks?.favorites ?? [])
+        .filter((f) => f.startsWith(prefix))
+        .map((f) => f.slice(prefix.length)),
+    );
+  }, [marks, kind]);
+  const list = useMemo(() => {
+    const found = q ? items.filter((i) => i.id.toLowerCase().includes(q)) : items;
+    if (tab === "wildcards") return found;
+    return pickerOrder(found, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
+  }, [items, q, tab, favorites, marks]);
   const inPrompt = useMemo(
     () => new Set(findLoraTags(prompt).map((t) => t.name.toLowerCase())),
     [prompt],
@@ -195,7 +219,16 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
           }
         />
       ) : (
-        <VirtualGrid items={list} isSelected={isSelected} onPick={pick} blurNsfw={blurNsfw} />
+        <VirtualGrid
+          items={list}
+          isSelected={isSelected}
+          onPick={pick}
+          blurNsfw={blurNsfw}
+          favorites={tab === "wildcards" ? null : favorites}
+          onFavorite={(item) =>
+            kind && setFavorite.mutate({ kind, name: item.id, favorite: !favorites.has(item.id) })
+          }
+        />
       )}
     </div>
   );
@@ -217,12 +250,18 @@ function VirtualGrid({
   isSelected,
   onPick,
   blurNsfw,
+  favorites,
+  onFavorite,
 }: {
   items: Item[];
   isSelected: (i: Item) => boolean;
   onPick: (i: Item) => void;
   blurNsfw: boolean;
+  /** Null where favorites don't apply (wildcards). */
+  favorites: Set<string> | null;
+  onFavorite: (i: Item) => void;
 }) {
+  const scoped = useScopeThumb();
   const scroller = useRef<HTMLDivElement>(null);
   const width = useElementWidth(scroller);
   const columns = Math.max(1, Math.floor((Math.max(width, CARD_MIN) + GAP) / (CARD_MIN + GAP)));
@@ -255,22 +294,56 @@ function VirtualGrid({
             }}
           >
             {items.slice(row.index * columns, row.index * columns + columns).map((item) => (
-              <ModelCard
+              <PickerCard
                 key={item.id}
-                name={item.name}
-                kind={item.kind}
-                baseModel={item.local?.baseModel ?? item.folder ?? undefined}
-                thumb={item.local?.thumb ?? null}
-                nsfw={item.local?.nsfw}
+                item={item}
+                scopedThumb={
+                  item.kind === "wildcards" ? null : scoped(item.kind as ModelKind, item.id)
+                }
                 blurNsfw={blurNsfw}
-                meta={item.local?.triggerWords[0]}
                 selected={isSelected(item)}
-                onClick={() => onPick(item)}
+                onPick={onPick}
+                favorite={favorites ? favorites.has(item.id) : null}
+                onFavorite={onFavorite}
               />
             ))}
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function PickerCard({
+  item,
+  scopedThumb,
+  blurNsfw,
+  selected,
+  onPick,
+  favorite,
+  onFavorite,
+}: {
+  item: Item;
+  scopedThumb: string | null;
+  blurNsfw: boolean;
+  selected: boolean;
+  onPick: (i: Item) => void;
+  favorite: boolean | null;
+  onFavorite: (i: Item) => void;
+}) {
+  return (
+    <ModelCard
+      name={item.name}
+      kind={item.kind}
+      baseModel={item.local?.baseModel ?? item.folder ?? undefined}
+      thumb={scopedThumb ?? item.local?.thumb ?? null}
+      nsfw={scopedThumb ? false : item.local?.nsfw}
+      blurNsfw={blurNsfw}
+      meta={item.local?.triggerWords[0]}
+      selected={selected}
+      onClick={() => onPick(item)}
+      favorite={favorite ?? undefined}
+      onFavorite={favorite === null ? undefined : () => onFavorite(item)}
+    />
   );
 }

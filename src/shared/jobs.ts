@@ -31,8 +31,22 @@ export const JobProgress = z.object({
   overall: z.number(),
   /** Index into the job's segments of the part that's running. */
   segment: z.number().int().default(0),
+  /** Steps per second of the node that's reporting, or null before its second step. */
+  rate: z.number().nullable().default(null),
 });
 export type JobProgress = z.infer<typeof JobProgress>;
+
+/** One part of a run (the base pass, a stage) and how fast it went. */
+export const JobTiming = z.object({
+  label: z.string(),
+  /** Time spent running this part's sampler nodes. */
+  ms: z.number(),
+  /** Sampler steps it ran. */
+  steps: z.number().int(),
+  /** Steps per second, or null when it ran no steps. */
+  rate: z.number().nullable(),
+});
+export type JobTiming = z.infer<typeof JobTiming>;
 
 /**
  * Jobs that one click queued together: a script's cells or a batch's files. The script and batch
@@ -88,6 +102,11 @@ export const Job = z.object({
   group: JobGroup.nullable().default(null),
   /** For a script's grid (group kind "grid"): the image Blombo put together. */
   file: JobFile.nullable().default(null),
+  /**
+   * How long each part took and how fast it sampled, filled in as it runs; the last entry,
+   * "Other", is loading models, decoding and saving.
+   */
+  timings: z.array(JobTiming).default([]),
 });
 export type Job = z.infer<typeof Job>;
 

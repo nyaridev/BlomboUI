@@ -191,9 +191,38 @@ describe("job queue against a ComfyUI", () => {
     expect(ticks.some((t) => t.progress.segment === 1)).toBe(true);
     const overall = ticks.map((t) => t.progress.overall);
     expect(overall).toEqual([...overall].sort((a, b) => a - b));
+    // Each part was timed from `executing` and its steps, with a speed.
+    expect(job?.timings.map((t) => t.label).slice(0, 2)).toEqual(["Sampling", "Hires fix"]);
+    expect(job?.timings[0]).toMatchObject({ steps: 3 });
+    expect(job?.timings[0]?.rate).toBeGreaterThan(0);
+    expect(ticks.at(-1)?.progress.rate).toBeGreaterThan(0);
     // The stage settings were saved with the workflow.
     const saved = await workflows.get("sd15");
     expect(saved.stages.hires).toMatchObject({ enabled: true, scale: 2 });
+  });
+
+  it("reports what a finished run ran with, and runs a logged run again", async () => {
+    const seen: Array<{ job: Job; values: Record<string, unknown> | null }> = [];
+    const off = queue.on("finished", (job, run) => seen.push({ job, values: run?.values ?? null }));
+    const res = await queue.enqueue({
+      workflowId: "sd15",
+      values: { "sampler.steps": 2, "prompt.positive": "a dog", "sampler.seed": 5 },
+      count: 1,
+      seedMode: "fixed",
+      loop: false,
+    });
+    await settled(res.jobs.map((j) => j.id));
+    const done = seen.find((s) => s.job.id === res.jobs[0]?.id);
+    expect(done?.values).toMatchObject({ "prompt.positive": "a dog" });
+
+    const manifest = await workflows.get("sd15");
+    const again = queue.rerun(manifest, { "prompt.positive": "a dog again" }, null, 77);
+    const [job] = await settled([again.id]);
+    expect(job?.state).toBe("done");
+    expect(job?.seed).toBe(77);
+    const sent = fake.prompts.at(-1)?.prompt ?? {};
+    expect(Object.values(sent).find((n) => n.class_type === "KSampler")?.inputs.seed).toBe(77);
+    off();
   });
 
   it("stops before submitting when a stage is missing something", async () => {

@@ -51,10 +51,37 @@ export function prepareWindow(title: string): {
   };
 }
 
-/** Notify when the app is in the background (long jobs, finished downloads). */
-export async function notify(title: string, body: string): Promise<void> {
-  if (document.visibilityState === "visible") return;
-  if (!("Notification" in window)) return;
-  if (Notification.permission === "default") await Notification.requestPermission();
-  if (Notification.permission === "granted") new Notification(title, { body });
+export type NotifyPermission = "granted" | "denied" | "default" | "unsupported";
+
+/** Whether this window may show OS notifications. */
+export function notifyPermission(): NotifyPermission {
+  if (typeof window === "undefined" || !("Notification" in window)) return "unsupported";
+  return Notification.permission;
+}
+
+/** Ask for permission (browsers only allow this from a click). */
+export async function askNotifyPermission(): Promise<NotifyPermission> {
+  if (notifyPermission() === "unsupported") return "unsupported";
+  return Notification.requestPermission();
+}
+
+/**
+ * An OS notification (the browser's, or WebView2's in the desktop window), only while the app is
+ * in the background: hidden, minimized or not focused. Clicking it brings the window back.
+ * `force` shows it even in the foreground (the settings page's test button).
+ */
+export async function notify(title: string, body: string, force = false): Promise<void> {
+  if (!force && document.visibilityState === "visible" && document.hasFocus()) return;
+  const permission = notifyPermission();
+  if (permission === "unsupported" || permission === "denied") return;
+  if (permission === "default" && (await askNotifyPermission()) !== "granted") return;
+  try {
+    const n = new Notification(title, { body, icon: "/favicon.svg", tag: `blombo-${title}` });
+    n.onclick = () => {
+      window.focus();
+      n.close();
+    };
+  } catch {
+    // Some webviews only allow notifications from a service worker; nothing to show then.
+  }
 }

@@ -109,13 +109,20 @@
   background-size: 16px 16px;
 }
 
+/* Settings → Appearance → Motion: "system" follows Windows, "reduced" always, "full" never. */
 @layer base {
   @media (prefers-reduced-motion: reduce) {
-    *,
-    *::before,
-    *::after {
+    html:not([data-motion="full"]) *,
+    html:not([data-motion="full"]) *::before,
+    html:not([data-motion="full"]) *::after {
       animation-duration: 0.01ms !important;
       transition-duration: 0.01ms !important;
     }
+  }
+  html[data-motion="reduced"] *,
+  html[data-motion="reduced"] *::before,
+  html[data-motion="reduced"] *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
 }

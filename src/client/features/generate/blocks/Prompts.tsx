@@ -6,11 +6,12 @@ import { bouncy } from "@client/lib/motion";
 import { IconButton, Kbd, NumberField, Switch, Tooltip } from "@client/ui";
 import { estimateTokens } from "@shared/prompt/tokenize";
 import { motion } from "motion/react";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import { cancelAll, generate, interrupt, setLoop, useLoopIntent } from "../actions";
-import { PromptEditor } from "../PromptEditor";
+import { PromptEditor, type PromptEditorHandle } from "../PromptEditor";
 import { useValue, useValues } from "../state";
 import { useRoleBinding } from "../workflow";
+import { PromptHistoryButton } from "./PromptHistory";
 import { useBuiltScript } from "./Scripts";
 
 function TokenCount({ text }: { text: string }) {
@@ -40,6 +41,7 @@ function PromptField({
 }) {
   const [value, setValue] = useValue<string>(id);
   const text = typeof value === "string" ? value : "";
+  const editor = useRef<PromptEditorHandle | null>(null);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 px-0.5">
@@ -47,6 +49,7 @@ function PromptField({
         <TokenCount text={text} />
         {tools ? (
           <span className="ml-auto flex items-center">
+            <PromptHistoryButton prompt={text} setPrompt={setValue} editor={editor} />
             <IconButton
               icon="eraser"
               label={`Clear ${label.toLowerCase()}`}
@@ -64,6 +67,7 @@ function PromptField({
         placeholder={placeholder}
         onSubmit={() => void generate()}
         className={className}
+        handle={editor}
       />
     </div>
   );

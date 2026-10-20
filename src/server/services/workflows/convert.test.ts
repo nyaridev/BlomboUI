@@ -157,6 +157,16 @@ describe("uiToApi", () => {
     expect(prompt["6"]?.inputs).toEqual({ text: "a lighthouse", clip: ["1", 1] });
   });
 
+  it("writes a value fed by a primitive into the primitive", () => {
+    const edited = UiGraph.parse(
+      applyWidgetValues(graph, [{ node: "3", input: "seed", value: 4242 }], info),
+    );
+    expect(uiToApi(edited, info).prompt["3"]?.inputs.seed).toBe(4242);
+    // The KSampler's own (hidden) seed widget is left as it was.
+    const own = edited.nodes.find((n) => n.id === 3)?.widgets_values as unknown[] | undefined;
+    expect(own?.[0]).toBe(0);
+  });
+
   it("reports unknown nodes and subgraphs instead of guessing", () => {
     const g = UiGraph.parse({
       nodes: [

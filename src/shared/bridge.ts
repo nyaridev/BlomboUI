@@ -10,7 +10,7 @@ import { ApiPrompt } from "./workflow/graph.ts";
  * The extension's version. Bump it when src/comfy-bridge changes: managed slots get the new copy
  * on their next start, and Settings → ComfyUI says an external install is out of date.
  */
-export const BRIDGE_VERSION = 1;
+export const BRIDGE_VERSION = 2;
 
 /** Folder name under ComfyUI's custom_nodes/ (also its /extensions/<name>/ URL). */
 export const BRIDGE_FOLDER = "blombo-bridge";

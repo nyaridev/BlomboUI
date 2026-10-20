@@ -282,6 +282,56 @@ describe("job queue against a ComfyUI", () => {
     );
   });
 
+  it("cancelling while a run is being submitted sends nothing and keeps the queue going", async () => {
+    const before = fake.prompts.length;
+    const res = await queue.enqueue({
+      workflowId: "sd15",
+      values: { "sampler.steps": 400 },
+      count: 1,
+      loop: false,
+    });
+    // The run is still being compiled (reading its workflow): cancel it now.
+    await queue.cancelAll();
+    const [cancelled] = await settled([res.jobs[0]?.id as string]);
+    expect(cancelled?.state).toBe("interrupted");
+    expect(fake.prompts.length).toBe(before);
+    const next = await queue.enqueue({
+      workflowId: "sd15",
+      values: { "sampler.steps": 3 },
+      count: 1,
+      loop: false,
+    });
+    const [done] = await settled([next.jobs[0]?.id as string]);
+    expect(done?.state).toBe("done");
+    expect(fake.prompts.length).toBe(before + 1);
+  });
+
+  it("keeps a running image through a dropped connection to ComfyUI", async () => {
+    const runOne = async (steps: number) => {
+      const res = await queue.enqueue({
+        workflowId: "sd15",
+        values: { "sampler.steps": steps },
+        count: 1,
+        loop: false,
+      });
+      const id = res.jobs[0]?.id as string;
+      const started = Date.now();
+      while (!queue.snapshot().jobs.find((j) => j.id === id)?.promptId) {
+        if (Date.now() - started > 5000) throw new Error("never started");
+        await new Promise((r) => setTimeout(r, 10));
+      }
+      fake.dropSockets();
+      const [job] = await settled([id], 15_000);
+      return job;
+    };
+    // Still rendering when Blombo reconnects: its events resume.
+    expect((await runOne(400))?.state).toBe("done");
+    // Finished while the connection was down: found in ComfyUI's history, with its image.
+    const quick = await runOne(60);
+    expect(quick?.state).toBe("done");
+    expect(quick?.images.length).toBeGreaterThan(0);
+  });
+
   it("cancels: interrupts the running image and drops the queue", async () => {
     const res = await queue.enqueue({
       workflowId: "sd15",

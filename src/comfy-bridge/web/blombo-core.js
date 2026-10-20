@@ -32,6 +32,23 @@ export async function configuredApi(fetchFn, baseUrl) {
   }
 }
 
+/**
+ * Which Blombo to talk to. The address bar may name one (Blombo puts it there when it opens
+ * ComfyUI), but only an address on this computer is believed: a link from anywhere else could
+ * otherwise send the canvas to another site on "Save to Blombo". Then config.json's.
+ */
+export function pickApi(fromUrl, configured) {
+  if (fromUrl) {
+    try {
+      const host = new URL(fromUrl).hostname;
+      if (host === "127.0.0.1" || host === "localhost" || host === "[::1]") return fromUrl;
+    } catch {
+      // not an address
+    }
+  }
+  return configured || null;
+}
+
 /** Requests to Blombo's /api/bridge. Errors carry Blombo's own message. */
 export function createClient(api, fetchFn) {
   const call = async (method, path, body) => {

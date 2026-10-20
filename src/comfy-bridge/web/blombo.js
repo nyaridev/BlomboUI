@@ -8,7 +8,7 @@
 // as a new workflow (Blombo's address comes from config.json, written when Blombo installed this).
 
 import { app } from "../../scripts/app.js";
-import { cleanUrl, configuredApi, createClient, readParams, toGraphs } from "./blombo-core.js";
+import { cleanUrl, configuredApi, createClient, pickApi, readParams, toGraphs } from "./blombo-core.js";
 
 const BAR_ID = "blombo-bridge-bar";
 const here = new URL(".", import.meta.url).toString();
@@ -122,7 +122,7 @@ function showBar(state, client) {
 }
 
 async function openSession(params) {
-  const api = params.api || (await configuredApi(fetch, here));
+  const api = pickApi(params.api, await configuredApi(fetch, here));
   if (!api) throw new Error("This ComfyUI doesn't know where BlomboUI is. Open the workflow from Blombo again.");
   const client = createClient(api, fetch);
   // Drop the token from the address so a reload doesn't try to reuse it.

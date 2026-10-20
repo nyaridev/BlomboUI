@@ -7,7 +7,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { unzip } from "fflate";
 import { stripAnsi } from "../../lib/ansi.ts";
-import { exists, writeFileAtomic } from "../../lib/fsx.ts";
+import { exists, resolveInside, writeFileAtomic } from "../../lib/fsx.ts";
 import type { InstallOps, RunOptions } from "./installer.ts";
 
 const UV_WINDOWS_ZIP =
@@ -106,9 +106,16 @@ async function extractFiles(
 export async function extractTopFolder(zip: string, dest: string): Promise<void> {
   const files = await unzipAsync(new Uint8Array(await fs.readFile(zip)), () => true);
   for (const [name, data] of Object.entries(files)) {
-    const parts = name.split("/").slice(1);
-    if (!parts.length || name.endsWith("/") || parts.some((p) => p === ".." || p === "")) continue;
-    await fs.mkdir(path.join(dest, ...parts.slice(0, -1)), { recursive: true });
-    await fs.writeFile(path.join(dest, ...parts), data);
+    // Split on both separators: Windows also reads "\" as one, so "top/..\..\x" must not pass.
+    const parts = name.split(/[\\/]/).slice(1);
+    if (
+      !parts.length ||
+      /[\\/]$/.test(name) ||
+      parts.some((p) => p === ".." || p === "." || p === "" || p.includes(":"))
+    )
+      continue;
+    const target = resolveInside(dest, parts.join("/"));
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, data);
   }
 }

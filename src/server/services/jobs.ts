@@ -66,6 +66,8 @@ export interface RunSpec {
 
 interface Run {
   job: Job;
+  /** The profile that was open when it was queued (its job log and errors go there). */
+  profileId: string | null;
   manifest: WorkflowManifest;
   values: Record<string, unknown>;
   stages: WorkflowManifest["stages"];
@@ -75,6 +77,8 @@ interface Run {
 
 /** What a finished job ran with, for the job log ("Run again", usage stats). */
 export interface RunContext {
+  /** The profile the run belongs to. */
+  profileId: string | null;
   manifest: WorkflowManifest;
   values: Record<string, unknown>;
   stages: WorkflowManifest["stages"];
@@ -165,6 +169,8 @@ export class JobQueue extends Emitter<QueueEvents> {
   private queued: Run[] = [];
   private active: Run | null = null;
   private finished: Job[] = [];
+  /** The running run while the ComfyUI connection is down (checked again on reconnect). */
+  private reconnecting: Run | null = null;
   private seq = 0;
   private loop: { workflowId: string; seedMode: SeedMode; next: number } | null = null;
   private submitting = false;
@@ -305,8 +311,12 @@ export class JobQueue extends Emitter<QueueEvents> {
     const run = this.active;
     if (!run) return;
     const api = this.deps.supervisor.api;
-    if (api && run.job.promptId) await api.interrupt(run.job.promptId).catch(() => api.interrupt());
-    else this.finish(run, "interrupted");
+    if (api && run.job.promptId) {
+      // Waiting in ComfyUI's queue (an external ComfyUI busy with something else): delete it;
+      // running: interrupt it.
+      await api.deleteQueued([run.job.promptId]).catch(() => undefined);
+      await api.interrupt(run.job.promptId).catch(() => api.interrupt());
+    } else this.finish(run, "interrupted");
   }
 
   /** Stop the running image, drop everything queued and stop looping. */
@@ -385,6 +395,7 @@ export class JobQueue extends Emitter<QueueEvents> {
     };
     this.queued.push({
       job,
+      profileId: this.deps.profiles.active,
       manifest,
       values: { ...values },
       stages: structuredClone(stages),
@@ -418,8 +429,15 @@ export class JobQueue extends Emitter<QueueEvents> {
     }
   }
 
+  /**
+   * True while an installer has ComfyUI stopped on purpose (custom nodes or the slot being
+   * installed): runs wait in the queue instead of starting it mid-install. Set in context.ts.
+   */
+  holdComfy: (() => boolean) | null = null;
+
   /** A managed ComfyUI that's stopped or crashed starts when there's work for it. */
   private prepareComfy(): void {
+    if (this.holdComfy?.()) return;
     const s = this.deps.supervisor.status();
     if (s.mode === "managed" && (s.state === "stopped" || s.state === "crashed"))
       void this.deps.supervisor.start();
@@ -452,9 +470,13 @@ export class JobQueue extends Emitter<QueueEvents> {
     run.clock = new RunClock(run.job.segments, Date.now());
     this.publishQueue();
     this.emit("started", run.job);
+    // Cancel or a profile switch can end this run during any await below: stop there.
+    const gone = () => this.active !== run || this.deps.profiles.active !== run.profileId;
     try {
       await this.uploadInputs(run);
+      if (gone()) return;
       const prompt = await this.deps.workflows.prompt(run.job.workflowId);
+      if (gone()) return;
       const info = await this.deps.supervisor.objectInfo();
       const loraFiles = info
         ? (nodeInputs(info[LORA_LOADER]).find((i) => i.name === "lora_name")?.options ?? null)
@@ -489,6 +511,7 @@ export class JobQueue extends Emitter<QueueEvents> {
         stageImages: controlFiles.length ? await this.deps.stages.upload(controlFiles) : {},
         objectInfo: info,
       });
+      if (gone()) return;
       run.job.segments = compiled.segments;
       run.clock?.setSegments(compiled.segments);
       const res = await api.queuePrompt(compiled.prompt, {
@@ -503,12 +526,19 @@ export class JobQueue extends Emitter<QueueEvents> {
           },
         },
       });
+      if (gone()) {
+        // Cancelled while ComfyUI was taking it: take it back out.
+        await api.deleteQueued([res.prompt_id]).catch(() => undefined);
+        await api.interrupt(res.prompt_id).catch(() => undefined);
+        return;
+      }
       run.job.promptId = res.prompt_id;
       this.publishQueue();
       const early = this.early;
       this.early = [];
       for (const msg of early) this.onMessage(msg);
     } catch (error) {
+      if (gone()) return;
       const message = describeComfyError(error, run.manifest);
       this.finish(run, "error", message);
       // The same mistake would fail every queued run of this workflow; stop them too.
@@ -521,6 +551,8 @@ export class JobQueue extends Emitter<QueueEvents> {
       }
     } finally {
       this.submitting = false;
+      // A run that ended while this one was being submitted couldn't start the next one.
+      if (!this.active) void this.pump();
     }
   }
 
@@ -551,7 +583,14 @@ export class JobQueue extends Emitter<QueueEvents> {
     this.emit(
       "finished",
       job,
-      run ? { manifest: run.manifest, values: run.values, stages: run.stages } : null,
+      run
+        ? {
+            profileId: run.profileId,
+            manifest: run.manifest,
+            values: run.values,
+            stages: run.stages,
+          }
+        : null,
     );
   }
 
@@ -562,6 +601,7 @@ export class JobQueue extends Emitter<QueueEvents> {
   ): void {
     if (this.active !== run) return;
     this.active = null;
+    if (this.reconnecting === run) this.reconnecting = null;
     if (state === "done") run.job.progress = { ...run.job.progress, overall: 1 };
     if (run.clock) run.job.timings = run.clock.finish(Date.now());
     this.retire(run.job, state, error, run);
@@ -680,6 +720,28 @@ export class JobQueue extends Emitter<QueueEvents> {
     }
   }
 
+  /** After a reconnect: did the running prompt finish, is it still going, or is it gone? */
+  private async recover(run: Run): Promise<void> {
+    const api = this.deps.supervisor.api;
+    const promptId = run.job.promptId;
+    if (!api || !promptId || this.active !== run) return;
+    try {
+      const entry = (await api.history(promptId))[promptId];
+      if (this.active !== run) return;
+      if (entry) {
+        await this.collectHistory(run);
+        if (entry.status?.status_str === "error")
+          this.finish(run, "error", "ComfyUI reported an error for this image. Check its log.");
+        else this.finish(run, "done");
+        return;
+      }
+      if ((await api.queue()).has(promptId)) return; // still running: its events resume
+    } catch {
+      // ComfyUI answered the socket but not these: treat the image as lost.
+    }
+    this.finish(run, "error", "ComfyUI lost this image while Blombo reconnected. Try again.");
+  }
+
   private onPreview(p: ComfyPreview): void {
     const run = this.active;
     if (!run?.job.promptId) return;
@@ -688,17 +750,29 @@ export class JobQueue extends Emitter<QueueEvents> {
   }
 
   private onStatus(status: ComfyStatus): void {
+    const run = this.active;
     if (status.state === "running") {
+      if (run && this.reconnecting === run) {
+        this.reconnecting = null;
+        void this.recover(run);
+      }
       void this.pump();
       return;
     }
-    const run = this.active;
-    if (run && !this.submitting)
+    if (run && !this.submitting) {
+      // Only the connection dropped (the supervisor reconnects with the same client id, so
+      // ComfyUI's events come back): keep the run and see where it is once connected.
+      if (run.job.promptId && (status.state === "starting" || status.state === "unreachable")) {
+        this.reconnecting = run;
+        this.publishQueue();
+        return;
+      }
       this.finish(
         run,
         "error",
         "ComfyUI stopped while this image was generating. Restart it and try again.",
       );
+    }
     if (status.state === "missing" && this.queued.length) void this.pump();
     else this.publishQueue();
   }

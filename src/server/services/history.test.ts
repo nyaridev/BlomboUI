@@ -129,14 +129,21 @@ describe("job log", () => {
       "model.checkpoint": "dream.safetensors",
       "prompt.positive": "a __animal__ <lora:detail:0.5>",
     };
-    history.record(job(), { manifest, values, stages: {} as WorkflowManifest["stages"] });
+    history.record(job(), {
+      profileId: profiles.active,
+      manifest,
+      values,
+      stages: {} as WorkflowManifest["stages"],
+    });
     history.record(job({ state: "error", error: "Out of memory", images: [], timings: [] }), {
+      profileId: profiles.active,
       manifest,
       values: { ...values, "prompt.positive": "a castle" },
       stages: {} as WorkflowManifest["stages"],
     });
     // Cancelled before it ran: not worth a row.
     history.record(job({ state: "cancelled", startedAt: null }), {
+      profileId: profiles.active,
       manifest,
       values,
       stages: {} as WorkflowManifest["stages"],

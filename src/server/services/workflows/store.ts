@@ -16,7 +16,13 @@ import {
   WorkflowManifest,
   type WorkflowSummary,
 } from "../../../shared/workflow/manifest.ts";
-import { exists, writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
+import {
+  exists,
+  movePath,
+  writeFileAtomic,
+  writeJsonAtomic,
+  writesSettled,
+} from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import type { ProfileService } from "../profiles.ts";
 
@@ -156,10 +162,28 @@ export class WorkflowService {
     return id;
   }
 
+  /**
+   * Claim a free id by making its folder: two creates with the same name at once (two imports,
+   * two "Send to Blombo") get different ids instead of writing into one folder.
+   */
+  private async reserveId(name: string, profileId?: string): Promise<string> {
+    const base = slugifyProfileName(name).replace(/^-+/, "") || "workflow";
+    await fs.mkdir(path.dirname(this.dir(base, profileId)), { recursive: true });
+    for (let n = 1; ; n++) {
+      const id = n === 1 ? base : `${base}-${n}`;
+      try {
+        await fs.mkdir(this.dir(id, profileId));
+        return id;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      }
+    }
+  }
+
   async create(input: NewWorkflow, profileId?: string, idHint?: string): Promise<WorkflowManifest> {
     const { prompt, graph, thumb, ...rest } = input;
     const now = new Date().toISOString();
-    const id = await this.uniqueId(idHint ?? input.name, profileId);
+    const id = await this.reserveId(idHint ?? input.name, profileId);
     const manifest = WorkflowManifest.parse({
       ...rest,
       format: "blombo.workflow/1",
@@ -262,9 +286,11 @@ export class WorkflowService {
       clearTimeout(pending.timer);
       this.pending.delete(file);
     }
+    // A save that's already writing would recreate the folder after the move: let it finish.
+    for (const name of ["workflow.json", "prompt.json", "graph.json", "thumb.webp"])
+      await writesSettled(path.join(dir, name));
     const trash = path.join(this.root(), "..", "trash", "workflows", `${id}-${Date.now()}`);
-    await fs.mkdir(path.dirname(trash), { recursive: true });
-    await fs.rename(dir, trash);
+    await movePath(dir, trash);
   }
 
   /** Write every pending manifest now. */

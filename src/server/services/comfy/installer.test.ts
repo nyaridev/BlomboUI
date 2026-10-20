@@ -170,4 +170,23 @@ describe("ComfyUI installer", () => {
     await extractTopFolder(zip, dest);
     expect(await fs.readFile(path.join(dest, "d", "b.txt"), "utf8")).toBe("b");
   });
+
+  it("never writes outside the folder, whichever separator a zip entry uses", async () => {
+    const zip = path.join(tmp, "evil.zip");
+    await fs.writeFile(
+      zip,
+      zipSync({
+        "Top-1/ok.txt": enc("ok"),
+        "Top-1/..\\..\\escaped.txt": enc("x"),
+        "Top-1/../../escaped2.txt": enc("x"),
+        "Top-1/C:\\escaped3.txt": enc("x"),
+      }),
+    );
+    const dest = path.join(tmp, "out-evil");
+    await extractTopFolder(zip, dest);
+    expect(await fs.readFile(path.join(dest, "ok.txt"), "utf8")).toBe("ok");
+    expect(await fs.readdir(dest)).toEqual(["ok.txt"]);
+    for (const name of ["escaped.txt", "escaped2.txt", "escaped3.txt"])
+      await expect(fs.stat(path.join(tmp, name))).rejects.toThrow();
+  });
 });

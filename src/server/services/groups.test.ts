@@ -22,6 +22,7 @@ import { scopeThumbPath } from "./scopes.ts";
 import { ScriptService } from "./scripts.ts";
 import { StageService } from "./stages.ts";
 import { installPreset } from "./workflows/presets.ts";
+import { INSTALL_IN_COMFY } from "./workflows/stages.ts";
 import { WorkflowService } from "./workflows/store.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-groups-"));
@@ -333,18 +334,26 @@ describe("batch runner", () => {
     expect(await batch.check("dataset-prep")).toMatchObject({ makesImages: true, makesText: true });
     const info = (await supervisor.objectInfo()) ?? {};
     const { "WD14Tagger|pysssss": _gone, ...without } = info;
-    const lacking = new BatchService({
-      queue,
-      workflows: new WorkflowService(profiles),
-      profiles,
-      supervisor: {
-        api: null,
-        objectInfo: async () => without,
-        status: () => ({ ...supervisor.status(), mode: "managed" }),
-      },
-      publish: () => undefined,
-      runtimeDir: path.join(tmp, "runtime"),
-    });
+    const lackingWith = (trusted: string[]) =>
+      new BatchService({
+        queue,
+        workflows: new WorkflowService(profiles),
+        profiles,
+        supervisor: {
+          api: null,
+          objectInfo: async () => without,
+          status: () => ({ ...supervisor.status(), mode: "managed" }),
+        },
+        publish: () => undefined,
+        runtimeDir: path.join(tmp, "runtime"),
+        trustedPacks: async () => trusted,
+      });
+    // A pack the installer doesn't trust (an imported bundle's) is installed inside ComfyUI.
+    const untrusted = await lackingWith([]).check("caption");
+    expect(untrusted.problems[0]?.message).toBe(
+      `Caption images needs WD14 Tagger. ${INSTALL_IN_COMFY}`,
+    );
+    const lacking = lackingWith(["https://github.com/pythongosssss/ComfyUI-WD14-Tagger"]);
     const report = await lacking.check("caption");
     expect(report.problems).toHaveLength(1);
     expect(report.problems[0]).toMatchObject({

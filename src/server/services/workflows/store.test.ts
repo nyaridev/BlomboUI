@@ -96,6 +96,15 @@ describe("import", () => {
 });
 
 describe("workflow store", () => {
+  it("gives two workflows created at once with one name their own ids", async () => {
+    const make = () =>
+      importWorkflow({ bytes: bytes(API), filename: "Twin.json" }, workflows, null);
+    const [a, b] = await Promise.all([make(), make()]);
+    expect(new Set([a.workflow.id, b.workflow.id]).size).toBe(2);
+    expect((await workflows.get(a.workflow.id)).id).toBe(a.workflow.id);
+    expect((await workflows.get(b.workflow.id)).id).toBe(b.workflow.id);
+  });
+
   it("saves values after a quiet period and reads the pending version meanwhile", async () => {
     await importWorkflow({ bytes: bytes(API), filename: "values.json" }, workflows, null);
     await workflows.patchValues("values", { values: { "sampler.steps": 33 } });

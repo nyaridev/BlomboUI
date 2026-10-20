@@ -17,11 +17,31 @@ export function toolsDir(runtimeDir: string): string {
   return path.join(runtimeDir, "tools");
 }
 
+/**
+ * Where a managed ComfyUI's libraries keep what they download and remember. By default they
+ * use the user's home and AppData (Hugging Face and torch hub caches, Ultralytics' settings,
+ * transparent-background's weights, matplotlib's font cache); BlomboUI is portable, so all of
+ * it goes to runtime/cache/comfy/ instead. Set for slot installs and every managed start.
+ */
+export function slotCacheEnv(runtimeDir: string): Record<string, string> {
+  const cache = path.join(runtimeDir, "cache", "comfy");
+  return {
+    HF_HOME: path.join(cache, "huggingface"),
+    TORCH_HOME: path.join(cache, "torch"),
+    XDG_CACHE_HOME: path.join(cache, "xdg"),
+    YOLO_CONFIG_DIR: path.join(cache, "ultralytics"),
+    TRANSPARENT_BACKGROUND_FILE_PATH: path.join(cache, "transparent-background"),
+    MPLCONFIGDIR: path.join(cache, "matplotlib"),
+    PIP_CACHE_DIR: path.join(cache, "pip"),
+  };
+}
+
 /** Environment for uv and the Pythons it manages: everything stays in runtime/tools/. */
 export function uvEnv(runtimeDir: string): NodeJS.ProcessEnv {
   const tools = toolsDir(runtimeDir);
   return {
     ...process.env,
+    ...slotCacheEnv(runtimeDir),
     UV_PYTHON_INSTALL_DIR: path.join(tools, "python"),
     UV_CACHE_DIR: path.join(tools, "uv-cache"),
     UV_PYTHON_PREFERENCE: "only-managed",

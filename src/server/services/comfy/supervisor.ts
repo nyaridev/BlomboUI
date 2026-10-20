@@ -24,6 +24,7 @@ import { writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { ComfyClient, type ComfyPreview, type ComfyWsMessage } from "./client.ts";
 import { extraModelPathsYaml } from "./paths.ts";
 import { findSlot, type SlotLayout } from "./slots.ts";
+import { slotCacheEnv } from "./uv.ts";
 
 export type ComfyTarget =
   | { mode: "managed"; slot: string; models: string; outputs: string }
@@ -275,7 +276,14 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     try {
       child = spawn(spec.command, spec.args, {
         cwd: spec.cwd,
-        env: { ...process.env, PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8", ...spec.env },
+        env: {
+          ...process.env,
+          // Caches and settings of the slot's libraries stay in runtime/ (portable).
+          ...slotCacheEnv(this.opts.runtimeDir),
+          PYTHONUNBUFFERED: "1",
+          PYTHONIOENCODING: "utf-8",
+          ...spec.env,
+        },
         windowsHide: true,
         stdio: ["ignore", "pipe", "pipe"],
       });

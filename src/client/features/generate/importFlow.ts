@@ -1,6 +1,6 @@
 /**
- * Importing a ComfyUI workflow from a dropped or chosen file: upload, make it the active
- * workflow, and say what the analyzer found (missing nodes or models first).
+ * Importing a ComfyUI workflow (or a .blombo bundle) from a dropped or chosen file: upload,
+ * make it the active workflow, and say what the analyzer found (missing nodes or models first).
  */
 import { useImportWorkflow } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
@@ -9,16 +9,19 @@ import type { ImportResult } from "@shared/workflow/manifest";
 import { type DragEvent, useState } from "react";
 import { useActiveChoice } from "./workflow";
 
-const ACCEPT = ".json,.png,.webp,application/json,image/png,image/webp";
+const ACCEPT = ".json,.png,.webp,.blombo,application/json,image/png,image/webp";
 
 function summarize(r: ImportResult): void {
   const problems = r.findings.filter((f) => f.level !== "info");
+  const renamed = r.findings.find((f) => f.code === "renamed");
   const shown = r.workflow.bindings.filter((b) => !b.hidden).length;
   if (problems.length) {
     toast(
       `Imported "${r.workflow.name}" with ${problems.length} thing${problems.length === 1 ? "" : "s"} to fix: ${problems[0]?.message}`,
       "warning",
     );
+  } else if (r.source === "blombo") {
+    toast(renamed ? renamed.message : `Imported "${r.workflow.name}" with its settings`, "success");
   } else {
     toast(`Imported "${r.workflow.name}" · ${shown} settings found`, "success");
   }

@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ApiPrompt, ObjectInfo, UiGraph } from "../../../shared/workflow/graph.ts";
-import { apiToUi, uiToApi } from "./convert.ts";
+import { apiToUi, applyWidgetValues, uiToApi } from "./convert.ts";
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
 const load = (name: string) =>
@@ -169,5 +169,35 @@ describe("uiToApi", () => {
     const { prompt, findings } = uiToApi(g, info);
     expect(prompt).toEqual({});
     expect(findings.map((f) => f.code).sort()).toEqual(["missing_node", "subgraph"]);
+  });
+});
+
+describe("applyWidgetValues", () => {
+  it("writes values into the widgets uiToApi reads them from", () => {
+    const prompt = ApiPrompt.parse(
+      JSON.parse(fs.readFileSync(path.join(dir, "sd15-api.json"), "utf8")),
+    );
+    const ui = apiToUi(prompt, info);
+    const edited = applyWidgetValues(
+      ui,
+      [
+        { node: "3", input: "steps", value: 41 },
+        { node: "3", input: "cfg", value: 4.5 },
+        { node: "6", input: "text", value: "a red barn" },
+        { node: "99", input: "steps", value: 1 },
+      ],
+      info,
+    );
+    const back = uiToApi(UiGraph.parse(edited), info).prompt;
+    expect(back["3"]?.inputs).toMatchObject({
+      steps: 41,
+      cfg: 4.5,
+      seed: prompt["3"]?.inputs.seed,
+    });
+    expect(back["6"]?.inputs.text).toBe("a red barn");
+    // The original is left as it was.
+    expect(uiToApi(UiGraph.parse(ui), info).prompt["3"]?.inputs.steps).toBe(
+      prompt["3"]?.inputs.steps,
+    );
   });
 });

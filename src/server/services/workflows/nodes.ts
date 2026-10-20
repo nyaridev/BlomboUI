@@ -45,6 +45,12 @@ export const IMAGE_OUTPUT_CLASSES = new Set([
   "SaveImageWebsocket",
 ]);
 
+/**
+ * Keys of a node's UI output that hold text worth keeping: WD14 Tagger shows "tags", show-text
+ * nodes and most captioners show "text". The batch runner writes them as sidecar .txt files.
+ */
+export const TEXT_OUTPUT_KEYS = ["text", "tags", "caption", "captions", "string"];
+
 /** Image inputs recognized without object_info. */
 export const IMAGE_INPUT_CLASSES = new Set(["LoadImage"]);
 

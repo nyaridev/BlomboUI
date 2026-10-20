@@ -261,3 +261,42 @@ export function apiToUi(prompt: ApiPrompt, info: ObjectInfo): Record<string, unk
     version: 0.4,
   };
 }
+
+/**
+ * Write values into a UI graph's widgets, the way uiToApi reads them (same widget order, the
+ * extra "control after generate" and upload widgets skipped). Edit in ComfyUI uses it so the
+ * canvas shows the workflow's current values, not the ones it was imported with. Inputs that
+ * are linked, or nodes the graph doesn't have, are left alone.
+ */
+export function applyWidgetValues(
+  graph: unknown,
+  edits: Array<{ node: string; input: string; value: unknown }>,
+  info: ObjectInfo,
+): unknown {
+  const out = structuredClone(graph) as { nodes?: UiNode[] };
+  const byNode = new Map<string, Array<{ input: string; value: unknown }>>();
+  for (const e of edits) byNode.set(e.node, [...(byNode.get(e.node) ?? []), e]);
+  for (const node of out.nodes ?? []) {
+    const mine = byNode.get(String(node.id));
+    const def = info[node.type];
+    if (!mine || !def) continue;
+    const wv = node.widgets_values;
+    let idx = 0;
+    for (const inp of nodeInputs(def)) {
+      if (!isWidgetType(inp.type)) continue;
+      const at = idx;
+      idx++;
+      if (inp.hasControl) idx++;
+      if (hasUploadWidget(info, node.type, inp.name)) idx++;
+      const edit = mine.find((e) => e.input === inp.name);
+      if (!edit || edit.value === undefined) continue;
+      const slot = node.inputs?.find((s) => s.name === inp.name || s.widget?.name === inp.name);
+      if (slot?.link !== null && slot?.link !== undefined) continue;
+      if (Array.isArray(wv)) {
+        if (at < wv.length) wv[at] = edit.value;
+      } else if (wv && typeof wv === "object")
+        (wv as Record<string, unknown>)[inp.name] = edit.value;
+    }
+  }
+  return out;
+}

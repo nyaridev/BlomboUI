@@ -11,6 +11,7 @@ import { cancelAll, generate, interrupt, setLoop, useLoopIntent } from "../actio
 import { PromptEditor } from "../PromptEditor";
 import { useValue, useValues } from "../state";
 import { useRoleBinding } from "../workflow";
+import { useBuiltScript } from "./Scripts";
 
 function TokenCount({ text }: { text: string }) {
   const { tokens, chunks } = useMemo(() => estimateTokens(text), [text]);
@@ -111,6 +112,8 @@ export function GenerateActions() {
   const loopIntent = useLoopIntent((s) => s.on);
   const busy = running || queued > 0;
   const loop = serverLoop || loopIntent;
+  const script = useBuiltScript();
+  const scripted = script.plan ?? (script.error ? true : null);
 
   return (
     <div className="flex w-[232px] shrink-0 flex-col gap-2">
@@ -133,14 +136,24 @@ export function GenerateActions() {
           />
         ) : null}
         <span className="relative flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Icon name={busy ? "plus" : "sparkle"} size={20} strokeWidth={2} />
-          {busy ? "Add to queue" : "Generate"}
+          <Icon
+            name={scripted ? "layout-grid" : busy ? "plus" : "sparkle"}
+            size={20}
+            strokeWidth={2}
+          />
+          {scripted ? "Run script" : busy ? "Add to queue" : "Generate"}
         </span>
         <span className="relative flex items-center gap-1.5 text-xs text-white/80">
           {busy ? (
             <span className="tabular">
               {Math.round(progress * 100)}% · {queued} queued
             </span>
+          ) : script.plan ? (
+            <span className="tabular">
+              {script.plan.cells.length} image{script.plan.cells.length === 1 ? "" : "s"}
+            </span>
+          ) : script.error ? (
+            <span>Script needs a fix</span>
           ) : (
             <>
               <Kbd className="border-white/30 bg-white/15 text-white">Ctrl</Kbd>

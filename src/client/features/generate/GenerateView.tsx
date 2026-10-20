@@ -2,12 +2,14 @@
  * Generate. Default arrangement: loaded models on top, prompts with the generate
  * stack beside them, workspace tabs, parameter column + image stage. Everything shows the
  * active workflow's bindings and values; the params column is a layout document that's
- * editable in Customize mode.
+ * editable in Customize mode. A batch workflow shows the batch runner instead of the prompts
+ * and the image stage.
  */
 import { glide } from "@client/lib/motion";
 import { Button, Spinner, Tabs } from "@client/ui";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useState } from "react";
+import { BatchView } from "./batch/BatchView";
 import { ImageStage } from "./blocks/ImageStage";
 import { ModelsStrip } from "./blocks/ModelsStrip";
 import { GenerateActions, Prompts } from "./blocks/Prompts";
@@ -58,6 +60,8 @@ export function GenerateView() {
       </div>
     );
   }
+
+  if (active.manifest.kind === "batch") return <BatchView manifest={active.manifest} />;
 
   return (
     <motion.div

@@ -1234,5 +1234,134 @@
     "output_node": false,
     "display_name": "FaceDetailer",
     "category": "ImpactPack/Simple"
+  },
+  "WD14Tagger|pysssss": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "model": [
+          [
+            "wd-eva02-large-tagger-v3",
+            "wd-vit-tagger-v3",
+            "wd-swinv2-tagger-v3",
+            "wd-convnext-tagger-v3",
+            "wd-v1-4-moat-tagger-v2",
+            "wd-v1-4-convnextv2-tagger-v2",
+            "wd-v1-4-convnext-tagger-v2",
+            "wd-v1-4-convnext-tagger",
+            "wd-v1-4-vit-tagger-v2",
+            "wd-v1-4-swinv2-tagger-v2",
+            "wd-v1-4-vit-tagger"
+          ],
+          {
+            "default": "wd-v1-4-moat-tagger-v2"
+          }
+        ],
+        "threshold": [
+          "FLOAT",
+          {
+            "default": 0.35,
+            "min": 0.0,
+            "max": 1,
+            "step": 0.05
+          }
+        ],
+        "character_threshold": [
+          "FLOAT",
+          {
+            "default": 0.85,
+            "min": 0.0,
+            "max": 1,
+            "step": 0.05
+          }
+        ],
+        "replace_underscore": ["BOOLEAN", { "default": false }],
+        "trailing_comma": ["BOOLEAN", { "default": false }],
+        "exclude_tags": ["STRING", { "default": "" }]
+      }
+    },
+    "input_order": {
+      "required": [
+        "image",
+        "model",
+        "threshold",
+        "character_threshold",
+        "replace_underscore",
+        "trailing_comma",
+        "exclude_tags"
+      ]
+    },
+    "output": ["STRING"],
+    "output_is_list": [true],
+    "output_name": ["STRING"],
+    "output_node": true,
+    "display_name": "WD14 Tagger 🐍",
+    "category": "image"
+  },
+  "InspyrenetRembg": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "torchscript_jit": [["default", "on"], {}]
+      }
+    },
+    "input_order": {
+      "required": ["image", "torchscript_jit"]
+    },
+    "output": ["IMAGE", "MASK"],
+    "output_name": ["IMAGE", "MASK"],
+    "output_node": false,
+    "display_name": "Inspyrenet Rembg",
+    "category": "image"
+  },
+  "InspyrenetRembgAdvanced": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "threshold": [
+          "FLOAT",
+          {
+            "default": 0.5,
+            "min": 0.0,
+            "max": 1.0,
+            "step": 0.01
+          }
+        ],
+        "torchscript_jit": [["default", "on"], {}]
+      }
+    },
+    "input_order": {
+      "required": ["image", "threshold", "torchscript_jit"]
+    },
+    "output": ["IMAGE", "MASK"],
+    "output_name": ["IMAGE", "MASK"],
+    "output_node": false,
+    "display_name": "Inspyrenet Rembg Advanced",
+    "category": "image"
+  },
+  "ImageScaleBy": {
+    "input": {
+      "required": {
+        "image": ["IMAGE"],
+        "upscale_method": [["nearest-exact", "bilinear", "area", "bicubic", "lanczos"], {}],
+        "scale_by": [
+          "FLOAT",
+          {
+            "default": 1.0,
+            "min": 0.01,
+            "max": 8.0,
+            "step": 0.01
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["image", "upscale_method", "scale_by"]
+    },
+    "output": ["IMAGE"],
+    "output_name": ["IMAGE"],
+    "output_node": false,
+    "display_name": "Upscale Image By",
+    "category": "image/upscaling"
   }
 }

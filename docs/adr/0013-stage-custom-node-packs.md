@@ -46,3 +46,8 @@ uv handling (`ensureUv`, the private environment, `uv pip` with progress, zip ex
 - Packs' `install.py` scripts are not run (only `requirements.txt`). If a pinned pack needs its script, it shows up as a failed verify, and the fix goes in the package (another ref) or in this service.
 - Bumping a pack is a one-line `ref` change in the stage packages; existing folders are kept, so an update of an installed pack isn't offered yet.
 - Not covered yet: updating or removing packs, packs for user stage packages, and running the real packs against a real ComfyUI (needs the owner's OK to download them).
+
+## Update (Phase 4b)
+
+Built-in batch workflows list their packs too (`packs` in `presets/workflows/<id>/workflow.json`: Inspyrenet Rembg, WD14 Tagger). The installer's allow-list is now the stage packages plus the built-in presets folder; a manifest from a profile or an import is never trusted for this. Their notice is the same component, fed by `GET /api/batch/check/:id`.
+

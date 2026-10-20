@@ -1,6 +1,6 @@
 # Workflows
 
-A **workflow** in BlomboUI is a real ComfyUI graph plus a manifest that tells the UI which inputs to show and how. Built-in presets and anything you import use the same format. Decisions: [ADR-0003](adr/0003-workflow-packages.md) (packages), [ADR-0004](adr/0004-stages.md) (stages), [ADR-0009](adr/0009-comfy-bridge.md) (editing in ComfyUI).
+A **workflow** in BlomboUI is a real ComfyUI graph plus a manifest that tells the UI which inputs to show and how. Built-in presets and anything you import use the same format. Decisions: [ADR-0003](adr/0003-workflow-packages.md) (packages), [ADR-0004](adr/0004-stages.md) (stages), [ADR-0009](adr/0009-comfy-bridge.md) (editing in ComfyUI), [ADR-0014](adr/0014-scripts-and-batch-runner.md) (scripts and batch).
 
 ## Package layout
 
@@ -12,7 +12,7 @@ data/profiles/<profile>/workflows/<id>/
 └── thumb.webp      picker thumbnail
 ```
 
-Built-in presets ship in `presets/workflows/<id>/` with the same files and are copied into a profile when installed (during profile creation, from the workflow picker, or from the empty Generate screen). Today: **SD 1.5**, **SDXL** and **Illustrious** text-to-image. Deleting a workflow moves its folder to `data/profiles/<profile>/trash/workflows/`.
+Built-in presets ship in `presets/workflows/<id>/` with the same files and are copied into a profile when installed (during profile creation, from the workflow picker, or from the empty Generate screen). Today: **SD 1.5**, **SDXL** and **Illustrious** text-to-image, and the batch tools **Remove background**, **Upscale images**, **Caption images** and **Dataset prep** (Batch workflows, below). Deleting a workflow moves its folder to `data/profiles/<profile>/trash/workflows/`.
 
 ## The manifest
 
@@ -37,6 +37,7 @@ Built-in presets ship in `presets/workflows/<id>/` with the same files and are c
   "run": { "seedMode": "random", "count": 1 },  // random | fixed | increment | decrement; runs per click
   "stages": { "hires": { "enabled": true, "scale": 1.5 } },  // see Stages
   "layout": null,                     // a linked layout id (Layouts); null: the profile's default
+  "packs": [],                        // built-in presets only: pinned custom node packs (see Batch)
   "createdAt": "…", "updatedAt": "…"
 }
 ```
@@ -55,7 +56,7 @@ Drop a file on the workflow picker, the Generate screen or File Info:
 | ComfyUI PNG / WebP | the embedded `prompt` (API) and `workflow` (UI) chunks |
 | API JSON | the graph as is; a UI graph is laid out automatically |
 | UI JSON | the canvas as is; it's converted to API with `/object_info` (anything that can't be converted is finalized on the first Edit in ComfyUI) |
-| `.blombo` | a full package: manifest, graphs, linked layout, thumbnail (arrives with Export) |
+| `.blombo` | a full package: manifest (values, stages, run settings), graphs, linked layout, thumbnail (see Export) |
 
 A UI JSON can only be converted while ComfyUI runs, because the widget values are matched to inputs by `/object_info`. Reroutes, primitive nodes and bypassed nodes are resolved; subgraphs and frontend-only plugin nodes can't be converted, and the import says so (exporting with ComfyUI's **Export (API)** always works). An API JSON imported while ComfyUI runs gets a generated canvas (`graph.json`) so it can be opened in ComfyUI.
 
@@ -75,12 +76,15 @@ Title a node `$Something` and its widget inputs become Blombo parameters named a
 
 ## Editing in ComfyUI
 
-**Edit in ComfyUI** (workflow picker, or the workflow menu) opens ComfyUI in a new window with the graph loaded. The bundled **blombo-bridge** extension shows a banner:
+**Edit in ComfyUI** (the workflow switcher's footer) opens ComfyUI in a new window with an edit session (ADR-0009). The bundled **blombo-bridge** extension loads the workflow's canvas, with the workflow's current values in its widgets, and shows a bar:
 
-- **Save to Blombo** sends the graph back and overwrites the workflow. Values are kept for every parameter that still exists; new and removed parameters are listed.
-- **Save as copy** creates a new workflow.
+- **Save to Blombo** sends both graphs back (`app.graphToPrompt()`, so ComfyUI converts subgraphs, primitives and reroutes itself) and overwrites the workflow; the previous version is copied to the profile's trash first. **Re-sync** (`services/workflows/resync.ts`) matches every parameter to the new graph by (node, input), then (class_type, title, input), then by role, and keeps its value, unless you changed that value in ComfyUI: then ComfyUI's value is kept. New parameters (a new `$`-titled node) and removed ones are reported ("2 new parameters, 1 removed, 1 changed in ComfyUI"); removed values stay in the workflow in case the node comes back.
+- **Save as copy** creates "<name> copy" next to it (`parentId` set); further saves from that window go to the copy.
+- **Cancel** ends the session.
 
-Without an edit session, the extension's menu offers **Send to Blombo**, which imports the current canvas as a new workflow.
+Each save uses the session's token and hands out the next one; tokens expire after two hours and only work while the same profile is open. Blombo's windows get the result over the live bus and the open workflow updates at once.
+
+Without a session, ComfyUI's **Workflow → Send to Blombo** adds the current canvas to the open profile as a new imported workflow. Managed slots get the extension automatically; for your own ComfyUI use Settings → ComfyUI → **Install bridge** and restart ComfyUI.
 
 ## Stages
 
@@ -179,9 +183,37 @@ The compiler (`services/workflows/compile.ts`) is pure and tested; the job queue
 - **Filenames.** When the graph's save node still has ComfyUI's default prefix, Blombo sets `%year%-%month%-%day%/<workflow id>`, so outputs are filed by day and workflow. A managed ComfyUI writes into the profile's outputs folder.
 - **Metadata.** Saved images carry ComfyUI's `prompt` chunk plus a `blombo` chunk: workflow id and name, seed, values and the final prompt texts. The gallery and File Info read it back: **Use these settings** reopens that workflow with its values and the image's seed fixed (falling back to what the graph ran with for anything the values don't cover). Images from ComfyUI alone or A1111 fill the active workflow by role (prompt, negative, model, sampler, scheduler, steps, CFG, seed, size, CLIP skip).
 
+## Scripts
+
+The Scripts block on the Generate screen (layout feature `scripts`, `shared/scripts.ts`) makes one click queue many runs, all with the same seed (unless the seed is an axis):
+
+| Script | Runs | Result |
+|---|---|---|
+| **Prompt matrix** | every combination of up to 6 terms, on and off, added to the end of a prompt (3 terms → 8 images) | one grid: the first half of the terms across, the rest down |
+| **XY plot** | one or two axes, crossed: any number, choice, model or on/off parameter (`4, 6, 8`, ranges `10-50 (+10)`, `3-9 [4]`), or a prompt **search/replace** (the first value is the text to find) | one grid with the values as labels |
+| **Scope thumbnails** | one run per picked checkpoint (or LoRA, added to the prompt as `<lora:name:weight>`) | each image becomes that model's thumbnail in a scope |
+
+A script queues at most 100 runs; the block shows the count and what's wrong before you click. Grids are put together by the server (`lib/grid.ts`, sharp) into `<outputs>/<date>/grids/`, appear on the image stage and in the gallery. Scope thumbnails are kept in `data/profiles/<id>/scopes/<scope>/<kind>/<model>.webp` (never next to your models); Models shows the `default` scope's picture for models without a preview of their own.
+
 ## Batch workflows
 
-`kind: "batch"` workflows (background removal, upscale, captioning, dataset prep) have an `image.input` binding. The runner feeds it from a file list or a folder, one job per file, and output handlers save images or write sidecar `.txt` files.
+`kind: "batch"` workflows have an `image.input` binding and no sampler (the analyzer marks such imports as batch too). The Generate screen shows the batch runner for them (ADR-0014): pick **a folder** (subfolders optional) or **files** (Choose files…, or drop them), an output folder (by default a subfolder named after the workflow, or the image folder itself for workflows that only write text), and run. Each file is one job in the queue: it's uploaded to ComfyUI's `input/blombo/batch/` right before its run, and as it finishes Blombo writes
+
+- the images it made as `<name>.png` (`<name>_2.png`… for more than one), copied from ComfyUI (built-in batch presets end in Preview Image, so ComfyUI's outputs folder stays clean)
+- the text it showed (a tagger's tags, a caption) as `<name>.txt`, with an optional prefix such as a trigger word
+
+**Skip existing** leaves out files whose result is already there, so a stopped batch resumes. A result never replaces the image you picked (it gets `-out`), and a file it would replace moves to the profile's trash first. Progress per file, outputs and errors are on the live bus (`batch` topic); a failing file doesn't stop the others.
+
+The built-in batch presets (`presets/workflows/`):
+
+| Preset | Nodes | Custom nodes |
+|---|---|---|
+| Remove background | Inspyrenet Rembg Advanced (threshold) → Preview Image (transparent PNG) | [ComfyUI-Inspyrenet-Rembg](https://github.com/john-mnz/ComfyUI-Inspyrenet-Rembg); its model downloads on first use |
+| Upscale images | Upscale model loader → upscale with model → Upscale Image By (final scale) | none (needs a model in `upscale_models/`) |
+| Caption images | WD14 Tagger → `<name>.txt` | [ComfyUI-WD14-Tagger](https://github.com/pythongosssss/ComfyUI-WD14-Tagger); its model downloads on first use |
+| Dataset prep | Image Scale (center crop to a training size) → Preview Image, and WD14 Tagger | WD14 Tagger |
+
+Their packs are pinned in the manifest's `packs` (like stage packages, ADR-0013), so the batch view's notice offers **Install** on a managed slot (`GET /api/batch/check/:id` says what's missing).
 
 ## Layouts
 
@@ -189,4 +221,4 @@ The Generate screen is a layout document (ADR-0005, `shared/layout/schema.ts`). 
 
 ## Export
 
-**Export** writes `<name>.blombo` (a zip): `workflow.json`, `graph.json`, `prompt.json`, the linked layout, and the thumbnail. Import it on any machine or profile.
+**Export** (the workflow switcher's footer) downloads `<name>.blombo`, a zip (`services/workflows/bundle.ts`): `blombo.json` (`format: "blombo.bundle/1"`), `workflow.json` (with its values, stages and run settings), `prompt.json`, `graph.json`, the linked layout (`layout.json`) and `thumb.webp`. Import it on any machine or profile by dropping it on the workflow switcher (or Import…): a name that's taken becomes "<name> copy", and a layout that's already in the profile is reused instead of added again.

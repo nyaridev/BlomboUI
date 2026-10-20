@@ -60,9 +60,11 @@ export function EmptyState({
 
 /* ── DropZone ────────────────────────────────────────────────────────────── */
 
-/** Drop a file here or click to pick one. */
+/** Drop a file here or click to pick one (`multiple`: several, through `onFiles`). */
 export function DropZone({
   onFile,
+  onFiles,
+  multiple,
   accept,
   title,
   hint,
@@ -71,7 +73,9 @@ export function DropZone({
   compact,
   className,
 }: {
-  onFile: (file: File) => void;
+  onFile?: (file: File) => void;
+  onFiles?: (files: File[]) => void;
+  multiple?: boolean;
   accept?: string;
   title: ReactNode;
   hint?: ReactNode;
@@ -83,6 +87,12 @@ export function DropZone({
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
+  const take = (list: FileList | null | undefined) => {
+    const files = Array.from(list ?? []);
+    if (!files.length) return;
+    if (multiple && onFiles) onFiles(files);
+    else if (files[0]) onFile?.(files[0]);
+  };
   return (
     <button
       type="button"
@@ -100,8 +110,7 @@ export function DropZone({
         if (!hasFiles(e)) return;
         e.preventDefault();
         setOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file) onFile(file);
+        take(e.dataTransfer.files);
       }}
       className={cn(
         "group flex w-full flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed text-center transition-colors focus-ring",
@@ -117,10 +126,10 @@ export function DropZone({
         ref={input}
         type="file"
         accept={accept}
+        multiple={multiple}
         hidden
         onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (file) onFile(file);
+          take(e.target.files);
           e.target.value = "";
         }}
       />

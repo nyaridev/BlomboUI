@@ -116,7 +116,7 @@ describe("job queue against a ComfyUI", () => {
 
     const jobs = await settled(res.jobs.map((j) => j.id));
     expect(jobs.map((j) => j.state)).toEqual(["done", "done"]);
-    expect(jobs[0]?.images[0]).toMatchObject({ type: "output", node: "9" });
+    expect(jobs[0]?.images[0]).toMatchObject({ type: "output", node: "8" });
 
     const [first] = fake.prompts.slice(-2);
     const sampler = Object.values(first?.prompt ?? {}).find((n) => n.class_type === "KSampler");

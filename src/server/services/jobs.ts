@@ -4,12 +4,15 @@
  * progress, preview frames and images on the live bus. Because the queue is on the server it
  * survives page reloads and every open window sees the same thing.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { ComfyStatus } from "../../shared/comfy.ts";
 import {
   type GenerateBody,
   type GenerateResponse,
   type Job,
+  type JobGroup,
   type JobImage,
   JobImage as JobImageSchema,
   type QueueSnapshot,
@@ -23,6 +26,7 @@ import {
   type WorkflowManifest,
 } from "../../shared/workflow/manifest.ts";
 import { hiresSize, readStages } from "../../shared/workflow/stages.ts";
+import { Emitter } from "../lib/emitter.ts";
 import { HttpError } from "../lib/http.ts";
 import { ComfyHttpError, type ComfyPreview, type ComfyWsMessage } from "./comfy/client.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
@@ -30,7 +34,7 @@ import type { ProfileService } from "./profiles.ts";
 import type { StageService } from "./stages.ts";
 import { loadWildcards } from "./wildcards.ts";
 import { CompileError, compile } from "./workflows/compile.ts";
-import { LORA_LOADER } from "./workflows/nodes.ts";
+import { LORA_LOADER, TEXT_OUTPUT_KEYS } from "./workflows/nodes.ts";
 import type { WorkflowService } from "./workflows/store.ts";
 
 export interface QueueDeps {
@@ -45,12 +49,40 @@ export interface QueueDeps {
   recordPrompts?: (texts: string[]) => void;
 }
 
+/** A file uploaded to ComfyUI's input folder right before the run, into an image binding. */
+export interface RunInput {
+  binding: string;
+  file: string;
+}
+
+/** One run a script or the batch runner adds (see addRuns). */
+export interface RunSpec {
+  seed: number;
+  values: Record<string, unknown>;
+  group: JobGroup;
+  inputs?: RunInput[];
+}
+
 interface Run {
   job: Job;
   manifest: WorkflowManifest;
   values: Record<string, unknown>;
   stages: WorkflowManifest["stages"];
+  inputs: RunInput[];
 }
+
+type QueueEvents = {
+  /** A job was taken off the queue to run. */
+  started: (job: Job) => void;
+  /** A job left the queue for good (done, error, interrupted or cancelled). */
+  finished: (job: Job) => void;
+};
+
+/** Where uploaded batch inputs go in ComfyUI's input folder. */
+const INPUT_SUBFOLDER = "blombo/batch";
+
+/** A run's input file couldn't be read or uploaded: that run fails, the others go on. */
+class InputError extends Error {}
 
 const KEEP_FINISHED = 40;
 
@@ -107,7 +139,19 @@ export function describeComfyError(error: unknown, manifest: WorkflowManifest): 
   return error.message;
 }
 
-export class JobQueue {
+/** Strings a node showed: a tagger's "tags", a captioner's "text" (see TEXT_OUTPUT_KEYS). */
+export function outputTexts(output: unknown): string[] {
+  if (!output || typeof output !== "object") return [];
+  const out: string[] = [];
+  for (const key of TEXT_OUTPUT_KEYS) {
+    const v = (output as Record<string, unknown>)[key];
+    const list = Array.isArray(v) ? v.flat() : typeof v === "string" ? [v] : [];
+    for (const s of list) if (typeof s === "string" && s.trim()) out.push(s.trim());
+  }
+  return out;
+}
+
+export class JobQueue extends Emitter<QueueEvents> {
   private readonly deps: QueueDeps;
   private queued: Run[] = [];
   private active: Run | null = null;
@@ -119,6 +163,7 @@ export class JobQueue {
   private early: ComfyWsMessage[] = [];
 
   constructor(deps: QueueDeps) {
+    super();
     this.deps = deps;
     deps.supervisor.on("message", (m) => this.onMessage(m));
     deps.supervisor.on("preview", (p) => this.onPreview(p));
@@ -140,12 +185,26 @@ export class JobQueue {
 
   /* ── commands ───────────────────────────────────────────────────────────── */
 
-  async enqueue(body: GenerateBody): Promise<GenerateResponse> {
-    const saved = await this.deps.workflows.patchValues(body.workflowId, {
+  /** Save what the click carried (values, run settings, stages) and return the workflow. */
+  async saveClick(body: GenerateBody): Promise<WorkflowManifest> {
+    return this.deps.workflows.patchValues(body.workflowId, {
       values: body.values,
-      run: { count: body.count, ...(body.seedMode ? { seedMode: body.seedMode } : {}) },
+      run: {
+        ...(body.script ? {} : { count: body.count }),
+        ...(body.seedMode ? { seedMode: body.seedMode } : {}),
+      },
       ...(body.stages ? { stages: body.stages } : {}),
     });
+  }
+
+  /** The seed a click starts from (the workflow's seed, or a random one). */
+  baseSeed(manifest: WorkflowManifest): number {
+    const seedBinding = bindingFor(manifest.bindings, "sampler.seed");
+    return toSeed(seedBinding ? manifest.values[seedBinding.id] : null) ?? randomSeed();
+  }
+
+  async enqueue(body: GenerateBody): Promise<GenerateResponse> {
+    const saved = await this.saveClick(body);
     if (saved.kind !== "generate")
       throw new HttpError(
         400,
@@ -154,7 +213,7 @@ export class JobQueue {
       );
     const mode = saved.run.seedMode;
     const seedBinding = bindingFor(saved.bindings, "sampler.seed");
-    const base = toSeed(seedBinding ? saved.values[seedBinding.id] : null) ?? randomSeed();
+    const base = this.baseSeed(saved);
     const jobs: Job[] = [];
     for (let i = 0; i < body.count; i++) jobs.push(this.add(saved, nextSeed(mode, base, i)));
     this.deps.recordPrompts?.(
@@ -176,6 +235,36 @@ export class JobQueue {
     this.publishQueue();
     void this.pump();
     return { jobs, values };
+  }
+
+  /**
+   * Queue runs that belong together (a script's cells, a batch's files). Each has its own values
+   * and seed; the group says which click it came from, and `finished` events report each one.
+   */
+  addRuns(manifest: WorkflowManifest, runs: RunSpec[]): Job[] {
+    const jobs = runs.map((r) =>
+      this.add(manifest, r.seed, { values: r.values, group: r.group, inputs: r.inputs ?? [] }),
+    );
+    this.prepareComfy();
+    this.publishQueue();
+    void this.pump();
+    return jobs;
+  }
+
+  /** Put a finished job Blombo made itself (a script's grid) into the list. */
+  addFinished(job: Job): void {
+    this.finished.unshift(job);
+    if (this.finished.length > KEEP_FINISHED) this.finished.length = KEEP_FINISHED;
+    this.publishQueue();
+  }
+
+  /** Stop a script's or a batch's runs: drop the queued ones, interrupt the running one. */
+  async cancelGroup(groupId: string): Promise<void> {
+    const mine = this.queued.filter((r) => r.job.group?.id === groupId);
+    this.queued = this.queued.filter((r) => r.job.group?.id !== groupId);
+    for (const run of mine) this.retire(run.job, "cancelled");
+    this.publishQueue();
+    if (this.active?.job.group?.id === groupId) await this.interrupt();
   }
 
   setLoop(on: boolean): void {
@@ -222,12 +311,17 @@ export class JobQueue {
 
   /* ── running ────────────────────────────────────────────────────────────── */
 
-  private add(manifest: WorkflowManifest, seed: number): Job {
+  private add(
+    manifest: WorkflowManifest,
+    seed: number,
+    extra: { values?: Record<string, unknown>; group?: JobGroup; inputs?: RunInput[] } = {},
+  ): Job {
+    const values = extra.values ?? manifest.values;
     const width = bindingFor(manifest.bindings, "latent.width");
     const height = bindingFor(manifest.bindings, "latent.height");
     const hasSeed = Boolean(bindingFor(manifest.bindings, "sampler.seed"));
-    const w = width ? num(manifest.values[width.id]) : null;
-    const h = height ? num(manifest.values[height.id]) : null;
+    const w = width ? num(values[width.id]) : null;
+    const h = height ? num(values[height.id]) : null;
     // With Hires fix on, the image comes out at the Hires size.
     const hires = readStages(manifest.stages).hires;
     const size = hires.enabled
@@ -248,16 +342,45 @@ export class JobQueue {
       finishedAt: null,
       progress: { value: 0, max: 1, node: null, overall: 0, segment: 0 },
       images: [],
+      texts: [],
       error: null,
       promptId: null,
+      group: extra.group ?? null,
+      file: null,
     };
     this.queued.push({
       job,
       manifest,
-      values: { ...manifest.values },
+      values: { ...values },
       stages: structuredClone(manifest.stages),
+      inputs: extra.inputs ?? [],
     });
     return job;
+  }
+
+  /** Upload a run's input files into ComfyUI and point their bindings at them. */
+  private async uploadInputs(run: Run): Promise<void> {
+    const api = this.deps.supervisor.api;
+    if (!api || !run.inputs.length) return;
+    for (const input of run.inputs) {
+      let bytes: Uint8Array;
+      try {
+        bytes = new Uint8Array(await fs.readFile(input.file));
+      } catch {
+        throw new InputError(`Couldn't read ${input.file}. Was it moved or deleted?`);
+      }
+      // Named by content, so running the same file again reuses ComfyUI's copy.
+      const hash = createHash("sha256").update(bytes).digest("hex").slice(0, 24);
+      const ext = path.extname(input.file).toLowerCase() || ".png";
+      try {
+        const res = await api.uploadImage(bytes, `${hash}${ext}`, INPUT_SUBFOLDER);
+        run.values[input.binding] = res.subfolder ? `${res.subfolder}/${res.name}` : res.name;
+      } catch (error) {
+        throw new InputError(
+          `ComfyUI didn't take ${path.basename(input.file)}: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
   }
 
   /** A managed ComfyUI that's stopped or crashed starts when there's work for it. */
@@ -292,7 +415,9 @@ export class JobQueue {
     run.job.state = "running";
     run.job.startedAt = new Date().toISOString();
     this.publishQueue();
+    this.emit("started", run.job);
     try {
+      await this.uploadInputs(run);
       const prompt = await this.deps.workflows.prompt(run.job.workflowId);
       const info = await this.deps.supervisor.objectInfo();
       const loraFiles = info
@@ -381,6 +506,7 @@ export class JobQueue {
     job.finishedAt = new Date().toISOString();
     this.finished.unshift(job);
     if (this.finished.length > KEEP_FINISHED) this.finished.length = KEEP_FINISHED;
+    this.emit("finished", job);
   }
 
   private finish(
@@ -392,7 +518,8 @@ export class JobQueue {
     this.active = null;
     if (state === "done") run.job.progress = { ...run.job.progress, overall: 1 };
     this.retire(run.job, state, error);
-    if (state === "error" && error)
+    // A batch lists its own failures per file; everything else goes to the error list.
+    if (state === "error" && error && run.job.group?.kind !== "batch")
       this.deps.reportError("job", `${run.job.workflowName} failed`, error);
     this.publishQueue();
     void this.pump();
@@ -415,11 +542,16 @@ export class JobQueue {
     if (!api || !run.job.promptId) return;
     try {
       const entry = (await api.history(run.job.promptId))[run.job.promptId];
-      for (const [node, out] of Object.entries(entry?.outputs ?? {}))
+      const texts: string[] = [];
+      for (const [node, out] of Object.entries(entry?.outputs ?? {})) {
         for (const img of out.images ?? []) {
           const parsed = JobImageSchema.safeParse({ ...img, node });
           if (parsed.success) this.addImage(run, parsed.data);
         }
+        texts.push(...outputTexts(out));
+      }
+      // History has every node's output; prefer it to what the socket said.
+      if (texts.length) run.job.texts = texts;
     } catch {
       // Images seen over the socket are enough.
     }
@@ -465,6 +597,7 @@ export class JobQueue {
       }
       case "executed": {
         const output = d.output as { images?: unknown[] } | null | undefined;
+        run.job.texts.push(...outputTexts(output));
         for (const img of output?.images ?? []) {
           const parsed = JobImageSchema.safeParse({
             ...(img as object),

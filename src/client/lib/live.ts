@@ -4,6 +4,8 @@
  * need (a progress number, the ComfyUI state), so a progress tick never re-renders the queue.
  * Preview frames are decoded off the main paint with createImageBitmap.
  */
+import type { BatchRun } from "@shared/batch";
+import type { ResyncReport } from "@shared/bridge";
 import type { ComfyLogLine, ComfyStatus, SystemStats } from "@shared/comfy";
 import type { Download, DownloadProgress } from "@shared/downloads";
 import type { GalleryImage, SyncState } from "@shared/gallery";
@@ -50,6 +52,16 @@ interface LiveState {
   downloadProgress: Record<string, DownloadProgress>;
   /** Background hashing and Civitai matching of local models. */
   lookup: LookupState | null;
+  /** The batch runner's current or last run (while a batch view follows the topic). */
+  batch: BatchRun | null;
+  /** The last workflow saved from ComfyUI (blombo-bridge), for a toast in this window. */
+  bridgeSaved: {
+    at: number;
+    workflowId: string;
+    name: string;
+    created: boolean;
+    report: ResyncReport | null;
+  } | null;
 }
 
 export const useLive = create<LiveState>(() => ({
@@ -68,6 +80,8 @@ export const useLive = create<LiveState>(() => ({
   downloads: [],
   downloadProgress: {},
   lookup: null,
+  batch: null,
+  bridgeSaved: null,
 }));
 
 const BASE_TOPICS: LiveTopic[] = ["comfy", "system", "jobs", "downloads"];
@@ -166,7 +180,11 @@ function onJson(text: string): void {
         void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
         void queryClient.invalidateQueries({ queryKey: ["workflow"] });
         void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
+        void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
       }
+      // Whether the bridge is loaded can only change when ComfyUI (re)starts.
+      if (msg.status.state !== s.comfy?.state)
+        void queryClient.invalidateQueries({ queryKey: ["bridge-status"] });
       break;
     }
     case "system":
@@ -225,8 +243,10 @@ function onJson(text: string): void {
       const was = s.nodeInstall?.state;
       useLive.setState({ nodeInstall: msg.install });
       // Finished (or failed after changing the slot): ComfyUI's nodes may differ now.
-      if (was === "running" && msg.install.state !== "running")
+      if (was === "running" && msg.install.state !== "running") {
         void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
+        void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+      }
       break;
     }
     case "models.changed":
@@ -234,6 +254,7 @@ function onJson(text: string): void {
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
       // A downloaded detector or ControlNet model can fix a stage.
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
+      void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
       break;
     case "models.lookup":
       useLive.setState({ lookup: msg.lookup });
@@ -241,6 +262,32 @@ function onJson(text: string): void {
     case "downloads":
       onDownloads(msg.downloads.items);
       break;
+    case "workflow.saved":
+      void queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow"] });
+      void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
+      void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+      useLive.setState({
+        bridgeSaved: {
+          at: Date.now(),
+          workflowId: msg.workflowId,
+          name: msg.name,
+          created: msg.created,
+          report: msg.report,
+        },
+      });
+      break;
+    case "batch":
+      useLive.setState({ batch: msg.run });
+      break;
+    case "batch.item": {
+      const run = s.batch;
+      if (!run || run.id !== msg.batchId) break;
+      const items = run.items.slice();
+      items[msg.item.index] = msg.item;
+      useLive.setState({ batch: { ...run, items } });
+      break;
+    }
     case "download.progress": {
       const next = { ...s.downloadProgress };
       for (const p of msg.items) next[p.id] = p;

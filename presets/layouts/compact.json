@@ -102,6 +102,11 @@
         "type": "params-rest",
         "id": "rest",
         "title": "More from this workflow"
+      },
+      {
+        "type": "feature",
+        "feature": "scripts",
+        "id": "scripts"
       }
     ],
     "stage": [

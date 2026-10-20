@@ -1,0 +1,125 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "caption",
+  "name": "Caption images",
+  "kind": "batch",
+  "family": "Utility",
+  "description": "Tags each image with WD14 and writes the tags to a .txt file with the same name. Its model downloads on first use.",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "caption",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "image.input",
+      "node": "1",
+      "input": "image",
+      "type": "image",
+      "label": "Input image",
+      "hidden": false,
+      "role": "image.input"
+    },
+    {
+      "id": "n2.model",
+      "node": "2",
+      "input": "model",
+      "type": "enum",
+      "label": "Tagger · Model",
+      "hidden": false,
+      "options": [
+        "wd-eva02-large-tagger-v3",
+        "wd-vit-tagger-v3",
+        "wd-swinv2-tagger-v3",
+        "wd-convnext-tagger-v3",
+        "wd-v1-4-moat-tagger-v2",
+        "wd-v1-4-convnextv2-tagger-v2",
+        "wd-v1-4-convnext-tagger-v2",
+        "wd-v1-4-convnext-tagger",
+        "wd-v1-4-vit-tagger-v2",
+        "wd-v1-4-swinv2-tagger-v2",
+        "wd-v1-4-vit-tagger"
+      ],
+      "group": "Tagger"
+    },
+    {
+      "id": "n2.threshold",
+      "node": "2",
+      "input": "threshold",
+      "type": "float",
+      "label": "Tagger · Threshold",
+      "hidden": false,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "group": "Tagger"
+    },
+    {
+      "id": "n2.character_threshold",
+      "node": "2",
+      "input": "character_threshold",
+      "type": "float",
+      "label": "Tagger · Character threshold",
+      "hidden": false,
+      "min": 0,
+      "max": 1,
+      "step": 0.05,
+      "group": "Tagger"
+    },
+    {
+      "id": "n2.replace_underscore",
+      "node": "2",
+      "input": "replace_underscore",
+      "type": "bool",
+      "label": "Tagger · Replace underscore",
+      "hidden": false,
+      "group": "Tagger"
+    },
+    {
+      "id": "n2.trailing_comma",
+      "node": "2",
+      "input": "trailing_comma",
+      "type": "bool",
+      "label": "Tagger · Trailing comma",
+      "hidden": false,
+      "group": "Tagger"
+    },
+    {
+      "id": "n2.exclude_tags",
+      "node": "2",
+      "input": "exclude_tags",
+      "type": "string",
+      "label": "Tagger · Exclude tags",
+      "hidden": false,
+      "group": "Tagger"
+    }
+  ],
+  "values": {
+    "image.input": "example.png",
+    "n2.model": "wd-v1-4-moat-tagger-v2",
+    "n2.threshold": 0.35,
+    "n2.character_threshold": 0.85,
+    "n2.replace_underscore": true,
+    "n2.trailing_comma": false,
+    "n2.exclude_tags": ""
+  },
+  "run": {
+    "seedMode": "fixed",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "packs": [
+    {
+      "name": "WD14 Tagger",
+      "url": "https://github.com/pythongosssss/ComfyUI-WD14-Tagger",
+      "nodes": [
+        "WD14Tagger|pysssss"
+      ],
+      "ref": "9e0a6e700299182fc05c58b62e7ad9f72182a78b"
+    }
+  ],
+  "createdAt": "2026-10-20T00:00:00.000Z",
+  "updatedAt": "2026-10-20T00:00:00.000Z"
+}

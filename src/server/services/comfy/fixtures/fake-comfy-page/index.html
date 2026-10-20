@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>ComfyUI (fake)</title>
+    <style>
+      :root {
+        --comfy-menu-bg: #353535;
+        --fg-color: #e6e6e6;
+        --border-color: #4e4e4e;
+      }
+      body {
+        margin: 0;
+        background: #202020;
+        color: var(--fg-color);
+        font: 13px system-ui, sans-serif;
+      }
+      header {
+        height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 12px;
+        background: var(--comfy-menu-bg);
+        border-bottom: 1px solid var(--border-color);
+      }
+      header b {
+        margin-right: auto;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: #444;
+        border: 1px solid var(--border-color);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+      }
+      main {
+        padding: 110px 16px 16px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+        gap: 10px;
+      }
+      .node {
+        background: #2c2c2c;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px 10px;
+      }
+      .node h3 {
+        margin: 0 0 6px;
+        font-size: 12px;
+      }
+      .node div {
+        opacity: 0.75;
+        font-size: 11px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #toasts {
+        position: fixed;
+        right: 12px;
+        bottom: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #toasts div {
+        background: #333;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 8px 12px;
+        max-width: 380px;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- A stand-in for ComfyUI's frontend, enough to run the blombo-bridge extension: it loads
+         every extension /extensions lists, keeps a UI graph, and converts it with /fake/convert. -->
+    <header>
+      <b>ComfyUI (fake)</b>
+      <span id="wf"></span>
+      <button id="edit" type="button">Add a $Sharpen node</button>
+      <button id="steps" type="button">Steps +5</button>
+      <button id="send" type="button">Workflow → Send to Blombo</button>
+    </header>
+    <main id="canvas"></main>
+    <div id="toasts"></div>
+    <script type="module">
+      import { app } from "/scripts/app.js";
+
+      const list = await (await fetch("/extensions")).json();
+      for (const url of list) await import(url);
+      await app.setupAll();
+    </script>
+  </body>
+</html>

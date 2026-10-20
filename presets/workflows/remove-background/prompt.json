@@ -1,0 +1,37 @@
+{
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "example.png"
+    },
+    "_meta": {
+      "title": "Input image"
+    }
+  },
+  "2": {
+    "class_type": "InspyrenetRembgAdvanced",
+    "inputs": {
+      "image": [
+        "1",
+        0
+      ],
+      "threshold": 0.5,
+      "torchscript_jit": "default"
+    },
+    "_meta": {
+      "title": "$Background removal"
+    }
+  },
+  "3": {
+    "class_type": "PreviewImage",
+    "inputs": {
+      "images": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Result"
+    }
+  }
+}

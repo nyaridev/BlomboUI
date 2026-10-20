@@ -32,6 +32,11 @@ interface ValuesState {
   stages: StageSettings;
   /** Show a workflow's saved values (only when switching workflows, so edits aren't lost). */
   load: (manifest: WorkflowManifest) => void;
+  /**
+   * Take the saved values of the open workflow again (it was saved from ComfyUI). The server's
+   * copy is newer, so unsaved edits of this workflow are dropped.
+   */
+  reload: (manifest: WorkflowManifest) => void;
   setValue: (id: string, value: unknown) => void;
   setRun: (patch: Partial<RunSettings>) => void;
   /** Replace one stage's settings (saved like values). */
@@ -119,6 +124,15 @@ export const useValues = create<ValuesState>((set, get) => ({
       run: { ...m.run },
       stages: readStages(m.stages),
     });
+  },
+  reload: (m) => {
+    if (get().workflowId !== m.id) return;
+    if (pending?.workflowId === m.id) {
+      pending = null;
+      if (saveTimer) clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    set({ values: { ...m.values }, run: { ...m.run }, stages: readStages(m.stages) });
   },
   setValue: (id, value) => {
     const wf = get().workflowId;

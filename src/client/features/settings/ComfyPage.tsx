@@ -2,12 +2,14 @@
  * Settings → ComfyUI: which ComfyUI this profile uses (a managed slot or your own), the
  * installed slots, and installing a slot with a progress view (the owner's choice over console
  * prompts). Progress comes from the server over the live bus, so it survives a page reload.
+ * The bridge row says whether blombo-bridge (Edit in ComfyUI, ADR-0009) is loaded, and installs
+ * it into a ComfyUI you run yourself.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { followTopic, useLive } from "@client/lib/live";
-import { useComfySlots, useUpdateProfile } from "@client/lib/queries";
+import { queryClient, useBridgeStatus, useComfySlots, useUpdateProfile } from "@client/lib/queries";
 import {
   Badge,
   Button,
@@ -20,6 +22,7 @@ import {
   TextField,
   toast,
 } from "@client/ui";
+import type { BridgeStatus } from "@shared/bridge";
 import { INSTALL_STEP_LABELS, type InstallState, type TorchVariant } from "@shared/install";
 import type { Profile } from "@shared/profile";
 import { useEffect, useState } from "react";
@@ -121,6 +124,14 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
       </Field>
 
       <Field
+        label="Blombo bridge"
+        layout="left"
+        hint="A small ComfyUI extension for Edit in ComfyUI: it opens a workflow there and adds Save to Blombo and Send to Blombo."
+      >
+        <BridgeRow profile={profile} />
+      </Field>
+
+      <Field
         label="Install ComfyUI"
         layout="left"
         hint="Downloads ComfyUI, a private Python and PyTorch into a new slot. Plan on about 6 GB of disk and a few minutes."
@@ -131,6 +142,92 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
           defaultSlot={mode === "managed" ? slot : "latest"}
         />
       </Field>
+    </div>
+  );
+}
+
+const BRIDGE_BADGE: Record<
+  BridgeStatus["state"],
+  { tone: "success" | "warning" | "neutral"; icon: IconName; label: string }
+> = {
+  loaded: { tone: "success", icon: "check-circle", label: "Loaded" },
+  outdated: { tone: "warning", icon: "refresh", label: "Out of date" },
+  missing: { tone: "warning", icon: "info", label: "Not loaded" },
+  unknown: { tone: "neutral", icon: "info", label: "ComfyUI is off" },
+};
+
+/** Whether ComfyUI has the bridge, and how to get it there. */
+function BridgeRow({ profile }: { profile: Profile | undefined }) {
+  const status = useBridgeStatus();
+  const comfy = useLive((s) => s.comfy);
+  const [installing, setInstalling] = useState(false);
+  const external = profile?.comfy.mode === "external";
+  const s = status.data;
+  const badge = s ? BRIDGE_BADGE[s.state] : null;
+
+  const install = async () => {
+    const picked = await api.pickFolder("Pick your ComfyUI folder (the one with main.py)");
+    if (!picked.path) return;
+    setInstalling(true);
+    try {
+      const res = await api.installBridge(picked.path);
+      toast(
+        res.result === "current"
+          ? `The bridge in ${res.path} is already current. Restart ComfyUI if it isn't loaded.`
+          : `Bridge ${res.result} in ${res.path}. Restart ComfyUI to load it.`,
+        "success",
+      );
+    } catch (error) {
+      toast(error instanceof Error ? error.message : String(error), "error");
+    } finally {
+      setInstalling(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-2.5">
+      <div className="flex items-center gap-2">
+        {badge ? (
+          <Badge tone={badge.tone}>
+            <Icon name={badge.icon} size={11} />
+            {badge.label}
+          </Badge>
+        ) : (
+          <Spinner size={14} />
+        )}
+        {s?.version ? <span className="font-mono text-2xs text-fg-3">v{s.version}</span> : null}
+        <Button
+          size="sm"
+          variant="ghost"
+          icon="refresh"
+          onClick={() => void queryClient.invalidateQueries({ queryKey: ["bridge-status"] })}
+        >
+          Check again
+        </Button>
+      </div>
+      <p className="max-w-[560px] text-xs text-fg-3">
+        {s && s.state !== "loaded"
+          ? s.message
+          : external
+            ? "Blombo doesn't change a ComfyUI it doesn't run, so install the bridge into yours once (and again after Blombo updates it)."
+            : "Blombo puts the bridge into this slot and keeps it current every time ComfyUI starts."}
+      </p>
+      {external ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Button icon="download" loading={installing} onClick={() => void install()}>
+            Install bridge…
+          </Button>
+          <span className="text-2xs text-fg-3">
+            Copies a small folder into your ComfyUI's custom_nodes. Restart ComfyUI afterwards.
+          </span>
+        </div>
+      ) : s && (s.state === "missing" || s.state === "outdated") && comfy?.state === "running" ? (
+        <div>
+          <Button icon="refresh" onClick={() => void api.comfyRestart().catch(() => undefined)}>
+            Restart ComfyUI
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

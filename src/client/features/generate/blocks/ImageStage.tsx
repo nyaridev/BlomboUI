@@ -18,7 +18,8 @@ import { useRoleBinding } from "../workflow";
 interface Result {
   key: string;
   url: string;
-  image: JobImage;
+  /** File name for the full-size window's title. */
+  name: string;
   job: Job;
 }
 
@@ -71,11 +72,28 @@ export function ImageStage() {
   const results = useMemo<Result[]>(
     () =>
       jobs
-        .filter((j) => j.state === "done")
-        .flatMap((job) =>
-          job.images
-            .filter((img) => img.type === "output" || job.images.every((i) => i.type !== "output"))
-            .map((image) => ({ key: keyOf(job, image), url: comfyViewUrl(image), image, job })),
+        // Batch files have their own panel; a script's grid is a picture Blombo made.
+        .filter((j) => j.state === "done" && j.group?.kind !== "batch")
+        .flatMap((job): Result[] =>
+          job.file
+            ? [
+                {
+                  key: job.id,
+                  url: job.file.url,
+                  name: job.file.path.split(/[\\/]/).pop() ?? "grid.png",
+                  job,
+                },
+              ]
+            : job.images
+                .filter(
+                  (img) => img.type === "output" || job.images.every((i) => i.type !== "output"),
+                )
+                .map((image) => ({
+                  key: keyOf(job, image),
+                  url: comfyViewUrl(image),
+                  name: image.filename,
+                  job,
+                })),
         ),
     [jobs],
   );
@@ -210,7 +228,7 @@ export function ImageStage() {
                 icon="maximize"
                 label="Open full size"
                 size="sm"
-                onClick={() => void openWindow(current.url, current.image.filename)}
+                onClick={() => void openWindow(current.url, current.name)}
               />
               <IconButton
                 icon="copy"

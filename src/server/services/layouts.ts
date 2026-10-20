@@ -132,6 +132,23 @@ export class LayoutService {
     return doc;
   }
 
+  /**
+   * A layout that came with an imported workflow: the same one already here is reused,
+   * otherwise it's added (renamed when the name is taken). Returns the id to link.
+   */
+  async adopt(doc: LayoutDocument): Promise<string> {
+    const same = (a: LayoutDocument, b: LayoutDocument) =>
+      JSON.stringify([a.regions, a.sizes]) === JSON.stringify([b.regions, b.sizes]);
+    if ((await this.builtins()).some((l) => l.id === doc.id)) return doc.id;
+    const custom = await readDir(this.dir());
+    const match = custom.find((l) => l.id === doc.id && same(l, doc));
+    if (match) return match.id;
+    const names = new Set(custom.map((l) => l.name.toLowerCase()));
+    let name = doc.name;
+    for (let n = 2; names.has(name.toLowerCase()); n++) name = `${doc.name.slice(0, 50)} (${n})`;
+    return (await this.create({ name, doc })).id;
+  }
+
   async save(id: string, input: LayoutDocument): Promise<LayoutDocument> {
     if ((await this.builtins()).some((l) => l.id === id))
       throw new HttpError(

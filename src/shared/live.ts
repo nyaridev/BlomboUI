@@ -11,9 +11,12 @@
  *   install ComfyUI slot installer and custom node installer progress (while a view showing
  *           either is open)
  *   downloads the download queue and its progress (the header shows it, so every window follows)
+ *   batch   the batch runner's files (while a batch workflow is open)
  * Errors, profile switches and model-folder changes go to everyone.
  */
 import { z } from "zod";
+import { BatchItem, BatchRun } from "./batch.ts";
+import { ResyncReport } from "./bridge.ts";
 import { ComfyLogLine, ComfyStatus, SystemStats } from "./comfy.ts";
 import { DownloadProgress, DownloadsSnapshot } from "./downloads.ts";
 import { GalleryImage, SyncState } from "./gallery.ts";
@@ -29,6 +32,7 @@ export const LIVE_TOPICS = [
   "gallery",
   "install",
   "downloads",
+  "batch",
 ] as const;
 export const LiveTopic = z.enum(LIVE_TOPICS);
 export type LiveTopic = z.infer<typeof LiveTopic>;
@@ -79,6 +83,19 @@ export const ServerMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("downloads"), downloads: DownloadsSnapshot }),
   /** Bytes received, batched a few times a second. */
   z.object({ t: z.literal("download.progress"), items: z.array(DownloadProgress) }),
+  /** A workflow was saved from ComfyUI (blombo-bridge): lists and the open workflow refetch. */
+  z.object({
+    t: z.literal("workflow.saved"),
+    workflowId: z.string(),
+    name: z.string(),
+    /** Saved as a new workflow ("Save as copy", "Send to Blombo"). */
+    created: z.boolean(),
+    report: ResyncReport.nullable(),
+  }),
+  /** The batch runner started, finished or stopped (the whole run). */
+  z.object({ t: z.literal("batch"), run: BatchRun.nullable() }),
+  /** One file of the running batch changed. */
+  z.object({ t: z.literal("batch.item"), batchId: z.string(), item: BatchItem }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

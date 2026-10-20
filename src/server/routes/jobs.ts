@@ -3,15 +3,16 @@ import { z } from "zod";
 import { GenerateBody } from "../../shared/jobs.ts";
 import { readJson } from "../lib/http.ts";
 import type { JobQueue } from "../services/jobs.ts";
+import type { ScriptService } from "../services/scripts.ts";
 
-export function jobRoutes(queue: JobQueue) {
+export function jobRoutes(queue: JobQueue, scripts: ScriptService) {
   const r = new Hono();
 
   r.get("/", (c) => c.json(queue.snapshot()));
 
   r.post("/", async (c) => {
     const body = await readJson(c, GenerateBody);
-    return c.json(await queue.enqueue(body), 201);
+    return c.json(await (body.script ? scripts.run(body) : queue.enqueue(body)), 201);
   });
 
   r.post("/interrupt", async (c) => {
@@ -27,6 +28,12 @@ export function jobRoutes(queue: JobQueue) {
   r.put("/loop", async (c) => {
     const { on } = await readJson(c, z.object({ on: z.boolean() }));
     queue.setLoop(on);
+    return c.json(queue.snapshot());
+  });
+
+  /** Stop a script's or a batch's runs (queued ones dropped, the running one interrupted). */
+  r.post("/groups/:id/cancel", async (c) => {
+    await queue.cancelGroup(c.req.param("id"));
     return c.json(queue.snapshot());
   });
 

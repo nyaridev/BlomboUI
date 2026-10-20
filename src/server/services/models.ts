@@ -30,6 +30,7 @@ import { exists, movePath, resolveInside } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { ThumbCache } from "../lib/thumbs.ts";
 import type { ProfileService } from "./profiles.ts";
+import { DEFAULT_SCOPE, scopeThumbPath } from "./scopes.ts";
 
 export const MODEL_THUMB_MAX = 480;
 const EXTENSIONS = new Set<string>(MODEL_EXTENSIONS);
@@ -224,6 +225,17 @@ export class ModelService {
       }
       const stem = stemOf(e.name);
       const sidecars = sidecarsFor(stem, files, dir);
+      // No preview next to the model: a scope thumbnail Blombo made for it, if there is one.
+      if (!sidecars.thumb) {
+        const comfyName = toRel(path.relative(kindRoot, full));
+        const scoped = scopeThumbPath(
+          this.deps.profiles.dir(profileId),
+          DEFAULT_SCOPE,
+          kind,
+          comfyName,
+        );
+        if (scoped && (await exists(scoped))) sidecars.thumb = scoped;
+      }
       const civitai = await readJson<CivitaiInfo>(sidecars.civitai);
       const a1111 = await readJson<A1111Info>(sidecars.json);
       const id = toRel(path.relative(root, full));

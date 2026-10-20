@@ -6,6 +6,7 @@
 import { z } from "zod";
 import { MODEL_KINDS } from "../constants.ts";
 import { LayoutDocument } from "../layout/schema.ts";
+import { NodePack } from "./packs.ts";
 import { ROLES, STAGES } from "./roles.ts";
 
 export const BindingType = z.enum([
@@ -81,6 +82,11 @@ export const WorkflowManifest = z.object({
   stages: StagesRecord.default({}),
   /** Linked layout id; null → the profile's default layout. */
   layout: z.string().nullable().default(null),
+  /**
+   * Custom node packs a built-in workflow needs (pinned, so Install can add them to a managed
+   * slot). Only presets carry them; the installer trusts the presets folder, not this field.
+   */
+  packs: z.array(NodePack).default([]),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -153,7 +159,7 @@ export const DuplicateWorkflowBody = z.object({ name: WorkflowManifest.shape.nam
 export const ImportResult = z.object({
   workflow: WorkflowManifest,
   /** Which kind of file it came from. */
-  source: z.enum(["api", "ui", "png", "webp"]),
+  source: z.enum(["api", "ui", "png", "webp", "blombo"]),
   findings: z.array(Finding),
 });
 export type ImportResult = z.infer<typeof ImportResult>;

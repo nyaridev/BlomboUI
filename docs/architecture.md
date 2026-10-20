@@ -32,20 +32,20 @@ flowchart LR
   end
   subgraph Comfy["ComfyUI :8188 (own Python + Torch)"]
     CQ["/prompt · /ws · /object_info"]
-    BR["blombo-bridge<br/>custom node (Save to Blombo)"]
+    BR["blombo-bridge<br/>extension (Save to Blombo)"]
   end
   B & T -->|HTTP + WS| R & WS
   R --> SV --> DB & FS
   SV -->|HTTP + WS client| CQ
   PM -->|child process| Comfy
-  BR -->|POST workflow| R
+  BR -->|/api/bridge (CORS: this ComfyUI only)| R
 ```
 
 - **Server** (`src/server`): Node 22+ running TypeScript directly (type stripping), Hono for HTTP, `ws` for WebSocket, `node:sqlite` for storage, `sharp` for thumbnails and grids. It serves the built client in production.
 - **Client** (`src/client`): React 19, Vite, Tailwind 4, TanStack Router and Query, Zustand for UI state, Motion for animation, Floating UI for anything that floats, dnd-kit for layout editing, CodeMirror 6 for YAML and prompts, TanStack Virtual for big grids.
 - **Shared** (`src/shared`): vocabulary (roles, model kinds, samplers), Zod schemas (settings, profile, workflow manifest, layout document, API bodies), and pure logic used on both sides (prompt syntax parser, wildcard grammar, resolution math).
 - **Desktop** (`src-tauri`): a thin native window that opens the local server URL. The page and the web build are the same. Small platform hooks (open a second window for ComfyUI, native notifications) go through `client/lib/platform.ts`.
-- **ComfyUI**: installed per *slot* under `runtime/comfyui/<slot>/` with its own Python (a private venv the in-app installer sets up with uv, or a portable build placed there by hand). Blombo supervises the process, writes `extra_model_paths.yaml` from the active profile, installs the custom node packs stages need into `custom_nodes/` (ADR-0013), and (later) the **blombo-bridge** extension.
+- **ComfyUI**: installed per *slot* under `runtime/comfyui/<slot>/` with its own Python (a private venv the in-app installer sets up with uv, or a portable build placed there by hand). Blombo supervises the process, writes `extra_model_paths.yaml` from the active profile, installs the custom node packs stages and batch presets need into `custom_nodes/` (ADR-0013), and keeps the **blombo-bridge** extension (ADR-0009) current there.
 
 ## Source layout
 
@@ -71,10 +71,10 @@ BlomboUI-new/
 │   │   ├── icons/         custom SVG icon set
 │   │   ├── lib/           api · live (ws) · queries · motion · hotkeys · platform · format
 │   │   └── styles/        tokens.css · base.css
-│   └── comfy-bridge/      ComfyUI extension (JS) shipped into each managed ComfyUI
+│   └── comfy-bridge/      blombo-bridge: __init__.py + web/blombo.js (extension) + web/blombo-core.js
 ├── presets/
-│   ├── workflows/     built-in workflow packages: sd15, sdxl, illustrious (planned: noobai, anima,
-│   │                  krea2, background-removal, upscale, caption, dataset)
+│   ├── workflows/     built-in workflow packages: sd15, sdxl, illustrious; batch: remove-background,
+│   │                  upscale, caption, dataset-prep (planned: noobai, anima, krea2)
 │   ├── stages/        graph patches per family: hires-*, adetailer-*, controlnet-* (checkpoint,
 │   │                  diffusion); upscale later
 │   ├── layouts/       built-in Generate layouts (default, compact)
@@ -100,15 +100,18 @@ data/
     ├── layouts/<layoutId>.json   Generate layouts (workflows link one by id)
     ├── inputs/<sha>.<ext>        ControlNet images, named by content, sent to ComfyUI per run
     ├── tags/<name>.csv           tag lists added in Settings → Autocomplete
-    ├── trash/                    workflows/ · layouts/ · tags/ · gallery/<id>/<file> ·
-    │                             wildcards/<stamp>/<path>
+    ├── scopes/<scope>/<kind>/    scope thumbnails (<ComfyUI model name>.webp, from the script)
+    ├── grids/<date>/             script grids when the profile has no outputs folder
+    ├── trash/                    workflows/ (also <id>-before-edit-<stamp>/) · layouts/ · tags/ ·
+    │                             gallery/<id>/<file> · wildcards/<stamp>/<path> · batch/<run>/
     └── blombo.sqlite             gallery index (FTS5) + favorites + trash list, downloads,
                                   Civitai views and searches, model hashes and lookups,
                                   tag usage (frequent tags)
 runtime/cache/<id>/thumbs/        gallery/ and models/ WebP thumbnails (safe to delete)
+runtime/cache/<id>/batch-inputs/  images dropped into the batch runner (named by content)
 runtime/cache/civitai/            api/ answers and images/ (the image proxy), safe to delete
 runtime/cache/manager/            the ComfyUI model catalog (model-list.json), a day at a time
-runtime/comfyui/<slot>/           managed ComfyUI: ComfyUI/ · .venv/ · blombo/ (pid, slot.json)
+runtime/comfyui/<slot>/           managed ComfyUI: ComfyUI/ (custom_nodes/blombo-bridge) · .venv/ · blombo/
 runtime/tools/                    uv, its Python downloads and package cache (installer)
 runtime/app/                      the desktop window's WebView2 profile and window.json
 
@@ -157,7 +160,7 @@ graph.json      ComfyUI UI format (nodes + links). Used for "Edit in ComfyUI"
 prompt.json     ComfyUI API format (class_type + inputs). Used to run
 ```
 
-**Import** accepts a ComfyUI API JSON, a UI JSON, or a ComfyUI PNG or WebP with embedded metadata (`.blombo` bundles come with export). The **analyzer** reads the graph with ComfyUI's `/object_info`. It finds semantic **roles** such as `prompt.positive`, `model.checkpoint`, `sampler.steps`, `latent.width` and `lora.stack`, and exposes inputs of nodes titled `$Something`. Today the workflow is saved straight away and the findings (missing nodes or models) are shown as a notice; a setup screen to confirm roles comes later.
+**Import** accepts a ComfyUI API JSON, a UI JSON, a ComfyUI PNG or WebP with embedded metadata, or a `.blombo` bundle. The **analyzer** reads the graph with ComfyUI's `/object_info`. It finds semantic **roles** such as `prompt.positive`, `model.checkpoint`, `sampler.steps`, `latent.width` and `lora.stack`, and exposes inputs of nodes titled `$Something`. Today the workflow is saved straight away and the findings (missing nodes or models) are shown as a notice; a setup screen to confirm roles comes later.
 
 **Running** compiles the package:
 
@@ -167,11 +170,13 @@ prompt.json → apply values to bindings → expand wildcards → <lora:…> tag
 → seed → filename prefix → POST /prompt
 ```
 
-**Editing in ComfyUI**: "Edit in ComfyUI" opens ComfyUI in a new window with an edit session. The bundled **blombo-bridge** extension loads the graph and shows a **Save to Blombo** button. Saving sends the UI and API graphs back. Blombo re-runs the analyzer and keeps existing bindings and values where node ids and inputs still match. It flags anything that was added or removed.
+**Editing in ComfyUI**: "Edit in ComfyUI" opens ComfyUI in a new window with an edit session (a single-use token, ADR-0009). The bundled **blombo-bridge** extension loads the canvas with the workflow's current values and shows Save to Blombo, Save as copy and Cancel. Saving sends the UI and API graphs back; Blombo re-runs the analyzer and re-syncs (`workflows/resync.ts`): values follow their parameters by (node, input), (class_type, title, input) or role, a value changed in ComfyUI wins, and added and removed parameters are reported. Every window hears about it over the live bus. Without a session, **Send to Blombo** imports any canvas.
 
 **Templates are gone.** Values live in the workflow. **Duplicate** creates a sibling package with a new name, and changes stay local to that copy. **Export** writes a `.blombo` zip: manifest, graphs, linked layout, thumbnail.
 
-Details: [`workflows.md`](workflows.md) · ADR [0003](adr/0003-workflow-packages.md) · ADR [0004](adr/0004-stages.md).
+**Scripts and batch** (ADR-0014): the Generate screen's Scripts block turns one click into a prompt matrix, an XY plot or scope thumbnails; `kind: "batch"` workflows show the batch runner instead of the prompts. Both queue groups of runs in the one server queue (`JobGroup`); `services/scripts.ts` composites grids and files scope thumbnails, `services/batch.ts` uploads each input file and writes results and sidecar captions into the output folder.
+
+Details: [`workflows.md`](workflows.md) · ADR [0003](adr/0003-workflow-packages.md) · ADR [0004](adr/0004-stages.md) · ADR [0009](adr/0009-comfy-bridge.md) · ADR [0014](adr/0014-scripts-and-batch-runner.md).
 
 ## Generate screen = layout document
 
@@ -197,7 +202,8 @@ ADR [0005](adr/0005-layout-documents.md).
 | `gallery` | `gallery.added` (a new image, indexed), `gallery.changed` (lists should refetch), `gallery.sync` (scan progress), while a gallery view is mounted |
 | `install` | `install`: the ComfyUI installer's steps, progress and log, while Settings → ComfyUI is open; `nodes.install`: the custom node installer's, while a "needs custom nodes" notice is shown |
 | `downloads` | `downloads` queue snapshots on every change, `download.progress` byte counts at 4 Hz (every window follows it: the header shows the queue) |
-| (all) | `hello` on connect (with the download queue), `error`, `profile.switched`, `models.changed` (model files renamed, moved, downloaded or matched on Civitai), `models.lookup` (background hashing progress) |
+| `batch` | `batch` (the run started, finished or stopped) and `batch.item` (one file changed), while a batch workflow is open |
+| (all) | `hello` on connect (with the download queue), `error`, `profile.switched`, `models.changed` (model files renamed, moved, downloaded or matched on Civitai), `models.lookup` (background hashing progress), `workflow.saved` (a workflow came back from ComfyUI: lists refetch, the open one reloads, a toast says what changed) |
 
 Preview frames are binary: a 4-byte job sequence number, 1 byte for the image type, then ComfyUI's JPEG or PNG preview bytes unchanged. A window whose socket is backed up skips frames.
 
@@ -215,10 +221,10 @@ ADR [0008](adr/0008-live-bus.md).
 
 - Routes are thin: parse with Zod, call a service, return JSON. Errors are thrown `HttpError`s.
 - Services own one concern each. Long work (hashing, gallery sync, downloads, thumbnail generation) runs on a small task runner with progress events on the bus.
-- The **ComfyUI supervisor** (`services/comfy/supervisor.ts`) follows the open profile's target. A **managed slot** (`runtime/comfyui/<slot>/` with `ComfyUI/main.py` and its own Python) is started with `--extra-model-paths-config` (written from the profile's models folder), `--output-directory` (the outputs folder), `--preview-method auto` and, for a CPU-only PyTorch, `--cpu`, on the first free port from 8188; its stdout and stderr become the log (terminal colors stripped). An **external** ComfyUI is only connected to, and Blombo keeps reconnecting while it's away. In dev mode a managed ComfyUI outlives server restarts and is re-adopted from `blombo/comfy.pid`, so editing server code doesn't reload models. A missing slot reports `missing`, and the header offers **Install**. Installing blombo-bridge comes with ADR-0009.
+- The **ComfyUI supervisor** (`services/comfy/supervisor.ts`) follows the open profile's target. A **managed slot** (`runtime/comfyui/<slot>/` with `ComfyUI/main.py` and its own Python) is started with `--extra-model-paths-config` (written from the profile's models folder), `--output-directory` (the outputs folder), `--preview-method auto` and, for a CPU-only PyTorch, `--cpu`, on the first free port from 8188; its stdout and stderr become the log (terminal colors stripped). An **external** ComfyUI is only connected to, and Blombo keeps reconnecting while it's away. In dev mode a managed ComfyUI outlives server restarts and is re-adopted from `blombo/comfy.pid`, so editing server code doesn't reload models. A missing slot reports `missing`, and the header offers **Install**. Before a slot starts, the supervisor's `prepareSlot` hook copies the current blombo-bridge into its `custom_nodes/` (ADR-0009).
 - The **installer** (`services/comfy/installer.ts`, ADR-0010) installs a slot from Settings → ComfyUI with a progress view: uv, a private Python 3.12 venv, the ComfyUI release zip, PyTorch (CUDA 12.8 or CPU), ComfyUI's requirements, then a check that writes `blombo/slot.json`. Steps skip finished work, so an interrupted install resumes; `blombo/installing` marks a slot unfinished so the supervisor won't start it.
 - The **custom node installer** (`services/comfy/nodepacks.ts`, ADR-0013) puts the packs a stage needs into the managed slot from the stage notice: the pinned source zip into `custom_nodes/`, ComfyUI stopped, the pack's requirements with uv (PyTorch pinned), ComfyUI started again and its node list checked. Both installers share `services/comfy/uv.ts`.
-- The **job queue** (`services/jobs.ts`) is server-side and survives a page reload. Each click queues runs (one ComfyUI prompt each, with its own seed per the seed mode); the queue compiles and submits one at a time, so wildcards and seeds are fresh per run. Interrupt stops the running image, Cancel also clears the queue and "generate forever". A validation error from ComfyUI is rewritten with the workflow's labels ("… isn't in your checkpoints folder") and stops the rest of that batch. Reordering comes later.
+- The **job queue** (`services/jobs.ts`) is server-side and survives a page reload. Each click queues runs (one ComfyUI prompt each, with its own seed per the seed mode); the queue compiles and submits one at a time, so wildcards and seeds are fresh per run. Interrupt stops the running image, Cancel also clears the queue and "generate forever". A validation error from ComfyUI is rewritten with the workflow's labels ("… isn't in your checkpoints folder") and stops the rest of that batch. Scripts and the batch runner add **groups** of runs (`addRuns`, each with its own values, seed and input files uploaded right before it runs), cancel them as a group, and follow them through the queue's `started` / `finished` events (ADR-0014). Reordering comes later.
 
 ## Scope
 

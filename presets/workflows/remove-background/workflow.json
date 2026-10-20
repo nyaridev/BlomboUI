@@ -1,0 +1,74 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "remove-background",
+  "name": "Remove background",
+  "kind": "batch",
+  "family": "Utility",
+  "description": "Cuts out the subject and saves a transparent PNG for each image (InSPyReNet). Its model downloads on first use.",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "remove-background",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "image.input",
+      "node": "1",
+      "input": "image",
+      "type": "image",
+      "label": "Input image",
+      "hidden": false,
+      "role": "image.input"
+    },
+    {
+      "id": "n2.threshold",
+      "node": "2",
+      "input": "threshold",
+      "type": "float",
+      "label": "Background removal · Threshold",
+      "hidden": false,
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "group": "Background removal"
+    },
+    {
+      "id": "n2.torchscript_jit",
+      "node": "2",
+      "input": "torchscript_jit",
+      "type": "enum",
+      "label": "Background removal · Torchscript jit",
+      "hidden": false,
+      "options": [
+        "default",
+        "on"
+      ],
+      "group": "Background removal"
+    }
+  ],
+  "values": {
+    "image.input": "example.png",
+    "n2.threshold": 0.5,
+    "n2.torchscript_jit": "default"
+  },
+  "run": {
+    "seedMode": "fixed",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "packs": [
+    {
+      "name": "Inspyrenet Rembg",
+      "url": "https://github.com/john-mnz/ComfyUI-Inspyrenet-Rembg",
+      "nodes": [
+        "InspyrenetRembg",
+        "InspyrenetRembgAdvanced"
+      ],
+      "ref": "87ac452ef1182e8f35f59b04010158d74dcefd06"
+    }
+  ],
+  "createdAt": "2026-10-20T00:00:00.000Z",
+  "updatedAt": "2026-10-20T00:00:00.000Z"
+}

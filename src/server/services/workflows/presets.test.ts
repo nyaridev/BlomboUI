@@ -24,9 +24,17 @@ const config = createConfig(parseFlags(["--data", tmp]));
 describe("built-in presets", async () => {
   const presets = await listPresets(config.presetsDir);
 
-  it("ship at least SD 1.5, SDXL and Illustrious", () => {
+  it("ship SD 1.5, SDXL, Illustrious and the batch tools", () => {
     expect(presets.map((p) => p.manifest.id).sort()).toEqual(
-      expect.arrayContaining(["illustrious", "sd15", "sdxl"]),
+      expect.arrayContaining([
+        "illustrious",
+        "sd15",
+        "sdxl",
+        "remove-background",
+        "upscale",
+        "caption",
+        "dataset-prep",
+      ]),
     );
   });
 
@@ -38,17 +46,30 @@ describe("built-in presets", async () => {
         expect(preset.manifest.values).toEqual(rebuilt.values);
       });
 
-      it("has the roles the default Generate layout uses, and a canvas", () => {
+      it("has the roles its screen uses, and a canvas", () => {
         const roles = preset.manifest.bindings.map((b) => b.role);
-        for (const role of [
-          "prompt.positive",
-          "model.checkpoint",
-          "sampler.steps",
-          "sampler.seed",
-          "latent.width",
-        ])
-          expect(roles).toContain(role);
+        const needed =
+          preset.manifest.kind === "batch"
+            ? ["image.input"]
+            : [
+                "prompt.positive",
+                "model.checkpoint",
+                "sampler.steps",
+                "sampler.seed",
+                "latent.width",
+              ];
+        for (const role of needed) expect(roles).toContain(role);
         expect(preset.graph).toBeTruthy();
+      });
+
+      it("lists a pinned pack for every custom node it uses", () => {
+        const known = new Set(Object.keys(info));
+        const packed = new Set(preset.manifest.packs.flatMap((p) => p.nodes));
+        for (const node of Object.values(preset.prompt)) {
+          expect(known.has(node.class_type) || packed.has(node.class_type)).toBe(true);
+          if (packed.has(node.class_type)) expect(known.has(node.class_type)).toBe(true);
+        }
+        for (const pack of preset.manifest.packs) expect(pack.ref).toMatch(/^[0-9a-f]{40}$/);
       });
 
       it("compiles", () => {

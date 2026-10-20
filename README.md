@@ -40,15 +40,16 @@ On first launch you'll see the **profile screen**. Create a profile: give it a n
 **All phases are built** and merged into `main` (Phases 0–5 plus a final pass of review fixes,
 performance, accessibility and contrast work). It's an alpha: everything has tests (`npm run check`:
 typecheck, lint, 433 tests, rules sync) and was clicked through against a **fake ComfyUI and a fake
-Civitai**, but most of it hasn't met a real ComfyUI yet.
+Civitai**; on 2026-10-21 the parts that need a real ComfyUI were run on one too (see below).
 
 | | Verified |
 |---|---|
-| Generate on a **real** ComfyUI (SD 1.5, live progress, previews, outputs) | Yes, in Phase 1 |
+| Generate on a **real** ComfyUI (SD 1.5, live progress, previews, outputs) | Yes, in Phase 1 and again in the real-ComfyUI checks (ComfyUI 0.42.1, 26.6 it/s on an RTX 5080) |
 | Everything else (stages, scripts, batch tools, bridge, gallery, models, Civitai, downloads, history, scopes, palette, shortcuts, tour, export) | Against the fake ComfyUI / fake Civitai, in the browser (Blombo and Light themes) and in tests |
 | Gallery with 20,000 images, startup bundle | Measured, see [`docs/performance.md`](docs/performance.md): first index 5.2 s, search about 10 ms, smooth virtual scrolling, first screen 236 KiB gzip |
 | Keyboard and screen-reader basics | Every main view: no unnamed controls, visible focus on every stop, modal layers keep focus; text contrast tested for every theme and accent |
-| Stages and batch tools on real models and real custom node packs; blombo-bridge in the real ComfyUI frontend; installing a managed ComfyUI slot | **Not yet.** They need multi-GB downloads; the plan, with every file listed, is in [`docs/review/real-comfyui-checks.md`](docs/review/real-comfyui-checks.md) and waits for an OK |
+| Installing a managed ComfyUI slot; Hires fix, ADetailer and ControlNet with their custom node packs installed from the notices; the upscale, caption, dataset-prep and remove-background batches; blombo-bridge in the real ComfyUI frontend | Yes, on real models in a throwaway folder: all six checks passed, nothing written outside BlomboUI's folder except four empty uv lock files in %TEMP%. Results: [`docs/review/real-comfyui-checks.md`](docs/review/real-comfyui-checks.md) |
+| Civitai with a real account and key, SDXL / Illustrious and diffusion-model (Flux-style) workflows, the external-ComfyUI bridge install | Not yet (fake Civitai and fixture tests only) |
 | The Tauri desktop window | Built in Phase 0, not re-checked in the final pass |
 
 ### Running it
@@ -154,7 +155,7 @@ npm run dev
 | [`docs/workflows.md`](docs/workflows.md) | Workflow packages, roles, import, stages, compile, export |
 | [`docs/adr/`](docs/adr/) | Why the big decisions were made (0001–0015) |
 | [`docs/performance.md`](docs/performance.md) | Measured numbers and how to repeat them |
-| [`docs/review/real-comfyui-checks.md`](docs/review/real-comfyui-checks.md) | What still needs a real ComfyUI and what it would download |
+| [`docs/review/real-comfyui-checks.md`](docs/review/real-comfyui-checks.md) | The checks on a real ComfyUI: results, what they downloaded, findings |
 | [`docs/review/features.html`](docs/review/features.html) | Feature inventory and review decisions |
 
 ## Roadmap
@@ -169,7 +170,7 @@ npm run dev
 | **4b · Bridge** | ComfyUI bridge extension, `.blombo` export and import, scripts, batch utilities | done |
 | **5 · Polish** | Settings stats, Help and prompt guide, Scopes, command palette, notifications, shortcuts, generation history, snippets, gallery ratings / tags / collections, tour, profile export | done |
 | **Final pass** | Phases merged into `main`, whole-codebase review and fixes (API only for Blombo's own pages, safer saved data, queue and profile-switch fixes), 20k-image gallery and startup bundle, keyboard and contrast pass | done |
-| **Real-ComfyUI checks** | Stages and batch tools on real models and packs, the bridge in the real frontend, the slot installer ([plan](docs/review/real-comfyui-checks.md)) | waiting for an OK |
+| **Real-ComfyUI checks** | Stages and batch tools on real models and packs, the bridge in the real frontend, the slot installer ([results](docs/review/real-comfyui-checks.md)) | done |
 
 ## Requirements
 

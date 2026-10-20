@@ -1,6 +1,6 @@
 # ADR-0009: blombo-bridge — a ComfyUI extension for round-trip editing
 
-**Status:** Accepted (built in Phase 4b, on `main`; checked against the fake ComfyUI page, not a real ComfyUI frontend yet)
+**Status:** Accepted (built in Phase 4b, on `main`; checked in the real ComfyUI frontend 1.55.18 on a managed slot on 2026-10-21; Install bridge for an external ComfyUI only in tests)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

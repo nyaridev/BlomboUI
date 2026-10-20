@@ -1,9 +1,45 @@
-# Real-ComfyUI checks: plan (waiting for the owner's OK)
+# Real-ComfyUI checks
 
-Everything in BlomboUI has been checked against the fake ComfyUI and the fake Civitai. Only Phase 1
-generated real images (SD 1.5 through the owner's ComfyUI). These checks need real downloads and a
-real ComfyUI, so **nothing below has been run**. Sizes were read from the sources on 2026-10-20
-(HEAD requests only, nothing downloaded).
+Approved by the owner and run on 2026-10-21 (00:03–00:20) with option A below: Blombo's own managed
+slot in `runtime/check-real/`, production build of `main` (53ab7cb) on 127.0.0.1:4391, an RTX 5080
+(driver 617.42). **All six checks passed.** The folder was deleted afterwards.
+
+## Results
+
+| # | Check | Result |
+|---|---|---|
+| — | Slot install (Settings → ComfyUI → Install, CUDA) | Passed in about 2 min: uv, Python 3.12.15, ComfyUI **0.42.1**, PyTorch CUDA 12.8, requirements, verify. ComfyUI started on 8188 (localhost) with blombo-bridge loaded. Models through Models → Manager's queue (face_yolov8m, SAM ViT-B, ControlNet canny, 4x-UltraSharp) all finished; the SD 1.5 checkpoint by direct download |
+| 1 | Generate, Hires fix, upscale batch | Passed. First image 20 s with the model load, then **26.6 it/s** (25 steps in under a second). Hires fix 512 → 768 with 4x-UltraSharp, progress split "Sampling" / "Hires fix". Images land with `prompt` + `blombo` metadata and appear in the gallery as they're written. Upscale batch 512 → 1024. With the output folder = the input folder and Skip existing off, `Photo.PNG` stayed byte-identical and the result went to `Photo-out.png` (the case fix from the final pass) |
+| 2 | ADetailer | Passed. The notice named Impact Pack and Subpack with their pinned refs; Install took about a minute (including `sam2` from Git), restarted ComfyUI and the check cleared. A portrait: 1 face found, cropped region upscaled 2.8× and redrawn. (A full-body shot with a tiny face: "no detections", image unchanged, as expected) |
+| 3 | ControlNet | Passed. controlnet_aux installed from the notice (about 45 s, 47 preprocessors). A gallery image as the control image, Canny: the result follows its pose and layout exactly; "Show map" returned the real Canny map |
+| 4 | Caption, dataset prep | Passed. WD14 installed from the notice; the model (311 MB) was fetched into the pack's folder on first run. Sidecar `.txt` captions with the prefix (`mytrigger, 1girl, solo, smile, …`); dataset prep wrote images and captions |
+| 5 | Remove background | Passed. Inspyrenet installed; its 351 MB weights went to `runtime/cache/comfy/transparent-background/` (the final pass's cache redirect at work). RGBA PNGs, background transparent (76% of the garden shot), inputs unchanged |
+| 6 | blombo-bridge in the real frontend (1.55.18) | Passed. Edit in ComfyUI opened the workflow with Blombo's values and the bar ("Editing SD 1.5 from Blombo"), the token left the address. Steps changed + a Primitive node on the seed → Save to Blombo: "1 changed in ComfyUI". Then seed 555 set in Blombo, reopened: the Primitive showed 555 (the final-pass fix); a steps-only edit saved with the seed kept at 555. Save as copy and Send to Blombo (Workflow menu command) both added workflows. Generating the round-tripped workflow used seed 555. A fetch from ComfyUI's page to a non-bridge `/api` route was refused (403) |
+
+## Outside BlomboUI's folder
+
+Directory snapshots of `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%` (and `.cache`) and every folder
+under `B:\AI\Diffusion`, before and after: nothing from the check. No Hugging Face, torch, Ultralytics,
+uv, pip or transparent-background folders appeared or changed (they went to `runtime/cache/comfy/`), and
+nothing under `B:\` changed. The only leak: uv left four empty `uv-setuptools-*.lock` files in
+`%TEMP%` while building packs from source (deleted). Fix handed to the follow-up session: the slot's
+processes get `TMP`/`TEMP` inside `runtime/cache/comfy/tmp`.
+
+## Findings
+
+- **Disk:** a CUDA slot with all five packs takes 13.6 GB: the venv 6.3 GB **plus uv's cache 7.3 GB**,
+  because installs copy (`UV_LINK_MODE=copy`) and the cache is kept for later installs. Worth deciding:
+  prune the cache after an install, or link instead of copying when the cache and the slot share a
+  drive. Models were 3.2 GB; total 17.4 GB for the run.
+- Model names in subfolders come back from ComfyUI with Windows separators
+  (`1.5\control_v11p_sd15_canny_fp16.safetensors`); stages pass them through as ComfyUI listed
+  them, which worked.
+- Images have no `workflow` (UI graph) chunk, only `prompt` and `blombo`, as in Phase 1: File Info
+  can rebuild a workflow from the prompt graph, not reopen the canvas layout.
+
+## The plan as approved
+
+Sizes below were read from the sources on 2026-10-20 (HEAD requests only).
 
 ## What changed since Phase 1
 

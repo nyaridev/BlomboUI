@@ -6,7 +6,10 @@ import { MAIN_VIEWS, MENU_VIEWS, type ViewId } from "@shared/constants";
 import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { ProfileScreen } from "../features/profiles/ProfileScreen";
-import { Shell } from "./Shell";
+import { loadShell } from "./loadShell";
+
+// Its own chunk: the profile screen paints without Generate, Gallery and the prompt editor.
+const Shell = lazy(() => loadShell().then((m) => ({ default: m.Shell })));
 
 const DesignLab = lazy(() =>
   import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })),
@@ -36,7 +39,11 @@ const labRoute = createRoute({
 const profileRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/p/$profileId",
-  component: Shell,
+  component: () => (
+    <Suspense fallback={<div className="h-full bg-bg" />}>
+      <Shell />
+    </Suspense>
+  ),
 });
 const profileIndexRoute = createRoute({
   getParentRoute: () => profileRoute,

@@ -15,6 +15,7 @@ import { randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { StatementSync } from "node:sqlite";
 import sharp from "sharp";
 import {
   type Collection,
@@ -92,6 +93,8 @@ interface Open {
   profileId: string;
   pdb: ProfileDb;
   thumbs: ThumbCache;
+  /** Prepared statements for the hot paths (indexing), per connection. */
+  statements: Map<string, StatementSync>;
 }
 
 const idle = (): SyncState => ({
@@ -150,7 +153,7 @@ export class GalleryService {
     const thumbs = new ThumbCache(
       path.join(this.deps.runtimeDir, "cache", profileId, "thumbs", "gallery"),
     );
-    this.current = { profileId, pdb, thumbs };
+    this.current = { profileId, pdb, thumbs, statements: new Map() };
     this.syncState = idle();
     return this.current;
   }
@@ -284,43 +287,43 @@ export class GalleryService {
     this.setSync({ total: this.syncState.total + files.length }, true);
     let added = 0;
     const seen = new Set<string>();
-    let pending: Array<{ rel: string; abs: string; stat: Stats }> = [];
 
-    const flush = async () => {
-      const parsed: Array<{ rel: string; stat: Stats; row: IndexRow }> = [];
-      for (const f of pending) {
-        try {
-          parsed.push({ ...f, row: await readForIndex(f.abs, f.stat) });
-        } catch {
-          // Unreadable or not really an image: leave it out of the index.
-        }
-      }
-      if (this.current !== open || signal.aborted) return;
-      transaction(db, () => {
-        for (const p of parsed) this.upsert(open, lib.id, p.rel, p.stat, p.row);
-      });
-      added += parsed.length;
-      pending = [];
-    };
-
-    for (const abs of files) {
+    // A batch at a time: stats and header reads run in parallel (indexing is I/O-bound) and
+    // each batch is written in one transaction.
+    for (let i = 0; i < files.length; i += BATCH) {
       if (signal.aborted || this.current !== open) return { added, removed: 0 };
-      const rel = toRel(path.relative(lib.path, abs));
-      seen.add(rel);
-      let stat: Stats;
-      try {
-        stat = await fs.stat(abs);
-      } catch {
-        continue;
+      const batch = files.slice(i, i + BATCH);
+      const stats = await Promise.all(batch.map((abs) => fs.stat(abs).catch(() => null)));
+      const changed: Array<{ rel: string; abs: string; stat: Stats }> = [];
+      batch.forEach((abs, j) => {
+        const rel = toRel(path.relative(lib.path, abs));
+        seen.add(rel);
+        const stat = stats[j];
+        if (!stat) return;
+        const prev = known.get(rel);
+        if (!prev || prev.size !== stat.size || Math.abs(prev.mtime - stat.mtimeMs) > 1)
+          changed.push({ rel, abs, stat });
+      });
+      if (changed.length) {
+        const parsed = await Promise.all(
+          changed.map((f) =>
+            readForIndex(f.abs, f.stat).then(
+              (row) => ({ ...f, row }),
+              // Unreadable or not really an image: leave it out of the index.
+              () => null,
+            ),
+          ),
+        );
+        if (signal.aborted || this.current !== open) return { added, removed: 0 };
+        const rows = parsed.filter((p) => p !== null);
+        transaction(db, () => {
+          for (const p of rows) this.upsert(open, lib.id, p.rel, p.stat, p.row);
+        });
+        added += rows.length;
       }
-      const prev = known.get(rel);
-      if (!prev || prev.size !== stat.size || Math.abs(prev.mtime - stat.mtimeMs) > 1)
-        pending.push({ rel, abs, stat });
-      if (pending.length >= BATCH) await flush();
-      this.setSync({ done: this.syncState.done + 1 });
-      if (this.syncState.done % 500 === 0) await yieldToLoop();
+      this.setSync({ done: this.syncState.done + batch.length });
+      await yieldToLoop();
     }
-    await flush();
 
     // Rows for files that are gone (the folder was readable, so absence is real).
     const gone = [...known.keys()].filter((rel) => !seen.has(rel));
@@ -335,55 +338,67 @@ export class GalleryService {
     return { added, removed: gone.length };
   }
 
+  /** A prepared statement, made once per connection (indexing runs these thousands of times). */
+  private stmt(open: Open, sql: string): StatementSync {
+    let statement = open.statements.get(sql);
+    if (!statement) {
+      statement = open.pdb.db.prepare(sql);
+      open.statements.set(sql, statement);
+    }
+    return statement;
+  }
+
   private upsert(open: Open, library: string, rel: string, stat: Stats, row: IndexRow): number {
-    const { db, fts } = open.pdb;
+    const { fts } = open.pdb;
     const name = rel.split("/").pop() ?? rel;
     const folder = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/")) : "";
     const search = searchText(rel, row.summary).toLowerCase();
-    const result = db
-      .prepare(
-        `INSERT INTO images (library, path, name, folder, size, mtime, width, height, source, model,
-                             summary, settings, has_workflow, search, indexed_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (library, path) DO UPDATE SET
-           name = excluded.name, folder = excluded.folder, size = excluded.size,
-           mtime = excluded.mtime, width = excluded.width, height = excluded.height,
-           source = excluded.source, model = excluded.model, summary = excluded.summary,
-           settings = excluded.settings, has_workflow = excluded.has_workflow,
-           search = excluded.search, indexed_at = excluded.indexed_at
-         RETURNING id`,
-      )
-      .get(
-        library,
-        rel,
-        name,
-        folder,
-        stat.size,
-        stat.mtimeMs,
-        row.width,
-        row.height,
-        row.summary.source,
-        row.summary.model,
-        JSON.stringify(row.summary),
-        JSON.stringify(row.settings),
-        row.hasWorkflow ? 1 : 0,
-        search,
-        Date.now(),
-      ) as { id: number };
+    const result = this.stmt(
+      open,
+      `INSERT INTO images (library, path, name, folder, size, mtime, width, height, source, model,
+                           summary, settings, has_workflow, search, indexed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT (library, path) DO UPDATE SET
+         name = excluded.name, folder = excluded.folder, size = excluded.size,
+         mtime = excluded.mtime, width = excluded.width, height = excluded.height,
+         source = excluded.source, model = excluded.model, summary = excluded.summary,
+         settings = excluded.settings, has_workflow = excluded.has_workflow,
+         search = excluded.search, indexed_at = excluded.indexed_at
+       RETURNING id`,
+    ).get(
+      library,
+      rel,
+      name,
+      folder,
+      stat.size,
+      stat.mtimeMs,
+      row.width,
+      row.height,
+      row.summary.source,
+      row.summary.model,
+      JSON.stringify(row.summary),
+      JSON.stringify(row.settings),
+      row.hasWorkflow ? 1 : 0,
+      search,
+      Date.now(),
+    ) as { id: number };
     const id = Number(result.id);
-    db.prepare("DELETE FROM image_loras WHERE image_id = ?").run(id);
-    const lora = db.prepare("INSERT INTO image_loras (image_id, name, strength) VALUES (?, ?, ?)");
+    this.stmt(open, "DELETE FROM image_loras WHERE image_id = ?").run(id);
+    const lora = this.stmt(
+      open,
+      "INSERT INTO image_loras (image_id, name, strength) VALUES (?, ?, ?)",
+    );
     for (const l of row.summary.loras) lora.run(id, l.name, l.strength);
     if (fts) {
-      db.prepare("DELETE FROM images_fts WHERE rowid = ?").run(id);
-      db.prepare("INSERT INTO images_fts (rowid, search) VALUES (?, ?)").run(id, search);
+      this.stmt(open, "DELETE FROM images_fts WHERE rowid = ?").run(id);
+      this.stmt(open, "INSERT INTO images_fts (rowid, search) VALUES (?, ?)").run(id, search);
     }
     return id;
   }
 
   private deleteRow(open: Open, id: number): void {
-    open.pdb.db.prepare("DELETE FROM images WHERE id = ?").run(id);
-    if (open.pdb.fts) open.pdb.db.prepare("DELETE FROM images_fts WHERE rowid = ?").run(id);
+    this.stmt(open, "DELETE FROM images WHERE id = ?").run(id);
+    if (open.pdb.fts) this.stmt(open, "DELETE FROM images_fts WHERE rowid = ?").run(id);
   }
 
   /**

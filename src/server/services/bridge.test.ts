@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { Hono } from "hono";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createClient, readParams, toGraphs } from "../../comfy-bridge/web/blombo-core.js";
+import { createClient, pickApi, readParams, toGraphs } from "../../comfy-bridge/web/blombo-core.js";
 import type { ComfyStatus } from "../../shared/comfy.ts";
 import type { ServerMessage } from "../../shared/live.ts";
 import { type ApiPrompt, ObjectInfo } from "../../shared/workflow/graph.ts";
@@ -206,5 +206,15 @@ describe("CORS on /api/bridge", () => {
       "http://127.0.0.1:8188",
       "http://localhost:8188",
     ]);
+  });
+});
+
+describe("bridge: which Blombo it talks to", () => {
+  it("believes an address in the link only when it's on this computer", () => {
+    expect(pickApi("http://127.0.0.1:4381", "http://127.0.0.1:4380")).toBe("http://127.0.0.1:4381");
+    expect(pickApi("http://localhost:4380", null)).toBe("http://localhost:4380");
+    expect(pickApi("https://evil.example", "http://127.0.0.1:4380")).toBe("http://127.0.0.1:4380");
+    expect(pickApi("https://evil.example", null)).toBeNull();
+    expect(pickApi(null, "http://127.0.0.1:4380")).toBe("http://127.0.0.1:4380");
   });
 });

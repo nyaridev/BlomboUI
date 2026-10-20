@@ -30,7 +30,7 @@ import type { LiveTopic, ServerMessage } from "../../shared/live.ts";
 import { isApiLink } from "../../shared/workflow/graph.ts";
 import { bindingFor } from "../../shared/workflow/manifest.ts";
 import type { StageProblem } from "../../shared/workflow/stages.ts";
-import { exists, movePath, writeFileAtomic, writeFileIfAbsent } from "../lib/fsx.ts";
+import { exists, movePath, resolveInside, writeFileAtomic, writeFileIfAbsent } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { JobQueue } from "./jobs.ts";
@@ -46,6 +46,11 @@ export interface BatchDeps {
   supervisor: Pick<ComfySupervisor, "api" | "objectInfo" | "status">;
   publish: (topic: LiveTopic | null, msg: ServerMessage) => void;
   runtimeDir: string;
+  /**
+   * Repositories the custom node installer trusts (Blombo's own packages). A workflow from
+   * elsewhere (an imported bundle) may list others; those are installed inside ComfyUI.
+   */
+  trustedPacks?: () => Promise<string[]>;
 }
 
 interface Source {
@@ -168,8 +173,12 @@ export class BatchService {
       const unknown = missing.filter((cls) => !packs.some((p) => p.nodes.includes(cls)));
       const names = [...packs.map((p) => p.name), ...unknown.map((c) => `"${c}"`)];
       const managed = this.deps.supervisor.status().mode === "managed";
+      const trusted = new Set((await this.deps.trustedPacks?.()) ?? []);
       const how =
-        managed && packs.length && !unknown.length && packs.every((p) => p.ref)
+        managed &&
+        packs.length &&
+        !unknown.length &&
+        packs.every((p) => p.ref && trusted.has(p.url))
           ? INSTALL_HERE
           : INSTALL_IN_COMFY;
       problems.push({
@@ -233,7 +242,7 @@ export class BatchService {
       sourceLabel = `${folder} (${files.length} image${files.length === 1 ? "" : "s"})`;
     } else {
       sources = body.source.files.map((f) => {
-        const name = f.name ?? path.basename(f.path);
+        const name = outputName(f.name) ?? outputName(f.path) ?? "image.png";
         return {
           file: path.resolve(f.path),
           stem: name.slice(0, name.length - path.extname(name).length),
@@ -288,7 +297,7 @@ export class BatchService {
       if (!(await exists(src.file))) {
         item.state = "error";
         item.error = "The file isn't there anymore.";
-      } else if (body.skipExisting && target !== src.file && (await exists(target))) {
+      } else if (body.skipExisting && !samePath(target, src.file) && (await exists(target))) {
         item.state = "skipped";
         item.outputs = [path.relative(output, target)];
       } else todo.push(index);
@@ -411,17 +420,15 @@ export class BatchService {
     target: string,
     data: Uint8Array | string,
   ): Promise<string> {
-    let file = target;
-    if (path.resolve(file) === path.resolve(src.file)) {
+    // Results stay inside the output folder whatever the input was called.
+    let file = resolveInside(a.output, path.relative(a.output, target));
+    if (samePath(file, src.file)) {
       const ext = path.extname(file);
       file = `${file.slice(0, file.length - ext.length)}-out${ext}`;
     }
     if (await exists(file)) {
-      const trash = path.join(
-        this.deps.profiles.dir(a.profileId),
-        "trash",
-        "batch",
-        a.run.id,
+      const trash = resolveInside(
+        path.join(this.deps.profiles.dir(a.profileId), "trash", "batch", a.run.id),
         path.relative(a.output, file),
       );
       await fs.mkdir(path.dirname(trash), { recursive: true });
@@ -446,4 +453,25 @@ export class BatchService {
     }
     return written;
   }
+}
+
+/** The same file? Windows paths ignore letter case ("Photo.PNG" is "photo.png"). */
+export function samePath(a: string, b: string): boolean {
+  const x = path.resolve(a);
+  const y = path.resolve(b);
+  return process.platform === "win32" ? x.toLowerCase() === y.toLowerCase() : x === y;
+}
+
+/**
+ * A file name to name outputs after: only the last part of what was sent (no folders, no
+ * "..", no characters Windows can't use), or null when nothing usable is left.
+ */
+export function outputName(raw: string | undefined): string | null {
+  if (!raw) return null;
+  const last = raw.split(/[\\/]/).pop() ?? "";
+  const clean = [...last]
+    .map((ch) => (ch.charCodeAt(0) < 32 || '<>:"|?*'.includes(ch) ? "_" : ch))
+    .join("")
+    .replace(/[. ]+$/, "");
+  return clean && clean !== "." && clean !== ".." ? clean : null;
 }

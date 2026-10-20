@@ -273,14 +273,17 @@ export function createServices(config: ServerConfig): Services {
     }
   });
 
+  jobs.holdComfy = () => installer.running || nodePacks.running;
+
+  // Packs Blombo's own packages list: stages and the built-in batch workflows.
+  const knownPacks = async () => [
+    ...(await stages.packages()).flatMap((s) => s.pkg.packs),
+    ...(await listPresets(config.presetsDir)).flatMap((p) => p.manifest.packs),
+  ];
   const nodePacks = new NodePackInstaller({
     runtimeDir: config.runtimeDir,
     ops: config.fakeComfy ? fakeInstallOps() : undefined,
-    // Packs Blombo's own packages list: stages and the built-in batch workflows.
-    known: async () => [
-      ...(await stages.packages()).flatMap((s) => s.pkg.packs),
-      ...(await listPresets(config.presetsDir)).flatMap((p) => p.manifest.packs),
-    ],
+    known: () => knownPacks(),
     blocked: () => {
       if (installer.running) return "ComfyUI is being installed. Wait for it to finish.";
       const busy = jobs.snapshot().jobs.some((j) => j.state === "running" || j.state === "queued");
@@ -339,6 +342,7 @@ export function createServices(config: ServerConfig): Services {
     supervisor,
     publish: (topic, msg) => bus.publish(topic, msg),
     runtimeDir: config.runtimeDir,
+    trustedPacks: async () => (await knownPacks()).map((p) => p.url),
   });
 
   supervisor.on("status", (status) => {

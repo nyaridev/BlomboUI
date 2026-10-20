@@ -265,15 +265,34 @@ export function apiToUi(prompt: ApiPrompt, info: ObjectInfo): Record<string, unk
 /**
  * Write values into a UI graph's widgets, the way uiToApi reads them (same widget order, the
  * extra "control after generate" and upload widgets skipped). Edit in ComfyUI uses it so the
- * canvas shows the workflow's current values, not the ones it was imported with. Inputs that
- * are linked, or nodes the graph doesn't have, are left alone.
+ * canvas shows the workflow's current values, not the ones it was imported with. An input fed
+ * by a primitive node (through reroutes) gets the value on that primitive, which is where
+ * uiToApi and ComfyUI read it; other linked inputs and nodes the graph doesn't have are left
+ * alone.
  */
 export function applyWidgetValues(
   graph: unknown,
   edits: Array<{ node: string; input: string; value: unknown }>,
   info: ObjectInfo,
 ): unknown {
-  const out = structuredClone(graph) as { nodes?: UiNode[] };
+  const out = structuredClone(graph) as { nodes?: UiNode[]; links?: UiGraph["links"] };
+  const nodes = new Map((out.nodes ?? []).map((n) => [String(n.id), n]));
+  const origins = new Map<number, string>();
+  for (const l of out.links ?? []) {
+    if (Array.isArray(l)) origins.set(l[0], String(l[1]));
+    else origins.set(l.id, String(l.origin_id));
+  }
+  /** The primitive node a link comes from (through reroutes), or null. */
+  const primitiveOf = (linkId: number): UiNode | null => {
+    for (let id: number | null | undefined = linkId, depth = 0; id != null && depth < 32; depth++) {
+      const src = nodes.get(origins.get(id) ?? "");
+      if (!src) return null;
+      if (src.type === "PrimitiveNode") return src;
+      if (src.type !== "Reroute") return null;
+      id = src.inputs?.[0]?.link;
+    }
+    return null;
+  };
   const byNode = new Map<string, Array<{ input: string; value: unknown }>>();
   for (const e of edits) byNode.set(e.node, [...(byNode.get(e.node) ?? []), e]);
   for (const node of out.nodes ?? []) {
@@ -291,7 +310,12 @@ export function applyWidgetValues(
       const edit = mine.find((e) => e.input === inp.name);
       if (!edit || edit.value === undefined) continue;
       const slot = node.inputs?.find((s) => s.name === inp.name || s.widget?.name === inp.name);
-      if (slot?.link !== null && slot?.link !== undefined) continue;
+      if (slot?.link !== null && slot?.link !== undefined) {
+        const primitive = primitiveOf(slot.link);
+        if (primitive && Array.isArray(primitive.widgets_values) && primitive.widgets_values.length)
+          primitive.widgets_values[0] = edit.value;
+        continue;
+      }
       if (Array.isArray(wv)) {
         if (at < wv.length) wv[at] = edit.value;
       } else if (wv && typeof wv === "object")

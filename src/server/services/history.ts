@@ -136,7 +136,8 @@ export class HistoryService {
 
   /** Log a run that left the queue. Runs cancelled before they started aren't worth a row. */
   record(job: Job, context: RunContext | null): void {
-    if (!this.deps.profiles.active || !context) return;
+    // A run that ends after a profile switch belongs to the profile it was queued in.
+    if (!context?.profileId || context.profileId !== this.deps.profiles.active) return;
     if (job.state === "cancelled" && !job.startedAt) return;
     if (job.state === "queued" || job.state === "running") return;
     const uses = usesOf(context.manifest, context.values);

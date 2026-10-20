@@ -42,6 +42,17 @@ function enqueue<T>(file: string, task: () => Promise<T>): Promise<T> {
   return next;
 }
 
+/** Resolves once the writes queued for `file` so far are done (whatever their outcome). */
+export function writesSettled(file: string): Promise<void> {
+  const pending = queues.get(path.resolve(file).toLowerCase());
+  return pending
+    ? pending.then(
+        () => undefined,
+        () => undefined,
+      )
+    : Promise.resolve();
+}
+
 async function renameWithRetry(from: string, to: string): Promise<void> {
   for (let attempt = 0; ; attempt++) {
     try {

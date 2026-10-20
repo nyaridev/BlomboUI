@@ -37,6 +37,8 @@ export interface FakeComfy {
   uploads: string[];
   /** Make the next prompt fail validation with this node error. */
   failNext: (nodeErrors: unknown) => void;
+  /** Drop every WebSocket (a network hiccup); prompts keep running. */
+  dropSockets: () => void;
   close: () => Promise<void>;
 }
 
@@ -188,6 +190,8 @@ export function startFakeComfy(
 ): Promise<FakeComfy> {
   let counter = 0;
   const sockets = new Map<string, WebSocket>();
+  /** Prompts being run (for GET /queue). */
+  const active = new Set<string>();
   const prompts: FakeComfy["prompts"] = [];
   const uploads: string[] = [];
   const history: Record<string, unknown> = {};
@@ -215,6 +219,7 @@ export function startFakeComfy(
   ) => {
     const wait = () => new Promise((r) => setTimeout(r, stepDelayMs));
     interrupted = false;
+    active.add(promptId);
     send(clientId, "execution_start", { prompt_id: promptId });
     // Each sampling node reports its own steps, in order (stages add their own passes).
     const passes = samplingNodes(job.prompt);
@@ -224,6 +229,7 @@ export function startFakeComfy(
       for (let i = 1; i <= pass.steps; i++) {
         await wait();
         if (interrupted) {
+          active.delete(promptId);
           send(clientId, "execution_interrupted", { prompt_id: promptId, node_id: pass.node });
           return;
         }
@@ -291,6 +297,7 @@ export function startFakeComfy(
     }
     if (saveId || Object.keys(outputs).length === 0) outputs[saveId ?? "9"] = { images };
     history[promptId] = { outputs, status: { status_str: "success", completed: true } };
+    active.delete(promptId);
     for (const [node, output] of Object.entries(outputs))
       send(clientId, "executed", { node, output, prompt_id: promptId });
     send(clientId, "execution_success", { prompt_id: promptId });
@@ -370,6 +377,11 @@ export function startFakeComfy(
         uploads.push(subfolder ? `${subfolder}/${name}` : name);
         return json(res, 200, { name, subfolder, type: "input" });
       }
+      if (p === "/queue" && req.method === "GET")
+        return json(res, 200, {
+          queue_running: [...active].map((id, i) => [i, id, {}, {}, []]),
+          queue_pending: [],
+        });
       if (p === "/interrupt") {
         interrupted = true;
         return json(res, 200, {});
@@ -439,6 +451,9 @@ export function startFakeComfy(
         uploads,
         failNext: (e) => {
           failure = e;
+        },
+        dropSockets: () => {
+          for (const ws of wss.clients) ws.terminate();
         },
         close: () =>
           new Promise<void>((done) => {

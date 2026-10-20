@@ -258,6 +258,18 @@ export class ComfyClient extends Emitter<ClientEvents> {
     return this.request<unknown>("POST", "/queue", { delete: promptIds });
   }
 
+  /** Ids of the prompts ComfyUI is running or has waiting. */
+  async queue(): Promise<Set<string>> {
+    const body = await this.request<{ queue_running?: unknown[][]; queue_pending?: unknown[][] }>(
+      "GET",
+      "/queue",
+    );
+    const ids = new Set<string>();
+    for (const entry of [...(body.queue_running ?? []), ...(body.queue_pending ?? [])])
+      if (Array.isArray(entry) && typeof entry[1] === "string") ids.add(entry[1]);
+    return ids;
+  }
+
   history(promptId: string) {
     return this.request<Record<string, ComfyHistoryEntry>>(
       "GET",

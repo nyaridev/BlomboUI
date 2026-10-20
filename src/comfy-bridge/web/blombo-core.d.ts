@@ -13,6 +13,7 @@ type FetchFn = (url: string, init?: RequestInit) => Promise<Response>;
 export function readParams(search: string): BridgeParams | null;
 export function cleanUrl(href: string): string;
 export function configuredApi(fetchFn: FetchFn, baseUrl: string): Promise<string | null>;
+export function pickApi(fromUrl: string | null, configured: string | null): string | null;
 export function createClient(
   api: string,
   fetchFn: FetchFn,

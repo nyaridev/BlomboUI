@@ -7,6 +7,7 @@ import type { InstallState } from "../../../shared/install.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { ComfyInstaller, extractTopFolder, type InstallOps } from "./installer.ts";
 import { findSlot } from "./slots.ts";
+import { slotCacheEnv, uvEnv } from "./uv.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-install-"));
 afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
@@ -157,6 +158,19 @@ describe("ComfyUI installer", () => {
     const state = await stopped;
     expect(state.state).toBe("cancelled");
     expect(state.error).toMatch(/continue where it left off/);
+  });
+
+  it("keeps the slot's library caches and settings inside runtime/", () => {
+    const runtime = path.join(tmp, "rt");
+    const env = slotCacheEnv(runtime);
+    for (const key of [
+      "HF_HOME",
+      "TORCH_HOME",
+      "YOLO_CONFIG_DIR",
+      "TRANSPARENT_BACKGROUND_FILE_PATH",
+    ])
+      expect(path.relative(runtime, env[key] as string).startsWith("..")).toBe(false);
+    expect(uvEnv(runtime).HF_HOME).toBe(env.HF_HOME);
   });
 
   it("strips terminal color codes", () => {

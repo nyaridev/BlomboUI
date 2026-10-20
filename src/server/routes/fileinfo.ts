@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { HttpError } from "../lib/http.ts";
+import { HttpError, readBody } from "../lib/http.ts";
 import { inspectBytes, inspectPath } from "../services/fileinfo.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
 import type { ModelService } from "../services/models.ts";
@@ -11,10 +11,12 @@ export function fileInfoRoutes(gallery: GalleryService, models: ModelService) {
   const r = new Hono();
 
   r.post("/", async (c) => {
-    const data = new Uint8Array(await c.req.arrayBuffer());
+    const data = await readBody(
+      c,
+      MAX_UPLOAD,
+      "That file is too large to inspect here (200 MB max).",
+    );
     if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
-    if (data.byteLength > MAX_UPLOAD)
-      throw new HttpError(413, "That file is too large to inspect here (200 MB max).", "too_large");
     return c.json(await inspectBytes(data, c.req.query("filename") ?? "file"));
   });
 

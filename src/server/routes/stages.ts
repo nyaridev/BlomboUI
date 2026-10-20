@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { ComfyFileRef } from "../../shared/comfy.ts";
 import { CheckStagesBody, GalleryImageBody, PreviewMapBody } from "../../shared/workflow/stages.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { StageService } from "../services/stages.ts";
 
@@ -16,7 +16,7 @@ export function stageRoutes(stages: StageService) {
 
   /** Raw image body; the original name comes from ?filename=. */
   r.post("/images", async (c) => {
-    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const bytes = await readBody(c, 64 * 1024 * 1024, "Pick an image under 64 MB.");
     return c.json(await stages.addImage(bytes, c.req.query("filename") ?? "image", "upload"), 201);
   });
 

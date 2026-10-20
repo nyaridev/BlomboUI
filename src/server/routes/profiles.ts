@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { OpenProfileResponse, ProfilesResponse } from "../../shared/api.ts";
 import { CreateProfileBody, ProfileId, UpdateProfileBody } from "../../shared/profile.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { sendFile } from "../lib/send.ts";
 import type { ProfileBackup } from "../services/backup.ts";
 import type { ProfileService } from "../services/profiles.ts";
@@ -52,11 +52,13 @@ export function profileRoutes(
 
   /** A new profile from an exported zip (the body is the zip). */
   r.post("/import", async (c) => {
-    const data = await c.req.arrayBuffer();
+    const data = await readBody(
+      c,
+      MAX_IMPORT_BYTES,
+      "That export is over 2 GB; Blombo can't import it.",
+    );
     if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
-    if (data.byteLength > MAX_IMPORT_BYTES)
-      throw new HttpError(413, "That export is over 2 GB; Blombo can't import it.", "too_large");
-    return c.json(await backup.import(new Uint8Array(data)), 201);
+    return c.json(await backup.import(data), 201);
   });
 
   r.get("/:id", async (c) => c.json(await profiles.get(id(c.req.param("id")))));
@@ -97,10 +99,8 @@ export function profileRoutes(
 
   r.put("/:id/avatar", async (c) => {
     const pid = id(c.req.param("id"));
-    const data = await c.req.arrayBuffer();
+    const data = await readBody(c, MAX_AVATAR_BYTES, "Images up to 12 MB work best for avatars.");
     if (data.byteLength === 0) throw new HttpError(400, "The image is empty.", "empty");
-    if (data.byteLength > MAX_AVATAR_BYTES)
-      throw new HttpError(413, "Images up to 12 MB work best for avatars.", "too_large");
     return c.json(await profiles.setAvatar(pid, data));
   });
 

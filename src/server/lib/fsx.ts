@@ -205,9 +205,12 @@ export async function freePath(target: string): Promise<string> {
 
 /** Resolve `rel` inside `root`, refusing anything that escapes it. */
 export function resolveInside(root: string, rel: string): string {
+  // ":" would name an NTFS alternate stream (or a drive), NUL truncates paths in some APIs.
+  if (/[\0:]/.test(rel))
+    throw new HttpError(400, "That name has characters a path can't use.", "bad_path");
   const target = path.resolve(root, rel);
   const relative = path.relative(root, target);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) {
     throw new HttpError(400, "Path is outside the allowed folder.", "path_outside");
   }
   return target;

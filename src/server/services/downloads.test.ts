@@ -135,6 +135,19 @@ describe("Civitai downloads", () => {
     expect(ok.blocked).toBeNull();
   });
 
+  it("queues a file once when it's asked for twice at the same moment", async () => {
+    const body = { source: "civitai", modelId: 1005, versionId: 10051 } as const;
+    const results = await Promise.allSettled([q().enqueue(body), q().enqueue(body)]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const refused = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect(refused.reason).toMatchObject({ code: "queued" });
+    const ok = results.find((r) => r.status === "fulfilled") as PromiseFulfilledResult<{
+      id: string;
+    }>;
+    await q().cancel(ok.value.id);
+    await finished(ok.value.id);
+  });
+
   it("cancels, removing the partial file", async () => {
     const d = await q().enqueue({ source: "civitai", modelId: 1005, versionId: 10052 });
     await q().cancel(d.id);

@@ -43,7 +43,7 @@ import {
 import type { LiveTopic, ServerMessage } from "../../../shared/live.ts";
 import { type LibraryEntry, slugId } from "../../../shared/settings.ts";
 import { type ProfileDb, type ProfileDbs, transaction } from "../../db/profileDb.ts";
-import { freePath, movePath } from "../../lib/fsx.ts";
+import { freePath, movePath, resolveInside } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import { readImageHead } from "../../lib/imagemeta.ts";
 import { ThumbCache } from "../../lib/thumbs.ts";
@@ -245,7 +245,14 @@ export class GalleryService {
     let added = 0;
     let removed = 0;
     try {
-      for (const lib of await this.libraries()) {
+      const libs = await this.libraries();
+      // Rows of libraries that were removed (e.g. while a sync was adding to them).
+      const known = new Set(libs.map((l) => l.id));
+      for (const { library } of open.pdb.db
+        .prepare("SELECT DISTINCT library FROM images")
+        .all() as Array<{ library: string }>)
+        if (!known.has(library)) this.dropLibraryRows(open, library);
+      for (const lib of libs) {
         if (signal.aborted) return;
         const r = await this.syncLibrary(open, lib, signal);
         added += r.added;
@@ -938,9 +945,20 @@ export class GalleryService {
     return row;
   }
 
+  /**
+   * The trashed file of a row: always `<trash id>/<name>` inside the trash folder. Anything else
+   * (a damaged or imported row) is refused, so restoring or emptying never touches more.
+   */
+  private trashFile(row: { file: string }): string {
+    const parts = row.file.split(/[\\/]/);
+    if (parts.length !== 2 || parts.some((p) => !p || p === "." || p === ".."))
+      throw new HttpError(409, "That trash entry is damaged; it can't be restored.", "bad_trash");
+    return resolveInside(this.trashDir(), parts.join("/"));
+  }
+
   async trashThumbFile(id: string): Promise<string> {
     const row = this.trashRow(id);
-    const abs = path.join(this.trashDir(), row.file);
+    const abs = this.trashFile(row);
     return this.need().thumbs.get(abs, `trash-${row.size}-${row.mtime}`, THUMB_MAX);
   }
 
@@ -959,7 +977,7 @@ export class GalleryService {
           "Set an outputs folder in Settings before restoring.",
           "no_outputs",
         );
-      const from = path.join(this.trashDir(), row.file);
+      const from = this.trashFile(row);
       const to = await freePath(fromRel(lib.path, row.path));
       await movePath(from, to);
       await fs.rm(path.dirname(from), { recursive: true, force: true }).catch(() => undefined);
@@ -996,9 +1014,13 @@ export class GalleryService {
     const { db } = this.need().pdb;
     const rows = (ids ?? this.trashList().map((t) => t.id)).map((id) => this.trashRow(id));
     for (const row of rows) {
-      const dir = path.dirname(path.join(this.trashDir(), row.file));
-      if (path.relative(this.trashDir(), dir).startsWith("..")) continue;
-      await fs.rm(dir, { recursive: true, force: true });
+      let dir: string | null = null;
+      try {
+        dir = path.dirname(this.trashFile(row));
+      } catch {
+        // A damaged row: drop it, delete nothing.
+      }
+      if (dir) await fs.rm(dir, { recursive: true, force: true });
       db.prepare("DELETE FROM trash WHERE id = ?").run(row.id);
     }
     if (rows.length) this.deps.publish("gallery", { t: "gallery.changed" });
@@ -1007,54 +1029,64 @@ export class GalleryService {
 
   /* ── libraries ───────────────────────────────────────────────────────── */
 
+  private dropLibraryRows(open: Open, library: string): void {
+    const { db } = open.pdb;
+    transaction(db, () => {
+      const ids = db.prepare("SELECT id FROM images WHERE library = ?").all(library) as Array<{
+        id: number;
+      }>;
+      for (const r of ids) this.deleteRow(open, r.id);
+    });
+  }
+
   async addLibrary(name: string, folder: string): Promise<LibraryEntry> {
     const { profileId } = this.need();
     const abs = path.resolve(folder.trim());
     if (!(await isDir(abs)))
       throw new HttpError(400, "That folder doesn't exist. Pick an existing folder.", "no_folder");
-    const libs = await this.libraries();
-    if (libs.some((l) => l.path && path.resolve(l.path).toLowerCase() === abs.toLowerCase()))
-      throw new HttpError(409, "That folder is already in the gallery.", "duplicate");
-    const settings = await this.deps.settings.get(profileId);
-    const taken = new Set(libs.map((l) => l.id));
-    const base = slugId(name, "library");
-    let id = base;
-    for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-    const entry: LibraryEntry = { id, name: name.trim(), path: abs };
-    await this.deps.settings.update(profileId, {
-      gallery: { libraries: [...settings.gallery.libraries, entry] },
+    const outputs = (await this.libraries())[0]?.path ?? "";
+    const made: { entry?: LibraryEntry } = {};
+    // Read-modify-write inside the settings queue, so two adds at once both stay.
+    await this.deps.settings.updateWith(profileId, (current) => {
+      const libs = current.gallery.libraries;
+      const same = (p: string) => Boolean(p) && path.resolve(p).toLowerCase() === abs.toLowerCase();
+      if (same(outputs) || libs.some((l) => same(l.path)))
+        throw new HttpError(409, "That folder is already in the gallery.", "duplicate");
+      const taken = new Set([OUTPUTS_LIBRARY, ...libs.map((l) => l.id)]);
+      const base = slugId(name, "library");
+      let id = base;
+      for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+      made.entry = { id, name: name.trim(), path: abs };
+      return { gallery: { libraries: [...libs, made.entry] } };
     });
     this.startSync();
-    return entry;
+    return made.entry as LibraryEntry;
   }
 
   async renameLibrary(id: string, name: string): Promise<void> {
     const { profileId } = this.need();
-    const settings = await this.deps.settings.get(profileId);
-    if (!settings.gallery.libraries.some((l) => l.id === id))
-      throw new HttpError(404, "That library isn't in this profile anymore.", "no_library");
-    await this.deps.settings.update(profileId, {
-      gallery: {
-        libraries: settings.gallery.libraries.map((l) => (l.id === id ? { ...l, name } : l)),
-      },
+    await this.deps.settings.updateWith(profileId, (current) => {
+      const libs = current.gallery.libraries;
+      if (!libs.some((l) => l.id === id))
+        throw new HttpError(404, "That library isn't in this profile anymore.", "no_library");
+      return { gallery: { libraries: libs.map((l) => (l.id === id ? { ...l, name } : l)) } };
     });
   }
 
   /** Stop showing a library. Its files are untouched; only the index rows go. */
   async removeLibrary(id: string): Promise<void> {
     const open = this.need();
-    const settings = await this.deps.settings.get(open.profileId);
-    await this.deps.settings.update(open.profileId, {
-      gallery: { libraries: settings.gallery.libraries.filter((l) => l.id !== id) },
-    });
-    const { db } = open.pdb;
-    transaction(db, () => {
-      const ids = db.prepare("SELECT id FROM images WHERE library = ?").all(id) as Array<{
-        id: number;
-      }>;
-      for (const r of ids) this.deleteRow(open, r.id);
-    });
+    await this.deps.settings.updateWith(open.profileId, (current) => ({
+      gallery: { libraries: current.gallery.libraries.filter((l) => l.id !== id) },
+    }));
+    // A sync that's reading this library would add its rows back: stop it first.
+    const run = this.syncRun;
+    run?.abort.abort();
+    await run?.done.catch(() => undefined);
+    if (this.current !== open) return;
+    this.dropLibraryRows(open, id);
     this.deps.publish("gallery", { t: "gallery.changed" });
+    this.startSync();
   }
 }
 

@@ -286,7 +286,10 @@ export class ProfileDbs {
   get(profileId: string): ProfileDb {
     const cached = this.open.get(profileId);
     if (cached) return cached;
-    const pdb = openProfileDb(this.fileOf(profileId));
+    const file = this.fileOf(profileId);
+    // A late write for a profile that was just removed must not bring its folder back.
+    if (!fs.existsSync(path.dirname(file))) throw new Error(`Profile "${profileId}" is gone.`);
+    const pdb = openProfileDb(file);
     this.open.set(profileId, pdb);
     return pdb;
   }

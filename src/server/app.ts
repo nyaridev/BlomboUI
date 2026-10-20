@@ -8,6 +8,7 @@ import { serveStatic } from "@hono/node-server/serve-static";
 import { Hono } from "hono";
 import type { ApiErrorBody } from "../shared/api.ts";
 import type { Services } from "./context.ts";
+import { localOnly } from "./lib/guard.ts";
 import { HttpError } from "./lib/http.ts";
 import { autocompleteRoutes } from "./routes/autocomplete.ts";
 import { batchRoutes } from "./routes/batch.ts";
@@ -44,6 +45,9 @@ export function createApp(services: Services) {
     const body: ApiErrorBody = { error: "Something went wrong on the server.", code: "internal" };
     return c.json(body, 500);
   });
+
+  // Only Blombo's own pages may call the API (cross-site requests, DNS rebinding).
+  app.use("/api/*", localOnly);
 
   const api = new Hono();
   api.route("/system", systemRoutes(config, profiles));

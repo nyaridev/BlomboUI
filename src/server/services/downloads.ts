@@ -172,7 +172,7 @@ async function hashInto(hash: ReturnType<typeof createHash>, file: string, bytes
 
 export class DownloadQueue {
   private readonly deps: DownloadDeps;
-  private readonly items: Item[] = [];
+  private items: Item[] = [];
   private progressTimer: ReturnType<typeof setTimeout> | null = null;
   private parallel = 2;
 
@@ -420,6 +420,9 @@ export class DownloadQueue {
     if (prepared.plan.blocked) throw new HttpError(409, prepared.plan.blocked, "blocked");
     if (body.source === "manager" && prepared.plan.installed)
       throw new HttpError(409, `"${prepared.plan.file}" is already installed.`, "installed");
+    const settings = await this.deps.settings.get(profileId);
+    // From the duplicate check to the push there's no await, so two quick requests for the same
+    // file can't both pass it (they'd write the same .part file).
     const dup = this.items.find(
       (i) =>
         !isFinished(i.d.state) &&
@@ -428,7 +431,6 @@ export class DownloadQueue {
     );
     if (dup)
       throw new HttpError(409, `"${dup.d.name}" is already in the download queue.`, "queued");
-    const settings = await this.deps.settings.get(profileId);
     this.parallel = settings.civitai.downloads.parallel;
     const d: Download = {
       ...prepared.fields,
@@ -815,6 +817,18 @@ export class DownloadQueue {
       added = true;
     }
     if (added) this.publish();
+  }
+
+  /** A profile is being removed: stop its downloads and forget them (their rows go with it). */
+  dropProfile(profileId: string): void {
+    for (const item of this.items)
+      if (item.profileId === profileId && item.run) {
+        item.run.reason = "pause";
+        item.run.abort.abort();
+      }
+    const before = this.items.length;
+    this.items = this.items.filter((i) => i.profileId !== profileId);
+    if (this.items.length !== before) this.publish();
   }
 
   /** Stop everything; unfinished downloads are saved as paused and resume later. */

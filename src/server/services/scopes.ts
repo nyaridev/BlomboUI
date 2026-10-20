@@ -12,7 +12,7 @@ import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import type { ModelKind } from "../../shared/constants.ts";
+import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import {
   DEFAULT_SCOPE,
   type SaveScopeBody,
@@ -41,8 +41,10 @@ export function scopeThumbPath(
   comfyName: string,
 ): string | null {
   const parts = comfyName.replace(/\\/g, "/").split("/");
-  if (parts.some((p) => p === "" || p === "." || p === "..")) return null;
+  if (parts.some((p) => p === "" || p === "." || p === ".." || /[\0:]/.test(p))) return null;
   if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(scope)) return null;
+  // The kind comes from URLs too: only a known kind is a folder name here.
+  if (!(MODEL_KINDS as readonly string[]).includes(kind)) return null;
   return `${path.join(profileDir, "scopes", scope, kind, ...parts)}.webp`;
 }
 

@@ -6,7 +6,7 @@ import {
   ScopeThumbFromImageBody,
   ScopeThumbTarget,
 } from "../../shared/scopes.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
 import type { ScopeService } from "../services/scopes.ts";
@@ -51,10 +51,8 @@ export function scopeRoutes(scopes: ScopeService, gallery: GalleryService) {
       name: c.req.query("name"),
     });
     if (!target.success) throw new HttpError(400, "Which model? Pass kind and name.", "no_model");
-    const data = await c.req.arrayBuffer();
+    const data = await readBody(c, MAX_UPLOAD, "Pick an image under 25 MB.");
     if (data.byteLength === 0) throw new HttpError(400, "The image is empty.", "empty");
-    if (data.byteLength > MAX_UPLOAD)
-      throw new HttpError(413, "Pick an image under 25 MB.", "too_large");
     await scopes.setThumb(
       c.req.param("id"),
       target.data.kind,

@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fontStack, mergeSettings, migrateSettings, Settings, SettingsPatch } from "./settings.ts";
+import {
+  fontStack,
+  mergeSettings,
+  migrateSettings,
+  readSettings,
+  Settings,
+  SettingsPatch,
+} from "./settings.ts";
 
 describe("settings", () => {
   it("fills every default from an empty file", () => {
@@ -67,5 +74,47 @@ describe("settings", () => {
     );
     expect(fontStack("custom", "  ")).toBeNull();
     expect(fontStack("geist", "x")).toBeNull();
+  });
+});
+
+describe("readSettings", () => {
+  it("replaces only the invalid value with its default", () => {
+    const r = readSettings({
+      version: 1,
+      gallery: {
+        tileSize: 500,
+        libraries: [{ id: "renders", name: "Renders", path: "D:/renders" }],
+      },
+      appearance: { font: "inter" },
+    });
+    expect(r.settings.gallery.tileSize).toBe(220);
+    expect(r.settings.gallery.libraries).toHaveLength(1);
+    expect(r.settings.appearance.font).toBe("inter");
+    expect(r.dropped).toEqual(["gallery.tileSize"]);
+    expect(r.newer).toBe(false);
+  });
+
+  it("drops one bad list item and keeps the rest", () => {
+    const r = readSettings({
+      gallery: {
+        libraries: [
+          { id: "a", name: "A", path: "D:/a" },
+          { id: 5, name: "", path: 3 },
+          { id: "c", name: "C", path: "D:/c" },
+        ],
+      },
+    });
+    expect(r.settings.gallery.libraries.map((l) => l.id)).toEqual(["a", "c"]);
+  });
+
+  it("flags a file from a newer version", () => {
+    const r = readSettings({ version: 9, appearance: { font: "inter" } });
+    expect(r.newer).toBe(true);
+    expect(r.settings.appearance.font).toBe("inter");
+  });
+
+  it("reads garbage as defaults", () => {
+    expect(readSettings("nope").settings.gallery.tileSize).toBe(220);
+    expect(readSettings({ gallery: 7 }).settings.gallery.tileSize).toBe(220);
   });
 });

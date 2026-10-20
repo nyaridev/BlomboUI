@@ -65,3 +65,23 @@ describe("download destinations", () => {
     expect(parseSize("big")).toBeNull();
   });
 });
+
+describe("planFileName with odd remote names", () => {
+  const input = {
+    fileName: "",
+    modelName: "Detail",
+    versionName: "v1",
+    baseModel: "SDXL 1.0",
+    creator: "someone",
+    tags: [],
+  };
+  it("keeps only a plain extension", () => {
+    expect(planFileName({ ...input, fileName: "m.st:hidden" }, "original")).not.toContain(":");
+    expect(planFileName({ ...input, fileName: "x./../checkpoints/y" }, "original")).not.toContain(
+      "/",
+    );
+    expect(planFileName({ ...input, fileName: "lora.SafeTensors" }, "original")).toBe(
+      "lora.safetensors",
+    );
+  });
+});

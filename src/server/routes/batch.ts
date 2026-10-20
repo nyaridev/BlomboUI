@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { StartBatchBody } from "../../shared/batch.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import type { BatchService } from "../services/batch.ts";
 
 const MAX_UPLOAD = 200 * 1024 * 1024;
@@ -30,10 +30,8 @@ export function batchRoutes(batch: BatchService) {
 
   /** A dropped image (raw body, ?filename=): kept on the server so the batch can read it. */
   r.post("/files", async (c) => {
-    const bytes = new Uint8Array(await c.req.arrayBuffer());
+    const bytes = await readBody(c, MAX_UPLOAD, "That file is too large (200 MB at most).");
     if (bytes.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
-    if (bytes.byteLength > MAX_UPLOAD)
-      throw new HttpError(413, "That file is too large (200 MB at most).", "too_large");
     return c.json(await batch.stage(bytes, c.req.query("filename") ?? "image.png"), 201);
   });
 

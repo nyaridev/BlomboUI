@@ -32,11 +32,14 @@ import { slotsRoot } from "./slots.ts";
 import {
   ensureUv,
   extractTopFolder,
+  linkModeLine,
   runPip,
   toolsDir,
   UV_WINDOWS,
+  type UvLinkMode,
   type UvRelease,
   uvEnv,
+  uvLinkMode,
 } from "./uv.ts";
 
 export { extractTopFolder };
@@ -84,6 +87,8 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
   private readonly ops: InstallOps;
   private current: InstallState = idleInstall();
   private abort: AbortController | null = null;
+  /** Decided per install once the slot folder exists (`uvLinkMode`). */
+  private linkMode: UvLinkMode = "copy";
   private lastEmit = 0;
   private emitTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -183,6 +188,8 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
     };
     try {
       await writeFileAtomic(marker, new Date().toISOString());
+      this.linkMode = await uvLinkMode(this.runtimeDir, slotDir);
+      this.log(linkModeLine(this.linkMode));
 
       let uv = "";
       await run("tools", async () => {
@@ -291,7 +298,12 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
   }
 
   private runOpts(slotDir: string, signal: AbortSignal): RunOptions {
-    return { cwd: slotDir, signal, onLine: (l) => this.log(l), env: uvEnv(this.runtimeDir) };
+    return {
+      cwd: slotDir,
+      signal,
+      onLine: (l) => this.log(l),
+      env: uvEnv(this.runtimeDir, this.linkMode),
+    };
   }
 
   private pip(

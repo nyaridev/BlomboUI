@@ -8,7 +8,16 @@ import type { InstallState } from "../../../shared/install.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { ComfyInstaller, extractTopFolder, type InstallOps } from "./installer.ts";
 import { findSlot } from "./slots.ts";
-import { ensureUv, slotCacheEnv, slotTempDir, UV_WINDOWS, type UvRelease, uvEnv } from "./uv.ts";
+import {
+  ensureUv,
+  slotCacheEnv,
+  slotTempDir,
+  UV_WINDOWS,
+  type UvRelease,
+  uvCacheDir,
+  uvEnv,
+  uvLinkMode,
+} from "./uv.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-install-"));
 afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
@@ -208,8 +217,45 @@ describe("ComfyUI installer", () => {
     expect(env.TMP).toBe(slotTempDir(runtime));
     expect(env.TEMP).toBe(env.TMP);
     expect(env.TMPDIR).toBe(env.TMP);
-    expect(uvEnv(runtime).HF_HOME).toBe(env.HF_HOME);
-    expect(uvEnv(runtime).TMP).toBe(env.TMP);
+    expect(uvEnv(runtime, "hardlink").HF_HOME).toBe(env.HF_HOME);
+    expect(uvEnv(runtime, "hardlink").TMP).toBe(env.TMP);
+  });
+
+  it("links packages from uv's cache when it can, and copies when it can't", async () => {
+    const runtime = path.join(tmp, "rt-link");
+    const slot = path.join(runtime, "comfyui", "s");
+    await fs.mkdir(slot, { recursive: true });
+    expect(await uvLinkMode(runtime, slot)).toBe("hardlink");
+    expect(uvEnv(runtime, "hardlink").UV_LINK_MODE).toBe("hardlink");
+    // The probe leaves nothing behind on either side.
+    expect(await fs.readdir(slot)).toEqual([]);
+    expect(await fs.readdir(uvCacheDir(runtime))).toEqual([]);
+
+    // A target the link can't be made in (here: a path under a file) falls back to copies.
+    const file = path.join(runtime, "not-a-folder");
+    await fs.writeFile(file, "");
+    expect(await uvLinkMode(runtime, path.join(file, "slot"))).toBe("copy");
+    expect(uvEnv(runtime, "copy").UV_LINK_MODE).toBe("copy");
+  });
+
+  it("runs every uv command of an install with the link mode it probed", async () => {
+    const runtime = path.join(tmp, "rt-mode");
+    const { ops } = fakeOps();
+    const modes: Array<string | undefined> = [];
+    const installer = new ComfyInstaller(runtime, {
+      ...ops,
+      run: (command, args, o) => {
+        modes.push(o.env.UV_LINK_MODE);
+        return ops.run(command, args, o);
+      },
+    });
+    const done = waitFor(installer, ["done", "error"]);
+    await installer.start({ slot: "linked", torch: "cpu", version: "latest" });
+    const state = await done;
+    expect(state.state).toBe("done");
+    expect(modes.length).toBeGreaterThan(2);
+    expect(new Set(modes)).toEqual(new Set(["hardlink"]));
+    expect(state.log.some((l) => l.includes("hardlinks"))).toBe(true);
   });
 
   it("makes the temp folder before uv runs", async () => {

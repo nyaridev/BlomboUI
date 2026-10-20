@@ -10,7 +10,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/adr/`: decisions and why (0001–0015, all accepted and built)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 - `docs/performance.md`: measured numbers (20k-image gallery, startup bundle) and how to repeat them
-- `docs/review/real-comfyui-checks.md`: what still needs a real ComfyUI, with every download listed (waiting for the owner's OK)
+- `docs/review/real-comfyui-checks.md`: the checks on a real ComfyUI (2026-10-21): results, downloads, findings
 
 ## Commands
 

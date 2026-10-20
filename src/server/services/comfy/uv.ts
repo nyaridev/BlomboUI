@@ -3,7 +3,7 @@
  * (runtime/tools/uv/, downloaded once on Windows), the environment that keeps its Python and
  * cache inside runtime/tools/, and `uv pip install` with progress read from its output.
  */
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -76,19 +76,57 @@ export function slotCacheEnv(runtimeDir: string): Record<string, string> {
   };
 }
 
+/** How uv puts packages from its cache into a venv. */
+export type UvLinkMode = "hardlink" | "copy";
+
+export function uvCacheDir(runtimeDir: string): string {
+  return path.join(toolsDir(runtimeDir), "uv-cache");
+}
+
+/**
+ * Hardlinks when the uv cache and `target` (a slot folder) can share files, else copies. Both
+ * live in runtime/, so they're normally on one drive and a slot costs its packages once instead
+ * of twice (cache + venv: 7.3 GB saved on a CUDA slot with every pack). A folder junctioned to
+ * another drive, or a filesystem without hardlinks, gets copies. uv would fall back on its own
+ * too, but deciding here keeps its warning out of the log and says which one ran.
+ */
+export async function uvLinkMode(runtimeDir: string, target: string): Promise<UvLinkMode> {
+  const id = `.blombo-link-probe-${randomUUID().slice(0, 8)}`;
+  const source = path.join(uvCacheDir(runtimeDir), id);
+  const link = path.join(target, id);
+  try {
+    await fs.mkdir(path.dirname(source), { recursive: true });
+    await fs.writeFile(source, "");
+    await fs.link(source, link);
+    return "hardlink";
+  } catch {
+    return "copy";
+  } finally {
+    await fs.rm(link, { force: true }).catch(() => undefined);
+    await fs.rm(source, { force: true }).catch(() => undefined);
+  }
+}
+
+/** The install log's line saying how packages get into the slot. */
+export function linkModeLine(mode: UvLinkMode): string {
+  return mode === "hardlink"
+    ? "Packages are linked from uv's cache (hardlinks), so they take disk space once."
+    : "uv's cache and this slot can't share files (another drive?), so packages are copied.";
+}
+
 /** Environment for uv and the Pythons it manages: everything stays in runtime/tools/. */
-export function uvEnv(runtimeDir: string): NodeJS.ProcessEnv {
+export function uvEnv(runtimeDir: string, linkMode: UvLinkMode): NodeJS.ProcessEnv {
   const tools = toolsDir(runtimeDir);
   return {
     ...process.env,
     ...slotCacheEnv(runtimeDir),
     UV_PYTHON_INSTALL_DIR: path.join(tools, "python"),
-    UV_CACHE_DIR: path.join(tools, "uv-cache"),
+    UV_CACHE_DIR: uvCacheDir(runtimeDir),
     UV_PYTHON_PREFERENCE: "only-managed",
     // Keep the downloaded Python private: no Windows registry entries, no python.exe shims.
     UV_PYTHON_INSTALL_REGISTRY: "0",
     UV_PYTHON_INSTALL_BIN: "0",
-    UV_LINK_MODE: "copy",
+    UV_LINK_MODE: linkMode,
     UV_NO_PROGRESS: "1",
     NO_COLOR: "1",
     PYTHONIOENCODING: "utf-8",

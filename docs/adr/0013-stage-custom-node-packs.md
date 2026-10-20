@@ -29,7 +29,7 @@ If ComfyUI was stopped to begin with, there's no restart: the result says the no
 
 The server accepts only repository URLs that a stage package lists **with a pinned ref**; the page never sends a URL Blombo would fetch. It refuses while jobs are queued or running (the restart would cut them off), while a slot is being installed, and for external ComfyUIs, where the answer is the how-to (ComfyUI-Manager or `git clone`). The stage check says "Install adds them to this ComfyUI and restarts it." for a managed slot and keeps the ComfyUI-Manager instructions for an external one.
 
-uv handling (`ensureUv`, the private environment, `uv pip` with progress, zip extraction) moved from the slot installer into `services/comfy/uv.ts`, shared by both installers.
+uv handling (`ensureUv`, the private environment, `uv pip` with progress, zip extraction) moved from the slot installer into `services/comfy/uv.ts`, shared by both installers. Packs' packages are hardlinked from uv's cache like the slot's own (ADR-0010; copies when `uvLinkMode()` finds the cache and the slot can't share files), and the PyTorch constraints file applies either way.
 
 ## Options considered
 

@@ -28,9 +28,13 @@ processes get `TMP`/`TEMP` inside `runtime/cache/comfy/tmp`.
 ## Findings
 
 - **Disk:** a CUDA slot with all five packs takes 13.6 GB: the venv 6.3 GB **plus uv's cache 7.3 GB**,
-  because installs copy (`UV_LINK_MODE=copy`) and the cache is kept for later installs. Worth deciding:
-  prune the cache after an install, or link instead of copying when the cache and the slot share a
-  drive. Models were 3.2 GB; total 17.4 GB for the run.
+  because installs copy (`UV_LINK_MODE=copy`) and the cache is kept for later installs. Models were
+  3.2 GB; total 17.4 GB for the run. **Decided (owner): hardlink installs.** Slot and pack installs now
+  hardlink packages from the cache (`uvLinkMode()` in `services/comfy/uv.ts` probes a link between the
+  cache and the slot first and falls back to copies when it can't, e.g. a folder junctioned to another
+  drive), so a new slot costs its packages once. The PyTorch constraints file is unchanged. The slot
+  from this run was installed with copies and keeps them until it's reinstalled (not done; it needs
+  the owner's OK). Not measured on a real install yet.
 - Model names in subfolders come back from ComfyUI with Windows separators
   (`1.5\control_v11p_sd15_canny_fp16.safetensors`); stages pass them through as ComfyUI listed
   them, which worked.

@@ -36,7 +36,16 @@ import { exists, movePath, readJsonFile, writeFileAtomic, writeJsonAtomic } from
 import { HttpError } from "../../lib/http.ts";
 import { defaultOps, type InstallOps, type RunOptions } from "./installer.ts";
 import { findSlot } from "./slots.ts";
-import { ensureUv, extractTopFolder, runPip, toolsDir, uvEnv } from "./uv.ts";
+import {
+  ensureUv,
+  extractTopFolder,
+  linkModeLine,
+  runPip,
+  toolsDir,
+  type UvLinkMode,
+  uvEnv,
+  uvLinkMode,
+} from "./uv.ts";
 
 const MAX_LOG = 200;
 /** First starts import every custom node (and some download helpers): give them time. */
@@ -101,6 +110,8 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
   private readonly ops: InstallOps;
   private current: NodeInstallState = idleNodeInstall();
   private abort: AbortController | null = null;
+  /** Decided per install (`uvLinkMode`). */
+  private linkMode: UvLinkMode = "copy";
   private lastEmit = 0;
   private emitTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -238,6 +249,8 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
       return t?.mode === "managed" && t.slot === slot;
     };
     try {
+      this.linkMode = await uvLinkMode(this.deps.runtimeDir, slotDir);
+      this.log(linkModeLine(this.linkMode));
       for (const p of packs)
         await run(`download:${p.folder}`, async () => {
           const found = await findPackDir(customNodes, p.folder);
@@ -331,7 +344,12 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
   }
 
   private runOpts(slotDir: string, signal: AbortSignal): RunOptions {
-    return { cwd: slotDir, signal, onLine: (l) => this.log(l), env: uvEnv(this.deps.runtimeDir) };
+    return {
+      cwd: slotDir,
+      signal,
+      onLine: (l) => this.log(l),
+      env: uvEnv(this.deps.runtimeDir, this.linkMode),
+    };
   }
 
   /** The source zip at the pinned commit → custom_nodes/<folder>. Returns the folder. */

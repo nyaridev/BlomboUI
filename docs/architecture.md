@@ -45,7 +45,7 @@ flowchart LR
 - **Client** (`src/client`): React 19, Vite, Tailwind 4, TanStack Router and Query, Zustand for UI state, Motion for animation, Floating UI for anything that floats, dnd-kit for layout editing, CodeMirror 6 for YAML and prompts, TanStack Virtual for big grids.
 - **Shared** (`src/shared`): vocabulary (roles, model kinds, samplers), Zod schemas (settings, profile, workflow manifest, layout document, API bodies), and pure logic used on both sides (prompt syntax parser, wildcard grammar, resolution math).
 - **Desktop** (`src-tauri`): a thin native window that opens the local server URL. The page and the web build are the same. Small platform hooks (open a second window for ComfyUI, native notifications) go through `client/lib/platform.ts`.
-- **ComfyUI**: installed per *slot* under `runtime/comfyui/<slot>/` with its own Python (a private venv the in-app installer sets up with uv, or a portable build placed there by hand). Blombo supervises the process, writes `extra_model_paths.yaml` from the active profile, and (later) installs the **blombo-bridge** extension into `custom_nodes/`.
+- **ComfyUI**: installed per *slot* under `runtime/comfyui/<slot>/` with its own Python (a private venv the in-app installer sets up with uv, or a portable build placed there by hand). Blombo supervises the process, writes `extra_model_paths.yaml` from the active profile, installs the custom node packs stages need into `custom_nodes/` (ADR-0013), and (later) the **blombo-bridge** extension.
 
 ## Source layout
 
@@ -133,7 +133,7 @@ or the registry (ADR-0002). Moving the folder moves the app.
 - **Local models** (`services/models.ts`): the models root is scanned per kind (`MODEL_FOLDERS`, including ComfyUI's alias folders) with sidecars next to each file: a preview image (thumbnail), `.civitai.info` and A1111 `.json` (name, base model, trigger words, NSFW flag, notes). Rename and move take the sidecars along and never overwrite. NSFW thumbnails are blurred until clicked (`settings.models.blurNsfw`, on by default).
 - **Wildcards** (`services/wildcards.ts`): `.txt` files (one option per line) and YAML files (nested keys, list leaves; keys are global) resolve `__name__` references for Generate and the Wildcard Manager. Saving is atomic and refuses a file that changed on disk since it was opened; deleting moves to the profile's trash. The roll preview runs the same seeded expansion as the compiler, with the editor's unsaved text.
 
-ADR [0011](adr/0011-gallery-index.md) (gallery index) · ADR [0010](adr/0010-in-app-comfyui-installer.md) (installer).
+ADR [0011](adr/0011-gallery-index.md) (gallery index) · ADR [0010](adr/0010-in-app-comfyui-installer.md) (installer) · ADR [0013](adr/0013-stage-custom-node-packs.md) (custom node packs).
 
 ## Online (Civitai, downloads, Manager store, History)
 
@@ -195,7 +195,7 @@ ADR [0005](adr/0005-layout-documents.md).
 | `jobs` | `queue` snapshots on every change, `job.progress` per step, `job.image` as outputs land, and binary preview frames |
 | `logs` | `comfy.log` batches, only while a log view is open |
 | `gallery` | `gallery.added` (a new image, indexed), `gallery.changed` (lists should refetch), `gallery.sync` (scan progress), while a gallery view is mounted |
-| `install` | `install`: the ComfyUI installer's steps, progress and log, while Settings → ComfyUI is open |
+| `install` | `install`: the ComfyUI installer's steps, progress and log, while Settings → ComfyUI is open; `nodes.install`: the custom node installer's, while a "needs custom nodes" notice is shown |
 | `downloads` | `downloads` queue snapshots on every change, `download.progress` byte counts at 4 Hz (every window follows it: the header shows the queue) |
 | (all) | `hello` on connect (with the download queue), `error`, `profile.switched`, `models.changed` (model files renamed, moved, downloaded or matched on Civitai), `models.lookup` (background hashing progress) |
 
@@ -217,6 +217,7 @@ ADR [0008](adr/0008-live-bus.md).
 - Services own one concern each. Long work (hashing, gallery sync, downloads, thumbnail generation) runs on a small task runner with progress events on the bus.
 - The **ComfyUI supervisor** (`services/comfy/supervisor.ts`) follows the open profile's target. A **managed slot** (`runtime/comfyui/<slot>/` with `ComfyUI/main.py` and its own Python) is started with `--extra-model-paths-config` (written from the profile's models folder), `--output-directory` (the outputs folder), `--preview-method auto` and, for a CPU-only PyTorch, `--cpu`, on the first free port from 8188; its stdout and stderr become the log (terminal colors stripped). An **external** ComfyUI is only connected to, and Blombo keeps reconnecting while it's away. In dev mode a managed ComfyUI outlives server restarts and is re-adopted from `blombo/comfy.pid`, so editing server code doesn't reload models. A missing slot reports `missing`, and the header offers **Install**. Installing blombo-bridge comes with ADR-0009.
 - The **installer** (`services/comfy/installer.ts`, ADR-0010) installs a slot from Settings → ComfyUI with a progress view: uv, a private Python 3.12 venv, the ComfyUI release zip, PyTorch (CUDA 12.8 or CPU), ComfyUI's requirements, then a check that writes `blombo/slot.json`. Steps skip finished work, so an interrupted install resumes; `blombo/installing` marks a slot unfinished so the supervisor won't start it.
+- The **custom node installer** (`services/comfy/nodepacks.ts`, ADR-0013) puts the packs a stage needs into the managed slot from the stage notice: the pinned source zip into `custom_nodes/`, ComfyUI stopped, the pack's requirements with uv (PyTorch pinned), ComfyUI started again and its node list checked. Both installers share `services/comfy/uv.ts`.
 - The **job queue** (`services/jobs.ts`) is server-side and survives a page reload. Each click queues runs (one ComfyUI prompt each, with its own seed per the seed mode); the queue compiles and submits one at a time, so wildcards and seeds are fresh per run. Interrupt stops the running image, Cancel also clears the queue and "generate forever". A validation error from ComfyUI is rewritten with the workflow's labels ("… isn't in your checkpoints folder") and stops the rest of that batch. Reordering comes later.
 
 ## Scope

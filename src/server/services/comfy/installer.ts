@@ -17,7 +17,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { unzip } from "fflate";
 import {
   type InstallBody,
   type InstallState,
@@ -30,11 +29,12 @@ import { Emitter } from "../../lib/emitter.ts";
 import { exists, writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import { slotsRoot } from "./slots.ts";
+import { ensureUv, extractTopFolder, runPip, toolsDir, uvEnv } from "./uv.ts";
+
+export { extractTopFolder };
 
 const MAX_LOG = 200;
 const PYTHON_VERSION = "3.12";
-const UV_WINDOWS_ZIP =
-  "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip";
 const TORCH_INDEX: Record<TorchVariant, string> = {
   cuda: "https://download.pytorch.org/whl/cu128",
   cpu: "https://download.pytorch.org/whl/cpu",
@@ -92,7 +92,7 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
   }
 
   private toolsDir(): string {
-    return path.join(this.runtimeDir, "tools");
+    return toolsDir(this.runtimeDir);
   }
 
   /** Start installing; resolves once it has started (progress comes as events). */
@@ -176,7 +176,9 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
 
       let uv = "";
       await run("tools", async () => {
-        uv = await this.ensureUv(signal, (f) => this.step("tools", { progress: f }, false));
+        uv = await ensureUv(this.runtimeDir, this.ops, signal, (f) =>
+          this.step("tools", { progress: f }, false),
+        );
         return null;
       });
 
@@ -279,105 +281,25 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
   }
 
   private runOpts(slotDir: string, signal: AbortSignal): RunOptions {
-    const tools = this.toolsDir();
-    return {
-      cwd: slotDir,
-      signal,
-      onLine: (l) => this.log(l),
-      env: {
-        ...process.env,
-        UV_PYTHON_INSTALL_DIR: path.join(tools, "python"),
-        UV_CACHE_DIR: path.join(tools, "uv-cache"),
-        UV_PYTHON_PREFERENCE: "only-managed",
-        // Keep the downloaded Python private: no Windows registry entries, no python.exe shims.
-        UV_PYTHON_INSTALL_REGISTRY: "0",
-        UV_PYTHON_INSTALL_BIN: "0",
-        UV_LINK_MODE: "copy",
-        UV_NO_PROGRESS: "1",
-        NO_COLOR: "1",
-        PYTHONIOENCODING: "utf-8",
-        VIRTUAL_ENV: "",
-      },
-    };
+    return { cwd: slotDir, signal, onLine: (l) => this.log(l), env: uvEnv(this.runtimeDir) };
   }
 
-  private async pip(
+  private pip(
     uv: string,
     args: string[],
     slotDir: string,
     id: InstallStepId,
     signal: AbortSignal,
   ): Promise<void> {
-    let downloading = 0;
-    let downloaded = 0;
-    const opts = this.runOpts(slotDir, signal);
-    const code = await this.ops.run(uv, args, {
-      ...opts,
-      onLine: (raw) => {
-        const line = stripAnsi(raw);
-        opts.onLine(line);
-        if (/^\s*Downloading\s/.test(line)) downloading++;
-        if (/^\s*Downloaded\s/.test(line)) downloaded++;
-        const progress = downloading ? Math.min(0.95, downloaded / downloading) : null;
-        this.step(id, { progress, detail: line.trim().slice(0, 120) }, false);
-      },
-    });
-    if (code !== 0) throw new Error(`Installing packages failed (exit code ${code}). See the log.`);
+    return runPip(this.ops, uv, args, this.runOpts(slotDir, signal), (progress, detail) =>
+      this.step(id, { progress, detail: detail.slice(0, 120) }, false),
+    );
   }
 
   private venvPython(slotDir: string): string {
     return this.ops.platform === "win32"
       ? path.join(slotDir, ".venv", "Scripts", "python.exe")
       : path.join(slotDir, ".venv", "bin", "python");
-  }
-
-  /** uv in runtime/tools/uv (downloaded once on Windows), or from PATH elsewhere. */
-  private async ensureUv(
-    signal: AbortSignal,
-    onProgress: (f: number | null) => void,
-  ): Promise<string> {
-    if (this.ops.platform !== "win32") return "uv";
-    const dir = path.join(this.toolsDir(), "uv");
-    const exe = path.join(dir, "uv.exe");
-    if (await exists(exe)) return exe;
-    const zip = path.join(this.toolsDir(), "downloads", "uv.zip");
-    await this.ops.download(UV_WINDOWS_ZIP, zip, onProgress, signal);
-    await extractFiles(zip, dir, (name) => /(^|\/)uvx?\.exe$/i.test(name));
-    await fs.rm(zip, { force: true });
-    if (!(await exists(exe))) throw new Error("The uv download didn't contain uv.exe.");
-    return exe;
-  }
-}
-
-/* ── zip helpers ──────────────────────────────────────────────────────────── */
-
-function unzipAsync(data: Uint8Array, filter: (name: string) => boolean) {
-  return new Promise<Record<string, Uint8Array>>((resolve, reject) => {
-    unzip(data, { filter: (f) => filter(f.name) }, (err, files) =>
-      err ? reject(err) : resolve(files),
-    );
-  });
-}
-
-/** Extract chosen files flat into `dest`. */
-async function extractFiles(
-  zip: string,
-  dest: string,
-  pick: (name: string) => boolean,
-): Promise<void> {
-  const files = await unzipAsync(new Uint8Array(await fs.readFile(zip)), pick);
-  for (const [name, data] of Object.entries(files))
-    if (!name.endsWith("/")) await writeFileAtomic(path.join(dest, path.basename(name)), data);
-}
-
-/** Extract a GitHub source zip ("ComfyUI-0.3.60/…") with its top folder stripped. */
-export async function extractTopFolder(zip: string, dest: string): Promise<void> {
-  const files = await unzipAsync(new Uint8Array(await fs.readFile(zip)), () => true);
-  for (const [name, data] of Object.entries(files)) {
-    const parts = name.split("/").slice(1);
-    if (!parts.length || name.endsWith("/") || parts.some((p) => p === ".." || p === "")) continue;
-    await fs.mkdir(path.join(dest, ...parts.slice(0, -1)), { recursive: true });
-    await fs.writeFile(path.join(dest, ...parts), data);
   }
 }
 

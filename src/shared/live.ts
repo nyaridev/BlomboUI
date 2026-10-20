@@ -8,7 +8,8 @@
  *   jobs    queue snapshots, per-step progress, finished images, preview frames
  *   logs    ComfyUI log lines (only while a log view is open)
  *   gallery new images, index changes and sync progress (while a gallery is mounted)
- *   install ComfyUI slot installer progress (while an installer view is open)
+ *   install ComfyUI slot installer and custom node installer progress (while a view showing
+ *           either is open)
  *   downloads the download queue and its progress (the header shows it, so every window follows)
  * Errors, profile switches and model-folder changes go to everyone.
  */
@@ -16,7 +17,7 @@ import { z } from "zod";
 import { ComfyLogLine, ComfyStatus, SystemStats } from "./comfy.ts";
 import { DownloadProgress, DownloadsSnapshot } from "./downloads.ts";
 import { GalleryImage, SyncState } from "./gallery.ts";
-import { InstallState } from "./install.ts";
+import { InstallState, NodeInstallState } from "./install.ts";
 import { JobImage, JobProgress, QueueSnapshot } from "./jobs.ts";
 import { LookupState } from "./models.ts";
 
@@ -68,6 +69,8 @@ export const ServerMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("gallery.changed") }),
   z.object({ t: z.literal("gallery.sync"), sync: SyncState }),
   z.object({ t: z.literal("install"), install: InstallState }),
+  /** Custom node packs being installed into the managed slot. */
+  z.object({ t: z.literal("nodes.install"), install: NodeInstallState }),
   /** Model files were renamed, moved, downloaded or matched on Civitai. */
   z.object({ t: z.literal("models.changed") }),
   /** Background hashing and Civitai lookup of local models. */

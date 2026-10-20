@@ -7,7 +7,7 @@
 import type { ComfyLogLine, ComfyStatus, SystemStats } from "@shared/comfy";
 import type { Download, DownloadProgress } from "@shared/downloads";
 import type { GalleryImage, SyncState } from "@shared/gallery";
-import type { InstallState } from "@shared/install";
+import type { InstallState, NodeInstallState } from "@shared/install";
 import type { JobProgress, QueueSnapshot } from "@shared/jobs";
 import {
   type AppError,
@@ -42,6 +42,8 @@ interface LiveState {
   galleryNew: number;
   /** The ComfyUI installer, while an installer view is open. */
   install: InstallState | null;
+  /** Custom node packs being installed for a stage (follows the same topic). */
+  nodeInstall: NodeInstallState | null;
   /** The download queue: running, queued and paused first, then this session's finished ones. */
   downloads: Download[];
   /** Bytes and speed of running downloads, kept apart so ticks don't re-render lists. */
@@ -62,6 +64,7 @@ export const useLive = create<LiveState>(() => ({
   gallerySync: null,
   galleryNew: 0,
   install: null,
+  nodeInstall: null,
   downloads: [],
   downloadProgress: {},
   lookup: null,
@@ -218,6 +221,14 @@ function onJson(text: string): void {
       if (msg.install.state === "done")
         void queryClient.invalidateQueries({ queryKey: qk.comfySlots });
       break;
+    case "nodes.install": {
+      const was = s.nodeInstall?.state;
+      useLive.setState({ nodeInstall: msg.install });
+      // Finished (or failed after changing the slot): ComfyUI's nodes may differ now.
+      if (was === "running" && msg.install.state !== "running")
+        void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
+      break;
+    }
     case "models.changed":
       void queryClient.invalidateQueries({ queryKey: ["local-models"] });
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });

@@ -21,7 +21,12 @@ import type { GalleryService } from "./gallery/index.ts";
 import type { ProfileService } from "./profiles.ts";
 import { LOAD_IMAGE, PREVIEW_IMAGE } from "./workflows/nodes.ts";
 import { listStagePackages } from "./workflows/presets.ts";
-import { applyStages, type LoadedStage } from "./workflows/stages.ts";
+import {
+  applyStages,
+  INSTALL_HERE,
+  INSTALL_IN_COMFY,
+  type LoadedStage,
+} from "./workflows/stages.ts";
 import type { WorkflowService } from "./workflows/store.ts";
 
 /** ComfyUI's input subfolder for Blombo's control images. */
@@ -187,6 +192,12 @@ export class StageService {
           stage,
         ).statuses,
     );
+    // A managed slot gets the Install button (services/comfy/nodepacks.ts), so say that instead.
+    if (this.deps.supervisor.status().mode === "managed")
+      for (const s of stages)
+        for (const p of s.problems)
+          if (p.code === "missing_nodes" && p.packs?.length && p.packs.every((x) => x.ref))
+            p.message = p.message.replace(INSTALL_IN_COMFY, INSTALL_HERE);
     return { checked: info !== null, stages };
   }
 

@@ -4,11 +4,8 @@
  * the inherited fields (steps, CFG, sampler, scheduler, prompts) that follow the base workflow
  * until unlinked.
  */
-import { api } from "@client/lib/api";
 import { useDebounced, useGoToView } from "@client/lib/hooks";
-import { useLive } from "@client/lib/live";
-import { openWindow } from "@client/lib/platform";
-import { queryClient, useStageReport } from "@client/lib/queries";
+import { useStageReport } from "@client/lib/queries";
 import { Button, InheritRow, Notice, NumberField, Select, type SelectOption } from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import type { StoreCategory } from "@shared/manager";
@@ -24,6 +21,7 @@ import { samplerLabel } from "../../labels";
 import { PromptEditor } from "../../PromptEditor";
 import { useValues } from "../../state";
 import { useRoleBinding } from "../../workflow";
+import { NodesNotice } from "./NodesNotice";
 
 /** The checks for every stage of the active workflow, following its settings (debounced). */
 export function useStageStatuses(): { statuses: StageStatus[]; checked: boolean } {
@@ -55,41 +53,11 @@ const MANAGER_QUERY: Partial<Record<ModelKind, string>> = {
 /** One problem, with the action that fixes it. */
 function ProblemNotice({ problem }: { problem: StageProblem }) {
   const goTo = useGoToView();
-  const comfyUrl = useLive((s) => s.comfy?.url ?? null);
   const kind = problem.modelKind;
   const category = kind ? MANAGER_CATEGORY[kind] : undefined;
+  if (problem.code === "missing_nodes") return <NodesNotice problem={problem} />;
   const actions =
-    problem.code === "missing_nodes" ? (
-      <>
-        {comfyUrl ? (
-          <Button size="sm" icon="external" onClick={() => void openWindow(comfyUrl, "ComfyUI")}>
-            Open ComfyUI
-          </Button>
-        ) : null}
-        {problem.packs?.map((p) => (
-          <Button
-            key={p.url}
-            size="sm"
-            variant="ghost"
-            icon="globe"
-            onClick={() => window.open(p.url, "_blank", "noopener")}
-          >
-            {p.name}
-          </Button>
-        ))}
-        <Button
-          size="sm"
-          variant="ghost"
-          icon="refresh"
-          onClick={async () => {
-            await api.comfyRefresh().catch(() => undefined);
-            void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
-          }}
-        >
-          Check again
-        </Button>
-      </>
-    ) : category && (problem.code === "missing_model" || problem.code === "pick_model") ? (
+    category && (problem.code === "missing_model" || problem.code === "pick_model") ? (
       <Button
         size="sm"
         icon="store"

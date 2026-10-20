@@ -82,3 +82,61 @@ export const SlotsResponse = z.object({
   install: InstallState,
 });
 export type SlotsResponse = z.infer<typeof SlotsResponse>;
+
+/* ── custom node packs ───────────────────────────────────────────────────────
+ * Installing the custom node packs a stage needs into the profile's managed slot
+ * (services/comfy/nodepacks.ts). Packs are named by repository URL and must be one a stage
+ * package lists with a pinned commit; the server never installs a URL from the page.
+ */
+
+export const NodeInstallBody = z.object({
+  packs: z.array(z.string().url()).min(1).max(10),
+});
+export type NodeInstallBody = z.infer<typeof NodeInstallBody>;
+
+export const NodeInstallStep = z.object({
+  /** "download:<folder>", "packages:<folder>", "restart" or "verify". */
+  id: z.string(),
+  label: z.string(),
+  state: z.enum(["pending", "active", "done", "error", "skipped"]),
+  progress: z.number().nullable(),
+  detail: z.string().nullable(),
+});
+export type NodeInstallStep = z.infer<typeof NodeInstallStep>;
+
+export const NodeInstallState = z.object({
+  state: z.enum(["idle", "running", "done", "error", "cancelled"]),
+  slot: z.string().nullable(),
+  /** Repository URLs of the packs in this install. */
+  packs: z.array(z.string()),
+  steps: z.array(NodeInstallStep),
+  startedAt: z.number().nullable(),
+  finishedAt: z.number().nullable(),
+  /** What went wrong and what to do next. */
+  error: z.string().nullable(),
+  /** Said when it's done ("ComfyUI loads them the next time it starts"). */
+  note: z.string().nullable(),
+  log: z.array(z.string()),
+});
+export type NodeInstallState = z.infer<typeof NodeInstallState>;
+
+export function idleNodeInstall(): NodeInstallState {
+  return {
+    state: "idle",
+    slot: null,
+    packs: [],
+    steps: [],
+    startedAt: null,
+    finishedAt: null,
+    error: null,
+    note: null,
+    log: [],
+  };
+}
+
+/** What Blombo keeps about the packs it put in a slot: <slot>/blombo/packs.json. */
+export const InstalledPacks = z.record(
+  z.string(),
+  z.object({ url: z.string(), ref: z.string(), installedAt: z.string() }),
+);
+export type InstalledPacks = z.infer<typeof InstalledPacks>;

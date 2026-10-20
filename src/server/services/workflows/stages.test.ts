@@ -104,6 +104,18 @@ describe("stage packages", () => {
         expect(info[node.class_type], `${pkg.id}: ${node.class_type}`).toBeDefined();
       }
   });
+
+  it("pin every pack, at the same commit wherever it's listed (so Install can fetch it)", () => {
+    const refs = new Map<string, string>();
+    for (const { pkg } of packages)
+      for (const pack of pkg.packs) {
+        expect(pack.ref, `${pkg.id}: ${pack.name}`).toMatch(/^[0-9a-f]{40}$/);
+        const seen = refs.get(pack.url);
+        if (seen) expect(pack.ref, `${pkg.id}: ${pack.name}`).toBe(seen);
+        else refs.set(pack.url, pack.ref as string);
+      }
+    expect(refs.size).toBe(3);
+  });
 });
 
 describe("ports", () => {

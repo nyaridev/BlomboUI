@@ -517,6 +517,27 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     }
   }
 
+  /**
+   * Resolves true once ComfyUI is connected, false when it stops, crashes or takes longer than
+   * `timeoutMs` (the custom node installer waits on this after a restart).
+   */
+  whenConnected(timeoutMs: number): Promise<boolean> {
+    if (this.current.state === "running" && this.client) return Promise.resolve(true);
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => finish(false), timeoutMs);
+      const offConnected = this.on("connected", () => finish(true));
+      const offStatus = this.on("status", (s) => {
+        if (s.state === "crashed" || s.state === "stopped" || s.state === "missing") finish(false);
+      });
+      function finish(ok: boolean) {
+        clearTimeout(timer);
+        offConnected();
+        offStatus();
+        resolve(ok);
+      }
+    });
+  }
+
   /** Forget object_info so the next read picks up new models or nodes. */
   refreshObjectInfo(): void {
     this.objectInfoCache = null;

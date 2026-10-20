@@ -5,9 +5,10 @@
  * Escape skips. Positions follow resizes and scrolling.
  */
 import { cn } from "@client/lib/cn";
+import { useModalFocus } from "@client/lib/hooks";
 import { FloatingPortal } from "@floating-ui/react";
 import { AnimatePresence, motion } from "motion/react";
-import { type ReactNode, useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Button } from "./Button";
 
 export interface TourStep {
@@ -81,6 +82,8 @@ export function Tour({
   const [index, setIndex] = useState(0);
   const [box, setBox] = useState<Box | null>(null);
   const [cardH, setCardH] = useState(170);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  useModalFocus(cardRef, open && Boolean(steps.length));
   const step = steps[index];
 
   useEffect(() => {
@@ -121,7 +124,12 @@ export function Tour({
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose(false);
-      else if (e.key === "ArrowRight" || e.key === "Enter") next();
+      // Enter on a focused button (Skip, Back) is that button's; elsewhere it goes on.
+      else if (
+        e.key === "ArrowRight" ||
+        (e.key === "Enter" && !(e.target instanceof HTMLButtonElement))
+      )
+        next();
       else if (e.key === "ArrowLeft") setIndex((i) => Math.max(0, i - 1));
       else return;
       e.preventDefault();
@@ -165,8 +173,10 @@ export function Tour({
               aria-modal="true"
               aria-label={`Tour: ${step.title}`}
               ref={(el) => {
+                cardRef.current = el;
                 if (el && Math.abs(el.offsetHeight - cardH) > 2) setCardH(el.offsetHeight);
               }}
+              tabIndex={-1}
               className="absolute flex flex-col gap-3 rounded-xl border border-line-strong bg-surface-3 p-4 shadow-pop"
               style={{ width: CARD_W }}
               animate={{ left: pos.left, top: pos.top }}

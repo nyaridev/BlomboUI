@@ -7,6 +7,7 @@
  * visit starts the tour (GenerateTour).
  */
 import { glide } from "@client/lib/motion";
+import { useSession } from "@client/lib/session";
 import { Button, Spinner, Tabs } from "@client/ui";
 import { useLocation } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
@@ -52,9 +53,10 @@ export function GenerateView() {
   }, [active.manifest, load, showLayout]);
 
   // Layouts saved by older versions in this browser move into the profile once.
+  const sessionProfile = useSession((s) => s.profileId);
   useEffect(() => {
-    void adoptBrowserLayouts();
-  }, []);
+    if (sessionProfile) void adoptBrowserLayouts();
+  }, [sessionProfile]);
 
   if (active.empty) return <StartWithWorkflow />;
   // Only the first load shows a spinner; switching keeps the view mounted.

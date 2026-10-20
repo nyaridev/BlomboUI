@@ -405,7 +405,8 @@ export function useFavorite() {
           },
       );
     },
-    onSettled: changed,
+    // The live bus refreshes the lists once the server has it; a failure puts them back.
+    onError: changed,
   });
 }
 
@@ -428,7 +429,8 @@ export function useRateImages() {
           },
       );
     },
-    onSettled: changed,
+    // The live bus refreshes the lists once the server has it; a failure puts them back.
+    onError: changed,
   });
 }
 

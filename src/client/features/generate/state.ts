@@ -8,7 +8,7 @@
  */
 import { api } from "@client/lib/api";
 import { qk, queryClient } from "@client/lib/queries";
-import { useSession } from "@client/lib/session";
+import { onProfileSwitch, useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
 import type { Block, LayoutDocument } from "@shared/layout/schema";
 import type {
@@ -151,6 +151,20 @@ export const useValues = create<ValuesState>((set, get) => ({
   },
   merge: (values) => set((s) => ({ values: { ...s.values, ...values } })),
 }));
+
+// Another profile can have a workflow with the same id (a built-in preset): send what's
+// pending to the profile it belongs to, then forget what's on screen so the next one loads.
+onProfileSwitch(async () => {
+  await save();
+  useValues.setState({ workflowId: null });
+  useLayout.setState({
+    workflowId: null,
+    customizing: false,
+    selected: null,
+    past: [],
+    future: [],
+  });
+});
 
 export function useValue<T>(id: string): [T, (v: T) => void] {
   const value = useValues((s) => s.values[id]) as T;

@@ -37,9 +37,11 @@ import { useBindings } from "../workflow";
 export function useBuiltScript() {
   const draft = useScript((s) => s.draft);
   const bindings = useBindings();
-  const values = useValues((s) => s.values);
+  // With no script, the values don't matter: don't re-render (and re-plan) on every keystroke.
+  const values = useValues((s) => (draft.kind === "off" ? NO_VALUES : s.values));
   return useMemo(() => buildScript(draft, bindings, values), [draft, bindings, values]);
 }
+const NO_VALUES: Record<string, unknown> = {};
 
 export function ScriptsBlock() {
   const draft = useScript((s) => s.draft);

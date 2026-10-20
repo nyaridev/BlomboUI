@@ -13,7 +13,7 @@ import { qk, queryClient } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
 import { describeResync } from "@shared/bridge";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useLayout, useValues } from "./state";
 import { useActiveChoice } from "./workflow";
 
@@ -51,12 +51,15 @@ export function exportWorkflow(workflowId: string): void {
 }
 
 /** Toasts for workflows saved from ComfyUI; mount once per window (Shell). */
+/** The last save announced, for the whole window: the Shell remounts when you come back from
+ * the profile screen, and the same save mustn't be announced (and reloaded) again. */
+let announced: number | null = null;
+
 export function useBridgeToasts(): void {
   const saved = useLive((s) => s.bridgeSaved);
-  const seen = useRef<number | null>(null);
   useEffect(() => {
-    if (!saved || saved.at === seen.current) return;
-    seen.current = saved.at;
+    if (!saved || saved.at === announced) return;
+    announced = saved.at;
     const profileId = useSession.getState().profileId;
     const open = () => {
       if (profileId) useActiveChoice.getState().choose(profileId, saved.workflowId);

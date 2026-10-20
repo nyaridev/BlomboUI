@@ -3,7 +3,7 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { bouncy } from "@client/lib/motion";
-import { IconButton, Kbd, NumberField, Switch, Tooltip } from "@client/ui";
+import { Button, IconButton, Kbd, NumberField, Switch, Tooltip } from "@client/ui";
 import { estimateTokens } from "@shared/prompt/tokenize";
 import { motion } from "motion/react";
 import { useMemo, useRef } from "react";
@@ -129,7 +129,7 @@ export function GenerateActions() {
         onClick={() => void generate()}
         className={cn(
           "group relative flex h-[92px] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl text-on-generate focus-ring disabled:opacity-50",
-          "bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] shadow-[inset_0_1px_0_rgb(255_255_255/.28),inset_0_-2px_0_rgb(0_0_0/.15)]",
+          "bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] shadow-[var(--bevel-generate)]",
           "transition-[box-shadow,filter] duration-200 hover:shadow-glow hover:brightness-105",
         )}
       >
@@ -160,32 +160,33 @@ export function GenerateActions() {
             <span>Script needs a fix</span>
           ) : (
             <>
-              <Kbd className="border-white/30 bg-white/15 text-white">Ctrl</Kbd>
-              <Kbd className="border-white/30 bg-white/15 text-white">Enter</Kbd>
+              <Kbd onColor>Ctrl</Kbd>
+              <Kbd onColor>Enter</Kbd>
             </>
           )}
         </span>
       </motion.button>
       <div className="grid grid-cols-2 gap-1.5">
         <Tooltip content="Stop this image; queued runs continue">
-          <button
-            type="button"
+          <Button
+            icon="skip"
             disabled={!running}
             onClick={() => void interrupt()}
-            className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-line bg-field text-sm text-fg-2 transition-colors hover:border-line-strong hover:text-fg disabled:opacity-40 focus-ring"
+            className="w-full"
           >
-            <Icon name="skip" size={15} /> Interrupt
-          </button>
+            Interrupt
+          </Button>
         </Tooltip>
         <Tooltip content="Stop and clear the queue">
-          <button
-            type="button"
+          <Button
+            icon="stop"
+            variant="danger"
             disabled={!busy && !serverLoop}
             onClick={() => void cancelAll()}
-            className="flex h-9 items-center justify-center gap-1.5 rounded-md border border-red/30 bg-red/10 text-sm text-red-ink transition-colors hover:bg-red/20 disabled:opacity-40 focus-ring"
+            className="w-full"
           >
-            <Icon name="stop" size={14} /> Cancel
-          </button>
+            Cancel
+          </Button>
         </Tooltip>
       </div>
       <div className="flex items-center gap-2">

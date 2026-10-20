@@ -14,9 +14,10 @@ import {
 import { useSession } from "@client/lib/session";
 import { Button, EmptyState, Skeleton } from "@client/ui";
 import type { GalleryImage } from "@shared/gallery";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { viewFromPath } from "../../app/router";
 import { Grid } from "./Grid";
 import { Lightbox } from "./Lightbox";
 import { Sidebar } from "./Sidebar";
@@ -57,7 +58,13 @@ function Images({ featured }: { featured: GalleryImage[] }) {
     [library, favorites, since, model, lora, sort, rating, tag, collection, q],
   );
   const images = useGalleryImages(query);
-  const items = useMemo(() => images.data?.pages.flatMap((p) => p.items) ?? [], [images.data]);
+  // Offset pages can overlap when images arrive or leave between them: show each image once.
+  const items = useMemo(() => {
+    const seen = new Set<number>();
+    return (images.data?.pages.flatMap((p) => p.items) ?? []).filter(
+      (i) => !seen.has(i.id) && Boolean(seen.add(i.id)),
+    );
+  }, [images.data]);
   const total = images.data?.pages[0]?.total ?? 0;
   const galleryNew = useLive((s) => s.galleryNew);
 
@@ -89,7 +96,24 @@ function Images({ featured }: { featured: GalleryImage[] }) {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  const open = ui.open !== null ? items.find((i) => i.id === ui.open) : undefined;
+  // The gallery stays mounted behind other views: its lightbox (and its keys: Delete, arrows,
+  // ratings) mustn't stay open there.
+  const visible = useRouterState({
+    select: (s) => viewFromPath(s.location.pathname) === "gallery",
+  });
+  useEffect(() => {
+    if (!visible && useGalleryUi.getState().open !== null)
+      useGalleryUi.getState().set({ open: null });
+  }, [visible]);
+  // "N new images since this list loaded" counts from the list on screen.
+  useEffect(() => {
+    void query;
+    useLive.setState({ galleryNew: 0 });
+  }, [query]);
+  const onOpen = useCallback((id: number) => useGalleryUi.getState().set({ open: id }), []);
+  const onUseSettings = useCallback(() => go("generate"), [go]);
+
+  const open = ui.open !== null && visible ? items.find((i) => i.id === ui.open) : undefined;
   const home = isHomeView({ ...ui, q });
 
   return (
@@ -143,8 +167,8 @@ function Images({ featured }: { featured: GalleryImage[] }) {
           hasMore={Boolean(hasNextPage)}
           loadingMore={isFetchingNextPage}
           onLoadMore={loadMore}
-          onOpen={(id) => ui.set({ open: id })}
-          onUseSettings={() => go("generate")}
+          onOpen={onOpen}
+          onUseSettings={onUseSettings}
         />
       )}
       <AnimatePresence>

@@ -505,7 +505,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
           <Row label="Generate">
             <button
               type="button"
-              className="flex h-[72px] w-[220px] flex-col items-center justify-center gap-1 rounded-xl bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] text-on-generate shadow-[inset_0_1px_0_rgb(255_255_255/.28)] transition-shadow hover:shadow-glow focus-ring"
+              className="flex h-[72px] w-[220px] flex-col items-center justify-center gap-1 rounded-xl bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] text-on-generate shadow-[var(--bevel-generate)] transition-shadow hover:shadow-glow focus-ring"
             >
               <span className="flex items-center gap-2 text-lg font-semibold">
                 <Icon name="sparkle" size={19} strokeWidth={2} /> Generate
@@ -848,6 +848,10 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
           <Row label="Keys / status">
             <Kbd>Ctrl</Kbd>
             <Kbd>Enter</Kbd>
+            <span className="inline-flex gap-1 rounded-md bg-generate px-2 py-1">
+              <Kbd onColor>Ctrl</Kbd>
+              <Kbd onColor>Enter</Kbd>
+            </span>
             <StatusDot tone="success" />
             <StatusDot tone="warning" pulse />
             <StatusDot tone="danger" />

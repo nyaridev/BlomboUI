@@ -2,6 +2,7 @@
  * The launch screen: pick a profile or create one. Opening a profile morphs its avatar into the
  * header (shared layoutId) while the app staggers in (see app/Shell.tsx).
  */
+import { preloadShell } from "@client/app/loadShell";
 import { useTheme } from "@client/app/theme";
 import { Icon } from "@client/icons/Icon";
 import { Wordmark } from "@client/icons/Logo";
@@ -38,6 +39,8 @@ export function ProfileScreen() {
   const [confirmDelete, setConfirmDelete] = useState<Profile | null>(null);
   const remove = useDeleteProfile();
   const profiles = data?.profiles ?? [];
+
+  useEffect(() => preloadShell(), []);
 
   useEffect(() => {
     if (!wizard) setTheme({ theme: "blombo", accent: "blue", font: "geist", customFont: "" });

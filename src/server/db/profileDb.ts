@@ -203,6 +203,10 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (kind, name)
   );
   `,
+  // 5: sorting the gallery by name without a full scan (20k+ images)
+  `
+  CREATE INDEX images_name ON images (name COLLATE NOCASE, id);
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

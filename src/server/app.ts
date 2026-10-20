@@ -17,11 +17,13 @@ import { comfyRoutes } from "./routes/comfy.ts";
 import { downloadRoutes } from "./routes/downloads.ts";
 import { fileInfoRoutes } from "./routes/fileinfo.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
+import { historyRoutes } from "./routes/history.ts";
 import { jobRoutes } from "./routes/jobs.ts";
 import { layoutRoutes } from "./routes/layouts.ts";
 import { managerRoutes } from "./routes/manager.ts";
 import { modelRoutes } from "./routes/models.ts";
 import { profileRoutes } from "./routes/profiles.ts";
+import { scopeRoutes } from "./routes/scopes.ts";
 import { scriptRoutes } from "./routes/scripts.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 import { stageRoutes } from "./routes/stages.ts";
@@ -45,7 +47,7 @@ export function createApp(services: Services) {
 
   const api = new Hono();
   api.route("/system", systemRoutes(config, profiles));
-  api.route("/profiles", profileRoutes(profiles, services.installPresets));
+  api.route("/profiles", profileRoutes(profiles, services.installPresets, services.backup));
   api.route("/bridge", bridgeRoutes(services.bridge));
   api.route("/comfy/bridge", bridgeAdminRoutes(services.bridge));
   api.route(
@@ -57,6 +59,7 @@ export function createApp(services: Services) {
     workflowRoutes(config, workflows, supervisor, services.layouts, services.bridge),
   );
   api.route("/scripts", scriptRoutes(services.scripts));
+  api.route("/scopes", scopeRoutes(services.scopes, gallery));
   api.route("/batch", batchRoutes(services.batch));
   api.route("/layouts", layoutRoutes(services.layouts, workflows));
   api.route("/stages", stageRoutes(services.stages));
@@ -65,6 +68,16 @@ export function createApp(services: Services) {
   api.route("/wildcards", wildcardRoutes(profiles));
   api.route("/settings", settingsRoutes(profiles, settings));
   api.route("/gallery", galleryRoutes(gallery));
+  api.route(
+    "/history",
+    historyRoutes({
+      history: services.history,
+      queue,
+      workflows,
+      gallery,
+      snippets: services.snippets,
+    }),
+  );
   api.route("/models", modelRoutes(models, services.lookup));
   api.route("/civitai", civitaiRoutes(services.civitai));
   api.route("/downloads", downloadRoutes(services.downloads));

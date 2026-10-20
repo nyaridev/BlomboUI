@@ -4,6 +4,7 @@
  */
 import { startLive } from "@client/lib/live";
 import { glide } from "@client/lib/motion";
+import { startNotifications } from "@client/lib/notifications";
 import { useProfile, useSettings } from "@client/lib/queries";
 import { openProfileOnce } from "@client/lib/session";
 import { toast } from "@client/ui";
@@ -11,13 +12,15 @@ import type { ViewId } from "@shared/constants";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
-import { ComingSoon } from "../features/common/ComingSoon";
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
+import { useFollowScope } from "../features/scopes/thumbs";
 import { Header } from "./header/Header";
+import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
 import { useTheme } from "./theme";
+import { useShortcuts } from "./useShortcuts";
 
 const KEEP_ALIVE: ViewId[] = ["generate", "gallery"];
 
@@ -41,6 +44,15 @@ const HistoryView = lazy(() =>
 const DesignLab = lazy(() =>
   import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })),
 );
+const ErrorsView = lazy(() =>
+  import("../features/errors/ErrorsView").then((m) => ({ default: m.ErrorsView })),
+);
+const HelpView = lazy(() =>
+  import("../features/help/HelpView").then((m) => ({ default: m.HelpView })),
+);
+const ScopesView = lazy(() =>
+  import("../features/scopes/ScopesView").then((m) => ({ default: m.ScopesView })),
+);
 
 function renderView(view: ViewId): ReactNode {
   switch (view) {
@@ -60,8 +72,12 @@ function renderView(view: ViewId): ReactNode {
       return <HistoryView />;
     case "lab":
       return <DesignLab />;
-    default:
-      return <ComingSoon view={view} />;
+    case "errors":
+      return <ErrorsView />;
+    case "help":
+      return <HelpView />;
+    case "scopes":
+      return <ScopesView />;
   }
 }
 
@@ -74,9 +90,12 @@ export function Shell() {
   const setTheme = useTheme((s) => s.set);
   const [visited, setVisited] = useState<Set<ViewId>>(() => new Set([view]));
   useBridgeToasts();
+  useShortcuts();
+  useFollowScope();
 
   useEffect(() => {
     startLive();
+    startNotifications();
   }, []);
 
   useEffect(() => {
@@ -94,7 +113,12 @@ export function Shell() {
   // The UI font comes from the profile's settings.
   const appearance = useSettings().data?.appearance;
   useEffect(() => {
-    if (appearance) setTheme({ font: appearance.font, customFont: appearance.customFont });
+    if (appearance)
+      setTheme({
+        font: appearance.font,
+        customFont: appearance.customFont,
+        motion: appearance.motion,
+      });
   }, [appearance, setTheme]);
 
   useEffect(() => {
@@ -134,6 +158,7 @@ export function Shell() {
           )}
         </AnimatePresence>
       </main>
+      <Palette />
     </div>
   );
 }

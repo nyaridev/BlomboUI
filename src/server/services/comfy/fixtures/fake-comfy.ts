@@ -219,6 +219,8 @@ export function startFakeComfy(
     // Each sampling node reports its own steps, in order (stages add their own passes).
     const passes = samplingNodes(job.prompt);
     for (const [p, pass] of (passes.length ? passes : [{ node: "3", steps }]).entries()) {
+      // Like ComfyUI: `executing` names each node as it starts (Blombo times stages with it).
+      send(clientId, "executing", { node: pass.node, prompt_id: promptId });
       for (let i = 1; i <= pass.steps; i++) {
         await wait();
         if (interrupted) {

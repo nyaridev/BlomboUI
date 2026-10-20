@@ -100,17 +100,23 @@ data/
     ├── layouts/<layoutId>.json   Generate layouts (workflows link one by id)
     ├── inputs/<sha>.<ext>        ControlNet images, named by content, sent to ComfyUI per run
     ├── tags/<name>.csv           tag lists added in Settings → Autocomplete
-    ├── scopes/<scope>/<kind>/    scope thumbnails (<ComfyUI model name>.webp, from the script)
+    ├── scopes/scopes.json        scopes: names, groups, prompt tags, the active one, auto (ADR-0015)
+    ├── scopes/<scope>/<kind>/    scope pictures (<ComfyUI model name>.webp: the script, uploads, gallery)
+    ├── snippets.json             prompt snippets
     ├── grids/<date>/             script grids when the profile has no outputs folder
     ├── trash/                    workflows/ (also <id>-before-edit-<stamp>/) · layouts/ · tags/ ·
-    │                             gallery/<id>/<file> · wildcards/<stamp>/<path> · batch/<run>/
-    └── blombo.sqlite             gallery index (FTS5) + favorites + trash list, downloads,
-                                  Civitai views and searches, model hashes and lookups,
-                                  tag usage (frequent tags)
+    │                             gallery/<id>/<file> · wildcards/<stamp>/<path> · batch/<run>/ ·
+    │                             scopes/<stamp>-<scope>/
+    └── blombo.sqlite             gallery index (FTS5) + favorites, ratings, your tags and
+                                  collections + trash list, downloads, Civitai views and searches,
+                                  model hashes and lookups, tag usage (frequent tags), the job log
+                                  (runs with values, timings and what they used), the error log,
+                                  favorite models
 runtime/cache/<id>/thumbs/        gallery/ and models/ WebP thumbnails (safe to delete)
 runtime/cache/<id>/batch-inputs/  images dropped into the batch runner (named by content)
 runtime/cache/civitai/            api/ answers and images/ (the image proxy), safe to delete
 runtime/cache/manager/            the ComfyUI model catalog (model-list.json), a day at a time
+runtime/cache/exports/            the last profile export zip (replaced by the next one)
 runtime/comfyui/<slot>/           managed ComfyUI: ComfyUI/ (custom_nodes/blombo-bridge) · .venv/ · blombo/
 runtime/tools/                    uv, its Python downloads and package cache (installer)
 runtime/app/                      the desktop window's WebView2 profile and window.json
@@ -149,6 +155,16 @@ ADR [0011](adr/0011-gallery-index.md) (gallery index) · ADR [0010](adr/0010-in-
 - **Checks without the real site:** `services/civitai/fixtures/fake-civitai.ts` serves the API, images, ranged downloads, an early-access file and a catalog; `--civitai` and `--catalog` point the server at it.
 
 ADR [0012](adr/0012-civitai-proxy-and-downloads.md).
+
+## Polish: history, help, scopes, shortcuts (Phase 5)
+
+- **Job log** (`services/history.ts`, ADR-0015): the queue's `finished` event carries what each run ran with; every run that left the queue (not ones cancelled before they started) is a `job_log` row with its values, stages, per-stage timings, duration and error, plus `job_log_uses` rows for its model, LoRAs (`<lora:…>` tags) and wildcards. It feeds **Settings → Overview** (images generated total / this week / per day for 14 days, GPU time, speed, most used models, LoRAs, wildcards and workflows; gallery size and favorites come from the index), **History → Generations** (a virtualized list with Run again, a new seed, or Use these settings), **prompt history** (the clock beside the prompt) and the pickers' **recent** models. The live bus's queue snapshots invalidate the `history` queries when a run finishes. Errors the bus announces are logged too, for the **Errors** view.
+- **Timings** (`services/timing.ts`): ComfyUI's `executing` and `progress` messages become time and steps per segment (the base pass, each stage) and "Other"; the running job's progress carries `rate` (it/s) and finished jobs `timings`. The image stage shows them.
+- **Scopes** (`services/scopes.ts`, `shared/scopes.ts`): `scopes/scopes.json` plus a folder of pictures per scope. The Scopes view (avatar menu, Models → Scopes) edits scopes, sets pictures (upload, from a gallery image, the thumbnails script), removes them to the trash, and looks a model up across scopes. The client's effective scope (picked, or picked from the Generate prompt's tags) swaps pictures into ModelCards, the Generate pickers and the models strip.
+- **Snippets** (`services/snippets.ts`): `snippets.json`; inserted at the cursor through the prompt editor's handle.
+- **Gallery marks**: star ratings (`marks.rating`), your tags (`image_tags`) and collections (`collections`, `collection_items`), keyed by library + path and carried through the trash; filters and a "Best rated" sort in the toolbar, collections in the sidebar, editing in the lightbox (1–5 / 0 rate).
+- **Profile export / import** (`services/backup.ts`): a zip of the profile folder without the trash and `secrets.json`, the database copied with `VACUUM INTO`; import makes a new profile.
+- **Client**: the command palette (Ctrl+K, `app/Palette.tsx`), shortcuts with overrides in settings (`shared/shortcuts.ts`, `app/useShortcuts.ts`, `app/commands.ts`), Help (F1, `features/help/`: topics, the prompt guide on `shared/prompt/explain.ts`, the playground with the real prompt editor), the first-run tour (`ui/Tour`), OS notifications when the window is in the background (`lib/notifications.ts`, `lib/platform.ts`), dropping an image on Generate to reuse its settings.
 
 ## Workflows (the core)
 

@@ -187,6 +187,48 @@ describe("gallery index", () => {
     expect(gallery.trashList()).toHaveLength(0);
   });
 
+  it("rates, tags and collects images, and keeps it all through the trash", async () => {
+    const plain = q({ q: "plain" }).items[0];
+    const other = q({ q: "silver" }).items[0];
+    if (!plain || !other) throw new Error("not found");
+    gallery.setRating([plain.id], 4);
+    gallery.setRating([other.id], 2);
+    gallery.setTags([plain.id, other.id], ["keeper", "Best Of"], []);
+    gallery.setTags([other.id], [], ["keeper"]);
+    const album = gallery.createCollection("Portfolio");
+    expect(album.id).toBe("portfolio");
+    expect(gallery.setCollectionItems(album.id, [plain.id], false)).toBe(1);
+
+    expect(q({ rating: 3 }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect(q({ sort: "rating" }).items[0]).toMatchObject({ name: "plain.png", rating: 4 });
+    expect(q({ tag: "keeper" }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect(gallery.tags()).toEqual([
+      { tag: "Best Of", count: 2 },
+      { tag: "keeper", count: 1 },
+    ]);
+    expect(q({ collection: album.id }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect(gallery.collections()[0]).toMatchObject({ name: "Portfolio", count: 1 });
+    const details = await gallery.details(plain.id);
+    expect(details).toMatchObject({
+      rating: 4,
+      tags: ["Best Of", "keeper"],
+      collections: ["portfolio"],
+    });
+
+    const [trashId] = await gallery.trash([plain.id]);
+    expect(gallery.collections()[0]?.count).toBe(0);
+    await gallery.restore([trashId as string]);
+    const back = q({ q: "plain" }).items[0];
+    expect(back).toMatchObject({ rating: 4, favorite: true });
+    expect(await gallery.details(back?.id as number)).toMatchObject({
+      tags: ["Best Of", "keeper"],
+      collections: ["portfolio"],
+    });
+    gallery.removeCollection(album.id);
+    expect(gallery.collections()).toEqual([]);
+    expect(q().total).toBe(3);
+  });
+
   it("empties only its own trash folder", async () => {
     const plain = q({ q: "plain" }).items[0];
     if (!plain) throw new Error("not found");

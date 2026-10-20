@@ -14,8 +14,10 @@ import {
   qk,
   useLocalModels,
   useModelDetails,
+  useModelMarks,
   useMoveModel,
   useRenameModel,
+  useSetModelFavorite,
   useSettings,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
@@ -39,12 +41,14 @@ import {
 } from "@client/ui";
 import { MODEL_KINDS, type ModelKind } from "@shared/constants";
 import type { LocalModel, ModelDetails } from "@shared/models";
+import { comfyNameOf, scopeKey } from "@shared/scopes";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFileInfoTarget } from "../fileinfo/state";
+import { useScopeThumb } from "../scopes/thumbs";
 import { openCivitaiModel } from "./civitai/state";
 import { useModelsNav } from "./nav";
 
@@ -268,6 +272,10 @@ function CardGrid({
     estimateSize: () => rowH,
     overscan: 3,
   });
+  const scoped = useScopeThumb();
+  const marks = useModelMarks().data;
+  const setFavorite = useSetModelFavorite();
+  const favorites = useMemo(() => new Set(marks?.favorites ?? []), [marks]);
   // Card size follows the width; re-measure when it changes.
   useEffect(() => {
     if (rowH > 0) virtualizer.measure();
@@ -295,9 +303,17 @@ function CardGrid({
                 name={m.name}
                 kind={m.kind}
                 baseModel={m.baseModel ?? undefined}
-                thumb={m.thumb}
-                nsfw={m.nsfw}
+                thumb={scoped(m.kind, comfyNameOf(m)) ?? m.thumb}
+                nsfw={scoped(m.kind, comfyNameOf(m)) ? false : m.nsfw}
                 blurNsfw={blurNsfw}
+                favorite={favorites.has(scopeKey(m.kind, comfyNameOf(m)))}
+                onFavorite={() =>
+                  setFavorite.mutate({
+                    kind: m.kind,
+                    name: comfyNameOf(m),
+                    favorite: !favorites.has(scopeKey(m.kind, comfyNameOf(m))),
+                  })
+                }
                 meta={formatBytes(m.size)}
                 selected={selected === m.id}
                 onClick={() => onSelect(m.id)}

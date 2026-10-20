@@ -4,13 +4,17 @@ import { z } from "zod";
 import type { OpenProfileResponse, ProfilesResponse } from "../../shared/api.ts";
 import { CreateProfileBody, ProfileId, UpdateProfileBody } from "../../shared/profile.ts";
 import { HttpError, readJson } from "../lib/http.ts";
+import { sendFile } from "../lib/send.ts";
+import type { ProfileBackup } from "../services/backup.ts";
 import type { ProfileService } from "../services/profiles.ts";
 
 const MAX_AVATAR_BYTES = 12 * 1024 * 1024;
+const MAX_IMPORT_BYTES = 2 * 1024 ** 3;
 
 export function profileRoutes(
   profiles: ProfileService,
   installPresets: (profileId: string, presetIds: string[]) => Promise<void>,
+  backup: ProfileBackup,
 ) {
   const r = new Hono();
 
@@ -46,7 +50,22 @@ export function profileRoutes(
     return c.json(await profiles.setOpenOnLaunch(body.id));
   });
 
+  /** A new profile from an exported zip (the body is the zip). */
+  r.post("/import", async (c) => {
+    const data = await c.req.arrayBuffer();
+    if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
+    if (data.byteLength > MAX_IMPORT_BYTES)
+      throw new HttpError(413, "That export is over 2 GB; Blombo can't import it.", "too_large");
+    return c.json(await backup.import(new Uint8Array(data)), 201);
+  });
+
   r.get("/:id", async (c) => c.json(await profiles.get(id(c.req.param("id")))));
+
+  /** The whole profile as a zip (without the trash and the Civitai key). */
+  r.get("/:id/export", async (c) => {
+    const { file, name } = await backup.export(id(c.req.param("id")));
+    return sendFile(file, { type: "application/zip", download: name });
+  });
 
   r.patch("/:id", async (c) => {
     const body = await readJson(c, UpdateProfileBody);

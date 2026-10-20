@@ -1,8 +1,9 @@
 /**
  * The profile's one SQLite file (ADR-0006): data/profiles/<id>/blombo.sqlite, opened with
  * node:sqlite in WAL mode. It holds rebuildable indexes (the gallery, model hashes and Civitai
- * lookups) plus small user marks and logs that must survive a rebuild (favorites, the trash
- * list, download and browse history), each in its own table. `ProfileDbs` hands every service
+ * lookups) plus small user marks and logs that must survive a rebuild (favorites, ratings, your
+ * tags and collections, the trash list, download and browse history, the job and error logs),
+ * each in its own table. `ProfileDbs` hands every service
  * the same connection, so a profile never has two databases.
  *
  * Migrations are ordered SQL steps tracked with `PRAGMA user_version`. Full-text search uses
@@ -129,6 +130,78 @@ const MIGRATIONS: string[] = [
     last_used REAL NOT NULL
   );
   CREATE INDEX tag_usage_uses ON tag_usage (uses DESC);
+  `,
+  // 4: the job log (with what each run used), the error log, gallery ratings, tags and
+  // collections, and favorite models
+  `
+  CREATE TABLE job_log (
+    id TEXT PRIMARY KEY,
+    workflow_id TEXT NOT NULL,
+    workflow_name TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    state TEXT NOT NULL,
+    seed INTEGER,
+    width INTEGER,
+    height INTEGER,
+    images INTEGER NOT NULL,
+    created_at REAL NOT NULL,
+    started_at REAL,
+    finished_at REAL NOT NULL,
+    duration_ms REAL,
+    model TEXT,
+    prompt TEXT,
+    negative TEXT,
+    values_json TEXT NOT NULL,
+    stages_json TEXT,
+    timings TEXT NOT NULL,
+    error TEXT,
+    group_title TEXT,
+    first_image TEXT
+  );
+  CREATE INDEX job_log_finished ON job_log (finished_at DESC);
+  CREATE TABLE job_log_uses (
+    job_id TEXT NOT NULL REFERENCES job_log (id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL
+  );
+  CREATE INDEX job_log_uses_kind ON job_log_uses (kind, name);
+  CREATE INDEX job_log_uses_job ON job_log_uses (job_id);
+  CREATE TABLE error_log (
+    id TEXT PRIMARY KEY,
+    at REAL NOT NULL,
+    source TEXT NOT NULL,
+    title TEXT NOT NULL,
+    detail TEXT NOT NULL
+  );
+  CREATE INDEX error_log_at ON error_log (at DESC);
+  ALTER TABLE marks ADD COLUMN rating INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE trash ADD COLUMN extra TEXT;
+  CREATE TABLE image_tags (
+    library TEXT NOT NULL,
+    path TEXT NOT NULL,
+    tag TEXT NOT NULL,
+    PRIMARY KEY (library, path, tag)
+  );
+  CREATE INDEX image_tags_tag ON image_tags (tag);
+  CREATE TABLE collections (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at REAL NOT NULL
+  );
+  CREATE TABLE collection_items (
+    collection_id TEXT NOT NULL REFERENCES collections (id) ON DELETE CASCADE,
+    library TEXT NOT NULL,
+    path TEXT NOT NULL,
+    added_at REAL NOT NULL,
+    PRIMARY KEY (collection_id, library, path)
+  );
+  CREATE INDEX collection_items_path ON collection_items (library, path);
+  CREATE TABLE model_marks (
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    favorite INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (kind, name)
+  );
   `,
 ];
 

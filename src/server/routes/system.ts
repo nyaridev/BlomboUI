@@ -4,9 +4,9 @@ import type { SystemInfo } from "../../shared/api.ts";
 import { APP_NAME } from "../../shared/constants.ts";
 import { CheckPathBody } from "../../shared/profile.ts";
 import type { ServerConfig } from "../config.ts";
-import { readJson } from "../lib/http.ts";
+import { HttpError, readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
-import { checkPath, pickFolder, pickImages } from "../services/system.ts";
+import { checkPath, pickFolder, pickImages, revealInFileManager } from "../services/system.ts";
 
 export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
   const r = new Hono();
@@ -21,6 +21,13 @@ export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
       activeProfileId: profiles.active,
     };
     return c.json(info);
+  });
+
+  /** Show the open profile's folder in Explorer (Settings → About). */
+  r.post("/reveal-profile", async (c) => {
+    if (!profiles.active) throw new HttpError(409, "Open a profile first.", "no_profile");
+    await revealInFileManager(profiles.dir(profiles.active));
+    return c.json({ ok: true });
   });
 
   r.post("/check-path", async (c) => {

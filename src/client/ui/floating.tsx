@@ -77,7 +77,7 @@ export function Tooltip({
             <div
               ref={refs.setFloating}
               style={floatingStyles}
-              className="z-[200]"
+              className="z-[370]"
               {...getFloatingProps()}
             >
               <motion.div
@@ -150,7 +150,7 @@ export function Popover({
               <div
                 ref={refs.setFloating}
                 style={floatingStyles}
-                className="z-[150]"
+                className="z-[350]"
                 {...getFloatingProps()}
               >
                 <motion.div
@@ -242,7 +242,7 @@ export function Menu({
               <div
                 ref={refs.setFloating}
                 style={floatingStyles}
-                className="z-[150]"
+                className="z-[350]"
                 {...getFloatingProps()}
               >
                 <motion.div

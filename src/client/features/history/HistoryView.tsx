@@ -1,7 +1,8 @@
 /**
- * History (avatar menu): every download with retry, show in Models and reveal; the Civitai
- * models you opened; and your Civitai searches. All of it lives in the profile's database and
- * is trimmed to the limits in Settings → Civitai.
+ * History (avatar menu): every run you generated (Generations.tsx, with run again); every
+ * download with retry, show in Models and reveal; the Civitai models you opened; and your
+ * Civitai searches. All of it lives in the profile's database; downloads and Civitai are trimmed
+ * to the limits in Settings → Civitai.
  */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
@@ -24,17 +25,20 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { DownloadRow } from "../downloads/DownloadRow";
 import { openCivitaiModel, useCivitai } from "../models/civitai/state";
 import { useModelsNav } from "../models/nav";
+import { Generations } from "./Generations";
 
-type Tab = "downloads" | "civitai";
+type Tab = "generations" | "downloads" | "civitai";
 
 export function HistoryView() {
-  const [tab, setTab] = useState<Tab>("downloads");
+  const [tab, setTab] = useState<Tab>("generations");
   return (
     <div className="flex h-full flex-col">
       <div className="mx-auto flex w-full max-w-[1120px] items-end gap-4 px-8 pt-8">
         <div className="flex flex-col gap-1 pb-3">
           <h1 className="text-2xl font-semibold tracking-tight text-fg">History</h1>
-          <p className="text-sm text-fg-3">What you downloaded and looked at on Civitai.</p>
+          <p className="text-sm text-fg-3">
+            What you generated, downloaded and looked at on Civitai.
+          </p>
         </div>
       </div>
       <div className="mx-auto w-full max-w-[1120px] border-b border-line px-8">
@@ -44,13 +48,22 @@ export function HistoryView() {
           value={tab}
           onChange={setTab}
           items={[
+            { value: "generations", label: "Generations", icon: "generate" },
             { value: "downloads", label: "Downloads", icon: "download" },
             { value: "civitai", label: "Civitai", icon: "globe" },
           ]}
           className="border-b-0"
         />
       </div>
-      <div className="min-h-0 flex-1">{tab === "downloads" ? <Downloads /> : <Civitai />}</div>
+      <div className="min-h-0 flex-1">
+        {tab === "generations" ? (
+          <Generations />
+        ) : tab === "downloads" ? (
+          <Downloads />
+        ) : (
+          <Civitai />
+        )}
+      </div>
     </div>
   );
 }

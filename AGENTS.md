@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0014)
+- `docs/adr/`: decisions and why (0001–0015)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 
 ## Commands
@@ -38,8 +38,10 @@ src/
 │                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
 │                 autocomplete (tag CSV, prompt context, formatting) · bridge (edit sessions)
 │                 scripts (matrix / XY / thumbnails planner) · batch (runner shapes)
+│                 history (job log, usage stats, snippets, model marks) · scopes (scope
+│                 definitions, pickScope) · shortcuts (actions, defaults, combos)
 │                 layout/schema · workflow/{roles,manifest,graph,stages,packs}
-│                 prompt/{tokenize,loras,wildcards,weight}
+│                 prompt/{tokenize,loras,wildcards,weight,explain}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
 │   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime --civitai --catalog)
 │   ├── context.ts    builds the services and wires their events together
@@ -48,12 +50,16 @@ src/
 │   │                 profiles · system · settings · comfy · workflows · jobs · wildcards
 │   │                 gallery · models · fileinfo · civitai · downloads · manager
 │   │                 stages · layouts · autocomplete · bridge (/api/bridge, CORS) · scripts · batch
+│   │                 history (job log, errors, prompts, stats, snippets, model marks) · scopes
 │   ├── services/     profiles · settings · system · window · live (bus) · jobs (queue)
 │   │                 wildcards · models · fileinfo · downloads (queue) · lookup (hash → Civitai)
 │   │                 manager (ComfyUI model catalog) · stages (packages, control images,
 │   │                 checks, map preview) · layouts (profile layouts/) · autocomplete (tag lists,
 │   │                 LoRAs, wildcards, frequent tags) · bridge (edit sessions, Save to Blombo)
-│   │                 scripts (groups → grids, scope thumbnails) · batch (the batch runner) · scopes
+│   │                 scripts (groups → grids, scope thumbnails) · batch (the batch runner)
+│   │                 scopes (scopes.json, per-scope model pictures) · history (job log, error log,
+│   │                 stats, model marks) · timing (RunClock: time and it/s per stage) · snippets
+│   │                 backup (profile export / import zip)
 │   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (slots, progress)
 │   │   │                 nodepacks (stage custom nodes into a slot) · uv (shared by both installers)
 │   │   │                 bridge (copy blombo-bridge into custom_nodes) · fixtures/fake-comfy(-page)
@@ -68,13 +74,15 @@ src/
 │                     grid (labeled script grids, sharp)
 ├── client/       React 19 · Vite 8 · Tailwind 4 · TanStack Router/Query · Zustand · Motion ·
 │   │             Floating UI · dnd-kit · CodeMirror 6
-│   ├── app/          router · Shell (keep-alive views) · header/ · theme
+│   ├── app/          router · Shell (keep-alive views) · header/ · theme · commands (actions the
+│   │                 palette and shortcuts run) · Palette (Ctrl+K) · useShortcuts
 │   ├── features/     profiles · generate · gallery · fileinfo · models (local, civitai/, Manager)
-│   │                 wildcards · settings · downloads · history · lab · common · preview
+│   │                 wildcards · settings · downloads · history (generations, downloads, Civitai)
+│   │                 errors · help (guide, playground) · scopes · lab · preview
 │   ├── ui/           the design system (hand-built controls). Import from "@client/ui"
 │   ├── icons/        hand-drawn SVG icon set + Logo
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
-│   │                 number · seeded · cn
+│   │                 number · seeded · cn · fuzzy (palette matching) · notifications (OS notes)
 │   └── styles/       tokens.css (all raw colors) · index.css (Tailwind theme) · base.css
 └── comfy-bridge/ blombo-bridge, the ComfyUI extension (ADR-0009): __init__.py + web/blombo.js +
                   web/blombo-core.js (plain JS; tests import the core through its .d.ts)
@@ -98,6 +106,8 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 **Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar thumbnails and info; the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
 
 **Online:** the server talks to Civitai for the client (cached API answers and an image proxy in `runtime/cache/civitai/`; the profile's key in `secrets.json`, never sent to the page). Downloads are a server queue with resume, hash checks and smart folders, progress on the bus (`downloads` topic) and history in the profile database; local models without info files are matched on Civitai by hash in the background; Models → Manager installs from ComfyUI-Manager's catalog through the same queue (ADR-0012).
+
+**Polish (Phase 5, ADR-0015):** every run that leaves the queue is logged in the profile database (`services/history.ts`: values, stages, timings, what it used), which feeds Settings → Overview (`/api/history/stats`), History → Generations (Run again: `queue.rerun`), prompt history, the pickers' recent models and the Errors view (errors are logged too). `services/timing.ts` turns ComfyUI's `executing` / `progress` into time and it/s per stage (`Job.timings`, `progress.rate`). Scopes live in `data/profiles/<id>/scopes/` (`scopes.json` + pictures); the client works out the effective scope once (`features/scopes/thumbs.ts`) and cards swap in its pictures. Snippets are `snippets.json`. Gallery ratings, your tags and collections are marks keyed by library + path. A profile exports as a zip (`services/backup.ts`, without the trash and the Civitai key) and imports as a new profile. Client-side: the command palette (`app/Palette.tsx` on `ui/CommandPalette`), shortcuts (`shared/shortcuts.ts`, overrides in `settings.shortcuts`, `app/useShortcuts.ts`, actions in `app/commands.ts`), OS notifications (`lib/notifications.ts` → `notify()` in `lib/platform.ts`), Help (`features/help/`), the first-run tour (`ui/Tour` + `features/generate/GenerateTour.tsx`), PNG drop on Generate (`features/generate/ImageDrop.tsx`).
 
 **Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) is still a sample. Never build new features on preview data.
 
@@ -168,6 +178,9 @@ Reads only through the service that owns the folder. Moves and renames go throug
 
 ### Touch Civitai or downloads
 Everything goes through the server: `services/civitai/` (API client with cache, image proxy, normalize) and `services/downloads.ts` (queue). Never call Civitai from the client and never put a remote image URL in the page; use `proxiedImage()`. Fetch with `fetchFollow` from `lib/remote.ts` (pass `auth` so the key goes only to Civitai's origin, `allow` for the image hosts). Writes into the models folder go through `openPartFile` / `commitPart` / `writeFileIfAbsent`. Tests and dev checks use the fake Civitai (`setupOnline()` in `services/civitai/fixtures/setup.ts` runs the real wiring against it), never the real site or a real key.
+
+### Add a shortcut or a palette entry
+An app-wide action is one entry in `SHORTCUT_ACTIONS` (`shared/shortcuts.ts`: id, label, group, default keys or `""`, optional `view`) and one case in `runAction()` (`app/commands.ts`); Settings → Shortcuts, the palette's Actions and Help list it from there. Keys that only work inside one view go in `FIXED_SHORTCUTS` (listed, not rebindable). Other palette groups (workflows, models, settings pages, help topics) are built from their data in `app/Palette.tsx`. Show the current keys with `useShortcutLabel()`, never a hardcoded string.
 
 ### Add a UI control
 Build it in `src/client/ui/`, export from `ui/index.ts`, add every state to `features/lab/DesignLab.tsx`, document it in `docs/design-system.md`.

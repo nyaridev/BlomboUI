@@ -3,6 +3,7 @@ export { Art, artStyle } from "./Art";
 export { Avatar } from "./Avatar";
 export { Button, type ButtonProps, IconButton, type IconButtonProps } from "./Button";
 export { Carousel, type CarouselImage } from "./Carousel";
+export { CommandPalette, type PaletteItem } from "./CommandPalette";
 export { Dialog } from "./Dialog";
 export {
   Badge,
@@ -34,8 +35,10 @@ export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } fro
 export { NumberField } from "./NumberField";
 export { Select, type SelectOption } from "./Select";
 export { type NumberControlProps, ScrubField, Slider } from "./Slider";
+export { StarRating } from "./StarRating";
 export { Notice, type UnitTab, UnitTabs } from "./stage";
 export { Collapsible, Divider, InheritRow, Panel, SectionTitle } from "./surfaces";
 export { type TabItem, Tabs } from "./Tabs";
+export { Tour, type TourStep } from "./Tour";
 export { Toaster, toast } from "./toast";
 export { Checkbox, Chip, Segmented, type SegmentOption, Switch } from "./toggles";

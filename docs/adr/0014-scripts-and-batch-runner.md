@@ -34,4 +34,4 @@ Both need progress, cancel, a live view in every window, and ComfyUI's events tu
 
 - A script or batch shows in the header queue and can be stopped with Cancel like any run; the Generate button turns into "Run script" while a script is on.
 - Grids and scope thumbnails need the images back from ComfyUI (`/view`), so they work with external ComfyUIs too.
-- Not covered yet: picking which scope Models shows (Phase 5, Scopes), a batch "open output folder" button, several batches at once, running the real Inspyrenet and WD14 packs (their models download on first use; needs the owner's OK).
+- Picking which scope cards show came in Phase 5 (ADR-0015). Not covered yet: a batch "open output folder" button, several batches at once, running the real Inspyrenet and WD14 packs (their models download on first use; needs the owner's OK).

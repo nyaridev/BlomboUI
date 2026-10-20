@@ -5,15 +5,18 @@ import { LayoutGroup, MotionConfig } from "motion/react";
 import { StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { router } from "./app/router";
-import { useApplyTheme } from "./app/theme";
+import { useApplyTheme, useTheme } from "./app/theme";
 import { queryClient } from "./lib/queries";
 import { Toaster } from "./ui";
 
+const REDUCED = { full: "never", reduced: "always", system: "user" } as const;
+
 function App() {
   useApplyTheme();
+  const motion = useTheme((s) => s.motion);
   return (
     <QueryClientProvider client={queryClient}>
-      <MotionConfig reducedMotion="user">
+      <MotionConfig reducedMotion={REDUCED[motion]}>
         <LayoutGroup id="app">
           <RouterProvider router={router} />
         </LayoutGroup>

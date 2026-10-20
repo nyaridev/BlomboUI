@@ -18,8 +18,9 @@ import {
   type ViewUpdate,
 } from "@codemirror/view";
 import { type Token, tokenizePrompt } from "@shared/prompt/tokenize";
-import { useEffect, useRef } from "react";
+import { type RefObject, useEffect, useRef } from "react";
 import { type AssistSettings, promptAssist } from "./promptAssist";
+import { joinAtCursor } from "./promptText";
 
 function className(t: Token): string {
   switch (t.type) {
@@ -37,6 +38,8 @@ function className(t: Token): string {
       return "cm-p-lora-strength";
     case "wildcard":
       return "cm-p-wildcard";
+    case "choice":
+      return "cm-p-choice";
     case "break":
       return "cm-p-break";
     case "escape":
@@ -110,6 +113,7 @@ const theme = EditorView.theme({
     borderRadius: "4px",
     padding: "1px 0",
   },
+  ".cm-p-choice": { color: "var(--syn-wildcard)", fontWeight: "700" },
   ".cm-p-break": {
     color: "var(--syn-break)",
     fontWeight: "700",
@@ -126,6 +130,13 @@ const theme = EditorView.theme({
   },
 });
 
+/** What a parent can do with an editor (snippets insert at the cursor). */
+export interface PromptEditorHandle {
+  /** Insert at the cursor, with ", " between it and the text around it. */
+  insert: (text: string) => void;
+  focus: () => void;
+}
+
 export function PromptEditor({
   value,
   onChange,
@@ -134,6 +145,7 @@ export function PromptEditor({
   className,
   label,
   onSubmit,
+  handle,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -142,6 +154,7 @@ export function PromptEditor({
   className?: string;
   label: string;
   onSubmit?: () => void;
+  handle?: RefObject<PromptEditorHandle | null>;
 }) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -190,9 +203,24 @@ export function PromptEditor({
       }),
     });
     view.current = v;
+    if (handle)
+      handle.current = {
+        insert: (text) => {
+          const { from, to } = v.state.selection.main;
+          const doc = v.state.doc.toString();
+          const insert = joinAtCursor(doc.slice(0, from), text, doc.slice(to));
+          v.dispatch({
+            changes: { from, to, insert },
+            selection: { anchor: from + insert.length },
+          });
+          v.focus();
+        },
+        focus: () => v.focus(),
+      };
     return () => {
       v.destroy();
       view.current = null;
+      if (handle) handle.current = null;
     };
   }, []);
 

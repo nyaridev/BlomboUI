@@ -192,6 +192,11 @@ function onJson(text: string): void {
       break;
     case "queue": {
       const running = msg.queue.jobs.find((j) => j.state === "running");
+      // A run left the queue: the job log, stats and prompt history have a new row.
+      const before = new Map(s.queue.jobs.map((j) => [j.id, j.state]));
+      const live = (state: string | undefined) => state === "queued" || state === "running";
+      if (msg.queue.jobs.some((j) => !live(j.state) && live(before.get(j.id))))
+        void queryClient.invalidateQueries({ queryKey: ["history"] });
       useLive.setState({
         queue: msg.queue,
         progress: running && s.progress?.jobId === running.id ? s.progress : null,
@@ -212,6 +217,7 @@ function onJson(text: string): void {
     }
     case "error":
       useLive.setState({ errors: [msg.error, ...s.errors].slice(0, 50) });
+      void queryClient.invalidateQueries({ queryKey: ["error-log"] });
       break;
     case "comfy.log":
       useLive.setState({ logs: [...s.logs, ...msg.lines].slice(-MAX_LOGS) });
@@ -251,6 +257,7 @@ function onJson(text: string): void {
     }
     case "models.changed":
       void queryClient.invalidateQueries({ queryKey: ["local-models"] });
+      void queryClient.invalidateQueries({ queryKey: ["scopes"] });
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
       // A downloaded detector or ControlNet model can fix a stage.
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
@@ -337,6 +344,9 @@ function onGalleryAdded(image: GalleryImage): void {
       !q.q &&
       !q.model &&
       !q.lora &&
+      !q.rating &&
+      !q.tag &&
+      !q.collection &&
       q.favorites !== "1" &&
       (q.sort ?? "newest") === "newest";
     if (!plain || !data?.pages[0]) continue;

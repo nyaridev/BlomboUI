@@ -12,6 +12,7 @@ import type { AppError } from "../shared/live.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
 import { AutocompleteService } from "./services/autocomplete.ts";
+import { ProfileBackup } from "./services/backup.ts";
 import { BatchService } from "./services/batch.ts";
 import { BridgeService } from "./services/bridge.ts";
 import { CivitaiApi } from "./services/civitai/api.ts";
@@ -25,6 +26,7 @@ import { StatsSampler } from "./services/comfy/stats.ts";
 import { ComfySupervisor } from "./services/comfy/supervisor.ts";
 import { DownloadQueue } from "./services/downloads.ts";
 import { GalleryService } from "./services/gallery/index.ts";
+import { HistoryService } from "./services/history.ts";
 import { JobQueue } from "./services/jobs.ts";
 import { LayoutService } from "./services/layouts.ts";
 import { LiveBus } from "./services/live.ts";
@@ -32,8 +34,10 @@ import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
 import { ProfileService } from "./services/profiles.ts";
+import { ScopeService } from "./services/scopes.ts";
 import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
+import { SnippetService } from "./services/snippets.ts";
 import { StageService } from "./services/stages.ts";
 import { installPreset, listPresets } from "./services/workflows/presets.ts";
 import { WorkflowService } from "./services/workflows/store.ts";
@@ -61,6 +65,10 @@ export interface Services {
   bridge: BridgeService;
   scripts: ScriptService;
   batch: BatchService;
+  history: HistoryService;
+  snippets: SnippetService;
+  scopes: ScopeService;
+  backup: ProfileBackup;
   /** Install starter presets into a new profile; unknown ids are skipped with a warning. */
   installPresets: (profileId: string, presetIds: string[]) => Promise<void>;
   shutdown: () => Promise<void>;
@@ -202,11 +210,26 @@ export function createServices(config: ServerConfig): Services {
     if (s.mode === "managed" && s.slot === slot && s.state === "missing") void supervisor.start();
   });
 
-  const reportError = (source: AppError["source"], title: string, detail: string) =>
-    bus.publish(null, {
-      t: "error",
-      error: { id: randomUUID(), at: Date.now(), source, title, detail },
-    });
+  // Finished runs and errors are logged in the profile database (History, Errors, Overview).
+  const history = new HistoryService({ profiles, dbs, gallery });
+  const backup = new ProfileBackup({ profiles, dbs, runtimeDir: config.runtimeDir });
+  const scopes = new ScopeService({
+    profiles,
+    onChanged: () => {
+      models.invalidate();
+      bus.publish(null, { t: "models.changed" });
+    },
+  });
+  const snippets = new SnippetService(profiles);
+  const reportError = (source: AppError["source"], title: string, detail: string) => {
+    const error: AppError = { id: randomUUID(), at: Date.now(), source, title, detail };
+    bus.publish(null, { t: "error", error });
+    try {
+      history.addError(error);
+    } catch (e) {
+      console.warn("Couldn't log an error:", e);
+    }
+  };
 
   const layouts = new LayoutService({ presetsDir: config.presetsDir, profiles, settings });
   const stages = new StageService({
@@ -242,6 +265,13 @@ export function createServices(config: ServerConfig): Services {
     reportError,
   });
   const jobs = queue;
+  jobs.on("finished", (job, run) => {
+    try {
+      history.record(job, run);
+    } catch (error) {
+      console.warn("Couldn't log a finished run:", error);
+    }
+  });
 
   const nodePacks = new NodePackInstaller({
     runtimeDir: config.runtimeDir,
@@ -375,6 +405,10 @@ export function createServices(config: ServerConfig): Services {
     bridge,
     scripts,
     batch,
+    history,
+    snippets,
+    scopes,
+    backup,
     installPresets: async (profileId, presetIds) => {
       for (const id of presetIds) {
         try {

@@ -1,14 +1,17 @@
 /**
  * The image stage: the selected result, or the live preview while generating; progress split by
- * part of the run (the workflow's sampling, then each stage) with speed and ETA; tools; and the strip of this session's results. Everything
- * comes from the live bus: queue snapshots, step progress and binary preview frames.
+ * part of the run (the workflow's sampling, then each stage) with speed and ETA; tools; the
+ * strip of this session's results; and, for a finished result, how long each part took and how
+ * fast it sampled (the server's timings, `Job.timings`). Everything comes from the live bus:
+ * queue snapshots, step progress and binary preview frames.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { type LivePreview, useLive } from "@client/lib/live";
 import { openWindow } from "@client/lib/platform";
-import { IconButton, Spinner, StageProgress, type StageSegment, toast } from "@client/ui";
+import { IconButton, Spinner, StageProgress, type StageSegment, Tooltip, toast } from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
+import { averageRate, formatDuration } from "@shared/history";
 import type { Job, JobImage } from "@shared/jobs";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -67,7 +70,9 @@ export function ImageStage() {
   const seedId = useRoleBinding("sampler.seed")?.id;
   const valueW = useValues((s) => (widthId ? Number(s.values[widthId]) : Number.NaN));
   const valueH = useValues((s) => (heightId ? Number(s.values[heightId]) : Number.NaN));
-  const speed = useSpeed();
+  const smoothed = useSpeed();
+  // The server measures from when the node started; before its first steps, our own estimate.
+  const speed = progress?.rate ?? smoothed;
 
   const results = useMemo<Result[]>(
     () =>
@@ -260,7 +265,18 @@ export function ImageStage() {
               {seconds(current.job) ? (
                 <>
                   <span className="text-white/40">·</span>
-                  <span>{seconds(current.job)}</span>
+                  {current.job.timings.length ? (
+                    <Tooltip content={<Timings job={current.job} />}>
+                      <span className="cursor-default underline decoration-white/40 decoration-dotted underline-offset-2">
+                        {seconds(current.job)}
+                        {averageRate(current.job.timings)
+                          ? ` · ${(averageRate(current.job.timings) as number).toFixed(2)} it/s`
+                          : ""}
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <span>{seconds(current.job)}</span>
+                  )}
                 </>
               ) : null}
             </div>
@@ -302,6 +318,27 @@ export function ImageStage() {
         </span>
       </div>
     </div>
+  );
+}
+
+/** How long each part of a finished run took (the image stage's tooltip). */
+function Timings({ job }: { job: Job }) {
+  return (
+    <span className="flex min-w-[200px] flex-col gap-1 py-0.5">
+      <span className="font-medium">Time per part</span>
+      {job.timings.map((t) => (
+        <span
+          key={t.label}
+          className="flex items-center justify-between gap-4 font-mono text-2xs tabular"
+        >
+          <span className="font-sans">{t.label}</span>
+          <span>
+            {formatDuration(t.ms)}
+            {t.rate ? ` · ${t.rate.toFixed(2)} it/s` : t.steps ? ` · ${t.steps} steps` : ""}
+          </span>
+        </span>
+      ))}
+    </span>
   );
 }
 

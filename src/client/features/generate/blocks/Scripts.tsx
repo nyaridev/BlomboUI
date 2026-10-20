@@ -5,7 +5,7 @@
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { useModels } from "@client/lib/queries";
+import { useModels, useScopes } from "@client/lib/queries";
 import {
   Button,
   Checkbox,
@@ -229,6 +229,11 @@ function ThumbsEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Bindi
   const q = filter.trim().toLowerCase();
   const shown = q ? all.filter((m) => m.toLowerCase().includes(q)) : all;
   const patch = (p: Partial<ScriptDraft["thumbs"]>) => set({ thumbs: { ...t, ...p } });
+  const scopes = useScopes().data?.scopes ?? [];
+  const scopeOptions = [
+    ...scopes.map((sc) => ({ value: sc.id, label: sc.name, group: sc.group || undefined })),
+    ...(scopes.some((sc) => sc.id === t.scope) ? [] : [{ value: t.scope, label: t.scope }]),
+  ];
   const toggle = (m: string, on: boolean) =>
     patch({ models: on ? [...t.models, m] : t.models.filter((x) => x !== m) });
 
@@ -292,14 +297,13 @@ function ThumbsEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Bindi
         )}
       </div>
       <div className="flex items-center gap-2">
-        <TextField
+        <Select
           size="sm"
-          mono
-          className="w-40"
-          aria-label="Scope"
+          className="w-44"
+          label="Scope"
           value={t.scope}
-          onChange={(e) => patch({ scope: e.target.value })}
-          icon="tag"
+          onChange={(scope) => patch({ scope })}
+          options={scopeOptions}
         />
         <span className="text-2xs text-fg-3">Scope · {t.models.length} picked</span>
         {t.target === "lora" ? (

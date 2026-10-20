@@ -133,7 +133,7 @@ export function Select<T extends string>({
               <div
                 ref={refs.setFloating}
                 style={floatingStyles}
-                className="z-[160] flex"
+                className="z-[360] flex"
                 {...getFloatingProps()}
               >
                 <motion.div

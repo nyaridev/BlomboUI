@@ -4,7 +4,7 @@
  * can preview others without saving.
  */
 import type { AccentId, ThemeId } from "@shared/constants";
-import { fontStack, type UiFont } from "@shared/settings";
+import { fontStack, type MotionPref, type UiFont } from "@shared/settings";
 import { useEffect } from "react";
 import { create } from "zustand";
 
@@ -14,7 +14,10 @@ interface ThemeState {
   font: UiFont;
   /** Family name for the "custom" font. */
   customFont: string;
-  set: (patch: Partial<Pick<ThemeState, "theme" | "accent" | "font" | "customFont">>) => void;
+  motion: MotionPref;
+  set: (
+    patch: Partial<Pick<ThemeState, "theme" | "accent" | "font" | "customFont" | "motion">>,
+  ) => void;
 }
 
 export const useTheme = create<ThemeState>((set) => ({
@@ -22,6 +25,7 @@ export const useTheme = create<ThemeState>((set) => ({
   accent: "blue",
   font: "geist",
   customFont: "",
+  motion: "system",
   set: (patch) => set(patch),
 }));
 
@@ -31,6 +35,10 @@ export function useApplyTheme() {
   const accent = useTheme((s) => s.accent);
   const font = useTheme((s) => s.font);
   const customFont = useTheme((s) => s.customFont);
+  const motion = useTheme((s) => s.motion);
+  useEffect(() => {
+    document.documentElement.dataset.motion = motion;
+  }, [motion]);
   useEffect(() => {
     const root = document.documentElement;
     root.dataset.theme = theme;

@@ -32,6 +32,7 @@ import { ComfyHttpError, type ComfyPreview, type ComfyWsMessage } from "./comfy/
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { ProfileService } from "./profiles.ts";
 import type { StageService } from "./stages.ts";
+import { RunClock } from "./timing.ts";
 import { loadWildcards } from "./wildcards.ts";
 import { CompileError, compile } from "./workflows/compile.ts";
 import { LORA_LOADER, TEXT_OUTPUT_KEYS } from "./workflows/nodes.ts";
@@ -69,13 +70,21 @@ interface Run {
   values: Record<string, unknown>;
   stages: WorkflowManifest["stages"];
   inputs: RunInput[];
+  clock?: RunClock;
+}
+
+/** What a finished job ran with, for the job log ("Run again", usage stats). */
+export interface RunContext {
+  manifest: WorkflowManifest;
+  values: Record<string, unknown>;
+  stages: WorkflowManifest["stages"];
 }
 
 type QueueEvents = {
   /** A job was taken off the queue to run. */
   started: (job: Job) => void;
   /** A job left the queue for good (done, error, interrupted or cancelled). */
-  finished: (job: Job) => void;
+  finished: (job: Job, context: RunContext | null) => void;
 };
 
 /** Where uploaded batch inputs go in ComfyUI's input folder. */
@@ -251,6 +260,25 @@ export class JobQueue extends Emitter<QueueEvents> {
     return jobs;
   }
 
+  /** Run a logged job again: its values, stages and seed, as one new run. */
+  rerun(
+    manifest: WorkflowManifest,
+    values: Record<string, unknown>,
+    stages: WorkflowManifest["stages"] | null,
+    seed: number | null,
+  ): Job {
+    if (manifest.kind !== "generate")
+      throw new HttpError(400, "Batch runs start from the batch runner.", "not_generate");
+    const job = this.add(manifest, seed ?? this.baseSeed(manifest), {
+      values: { ...manifest.values, ...values },
+      ...(stages ? { stages } : {}),
+    });
+    this.prepareComfy();
+    this.publishQueue();
+    void this.pump();
+    return job;
+  }
+
   /** Put a finished job Blombo made itself (a script's grid) into the list. */
   addFinished(job: Job): void {
     this.finished.unshift(job);
@@ -314,7 +342,12 @@ export class JobQueue extends Emitter<QueueEvents> {
   private add(
     manifest: WorkflowManifest,
     seed: number,
-    extra: { values?: Record<string, unknown>; group?: JobGroup; inputs?: RunInput[] } = {},
+    extra: {
+      values?: Record<string, unknown>;
+      group?: JobGroup;
+      inputs?: RunInput[];
+      stages?: WorkflowManifest["stages"];
+    } = {},
   ): Job {
     const values = extra.values ?? manifest.values;
     const width = bindingFor(manifest.bindings, "latent.width");
@@ -323,7 +356,8 @@ export class JobQueue extends Emitter<QueueEvents> {
     const w = width ? num(values[width.id]) : null;
     const h = height ? num(values[height.id]) : null;
     // With Hires fix on, the image comes out at the Hires size.
-    const hires = readStages(manifest.stages).hires;
+    const stages = extra.stages ?? manifest.stages;
+    const hires = readStages(stages).hires;
     const size = hires.enabled
       ? hiresSize(hires, w !== null && h !== null ? { width: w, height: h } : null)
       : null;
@@ -340,19 +374,20 @@ export class JobQueue extends Emitter<QueueEvents> {
       createdAt: new Date().toISOString(),
       startedAt: null,
       finishedAt: null,
-      progress: { value: 0, max: 1, node: null, overall: 0, segment: 0 },
+      progress: { value: 0, max: 1, node: null, overall: 0, segment: 0, rate: null },
       images: [],
       texts: [],
       error: null,
       promptId: null,
       group: extra.group ?? null,
       file: null,
+      timings: [],
     };
     this.queued.push({
       job,
       manifest,
       values: { ...values },
-      stages: structuredClone(manifest.stages),
+      stages: structuredClone(stages),
       inputs: extra.inputs ?? [],
     });
     return job;
@@ -414,6 +449,7 @@ export class JobQueue extends Emitter<QueueEvents> {
     this.early = [];
     run.job.state = "running";
     run.job.startedAt = new Date().toISOString();
+    run.clock = new RunClock(run.job.segments, Date.now());
     this.publishQueue();
     this.emit("started", run.job);
     try {
@@ -454,6 +490,7 @@ export class JobQueue extends Emitter<QueueEvents> {
         objectInfo: info,
       });
       run.job.segments = compiled.segments;
+      run.clock?.setSegments(compiled.segments);
       const res = await api.queuePrompt(compiled.prompt, {
         preview_method: "auto",
         extra_pnginfo: {
@@ -500,13 +537,22 @@ export class JobQueue extends Emitter<QueueEvents> {
     }
   }
 
-  private retire(job: Job, state: Job["state"], error: string | null = null): void {
+  private retire(
+    job: Job,
+    state: Job["state"],
+    error: string | null = null,
+    run: Run | null = null,
+  ): void {
     job.state = state;
     job.error = error;
     job.finishedAt = new Date().toISOString();
     this.finished.unshift(job);
     if (this.finished.length > KEEP_FINISHED) this.finished.length = KEEP_FINISHED;
-    this.emit("finished", job);
+    this.emit(
+      "finished",
+      job,
+      run ? { manifest: run.manifest, values: run.values, stages: run.stages } : null,
+    );
   }
 
   private finish(
@@ -517,7 +563,8 @@ export class JobQueue extends Emitter<QueueEvents> {
     if (this.active !== run) return;
     this.active = null;
     if (state === "done") run.job.progress = { ...run.job.progress, overall: 1 };
-    this.retire(run.job, state, error);
+    if (run.clock) run.job.timings = run.clock.finish(Date.now());
+    this.retire(run.job, state, error, run);
     // A batch lists its own failures per file; everything else goes to the error list.
     if (state === "error" && error && run.job.group?.kind !== "batch")
       this.deps.reportError("job", `${run.job.workflowName} failed`, error);
@@ -580,13 +627,14 @@ export class JobQueue extends Emitter<QueueEvents> {
         // The part of the run this node belongs to; an unknown node stays in the current one.
         const found = node === null ? -1 : segments.findIndex((s) => s.nodes.includes(node));
         const segment = found >= 0 ? found : prev.segment;
+        const rate = run.clock?.progress(node, value, Date.now()) ?? null;
         const n = Math.max(1, segments.length);
         // A detailer runs its steps once per face: never let the bar go backwards.
         const overall = Math.min(
           0.99,
           Math.max(segment === prev.segment ? prev.overall : 0, (segment + value / max) / n),
         );
-        run.job.progress = { value, max, node, overall, segment };
+        run.job.progress = { value, max, node, overall, segment, rate };
         this.deps.publish("jobs", {
           t: "job.progress",
           jobId: run.job.id,
@@ -611,6 +659,8 @@ export class JobQueue extends Emitter<QueueEvents> {
         void this.collectHistory(run).then(() => this.finish(run, "done"));
         break;
       case "executing":
+        if (d.node !== null && d.node !== undefined)
+          run.clock?.executing(String(d.node), Date.now());
         // Older ComfyUI signals the end with `executing` for node null.
         if (d.node === null && pid === run.job.promptId)
           void this.collectHistory(run).then(() => this.finish(run, "done"));

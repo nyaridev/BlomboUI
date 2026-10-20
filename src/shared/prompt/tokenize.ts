@@ -6,6 +6,7 @@
  *   \( \) \[ \]                  literal brackets
  *   <lora:name>  <lora:name:0.8> LoRA with optional strength
  *   __path/name__                wildcard
+ *   {red|blue}                   one of the options, picked per image (like a wildcard)
  *   BREAK                        start a new 75-token chunk
  * Unbalanced brackets and malformed LoRA tags are reported as `invalid`.
  */
@@ -18,6 +19,7 @@ export type TokenType =
   | "lora-name"
   | "lora-strength"
   | "wildcard"
+  | "choice"
   | "break"
   | "escape"
   | "invalid";
@@ -35,6 +37,8 @@ const LORA = /<lora:([^:>]*)(?::([^>]*))?>/gi;
 const LORA_OPEN = /<lora:[^>]*$/gim;
 const WILDCARD = /__([^\s_][^\s]*?)__/g;
 const BREAK = /\bBREAK\b/g;
+/** An innermost {…|…} group (the braces and bars are marked; what's inside keeps its syntax). */
+const CHOICE = /\{[^{}]*\|[^{}]*\}/g;
 const ESCAPE = /\\[()[\]]/g;
 const WEIGHT_TAIL = /:\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*$/;
 
@@ -87,6 +91,16 @@ export function tokenizePrompt(text: string): Token[] {
     if (covered[m.index]) continue;
     tokens.push({ from: m.index, to: m.index + m[0].length, type: "wildcard" });
     cover(m.index, m.index + m[0].length);
+  }
+  for (const m of text.matchAll(CHOICE)) {
+    if (covered[m.index]) continue;
+    for (let i = m.index; i < m.index + m[0].length; i++) {
+      const ch = text[i];
+      if (!covered[i] && (ch === "{" || ch === "}" || ch === "|")) {
+        tokens.push({ from: i, to: i + 1, type: "choice" });
+        cover(i, i + 1);
+      }
+    }
   }
   for (const m of text.matchAll(BREAK)) {
     if (covered[m.index]) continue;

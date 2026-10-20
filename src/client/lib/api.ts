@@ -38,20 +38,34 @@ import type {
 } from "@shared/downloads";
 import type { FileInfo } from "@shared/fileinfo";
 import type {
+  Collection,
   GalleryFacets,
   GalleryOverview,
   GalleryPage,
   GalleryQueryInput,
   ImageDetails,
   SyncState,
+  TagCount,
   TrashEntry,
 } from "@shared/gallery";
+import type {
+  JobHistoryPage,
+  JobHistoryQueryInput,
+  JobRecordDetail,
+  ModelMarks,
+  PromptHistoryEntry,
+  SaveSnippetBody,
+  Snippet,
+  UsageStats,
+} from "@shared/history";
 import type { InstallBody, InstallState, NodeInstallState, SlotsResponse } from "@shared/install";
-import type { GenerateBody, GenerateResponse, QueueSnapshot } from "@shared/jobs";
+import type { GenerateBody, GenerateResponse, Job, QueueSnapshot } from "@shared/jobs";
 import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layout/schema";
+import type { AppError } from "@shared/live";
 import type { Catalog } from "@shared/manager";
 import type { LocalModel, LookupState, ModelDetails, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
+import type { SaveScopeBody, ScopeDef, ScopesState } from "@shared/scopes";
 import type { LibraryEntry, Settings, SettingsPatch } from "@shared/settings";
 import type { RollBody, RollResult, WildcardFile, WildcardTree } from "@shared/wildcards";
 import type {
@@ -103,6 +117,7 @@ async function request<T>(
 
 export const api = {
   system: () => request<SystemInfo>("GET", "/system"),
+  revealProfileFolder: () => request<{ ok: true }>("POST", "/system/reveal-profile"),
   checkPath: (path: string) => request<CheckPathResult>("POST", "/system/check-path", { path }),
   pickFolder: (title: string, initial?: string) =>
     request<{ path: string | null }>("POST", "/system/pick-folder", { title, initial }),
@@ -120,6 +135,7 @@ export const api = {
   uploadAvatar: (id: string, file: Blob) =>
     request<Profile>("PUT", `/profiles/${id}/avatar`, undefined, file),
   removeAvatar: (id: string) => request<Profile>("DELETE", `/profiles/${id}/avatar`),
+  importProfile: (file: Blob) => request<Profile>("POST", "/profiles/import", undefined, file),
 
   comfy: () => request<ComfyStatus>("GET", "/comfy"),
   comfyStart: () => request<ComfyStatus>("POST", "/comfy/start"),
@@ -263,6 +279,69 @@ export const api = {
     request<{ ok: true }>("PATCH", `/gallery/libraries/${encodeURIComponent(id)}`, { name }),
   removeLibrary: (id: string) =>
     request<void>("DELETE", `/gallery/libraries/${encodeURIComponent(id)}`),
+  rateImages: (ids: number[], rating: number) =>
+    request<{ ok: true }>("POST", "/gallery/rating", { ids, rating }),
+  tagImages: (ids: number[], add: string[], remove: string[]) =>
+    request<{ ok: true }>("POST", "/gallery/tags", { ids, add, remove }),
+  galleryTags: () => request<TagCount[]>("GET", "/gallery/tags"),
+  collections: () => request<Collection[]>("GET", "/gallery/collections"),
+  createCollection: (name: string) => request<Collection>("POST", "/gallery/collections", { name }),
+  renameCollection: (id: string, name: string) =>
+    request<{ ok: true }>("PATCH", `/gallery/collections/${encodeURIComponent(id)}`, { name }),
+  removeCollection: (id: string) =>
+    request<void>("DELETE", `/gallery/collections/${encodeURIComponent(id)}`),
+  collectImages: (id: string, ids: number[], remove = false) =>
+    request<{ changed: number }>("POST", `/gallery/collections/${encodeURIComponent(id)}/items`, {
+      ids,
+      remove,
+    }),
+
+  jobHistory: (q: JobHistoryQueryInput) =>
+    request<JobHistoryPage>("GET", `/history/jobs?${query(q)}`),
+  jobRecord: (id: string) => request<JobRecordDetail>("GET", `/history/jobs/${id}`),
+  rerunJob: (id: string, newSeed = false) =>
+    request<{ job: Job }>("POST", `/history/jobs/${id}/rerun`, { newSeed }),
+  removeJobRecords: (body: { ids?: string[]; all?: boolean }) =>
+    request<{ removed: number }>("POST", "/history/jobs/remove", body),
+  promptHistory: (q: string, limit = 50) =>
+    request<PromptHistoryEntry[]>("GET", `/history/prompts?${query({ q, limit })}`),
+  usageStats: () => request<UsageStats>("GET", "/history/stats"),
+  errorLog: () => request<AppError[]>("GET", "/history/errors"),
+  clearErrorLog: (ids?: string[]) =>
+    request<{ removed: number }>("POST", "/history/errors/clear", { ids }),
+  snippets: () => request<Snippet[]>("GET", "/history/snippets"),
+  saveSnippet: (body: SaveSnippetBody) => request<Snippet>("POST", "/history/snippets", body),
+  removeSnippet: (id: string) =>
+    request<void>("DELETE", `/history/snippets/${encodeURIComponent(id)}`),
+  modelMarks: () => request<ModelMarks>("GET", "/history/model-marks"),
+  setModelFavorite: (kind: ModelKind, name: string, favorite: boolean) =>
+    request<ModelMarks>("POST", "/history/model-marks", { kind, name, favorite }),
+
+  scopes: () => request<ScopesState>("GET", "/scopes"),
+  setScopeOptions: (patch: { active?: string; auto?: boolean }) =>
+    request<ScopesState>("PUT", "/scopes/options", patch),
+  createScope: (body: SaveScopeBody) => request<ScopeDef>("POST", "/scopes", body),
+  updateScope: (id: string, body: SaveScopeBody) =>
+    request<ScopeDef>("PATCH", `/scopes/${encodeURIComponent(id)}`, body),
+  removeScope: (id: string) => request<void>("DELETE", `/scopes/${encodeURIComponent(id)}`),
+  uploadScopeThumb: (scope: string, kind: ModelKind, name: string, file: Blob) =>
+    request<{ ok: true }>(
+      "PUT",
+      `/scopes/${encodeURIComponent(scope)}/thumbs?${query({ kind, name })}`,
+      undefined,
+      file,
+    ),
+  scopeThumbFromImage: (scope: string, kind: ModelKind, name: string, imageId: number) =>
+    request<{ ok: true }>("POST", `/scopes/${encodeURIComponent(scope)}/thumbs/from-image`, {
+      kind,
+      name,
+      imageId,
+    }),
+  removeScopeThumb: (scope: string, kind: ModelKind, name: string) =>
+    request<{ ok: true }>("POST", `/scopes/${encodeURIComponent(scope)}/thumbs/remove`, {
+      kind,
+      name,
+    }),
 
   localModels: (rescan = false) =>
     request<ModelList>("GET", `/models/local${rescan ? "?rescan=1" : ""}`),
@@ -335,6 +414,11 @@ function query(params: Record<string, unknown>): string {
   for (const [k, v] of Object.entries(params))
     if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   return q.toString();
+}
+
+/** The zip download of a whole profile (Settings → About). */
+export function profileExportUrl(id: string): string {
+  return `/api/profiles/${encodeURIComponent(id)}/export`;
 }
 
 /** The .blombo download of a workflow. */

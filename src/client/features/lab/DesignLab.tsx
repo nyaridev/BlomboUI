@@ -5,6 +5,7 @@
 import { useTheme } from "@client/app/theme";
 import { BatchRunView } from "@client/features/generate/batch/BatchView";
 import { PromptEditor } from "@client/features/generate/PromptEditor";
+import { SyntaxText } from "@client/features/help/SyntaxText";
 import { MOCK_PROMPT } from "@client/features/preview/mock";
 import { Icon } from "@client/icons/Icon";
 import { Logo, Wordmark } from "@client/icons/Logo";
@@ -21,6 +22,7 @@ import {
   Checkbox,
   Chip,
   Collapsible,
+  CommandPalette,
   CopyButton,
   Dialog,
   DropZone,
@@ -46,12 +48,14 @@ import {
   Slider,
   Spinner,
   StageProgress,
+  StarRating,
   StatusDot,
   Switch,
   Tabs,
   TextArea,
   TextField,
   Tooltip,
+  Tour,
   TreeRow,
   toast,
   UnitTabs,
@@ -80,7 +84,24 @@ const SECTIONS = [
   ["library", "Library"],
   ["batch", "Batch"],
   ["prompt", "Prompt editor"],
+  ["guides", "Guides"],
 ] as const;
+
+/** Sample entries for the command palette (Lab only). */
+const PALETTE_SAMPLE = [
+  { id: "g", label: "Go to Generate", group: "Go to", icon: "generate" as const, keys: ["Ctrl 1"] },
+  { id: "y", label: "Go to Gallery", group: "Go to", icon: "gallery" as const, keys: ["Ctrl 2"] },
+  { id: "u", label: "Unload models from VRAM", group: "Actions", icon: "unload-models" as const },
+  {
+    id: "r",
+    label: "Rescan model folders",
+    group: "Actions",
+    icon: "rescan-models" as const,
+    keys: ["R"],
+  },
+  { id: "w", label: "SDXL", group: "Workflows", icon: "workflow" as const, hint: "SDXL" },
+  { id: "s", label: "Settings → Shortcuts", group: "Settings", icon: "keyboard" as const },
+];
 
 /** A finished-looking batch for the Batch section (Lab only). */
 const SAMPLE_BATCH: BatchRun = {
@@ -223,6 +244,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [treeSel, setTreeSel] = useState("outfits/fantasy.txt");
   const [lines, setLines] = useState(["silver cloak", "# a comment", "__colors__ armor"]);
   const [progress, setProgress] = useState(0.42);
+  const [stars, setStars] = useState(3);
+  const [palette, setPalette] = useState(false);
+  const [tour, setTour] = useState(false);
   const samples = useSampleImages();
   const errors = useLive((s) => s.errors.length);
 
@@ -722,6 +746,17 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                   onSelect: () => undefined,
                 },
               ]}
+            />
+          </Row>
+          <Row label="Command palette">
+            <Button icon="search" onClick={() => setPalette(true)}>
+              Open palette
+            </Button>
+            <CommandPalette
+              open={palette}
+              onOpenChange={setPalette}
+              items={PALETTE_SAMPLE}
+              onPick={(i) => toast(`Picked “${i.label}”`, "info")}
             />
           </Row>
           <Row label="Dialog">
@@ -1288,7 +1323,55 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               <span className="text-syn-invalid underline decoration-wavy">&lt;lora:broken</span>{" "}
               error
             </span>
+            <span>
+              <span className="font-bold text-syn-wildcard">{"{a|b}"}</span> choice
+            </span>
           </div>
+          <div className="mt-4 flex flex-col gap-1.5">
+            <span className="label-caps">SyntaxText (read-only, Help and history)</span>
+            <SyntaxText
+              text={
+                "(golden hour:1.3), ((fog)), [people], {red|blue}, __animal__, <lora:detail:0.6> BREAK \\(note\\)"
+              }
+            />
+          </div>
+        </Section>
+
+        <Section
+          id="guides"
+          title="Guides"
+          text="Ratings, the first-run tour and the guide pieces used by Help."
+        >
+          <Row label="Star rating">
+            <StarRating value={stars} onChange={setStars} />
+            <StarRating value={stars} onChange={setStars} size="sm" />
+            <StarRating value={4} readOnly />
+            <span className="font-mono text-xs text-fg-3">{stars} of 5</span>
+          </Row>
+          <Row label="Tour">
+            <Button icon="play" onClick={() => setTour(true)} data-tour="lab-tour">
+              Start a sample tour
+            </Button>
+            <span data-tour="lab-tour-2" className="text-xs text-fg-3">
+              Highlights a part of the page with a card next to it.
+            </span>
+            <Tour
+              open={tour}
+              onClose={() => setTour(false)}
+              steps={[
+                {
+                  target: "[data-tour=lab-tour]",
+                  title: "This button",
+                  text: "Each step highlights one part and says what it does.",
+                },
+                {
+                  target: "[data-tour=lab-tour-2]",
+                  title: "And this text",
+                  text: "Arrow keys move, Escape skips, Done finishes.",
+                },
+              ]}
+            />
+          </Row>
         </Section>
       </div>
     </div>

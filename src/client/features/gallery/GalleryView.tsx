@@ -50,10 +50,11 @@ function useDebounced<T>(value: T, ms: number): T {
 function Images({ featured }: { featured: GalleryImage[] }) {
   const ui = useGalleryUi();
   const q = useDebounced(ui.q, 250);
-  const { library, favorites, since, model, lora, sort } = ui;
+  const { library, favorites, since, model, lora, sort, rating, tag, collection } = ui;
   const query = useMemo(
-    () => galleryQuery({ library, favorites, since, model, lora, sort }, q),
-    [library, favorites, since, model, lora, sort, q],
+    () =>
+      galleryQuery({ library, favorites, since, model, lora, sort, rating, tag, collection }, q),
+    [library, favorites, since, model, lora, sort, rating, tag, collection, q],
   );
   const images = useGalleryImages(query);
   const items = useMemo(() => images.data?.pages.flatMap((p) => p.items) ?? [], [images.data]);

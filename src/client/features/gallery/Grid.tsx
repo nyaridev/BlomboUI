@@ -183,6 +183,16 @@ export const Tile = memo(function Tile({
           <span className="truncate">{image.model}</span>
         </div>
       ) : null}
+      {image.rating ? (
+        <div
+          className="pointer-events-none absolute top-1.5 left-1.5 flex items-center gap-0.5 rounded-full bg-black/45 px-1.5 py-0.5 font-mono text-2xs text-white/90 tabular"
+          role="img"
+          aria-label={`${image.rating} of 5 stars`}
+        >
+          <Icon name="star" size={10} className="fill-current text-yellow-ink" />
+          {image.rating}
+        </div>
+      ) : null}
       <button
         type="button"
         aria-label={image.favorite ? "Remove from favorites" : "Add to favorites"}

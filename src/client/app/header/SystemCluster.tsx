@@ -6,10 +6,10 @@
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
+import { useGoToView } from "@client/lib/hooks";
 import { dismissErrors, useLive } from "@client/lib/live";
 import { snappy } from "@client/lib/motion";
 import { openWindow } from "@client/lib/platform";
-import { qk, queryClient } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
   Button,
@@ -20,13 +20,14 @@ import {
   ProgressRing,
   StatusDot,
   Tooltip,
-  toast,
 } from "@client/ui";
 import type { ComfyState } from "@shared/comfy";
 import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import { useSettingsNav } from "../../features/settings/nav";
+import { freeMemory, rescanModels, runWithToast, unloadModels } from "../commands";
+import { useShortcutLabel } from "../useShortcuts";
 import { ComfyLogs } from "./ComfyLogs";
 import { DownloadsChip } from "./DownloadsChip";
 
@@ -54,16 +55,8 @@ function uptime(since: string | null): string {
   return mins < 60 ? `${mins}m` : `${Math.floor(mins / 60)}h ${mins % 60}m`;
 }
 
-async function run(action: () => Promise<unknown>, done: string) {
-  try {
-    await action();
-    toast(done, "success");
-  } catch (error) {
-    toast(error instanceof Error ? error.message : String(error), "error");
-  }
-}
-
 export function SystemCluster() {
+  const keys = useShortcutLabel();
   const comfy = useLive((s) => s.comfy);
   const gpu = useLive((s) => s.stats?.gpu ?? null);
   const running = comfy?.state === "running";
@@ -107,36 +100,23 @@ export function SystemCluster() {
         <IconButton
           icon="unload-models"
           label="Unload models from VRAM"
+          shortcut={keys("unload")}
           disabled={!running}
-          onClick={() =>
-            void run(
-              () => api.comfyFree({ unloadModels: true, freeMemory: false }),
-              "Models unloaded from VRAM",
-            )
-          }
+          onClick={() => void unloadModels()}
         />
         <IconButton
           icon="free-cache"
           label="Free memory and node cache"
+          shortcut={keys("free")}
           disabled={!running}
-          onClick={() =>
-            void run(
-              () => api.comfyFree({ unloadModels: true, freeMemory: true }),
-              "Memory and cache freed",
-            )
-          }
+          onClick={() => void freeMemory()}
         />
         <IconButton
           icon="rescan-models"
           label="Rescan model folders"
+          shortcut={keys("rescan")}
           disabled={!running}
-          onClick={() =>
-            void run(async () => {
-              await api.comfyRefresh();
-              await queryClient.invalidateQueries({ queryKey: qk.modelsAll });
-              await queryClient.invalidateQueries({ queryKey: ["workflow"] });
-            }, "Model lists refreshed")
-          }
+          onClick={() => void rescanModels()}
         />
       </div>
 
@@ -310,7 +290,7 @@ function ComfyStatusButton() {
                   size="sm"
                   variant="ghost"
                   icon="play"
-                  onClick={() => void run(api.comfyStart, "Starting ComfyUI")}
+                  onClick={() => void runWithToast(api.comfyStart, "Starting ComfyUI")}
                 >
                   Start
                 </Button>
@@ -320,7 +300,7 @@ function ComfyStatusButton() {
                   size="sm"
                   variant="ghost"
                   icon="stop"
-                  onClick={() => void run(api.comfyStop, "ComfyUI stopped")}
+                  onClick={() => void runWithToast(api.comfyStop, "ComfyUI stopped")}
                 >
                   Stop
                 </Button>
@@ -331,7 +311,7 @@ function ComfyStatusButton() {
                   variant="ghost"
                   icon="refresh"
                   onClick={() => {
-                    void run(
+                    void runWithToast(
                       api.comfyRestart,
                       managed ? "Restarting ComfyUI" : "Reconnecting to ComfyUI",
                     );
@@ -354,6 +334,7 @@ const running = (s: ComfyState) => s === "running";
 
 function ErrorsButton() {
   const errors = useLive((s) => s.errors);
+  const go = useGoToView();
   return (
     <AnimatePresence>
       {errors.length > 0 ? (
@@ -392,7 +373,18 @@ function ErrorsButton() {
                     </div>
                   ))}
                 </div>
-                <div className="flex justify-end border-t border-line p-2">
+                <div className="flex justify-end gap-1 border-t border-line p-2">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon="errors"
+                    onClick={() => {
+                      close();
+                      go("errors");
+                    }}
+                  >
+                    Open Errors
+                  </Button>
                   <Button
                     size="sm"
                     variant="ghost"
@@ -402,7 +394,7 @@ function ErrorsButton() {
                       close();
                     }}
                   >
-                    Clear all
+                    Mark as read
                   </Button>
                 </div>
               </div>

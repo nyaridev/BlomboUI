@@ -38,7 +38,7 @@ import type {
   SyncState,
   TrashEntry,
 } from "@shared/gallery";
-import type { InstallBody, InstallState, SlotsResponse } from "@shared/install";
+import type { InstallBody, InstallState, NodeInstallState, SlotsResponse } from "@shared/install";
 import type { GenerateBody, GenerateResponse, QueueSnapshot } from "@shared/jobs";
 import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layout/schema";
 import type { Catalog } from "@shared/manager";
@@ -291,6 +291,11 @@ export const api = {
   comfySlots: () => request<SlotsResponse>("GET", "/comfy/slots"),
   installComfy: (body: InstallBody) => request<InstallState>("POST", "/comfy/install", body),
   cancelInstall: () => request<InstallState>("POST", "/comfy/install/cancel"),
+  nodeInstall: () => request<NodeInstallState>("GET", "/comfy/nodes"),
+  /** Install stage custom node packs (by repository URL) into the managed slot. */
+  installNodes: (packs: string[]) =>
+    request<NodeInstallState>("POST", "/comfy/nodes/install", { packs }),
+  cancelNodeInstall: () => request<NodeInstallState>("POST", "/comfy/nodes/cancel"),
 };
 
 /** Query string from defined values only. */

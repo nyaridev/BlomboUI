@@ -43,7 +43,10 @@ export function createApp(services: Services) {
   const api = new Hono();
   api.route("/system", systemRoutes(config, profiles));
   api.route("/profiles", profileRoutes(profiles, services.installPresets));
-  api.route("/comfy", comfyRoutes(supervisor, services.installer, config.runtimeDir));
+  api.route(
+    "/comfy",
+    comfyRoutes(supervisor, services.installer, services.nodePacks, config.runtimeDir),
+  );
   api.route("/workflows", workflowRoutes(config, workflows, supervisor, services.layouts));
   api.route("/layouts", layoutRoutes(services.layouts, workflows));
   api.route("/stages", stageRoutes(services.stages));

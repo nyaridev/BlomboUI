@@ -115,7 +115,7 @@ presets/stages/
 └── controlnet-diffusion/                             …on the prompt only
 ```
 
-`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, repository, classes), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler).
+`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler).
 
 `prompt.json` is a ComfyUI API graph with three extras:
 
@@ -149,7 +149,11 @@ Stage settings live in the workflow under `stages` and are read with defaults by
 
 ### What's missing
 
-`POST /api/stages/check` splices each stage into a copy of the workflow as if it were on and reports, per stage: the package that fits, the missing **ports** ("can't attach to this workflow"), missing **custom nodes** with their packs (checked against ComfyUI's `/object_info`), models that aren't **picked** or aren't **in the folder** (with the model kind), a missing size or image, plus ComfyUI's current **choices** for each field (detectors, SAM models, preprocessors, ControlNet and upscale models). The Generate screen shows these as notices in the stage block, with **Find in Manager** (Models → Manager on the right category and search) for models and **Open ComfyUI** / the pack's page for custom nodes. Generate refuses to queue an enabled stage with problems and offers to turn it off; the compiler stops with the same message if one slips through.
+`POST /api/stages/check` splices each stage into a copy of the workflow as if it were on and reports, per stage: the package that fits, the missing **ports** ("can't attach to this workflow"), missing **custom nodes** with their packs (checked against ComfyUI's `/object_info`), models that aren't **picked** or aren't **in the folder** (with the model kind), a missing size or image, plus ComfyUI's current **choices** for each field (detectors, SAM models, preprocessors, ControlNet and upscale models). The Generate screen shows these as notices in the stage block, with **Find in Manager** (Models → Manager on the right category and search) for models and, for custom nodes, **Install** on a managed slot (below) or **Open ComfyUI** and the pack's page for a ComfyUI you run yourself. Generate refuses to queue an enabled stage with problems and offers to turn it off; the compiler stops with the same message if one slips through.
+
+### Installing custom nodes
+
+On a managed slot, **Install** in a "needs custom nodes" notice posts the packs (by repository URL) to `POST /api/comfy/nodes/install`. The server (`services/comfy/nodepacks.ts`, ADR-0013) accepts only packs a stage package lists with a `ref`, then: downloads each pack's source zip at that commit into `ComfyUI/custom_nodes/<folder>` (a folder that's already there is kept), stops ComfyUI if it runs, installs each pack's `requirements.txt` with uv into the slot's Python (the slot's PyTorch pinned as a constraint), starts ComfyUI again and checks its node list has the pack's classes. Progress shows in the notice (`install` topic, `nodes.install`; `GET /api/comfy/nodes` after a reload), with **Stop**; a failure says what to do and offers **Install again**, which resumes. It refuses while jobs are queued or running and for an external ComfyUI, whose notice keeps the ComfyUI-Manager instructions.
 
 ### Progress
 

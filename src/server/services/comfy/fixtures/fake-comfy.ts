@@ -4,7 +4,9 @@
  * executed → execution_success. Import startFakeComfy() in-process, or run this file with
  * `node fake-comfy.ts --port N [--step-ms 40] [--output-directory DIR]` to stand in for a
  * managed slot's main.py. With an output directory, each run writes a small PNG there (with the
- * prompt and extra chunks, like ComfyUI's SaveImage) so the gallery can index it.
+ * prompt and extra chunks, like ComfyUI's SaveImage) so the gallery can index it. With
+ * `--custom-nodes DIR`, the nodes of the packs that stage packages list (in their stage.json)
+ * only appear when the pack's folder is in DIR, as if ComfyUI loaded what's in custom_nodes/.
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -34,6 +36,35 @@ const objectInfo = fs.readFileSync(
   path.join(here, "..", "..", "workflows", "fixtures", "object_info.json"),
   "utf8",
 );
+const presetsDir = path.join(here, "..", "..", "..", "..", "..", "presets", "stages");
+
+/** Node class → the custom_nodes folder of the stage pack that provides it. */
+function packClasses(): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const id of fs.readdirSync(presetsDir)) {
+    const file = path.join(presetsDir, id, "stage.json");
+    if (!fs.existsSync(file)) continue;
+    const pkg = JSON.parse(fs.readFileSync(file, "utf8")) as {
+      packs?: Array<{ url: string; folder?: string; nodes: string[] }>;
+    };
+    for (const pack of pkg.packs ?? [])
+      for (const cls of pack.nodes) out.set(cls, pack.folder ?? pack.url.split("/").pop() ?? "");
+  }
+  return out;
+}
+
+/** object_info without the pack nodes whose folder isn't in `customNodesDir`. */
+function objectInfoFor(customNodesDir: string | null): string {
+  if (!customNodesDir) return objectInfo;
+  const norm = (n: string) => n.toLowerCase().replace(/_/g, "-");
+  const present = new Set(
+    fs.existsSync(customNodesDir) ? fs.readdirSync(customNodesDir).map(norm) : [],
+  );
+  const info = JSON.parse(objectInfo) as Record<string, unknown>;
+  for (const [cls, folder] of packClasses()) if (!present.has(norm(folder))) delete info[cls];
+  return JSON.stringify(info);
+}
+
 // 1×1 transparent PNG.
 const PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=",
@@ -105,6 +136,7 @@ export function startFakeComfy(
   port = 0,
   stepDelayMs = 5,
   outputDir: string | null = null,
+  customNodesDir: string | null = null,
 ): Promise<FakeComfy> {
   let counter = 0;
   const sockets = new Map<string, WebSocket>();
@@ -218,7 +250,7 @@ export function startFakeComfy(
             },
           ],
         });
-      if (p === "/object_info") return json(res, 200, objectInfo);
+      if (p === "/object_info") return json(res, 200, objectInfoFor(customNodesDir));
       if (p.startsWith("/models/"))
         return json(res, 200, p.endsWith("/checkpoints") ? ["sd15/dreamshaper_8.safetensors"] : []);
       if (p === "/prompt" && req.method === "POST") {
@@ -316,7 +348,7 @@ export function startFakeComfy(
 }
 
 // Run as a stand-in for ComfyUI's main.py: node fake-comfy.ts [--port N] [--step-ms N]
-// [--output-directory DIR] (other flags ignored).
+// [--output-directory DIR] [--custom-nodes DIR] (other flags ignored).
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const arg = (name: string) => {
     const at = process.argv.indexOf(name);
@@ -327,6 +359,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     Number(arg("--port") ?? 8188),
     Number(arg("--step-ms") ?? 5),
     arg("--output-directory") ?? null,
+    arg("--custom-nodes") ?? null,
   );
   console.log(`To see the GUI go to: ${fake.url}`);
 }

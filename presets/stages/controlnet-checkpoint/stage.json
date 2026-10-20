@@ -12,6 +12,7 @@
     {
       "name": "ControlNet Auxiliary Preprocessors",
       "url": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+      "ref": "a587a4c1594524c1d2de5cd1a86cd868ff448e1c",
       "nodes": ["AIO_Preprocessor"]
     }
   ],

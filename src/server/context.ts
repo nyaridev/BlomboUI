@@ -3,7 +3,8 @@
  * the job queue and the live bus, the bus decides when GPU stats are sampled and logs are
  * followed, finished images go into the gallery index, finished downloads refresh the model
  * lists, and opening a profile points everything (ComfyUI, the profile database, the model
- * list, the download queue, the Civitai lookup) at that profile.
+ * list, the download queue, the Civitai lookup) at that profile. Custom node packs installed
+ * for a stage refresh ComfyUI's node list and the stage checks.
  */
 import { randomUUID } from "node:crypto";
 import path from "node:path";
@@ -14,7 +15,9 @@ import { AutocompleteService } from "./services/autocomplete.ts";
 import { CivitaiApi } from "./services/civitai/api.ts";
 import { ImageProxy } from "./services/civitai/images.ts";
 import { CivitaiService } from "./services/civitai/index.ts";
+import { fakeInstallOps } from "./services/comfy/fixtures/fake-install-ops.ts";
 import { ComfyInstaller } from "./services/comfy/installer.ts";
+import { NodePackInstaller } from "./services/comfy/nodepacks.ts";
 import { StatsSampler } from "./services/comfy/stats.ts";
 import { ComfySupervisor } from "./services/comfy/supervisor.ts";
 import { DownloadQueue } from "./services/downloads.ts";
@@ -42,6 +45,7 @@ export interface Services {
   gallery: GalleryService;
   models: ModelService;
   installer: ComfyInstaller;
+  nodePacks: NodePackInstaller;
   dbs: ProfileDbs;
   civitai: CivitaiService;
   lookup: ModelLookup;
@@ -58,7 +62,26 @@ export interface Services {
 export function createServices(config: ServerConfig): Services {
   const profiles = new ProfileService(config);
   const workflows = new WorkflowService(profiles);
-  const supervisor = new ComfySupervisor({ runtimeDir: config.runtimeDir, keepAlive: config.dev });
+  const supervisor = new ComfySupervisor({
+    runtimeDir: config.runtimeDir,
+    keepAlive: config.dev,
+    // --fake-comfy (dev checks): the fake ComfyUI stands in for the slot's main.py and only
+    // shows the stage packs that are in the slot's custom_nodes/.
+    launch: config.fakeComfy
+      ? (layout, args) => ({
+          command: process.execPath,
+          args: [
+            path.join(config.root, "src/server/services/comfy/fixtures/fake-comfy.ts"),
+            ...args.slice(2),
+            "--step-ms",
+            "120",
+            "--custom-nodes",
+            path.join(layout.comfyDir, "custom_nodes"),
+          ],
+          cwd: layout.dir,
+        })
+      : undefined,
+  });
 
   // The bus greets each window with the current state; the queues are created right after.
   let queue: JobQueue | null = null;
@@ -202,6 +225,42 @@ export function createServices(config: ServerConfig): Services {
   });
   const jobs = queue;
 
+  const nodePacks = new NodePackInstaller({
+    runtimeDir: config.runtimeDir,
+    ops: config.fakeComfy ? fakeInstallOps() : undefined,
+    known: async () => (await stages.packages()).flatMap((s) => s.pkg.packs),
+    blocked: () => {
+      if (installer.running) return "ComfyUI is being installed. Wait for it to finish.";
+      const busy = jobs.snapshot().jobs.some((j) => j.state === "running" || j.state === "queued");
+      return busy
+        ? "Installing restarts ComfyUI. Wait for the queue to finish (or stop it), then install."
+        : null;
+    },
+    comfy: {
+      target: () => {
+        const s = supervisor.status();
+        if (!profiles.active) return null;
+        if (s.mode === "external") return { mode: "external", url: s.url };
+        return s.slot ? { mode: "managed", slot: s.slot } : null;
+      },
+      running: () => supervisor.isRunning,
+      stop: async () => {
+        await supervisor.stop();
+      },
+      startAndWait: async (timeoutMs) => {
+        const ready = supervisor.whenConnected(timeoutMs);
+        await supervisor.start();
+        return ready;
+      },
+      objectInfo: () => {
+        supervisor.refreshObjectInfo();
+        return supervisor.objectInfo();
+      },
+    },
+  });
+  nodePacks.on("state", (install) => bus.publish("install", { t: "nodes.install", install }));
+  nodePacks.on("installed", () => supervisor.refreshObjectInfo());
+
   supervisor.on("status", (status) => {
     bus.publish("comfy", { t: "comfy.status", status });
     if (status.state === "crashed")
@@ -254,6 +313,7 @@ export function createServices(config: ServerConfig): Services {
     gallery,
     models,
     installer,
+    nodePacks,
     dbs,
     civitai,
     lookup,
@@ -276,6 +336,7 @@ export function createServices(config: ServerConfig): Services {
     shutdown: async () => {
       stats.setActive(false);
       installer.cancel();
+      nodePacks.cancel();
       downloads.shutdown();
       lookup.stop();
       await workflows.flush().catch(() => undefined);

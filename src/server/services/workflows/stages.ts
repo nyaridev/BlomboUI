@@ -403,6 +403,14 @@ function joinNames(names: string[]): string {
   return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
 }
 
+/**
+ * How a missing pack is installed when Blombo can't do it. The stage check swaps it for
+ * INSTALL_HERE when the profile's slot is managed and every pack is pinned (services/stages.ts).
+ */
+export const INSTALL_IN_COMFY =
+  "Install the missing custom nodes in ComfyUI (Manager → Custom Nodes Manager), then restart ComfyUI.";
+export const INSTALL_HERE = "Install adds them to this ComfyUI and restarts it.";
+
 function nodeProblems(
   prompt: ApiPrompt,
   added: string[],
@@ -431,9 +439,7 @@ function nodeProblems(
   );
   const parts = packs.map((p) => `${joinNames(p.nodes)} (${p.name})`);
   if (core.length) parts.push(`${joinNames(core)} (built into newer ComfyUI)`);
-  const how = packs.length
-    ? "Install the missing custom nodes in ComfyUI (Manager → Custom Nodes Manager), then restart ComfyUI."
-    : "Update ComfyUI, then restart it.";
+  const how = packs.length ? INSTALL_IN_COMFY : "Update ComfyUI, then restart it.";
   return {
     code: "missing_nodes",
     message: `${label} needs ${joinNames(parts)}. ${how}`,

@@ -39,7 +39,7 @@ prompt.json    ComfyUI API graph with PORT:<ROLE> stub nodes
 - **Checks are a dry run.** The same splice runs on a copy of the workflow per stage and reports missing ports, custom nodes (by pack), models (not picked, not in the folder) and ComfyUI's choices for each field. The UI shows them before a run and offers Models → Manager or ComfyUI; the compiler refuses with the same messages.
 - **Control images live in the profile** (`inputs/`, content-named) and are uploaded to ComfyUI per run, so a ComfyUI restart or another slot never loses them.
 - **Progress segments** come from the compiled graph: each sampling node belongs to a segment (base passes, Hires fix, each ADetailer unit).
-- **Custom nodes aren't installed by Blombo yet.** A missing pack is named with its repository and the way to install it inside ComfyUI (ComfyUI-Manager). The ADetailer and ControlNet node specs were written from the Impact Pack / Impact Subpack / controlnet_aux sources and tested against the fake ComfyUI; a run on real models is still to be checked.
+- **Custom nodes install from the notice** on a managed slot (ADR-0013): packs carry a pinned `ref` and Blombo downloads them, installs their requirements and restarts ComfyUI. An external ComfyUI gets the repository and ComfyUI-Manager instructions. The ADetailer and ControlNet node specs were written from the Impact Pack / Impact Subpack / controlnet_aux sources and tested against the fake ComfyUI; a run on real models is still to be checked.
 
 ## Action items
 
@@ -47,4 +47,5 @@ prompt.json    ComfyUI API graph with PORT:<ROLE> stub nodes
 2. [x] Write the ControlNet stage (Apply ControlNet Advanced + common preprocessors via comfyui_controlnet_aux).
 3. [x] Stage UI blocks: compact header with an enable switch, an inherited-value pattern and units tabs.
 4. [ ] Upscale stage (after ADetailer), and user stage packages dropped into the profile.
-5. [ ] Check a real run of each stage on real models (needs detector, SAM and ControlNet downloads).
+5. [ ] Check a real run of each stage on real models (needs detector, SAM and ControlNet downloads, and the real packs installed through ADR-0013).
+6. [x] Install the custom node packs a stage needs from its notice (ADR-0013).

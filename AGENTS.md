@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0012)
+- `docs/adr/`: decisions and why (0001–0013)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 
 ## Commands
@@ -23,7 +23,8 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `npm run rules:sync` | Regenerate `.cursor/rules/*.mdc` from `.claude/rules/*.md` |
 | `node tools/make-icons.ts` | Regenerate desktop icons from `src-tauri/app-icon.svg` |
 | `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
-| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use; it takes `/upload/image` and reports progress per sampler node, so stage segments show |
+| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use (with `--custom-nodes DIR`, only the packs whose folder is in DIR); it takes `/upload/image` and reports progress per sampler node, so stage segments show |
+| `node src/server/main.ts --dev … --fake-comfy` | Dev checks only: managed slots run the fake ComfyUI (with `--custom-nodes` on the slot's `custom_nodes/`), and custom node installs use fake downloads and a fake uv (`services/comfy/fixtures/fake-install-ops.ts`). Make a slot by hand in the throwaway runtime (`comfyui/<slot>/ComfyUI/main.py` and `.venv/Scripts/python.exe`, both empty) to click through **Install** on a stage notice |
 | `node src/server/main.ts --dev --port 4391 --data <tmp> --runtime <tmp>` + `BLOMBO_API_PORT=4391 BLOMBO_WEB_PORT=4392 vite` | A second, throwaway dev instance (own profiles, slots and caches) next to one that's already running |
 | `node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` | A fake Civitai and model catalog (API, images, ranged downloads, an early-access file). Start the server with `--civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json` to browse and download without the real site; its API key is `FAKE_KEY` in that file |
 
@@ -51,7 +52,8 @@ src/
 │   │                 manager (ComfyUI model catalog) · stages (packages, control images,
 │   │                 checks, map preview) · layouts (profile layouts/) · autocomplete (tag lists,
 │   │                 LoRAs, wildcards, frequent tags)
-│   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (uv, progress)
+│   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (slots, progress)
+│   │   │                 nodepacks (stage custom nodes into a slot) · uv (shared by both installers)
 │   │   ├── civitai/      api (cached client) · images (proxy) · normalize · fixtures/fake-civitai
 │   │   ├── gallery/      index (sync, search, favorites, trash, libraries) · meta
 │   │   └── workflows/    store · analyze (roles, ports) · convert · import · compile · loras
@@ -91,7 +93,7 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) is still a sample. Never build new features on preview data.
 
-**Portable, no installer:** BlomboUI runs from the cloned folder through the launchers. Everything it writes stays in `data/` and `runtime/`; nothing goes to AppData or the registry (the desktop window keeps its WebView2 profile and size in `runtime/app/`). Only ComfyUI slots can be installed by the app, into `runtime/comfyui/`.
+**Portable, no installer:** BlomboUI runs from the cloned folder through the launchers. Everything it writes stays in `data/` and `runtime/`; nothing goes to AppData or the registry (the desktop window keeps its WebView2 profile and size in `runtime/app/`). Only ComfyUI slots, and the custom node packs stages need inside them, can be installed by the app, into `runtime/comfyui/`.
 
 ## Golden rules
 
@@ -133,6 +135,7 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 1. Edit `presets/stages/<id>/prompt.json` (an API graph with `PORT:<PORT>` stubs, `OUT:<PORT>` republishers and `_meta.blombo` `when` / `else` / `inputsWhen`) and `stage.json` (stage, family, ports, packs, fields, defaults). Format: `docs/workflows.md` → Stages.
 2. New settings fields go into the stage's schema in `shared/workflow/stages.ts` (with defaults) and its block in `features/generate/blocks/stages/`; values reach the graph through `instancesFor()` in `services/workflows/stages.ts`.
 3. Add every class the graph uses to the fake ComfyUI's `fixtures/object_info.json`, and a compiled-graph case to `services/workflows/stages.test.ts`. The package test fails if a class is unknown.
+4. A pack the graph needs goes in `packs` with its GitHub URL, the classes it provides and a pinned `ref` (a full commit hash, e.g. from `git ls-remote <url> HEAD`), so the stage notice can install it (ADR-0013). Use the same `ref` in every package that lists the pack.
 
 ### Teach the analyzer a node
 Detection is by input names first (`seed`, `steps`, `positive`, `ckpt_name`…). Only when that can't work, add the class to `services/workflows/nodes.ts`, add a fixture graph under `services/workflows/fixtures/` and a case to `analyze.test.ts`.

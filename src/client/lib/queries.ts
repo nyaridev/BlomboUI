@@ -50,6 +50,7 @@ export const qk = {
   modelDetails: (profileId: string | null, id: string | null) =>
     ["local-models", profileId, "details", id] as const,
   comfySlots: ["comfy-slots"] as const,
+  nodeInstall: ["node-install"] as const,
   civitaiAccount: (profileId: string | null) => ["civitai-account", profileId] as const,
   /** Everything under ["civitai", profileId] holds Civitai answers (marks change on downloads). */
   civitai: (profileId: string | null) => ["civitai", profileId] as const,
@@ -484,6 +485,11 @@ export function useWildcardsChanged() {
 
 export function useComfySlots() {
   return useQuery({ queryKey: qk.comfySlots, queryFn: api.comfySlots });
+}
+
+/** The custom node installer's state when the view opened; the live bus has it after that. */
+export function useNodeInstall() {
+  return useQuery({ queryKey: qk.nodeInstall, queryFn: api.nodeInstall });
 }
 
 /* ── Civitai ─────────────────────────────────────────────────────────────── */

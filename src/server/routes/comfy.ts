@@ -1,9 +1,10 @@
 import { Hono } from "hono";
 import { ComfyFileRef, FreeMemoryBody } from "../../shared/comfy.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
-import { InstallBody, type SlotsResponse } from "../../shared/install.ts";
+import { InstallBody, NodeInstallBody, type SlotsResponse } from "../../shared/install.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ComfyInstaller } from "../services/comfy/installer.ts";
+import type { NodePackInstaller } from "../services/comfy/nodepacks.ts";
 import { listSlots } from "../services/comfy/slots.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 
@@ -21,6 +22,7 @@ function requireApi(supervisor: ComfySupervisor) {
 export function comfyRoutes(
   supervisor: ComfySupervisor,
   installer: ComfyInstaller,
+  nodePacks: NodePackInstaller,
   runtimeDir: string,
 ) {
   const r = new Hono();
@@ -40,6 +42,20 @@ export function comfyRoutes(
   r.post("/install/cancel", (c) => {
     installer.cancel();
     return c.json(installer.state());
+  });
+
+  /** Custom node packs for stages, into the profile's managed slot. */
+  r.get("/nodes", (c) => c.json(nodePacks.state()));
+
+  r.post("/nodes/install", async (c) => {
+    const body = await readJson(c, NodeInstallBody);
+    await nodePacks.start(body.packs);
+    return c.json(nodePacks.state(), 202);
+  });
+
+  r.post("/nodes/cancel", (c) => {
+    nodePacks.cancel();
+    return c.json(nodePacks.state());
   });
 
   r.get("/", (c) => c.json(supervisor.status()));

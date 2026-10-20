@@ -889,6 +889,54 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 ADetailer needs FaceDetailer (ComfyUI Impact Pack). Install the missing custom nodes
                 in ComfyUI, then restart ComfyUI.
               </Notice>
+              <Notice
+                tone="warning"
+                actions={
+                  <>
+                    <Button size="sm" variant="primary" icon="download">
+                      Install
+                    </Button>
+                    <Button size="sm" variant="ghost" icon="globe">
+                      ComfyUI Impact Pack
+                    </Button>
+                    <Button size="sm" variant="ghost" icon="refresh">
+                      Check again
+                    </Button>
+                  </>
+                }
+              >
+                ADetailer needs FaceDetailer (ComfyUI Impact Pack). Install adds them to this
+                ComfyUI and restarts it.
+              </Notice>
+              <Notice
+                tone="info"
+                title="Installing custom nodes · 4 of 7"
+                actions={
+                  <Button size="sm" variant="ghost" icon="stop">
+                    Stop
+                  </Button>
+                }
+              >
+                <span className="flex flex-col gap-1.5">
+                  <span>Install ComfyUI Impact Pack's packages</span>
+                  <ProgressBar value={0.4} label="Installing packages" size="sm" />
+                  <span className="truncate font-mono text-[11px] text-fg-3">
+                    Downloading ultralytics (1.0MiB)
+                  </span>
+                </span>
+              </Notice>
+              <Notice
+                tone="danger"
+                title="Install failed"
+                actions={
+                  <Button size="sm" variant="primary" icon="download">
+                    Install again
+                  </Button>
+                }
+              >
+                ComfyUI didn't load ComfyUI Impact Subpack. Open ComfyUI's log from the status menu
+                to see why (often a package that failed to install), then install again.
+              </Notice>
               <Notice tone="danger" title="Couldn't read the list">
                 Use one tag per line: name, category, count, aliases.
               </Notice>

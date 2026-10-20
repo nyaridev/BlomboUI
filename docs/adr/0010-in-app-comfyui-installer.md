@@ -39,4 +39,5 @@ The server runs the install (`services/comfy/installer.ts`) and publishes its st
 
 - A fresh slot installs from Settings → ComfyUI (and the header's **Install** when the profile's slot is missing). CPU-only installs work on machines without NVIDIA GPUs (slowly).
 - The uv package cache in `runtime/tools/uv-cache/` makes a second slot much faster; deleting it is safe.
+- The custom node installer for stages (ADR-0013) reuses this setup: uv and its environment live in `services/comfy/uv.ts`, and packs go into the slot's `custom_nodes/` with the slot's Python.
 - Not covered yet: updating an installed slot, choosing other CUDA versions or ROCm, and installing blombo-bridge (ADR-0009) into new slots.

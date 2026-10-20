@@ -20,6 +20,8 @@ export interface ExpandResult {
 }
 
 const WILDCARD = /__([^\s_][^\s]*?)__/g;
+/** No prompt needs more than this; a self-referencing wildcard would otherwise explode. */
+export const MAX_EXPANDED_CHARS = 50_000;
 /** An innermost {…|…} group: no nested braces inside. */
 const CHOICE = /\{([^{}]*\|[^{}]*)\}/g;
 
@@ -35,6 +37,9 @@ export function expandPrompt(
 
   let out = text;
   for (let depth = 0; depth < maxDepth; depth++) {
+    // Wildcards that use themselves several times grow exponentially: stop growing well before
+    // that runs out of memory (what's left stays as written).
+    if (out.length > MAX_EXPANDED_CHARS) break;
     let changed = false;
     out = out.replace(CHOICE, (_all, body: string) => {
       changed = true;

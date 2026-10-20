@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { BrowseFilter, SavedFilter } from "./civitai.ts";
+import { salvage } from "./salvage.ts";
 
 export const SETTINGS_VERSION = 1;
 
@@ -236,52 +237,11 @@ export interface ReadSettings {
  * it's never written over with what this version understands.
  */
 export function readSettings(raw: unknown): ReadSettings {
-  const input = raw && typeof raw === "object" ? { ...(raw as Record<string, unknown>) } : {};
+  const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const version = Number(input.version);
   const newer = Number.isFinite(version) && version > SETTINGS_VERSION;
-  const dropped: string[] = [];
-  // Each bad value is removed where Zod points (array items as a whole, at their index), and
-  // parsing is tried again; a value whose path can't be removed drops its whole section.
-  for (let attempt = 0; attempt < 200; attempt++) {
-    const parsed = Settings.safeParse({ ...input, version: SETTINGS_VERSION });
-    if (parsed.success) return { settings: parsed.data, dropped, newer };
-    const where = (parsed.error.issues[0]?.path ?? []).map(String);
-    const section = where[0];
-    if (!section || !removeAt(input, where)) {
-      if (section && section in input) {
-        delete input[section];
-        dropped.push(section);
-        continue;
-      }
-      break;
-    }
-    dropped.push(where.join("."));
-  }
-  return { settings: Settings.parse({}), dropped: [...dropped, "*"], newer };
-}
-
-/** Delete the value at `path` (stopping at the first array item); false when nothing's there. */
-function removeAt(root: Record<string, unknown>, path: string[]): boolean {
-  let node: unknown = root;
-  for (let i = 0; i < path.length; i++) {
-    const key = path[i] as string;
-    if (Array.isArray(node)) {
-      const index = Number(key);
-      if (!Number.isInteger(index) || index < 0 || index >= node.length) return false;
-      node.splice(index, 1);
-      return true;
-    }
-    if (!isPlain(node) || !(key in node)) return false;
-    if (i === path.length - 1) {
-      delete node[key];
-      return true;
-    }
-    const child = node[key];
-    // Copy on the way down so the caller's parsed JSON isn't changed under it.
-    node[key] = Array.isArray(child) ? [...child] : isPlain(child) ? { ...child } : child;
-    node = node[key];
-  }
-  return false;
+  const { data, fixed } = salvage(Settings, { ...input, version: SETTINGS_VERSION });
+  return { settings: data, dropped: fixed, newer };
 }
 
 /**

@@ -47,6 +47,8 @@ describe("axis values", () => {
     expect(parseAxisValues("5-1 (-2)", find("sampler.steps"))).toEqual([5, 3, 1]);
     expect(parseAxisValues("1-2 [5]", find("sampler.cfg"))).toEqual([1, 1.25, 1.5, 1.75, 2]);
     expect(parseAxisValues("-1, -2", find("sampler.steps"))).toEqual([-1, -2]);
+    // A huge count is refused before anything is built (typing "1-2 [999999999]").
+    expect(() => parseAxisValues("1-2 [999999999]", find("sampler.cfg"))).toThrow(/too many/);
   });
 
   it("matches choices and models loosely, and refuses unknown ones", () => {

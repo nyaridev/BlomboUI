@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { rng } from "../random.ts";
-import { expandPrompt, findWildcards, wildcardLines } from "./wildcards.ts";
+import { expandPrompt, findWildcards, MAX_EXPANDED_CHARS, wildcardLines } from "./wildcards.ts";
 
 const files: Record<string, string[]> = {
   color: ["red", "blue", "green"],
@@ -52,5 +52,14 @@ describe("helpers", () => {
 
   it("finds wildcard names once each", () => {
     expect(findWildcards("__a__ __b/c__ __a__")).toEqual(["a", "b/c"]);
+  });
+});
+
+describe("expandPrompt limits", () => {
+  it("stops a wildcard that keeps using itself before it runs out of memory", () => {
+    const resolve = (name: string) =>
+      name === "x" ? ["__x__ __x__ __x__ __x__ __x__ __x__ __x__ __x__ word"] : undefined;
+    const out = expandPrompt("__x__", rng(1), resolve, 20);
+    expect(out.text.length).toBeLessThan(MAX_EXPANDED_CHARS * 10);
   });
 });

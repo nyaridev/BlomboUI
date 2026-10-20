@@ -43,7 +43,7 @@ describe("SettingsService", () => {
     await service.update("p", { appearance: { font: "inter" } });
     const saved = JSON.parse(await fs.readFile(file(), "utf8"));
     expect(saved.gallery.libraries).toHaveLength(1);
-    expect(saved.gallery.tileSize).toBe(220);
+    expect(saved.gallery.tileSize).toBe(400);
     const copies = (await fs.readdir(path.join(dir, "p"))).filter((n) =>
       n.startsWith("settings.invalid-"),
     );

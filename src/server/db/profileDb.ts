@@ -21,7 +21,8 @@ export interface ProfileDb {
   close(): void;
 }
 
-const MIGRATIONS: string[] = [
+/** Ordered steps; exported so tests can build a database as an older version left it. */
+export const MIGRATIONS: readonly string[] = [
   // 1: gallery index, marks, trash
   `
   CREATE TABLE images (
@@ -211,6 +212,11 @@ const MIGRATIONS: string[] = [
 
 function migrate(db: DatabaseSync): void {
   const row = db.prepare("PRAGMA user_version").get() as { user_version: number };
+  // A database a newer BlomboUI migrated has tables this version doesn't know: don't touch it.
+  if (row.user_version > MIGRATIONS.length)
+    throw new Error(
+      `This profile's database was made by a newer BlomboUI (version ${row.user_version}). Update BlomboUI to open it.`,
+    );
   for (let v = row.user_version; v < MIGRATIONS.length; v++) {
     db.exec("BEGIN");
     try {
@@ -242,7 +248,13 @@ export function openProfileDb(file: string): ProfileDb {
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec("PRAGMA foreign_keys = ON");
   db.exec("PRAGMA busy_timeout = 3000");
-  migrate(db);
+  try {
+    migrate(db);
+  } catch (error) {
+    // Don't leave the file open (and locked on Windows) when it can't be used.
+    db.close();
+    throw error;
+  }
   const fts = ensureFts(db);
   return {
     db,

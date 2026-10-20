@@ -162,6 +162,7 @@ function onJson(text: string): void {
       if (msg.status.state === "running" && !wasRunning) {
         void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
         void queryClient.invalidateQueries({ queryKey: ["workflow"] });
+        void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
       }
       break;
     }
@@ -196,6 +197,7 @@ function onJson(text: string): void {
       break;
     case "profile.switched":
       void queryClient.invalidateQueries({ queryKey: ["workflows"] });
+      void queryClient.invalidateQueries({ queryKey: ["layouts"] });
       break;
     case "gallery.added":
       onGalleryAdded(msg.image);
@@ -219,6 +221,8 @@ function onJson(text: string): void {
     case "models.changed":
       void queryClient.invalidateQueries({ queryKey: ["local-models"] });
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
+      // A downloaded detector or ControlNet model can fix a stage.
+      void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
       break;
     case "models.lookup":
       useLive.setState({ lookup: msg.lookup });

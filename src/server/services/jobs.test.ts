@@ -5,10 +5,12 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Job, QueueSnapshot } from "../../shared/jobs.ts";
 import { decodePreviewFrame, type ServerMessage } from "../../shared/live.ts";
 import { createConfig, parseFlags } from "../config.ts";
+import { realPng } from "../lib/test-images.ts";
 import { type FakeComfy, startFakeComfy } from "./comfy/fixtures/fake-comfy.ts";
 import { ComfySupervisor } from "./comfy/supervisor.ts";
 import { JobQueue, nextSeed } from "./jobs.ts";
 import { ProfileService } from "./profiles.ts";
+import { StageService } from "./stages.ts";
 import { installPreset } from "./workflows/presets.ts";
 import { WorkflowService } from "./workflows/store.ts";
 
@@ -20,6 +22,7 @@ let fake: FakeComfy;
 let supervisor: ComfySupervisor;
 let queue: JobQueue;
 let workflows: WorkflowService;
+let stages: StageService;
 
 beforeAll(async () => {
   fake = await startFakeComfy(0, 2);
@@ -39,10 +42,18 @@ beforeAll(async () => {
   await profiles.open(p.id);
   await installPreset(config.presetsDir, workflows, "sd15", p.id);
   supervisor = new ComfySupervisor({ runtimeDir: path.join(tmp, "runtime"), keepAlive: false });
+  stages = new StageService({
+    presetsDir: config.presetsDir,
+    profiles,
+    workflows,
+    supervisor,
+    gallery: null as never,
+  });
   queue = new JobQueue({
     supervisor,
     workflows,
     profiles,
+    stages,
     publish: (_topic, msg) => messages.push(msg),
     publishBinary: (_topic, frame) => frames.push(frame),
     reportError: () => undefined,
@@ -130,6 +141,91 @@ describe("job queue against a ComfyUI", () => {
     expect(decodePreviewFrame(frames[0] as Uint8Array)?.mime).toBe("image/png");
     // The next click starts from the saved seed.
     expect((await workflows.get("sd15")).values["sampler.seed"]).toBe(102);
+  });
+
+  it("splices stages, uploads control images and splits progress by stage", async () => {
+    const image = await stages.addImage(await realPng(64, 96), "pose.png", "upload");
+    expect(image).toMatchObject({ source: "upload", label: "pose.png", width: 64, height: 96 });
+    const res = await queue.enqueue({
+      workflowId: "sd15",
+      values: { "sampler.steps": 3, "prompt.positive": "a cat" },
+      stages: {
+        hires: { enabled: true, scale: 2, upscaler: "4x-UltraSharp.pth" },
+        controlnet: {
+          enabled: true,
+          units: [
+            {
+              id: "pose",
+              name: "Pose",
+              image,
+              preprocessor: "DWPreprocessor",
+              model: "control_v11p_sd15_canny.pth",
+            },
+          ],
+        },
+      },
+      count: 1,
+      loop: false,
+    });
+    const [job] = await settled(res.jobs.map((j) => j.id));
+    expect(job?.state).toBe("done");
+    expect(job?.segments.map((s) => s.label)).toEqual(["Sampling", "Hires fix"]);
+    expect(fake.uploads).toContain(`blombo/${image.file}`);
+    const sent = fake.prompts.at(-1)?.prompt ?? {};
+    const classes = Object.values(sent).map((n) => n.class_type);
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        "ImageUpscaleWithModel",
+        "ControlNetApplyAdvanced",
+        "AIO_Preprocessor",
+      ]),
+    );
+    expect(Object.values(sent).find((n) => n.class_type === "LoadImage")?.inputs.image).toBe(
+      `blombo/${image.file}`,
+    );
+    // Progress reached the second segment, and the bar never went backwards.
+    const ticks = messages.filter(
+      (m): m is Extract<typeof m, { t: "job.progress" }> =>
+        m.t === "job.progress" && m.jobId === job?.id,
+    );
+    expect(ticks.some((t) => t.progress.segment === 1)).toBe(true);
+    const overall = ticks.map((t) => t.progress.overall);
+    expect(overall).toEqual([...overall].sort((a, b) => a - b));
+    // The stage settings were saved with the workflow.
+    const saved = await workflows.get("sd15");
+    expect(saved.stages.hires).toMatchObject({ enabled: true, scale: 2 });
+  });
+
+  it("stops before submitting when a stage is missing something", async () => {
+    const before = fake.prompts.length;
+    const res = await queue.enqueue({
+      workflowId: "sd15",
+      values: {},
+      stages: {
+        hires: { enabled: false },
+        controlnet: { enabled: false },
+        adetailer: { enabled: true },
+      },
+      count: 1,
+      loop: false,
+    });
+    const [job] = await settled(res.jobs.map((j) => j.id));
+    expect(job?.state).toBe("error");
+    expect(job?.error).toBe("ADetailer · Face: pick a detector.");
+    expect(fake.prompts.length).toBe(before);
+    await workflows.patchValues("sd15", { values: {}, stages: { adetailer: { enabled: false } } });
+  });
+
+  it("checks stages for the Generate screen", async () => {
+    const report = await stages.check("sd15", {});
+    expect(report.checked).toBe(true);
+    expect(report.stages.map((s) => [s.stage, s.package])).toEqual([
+      ["controlnet", "controlnet-checkpoint"],
+      ["hires", "hires-checkpoint"],
+      ["adetailer", "adetailer-checkpoint"],
+    ]);
+    expect(report.stages[1]?.problems).toEqual([]);
+    expect(report.stages[1]?.choices.upscaler).toContain("4x-UltraSharp.pth");
   });
 
   it("turns validation errors into plain messages and stops the rest of that batch", async () => {

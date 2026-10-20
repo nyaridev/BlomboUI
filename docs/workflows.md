@@ -35,8 +35,8 @@ Built-in presets ship in `presets/workflows/<id>/` with the same files and are c
   ],
   "values": { "sampler.steps": 28, "n14.sharpness": 0.35 },
   "run": { "seedMode": "random", "count": 1 },  // random | fixed | increment | decrement; runs per click
-  "stages": { "hires": { "enabled": true, "scale": 1.5 } },
-  "layout": null,                     // or a layout id
+  "stages": { "hires": { "enabled": true, "scale": 1.5 } },  // see Stages
+  "layout": null,                     // a linked layout id (Layouts); null: the profile's default
   "createdAt": "…", "updatedAt": "…"
 }
 ```
@@ -84,15 +84,76 @@ Without an edit session, the extension's menu offers **Send to Blombo**, which i
 
 ## Stages
 
-Hires fix, ADetailer, ControlNet and upscale are **stages**: graph patches in `presets/stages/<id>/` that splice into any workflow at role ports (`port.MODEL`, `port.CLIP`, `port.VAE`, `port.POSITIVE`, `port.NEGATIVE`, `port.LATENT`, `port.IMAGE`). They run in a fixed order:
+Hires fix, ADetailer and ControlNet are **stages**: graph patches that splice into any workflow at its **ports**, the links the compiler finds from the main sampler (`services/workflows/analyze.ts` → `findPorts`):
+
+| Port | Where |
+|---|---|
+| `MODEL` | the model going into the main sampler (after its LoRAs) |
+| `CLIP` | the text encoder the prompt is encoded with (after CLIP skip and LoRAs) |
+| `POSITIVE`, `NEGATIVE` | the conditioning going into the sampler (or its guider) |
+| `LATENT`, `VAE`, `IMAGE` | the sampler's output, and the decoder that reads it (its VAE and image) |
+
+They run in a fixed order, each reading the ports the one before left:
 
 ```text
-controlnet → base → hires → adetailer (units) → upscale
+controlnet (units) → the workflow's own sampling → hires → adetailer (units) → upscale (later)
 ```
 
-Stage parameters inherit the base values (steps, CFG, sampler, prompt, model, LoRAs) until you unlink them.
+ControlNet changes the conditioning, so the base sampler and Hires fix use it. ADetailer redraws with the plain prompt (`from: "base"`), since a full-image control map doesn't fit a face crop.
 
-Stages aren't wired yet: the Generate layout shows them as placeholders until their phase.
+### Stage packages
+
+A stage is a package in `presets/stages/<id>/` (schema: `StagePackage` in `src/shared/workflow/stages.ts`), one per stage and family:
+
+```text
+presets/stages/
+├── hires-checkpoint/      stage.json + prompt.json   KSampler second pass
+├── hires-diffusion/                                  SamplerCustomAdvanced + BasicGuider
+├── adetailer-checkpoint/                             Impact Pack FaceDetailer, one per unit
+├── adetailer-diffusion/                              …with an empty negative (ConditioningZeroOut)
+├── controlnet-checkpoint/                            ControlNetApplyAdvanced on positive + negative
+└── controlnet-diffusion/                             …on the prompt only
+```
+
+`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, repository, classes), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler).
+
+`prompt.json` is a ComfyUI API graph with three extras:
+
+- **`PORT:<PORT>` stub nodes** stand for the workflow's link at that port. `inputs.from: "base"` takes the port as it was before any stage changed it; `inputs.optional: true` drops links to it when the workflow has no such port (ControlNet's optional VAE).
+- **`OUT:<PORT>` nodes** republish a port: whatever read the old link (the save node, the main sampler) now reads `inputs.value`.
+- **`_meta.blombo`** on a node: `when: "<flag>"` keeps the node only when the flag is on, and links to a dropped node follow `else` (`"input:image"` passes that input through, `"node:p-pos"` uses another node, nothing removes the link). `inputsWhen: { "<input>": "<flag>" }` keeps one input only when its flag is on. Flags come from the settings: `upscaler` (a model is picked), `saveFirst`, `prompt` / `negative` (unlinked), `sam`, `segm` (a segmentation detector), `preprocess` (a preprocessor other than "none").
+
+The splicer (`services/workflows/stages.ts`) copies the graph with fresh node ids, sets field values, titles nodes `"<Stage> · <title>"` (so ComfyUI errors name the stage) and strips the extras. A stage prompt's own `<lora:…>` tags become a LoRA chain for that stage only; its `__wildcards__` expand with the run's seed.
+
+### Settings, inheritance and units
+
+Stage settings live in the workflow under `stages` and are read with defaults by `readStages()`:
+
+```jsonc
+"stages": {
+  "hires": { "enabled": true, "sizeMode": "scale", "scale": 1.5, "upscaler": "4x-UltraSharp.pth",
+             "denoise": 0.35, "saveFirst": false, "steps": 15, "unlinked": ["steps"] },
+  "adetailer": { "enabled": true, "units": [
+    { "id": "face", "name": "Face", "enabled": true, "detector": "bbox/face_yolov8m.pt", "sam": "",
+      "confidence": 0.5, "dilation": 10, "denoise": 0.4, "feather": 5, "unlinked": [] } ] },
+  "controlnet": { "enabled": false, "units": [
+    { "id": "unit-1", "name": "Pose", "image": { "file": "3f2a….png", "source": "gallery", … },
+      "preprocessor": "DWPreprocessor", "model": "…", "strength": 0.8, "start": 0, "end": 0.8 } ] }
+}
+```
+
+- **Inheritance.** Steps, CFG, sampler, scheduler, prompt and negative follow the base workflow (by role) until they're listed in `unlinked`; the UI shows them with `InheritRow` (dimmed base value, a link toggle). A linked prompt reuses the base conditioning, so it costs nothing.
+- **Units.** ADetailer and ControlNet run their enabled units in order: each detailer takes the previous image, each ControlNet applies on top of the previous one.
+- **Hires size.** `scale` multiplies the workflow's width and height (rounded to 8); `target` sets them. Without an upscale model the image is resized (Lanczos) before the second pass. "Also save the image before Hires fix" adds a save node on the first image (`<prefix>-first`).
+- **Control images** are copied into the profile (`inputs/<sha>.<ext>`, named by content) from an upload, the gallery or the last output, and sent to ComfyUI's input folder (`blombo/…`) right before a run. **Show map** runs only the preprocessor in ComfyUI and shows the result. The gallery lightbox's **Use for ControlNet** puts an image into the first free unit.
+
+### What's missing
+
+`POST /api/stages/check` splices each stage into a copy of the workflow as if it were on and reports, per stage: the package that fits, the missing **ports** ("can't attach to this workflow"), missing **custom nodes** with their packs (checked against ComfyUI's `/object_info`), models that aren't **picked** or aren't **in the folder** (with the model kind), a missing size or image, plus ComfyUI's current **choices** for each field (detectors, SAM models, preprocessors, ControlNet and upscale models). The Generate screen shows these as notices in the stage block, with **Find in Manager** (Models → Manager on the right category and search) for models and **Open ComfyUI** / the pack's page for custom nodes. Generate refuses to queue an enabled stage with problems and offers to turn it off; the compiler stops with the same message if one slips through.
+
+### Progress
+
+Each run is split into **segments**: the workflow's own sampling passes ("Sampling", or "Pass 1", "Pass 2"…), then one per stage instance that samples ("Hires fix", "ADetailer · Face"). Segments list their sampler nodes, so ComfyUI's progress events map to the right segment; the bar never goes backwards (a detailer repeats its steps per face).
 
 ## Running (compile)
 
@@ -101,12 +162,12 @@ prompt.json
   → apply values to bindings
   → expand __wildcards__ and {a|b|c} choices (seeded per image)
   → move <lora:name:strength> tags into the LoRA stack
-  → (later) splice enabled stages at role ports
+  → splice enabled stages at the ports (controlnet → base → hires → adetailer units)
   → seed, filename prefix
   → POST /prompt (client_id = this server) → progress and previews on the live bus
 ```
 
-The compiler (`services/workflows/compile.ts`) is pure and tested; the job queue feeds it the wildcard files and ComfyUI's LoRA list.
+The compiler (`services/workflows/compile.ts`) is pure and tested; the job queue feeds it the wildcard files, ComfyUI's LoRA list and node definitions, the stage packages and the uploaded control images.
 
 - **Seeds.** Each run is its own ComfyUI prompt. The seed mode decides each run's seed: `random` (new every run), `fixed`, `increment` or `decrement` (from the workflow's seed; the next click continues where this one stopped). The same seed always gives the same wildcard picks.
 - **Wildcards.** `__outfits/fantasy__` picks a random line from `<wildcards>/outfits/fantasy.txt` (blank lines and `#` comments skipped), or, when there's no such file, from the list at key path `outfits/fantasy` in any `.yaml` / `.yml` file in the folder (nested mappings, list leaves; a single string is one option; keys are global, so the YAML file's own name isn't part of the reference, as in Dynamic Prompts and Impact Pack). Lines may use more wildcards. `{red|blue}` picks one option. An unknown wildcard stops the run with the file name it looked for. The Wildcard Manager's roll preview uses the same expansion and seeds.
@@ -117,6 +178,10 @@ The compiler (`services/workflows/compile.ts`) is pure and tested; the job queue
 ## Batch workflows
 
 `kind: "batch"` workflows (background removal, upscale, captioning, dataset prep) have an `image.input` binding. The runner feeds it from a file list or a folder, one job per file, and output handlers save images or write sidecar `.txt` files.
+
+## Layouts
+
+The Generate screen is a layout document (ADR-0005, `shared/layout/schema.ts`). Built-in layouts ship in `presets/layouts/<id>.json` (**Default**, **Compact**); the profile's own are `data/profiles/<id>/layouts/<layoutId>.json`. Picking a layout in the Generate tab links it to the workflow (`manifest.layout`); **Reset to default** unlinks it, and the workflow shows the profile's default (Settings `generate.layout`, set from the layout menu; "default" when unset). `GET /api/workflows/:id` returns the manifest with the layout it shows (`layoutDoc`, `layoutSource: "linked" | "default"`), so the screen never waits for a second request. Customize edits stay on screen until **Save** (the profile's own layouts), **Save as…** (a new layout, linked to the workflow) or **Discard**; deleting moves the file to the profile's trash and workflows that used it fall back to the default. Layouts kept in the browser by older builds move into the profile once.
 
 ## Export
 

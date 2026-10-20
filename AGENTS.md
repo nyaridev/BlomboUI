@@ -23,7 +23,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `npm run rules:sync` | Regenerate `.cursor/rules/*.mdc` from `.claude/rules/*.md` |
 | `node tools/make-icons.ts` | Regenerate desktop icons from `src-tauri/app-icon.svg` |
 | `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
-| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too |
+| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use; it takes `/upload/image` and reports progress per sampler node, so stage segments show |
 | `node src/server/main.ts --dev --port 4391 --data <tmp> --runtime <tmp>` + `BLOMBO_API_PORT=4391 BLOMBO_WEB_PORT=4392 vite` | A second, throwaway dev instance (own profiles, slots and caches) next to one that's already running |
 | `node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` | A fake Civitai and model catalog (API, images, ranged downloads, an early-access file). Start the server with `--civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json` to browse and download without the real site; its API key is `FAKE_KEY` in that file |
 
@@ -35,7 +35,9 @@ src/
 │                 constants · profile · settings · api · comfy · jobs · live · random
 │                 gallery · imageinfo · fileinfo · safetensors · models · wildcards · install
 │                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
-│                 layout/schema · workflow/{roles,manifest,graph} · prompt/{tokenize,loras,wildcards}
+│                 autocomplete (tag CSV, prompt context, formatting)
+│                 layout/schema · workflow/{roles,manifest,graph,stages}
+│                 prompt/{tokenize,loras,wildcards,weight}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
 │   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime --civitai --catalog)
 │   ├── context.ts    builds the services and wires their events together
@@ -43,14 +45,17 @@ src/
 │   ├── routes/       thin: validate (Zod) → service → JSON
 │   │                 profiles · system · settings · comfy · workflows · jobs · wildcards
 │   │                 gallery · models · fileinfo · civitai · downloads · manager
+│   │                 stages · layouts · autocomplete
 │   ├── services/     profiles · settings · system · window · live (bus) · jobs (queue)
 │   │                 wildcards · models · fileinfo · downloads (queue) · lookup (hash → Civitai)
-│   │                 manager (ComfyUI model catalog)
+│   │                 manager (ComfyUI model catalog) · stages (packages, control images,
+│   │                 checks, map preview) · layouts (profile layouts/) · autocomplete (tag lists,
+│   │                 LoRAs, wildcards, frequent tags)
 │   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (uv, progress)
 │   │   ├── civitai/      api (cached client) · images (proxy) · normalize · fixtures/fake-civitai
 │   │   ├── gallery/      index (sync, search, favorites, trash, libraries) · meta
-│   │   └── workflows/    store · analyze · convert · import · compile · presets · nodes · summary
-│   │                 (planned: autocomplete)
+│   │   └── workflows/    store · analyze (roles, ports) · convert · import · compile · loras
+│   │                     stages (the splicer) · presets · nodes · summary
 │   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram) · ProfileDbs (shared connections)
 │   └── lib/          fsx (atomic, queued writes; movePath; resolveInside; part files) · http · send
 │                     remote (redirects by hand, key only to its origin, image sniffing)
@@ -67,7 +72,8 @@ src/
 │   └── styles/       tokens.css (all raw colors) · index.css (Tailwind theme) · base.css
 └── comfy-bridge/ (planned) ComfyUI extension: "Edit in ComfyUI" / "Save to Blombo"
 src-tauri/        Desktop shell: native window on --url, capability for localhost IPC
-presets/          workflows/ (sd15, sdxl, illustrious) · planned: stages/, layouts/
+presets/          workflows/ (sd15, sdxl, illustrious) · stages/ (hires, adetailer, controlnet ×
+                  checkpoint/diffusion) · layouts/ (default, compact) · tags/ (starter list)
 tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit
 runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop window data)
@@ -75,7 +81,9 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Data flow:** client → `/api` (Zod-validated) → service → files in `data/` and ComfyUI's HTTP API. Live state comes back over one WebSocket per window, `/api/live` (ADR-0008): ComfyUI status, GPU stats at 1 Hz, queue snapshots, step progress, binary preview frames, errors, and ComfyUI's log while a log view is open. The server owns the single ComfyUI socket (`services/comfy/client.ts`) and fans it out (`services/live.ts`); the client keeps it in `lib/live.ts`.
 
-**Generating:** the Generate button posts the current values to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → seed → filename prefix), sends it to ComfyUI and turns its socket events into progress, previews and images. The queue lives on the server, so reloads and other windows see the same thing.
+**Generating:** the Generate button posts the current values and stage settings to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → stages spliced at the ports → seed → filename prefix), uploads ControlNet images, sends it to ComfyUI and turns its socket events into progress (split into segments: base passes, then each stage), previews and images. The queue lives on the server, so reloads and other windows see the same thing. Stage blocks ask `/api/stages/check` what's missing before you run.
+
+**Generate screen:** the params column is a layout document; built-in layouts are in `presets/layouts/`, the profile's in `layouts/`, and a workflow links one (`manifest.layout`; `GET /api/workflows/:id` returns the layout it shows). The prompt editor's autocomplete asks `/api/autocomplete` (tag lists in `presets/tags/` and the profile's `tags/`, LoRAs and trigger words, wildcards, frequent tags from the profile database); Ctrl+↑/↓ changes weights.
 
 **Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar thumbnails and info; the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
 
@@ -120,6 +128,11 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 1. Edit `presets/workflows/<id>/prompt.json` (a ComfyUI API graph; values in it are the defaults) and the name, family, description and `preset.version` in `workflow.json`.
 2. Run `node tools/build-presets.ts` to regenerate bindings, values and `graph.json`. The preset test fails if you forget.
 3. Bump `preset.version` when changing a shipped preset so profiles can be offered the update later.
+
+### Add or change a stage package
+1. Edit `presets/stages/<id>/prompt.json` (an API graph with `PORT:<PORT>` stubs, `OUT:<PORT>` republishers and `_meta.blombo` `when` / `else` / `inputsWhen`) and `stage.json` (stage, family, ports, packs, fields, defaults). Format: `docs/workflows.md` → Stages.
+2. New settings fields go into the stage's schema in `shared/workflow/stages.ts` (with defaults) and its block in `features/generate/blocks/stages/`; values reach the graph through `instancesFor()` in `services/workflows/stages.ts`.
+3. Add every class the graph uses to the fake ComfyUI's `fixtures/object_info.json`, and a compiled-graph case to `services/workflows/stages.test.ts`. The package test fails if a class is unknown.
 
 ### Teach the analyzer a node
 Detection is by input names first (`seed`, `steps`, `positive`, `ckpt_name`…). Only when that can't work, add the class to `services/workflows/nodes.ts`, add a fixture graph under `services/workflows/fixtures/` and a case to `analyze.test.ts`.

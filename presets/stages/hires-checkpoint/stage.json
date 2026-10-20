@@ -1,0 +1,27 @@
+{
+  "format": "blombo.stage/1",
+  "id": "hires-checkpoint",
+  "stage": "hires",
+  "family": "checkpoint",
+  "name": "Hires fix",
+  "description": "Upscales the finished image (with an upscale model or a plain resize) and samples it again at a low denoise.",
+  "attach": "after_decode",
+  "requires": ["MODEL", "VAE", "IMAGE"],
+  "provides": ["IMAGE"],
+  "packs": [],
+  "fields": [
+    { "field": "upscaler", "node": "loader", "input": "model_name", "modelKind": "upscale_models", "label": "Upscaler" },
+    { "field": "width", "node": "resize", "input": "width" },
+    { "field": "height", "node": "resize", "input": "height" },
+    { "field": "prompt", "node": "pos", "input": "text" },
+    { "field": "negative", "node": "neg", "input": "text" },
+    { "field": "seed", "node": "sampler", "input": "seed" },
+    { "field": "steps", "node": "sampler", "input": "steps" },
+    { "field": "cfg", "node": "sampler", "input": "cfg" },
+    { "field": "sampler", "node": "sampler", "input": "sampler_name", "label": "Sampler" },
+    { "field": "scheduler", "node": "sampler", "input": "scheduler", "label": "Scheduler" },
+    { "field": "denoise", "node": "sampler", "input": "denoise" },
+    { "field": "prefix", "node": "save-first", "input": "filename_prefix" }
+  ],
+  "defaults": {}
+}

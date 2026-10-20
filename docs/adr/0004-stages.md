@@ -30,8 +30,21 @@ prompt.json    ComfyUI API graph with PORT:<ROLE> stub nodes
 - Stages are listed per workflow as **available** or **missing requirements** (for example, "needs port.VAE").
 - Users can add their own stages later by dropping a stage package. That isn't exposed in the UI yet.
 
+## Implementation notes (Phase 4a)
+
+- **Ports are found, not bound.** `findPorts()` in the analyzer walks from the main sampler at compile time (after LoRAs are chained), so the manifest needs no `port.*` bindings and every graph the analyzer understands gets stages.
+- **Stub syntax.** `PORT:<PORT>` nodes (with `from: "base"` for the pre-stage value, `optional: true` for inputs that can go), `OUT:<PORT>` nodes to republish, and `_meta.blombo` `when` / `else` / `inputsWhen` for parts that depend on a setting (an upscale model, SAM, a custom prompt, a preprocessor). Everything is data in `presets/stages/`; the splicer has no per-stage graph code.
+- **Families instead of one package per stage.** `checkpoint` and `diffusion` packages; the workflow's family picks first, any package whose required ports exist is the fallback. Diffusion packages sample with `SamplerCustomAdvanced` + `BasicGuider`, give the detailer an empty negative, and apply ControlNet to the prompt only.
+- **ADetailer reads the base prompt**, not the ControlNet conditioning; Hires fix reads the ControlNet one, as the base sampler does.
+- **Checks are a dry run.** The same splice runs on a copy of the workflow per stage and reports missing ports, custom nodes (by pack), models (not picked, not in the folder) and ComfyUI's choices for each field. The UI shows them before a run and offers Models → Manager or ComfyUI; the compiler refuses with the same messages.
+- **Control images live in the profile** (`inputs/`, content-named) and are uploaded to ComfyUI per run, so a ComfyUI restart or another slot never loses them.
+- **Progress segments** come from the compiled graph: each sampling node belongs to a segment (base passes, Hires fix, each ADetailer unit).
+- **Custom nodes aren't installed by Blombo yet.** A missing pack is named with its repository and the way to install it inside ComfyUI (ComfyUI-Manager). The ADetailer and ControlNet node specs were written from the Impact Pack / Impact Subpack / controlnet_aux sources and tested against the fake ComfyUI; a run on real models is still to be checked.
+
 ## Action items
 
-1. [ ] Author `hiresfix` and `adetailer` stage packages for both checkpoint and diffusion families.
-2. [ ] Write the ControlNet stage (Apply ControlNet Advanced + common preprocessors via comfyui_controlnet_aux).
-3. [ ] Stage UI blocks: compact header with an enable switch, an inherited-value pattern and units tabs.
+1. [x] Author `hiresfix` and `adetailer` stage packages for both checkpoint and diffusion families.
+2. [x] Write the ControlNet stage (Apply ControlNet Advanced + common preprocessors via comfyui_controlnet_aux).
+3. [x] Stage UI blocks: compact header with an enable switch, an inherited-value pattern and units tabs.
+4. [ ] Upscale stage (after ADetailer), and user stage packages dropped into the profile.
+5. [ ] Check a real run of each stage on real models (needs detector, SAM and ControlNet downloads).

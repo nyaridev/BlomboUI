@@ -1,29 +1,41 @@
 /**
  * Generate UI state, split in small stores so a slider only re-renders itself:
- *  - useValues:  the active workflow's values (binding id → value) and run settings. Edits save
- *                into the workflow in the background (debounced PATCH); there are no templates.
- *  - useStages:  Hires / ADetailer / ControlNet settings (stages arrive in a later phase)
- *  - useLayout:  the layout document, Customize mode, selection, undo/redo, presets
+ *  - useValues:  the active workflow's values (binding id → value), run settings and stage
+ *                settings. Edits save into the workflow in the background (debounced PATCH);
+ *                there are no templates.
+ *  - useLayout:  the layout document the params column shows, Customize mode, selection and
+ *                undo/redo. Layouts are saved in the profile (features/generate/layouts.ts).
  */
 import { api } from "@client/lib/api";
 import { qk, queryClient } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
 import type { Block, LayoutDocument } from "@shared/layout/schema";
-import type { RunSettings, WorkflowManifest } from "@shared/workflow/manifest";
+import type {
+  RunSettings,
+  StagesRecord,
+  WorkflowDetail,
+  WorkflowManifest,
+} from "@shared/workflow/manifest";
+import { readStages, type StageSettings } from "@shared/workflow/stages";
+import type { z } from "zod";
 import { create } from "zustand";
-import { COMPACT_LAYOUT, DEFAULT_LAYOUT } from "./layout/defaultLayout";
 
 /* ── values ──────────────────────────────────────────────────────────────── */
+
+type StagesPatch = z.infer<typeof StagesRecord>;
 
 interface ValuesState {
   workflowId: string | null;
   values: Record<string, unknown>;
   run: RunSettings;
+  stages: StageSettings;
   /** Show a workflow's saved values (only when switching workflows, so edits aren't lost). */
   load: (manifest: WorkflowManifest) => void;
   setValue: (id: string, value: unknown) => void;
   setRun: (patch: Partial<RunSettings>) => void;
+  /** Replace one stage's settings (saved like values). */
+  setStage: <K extends keyof StageSettings>(key: K, value: StageSettings[K]) => void;
   /** Values the server changed (the next seed after a run); not saved again. */
   merge: (values: Record<string, unknown>) => void;
 }
@@ -33,6 +45,7 @@ let pending: {
   workflowId: string;
   values: Record<string, unknown>;
   run: Partial<RunSettings>;
+  stages: StagesPatch;
 } | null = null;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -43,22 +56,44 @@ async function save(): Promise<void> {
   pending = null;
   if (!batch) return;
   try {
-    const saved = await api.patchValues(batch.workflowId, { values: batch.values, run: batch.run });
-    // Keep the cached manifest current without replacing its live model choices.
+    const saved = await api.patchValues(batch.workflowId, {
+      values: batch.values,
+      run: batch.run,
+      ...(Object.keys(batch.stages).length ? { stages: batch.stages } : {}),
+    });
+    // Keep the cached workflow current without replacing its live choices and layout.
     const key = qk.workflow(useSession.getState().profileId, batch.workflowId);
-    queryClient.setQueryData<WorkflowManifest>(key, (old) =>
-      old ? { ...old, values: saved.values, run: saved.run, updatedAt: saved.updatedAt } : old,
+    queryClient.setQueryData<WorkflowDetail>(key, (old) =>
+      old
+        ? {
+            ...old,
+            values: saved.values,
+            run: saved.run,
+            stages: saved.stages,
+            updatedAt: saved.updatedAt,
+          }
+        : old,
     );
   } catch (error) {
     toast(`Couldn't save the change: ${error instanceof Error ? error.message : error}`, "error");
   }
 }
 
-function queueSave(workflowId: string, values: Record<string, unknown>, run: Partial<RunSettings>) {
+function queueSave(
+  workflowId: string,
+  values: Record<string, unknown>,
+  run: Partial<RunSettings>,
+  stages: StagesPatch = {},
+) {
   if (pending && pending.workflowId !== workflowId) void save();
   pending = pending
-    ? { workflowId, values: { ...pending.values, ...values }, run: { ...pending.run, ...run } }
-    : { workflowId, values, run };
+    ? {
+        workflowId,
+        values: { ...pending.values, ...values },
+        run: { ...pending.run, ...run },
+        stages: { ...pending.stages, ...stages },
+      }
+    : { workflowId, values, run, stages };
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => void save(), SAVE_DELAY_MS);
 }
@@ -74,10 +109,16 @@ export const useValues = create<ValuesState>((set, get) => ({
   workflowId: null,
   values: {},
   run: { seedMode: "random", count: 1 },
+  stages: readStages({}),
   load: (m) => {
     if (get().workflowId === m.id) return;
     if (pending) void save();
-    set({ workflowId: m.id, values: { ...m.values }, run: { ...m.run } });
+    set({
+      workflowId: m.id,
+      values: { ...m.values },
+      run: { ...m.run },
+      stages: readStages(m.stages),
+    });
   },
   setValue: (id, value) => {
     const wf = get().workflowId;
@@ -89,6 +130,11 @@ export const useValues = create<ValuesState>((set, get) => ({
     set((s) => ({ run: { ...s.run, ...patch } }));
     if (wf) queueSave(wf, {}, patch);
   },
+  setStage: (key, value) => {
+    const wf = get().workflowId;
+    set((s) => ({ stages: { ...s.stages, [key]: value } }));
+    if (wf) queueSave(wf, {}, {}, { [key]: value as unknown as Record<string, unknown> });
+  },
   merge: (values) => set((s) => ({ values: { ...s.values, ...values } })),
 }));
 
@@ -98,141 +144,38 @@ export function useValue<T>(id: string): [T, (v: T) => void] {
   return [value, (v: T) => setValue(id, v)];
 }
 
-/* ── stages ──────────────────────────────────────────────────────────────── */
-
-export interface AdUnit {
-  id: string;
-  name: string;
-  detector: string;
-  confidence: number;
-  denoise: number;
-  maskBlur: number;
-  promptOverride: boolean;
-  prompt: string;
+/** One stage's settings and a setter that merges a patch into them. */
+export function useStage<K extends keyof StageSettings>(
+  key: K,
+): [StageSettings[K], (patch: Partial<StageSettings[K]>) => void] {
+  const value = useValues((s) => s.stages[key]);
+  const setStage = useValues((s) => s.setStage);
+  return [value, (patch) => setStage(key, { ...useValues.getState().stages[key], ...patch })];
 }
-
-export interface CnUnit {
-  id: string;
-  name: string;
-  preprocessor: string;
-  model: string;
-  strength: number;
-  start: number;
-  end: number;
-  mode: "balanced" | "prompt" | "control";
-}
-
-interface StagesState {
-  hires: {
-    enabled: boolean;
-    sizeMode: "scale" | "target";
-    scale: number;
-    upscaler: string;
-    denoise: number;
-    steps: number;
-    stepsOverride: boolean;
-    samplerOverride: boolean;
-    sampler: string;
-    cfgOverride: boolean;
-    cfg: number;
-    saveFirst: boolean;
-  };
-  adetailer: { enabled: boolean; active: string; units: AdUnit[] };
-  controlnet: { enabled: boolean; active: string; units: CnUnit[] };
-  patch: <K extends "hires" | "adetailer" | "controlnet">(
-    key: K,
-    value: Partial<StagesState[K]>,
-  ) => void;
-}
-
-export const useStages = create<StagesState>((set) => ({
-  hires: {
-    enabled: true,
-    sizeMode: "scale",
-    scale: 1.5,
-    upscaler: "4x-UltraSharp",
-    denoise: 0.38,
-    steps: 14,
-    stepsOverride: true,
-    samplerOverride: false,
-    sampler: "euler_ancestral",
-    cfgOverride: false,
-    cfg: 5.5,
-    saveFirst: false,
-  },
-  adetailer: {
-    enabled: false,
-    active: "face",
-    units: [
-      {
-        id: "face",
-        name: "Face",
-        detector: "face_yolov8m",
-        confidence: 0.35,
-        denoise: 0.4,
-        maskBlur: 4,
-        promptOverride: false,
-        prompt: "",
-      },
-      {
-        id: "hands",
-        name: "Hands",
-        detector: "hand_yolov8s",
-        confidence: 0.3,
-        denoise: 0.35,
-        maskBlur: 4,
-        promptOverride: true,
-        prompt: "detailed hands, five fingers",
-      },
-    ],
-  },
-  controlnet: {
-    enabled: false,
-    active: "pose",
-    units: [
-      {
-        id: "pose",
-        name: "Pose",
-        preprocessor: "dwpose",
-        model: "controlnet-openpose-sdxl",
-        strength: 0.85,
-        start: 0,
-        end: 0.8,
-        mode: "balanced",
-      },
-    ],
-  },
-  patch: (key, value) => set((s) => ({ [key]: { ...s[key], ...value } }) as Partial<StagesState>),
-}));
 
 /* ── layout + customize ──────────────────────────────────────────────────── */
 
-const PRESETS_KEY = "blombo.layoutPresets";
-
-function loadPresets(): LayoutDocument[] {
-  try {
-    const raw = localStorage.getItem(PRESETS_KEY);
-    return raw ? (JSON.parse(raw) as LayoutDocument[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 interface LayoutState {
-  doc: LayoutDocument;
-  builtins: LayoutDocument[];
-  custom: LayoutDocument[];
+  /** What the params column shows (null until a workflow loads). */
+  doc: LayoutDocument | null;
+  /** The layout as saved; `doc !== saved` means there are unsaved edits. */
+  saved: LayoutDocument | null;
+  /** The workflow links this layout, or shows the profile's default. */
+  source: "linked" | "default";
+  workflowId: string | null;
   customizing: boolean;
   selected: string | null;
   past: LayoutDocument[];
   future: LayoutDocument[];
+  /** Show a workflow's layout (on load and when switching; unsaved edits stay). */
+  show: (detail: WorkflowDetail) => void;
+  /** Replace the document with a saved one (picked, saved or reset). */
+  setSaved: (doc: LayoutDocument, source: "linked" | "default") => void;
   setCustomizing: (on: boolean) => void;
   select: (id: string | null) => void;
   apply: (next: LayoutDocument) => void;
   undo: () => void;
   redo: () => void;
-  load: (id: string) => void;
-  saveAs: (name: string) => void;
   updateBlock: (id: string, patch: Partial<Block>) => void;
   moveParams: (from: number, to: number) => void;
   moveInCard: (cardId: string, from: number, to: number) => void;
@@ -255,42 +198,57 @@ function arrayMove<T>(list: T[], from: number, to: number): T[] {
 }
 
 export const useLayout = create<LayoutState>((set, get) => ({
-  doc: DEFAULT_LAYOUT,
-  builtins: [DEFAULT_LAYOUT, COMPACT_LAYOUT],
-  custom: loadPresets(),
+  doc: null,
+  saved: null,
+  source: "default",
+  workflowId: null,
   customizing: false,
   selected: null,
   past: [],
   future: [],
+  show: (detail) => {
+    const s = get();
+    const switched = s.workflowId !== detail.id;
+    // Same workflow: unsaved edits stay on screen until they're saved or thrown away.
+    if (!switched && (s.doc !== s.saved || s.saved === detail.layoutDoc)) return;
+    set({
+      doc: detail.layoutDoc,
+      saved: detail.layoutDoc,
+      source: detail.layoutSource,
+      workflowId: detail.id,
+      past: switched ? [] : s.past,
+      future: switched ? [] : s.future,
+      selected: null,
+    });
+  },
+  setSaved: (doc, source) =>
+    set((s) => ({
+      doc,
+      saved: doc,
+      source,
+      past: s.doc ? [...s.past.slice(-49), s.doc] : s.past,
+      future: [],
+      selected: null,
+    })),
   setCustomizing: (customizing) => set({ customizing, selected: null }),
   select: (selected) => set({ selected }),
-  apply: (next) => set((s) => ({ doc: next, past: [...s.past.slice(-49), s.doc], future: [] })),
+  apply: (next) =>
+    set((s) => ({ doc: next, past: s.doc ? [...s.past.slice(-49), s.doc] : s.past, future: [] })),
   undo: () =>
     set((s) => {
       const prev = s.past[s.past.length - 1];
-      return prev ? { doc: prev, past: s.past.slice(0, -1), future: [s.doc, ...s.future] } : s;
+      return prev && s.doc
+        ? { doc: prev, past: s.past.slice(0, -1), future: [s.doc, ...s.future] }
+        : s;
     }),
   redo: () =>
     set((s) => {
       const next = s.future[0];
-      return next ? { doc: next, past: [...s.past, s.doc], future: s.future.slice(1) } : s;
+      return next && s.doc ? { doc: next, past: [...s.past, s.doc], future: s.future.slice(1) } : s;
     }),
-  load: (id) => {
-    const found = [...get().builtins, ...get().custom].find((l) => l.id === id);
-    if (found) get().apply(structuredClone(found));
-  },
-  saveAs: (name) => {
-    const doc = { ...structuredClone(get().doc), id: `custom-${Date.now().toString(36)}`, name };
-    const custom = [...get().custom, doc];
-    try {
-      localStorage.setItem(PRESETS_KEY, JSON.stringify(custom));
-    } catch {
-      // Storage can be unavailable; the preset still lives for this session.
-    }
-    set({ custom, doc });
-  },
   updateBlock: (id, patch) => {
     const s = get();
+    if (!s.doc) return;
     s.apply({
       ...s.doc,
       regions: { ...s.doc.regions, params: mapBlocks(s.doc.regions.params, id, patch) },
@@ -298,6 +256,7 @@ export const useLayout = create<LayoutState>((set, get) => ({
   },
   moveParams: (from, to) => {
     const s = get();
+    if (!s.doc) return;
     s.apply({
       ...s.doc,
       regions: { ...s.doc.regions, params: arrayMove(s.doc.regions.params, from, to) },
@@ -305,6 +264,7 @@ export const useLayout = create<LayoutState>((set, get) => ({
   },
   moveInCard: (cardId, from, to) => {
     const s = get();
+    if (!s.doc) return;
     const params = s.doc.regions.params.map((b) =>
       b.type === "card" && b.id === cardId
         ? { ...b, children: arrayMove(b.children, from, to) }

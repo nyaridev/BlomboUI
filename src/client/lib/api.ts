@@ -9,6 +9,7 @@ import type {
   ProfilesResponse,
   SystemInfo,
 } from "@shared/api";
+import type { CompleteMode, Suggestion, TagListInfo, TagListsResponse } from "@shared/autocomplete";
 import {
   type BrowseFilter,
   browseQuery,
@@ -18,7 +19,7 @@ import {
   type CivitaiSearch,
   type CivitaiView,
 } from "@shared/civitai";
-import type { ComfyLogLine, ComfyStatus, FreeMemoryBody } from "@shared/comfy";
+import type { ComfyFileRef, ComfyLogLine, ComfyStatus, FreeMemoryBody } from "@shared/comfy";
 import type { ModelKind } from "@shared/constants";
 import type {
   Download,
@@ -39,6 +40,7 @@ import type {
 } from "@shared/gallery";
 import type { InstallBody, InstallState, SlotsResponse } from "@shared/install";
 import type { GenerateBody, GenerateResponse, QueueSnapshot } from "@shared/jobs";
+import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layout/schema";
 import type { Catalog } from "@shared/manager";
 import type { LocalModel, LookupState, ModelDetails, ModelList } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
@@ -49,9 +51,11 @@ import type {
   PatchValuesBody,
   PresetSummary,
   UpdateWorkflowBody,
+  WorkflowDetail,
   WorkflowManifest,
   WorkflowSummary,
 } from "@shared/workflow/manifest";
+import type { StageImage, StageReport } from "@shared/workflow/stages";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -121,7 +125,7 @@ export const api = {
     ),
 
   workflows: () => request<WorkflowSummary[]>("GET", "/workflows"),
-  workflow: (id: string) => request<WorkflowManifest>("GET", `/workflows/${id}`),
+  workflow: (id: string) => request<WorkflowDetail>("GET", `/workflows/${id}`),
   presets: () => request<PresetSummary[]>("GET", "/workflows/presets"),
   installPreset: (id: string) =>
     request<WorkflowManifest>("POST", `/workflows/presets/${id}/install`),
@@ -139,6 +143,47 @@ export const api = {
   duplicateWorkflow: (id: string, name?: string) =>
     request<WorkflowManifest>("POST", `/workflows/${id}/duplicate`, { name }),
   deleteWorkflow: (id: string) => request<void>("DELETE", `/workflows/${id}`),
+
+  layouts: () => request<LayoutList>("GET", "/layouts"),
+  createLayout: (body: CreateLayoutBody) => request<LayoutDocument>("POST", "/layouts", body),
+  saveLayout: (id: string, doc: LayoutDocument) =>
+    request<LayoutDocument>("PUT", `/layouts/${encodeURIComponent(id)}`, { doc }),
+  renameLayout: (id: string, name: string) =>
+    request<LayoutDocument>("PATCH", `/layouts/${encodeURIComponent(id)}`, { name }),
+  deleteLayout: (id: string) => request<void>("DELETE", `/layouts/${encodeURIComponent(id)}`),
+
+  checkStages: (workflowId: string, stages: unknown) =>
+    request<StageReport>("POST", "/stages/check", { workflowId, stages }),
+  uploadStageImage: (file: Blob, filename: string) =>
+    request<StageImage>(
+      "POST",
+      `/stages/images?filename=${encodeURIComponent(filename)}`,
+      undefined,
+      file,
+    ),
+  stageImageFromGallery: (id: number) =>
+    request<StageImage>("POST", "/stages/images/gallery", { id }),
+  stageImageFromOutput: (ref: ComfyFileRef) =>
+    request<StageImage>("POST", "/stages/images/output", ref),
+  previewMap: (file: string, preprocessor: string, resolution: number) =>
+    request<ComfyFileRef>("POST", "/stages/preview", { file, preprocessor, resolution }),
+
+  suggest: (q: string, mode: CompleteMode, limit: number, signal?: AbortSignal) =>
+    fetch(`/api/autocomplete?${query({ q, mode, limit })}`, { signal }).then((r) =>
+      r.ok ? (r.json() as Promise<Suggestion[]>) : ([] as Suggestion[]),
+    ),
+  tagLists: () => request<TagListsResponse>("GET", "/autocomplete/lists"),
+  addTagList: (file: File) =>
+    request<TagListInfo>(
+      "POST",
+      `/autocomplete/lists?filename=${encodeURIComponent(file.name)}`,
+      undefined,
+      file,
+    ),
+  removeTagList: (file: string) =>
+    request<void>("DELETE", `/autocomplete/lists/${encodeURIComponent(file)}`),
+  revealTagLists: () => request<{ ok: true }>("POST", "/autocomplete/lists/reveal"),
+  clearFrequentTags: () => request<void>("DELETE", "/autocomplete/frequent"),
 
   queue: () => request<QueueSnapshot>("GET", "/jobs"),
   generate: (body: GenerateBody) => request<GenerateResponse>("POST", "/jobs", body),
@@ -254,6 +299,11 @@ function query(params: Record<string, unknown>): string {
   for (const [k, v] of Object.entries(params))
     if (v !== undefined && v !== null && v !== "") q.set(k, String(v));
   return q.toString();
+}
+
+/** A stage's control image (named by its content, so it's cached for good). */
+export function stageImageUrl(file: string): string {
+  return `/api/stages/images/${encodeURIComponent(file)}`;
 }
 
 /** Avatar URL with a cache-buster tied to the profile record, so a new upload shows at once. */

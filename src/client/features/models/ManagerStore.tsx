@@ -29,7 +29,8 @@ import {
 } from "@shared/manager";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useModelsNav } from "./nav";
 
 const CATEGORY_ICON: Record<StoreCategory, IconName> = {
   checkpoints: "models",
@@ -56,8 +57,19 @@ const HEADER_H = 40;
 
 export function ManagerStore() {
   const catalog = useCatalog();
-  const [filter, setFilter] = useState<Filter>("all");
-  const [query, setQuery] = useState("");
+  // A deep link ("Find in Manager" from a stage) picks the category and search once.
+  const [link] = useState(() => useModelsNav.getState().takeManager());
+  const [filter, setFilter] = useState<Filter>(link?.category ?? "all");
+  const [query, setQuery] = useState(link?.query ?? "");
+  const pending = useModelsNav((s) => s.manager);
+  useEffect(() => {
+    if (!pending) return;
+    const next = useModelsNav.getState().takeManager();
+    if (next) {
+      setFilter(next.category);
+      setQuery(next.query);
+    }
+  }, [pending]);
   const [refreshing, setRefreshing] = useState(false);
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);

@@ -1,0 +1,66 @@
+{
+  "p-image": { "class_type": "PORT:IMAGE", "inputs": {} },
+  "p-model": { "class_type": "PORT:MODEL", "inputs": {} },
+  "p-clip": { "class_type": "PORT:CLIP", "inputs": {} },
+  "p-vae": { "class_type": "PORT:VAE", "inputs": {} },
+  "p-pos": { "class_type": "PORT:POSITIVE", "inputs": {} },
+  "save-first": {
+    "class_type": "SaveImage",
+    "inputs": { "filename_prefix": "ComfyUI", "images": ["p-image", 0] },
+    "_meta": { "title": "Save first pass", "blombo": { "when": "saveFirst" } }
+  },
+  "loader": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": { "model_name": "" },
+    "_meta": { "title": "Upscale model", "blombo": { "when": "upscaler" } }
+  },
+  "upscale": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": { "upscale_model": ["loader", 0], "image": ["p-image", 0] },
+    "_meta": { "title": "Upscale", "blombo": { "when": "upscaler", "else": "input:image" } }
+  },
+  "resize": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["upscale", 0], "upscale_method": "lanczos", "width": 1536, "height": 1536, "crop": "disabled" },
+    "_meta": { "title": "Resize" }
+  },
+  "encode": {
+    "class_type": "VAEEncode",
+    "inputs": { "pixels": ["resize", 0], "vae": ["p-vae", 0] },
+    "_meta": { "title": "Encode" }
+  },
+  "pos": {
+    "class_type": "CLIPTextEncode",
+    "inputs": { "text": "", "clip": ["p-clip", 0] },
+    "_meta": { "title": "Prompt", "blombo": { "when": "prompt", "else": "node:p-pos" } }
+  },
+  "noise": { "class_type": "RandomNoise", "inputs": { "noise_seed": 0 }, "_meta": { "title": "Noise" } },
+  "guider": {
+    "class_type": "BasicGuider",
+    "inputs": { "model": ["p-model", 0], "conditioning": ["pos", 0] },
+    "_meta": { "title": "Guider" }
+  },
+  "select": { "class_type": "KSamplerSelect", "inputs": { "sampler_name": "euler" }, "_meta": { "title": "Sampler" } },
+  "sigmas": {
+    "class_type": "BasicScheduler",
+    "inputs": { "model": ["p-model", 0], "scheduler": "simple", "steps": 15, "denoise": 0.35 },
+    "_meta": { "title": "Scheduler" }
+  },
+  "sampler": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["noise", 0],
+      "guider": ["guider", 0],
+      "sampler": ["select", 0],
+      "sigmas": ["sigmas", 0],
+      "latent_image": ["encode", 0]
+    },
+    "_meta": { "title": "Sampler" }
+  },
+  "decode": {
+    "class_type": "VAEDecode",
+    "inputs": { "samples": ["sampler", 0], "vae": ["p-vae", 0] },
+    "_meta": { "title": "Decode" }
+  },
+  "out-image": { "class_type": "OUT:IMAGE", "inputs": { "value": ["decode", 0] } }
+}

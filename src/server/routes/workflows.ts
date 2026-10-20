@@ -3,11 +3,13 @@ import {
   DuplicateWorkflowBody,
   PatchValuesBody,
   UpdateWorkflowBody,
+  type WorkflowDetail,
   type WorkflowManifest,
 } from "../../shared/workflow/manifest.ts";
 import type { ServerConfig } from "../config.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
+import type { LayoutService } from "../services/layouts.ts";
 import { refreshBindings } from "../services/workflows/analyze.ts";
 import { importWorkflow } from "../services/workflows/import.ts";
 import { installPreset, presetSummaries } from "../services/workflows/presets.ts";
@@ -19,6 +21,7 @@ export function workflowRoutes(
   config: ServerConfig,
   workflows: WorkflowService,
   supervisor: ComfySupervisor,
+  layouts: LayoutService,
 ) {
   const r = new Hono();
 
@@ -56,7 +59,17 @@ export function workflowRoutes(
     return c.json(result, 201);
   });
 
-  r.get("/:id", async (c) => c.json(await withLiveChoices(await workflows.get(c.req.param("id")))));
+  /** What Generate loads: live choices plus the layout it shows (linked or the default). */
+  r.get("/:id", async (c) => {
+    const manifest = await withLiveChoices(await workflows.get(c.req.param("id")));
+    const layout = await layouts.resolve(manifest.layout);
+    const detail: WorkflowDetail = {
+      ...manifest,
+      layoutDoc: layout.doc,
+      layoutSource: layout.source,
+    };
+    return c.json(detail);
+  });
 
   r.patch("/:id/values", async (c) => {
     const body = await readJson(c, PatchValuesBody);

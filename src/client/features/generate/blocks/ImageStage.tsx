@@ -1,6 +1,6 @@
 /**
  * The image stage: the selected result, or the live preview while generating; progress split by
- * sampler pass with speed and ETA; tools; and the strip of this session's results. Everything
+ * part of the run (the workflow's sampling, then each stage) with speed and ETA; tools; and the strip of this session's results. Everything
  * comes from the live bus: queue snapshots, step progress and binary preview frames.
  */
 import { Icon } from "@client/icons/Icon";
@@ -98,23 +98,27 @@ export function ImageStage() {
   const w = running?.width ?? current?.job.width ?? (Number.isFinite(valueW) ? valueW : 1024);
   const h = running?.height ?? current?.job.height ?? (Number.isFinite(valueH) ? valueH : 1024);
 
+  // One segment per part of the run: the workflow's sampling, then each stage that samples.
+  const parts = running?.segments;
   const segments: StageSegment[] = useMemo(() => {
-    const passes = Math.max(1, running?.passes ?? 1);
-    const overall = progress?.overall ?? 0;
-    return Array.from({ length: passes }, (_, i) => {
-      const local = Math.min(1, Math.max(0, overall * passes - i));
+    const list = parts?.length ? parts : [{ id: "base", label: "Sampling", nodes: [] }];
+    const current = progress?.segment ?? 0;
+    return list.map((seg, i) => {
+      const local =
+        i < current ? 1 : i > current || !progress ? 0 : Math.min(1, progress.value / progress.max);
+      const steps = i === current && progress ? ` · ${progress.max} steps` : "";
       return {
-        id: `pass-${i}`,
-        label: passes === 1 ? `Sampling · ${progress?.max ?? "…"} steps` : `Pass ${i + 1}`,
+        id: seg.id,
+        label: `${seg.label}${steps}`,
         progress: local,
-        state: local >= 1 ? "done" : local > 0 || i === 0 ? "active" : "pending",
+        state: i < current ? "done" : i === current ? "active" : "pending",
       } satisfies StageSegment;
     });
-  }, [running?.passes, progress]);
+  }, [parts, progress]);
 
-  // Remaining steps of this pass plus the passes still to come, at the current speed.
-  const passes = Math.max(1, running?.passes ?? 1);
-  const passesLeft = progress ? Math.max(0, passes - 1 - Math.floor(progress.overall * passes)) : 0;
+  // Remaining steps of this part plus the parts still to come, at the current speed.
+  const passes = Math.max(1, parts?.length ?? 1);
+  const passesLeft = progress ? Math.max(0, passes - 1 - (progress.segment ?? 0)) : 0;
   const eta =
     progress && speed && speed > 0
       ? Math.round((progress.max - progress.value + passesLeft * progress.max) / speed)

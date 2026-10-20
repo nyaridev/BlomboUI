@@ -1,0 +1,114 @@
+{
+  "format": "blombo.layout/1",
+  "id": "default",
+  "name": "Default",
+  "regions": {
+    "models": [
+      {
+        "type": "feature",
+        "feature": "loaded-models",
+        "id": "models"
+      }
+    ],
+    "prompt": [
+      {
+        "type": "feature",
+        "feature": "prompts",
+        "id": "prompts"
+      }
+    ],
+    "actions": [
+      {
+        "type": "feature",
+        "feature": "generate-actions",
+        "id": "actions"
+      }
+    ],
+    "params": [
+      {
+        "type": "card",
+        "id": "card-sampling",
+        "title": "Sampling",
+        "icon": "activity",
+        "children": [
+          {
+            "type": "param",
+            "id": "p-sampler",
+            "bind": "role:sampler.name",
+            "control": "select",
+            "span": 7
+          },
+          {
+            "type": "param",
+            "id": "p-scheduler",
+            "bind": "role:sampler.scheduler",
+            "control": "select",
+            "span": 5
+          },
+          {
+            "type": "param",
+            "id": "p-steps",
+            "bind": "role:sampler.steps",
+            "control": "slider",
+            "span": 12
+          },
+          {
+            "type": "param",
+            "id": "p-cfg",
+            "bind": "role:sampler.cfg",
+            "control": "slider",
+            "span": 12
+          },
+          {
+            "type": "param",
+            "id": "p-clipskip",
+            "bind": "role:clip.skip",
+            "control": "segmented",
+            "span": 12,
+            "hidden": true
+          }
+        ]
+      },
+      {
+        "type": "feature",
+        "feature": "resolution",
+        "id": "resolution"
+      },
+      {
+        "type": "feature",
+        "feature": "seed",
+        "id": "seed"
+      },
+      {
+        "type": "stage",
+        "stage": "hires",
+        "id": "stage-hires"
+      },
+      {
+        "type": "stage",
+        "stage": "adetailer",
+        "id": "stage-adetailer"
+      },
+      {
+        "type": "stage",
+        "stage": "controlnet",
+        "id": "stage-controlnet"
+      },
+      {
+        "type": "params-rest",
+        "id": "rest",
+        "title": "More from this workflow"
+      }
+    ],
+    "stage": [
+      {
+        "type": "feature",
+        "feature": "image-stage",
+        "id": "stage"
+      }
+    ]
+  },
+  "sizes": {
+    "params": 420
+  }
+}

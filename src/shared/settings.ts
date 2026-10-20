@@ -54,6 +54,44 @@ export const ModelSettings = z.object({
   blurNsfw: z.boolean().default(true),
 });
 
+export const GenerateSettings = z.object({
+  /** The layout workflows show when they don't link one (a built-in or profile layout id). */
+  layout: z.string().min(1).max(80).default("default"),
+});
+
+/** Ctrl+↑/↓ in the prompt editor changes weights by this much. */
+export const WEIGHT_STEPS = [0.01, 0.05, 0.1] as const;
+
+export const AutocompleteSettings = z.object({
+  enabled: z.boolean().default(true),
+  /** What suggestions draw from. */
+  sources: z
+    .object({
+      tags: z.boolean().default(true),
+      loras: z.boolean().default(true),
+      triggers: z.boolean().default(true),
+      wildcards: z.boolean().default(true),
+      frequent: z.boolean().default(true),
+    })
+    .prefault({}),
+  /** Tag lists turned off ("bundled:starter", "profile:danbooru.csv"). */
+  disabledLists: z.array(z.string().max(200)).max(100).default([]),
+  /** Characters typed before suggestions appear. */
+  minChars: z.number().int().min(1).max(5).default(2),
+  maxResults: z.number().int().min(5).max(50).default(15),
+  /** "long_hair" goes in as "long hair". */
+  replaceUnderscores: z.boolean().default(true),
+  /** "name (artist)" goes in as "name \(artist\)", so parentheses aren't read as weights. */
+  escapeParens: z.boolean().default(true),
+  /** Add ", " after an inserted tag. */
+  appendComma: z.boolean().default(true),
+  /** Inserting a LoRA also inserts its trigger words. */
+  insertTriggers: z.boolean().default(false),
+  thumbnails: z.boolean().default(true),
+  weightStep: z.number().min(0.01).max(0.25).default(0.05),
+});
+export type AutocompleteSettings = z.infer<typeof AutocompleteSettings>;
+
 /** Parts of the folder a Civitai download is sorted into, in order ("Illustrious/Creator"). */
 export const DOWNLOAD_FOLDER_PARTS = ["baseModel", "category", "creator"] as const;
 export type DownloadFolderPart = (typeof DOWNLOAD_FOLDER_PARTS)[number];
@@ -113,6 +151,8 @@ export const Settings = z.object({
   gallery: GallerySettings.prefault({}),
   models: ModelSettings.prefault({}),
   civitai: CivitaiSettings.prefault({}),
+  generate: GenerateSettings.prefault({}),
+  autocomplete: AutocompleteSettings.prefault({}),
 });
 export type Settings = z.infer<typeof Settings>;
 
@@ -123,7 +163,14 @@ export type Settings = z.infer<typeof Settings>;
  */
 const Section = z.record(z.string(), z.unknown());
 export const SettingsPatch = z
-  .object({ appearance: Section, gallery: Section, models: Section, civitai: Section })
+  .object({
+    appearance: Section,
+    gallery: Section,
+    models: Section,
+    civitai: Section,
+    generate: Section,
+    autocomplete: Section,
+  })
   .partial()
   .strict();
 export type SettingsPatch = z.infer<typeof SettingsPatch>;

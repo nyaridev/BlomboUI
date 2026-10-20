@@ -95,3 +95,27 @@ export function controlFamily(type: string): ControlFamily | null {
   if (type === "string") return "string";
   return null;
 }
+
+/* ── layout presets (data/profiles/<id>/layouts/<layoutId>.json) ─────────── */
+
+/** Ids of the profile's own layouts; built-in ones (presets/layouts/) keep theirs. */
+export const LayoutId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,59}$/, "Invalid layout id");
+
+export const LayoutList = z.object({
+  builtins: z.array(LayoutDocument),
+  custom: z.array(LayoutDocument),
+  /** What workflows without a linked layout show (Settings → generate.layout). */
+  defaultId: z.string(),
+});
+export type LayoutList = z.infer<typeof LayoutList>;
+
+export const CreateLayoutBody = z.object({
+  name: z.string().trim().min(1).max(60),
+  doc: LayoutDocument,
+  /** Also link the new layout to this workflow. */
+  linkTo: z.string().optional(),
+});
+export type CreateLayoutBody = z.infer<typeof CreateLayoutBody>;
+
+export const SaveLayoutBody = z.object({ doc: LayoutDocument });
+export const RenameLayoutBody = z.object({ name: z.string().trim().min(1).max(60) });

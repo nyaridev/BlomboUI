@@ -42,3 +42,13 @@ export function useGoToView(): (view: ViewId) => void {
     else void navigate({ to: "/p/$profileId/$view", params: { profileId, view } });
   };
 }
+
+/** `value`, once it has stopped changing for `ms` (for requests that follow typing or sliders). */
+export function useDebounced<T>(value: T, ms: number): T {
+  const [settled, setSettled] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setSettled(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return settled;
+}

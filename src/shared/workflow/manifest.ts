@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { MODEL_KINDS } from "../constants.ts";
+import { LayoutDocument } from "../layout/schema.ts";
 import { ROLES, STAGES } from "./roles.ts";
 
 export const BindingType = z.enum([
@@ -57,6 +58,9 @@ export const RunSettings = z.object({
 });
 export type RunSettings = z.infer<typeof RunSettings>;
 
+/** Saved stage settings, loosely: each stage's schema fills defaults when read. */
+export const StagesRecord = z.partialRecord(z.enum(STAGES), z.record(z.string(), z.unknown()));
+
 export const WorkflowManifest = z.object({
   format: z.literal("blombo.workflow/1"),
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
@@ -73,13 +77,25 @@ export const WorkflowManifest = z.object({
   bindings: z.array(Binding),
   values: z.record(z.string(), z.unknown()).default({}),
   run: RunSettings.default({ seedMode: "random", count: 1 }),
-  stages: z.partialRecord(z.enum(STAGES), z.record(z.string(), z.unknown())).default({}),
+  /** Stage settings (shared/workflow/stages.ts reads them with defaults: `readStages`). */
+  stages: StagesRecord.default({}),
   /** Linked layout id; null → the profile's default layout. */
   layout: z.string().nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
 export type WorkflowManifest = z.infer<typeof WorkflowManifest>;
+
+/**
+ * A workflow as the Generate screen loads it: the manifest with live model choices, plus the
+ * layout it shows (the linked one, or the profile's default when none is linked or it's gone).
+ */
+export const WorkflowDetail = WorkflowManifest.extend({
+  layoutDoc: LayoutDocument,
+  /** "linked": manifest.layout found; "default": the profile's default layout. */
+  layoutSource: z.enum(["linked", "default"]),
+});
+export type WorkflowDetail = z.infer<typeof WorkflowDetail>;
 
 /** One row in the workflow picker. */
 export const WorkflowSummary = WorkflowManifest.pick({
@@ -119,12 +135,16 @@ export type Finding = z.infer<typeof Finding>;
 export const PatchValuesBody = z.object({
   values: z.record(z.string(), z.unknown()),
   run: RunSettings.partial().optional(),
+  /** Whole stage objects to replace ("hires" → its settings). */
+  stages: StagesRecord.optional(),
 });
 export type PatchValuesBody = z.infer<typeof PatchValuesBody>;
 
 export const UpdateWorkflowBody = z.object({
   name: WorkflowManifest.shape.name.optional(),
   tags: z.array(z.string().max(40)).max(20).optional(),
+  /** Link a layout (its id) or go back to the profile's default (null). */
+  layout: z.string().min(1).max(80).nullable().optional(),
 });
 export type UpdateWorkflowBody = z.infer<typeof UpdateWorkflowBody>;
 

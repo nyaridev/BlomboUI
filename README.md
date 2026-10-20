@@ -11,7 +11,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Tauri](https://img.shields.io/badge/Desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![ComfyUI](https://img.shields.io/badge/Engine-ComfyUI-1F1F1F)](https://github.com/comfyanonymous/ComfyUI)
-[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20Phase%203-orange)](#roadmap)
+[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20Phase%204a-orange)](#roadmap)
 
 [Quick start](#quick-start) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Development](#development) · [Docs](#documentation) · [Roadmap](#roadmap)
 
@@ -35,7 +35,7 @@ There's no installer: BlomboUI runs from this folder, and everything it saves st
 
 On first launch you'll see the **profile screen**. Create a profile: give it a name, a picture and a color, point it at your models, outputs and wildcards folders, choose a ComfyUI install, and pick starter workflows. Open it and you're on the Generate screen.
 
-> **Status:** Phase 3. Generate runs on ComfyUI (a managed slot the app installs for you, or your own ComfyUI URL), with built-in SD 1.5 / SDXL / Illustrious workflows, importing any ComfyUI workflow (JSON, PNG, WebP), wildcards and `<lora:…>` tags, a server-side queue, and live progress and previews. The gallery indexes your outputs and extra folders (search, favorites, trash, a lightbox with "use these settings"), File Info reads images and safetensors files, Models → Local shows your model files, and the Wildcard Manager edits .txt and .yaml wildcards. Models → Civitai browses and downloads from Civitai inside the app (a download queue with resume, smart folders and info files), Models → Manager installs from the ComfyUI model catalog, and local models without info files are matched on Civitai by hash. See the [roadmap](#roadmap).
+> **Status:** Phase 4a. Generate runs on ComfyUI (a managed slot the app installs for you, or your own ComfyUI URL), with built-in SD 1.5 / SDXL / Illustrious workflows, importing any ComfyUI workflow (JSON, PNG, WebP), wildcards and `<lora:…>` tags, a server-side queue, and live progress and previews. The gallery indexes your outputs and extra folders (search, favorites, trash, a lightbox with "use these settings"), File Info reads images and safetensors files, Models → Local shows your model files, and the Wildcard Manager edits .txt and .yaml wildcards. Models → Civitai browses and downloads from Civitai inside the app (a download queue with resume, smart folders and info files), Models → Manager installs from the ComfyUI model catalog, and local models without info files are matched on Civitai by hash. Hires fix, ADetailer (units, detector + SAM) and ControlNet (units, image from upload, gallery or the last output, preprocessors) splice into any workflow and say what's missing before you run; the prompt editor autocompletes tags, LoRAs, trigger words and wildcards (Ctrl+↑/↓ for weights); layouts are saved in the profile and linked per workflow. See the [roadmap](#roadmap).
 
 ## What it does
 
@@ -43,7 +43,7 @@ On first launch you'll see the **profile screen**. Create a profile: give it a n
 |---|---|
 | **Profiles** | Start on a profile screen. Each profile has its own folders, workflows, layouts, settings, avatar and accent color. Switch without restarting. |
 | **Workflows** | Drag in any ComfyUI workflow (JSON or a ComfyUI image) and BlomboUI sets it up: prompts, models, sampler, size, LoRAs. Your settings save into the workflow. **Duplicate** to branch, **Edit in ComfyUI** to change the graph and **Save to Blombo** to bring it back. Export as `.blombo`. |
-| **Generate** | Loaded models on top, a prompt editor with syntax colors, Generate / Interrupt / Cancel, parameter cards and a live image stage. **Customize** moves any block and switches controls between slider, scrub bar, number, chips, buttons and dropdown. Save layouts as presets. |
+| **Generate** | Loaded models on top, a prompt editor with syntax colors, Generate / Interrupt / Cancel, parameter cards and a live image stage. **Customize** moves any block and switches controls between slider, scrub bar, number, chips, buttons and dropdown. Layouts are saved in the profile and linked per workflow. Prompt autocomplete for tags, LoRAs, trigger words and wildcards. |
 | **Stages** | Hires fix, ADetailer (multiple units) and ControlNet that inherit your base settings until you change them. They work on imported workflows too. |
 | **Gallery** | A showcase of your images: featured favorites, day sections in justified rows, extra library folders, search across prompts and models, favorites, a trash you can restore from, and a lightbox with the full parameters and **Use these settings**. New images appear as they're generated. |
 | **File Info** | Drop an image to see how it was made (BlomboUI, ComfyUI or A1111 metadata, the embedded graph) and import its workflow, or a `.safetensors` file to read its training details and tags. |
@@ -133,10 +133,11 @@ npm run dev
 | Phase | Scope | State |
 |---|---|---|
 | **0 · Foundation** | Design system, icons, Design Lab, app shell, profiles, launchers, Tauri window, docs | done |
-| **1 · Generate core** | ComfyUI supervisor, live bus, workflow packages, analyzer, presets, compiler, queue, image stage (autocomplete and the import setup screen still open) | done |
+| **1 · Generate core** | ComfyUI supervisor, live bus, workflow packages, analyzer, presets, compiler, queue, image stage (the import setup screen still open) | done |
 | **2 · Library** | Gallery index and showcase, File Info, local models, Wildcard Manager, UI font setting, installing ComfyUI from the app | done |
-| **3 · Online** | Civitai account and browser, model pages, download queue, Civitai lookup of local models, ComfyUI Manager store, History | **in review** |
-| **4 · Power** | Hires / ADetailer / ControlNet stages, Customize presets and export, ComfyUI bridge, scripts, batch utilities | |
+| **3 · Online** | Civitai account and browser, model pages, download queue, Civitai lookup of local models, ComfyUI Manager store, History | done |
+| **4a · Generate** | Hires / ADetailer / ControlNet stages, prompt autocomplete and weight keys, layouts saved in the profile and linked per workflow | **in review** |
+| **4b · Bridge** | ComfyUI bridge extension, `.blombo` export and import, scripts, batch utilities | |
 | **5 · Polish** | Settings stats, Help and prompt guide, Scopes, command palette, notifications | |
 
 ## Requirements

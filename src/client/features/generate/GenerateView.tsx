@@ -7,11 +7,12 @@
 import { glide } from "@client/lib/motion";
 import { Button, Spinner, Tabs } from "@client/ui";
 import { AnimatePresence, motion } from "motion/react";
-import { useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { ImageStage } from "./blocks/ImageStage";
 import { ModelsStrip } from "./blocks/ModelsStrip";
 import { GenerateActions, Prompts } from "./blocks/Prompts";
 import { CustomizeBar, Inspector, LayoutPicker } from "./Customize";
+import { adoptBrowserLayouts } from "./layouts";
 import { ModelGrid, type PickerTab } from "./ModelGrid";
 import { ParamsColumn } from "./ParamsColumn";
 import { StartWithWorkflow } from "./StartWithWorkflow";
@@ -29,12 +30,20 @@ export function GenerateView() {
   const active = useActiveWorkflow();
   const load = useValues((s) => s.load);
   const loaded = useValues((s) => s.workflowId);
+  const showLayout = useLayout((s) => s.show);
 
   // Show the workflow's saved values when it becomes active (before paint, so a switch never
   // shows one workflow's controls with the other's values).
   useLayoutEffect(() => {
-    if (active.manifest) load(active.manifest);
-  }, [active.manifest, load]);
+    if (!active.manifest) return;
+    load(active.manifest);
+    showLayout(active.manifest);
+  }, [active.manifest, load, showLayout]);
+
+  // Layouts saved by older versions in this browser move into the profile once.
+  useEffect(() => {
+    void adoptBrowserLayouts();
+  }, []);
 
   if (active.empty) return <StartWithWorkflow />;
   // Only the first load shows a spinner; switching keeps the view mounted.

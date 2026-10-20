@@ -2,16 +2,20 @@
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
+import { queryClient, useLayouts, useUpdateSettings } from "@client/lib/queries";
 import {
   Badge,
   Button,
+  Dialog,
   Field,
   IconButton,
+  Menu,
   Popover,
   Segmented,
   Select,
   Switch,
   TextField,
+  Tooltip,
   toast,
 } from "@client/ui";
 import { CONTROL_STYLES } from "@shared/layout/schema";
@@ -19,6 +23,15 @@ import { resolveBind } from "@shared/workflow/manifest";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { bindingFamily, defaultStyle } from "./blocks/ParamControl";
+import {
+  chooseLayout,
+  deleteLayout,
+  discardLayoutEdits,
+  renameLayout,
+  resetLayout,
+  saveLayout,
+  saveLayoutAs,
+} from "./layouts";
 import { blockLabel } from "./ParamsColumn";
 import { findBlock, useLayout } from "./state";
 import { useBindings } from "./workflow";
@@ -38,34 +51,172 @@ const STYLE_LABELS: Record<string, string> = {
 
 export function LayoutPicker() {
   const doc = useLayout((s) => s.doc);
-  const builtins = useLayout((s) => s.builtins);
-  const custom = useLayout((s) => s.custom);
-  const load = useLayout((s) => s.load);
+  const dirty = useLayout((s) => s.doc !== s.saved);
+  const source = useLayout((s) => s.source);
+  const { data } = useLayouts();
+  if (!doc) return null;
+  const builtins = data?.builtins ?? [];
+  const custom = data?.custom ?? [];
+  const known = [...builtins, ...custom].some((l) => l.id === doc.id);
+  const hint = (id: string) => (id === data?.defaultId ? "Default" : undefined);
   return (
-    <Select
-      size="sm"
-      value={doc.id}
-      onChange={load}
-      label="Layout"
-      className="w-[170px]"
-      options={[
-        ...builtins.map((l) => ({
-          value: l.id,
-          label: l.name,
-          icon: "customize" as const,
-          group: "Built-in",
-        })),
-        ...custom.map((l) => ({
-          value: l.id,
-          label: l.name,
-          icon: "customize" as const,
-          group: "Yours",
-        })),
-        ...(builtins.some((l) => l.id === doc.id) || custom.some((l) => l.id === doc.id)
-          ? []
-          : [{ value: doc.id, label: `${doc.name} (edited)`, group: "Current" }]),
-      ]}
-    />
+    <span className="flex items-center gap-1.5">
+      <Select
+        size="sm"
+        value={doc.id}
+        onChange={(id) => void chooseLayout(id)}
+        label="Layout"
+        className="w-[170px]"
+        options={[
+          ...builtins.map((l) => ({
+            value: l.id,
+            label: l.name,
+            icon: "customize" as const,
+            group: "Built-in",
+            hint: hint(l.id),
+          })),
+          ...custom.map((l) => ({
+            value: l.id,
+            label: l.name,
+            icon: "customize" as const,
+            group: "This profile",
+            hint: hint(l.id),
+          })),
+          ...(known ? [] : [{ value: doc.id, label: doc.name, group: "Current" }]),
+        ]}
+      />
+      {dirty ? (
+        <Badge tone="warning">edited</Badge>
+      ) : source === "linked" ? (
+        <Tooltip content="This workflow uses this layout">
+          <span className="grid h-5 w-5 place-items-center text-fg-3">
+            <Icon name="link" size={13} />
+          </span>
+        </Tooltip>
+      ) : null}
+    </span>
+  );
+}
+
+/** Make default, reset, rename, delete: the less common layout actions. */
+function LayoutMenu() {
+  const doc = useLayout((s) => s.saved);
+  const source = useLayout((s) => s.source);
+  const { data } = useLayouts();
+  const updateSettings = useUpdateSettings();
+  const [renaming, setRenaming] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [name, setName] = useState("");
+  if (!doc) return null;
+  const mine = Boolean(data?.custom.some((l) => l.id === doc.id));
+  const isDefault = data?.defaultId === doc.id;
+  return (
+    <>
+      <Menu
+        trigger={<IconButton icon="more-horizontal" label="More layout actions" size="sm" />}
+        width={280}
+        items={[
+          {
+            id: "default",
+            label: isDefault ? "Already the profile's default" : "Make it the profile's default",
+            icon: "check",
+            disabled: isDefault,
+            onSelect: () =>
+              updateSettings.mutate(
+                { generate: { layout: doc.id } },
+                {
+                  onSuccess: () => {
+                    void queryClient.invalidateQueries({ queryKey: ["layouts"] });
+                    toast(`"${doc.name}" is now the default layout`, "success");
+                  },
+                },
+              ),
+          },
+          {
+            id: "reset",
+            label: "Reset to default",
+            icon: "refresh",
+            disabled: source === "default",
+            onSelect: () => void resetLayout(),
+          },
+          { type: "separator", id: "s1" },
+          {
+            id: "rename",
+            label: "Rename…",
+            icon: "edit",
+            disabled: !mine,
+            onSelect: () => {
+              setName(doc.name);
+              setRenaming(true);
+            },
+          },
+          {
+            id: "delete",
+            label: "Delete layout",
+            icon: "trash",
+            tone: "danger",
+            disabled: !mine,
+            onSelect: () => setConfirmDelete(true),
+          },
+        ]}
+      />
+      <Dialog
+        open={renaming}
+        onOpenChange={setRenaming}
+        title="Rename layout"
+        width={380}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setRenaming(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              disabled={!name.trim()}
+              onClick={() => {
+                void renameLayout(doc.id, name.trim());
+                setRenaming(false);
+              }}
+            >
+              Rename
+            </Button>
+          </>
+        }
+      >
+        <TextField
+          autoFocus
+          aria-label="Layout name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+      </Dialog>
+      <Dialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={`Delete "${doc.name}"?`}
+        description="It moves to the profile's trash. Workflows that use it show the default layout instead."
+        width={440}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setConfirmDelete(false)}>
+              Keep it
+            </Button>
+            <Button
+              variant="danger"
+              icon="trash"
+              onClick={() => {
+                void deleteLayout(doc.id, doc.name);
+                setConfirmDelete(false);
+              }}
+            >
+              Delete layout
+            </Button>
+          </>
+        }
+      >
+        {null}
+      </Dialog>
+    </>
   );
 }
 
@@ -74,9 +225,11 @@ export function CustomizeBar() {
   const redo = useLayout((s) => s.redo);
   const canUndo = useLayout((s) => s.past.length > 0);
   const canRedo = useLayout((s) => s.future.length > 0);
-  const load = useLayout((s) => s.load);
-  const saveAs = useLayout((s) => s.saveAs);
+  const dirty = useLayout((s) => s.doc !== s.saved);
+  const savedId = useLayout((s) => s.saved?.id ?? null);
   const setCustomizing = useLayout((s) => s.setCustomizing);
+  const { data } = useLayouts();
+  const mine = Boolean(savedId && data?.custom.some((l) => l.id === savedId));
   const [name, setName] = useState("");
   return (
     <motion.div
@@ -87,7 +240,7 @@ export function CustomizeBar() {
     >
       <Icon name="customize" size={16} className="text-accent-ink" />
       <span className="text-sm font-medium text-fg">Customizing layout</span>
-      <span className="text-xs text-fg-3 max-[1300px]:hidden">
+      <span className="text-xs text-fg-3 max-[1450px]:hidden">
         Drag blocks by the grip. Click one to change how it looks.
       </span>
       <span className="ml-auto flex items-center gap-1">
@@ -108,14 +261,26 @@ export function CustomizeBar() {
           onClick={redo}
         />
         <LayoutPicker />
-        <Button size="sm" variant="ghost" icon="refresh" onClick={() => load("default")}>
-          Reset
-        </Button>
+        <LayoutMenu />
+        {dirty ? (
+          <Button size="sm" variant="ghost" onClick={discardLayoutEdits}>
+            Discard
+          </Button>
+        ) : null}
+        {mine ? (
+          <Button size="sm" icon="save" disabled={!dirty} onClick={() => void saveLayout()}>
+            Save
+          </Button>
+        ) : null}
         <Popover
           placement="bottom-end"
           className="w-72 p-3"
           trigger={
-            <Button size="sm" icon="save">
+            <Button
+              size="sm"
+              variant={mine ? "ghost" : "secondary"}
+              icon={mine ? undefined : "save"}
+            >
               Save as…
             </Button>
           }
@@ -126,13 +291,12 @@ export function CustomizeBar() {
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!name.trim()) return;
-                saveAs(name.trim());
-                toast(`Layout "${name.trim()}" saved`, "success");
+                void saveLayoutAs(name.trim());
                 setName("");
                 close();
               }}
             >
-              <Field label="Preset name">
+              <Field label="Layout name">
                 {(id) => (
                   <TextField
                     id={id}
@@ -144,10 +308,10 @@ export function CustomizeBar() {
                 )}
               </Field>
               <p className="text-2xs text-fg-3">
-                Presets are exported with workflows (.blombo), so you can share them.
+                Saved in this profile, and this workflow uses it from now on.
               </p>
               <Button type="submit" variant="primary" size="sm" disabled={!name.trim()}>
-                Save preset
+                Save layout
               </Button>
             </form>
           )}
@@ -166,8 +330,9 @@ export function Inspector() {
   const update = useLayout((s) => s.updateBlock);
   const select = useLayout((s) => s.select);
   const bindings = useBindings();
-  const block = findBlock(doc.regions.params, selectedId);
-  const inCard = doc.regions.params.some(
+  const params = doc?.regions.params ?? [];
+  const block = findBlock(params, selectedId);
+  const inCard = params.some(
     (b) => b.type === "card" && b.children.some((c) => c.id === selectedId),
   );
 

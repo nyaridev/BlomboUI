@@ -10,6 +10,7 @@ import path from "node:path";
 import type { AppError } from "../shared/live.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
+import { AutocompleteService } from "./services/autocomplete.ts";
 import { CivitaiApi } from "./services/civitai/api.ts";
 import { ImageProxy } from "./services/civitai/images.ts";
 import { CivitaiService } from "./services/civitai/index.ts";
@@ -19,12 +20,14 @@ import { ComfySupervisor } from "./services/comfy/supervisor.ts";
 import { DownloadQueue } from "./services/downloads.ts";
 import { GalleryService } from "./services/gallery/index.ts";
 import { JobQueue } from "./services/jobs.ts";
+import { LayoutService } from "./services/layouts.ts";
 import { LiveBus } from "./services/live.ts";
 import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
 import { ProfileService } from "./services/profiles.ts";
 import { SettingsService } from "./services/settings.ts";
+import { StageService } from "./services/stages.ts";
 import { installPreset } from "./services/workflows/presets.ts";
 import { WorkflowService } from "./services/workflows/store.ts";
 
@@ -44,6 +47,9 @@ export interface Services {
   lookup: ModelLookup;
   catalog: ManagerCatalog;
   downloads: DownloadQueue;
+  layouts: LayoutService;
+  stages: StageService;
+  autocomplete: AutocompleteService;
   /** Install starter presets into a new profile; unknown ids are skipped with a warning. */
   installPresets: (profileId: string, presetIds: string[]) => Promise<void>;
   shutdown: () => Promise<void>;
@@ -161,10 +167,28 @@ export function createServices(config: ServerConfig): Services {
       error: { id: randomUUID(), at: Date.now(), source, title, detail },
     });
 
+  const layouts = new LayoutService({ presetsDir: config.presetsDir, profiles, settings });
+  const stages = new StageService({
+    presetsDir: config.presetsDir,
+    profiles,
+    workflows,
+    supervisor,
+    gallery,
+  });
+  const autocomplete = new AutocompleteService({
+    presetsDir: config.presetsDir,
+    profiles,
+    settings,
+    dbs,
+    models,
+  });
+
   queue = new JobQueue({
     supervisor,
     workflows,
     profiles,
+    stages,
+    recordPrompts: (texts) => autocomplete.record(texts),
     publish: (topic, msg) => {
       bus.publish(topic, msg);
       // New outputs appear in the gallery as they land, without a rescan.
@@ -235,6 +259,9 @@ export function createServices(config: ServerConfig): Services {
     lookup,
     catalog,
     downloads,
+    layouts,
+    stages,
+    autocomplete,
     installPresets: async (profileId, presetIds) => {
       for (const id of presetIds) {
         try {

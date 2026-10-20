@@ -2,20 +2,22 @@
  * The compiler: a workflow package + values + a seed → the API graph sent to ComfyUI.
  *
  *   prompt.json → values onto bindings → wildcards and {a|b} choices (seeded) →
- *   <lora:…> tags out of the text and into the LoRA stack → seed → filename prefix
+ *   <lora:…> tags out of the text and into the LoRA stack → enabled stages spliced at role
+ *   ports (controlnet → base → hires → adetailer units) → seed → filename prefix
  *
- * It's pure: wildcard files and the LoRA file list are passed in, so it's fully testable.
- * Errors are CompileError with a message the user can act on.
+ * It's pure: wildcard files, the LoRA file list, stage packages and ComfyUI's node list are
+ * passed in, so it's fully testable. Errors are CompileError with a message the user can act on.
  */
-import { findLoraTags, formatLoraTag, stripLoraTags } from "../../../shared/prompt/loras.ts";
+import { findLoraTags, stripLoraTags } from "../../../shared/prompt/loras.ts";
 import { expandPrompt, type WildcardResolver } from "../../../shared/prompt/wildcards.ts";
 import { rng } from "../../../shared/random.ts";
-import type { ApiPrompt } from "../../../shared/workflow/graph.ts";
+import type { ApiPrompt, ObjectInfo } from "../../../shared/workflow/graph.ts";
 import type { Binding, WorkflowManifest } from "../../../shared/workflow/manifest.ts";
-import { findLoraSources, findLoraStack } from "./analyze.ts";
-import { LORA_LOADER, LORA_LOADER_MODEL_ONLY } from "./nodes.ts";
+import type { RunSegment, StageSettings, StageStatus } from "../../../shared/workflow/stages.ts";
+import { applyLoras, CompileError, type ResolvedLora, resolveLoras } from "./loras.ts";
+import { applyStages, baseSegments, type LoadedStage } from "./stages.ts";
 
-export class CompileError extends Error {}
+export { CompileError, type ResolvedLora, resolveLoraFile } from "./loras.ts";
 
 export interface CompileInput {
   manifest: Pick<WorkflowManifest, "bindings">;
@@ -27,19 +29,23 @@ export interface CompileInput {
   loraFiles: string[] | null;
   /** Used when the graph's own prefix is ComfyUI's default. */
   filenamePrefix: string;
-}
-
-export interface ResolvedLora {
-  file: string;
-  strength: number;
-  clipStrength: number;
+  /** Stage settings; enabled stages are spliced in. */
+  stages?: StageSettings;
+  stagePackages?: LoadedStage[];
+  /** Stage image file → its name in ComfyUI's input folder (uploaded before compiling). */
+  stageImages?: Record<string, string>;
+  /** ComfyUI's node definitions, to check stage nodes and models; null when unknown. */
+  objectInfo?: ObjectInfo | null;
 }
 
 export interface CompileResult {
   prompt: ApiPrompt;
-  /** Final texts after wildcards, with LoRA tags removed. */
+  /** Final texts after wildcards, with LoRA tags removed (stage prompts as "hires.prompt"). */
   texts: Record<string, string>;
   loras: ResolvedLora[];
+  /** The run's parts for the progress bar: base passes, then each stage. */
+  segments: RunSegment[];
+  stages: StageStatus[];
 }
 
 function coerce(b: Binding, value: unknown): unknown {
@@ -60,23 +66,6 @@ function coerce(b: Binding, value: unknown): unknown {
     default:
       return value === null || value === undefined ? undefined : String(value);
   }
-}
-
-const stem = (f: string) =>
-  f
-    .replace(/\\/g, "/")
-    .replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "")
-    .toLowerCase();
-
-/** Match a tag name ("detail", "SDXL/detail", "detail.safetensors") to a LoRA file. */
-export function resolveLoraFile(name: string, files: string[] | null): string | null {
-  if (!files) return /\.\w+$/.test(name) ? name : `${name}.safetensors`;
-  const want = stem(name);
-  return (
-    files.find((f) => stem(f) === want) ??
-    files.find((f) => stem(f).split("/").pop() === want.split("/").pop()) ??
-    null
-  );
 }
 
 export function compile(input: CompileInput): CompileResult {
@@ -115,23 +104,36 @@ export function compile(input: CompileInput): CompileResult {
     set(b, clean);
   }
 
-  const loras: ResolvedLora[] = [];
-  for (const tag of tags) {
-    const file = resolveLoraFile(tag.name, input.loraFiles);
-    if (!file)
-      throw new CompileError(
-        `LoRA "${tag.name}" isn't in your loras folder. Check the name in ${formatLoraTag(tag.name, tag.strength)}.`,
-      );
-    if (loras.some((l) => l.file === file)) continue;
-    loras.push({ file, strength: tag.strength, clipStrength: tag.clipStrength ?? tag.strength });
-  }
+  const loras = resolveLoras(tags, input.loraFiles);
   if (loras.length) applyLoras(prompt, loras);
 
-  // 4. Seed (each run has its own; the value in the workflow is only the starting point).
+  // 4. Stages, at the ports the graph has now (after its LoRAs).
+  const segments = baseSegments(prompt);
+  let stages: StageStatus[] = [];
+  if (input.stages && input.stagePackages) {
+    const result = applyStages(prompt, input.stages, input.stagePackages, {
+      bindings: input.manifest.bindings,
+      values: input.values,
+      seed: input.seed,
+      wildcards: input.wildcards,
+      random,
+      loraFiles: input.loraFiles,
+      images: input.stageImages ?? {},
+      filenamePrefix: input.filenamePrefix,
+      info: input.objectInfo ?? null,
+    });
+    const problems = result.statuses.flatMap((s) => s.problems);
+    if (problems.length) throw new CompileError(problems.map((p) => p.message).join(" "));
+    segments.push(...result.segments);
+    Object.assign(texts, result.texts);
+    stages = result.statuses;
+  }
+
+  // 5. Seed (each run has its own; the value in the workflow is only the starting point).
   const seedBinding = input.manifest.bindings.find((b) => b.role === "sampler.seed");
   if (seedBinding) set(seedBinding, input.seed);
 
-  // 5. Filename prefix, unless the user set one in the graph.
+  // 6. Filename prefix, unless the user set one in the graph.
   const out = input.manifest.bindings.find((b) => b.role === "output.image");
   if (out) {
     const current = prompt[out.node]?.inputs[out.input];
@@ -139,79 +141,5 @@ export function compile(input: CompileInput): CompileResult {
       set(out, input.filenamePrefix);
   }
 
-  return { prompt, texts, loras };
-}
-
-function nextId(prompt: ApiPrompt): () => string {
-  let n = Math.max(
-    0,
-    ...Object.keys(prompt)
-      .map((k) => Number(k))
-      .filter(Number.isFinite),
-  );
-  return () => String(++n);
-}
-
-function applyLoras(prompt: ApiPrompt, loras: ResolvedLora[]): void {
-  // A stack node (rgthree Power Lora Loader) takes them as lora_<n> entries.
-  const stack = findLoraStack(prompt);
-  const stackNode = stack ? prompt[stack] : undefined;
-  if (stackNode) {
-    const taken = Object.keys(stackNode.inputs)
-      .map((k) => /^lora_(\d+)$/.exec(k)?.[1])
-      .filter(Boolean)
-      .map(Number);
-    let n = Math.max(0, ...taken);
-    for (const l of loras)
-      stackNode.inputs[`lora_${++n}`] = {
-        on: true,
-        lora: l.file,
-        strength: l.strength,
-        strengthTwo: l.clipStrength === l.strength ? null : l.clipStrength,
-      };
-    return;
-  }
-
-  // Otherwise chain loaders right after the model (and CLIP) loader and rewire consumers.
-  const sources = findLoraSources(prompt);
-  if (!sources)
-    throw new CompileError(
-      "This workflow has no model loader to attach LoRAs to. Remove the <lora:…> tags.",
-    );
-  const id = nextId(prompt);
-  const [mNode, mSlot] = sources.model;
-  const clip = sources.clip;
-  const consumers = Object.values(prompt).flatMap((node) =>
-    Object.entries(node.inputs).map(([name, v]) => ({ node, name, v })),
-  );
-  let model: [string, number] = [mNode, mSlot];
-  let clipOut: [string, number] | null = clip ? [clip[0], clip[1]] : null;
-  for (const l of loras) {
-    const nid = id();
-    prompt[nid] = clipOut
-      ? {
-          class_type: LORA_LOADER,
-          inputs: {
-            lora_name: l.file,
-            strength_model: l.strength,
-            strength_clip: l.clipStrength,
-            model,
-            clip: clipOut,
-          },
-          _meta: { title: `LoRA ${l.file}` },
-        }
-      : {
-          class_type: LORA_LOADER_MODEL_ONLY,
-          inputs: { lora_name: l.file, strength_model: l.strength, model },
-          _meta: { title: `LoRA ${l.file}` },
-        };
-    model = [nid, 0];
-    if (clipOut) clipOut = [nid, 1];
-  }
-  for (const { node, name, v } of consumers) {
-    if (!Array.isArray(v)) continue;
-    if (String(v[0]) === mNode && v[1] === mSlot) node.inputs[name] = model;
-    else if (clip && clipOut && String(v[0]) === clip[0] && v[1] === clip[1])
-      node.inputs[name] = clipOut;
-  }
+  return { prompt, texts, loras, segments, stages };
 }

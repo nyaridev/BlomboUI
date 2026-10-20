@@ -41,6 +41,20 @@ describe("settings", () => {
     expect(s.models.blurNsfw).toBe(false);
   });
 
+  it("gives older files the Generate and autocomplete defaults", () => {
+    const s = migrateSettings({ appearance: { font: "inter" } });
+    expect(s.generate.layout).toBe("default");
+    expect(s.autocomplete.enabled).toBe(true);
+    expect(s.autocomplete.sources.loras).toBe(true);
+    expect(s.autocomplete.weightStep).toBe(0.05);
+    const next = mergeSettings(
+      s,
+      SettingsPatch.parse({ autocomplete: { sources: { tags: false } } }),
+    );
+    expect(next.autocomplete.sources.tags).toBe(false);
+    expect(next.autocomplete.sources.wildcards).toBe(true);
+  });
+
   it("rejects invalid values and unknown sections", () => {
     const base = Settings.parse({});
     expect(() => mergeSettings(base, { appearance: { font: "comic" } })).toThrow();

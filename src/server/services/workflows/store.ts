@@ -157,6 +157,8 @@ export class WorkflowService {
       ...current,
       values: { ...current.values, ...body.values },
       run: { ...current.run, ...body.run },
+      // A stage's settings are replaced whole (the client always sends the full object).
+      stages: { ...current.stages, ...body.stages },
       updatedAt: new Date().toISOString(),
     };
     this.schedule(this.manifestFile(id), next);
@@ -169,6 +171,7 @@ export class WorkflowService {
       ...current,
       ...(body.name ? { name: body.name } : {}),
       ...(body.tags ? { tags: body.tags } : {}),
+      ...(body.layout !== undefined ? { layout: body.layout } : {}),
       updatedAt: new Date().toISOString(),
     });
     await this.writeNow(this.manifestFile(id), next);

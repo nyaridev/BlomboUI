@@ -1,0 +1,65 @@
+{
+  "format": "blombo.stage/1",
+  "id": "controlnet-diffusion",
+  "stage": "controlnet",
+  "family": "diffusion",
+  "name": "ControlNet",
+  "description": "ControlNet for diffusion-model graphs without a negative prompt: the control is applied to the prompt only.",
+  "attach": "before_sampler",
+  "requires": [
+    "POSITIVE"
+  ],
+  "provides": [
+    "POSITIVE"
+  ],
+  "packs": [
+    {
+      "name": "ControlNet Auxiliary Preprocessors",
+      "url": "https://github.com/Fannovel16/comfyui_controlnet_aux",
+      "nodes": [
+        "AIO_Preprocessor"
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "field": "image",
+      "node": "image",
+      "input": "image"
+    },
+    {
+      "field": "preprocessor",
+      "node": "preprocess",
+      "input": "preprocessor",
+      "label": "Preprocessor"
+    },
+    {
+      "field": "resolution",
+      "node": "preprocess",
+      "input": "resolution"
+    },
+    {
+      "field": "model",
+      "node": "loader",
+      "input": "control_net_name",
+      "modelKind": "controlnet",
+      "label": "ControlNet model"
+    },
+    {
+      "field": "strength",
+      "node": "apply",
+      "input": "strength"
+    },
+    {
+      "field": "start",
+      "node": "apply",
+      "input": "start_percent"
+    },
+    {
+      "field": "end",
+      "node": "apply",
+      "input": "end_percent"
+    }
+  ],
+  "defaults": {}
+}

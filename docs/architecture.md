@@ -251,7 +251,7 @@ ADR [0008](adr/0008-live-bus.md).
 - **Big files stream:** profile export and import read, deflate or inflate and write the zip in chunks (fflate's `Zip` / `Unzip`), so a large profile never sits in memory whole or holds up other requests; a failed import removes its half-written folder.
 - **What gets installed is pinned:** uv is one release (`UV_WINDOWS` in `services/comfy/uv.ts`) checked against its published SHA-256 before it's unpacked, like the custom node packs' commit refs.
 - **The gallery never resurrects a trashed image:** a sync batch skips images trashed while it was reading their headers.
-- **A managed slot stays portable:** its libraries' caches and settings (Hugging Face, torch hub, Ultralytics, transparent-background, matplotlib, pip) go to `runtime/cache/comfy/` (`slotCacheEnv`), not the user's home or AppData.
+- **A managed slot stays portable:** its libraries' caches and settings (Hugging Face, torch hub, Ultralytics, transparent-background, matplotlib, pip) and temp files (`TMP` / `TEMP` / `TMPDIR`: uv's build locks, Python's tempfile; the folder is made before uv or ComfyUI runs) go to `runtime/cache/comfy/` (`slotCacheEnv`), not the user's home or AppData.
 - Measurements and how to repeat them: [`performance.md`](performance.md). The plan for the checks that need a real ComfyUI: [`review/real-comfyui-checks.md`](review/real-comfyui-checks.md).
 
 ## Scope

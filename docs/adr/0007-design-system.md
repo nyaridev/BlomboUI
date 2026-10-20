@@ -1,6 +1,6 @@
 # ADR-0007: Hand-built controls on tokens, Floating UI for behavior, custom SVG icons
 
-**Status:** Proposed
+**Status:** Accepted (built in Phase 0; text contrast is tested per theme and accent since the final pass)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

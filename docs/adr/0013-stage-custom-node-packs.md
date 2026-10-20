@@ -1,6 +1,6 @@
 # ADR-0013: Installing the custom node packs stages need
 
-**Status:** Proposed (built on `phase-4a-node-packs`; not yet run against the real packs)
+**Status:** Accepted (built in Phase 4a, on `main`; checked with fake downloads and a fake uv, not yet against the real packs)
 **Date:** 2026-10-20
 **Deciders:** nyaridev
 

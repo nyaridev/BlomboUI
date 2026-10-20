@@ -21,12 +21,13 @@ All raw colors live in `src/client/styles/tokens.css`. Tailwind sees only tokens
 | Surfaces | `bg` → `surface` → `surface-2` → `surface-3` | App → panels → cards → floating (menus, popovers) |
 | Inputs | `field`, `field-hover`, `sunken` | Inputs sit on `field`; tracks and wells use `sunken` |
 | Lines | `line`, `line-strong` | Borders; `line-strong` for hover and floating edges |
-| Text | `fg` → `fg-2` → `fg-3` → `fg-4` | Body → labels → muted → hints and disabled |
+| Text | `fg` → `fg-2` → `fg-3` → `fg-4` | Body → labels → muted → hints, counts and disabled. Anything someone must read to use the app is `fg-3` or stronger |
 | Brand | `accent`, `accent-ink`, `on-accent` | Fills use `accent`; text and icons on dark use `accent-ink` |
 | Generate | `generate`, `generate-hi`, `generate-ink` | Only the Generate action, its progress and its queue |
 | Palette | `red`…`pink` + `-ink` | Model-kind colors, tags, charts. `-ink` for text |
 | Status | `success`, `warning`, `danger`, `info` | Always with an icon or a word, never color alone |
 | Syntax | `syn-weight`, `syn-lora`, `syn-wildcard`, `syn-break`, `syn-escape`, `syn-invalid` | Prompt editor and the prompt guide |
+| Depth | `shadow-card`, `shadow-pop`, `bevel-primary`, `bevel-generate`, `shadow-thumb`, `shadow-knob` | Cards, floating layers, raised fills (primary buttons, Generate), slider and switch handles. Use them as `shadow-[var(--…)]`; never write an `rgb()` shadow in a component |
 
 **Themes** (`blombo`, `slate`, `midnight`, `ember`, `moss`, `light`) override surface and text tokens on `<html data-theme>`. **Profile accents** (`blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`, `cyan`) override `--accent*` on `<html data-accent>`. Any subtree can preview another theme by setting `data-theme` on itself, which is how the theme picker cards work.
 
@@ -89,7 +90,7 @@ Presets in `src/client/lib/motion.ts`:
 | `Collapsible`, `InheritRow` | The stage pattern: header with summary + enable switch; inherited fields show the base value with a link toggle |
 | `Notice` | Inline message with a status icon, text and the actions that fix it; `info` (something to pick), `warning` (something missing), `danger` (something broken) |
 | `UnitTabs` | A stage's units as small tabs with their run order, a sliding indicator, a strike-through for units that are off, a warning mark for units missing something, and an add button up to `max` |
-| `Badge`, `Kbd`, `StatusDot`, `Spinner`, `Skeleton`, `Meter`, `StageProgress`, `ProgressRing` | Feedback. `ProgressRing` is the small circle in header chips (generation queue, downloads), in the current text color |
+| `Badge`, `Kbd`, `StatusDot`, `Spinner`, `Skeleton`, `Meter`, `StageProgress`, `ProgressRing` | Feedback. `ProgressRing` is the small circle in header chips (generation queue, downloads), in the current text color. `Kbd onColor` sits on a filled surface (the Generate button) |
 | `Avatar` | Image or monogram on the profile accent, with an accent ring |
 | `ModelCard`, `FallbackFace` | The one model card; designed fallback when there's no thumbnail. `nsfw` + `blurNsfw` blur the thumbnail until clicked (the first click only reveals); `meta` adds a small mono line (size); `mark` pins a status pill to the corner ("Installed" success, "Update" warning, "Downloading" accent); `typeLabel` shows the source's own type name ("LyCORIS") instead of the kind's |
 | `Art` | Seeded placeholder "renders" for previews and empty states |
@@ -162,4 +163,6 @@ Presets in `src/client/lib/motion.ts`:
 - Visible focus ring (`focus-ring` utility / global `:focus-visible`) on everything interactive.
 - Every icon-only control has a label. Radios, tabs and sliders expose their ARIA roles and values.
 - Keyboard: arrows in segmented controls, tabs, menus and selects; Enter/Escape in editable values; `1`–`9` on the profile screen; app shortcuts from `shared/shortcuts.ts` (Ctrl+1–8 views, Ctrl+Enter generate, Ctrl+K palette, F1 help, R rescan…), rebindable in Settings → Shortcuts. Show keys with `useShortcutLabel()`, never a hardcoded string.
-- Contrast: text tokens on their surfaces meet WCAG AA in every theme; check new tokens in the Lab against `surface` and `surface-2`.
+- Contrast, checked by `src/client/styles/contrast.test.ts` for every theme × accent on every surface (`bg` to `field`): `fg`, `fg-2`, `fg-3`, every `-ink` and the syntax colors 4.5:1; `fg-4` 3:1 (hints, counts, disabled); `on-accent` on `accent` 4.5:1 (yellow, green and cyan accents use dark text; orange and pink use a shade deeper than their palette color). A new text token goes into that test. Known exception: white on the Generate gradient is 3.9:1 (the label is 18 px semibold); it's the brand orange, left for the owner to decide.
+- Modal layers that aren't a `Dialog` (the lightbox, the tour) use `useModalFocus(ref)` from `lib/hooks`: focus moves in, Tab stays inside, focus returns on close. A file input is opened from a real `Button` (a `<label>` around a hidden input can't be reached with Tab). A slider without a visible label takes `ariaLabel`.
+- Status is never color alone: the header's ComfyUI dot gets a word (Stopped, Starting, Offline…) whenever ComfyUI isn't simply running.

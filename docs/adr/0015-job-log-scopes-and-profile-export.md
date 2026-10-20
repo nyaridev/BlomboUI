@@ -1,6 +1,6 @@
 # ADR-0015: The job log, scopes and profile export
 
-**Status:** Accepted (built on `phase-5-polish`; checked against the fake ComfyUI only)
+**Status:** Accepted (built in Phase 5, on `main`; checked against the fake ComfyUI only)
 **Date:** 2026-10-20
 **Deciders:** nyaridev
 

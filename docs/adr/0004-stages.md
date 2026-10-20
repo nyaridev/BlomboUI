@@ -1,6 +1,6 @@
 # ADR-0004: Stages — Hires fix, ADetailer, ControlNet as graph patches on role ports
 
-**Status:** Proposed
+**Status:** Accepted (built in Phase 4a; checked against the fake ComfyUI, not yet on real models and packs)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

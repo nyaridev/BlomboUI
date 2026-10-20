@@ -7,8 +7,10 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0015)
+- `docs/adr/`: decisions and why (0001–0015, all accepted and built)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
+- `docs/performance.md`: measured numbers (20k-image gallery, startup bundle) and how to repeat them
+- `docs/review/real-comfyui-checks.md`: what still needs a real ComfyUI, with every download listed (waiting for the owner's OK)
 
 ## Commands
 
@@ -23,7 +25,8 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 | `npm run rules:sync` | Regenerate `.cursor/rules/*.mdc` from `.claude/rules/*.md` |
 | `node tools/make-icons.ts` | Regenerate desktop icons from `src-tauri/app-icon.svg` |
 | `node tools/build-presets.ts [--comfy <url>]` | Rebuild built-in presets' bindings and `graph.json` from their `prompt.json` |
-| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use and the batch presets' nodes (with `--custom-nodes DIR`, only the packs whose folder is in DIR); it takes `/upload/image`, reports progress per sampler node (so stage segments show), keeps Preview Image results as temp images, returns tags for tagger nodes, and `/view` serves the images it wrote. With `--custom-nodes`, `/` is a stand-in ComfyUI page that loads custom nodes' web extensions (blombo-bridge) |
+| `node --expose-gc tools/bench-gallery.ts [--images 20000] [--dir runtime/bench-gallery] [--keep]` | Gallery benchmark: a throwaway library of ComfyUI-style PNGs, first index, resync, list and search latency, thumbnails and memory through the real routes. Numbers live in `docs/performance.md`. It only clears a folder it made |
+| `node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297 --step-ms 120 [--output-directory DIR]` | A fake ComfyUI (no GPU): point a throwaway profile at it (external URL) to try Generate end to end. With an output directory it writes each image there (with metadata), so the gallery's live inserts work too. Its `/object_info` includes the Impact Pack, Impact Subpack and controlnet_aux nodes the stages use and the batch presets' nodes (with `--custom-nodes DIR`, only the packs whose folder is in DIR); it takes `/upload/image`, answers `GET /queue` (and tests can drop its sockets: `dropSockets()`), reports progress per sampler node (so stage segments show), keeps Preview Image results as temp images, returns tags for tagger nodes, and `/view` serves the images it wrote. With `--custom-nodes`, `/` is a stand-in ComfyUI page that loads custom nodes' web extensions (blombo-bridge) |
 | `node src/server/main.ts --dev … --fake-comfy` | Dev checks only: managed slots run the fake ComfyUI (with `--custom-nodes` on the slot's `custom_nodes/`), and custom node installs use fake downloads and a fake uv (`services/comfy/fixtures/fake-install-ops.ts`). Make a slot by hand in the throwaway runtime (`comfyui/<slot>/ComfyUI/main.py` and `.venv/Scripts/python.exe`, both empty) to click through **Install** on a stage or batch notice. The slot gets blombo-bridge on start, so **Edit in ComfyUI** opens the fake ComfyUI page with the bridge's bar (Save to Blombo, Save as copy, Send to Blombo) |
 | `node src/server/main.ts --dev --port 4391 --data <tmp> --runtime <tmp>` + `BLOMBO_API_PORT=4391 BLOMBO_WEB_PORT=4392 vite` | A second, throwaway dev instance (own profiles, slots and caches) next to one that's already running |
 | `node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` | A fake Civitai and model catalog (API, images, ranged downloads, an early-access file). Start the server with `--civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json` to browse and download without the real site; its API key is `FAKE_KEY` in that file |
@@ -40,6 +43,7 @@ src/
 │                 scripts (matrix / XY / thumbnails planner) · batch (runner shapes)
 │                 history (job log, usage stats, snippets, model marks) · scopes (scope
 │                 definitions, pickScope) · shortcuts (actions, defaults, combos)
+│                 salvage (read saved data value by value: clamp, default, drop one item)
 │                 layout/schema · workflow/{roles,manifest,graph,stages,packs}
 │                 prompt/{tokenize,loras,wildcards,weight,explain}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
@@ -68,7 +72,8 @@ src/
 │   │   └── workflows/    store · analyze (roles, ports) · convert · import · compile · loras
 │   │                     stages (the splicer) · presets · nodes · summary · resync · bundle (.blombo)
 │   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram) · ProfileDbs (shared connections)
-│   └── lib/          fsx (atomic, queued writes; movePath; resolveInside; part files) · http · send
+│   └── lib/          fsx (atomic, queued writes; movePath; resolveInside; part files) · http (readJson,
+│                     readBody) · send · guard (only Blombo's own pages may call /api)
 │                     remote (redirects by hand, key only to its origin, image sniffing)
 │                     emitter · imagemeta (header-only PNG/WebP/JPEG) · exif · thumbs (sharp) · ansi
 │                     grid (labeled script grids, sharp)
@@ -83,14 +88,16 @@ src/
 │   ├── icons/        hand-drawn SVG icon set + Logo
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
 │   │                 number · seeded · cn · fuzzy (palette matching) · notifications (OS notes)
-│   └── styles/       tokens.css (all raw colors) · index.css (Tailwind theme) · base.css
+│   └── styles/       tokens.css (all raw colors) · index.css (Tailwind theme) · base.css ·
+│                     contrast (+ test: text contrast in every theme × accent)
 └── comfy-bridge/ blombo-bridge, the ComfyUI extension (ADR-0009): __init__.py + web/blombo.js +
                   web/blombo-core.js (plain JS; tests import the core through its .d.ts)
 src-tauri/        Desktop shell: native window on --url, capability for localhost IPC
 presets/          workflows/ (sd15, sdxl, illustrious; batch: remove-background, upscale, caption,
                   dataset-prep) · stages/ (hires, adetailer, controlnet ×
                   checkpoint/diffusion) · layouts/ (default, compact) · tags/ (starter list)
-tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets
+tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets ·
+                  bench-gallery
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit
 runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop window data)
 ```
@@ -108,6 +115,8 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 **Online:** the server talks to Civitai for the client (cached API answers and an image proxy in `runtime/cache/civitai/`; the profile's key in `secrets.json`, never sent to the page). Downloads are a server queue with resume, hash checks and smart folders, progress on the bus (`downloads` topic) and history in the profile database; local models without info files are matched on Civitai by hash in the background; Models → Manager installs from ComfyUI-Manager's catalog through the same queue (ADR-0012).
 
 **Polish (Phase 5, ADR-0015):** every run that leaves the queue is logged in the profile database (`services/history.ts`: values, stages, timings, what it used), which feeds Settings → Overview (`/api/history/stats`), History → Generations (Run again: `queue.rerun`), prompt history, the pickers' recent models and the Errors view (errors are logged too). `services/timing.ts` turns ComfyUI's `executing` / `progress` into time and it/s per stage (`Job.timings`, `progress.rate`). Scopes live in `data/profiles/<id>/scopes/` (`scopes.json` + pictures); the client works out the effective scope once (`features/scopes/thumbs.ts`) and cards swap in its pictures. Snippets are `snippets.json`. Gallery ratings, your tags and collections are marks keyed by library + path. A profile exports as a zip (`services/backup.ts`, without the trash and the Civitai key) and imports as a new profile. Client-side: the command palette (`app/Palette.tsx` on `ui/CommandPalette`), shortcuts (`shared/shortcuts.ts`, overrides in `settings.shortcuts`, `app/useShortcuts.ts`, actions in `app/commands.ts`), OS notifications (`lib/notifications.ts` → `notify()` in `lib/platform.ts`), Help (`features/help/`), the first-run tour (`ui/Tour` + `features/generate/GenerateTour.tsx`), PNG drop on Generate (`features/generate/ImageDrop.tsx`).
+
+**Hardening (final pass):** `/api` answers only Blombo's own pages (`lib/guard.ts`: local Host, same-origin browser requests; `/api/bridge/*` keeps its own CORS). Uploads go through `readBody` with a limit. Saved settings and stage settings are read value by value (`shared/salvage.ts`); settings updates per profile are queued (`updateWith` for read-modify-write) and never write over a damaged or newer file without keeping it. The client saves pending values before the server switches profiles (`session.onProfileSwitch`). A managed slot's library caches stay in `runtime/cache/comfy/` (`slotCacheEnv`). Details: `docs/architecture.md` → Hardening.
 
 **Preview data:** only the Design Lab's sample prompt (`features/preview/mock.ts`) is still a sample. Never build new features on preview data.
 

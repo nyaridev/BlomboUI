@@ -11,9 +11,9 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Tauri](https://img.shields.io/badge/Desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![ComfyUI](https://img.shields.io/badge/Engine-ComfyUI-1F1F1F)](https://github.com/comfyanonymous/ComfyUI)
-[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20Phase%205-orange)](#roadmap)
+[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20all%20phases%20built-orange)](#status)
 
-[Quick start](#quick-start) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Development](#development) · [Docs](#documentation) · [Roadmap](#roadmap)
+[Quick start](#quick-start) · [Status](#status) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Development](#development) · [Docs](#documentation) · [Roadmap](#roadmap)
 
 </div>
 
@@ -35,7 +35,32 @@ There's no installer: BlomboUI runs from this folder, and everything it saves st
 
 On first launch you'll see the **profile screen**. Create a profile: give it a name, a picture and a color, point it at your models, outputs and wildcards folders, choose a ComfyUI install, and pick starter workflows. Open it and you're on the Generate screen.
 
-> **Status:** Phase 5 (polish), the last feature phase. New in it: Settings → Overview counts what you made (images per day, GPU time, speed, most used models, LoRAs and wildcards), **Help** (F1) explains getting started, models, workflows, stages and batch tools with a prompt guide and a live playground, **Scopes** keep a picture of each model per style (picked by hand or from the prompt's tags), a **command palette** (Ctrl+K) jumps anywhere, **keyboard shortcuts** can be rebound, Windows notifications say when long runs, batches and downloads finish, History lists every generation with **Run again**, the prompt has a recent-prompts and **snippets** menu, dropping an image on Generate reuses its settings, the gallery has **ratings, tags and collections**, pickers put favorite and recent models first, the image stage shows time and it/s per stage, a first-run **tour** walks the Generate screen, and a whole profile **exports and imports** as a zip. Before that, Phase 4b: Generate runs on ComfyUI (a managed slot the app installs for you, or your own ComfyUI URL), with built-in SD 1.5 / SDXL / Illustrious workflows, importing any ComfyUI workflow (JSON, PNG, WebP), wildcards and `<lora:…>` tags, a server-side queue, and live progress and previews. The gallery indexes your outputs and extra folders (search, favorites, trash, a lightbox with "use these settings"), File Info reads images and safetensors files, Models → Local shows your model files, and the Wildcard Manager edits .txt and .yaml wildcards. Models → Civitai browses and downloads from Civitai inside the app (a download queue with resume, smart folders and info files), Models → Manager installs from the ComfyUI model catalog, and local models without info files are matched on Civitai by hash. Hires fix, ADetailer (units, detector + SAM) and ControlNet (units, image from upload, gallery or the last output, preprocessors) splice into any workflow and say what's missing before you run (the custom nodes they need install from the notice on a managed slot); the prompt editor autocompletes tags, LoRAs, trigger words and wildcards (Ctrl+↑/↓ for weights); layouts are saved in the profile and linked per workflow. **Edit in ComfyUI** opens a workflow in ComfyUI with the bundled blombo-bridge extension (Save to Blombo keeps your values, Send to Blombo imports any canvas), workflows export and import as `.blombo` files, scripts (prompt matrix, XY plot with a labeled grid, scope thumbnails) queue many images from one click, and batch workflows (remove background, upscale, caption, dataset prep) run over a folder or files. See the [roadmap](#roadmap).
+## Status
+
+**All phases are built** and merged into `main` (Phases 0–5 plus a final pass of review fixes,
+performance, accessibility and contrast work). It's an alpha: everything has tests (`npm run check`:
+typecheck, lint, 433 tests, rules sync) and was clicked through against a **fake ComfyUI and a fake
+Civitai**, but most of it hasn't met a real ComfyUI yet.
+
+| | Verified |
+|---|---|
+| Generate on a **real** ComfyUI (SD 1.5, live progress, previews, outputs) | Yes, in Phase 1 |
+| Everything else (stages, scripts, batch tools, bridge, gallery, models, Civitai, downloads, history, scopes, palette, shortcuts, tour, export) | Against the fake ComfyUI / fake Civitai, in the browser (Blombo and Light themes) and in tests |
+| Gallery with 20,000 images, startup bundle | Measured, see [`docs/performance.md`](docs/performance.md): first index 5.2 s, search about 10 ms, smooth virtual scrolling, first screen 236 KiB gzip |
+| Keyboard and screen-reader basics | Every main view: no unnamed controls, visible focus on every stop, modal layers keep focus; text contrast tested for every theme and accent |
+| Stages and batch tools on real models and real custom node packs; blombo-bridge in the real ComfyUI frontend; installing a managed ComfyUI slot | **Not yet.** They need multi-GB downloads; the plan, with every file listed, is in [`docs/review/real-comfyui-checks.md`](docs/review/real-comfyui-checks.md) and waits for an OK |
+| The Tauri desktop window | Built in Phase 0, not re-checked in the final pass |
+
+### Running it
+
+- **Browser:** `start-web.bat` (builds the client the first time, serves on http://127.0.0.1:4380).
+- **Desktop window:** `start-app.bat` (needs Rust once to build the window).
+- **Development:** `start-dev.bat` or `npm run dev` (API :4381, Vite :4382 with hot reload).
+- **ComfyUI:** in a profile, either let BlomboUI install and manage one (Settings → ComfyUI → Install,
+  into `runtime/comfyui/`) or point it at your own ComfyUI's address.
+- **Trying it without a GPU:** start the fake ComfyUI
+  (`node src/server/services/comfy/fixtures/fake-comfy.ts --port 8297`) and use
+  `http://127.0.0.1:8297` as the profile's ComfyUI address; see [`AGENTS.md`](AGENTS.md) → Commands.
 
 ## What it does
 
@@ -128,6 +153,8 @@ npm run dev
 | [`docs/design-system.md`](docs/design-system.md) | Tokens, type, motion, icons, components, copy |
 | [`docs/workflows.md`](docs/workflows.md) | Workflow packages, roles, import, stages, compile, export |
 | [`docs/adr/`](docs/adr/) | Why the big decisions were made (0001–0015) |
+| [`docs/performance.md`](docs/performance.md) | Measured numbers and how to repeat them |
+| [`docs/review/real-comfyui-checks.md`](docs/review/real-comfyui-checks.md) | What still needs a real ComfyUI and what it would download |
 | [`docs/review/features.html`](docs/review/features.html) | Feature inventory and review decisions |
 
 ## Roadmap
@@ -140,8 +167,9 @@ npm run dev
 | **3 · Online** | Civitai account and browser, model pages, download queue, Civitai lookup of local models, ComfyUI Manager store, History | done |
 | **4a · Generate** | Hires / ADetailer / ControlNet stages (with one-click custom node install), prompt autocomplete and weight keys, layouts saved in the profile and linked per workflow | done |
 | **4b · Bridge** | ComfyUI bridge extension, `.blombo` export and import, scripts, batch utilities | done |
-| **5 · Polish** | Settings stats, Help and prompt guide, Scopes, command palette, notifications, shortcuts, generation history, snippets, gallery ratings / tags / collections, tour, profile export | **in review** |
-| **Final pass** | Merge the phase branches, large-gallery performance, accessibility, checks on a real ComfyUI | |
+| **5 · Polish** | Settings stats, Help and prompt guide, Scopes, command palette, notifications, shortcuts, generation history, snippets, gallery ratings / tags / collections, tour, profile export | done |
+| **Final pass** | Phases merged into `main`, whole-codebase review and fixes (API only for Blombo's own pages, safer saved data, queue and profile-switch fixes), 20k-image gallery and startup bundle, keyboard and contrast pass | done |
+| **Real-ComfyUI checks** | Stages and batch tools on real models and packs, the bridge in the real frontend, the slot installer ([plan](docs/review/real-comfyui-checks.md)) | waiting for an OK |
 
 ## Requirements
 

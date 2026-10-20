@@ -29,4 +29,4 @@ Full spec: `docs/design-system.md`. Live reference: the Design Lab (`/lab`).
 
 **Copy.** Sentence case. Buttons say what happens. Errors say what to do next. In the UI it's *workflow*, *layout*, *profile*, *stage*; *binding* and *manifest* appear only in the Inspector's technical badges.
 
-**Accessibility.** Visible focus (`focus-ring`), labels on icon-only controls, arrow keys in segmented/tabs/menus/selects, Enter/Escape in editable values.
+**Accessibility.** Visible focus (`focus-ring`), labels on icon-only controls, arrow keys in segmented/tabs/menus/selects, Enter/Escape in editable values. A modal layer that isn't a `Dialog` uses `useModalFocus`. A new text color token goes into `styles/contrast.test.ts` (4.5:1, hints 3:1, in every theme and accent).

@@ -1,6 +1,6 @@
 # ADR-0002: One local server, two windows (web + Tauri)
 
-**Status:** Proposed
+**Status:** Accepted (built in Phase 0: browser and Tauri window; the window itself not re-checked in the final pass)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

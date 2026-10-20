@@ -1,6 +1,6 @@
 # ADR-0006: Profiles as folders; JSON for state, SQLite for indexes
 
-**Status:** Proposed
+**Status:** Accepted (built in Phases 0–2; profile.json is versioned since the final pass)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

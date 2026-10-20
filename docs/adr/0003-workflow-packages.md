@@ -1,6 +1,6 @@
 # ADR-0003: Workflow packages with an analyzed binding manifest
 
-**Status:** Proposed
+**Status:** Accepted (built in Phase 1; .blombo bundles in Phase 4b)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

@@ -1,6 +1,6 @@
 # ADR-0005: The Generate screen is a layout document
 
-**Status:** Proposed
+**Status:** Accepted (built in Phase 0, saved in the profile since Phase 4a)
 **Date:** 2026-10-15
 **Deciders:** nyaridev
 

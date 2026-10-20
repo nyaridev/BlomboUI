@@ -8,7 +8,7 @@ paths:
 # Client rules
 
 - **Routing** (`app/router.tsx`): `/` profile screen, `/lab` Design Lab, `/p/$profileId` and `/p/$profileId/$view` the app. `Shell` stays mounted for all views of a profile and keeps `generate` and `gallery` alive (hidden) after their first visit. Don't turn those into unmounting routes.
-- **Opening a profile** goes through `lib/session.ts` (`openProfileOnce`, `leaveProfile`). Theme and accent follow the profile record (`Shell` applies them); preview-only changes use `useTheme().set` without saving.
+- **Opening a profile** goes through `lib/session.ts` (`openProfileOnce`, `leaveProfile`). State that's keyed only by ids two profiles can share (built-in presets) registers `onProfileSwitch` to save and reset before the server switches. Theme and accent follow the profile record (`Shell` applies them); preview-only changes use `useTheme().set` without saving.
 - **Server state** lives in TanStack Query. Keys and hooks are in `lib/queries.ts`; mutations invalidate their keys. Profile-scoped data (workflows, presets, wildcards) is keyed by the open profile (`useSession`). Don't mirror server data into Zustand.
 - **Live state** (ComfyUI status, GPU stats, queue, progress, previews, errors, logs, the download queue and its byte counts, the Civitai lookup) comes from the live bus in `lib/live.ts` (`useLive`). Select single values; use `followTopic()` for topics a view needs only while mounted. No polling.
 - **UI state** lives in small Zustand stores per feature. Select the smallest slice (`useValues((s) => s.values[id])`), never the whole store, so one slider only re-renders itself.

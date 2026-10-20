@@ -66,6 +66,20 @@ export const JobHistoryPage = z.object({
 });
 export type JobHistoryPage = z.infer<typeof JobHistoryPage>;
 
+/** Run a logged job again, with its seed or a new one. */
+export const RerunBody = z.object({ newSeed: z.boolean().default(false) });
+export type RerunBody = z.input<typeof RerunBody>;
+
+/** Remove runs from the job log: these ids, or `all`. */
+export const RemoveJobRecordsBody = z.object({
+  ids: z.array(z.string()).min(1).max(5000).optional(),
+  all: z.boolean().optional(),
+});
+export type RemoveJobRecordsBody = z.infer<typeof RemoveJobRecordsBody>;
+
+/** Clear the error log: these entries, or all of it without `ids`. */
+export const ClearErrorsBody = z.object({ ids: z.array(z.string()).max(500).optional() });
+
 export const Usage = z.object({ name: z.string(), count: z.number().int() });
 export type Usage = z.infer<typeof Usage>;
 

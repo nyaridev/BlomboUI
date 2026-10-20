@@ -22,6 +22,7 @@ import { CONTROL_STYLES } from "@shared/layout/schema";
 import { resolveBind } from "@shared/workflow/manifest";
 import { motion } from "motion/react";
 import { useState } from "react";
+import { blockLabel } from "./blockLabel";
 import { bindingFamily, defaultStyle } from "./blocks/ParamControl";
 import {
   chooseLayout,
@@ -32,7 +33,6 @@ import {
   saveLayout,
   saveLayoutAs,
 } from "./layouts";
-import { blockLabel } from "./ParamsColumn";
 import { findBlock, useLayout } from "./state";
 import { useBindings } from "./workflow";
 

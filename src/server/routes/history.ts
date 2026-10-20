@@ -1,6 +1,11 @@
 import { Hono } from "hono";
-import { z } from "zod";
-import { ModelFavoriteBody, SaveSnippetBody } from "../../shared/history.ts";
+import {
+  ClearErrorsBody,
+  ModelFavoriteBody,
+  RemoveJobRecordsBody,
+  RerunBody,
+  SaveSnippetBody,
+} from "../../shared/history.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
 import type { HistoryService } from "../services/history.ts";
@@ -24,7 +29,7 @@ export function historyRoutes(deps: {
   r.get("/jobs/:id", (c) => c.json(history.detail(c.req.param("id"))));
 
   r.post("/jobs/:id/rerun", async (c) => {
-    const body = await readJson(c, z.object({ newSeed: z.boolean().default(false) }));
+    const body = await readJson(c, RerunBody);
     const run = history.detail(c.req.param("id"));
     const manifest = await workflows.get(run.workflowId).catch(() => {
       throw new HttpError(
@@ -38,13 +43,7 @@ export function historyRoutes(deps: {
   });
 
   r.post("/jobs/remove", async (c) => {
-    const body = await readJson(
-      c,
-      z.object({
-        ids: z.array(z.string()).min(1).max(5000).optional(),
-        all: z.boolean().optional(),
-      }),
-    );
+    const body = await readJson(c, RemoveJobRecordsBody);
     if (!body.ids && !body.all) throw new HttpError(400, "Which runs? Pass ids or all.", "no_ids");
     return c.json({ removed: history.remove(body.all ? "all" : (body.ids ?? [])) });
   });
@@ -71,7 +70,7 @@ export function historyRoutes(deps: {
   r.get("/errors", (c) => c.json(history.errors()));
 
   r.post("/errors/clear", async (c) => {
-    const body = await readJson(c, z.object({ ids: z.array(z.string()).max(500).optional() }));
+    const body = await readJson(c, ClearErrorsBody);
     return c.json({ removed: history.clearErrors(body.ids) });
   });
 

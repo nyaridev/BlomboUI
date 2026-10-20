@@ -62,11 +62,16 @@ export type RunSettings = z.infer<typeof RunSettings>;
 /** Saved stage settings, loosely: each stage's schema fills defaults when read. */
 export const StagesRecord = z.partialRecord(z.enum(STAGES), z.record(z.string(), z.unknown()));
 
+/** `generate` shows the Generate screen; `batch` shows the batch runner (ADR-0014). */
+export const WORKFLOW_KINDS = ["generate", "batch"] as const;
+export const WorkflowKind = z.enum(WORKFLOW_KINDS);
+export type WorkflowKind = z.infer<typeof WorkflowKind>;
+
 export const WorkflowManifest = z.object({
   format: z.literal("blombo.workflow/1"),
   id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/),
   name: z.string().min(1).max(80),
-  kind: z.enum(["generate", "batch"]),
+  kind: WorkflowKind,
   family: z.string().default("Custom"),
   description: z.string().max(300).optional(),
   icon: z.string().optional(),
@@ -120,7 +125,7 @@ export type WorkflowSummary = z.infer<typeof WorkflowSummary>;
 export const PresetSummary = z.object({
   id: z.string(),
   name: z.string(),
-  kind: z.enum(["generate", "batch"]),
+  kind: WorkflowKind,
   family: z.string(),
   description: z.string(),
   version: z.number().int(),

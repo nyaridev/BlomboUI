@@ -7,6 +7,7 @@ import type { NodeInstallState } from "../../../shared/install.ts";
 import type { NodePack } from "../../../shared/workflow/stages.ts";
 import type { InstallOps } from "./installer.ts";
 import { externalHowTo, type NodePackComfy, NodePackInstaller, packFolder } from "./nodepacks.ts";
+import { UV_WINDOWS } from "./uv.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-nodepacks-"));
 afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
@@ -54,6 +55,8 @@ function fakeOps(opts: { failPip?: string; hang?: boolean } = {}) {
   const calls: string[] = [];
   const ops: InstallOps = {
     platform: "win32",
+    // uv is already in runtime/tools; nothing downloads it.
+    uv: UV_WINDOWS,
     async download(url, dest, onProgress) {
       calls.push(`download ${url}`);
       const repo = url.split("/")[4] ?? "x";

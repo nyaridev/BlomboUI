@@ -1,13 +1,14 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import {
   AddLibraryBody,
   CollectionItemsBody,
   CollectionName,
+  EmptyTrashBody,
   FavoriteBody,
   GalleryQuery,
   ImageIdsBody,
   RatingBody,
+  RenameLibraryBody,
   TagsBody,
   TrashIdsBody,
 } from "../../shared/gallery.ts";
@@ -124,7 +125,7 @@ export function galleryRoutes(gallery: GalleryService) {
   });
 
   r.post("/trash/empty", async (c) => {
-    const body = await readJson(c, z.object({ ids: z.array(z.string()).max(5000).optional() }));
+    const body = await readJson(c, EmptyTrashBody);
     return c.json({ deleted: await gallery.emptyTrash(body.ids) });
   });
 
@@ -139,7 +140,7 @@ export function galleryRoutes(gallery: GalleryService) {
   });
 
   r.patch("/libraries/:id", async (c) => {
-    const body = await readJson(c, z.object({ name: AddLibraryBody.shape.name }));
+    const body = await readJson(c, RenameLibraryBody);
     await gallery.renameLibrary(c.req.param("id"), body.name);
     return c.json({ ok: true });
   });

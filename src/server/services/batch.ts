@@ -27,7 +27,6 @@ import {
 } from "../../shared/batch.ts";
 import type { Job, JobImage } from "../../shared/jobs.ts";
 import type { LiveTopic, ServerMessage } from "../../shared/live.ts";
-import { isApiLink } from "../../shared/workflow/graph.ts";
 import { bindingFor } from "../../shared/workflow/manifest.ts";
 import type { StageProblem } from "../../shared/workflow/stages.ts";
 import { exists, movePath, resolveInside, writeFileAtomic, writeFileIfAbsent } from "../lib/fsx.ts";
@@ -35,7 +34,7 @@ import { HttpError } from "../lib/http.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { JobQueue } from "./jobs.ts";
 import type { ProfileService } from "./profiles.ts";
-import { refreshBindings } from "./workflows/analyze.ts";
+import { outputRoles, refreshBindings } from "./workflows/analyze.ts";
 import { INSTALL_HERE, INSTALL_IN_COMFY } from "./workflows/stages.ts";
 import type { WorkflowService } from "./workflows/store.ts";
 
@@ -158,11 +157,9 @@ export class BatchService {
     const manifest = await this.deps.workflows.get(workflowId);
     const prompt = await this.deps.workflows.prompt(workflowId);
     const info = await this.deps.supervisor.objectInfo();
-    const makesImages = Object.values(prompt).some((n) => isApiLink(n.inputs.images));
-    const makesText = Object.values(prompt).some((n) => {
-      const def = info?.[n.class_type];
-      return Boolean(def?.output_node && def.output?.includes("STRING"));
-    });
+    const outputs = outputRoles(prompt, info);
+    const makesImages = outputs.has("output.image");
+    const makesText = outputs.has("output.text");
     if (!info) return { checked: false, problems: [], makesImages, makesText };
     const problems: StageProblem[] = [];
     const missing = [...new Set(Object.values(prompt).map((n) => n.class_type))].filter(
@@ -222,7 +219,8 @@ export class BatchService {
     if (!input)
       throw new HttpError(400, "This workflow has no input image to feed files into.", "no_input");
     const prompt = await this.deps.workflows.prompt(manifest.id);
-    const makesImages = Object.values(prompt).some((n) => isApiLink(n.inputs.images));
+    const info = await this.deps.supervisor.objectInfo().catch(() => null);
+    const makesImages = outputRoles(prompt, info).has("output.image");
 
     // The files.
     let sources: Source[];

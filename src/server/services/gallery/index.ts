@@ -95,7 +95,15 @@ interface Open {
   thumbs: ThumbCache;
   /** Prepared statements for the hot paths (indexing), per connection. */
   statements: Map<string, StatementSync>;
+  /**
+   * Images trashed since the running sync started (`trashKey`). A sync batch reads headers
+   * between its stat and its write; an image trashed meanwhile must not come back.
+   */
+  trashed: Set<string>;
 }
+
+/** Library ids are slugs, so the first "/" ends the id. */
+const trashKey = (library: string, rel: string) => `${library}/${rel}`;
 
 const idle = (): SyncState => ({
   running: false,
@@ -153,7 +161,7 @@ export class GalleryService {
     const thumbs = new ThumbCache(
       path.join(this.deps.runtimeDir, "cache", profileId, "thumbs", "gallery"),
     );
-    this.current = { profileId, pdb, thumbs, statements: new Map() };
+    this.current = { profileId, pdb, thumbs, statements: new Map(), trashed: new Set() };
     this.syncState = idle();
     return this.current;
   }
@@ -241,6 +249,8 @@ export class GalleryService {
 
   private async runSync(signal: AbortSignal): Promise<void> {
     const open = this.need();
+    // Anything trashed before this sync walks the folders is already gone from them.
+    open.trashed.clear();
     this.setSync({ ...idle(), running: true }, true);
     let added = 0;
     let removed = 0;
@@ -322,7 +332,9 @@ export class GalleryService {
           ),
         );
         if (signal.aborted || this.current !== open) return { added, removed: 0 };
-        const rows = parsed.filter((p) => p !== null);
+        const rows = parsed
+          .filter((p) => p !== null)
+          .filter((p) => !open.trashed.has(trashKey(lib.id, p.rel)));
         transaction(db, () => {
           for (const p of rows) this.upsert(open, lib.id, p.rel, p.stat, p.row);
         });
@@ -895,6 +907,7 @@ export class GalleryService {
           row.path,
         );
         this.deleteRow(open, row.id);
+        open.trashed.add(trashKey(row.library, row.path));
       });
       moved.push(trashId);
     }

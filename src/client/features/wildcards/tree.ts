@@ -2,12 +2,12 @@
  * The wildcard file tree as visible rows: folders first, then files, by name. Collapsed
  * folders hide their children; a search shows every match with its folders open.
  */
-import type { WildcardEntry } from "@shared/wildcards";
+import type { WildcardEntry, WildcardEntryType } from "@shared/wildcards";
 
 export interface TreeNode {
   path: string;
   name: string;
-  type: "file" | "folder";
+  type: WildcardEntryType;
   entry: WildcardEntry | null;
   children: TreeNode[];
 }
@@ -82,7 +82,7 @@ export function visibleRows(
 }
 
 /** The folder a new file goes in when `path` is selected. */
-export function folderOf(path: string | null, type: "file" | "folder" | null): string {
+export function folderOf(path: string | null, type: WildcardEntryType | null): string {
   if (!path) return "";
   if (type === "folder") return path;
   return path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";

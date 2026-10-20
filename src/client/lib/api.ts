@@ -27,7 +27,13 @@ import {
   type CivitaiSearch,
   type CivitaiView,
 } from "@shared/civitai";
-import type { ComfyFileRef, ComfyLogLine, ComfyStatus, FreeMemoryBody } from "@shared/comfy";
+import type {
+  ComfyFileRef,
+  ComfyLogLine,
+  ComfyModelList,
+  ComfyStatus,
+  FreeMemoryBody,
+} from "@shared/comfy";
 import type { ModelKind } from "@shared/constants";
 import type {
   Download,
@@ -54,6 +60,8 @@ import type {
   JobRecordDetail,
   ModelMarks,
   PromptHistoryEntry,
+  RemoveJobRecordsBody,
+  RerunBody,
   SaveSnippetBody,
   Snippet,
   UsageStats,
@@ -64,10 +72,23 @@ import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layou
 import type { AppError } from "@shared/live";
 import type { Catalog } from "@shared/manager";
 import type { LocalModel, LookupState, ModelDetails, ModelList } from "@shared/models";
-import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
+import type {
+  CreateProfileBody,
+  PickFolderBody,
+  PickImagesBody,
+  Profile,
+  UpdateProfileBody,
+} from "@shared/profile";
 import type { SaveScopeBody, ScopeDef, ScopesState } from "@shared/scopes";
 import type { LibraryEntry, Settings, SettingsPatch } from "@shared/settings";
-import type { RollBody, RollResult, WildcardFile, WildcardTree } from "@shared/wildcards";
+import type {
+  RollBody,
+  RollResult,
+  WildcardEntryType,
+  WildcardFile,
+  WildcardList,
+  WildcardTree,
+} from "@shared/wildcards";
 import type {
   ImportResult,
   PatchValuesBody,
@@ -120,9 +141,12 @@ export const api = {
   revealProfileFolder: () => request<{ ok: true }>("POST", "/system/reveal-profile"),
   checkPath: (path: string) => request<CheckPathResult>("POST", "/system/check-path", { path }),
   pickFolder: (title: string, initial?: string) =>
-    request<{ path: string | null }>("POST", "/system/pick-folder", { title, initial }),
+    request<{ path: string | null }>("POST", "/system/pick-folder", {
+      title,
+      initial,
+    } satisfies PickFolderBody),
   pickImages: (title: string) =>
-    request<{ paths: string[] }>("POST", "/system/pick-images", { title }),
+    request<{ paths: string[] }>("POST", "/system/pick-images", { title } satisfies PickImagesBody),
 
   profiles: () => request<ProfilesResponse>("GET", "/profiles"),
   createProfile: (body: CreateProfileBody) => request<Profile>("POST", "/profiles", body),
@@ -144,11 +168,7 @@ export const api = {
   comfyLogs: () => request<{ lines: ComfyLogLine[] }>("GET", "/comfy/logs"),
   comfyFree: (body: Partial<FreeMemoryBody>) => request<{ ok: true }>("POST", "/comfy/free", body),
   comfyRefresh: () => request<{ ok: true }>("POST", "/comfy/refresh"),
-  models: (kind: ModelKind) =>
-    request<{ kind: ModelKind; names: string[]; available: boolean }>(
-      "GET",
-      `/comfy/models/${kind}`,
-    ),
+  models: (kind: ModelKind) => request<ComfyModelList>("GET", `/comfy/models/${kind}`),
 
   workflows: () => request<WorkflowSummary[]>("GET", "/workflows"),
   workflow: (id: string) => request<WorkflowDetail>("GET", `/workflows/${id}`),
@@ -239,13 +259,13 @@ export const api = {
   cancelGroup: (id: string) =>
     request<QueueSnapshot>("POST", `/jobs/groups/${encodeURIComponent(id)}/cancel`),
 
-  wildcards: () => request<{ root: string; names: string[] }>("GET", "/wildcards"),
+  wildcards: () => request<WildcardList>("GET", "/wildcards"),
   wildcardTree: () => request<WildcardTree>("GET", "/wildcards/tree"),
   wildcardFile: (path: string) =>
     request<WildcardFile>("GET", `/wildcards/file?path=${encodeURIComponent(path)}`),
   saveWildcard: (path: string, text: string, baseMtime: number | null) =>
     request<WildcardFile>("PUT", "/wildcards/file", { path, text, baseMtime }),
-  createWildcard: (path: string, type: "file" | "folder") =>
+  createWildcard: (path: string, type: WildcardEntryType) =>
     request<{ ok: true }>("POST", "/wildcards/create", { path, type }),
   moveWildcard: (from: string, to: string) =>
     request<{ ok: true }>("POST", "/wildcards/move", { from, to }),
@@ -300,8 +320,8 @@ export const api = {
     request<JobHistoryPage>("GET", `/history/jobs?${query(q)}`),
   jobRecord: (id: string) => request<JobRecordDetail>("GET", `/history/jobs/${id}`),
   rerunJob: (id: string, newSeed = false) =>
-    request<{ job: Job }>("POST", `/history/jobs/${id}/rerun`, { newSeed }),
-  removeJobRecords: (body: { ids?: string[]; all?: boolean }) =>
+    request<{ job: Job }>("POST", `/history/jobs/${id}/rerun`, { newSeed } satisfies RerunBody),
+  removeJobRecords: (body: RemoveJobRecordsBody) =>
     request<{ removed: number }>("POST", "/history/jobs/remove", body),
   promptHistory: (q: string, limit = 50) =>
     request<PromptHistoryEntry[]>("GET", `/history/prompts?${query({ q, limit })}`),

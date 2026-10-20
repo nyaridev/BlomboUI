@@ -5,6 +5,7 @@ import {
   MoveWildcardBody,
   RollBody,
   SaveWildcardBody,
+  type WildcardList,
   WildcardPath,
   WildcardPathBody,
 } from "../../shared/wildcards.ts";
@@ -30,7 +31,7 @@ export function wildcardRoutes(profiles: ProfileService) {
   /** Names only (prompt autocomplete, pickers). */
   r.get("/", async (c) => {
     const f = await files();
-    return c.json({ root: f.root, names: await listWildcards(f.root) });
+    return c.json<WildcardList>({ root: f.root, names: await listWildcards(f.root) });
   });
 
   r.get("/tree", async (c) => c.json(await (await files()).tree()));

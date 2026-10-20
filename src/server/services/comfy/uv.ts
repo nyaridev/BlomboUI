@@ -3,6 +3,8 @@
  * (runtime/tools/uv/, downloaded once on Windows), the environment that keeps its Python and
  * cache inside runtime/tools/, and `uv pip install` with progress read from its output.
  */
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { unzip } from "fflate";
@@ -10,8 +12,29 @@ import { stripAnsi } from "../../lib/ansi.ts";
 import { exists, resolveInside, writeFileAtomic } from "../../lib/fsx.ts";
 import type { InstallOps, RunOptions } from "./installer.ts";
 
-const UV_WINDOWS_ZIP =
-  "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-pc-windows-msvc.zip";
+/** A uv build to download: where it is and the SHA-256 it must have. */
+export interface UvRelease {
+  version: string;
+  url: string;
+  sha256: string;
+}
+
+/**
+ * The uv BlomboUI downloads on Windows: a pinned release, checked against the SHA-256 its
+ * release publishes (`<asset>.sha256`, also GitHub's asset digest) before it's unpacked.
+ * To move to a newer uv, change all three together.
+ */
+export const UV_WINDOWS: UvRelease = {
+  version: "0.12.24",
+  url: "https://github.com/astral-sh/uv/releases/download/0.12.24/uv-x86_64-pc-windows-msvc.zip",
+  sha256: "7c38608c8a18ee137d748a1773053b07ec8f3a30fab49aebaa6f4e4efeceb019",
+};
+
+async function sha256File(file: string): Promise<string> {
+  const hash = createHash("sha256");
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Uint8Array);
+  return hash.digest("hex");
+}
 
 export function toolsDir(runtimeDir: string): string {
   return path.join(runtimeDir, "tools");
@@ -56,7 +79,10 @@ export function uvEnv(runtimeDir: string): NodeJS.ProcessEnv {
   };
 }
 
-/** uv in runtime/tools/uv (downloaded once on Windows), or from PATH elsewhere. */
+/**
+ * uv in runtime/tools/uv (downloaded once on Windows: `ops.uv`, refused unless its SHA-256
+ * matches), or from PATH elsewhere.
+ */
 export async function ensureUv(
   runtimeDir: string,
   ops: InstallOps,
@@ -68,7 +94,14 @@ export async function ensureUv(
   const exe = path.join(dir, "uv.exe");
   if (await exists(exe)) return exe;
   const zip = path.join(toolsDir(runtimeDir), "downloads", "uv.zip");
-  await ops.download(UV_WINDOWS_ZIP, zip, onProgress, signal);
+  await ops.download(ops.uv.url, zip, onProgress, signal);
+  const got = await sha256File(zip);
+  if (got !== ops.uv.sha256.toLowerCase()) {
+    await fs.rm(zip, { force: true });
+    throw new Error(
+      `The uv ${ops.uv.version} download didn't match its checksum, so it wasn't used. Try again; if it keeps failing, the download is being changed on the way.`,
+    );
+  }
   await extractFiles(zip, dir, (name) => /(^|\/)uvx?\.exe$/i.test(name));
   await fs.rm(zip, { force: true });
   if (!(await exists(exe))) throw new Error("The uv download didn't contain uv.exe.");

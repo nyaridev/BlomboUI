@@ -10,6 +10,7 @@ import { glide } from "@client/lib/motion";
 import { useFavorite, useGalleryImage } from "@client/lib/queries";
 import { Button, Skeleton } from "@client/ui";
 import { fileUrl, type GalleryImage } from "@shared/gallery";
+import type { GalleryLayout } from "@shared/settings";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -31,7 +32,7 @@ export const Grid = memo(function Grid({
 }: {
   items: GalleryImage[];
   total: number;
-  layout: "justified" | "grid";
+  layout: GalleryLayout;
   size: number;
   byDay: boolean;
   /** Showcase images for the hero (home view only). */

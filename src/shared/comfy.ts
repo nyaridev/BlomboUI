@@ -3,6 +3,7 @@
  * header, and log lines. All of these travel over the live bus (shared/live.ts) and /api/comfy.
  */
 import { z } from "zod";
+import { MODEL_KINDS } from "./constants.ts";
 
 export const COMFY_STATES = [
   /** Managed slot not running (never started, or stopped on purpose). */
@@ -72,6 +73,15 @@ export const FreeMemoryBody = z.object({
   freeMemory: z.boolean().default(true),
 });
 export type FreeMemoryBody = z.infer<typeof FreeMemoryBody>;
+
+/** GET /api/comfy/models/:kind: what ComfyUI lists for one model kind (empty while it's down). */
+export const ComfyModelList = z.object({
+  kind: z.enum(MODEL_KINDS),
+  names: z.array(z.string()),
+  /** False while ComfyUI isn't connected, so the list says nothing yet. */
+  available: z.boolean(),
+});
+export type ComfyModelList = z.infer<typeof ComfyModelList>;
 
 /** Where a ComfyUI output file lives, as ComfyUI's /view endpoint names it. */
 export const ComfyFileRef = z.object({

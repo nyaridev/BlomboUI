@@ -26,6 +26,7 @@ import {
   type RollResult,
   txtWildcardName,
   type WildcardEntry,
+  type WildcardEntryType,
   type WildcardFile,
   type WildcardTree,
   wildcardFormat,
@@ -248,7 +249,7 @@ export class WildcardFiles {
     return { path: rel, format: wildcardFormat(rel) ?? "txt", text, mtime: after.mtimeMs };
   }
 
-  async create(rel: string, type: "file" | "folder"): Promise<void> {
+  async create(rel: string, type: WildcardEntryType): Promise<void> {
     const target = this.abs(rel);
     if (await exists(target)) throw new HttpError(409, `"${rel}" already exists.`, "exists");
     if (type === "folder") {

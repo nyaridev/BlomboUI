@@ -2,6 +2,7 @@
  * HTTP helpers: a typed error that routes throw, and Zod-validated body parsing.
  * The app-level onError turns HttpError into `{ error, code }` JSON.
  */
+import fs from "node:fs/promises";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { z } from "zod";
@@ -20,27 +21,40 @@ export class HttpError extends Error {
 }
 
 /**
- * A raw upload, refused with 413 as soon as it passes `max` bytes (by its Content-Length, or
- * while it streams in), so an oversized body is never held in memory whole.
+ * Feed a raw upload to `onChunk`, refused with 413 as soon as it passes `max` bytes (by its
+ * Content-Length, or while it streams in), so an oversized body is never read to the end.
  */
-export async function readBody(c: Context, max: number, tooLarge: string): Promise<Uint8Array> {
+async function streamBody(
+  c: Context,
+  max: number,
+  tooLarge: string,
+  onChunk: (chunk: Uint8Array) => unknown,
+): Promise<number> {
   const declared = Number(c.req.header("content-length"));
   if (Number.isFinite(declared) && declared > max) throw new HttpError(413, tooLarge, "too_large");
   const body = c.req.raw.body;
-  if (!body) return new Uint8Array();
-  const chunks: Uint8Array[] = [];
+  if (!body) return 0;
   let size = 0;
   const reader = body.getReader();
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > max) {
-      await reader.cancel().catch(() => undefined);
-      throw new HttpError(413, tooLarge, "too_large");
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > max) throw new HttpError(413, tooLarge, "too_large");
+      await onChunk(value);
     }
-    chunks.push(value);
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
   }
+  return size;
+}
+
+/** A raw upload held in memory (small ones: images, lists), refused past `max` bytes. */
+export async function readBody(c: Context, max: number, tooLarge: string): Promise<Uint8Array> {
+  const chunks: Uint8Array[] = [];
+  const size = await streamBody(c, max, tooLarge, (chunk) => chunks.push(chunk));
   const out = new Uint8Array(size);
   let at = 0;
   for (const chunk of chunks) {
@@ -48,6 +62,24 @@ export async function readBody(c: Context, max: number, tooLarge: string): Promi
     at += chunk.byteLength;
   }
   return out;
+}
+
+/**
+ * A raw upload streamed into `file` (large ones: profile imports), refused past `max` bytes.
+ * Returns its size. The file is the caller's to remove, also when this throws.
+ */
+export async function readBodyToFile(
+  c: Context,
+  file: string,
+  max: number,
+  tooLarge: string,
+): Promise<number> {
+  const out = await fs.open(file, "w");
+  try {
+    return await streamBody(c, max, tooLarge, (chunk) => out.write(chunk));
+  } finally {
+    await out.close();
+  }
 }
 
 export async function readJson<S extends z.ZodType>(c: Context, schema: S): Promise<z.output<S>> {

@@ -5,7 +5,6 @@
  */
 import { z } from "zod";
 import { ImageSettings, ImageSummary } from "./imageinfo.ts";
-import { LibraryId } from "./settings.ts";
 
 export const IMAGE_EXTENSIONS = [".png", ".webp", ".jpg", ".jpeg"] as const;
 
@@ -184,17 +183,17 @@ export const FavoriteBody = z.object({
 });
 export const ImageIdsBody = z.object({ ids: z.array(z.number().int()).min(1).max(5000) });
 export const TrashIdsBody = z.object({ ids: z.array(z.string()).min(1).max(5000) });
+/** Empty the trash: these entries, or all of it without `ids`. */
+export const EmptyTrashBody = z.object({ ids: z.array(z.string()).max(5000).optional() });
 
+const LibraryName = z.string().trim().min(1).max(60);
 export const AddLibraryBody = z.object({
-  name: z.string().trim().min(1).max(60),
+  name: LibraryName,
   path: z.string().trim().min(1),
 });
 export type AddLibraryBody = z.infer<typeof AddLibraryBody>;
 
-export const UpdateLibraryBody = z.object({
-  id: LibraryId,
-  name: z.string().trim().min(1).max(60),
-});
+export const RenameLibraryBody = z.object({ name: LibraryName });
 
 /** A version tag for URLs that changes whenever the file does (size + mtime). */
 function version(size: number, mtime: number): string {

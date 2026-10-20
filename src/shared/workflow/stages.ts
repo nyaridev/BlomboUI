@@ -12,6 +12,7 @@
  */
 import { z } from "zod";
 import { MODEL_KINDS } from "../constants.ts";
+import { salvage } from "../salvage.ts";
 import { type Binding, bindingFor } from "./manifest.ts";
 import { NodePack } from "./packs.ts";
 import { STAGES, type StageId } from "./roles.ts";
@@ -196,17 +197,17 @@ export const StageSettings = z.object({
 });
 export type StageSettings = z.infer<typeof StageSettings>;
 
-/** Stage settings as saved in a manifest (anything unreadable falls back to defaults). */
+/**
+ * Stage settings as saved in a manifest. One bad value never resets a stage: a number out of
+ * range is pulled to its limit (steps unlinked from a base of 200 become 150), anything else
+ * invalid falls back to its own default, and a broken unit is dropped on its own.
+ */
 export function readStages(raw: unknown): StageSettings {
   const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  const one = <S extends z.ZodType>(schema: S, value: unknown): z.output<S> => {
-    const parsed = schema.safeParse(value ?? {});
-    return parsed.success ? parsed.data : schema.parse({});
-  };
   return {
-    hires: one(HiresSettings, input.hires),
-    adetailer: one(AdetailerSettings, input.adetailer),
-    controlnet: one(ControlnetSettings, input.controlnet),
+    hires: salvage(HiresSettings, input.hires).data,
+    adetailer: salvage(AdetailerSettings, input.adetailer).data,
+    controlnet: salvage(ControlnetSettings, input.controlnet).data,
   };
 }
 

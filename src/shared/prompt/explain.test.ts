@@ -18,6 +18,15 @@ describe("explainPrompt", () => {
     ]);
   });
 
+  it("keeps the weights after a zero-weight group", () => {
+    const { chunks } = explainPrompt("(a:0), b, (c:1.2)");
+    expect(chunks[0]?.tags).toEqual([
+      { text: "a", weight: 0 },
+      { text: "b", weight: 1 },
+      { text: "c", weight: 1.2 },
+    ]);
+  });
+
   it("keeps escaped parentheses as text", () => {
     const { chunks } = explainPrompt("name \\(artist\\), (cat:1.2)");
     expect(chunks[0]?.tags).toEqual([

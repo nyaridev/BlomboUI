@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { a1111SamplerToComfy, a1111Summary, parseA1111 } from "./imageinfo.ts";
+import {
+  a1111SamplerToComfy,
+  a1111ScheduleToComfy,
+  a1111Summary,
+  parseA1111,
+} from "./imageinfo.ts";
 
 const SAMPLE = `masterpiece, 1girl, <lora:Detailer:0.8>, silver hair
 Negative prompt: lowres, bad hands
@@ -53,5 +58,19 @@ describe("a1111SamplerToComfy", () => {
       scheduler: "karras",
     });
     expect(a1111SamplerToComfy("Mystery")).toEqual({ sampler: "Mystery", scheduler: null });
+  });
+});
+
+describe("A1111 schedule type", () => {
+  it("uses Schedule type when the sampler name has no scheduler", () => {
+    const text =
+      "a cat\nNegative prompt: blurry\nSteps: 20, Sampler: DPM++ 2M, Schedule type: Karras, CFG scale: 7, Seed: 1, Size: 512x768";
+    expect(
+      a1111Summary(parseA1111(text) as NonNullable<ReturnType<typeof parseA1111>>).roles[
+        "sampler.scheduler"
+      ],
+    ).toBe("karras");
+    expect(a1111ScheduleToComfy("Automatic")).toBeNull();
+    expect(a1111ScheduleToComfy("SGM Uniform")).toBe("sgm_uniform");
   });
 });

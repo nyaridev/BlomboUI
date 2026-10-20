@@ -33,6 +33,11 @@ describe("nudgeWeight", () => {
     });
   });
 
+  it("reads every weight the tokenizer does", () => {
+    expect(nudge("(c|at:.5)", 0.05)?.text).toBe("(cat:0.55)");
+    expect(nudge("(c|at:+1.2)", 0.05)?.text).toBe("(cat:1.25)");
+  });
+
   it("reads a group without a weight as 1.1", () => {
     expect(nudge("(sh|iny)", 0.05)?.text).toBe("(shiny:1.15)");
   });

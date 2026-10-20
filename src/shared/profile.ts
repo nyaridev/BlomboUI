@@ -26,6 +26,8 @@ export const ComfyTarget = z.discriminatedUnion("mode", [
 export type ComfyTarget = z.infer<typeof ComfyTarget>;
 
 export const Profile = z.object({
+  /** profile.json format version (files from before it had one are version 1). */
+  version: z.literal(1).default(1),
   id: ProfileId,
   name: z.string().trim().min(1).max(40),
   accent: z.enum(ACCENTS).default("blue"),

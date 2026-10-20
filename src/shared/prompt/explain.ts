@@ -10,7 +10,7 @@
  *   \( \)      literal parentheses, no weight
  */
 import { findLoraTags } from "./loras.ts";
-import { estimateTokens, tokenizePrompt } from "./tokenize.ts";
+import { estimateTokens, tokenizePrompt, WEIGHT_TAIL } from "./tokenize.ts";
 import { findWildcards } from "./wildcards.ts";
 
 export interface ExplainedTag {
@@ -33,7 +33,6 @@ export interface PromptExplanation {
   issues: string[];
 }
 
-const WEIGHT_TAIL = /:\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*$/;
 const CHOICE = /\{([^{}]*\|[^{}]*)\}/g;
 
 /** Weight multiplier at each character of `text` (LoRA tags already blanked out). */
@@ -58,11 +57,12 @@ function weights(text: string): Float64Array {
       }
     }
   }
-  const factors: Array<{ until: number; f: number }> = [];
+  // Each open group remembers the weight outside it (dividing it back out breaks on a 0 weight).
+  const factors: Array<{ until: number; outside: number }> = [];
   let current = 1;
   for (let i = 0; i < text.length; i++) {
     while (factors.length && (factors[factors.length - 1] as { until: number }).until < i) {
-      current /= (factors.pop() as { f: number }).f;
+      current = (factors.pop() as { outside: number }).outside;
     }
     const ch = text[i];
     if (ch === "\\") {
@@ -78,7 +78,7 @@ function weights(text: string): Float64Array {
         const m = WEIGHT_TAIL.exec(text.slice(i + 1, close));
         if (m) f = Number(m[1]);
       }
-      factors.push({ until: close, f });
+      factors.push({ until: close, outside: current });
       current *= f;
     }
     w[i] = current;

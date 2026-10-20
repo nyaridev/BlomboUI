@@ -126,6 +126,7 @@ function expandNumber(part: string, integer: boolean): number[] {
   if (m[4] !== undefined) {
     const count = Number(m[4]);
     if (count < 1) throw new ScriptError(`"${part}" asks for no values.`);
+    if (count > MAX_SCRIPT_RUNS) throw new ScriptError(`"${part}" makes too many values.`);
     if (count === 1) return [integer ? Math.round(a) : a];
     const out = Array.from({ length: count }, (_, i) => round(a + ((b - a) * i) / (count - 1)));
     return integer ? [...new Set(out.map(Math.round))] : out;

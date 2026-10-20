@@ -39,8 +39,11 @@ const WILDCARD = /__([^\s_][^\s]*?)__/g;
 const BREAK = /\bBREAK\b/g;
 /** An innermost {…|…} group (the braces and bars are marked; what's inside keeps its syntax). */
 const CHOICE = /\{[^{}]*\|[^{}]*\}/g;
-const ESCAPE = /\\[()[\]]/g;
-const WEIGHT_TAIL = /:\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*$/;
+/** An escaped bracket, or an escaped backslash (so in "\\\\(" the bracket is real). */
+const ESCAPE = /\\[\\()[\]]/g;
+/** A group's ":1.2" weight; also ".5", "+1.2" and "1.", as ComfyUI reads them. Shared by the
+ * explainer and the weight keys so all three agree. */
+export const WEIGHT_TAIL = /:\s*([+-]?(?:\d+\.?\d*|\.\d+))\s*$/;
 
 export function tokenizePrompt(text: string): Token[] {
   const tokens: Token[] = [];

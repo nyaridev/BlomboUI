@@ -40,6 +40,11 @@ describe("tokenizePrompt", () => {
     expect(types("\\(cinematic\\)")).toEqual(["escape:\\(", "escape:\\)"]);
   });
 
+  it("reads an escaped backslash before a bracket as a real group", () => {
+    // a\\(cat): a literal backslash, then the group (cat).
+    expect(types("a\\\\(cat)")).toEqual(["escape:\\\\", "paren:(", "paren:)"]);
+  });
+
   it("reports unbalanced brackets", () => {
     expect(types("a) (b")).toEqual(["invalid:)", "invalid:("]);
     expect(types("[a)")).toEqual(["invalid:[", "invalid:)"]);

@@ -162,11 +162,30 @@ export function a1111Summary(p: A1111Parameters): { summary: ImageSummary; roles
   const sampler = summary.sampler ? a1111SamplerToComfy(summary.sampler) : null;
   if (sampler) {
     roles["sampler.name"] = sampler.sampler;
-    if (sampler.scheduler) roles["sampler.scheduler"] = sampler.scheduler;
+    // Newer A1111 and Forge write the scheduler on its own ("Schedule type: Karras").
+    const scheduler =
+      sampler.scheduler ?? (summary.scheduler ? a1111ScheduleToComfy(summary.scheduler) : null);
+    if (scheduler) roles["sampler.scheduler"] = scheduler;
   }
   const clipSkip = numberOrNull(get("clip skip"));
   if (clipSkip !== null) roles["clip.skip"] = -Math.abs(clipSkip);
   return { summary, roles };
+}
+
+/** A1111 / Forge "Schedule type" names to ComfyUI schedulers ("Automatic" picks none). */
+export function a1111ScheduleToComfy(name: string): string | null {
+  const map: Record<string, string> = {
+    karras: "karras",
+    exponential: "exponential",
+    "sgm uniform": "sgm_uniform",
+    simple: "simple",
+    normal: "normal",
+    uniform: "normal",
+    ddim: "ddim_uniform",
+    beta: "beta",
+    "kl optimal": "kl_optimal",
+  };
+  return map[name.trim().toLowerCase()] ?? null;
 }
 
 /** A1111 sampler names ("DPM++ 2M Karras") to ComfyUI sampler and scheduler names. */

@@ -78,7 +78,7 @@ describe("settings", () => {
 });
 
 describe("readSettings", () => {
-  it("replaces only the invalid value with its default", () => {
+  it("pulls an out-of-range value to its limit and keeps the rest", () => {
     const r = readSettings({
       version: 1,
       gallery: {
@@ -87,7 +87,7 @@ describe("readSettings", () => {
       },
       appearance: { font: "inter" },
     });
-    expect(r.settings.gallery.tileSize).toBe(220);
+    expect(r.settings.gallery.tileSize).toBe(400);
     expect(r.settings.gallery.libraries).toHaveLength(1);
     expect(r.settings.appearance.font).toBe("inter");
     expect(r.dropped).toEqual(["gallery.tileSize"]);

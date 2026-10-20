@@ -9,6 +9,8 @@
  * Pure: text and selection in, text and selection out (null when there's nothing to change).
  */
 
+import { WEIGHT_TAIL } from "./tokenize.ts";
+
 export interface WeightEdit {
   text: string;
   /** The new selection: the weighted text, without the parentheses and weight. */
@@ -17,7 +19,6 @@ export interface WeightEdit {
 }
 
 const LORA = /<lora:([^:>]+)(?::([^:>]*))?(?::([^:>]*))?>/gi;
-const WEIGHT_TAIL = /:\s*(-?\d+(?:\.\d+)?)\s*$/;
 /** Characters that end a tag when looking for "the tag at the cursor". */
 const BOUNDARY = /[,\n|{}]/;
 

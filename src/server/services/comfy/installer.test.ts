@@ -8,7 +8,7 @@ import type { InstallState } from "../../../shared/install.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { ComfyInstaller, extractTopFolder, type InstallOps } from "./installer.ts";
 import { findSlot } from "./slots.ts";
-import { slotCacheEnv, UV_WINDOWS, type UvRelease, uvEnv } from "./uv.ts";
+import { ensureUv, slotCacheEnv, slotTempDir, UV_WINDOWS, type UvRelease, uvEnv } from "./uv.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-install-"));
 afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
@@ -200,9 +200,23 @@ describe("ComfyUI installer", () => {
       "TORCH_HOME",
       "YOLO_CONFIG_DIR",
       "TRANSPARENT_BACKGROUND_FILE_PATH",
+      "TMP",
+      "TEMP",
+      "TMPDIR",
     ])
       expect(path.relative(runtime, env[key] as string).startsWith("..")).toBe(false);
+    expect(env.TMP).toBe(slotTempDir(runtime));
+    expect(env.TEMP).toBe(env.TMP);
+    expect(env.TMPDIR).toBe(env.TMP);
     expect(uvEnv(runtime).HF_HOME).toBe(env.HF_HOME);
+    expect(uvEnv(runtime).TMP).toBe(env.TMP);
+  });
+
+  it("makes the temp folder before uv runs", async () => {
+    const runtime = path.join(tmp, "rt-temp");
+    const { ops } = fakeOps();
+    await ensureUv(runtime, { ...ops, platform: "linux" }, new AbortController().signal, () => {});
+    expect((await fs.stat(slotTempDir(runtime))).isDirectory()).toBe(true);
   });
 
   it("strips terminal color codes", () => {

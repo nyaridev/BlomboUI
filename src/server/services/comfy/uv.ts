@@ -40,11 +40,25 @@ export function toolsDir(runtimeDir: string): string {
   return path.join(runtimeDir, "tools");
 }
 
+/** Temp files of a managed ComfyUI and of uv's builds (not the system %TEMP%). */
+export function slotTempDir(runtimeDir: string): string {
+  return path.join(runtimeDir, "cache", "comfy", "tmp");
+}
+
+/**
+ * Make the temp folder before uv or a managed ComfyUI runs: Python's tempfile quietly falls
+ * back to the system temp when TMP points at a folder that doesn't exist.
+ */
+export async function ensureSlotTemp(runtimeDir: string): Promise<void> {
+  await fs.mkdir(slotTempDir(runtimeDir), { recursive: true });
+}
+
 /**
  * Where a managed ComfyUI's libraries keep what they download and remember. By default they
  * use the user's home and AppData (Hugging Face and torch hub caches, Ultralytics' settings,
- * transparent-background's weights, matplotlib's font cache); BlomboUI is portable, so all of
- * it goes to runtime/cache/comfy/ instead. Set for slot installs and every managed start.
+ * transparent-background's weights, matplotlib's font cache) and the system temp (uv's build
+ * locks, Python's tempfile); BlomboUI is portable, so all of it goes to runtime/cache/comfy/
+ * instead (`ensureSlotTemp` makes the temp folder). Set for slot installs and every managed start.
  */
 export function slotCacheEnv(runtimeDir: string): Record<string, string> {
   const cache = path.join(runtimeDir, "cache", "comfy");
@@ -56,6 +70,9 @@ export function slotCacheEnv(runtimeDir: string): Record<string, string> {
     TRANSPARENT_BACKGROUND_FILE_PATH: path.join(cache, "transparent-background"),
     MPLCONFIGDIR: path.join(cache, "matplotlib"),
     PIP_CACHE_DIR: path.join(cache, "pip"),
+    TMP: slotTempDir(runtimeDir),
+    TEMP: slotTempDir(runtimeDir),
+    TMPDIR: slotTempDir(runtimeDir),
   };
 }
 
@@ -89,6 +106,8 @@ export async function ensureUv(
   signal: AbortSignal,
   onProgress: (f: number | null) => void,
 ): Promise<string> {
+  // Every uv run in both installers comes after this, so its temp folder is there.
+  await ensureSlotTemp(runtimeDir);
   if (ops.platform !== "win32") return "uv";
   const dir = path.join(toolsDir(runtimeDir), "uv");
   const exe = path.join(dir, "uv.exe");

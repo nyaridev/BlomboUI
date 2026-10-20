@@ -121,6 +121,10 @@ describe("managed slot", () => {
     );
     expect(yaml).toContain(modelsDir.replace(/\\/g, "/"));
     expect(await s.objectInfo()).toHaveProperty("KSampler");
+    // Its temp folder exists, so Python's tempfile doesn't fall back to the system temp.
+    expect((await fs.stat(path.join(runtimeDir, "cache", "comfy", "tmp"))).isDirectory()).toBe(
+      true,
+    );
 
     await s.stop();
     expect(s.status()).toMatchObject({ state: "stopped", pid: null });

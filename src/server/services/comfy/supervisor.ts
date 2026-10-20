@@ -24,7 +24,7 @@ import { writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { ComfyClient, type ComfyPreview, type ComfyWsMessage } from "./client.ts";
 import { extraModelPathsYaml } from "./paths.ts";
 import { findSlot, type SlotLayout } from "./slots.ts";
-import { slotCacheEnv } from "./uv.ts";
+import { ensureSlotTemp, slotCacheEnv } from "./uv.ts";
 
 export type ComfyTarget =
   | { mode: "managed"; slot: string; models: string; outputs: string }
@@ -254,6 +254,7 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     if (target.outputs.trim()) args.push("--output-directory", target.outputs.trim());
     // A CPU-only PyTorch makes ComfyUI crash looking for CUDA unless it's told.
     if (layout.torch === "cpu") args.push("--cpu");
+    await ensureSlotTemp(this.opts.runtimeDir);
 
     const spec = this.opts.launch
       ? this.opts.launch(layout, args)

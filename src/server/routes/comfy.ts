@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { ComfyFileRef, FreeMemoryBody } from "../../shared/comfy.ts";
+import { ComfyFileRef, type ComfyModelList, FreeMemoryBody } from "../../shared/comfy.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import { InstallBody, NodeInstallBody, type SlotsResponse } from "../../shared/install.ts";
 import { HttpError, readJson } from "../lib/http.ts";
@@ -89,9 +89,10 @@ export function comfyRoutes(
     if (!(MODEL_KINDS as readonly string[]).includes(kind))
       throw new HttpError(400, `Unknown model kind "${kind}".`, "bad_kind");
     const api = supervisor.api;
-    if (!api) return c.json({ kind: kind as ModelKind, names: [], available: false });
+    if (!api)
+      return c.json<ComfyModelList>({ kind: kind as ModelKind, names: [], available: false });
     const names = await api.request<string[]>("GET", `/models/${kind}`).catch(() => []);
-    return c.json({
+    return c.json<ComfyModelList>({
       kind: kind as ModelKind,
       names: Array.isArray(names) ? names : [],
       available: true,

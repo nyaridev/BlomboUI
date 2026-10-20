@@ -1,6 +1,5 @@
 import { Hono } from "hono";
-import { z } from "zod";
-import { GenerateBody } from "../../shared/jobs.ts";
+import { GenerateBody, LoopBody } from "../../shared/jobs.ts";
 import { readJson } from "../lib/http.ts";
 import type { JobQueue } from "../services/jobs.ts";
 import type { ScriptService } from "../services/scripts.ts";
@@ -26,7 +25,7 @@ export function jobRoutes(queue: JobQueue, scripts: ScriptService) {
   });
 
   r.put("/loop", async (c) => {
-    const { on } = await readJson(c, z.object({ on: z.boolean() }));
+    const { on } = await readJson(c, LoopBody);
     queue.setLoop(on);
     return c.json(queue.snapshot());
   });

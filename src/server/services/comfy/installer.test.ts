@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -7,23 +8,32 @@ import type { InstallState } from "../../../shared/install.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { ComfyInstaller, extractTopFolder, type InstallOps } from "./installer.ts";
 import { findSlot } from "./slots.ts";
-import { slotCacheEnv, uvEnv } from "./uv.ts";
+import { slotCacheEnv, UV_WINDOWS, type UvRelease, uvEnv } from "./uv.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-install-"));
 afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
+/** The fake uv download and the release pinned to it. */
+const UV_ZIP = zipSync({ "uv.exe": enc("uv"), "uvx.exe": enc("uvx"), "README.md": enc("x") });
+const UV_TEST: UvRelease = {
+  version: "0.0.0-test",
+  url: "https://example.invalid/uv-x86_64-pc-windows-msvc.zip",
+  sha256: createHash("sha256").update(UV_ZIP).digest("hex"),
+};
+
 /** Fake network and processes: downloads write fixture zips, `uv venv` makes a python.exe. */
-function fakeOps(opts: { failTorch?: boolean; hang?: boolean } = {}) {
+function fakeOps(opts: { failTorch?: boolean; hang?: boolean; uv?: UvRelease } = {}) {
   const calls: string[] = [];
   const ops: InstallOps = {
     platform: "win32",
+    uv: opts.uv ?? UV_TEST,
     async download(url, dest, onProgress) {
       calls.push(`download ${url.includes("uv-") ? "uv" : "comfy"}`);
       await fs.mkdir(path.dirname(dest), { recursive: true });
       const zip = url.includes("uv-")
-        ? zipSync({ "uv.exe": enc("uv"), "uvx.exe": enc("uvx"), "README.md": enc("x") })
+        ? UV_ZIP
         : zipSync({
             "ComfyUI-0.9.9/main.py": enc("print('hi')"),
             "ComfyUI-0.9.9/requirements.txt": enc("numpy"),
@@ -137,6 +147,28 @@ describe("ComfyUI installer", () => {
     ]);
     expect(retry.calls).not.toContain("download comfy");
     expect((await findSlot(runtime, "s1")).ok).toBe(true);
+  });
+
+  it("refuses a uv download whose checksum doesn't match the pin", async () => {
+    const runtime = path.join(tmp, "uv-bad");
+    const { ops, calls } = fakeOps({ uv: { ...UV_TEST, sha256: "0".repeat(64) } });
+    const installer = new ComfyInstaller(runtime, ops);
+    const done = waitFor(installer, ["done", "error"]);
+    await installer.start({ slot: "s3", torch: "cpu", version: "latest" });
+    const state = await done;
+    expect(state.state).toBe("error");
+    expect(state.error).toMatch(/didn't match its checksum/);
+    expect(calls).toEqual(["download uv"]);
+    await expect(fs.access(path.join(runtime, "tools", "uv", "uv.exe"))).rejects.toThrow();
+    await expect(fs.access(path.join(runtime, "tools", "downloads", "uv.zip"))).rejects.toThrow();
+  });
+
+  it("pins uv to one release with its SHA-256", () => {
+    expect(UV_WINDOWS.url).toBe(
+      `https://github.com/astral-sh/uv/releases/download/${UV_WINDOWS.version}/uv-x86_64-pc-windows-msvc.zip`,
+    );
+    expect(UV_WINDOWS.url).not.toContain("latest");
+    expect(UV_WINDOWS.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
 
   it("can be cancelled", async () => {

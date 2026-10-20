@@ -9,6 +9,7 @@ import {
   countSamplers,
   findLoraSources,
   findLoraStack,
+  outputRoles,
   refreshBindings,
 } from "./analyze.ts";
 
@@ -18,6 +19,17 @@ const load = (name: string) =>
 const info = ObjectInfo.parse(
   JSON.parse(fs.readFileSync(path.join(dir, "object_info.json"), "utf8")),
 );
+
+/** A built-in preset's API graph (the batch presets carry captioners and previews). */
+const preset = (id: string) =>
+  ApiPrompt.parse(
+    JSON.parse(
+      fs.readFileSync(
+        path.join(dir, "..", "..", "..", "..", "..", "presets", "workflows", id, "prompt.json"),
+        "utf8",
+      ),
+    ),
+  );
 
 const byRole = (bindings: Binding[]) =>
   Object.fromEntries(bindings.filter((b) => b.role).map((b) => [b.role, `${b.node}.${b.input}`]));
@@ -182,5 +194,17 @@ describe("graph helpers", () => {
     const stale = analyze(prompt, null).bindings;
     const fresh = refreshBindings(stale, prompt, info);
     expect(fresh.find((b) => b.id === "model.checkpoint")?.options).toHaveLength(3);
+  });
+
+  it("tells which outputs a graph makes, as roles", () => {
+    expect([...outputRoles(load("sd15-api"), info)]).toEqual(["output.image"]);
+    expect([...outputRoles(preset("caption"), info)]).toEqual(["output.text"]);
+    expect([...outputRoles(preset("dataset-prep"), info)].sort()).toEqual([
+      "output.image",
+      "output.text",
+    ]);
+    // Without object_info only the known image outputs show; text needs the node's definition.
+    expect([...outputRoles(preset("upscale"), null)]).toEqual(["output.image"]);
+    expect([...outputRoles(preset("caption"), null)]).toEqual([]);
   });
 });

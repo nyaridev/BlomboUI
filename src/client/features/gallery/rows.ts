@@ -4,6 +4,7 @@
  * to measure, and only the visible rows are mounted.
  */
 import { dayKey, type GalleryImage } from "@shared/gallery";
+import type { GalleryLayout } from "@shared/settings";
 import { type JustifiedItem, justify } from "./justify";
 
 export const GAP = 6;
@@ -24,7 +25,7 @@ const ratio = (i: GalleryImage) => (i.width > 0 && i.height > 0 ? i.width / i.he
 
 function imageRows(
   items: GalleryImage[],
-  layout: "justified" | "grid",
+  layout: GalleryLayout,
   width: number,
   size: number,
 ): Array<Array<JustifiedItem<GalleryImage>>> {
@@ -42,7 +43,7 @@ function imageRows(
 
 export function buildRows(opts: {
   items: GalleryImage[];
-  layout: "justified" | "grid";
+  layout: GalleryLayout;
   width: number;
   size: number;
   /** Group by day (date sorts); name sort shows one block. */

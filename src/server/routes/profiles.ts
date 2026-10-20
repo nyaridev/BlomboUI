@@ -1,9 +1,14 @@
 import fs from "node:fs/promises";
 import { Hono } from "hono";
-import { z } from "zod";
 import type { OpenProfileResponse, ProfilesResponse } from "../../shared/api.ts";
-import { CreateProfileBody, ProfileId, UpdateProfileBody } from "../../shared/profile.ts";
-import { HttpError, readBody, readJson } from "../lib/http.ts";
+import {
+  CreateProfileBody,
+  OpenOnLaunchBody,
+  ProfileId,
+  ReorderProfilesBody,
+  UpdateProfileBody,
+} from "../../shared/profile.ts";
+import { HttpError, readBody, readBodyToFile, readJson } from "../lib/http.ts";
 import { sendFile } from "../lib/send.ts";
 import type { ProfileBackup } from "../services/backup.ts";
 import type { ProfileService } from "../services/profiles.ts";
@@ -41,24 +46,30 @@ export function profileRoutes(
   });
 
   r.put("/order", async (c) => {
-    const { order } = await readJson(c, z.object({ order: z.array(ProfileId) }));
+    const { order } = await readJson(c, ReorderProfilesBody);
     return c.json(await profiles.reorder(order));
   });
 
   r.put("/open-on-launch", async (c) => {
-    const body = await readJson(c, z.object({ id: ProfileId.nullable() }));
+    const body = await readJson(c, OpenOnLaunchBody);
     return c.json(await profiles.setOpenOnLaunch(body.id));
   });
 
-  /** A new profile from an exported zip (the body is the zip). */
+  /** A new profile from an exported zip (the body is the zip, streamed to runtime/ first). */
   r.post("/import", async (c) => {
-    const data = await readBody(
-      c,
-      MAX_IMPORT_BYTES,
-      "That export is over 2 GB; Blombo can't import it.",
-    );
-    if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
-    return c.json(await backup.import(data), 201);
+    const file = await backup.uploadFile();
+    try {
+      const size = await readBodyToFile(
+        c,
+        file,
+        MAX_IMPORT_BYTES,
+        "That export is over 2 GB; Blombo can't import it.",
+      );
+      if (size === 0) throw new HttpError(400, "The file is empty.", "empty");
+      return c.json(await backup.import(file), 201);
+    } finally {
+      await fs.rm(file, { force: true }).catch(() => undefined);
+    }
   });
 
   r.get("/:id", async (c) => c.json(await profiles.get(id(c.req.param("id")))));

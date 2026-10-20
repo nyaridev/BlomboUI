@@ -135,6 +135,9 @@ export const GenerateBody = z.object({
 });
 export type GenerateBody = z.infer<typeof GenerateBody>;
 
+/** Turn loop mode (keep queuing new seeds) on or off. */
+export const LoopBody = z.object({ on: z.boolean() });
+
 export const GenerateResponse = z.object({
   jobs: z.array(Job),
   /** Values the server changed for the next click (the seed, in increment/decrement mode). */

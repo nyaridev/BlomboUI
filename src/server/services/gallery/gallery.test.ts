@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { GalleryQuery } from "../../../shared/gallery.ts";
 import type { ServerMessage } from "../../../shared/live.ts";
 import { createConfig, parseFlags } from "../../config.ts";
@@ -10,6 +10,24 @@ import { realPng } from "../../lib/test-images.ts";
 import { ProfileService } from "../profiles.ts";
 import { SettingsService } from "../settings.ts";
 import { ftsQuery, GalleryService } from "./index.ts";
+
+/** A header read of a file named in `held` finishes, then waits until the test lets it go. */
+const held = new Map<string, { reached: () => void; release: Promise<void> }>();
+vi.mock("../../lib/imagemeta.ts", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../../lib/imagemeta.ts")>();
+  return {
+    ...real,
+    readImageHead: async (abs: string) => {
+      const head = await real.readImageHead(abs);
+      const gate = held.get(path.basename(abs));
+      if (gate) {
+        gate.reached();
+        await gate.release;
+      }
+      return head;
+    },
+  };
+});
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-gallery-"));
 const outputs = path.join(tmp, "outputs");
@@ -185,6 +203,40 @@ describe("gallery index", () => {
     await fs.access(path.join(outputs, "sub", "plain.png"));
     expect(q({ favorites: "1" }).items.map((i) => i.name)).toEqual(["plain.png"]);
     expect(gallery.trashList()).toHaveLength(0);
+  });
+
+  it("doesn't bring back an image trashed while a sync reads it", async () => {
+    await write("racy.png", await realPng(24, 24));
+    let reached = () => {};
+    const atRead = new Promise<void>((resolve) => {
+      reached = resolve;
+    });
+    let release = () => {};
+    held.set("racy.png", {
+      reached: () => reached(),
+      release: new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    });
+    try {
+      gallery.startSync();
+      await atRead;
+      // The sync has read racy.png's header and not written it yet. Index it the way a finished
+      // job would, trash it, then let the sync's batch write.
+      held.delete("racy.png");
+      await gallery.ingestOutput({ filename: "racy.png", subfolder: "", type: "output" });
+      const row = q({ q: "racy" }).items[0];
+      if (!row) throw new Error("not indexed");
+      expect(await gallery.trash([row.id])).toHaveLength(1);
+      release();
+      await gallery.whenSynced();
+      expect(q({ q: "racy" }).total).toBe(0);
+    } finally {
+      held.delete("racy.png");
+      release();
+    }
+    const entry = gallery.trashList().find((t) => t.name === "racy.png");
+    await gallery.emptyTrash(entry ? [entry.id] : []);
   });
 
   it("rates, tags and collects images, and keeps it all through the trash", async () => {

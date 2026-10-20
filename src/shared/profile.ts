@@ -77,7 +77,18 @@ export const UpdateProfileBody = z.object({
 });
 export type UpdateProfileBody = z.infer<typeof UpdateProfileBody>;
 
+export const ReorderProfilesBody = z.object({ order: z.array(ProfileId) });
+export const OpenOnLaunchBody = z.object({ id: ProfileId.nullable() });
+
 export const CheckPathBody = z.object({ path: z.string() });
+/** The OS folder and image pickers (Settings, libraries, batch inputs). */
+export const PickFolderBody = z.object({
+  title: z.string().max(120).default("Choose a folder"),
+  initial: z.string().optional(),
+});
+export type PickFolderBody = z.input<typeof PickFolderBody>;
+export const PickImagesBody = z.object({ title: z.string().max(120).default("Choose images") });
+export type PickImagesBody = z.input<typeof PickImagesBody>;
 export const CheckPathResult = z.object({
   path: z.string(),
   exists: z.boolean(),

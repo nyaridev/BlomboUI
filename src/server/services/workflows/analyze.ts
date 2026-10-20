@@ -16,7 +16,12 @@ import {
   nodeInputs,
   type ObjectInfo,
 } from "../../../shared/workflow/graph.ts";
-import type { Binding, BindingType, Finding } from "../../../shared/workflow/manifest.ts";
+import type {
+  Binding,
+  BindingType,
+  Finding,
+  WorkflowKind,
+} from "../../../shared/workflow/manifest.ts";
 import { ROLE_LABELS, type Role } from "../../../shared/workflow/roles.ts";
 import type { Port } from "../../../shared/workflow/stages.ts";
 import {
@@ -35,7 +40,7 @@ export interface Analysis {
   bindings: Binding[];
   values: Record<string, unknown>;
   findings: Finding[];
-  kind: "generate" | "batch";
+  kind: WorkflowKind;
 }
 
 interface Ref {
@@ -103,6 +108,12 @@ export class GraphView {
     const def = this.info?.[this.classOf(id)];
     if (def) return def.output_node === true;
     return IMAGE_OUTPUT_CLASSES.has(this.classOf(id));
+  }
+
+  /** An output node that shows text (captioners, taggers). Only object_info can tell. */
+  showsText(id: string): boolean {
+    const def = this.info?.[this.classOf(id)];
+    return Boolean(def?.output_node && def.output?.includes("STRING"));
   }
 
   isSampler(id: string): boolean {
@@ -332,6 +343,24 @@ export function refreshBindings(
     const options = g.inputInfo(b.node, b.input)?.options;
     return options ? { ...b, options } : b;
   });
+}
+
+export type OutputRole = Extract<Role, "output.image" | "output.text">;
+
+/**
+ * What a graph's output nodes make: `output.image` for one that takes images (Save Image,
+ * Preview Image…), `output.text` for one that shows text (a caption or tags; needs object_info).
+ * The batch runner decides what it writes from these.
+ */
+export function outputRoles(prompt: ApiPrompt, info: ObjectInfo | null): Set<OutputRole> {
+  const g = new GraphView(prompt, info);
+  const roles = new Set<OutputRole>();
+  for (const id of g.ids()) {
+    if (!g.isOutput(id)) continue;
+    if (isApiLink(g.inputs(id).images)) roles.add("output.image");
+    if (g.showsText(id)) roles.add("output.text");
+  }
+  return roles;
 }
 
 /** Sampler passes in a graph: the progress bar splits into this many segments. */

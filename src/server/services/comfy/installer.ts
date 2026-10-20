@@ -29,7 +29,15 @@ import { Emitter } from "../../lib/emitter.ts";
 import { exists, writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import { slotsRoot } from "./slots.ts";
-import { ensureUv, extractTopFolder, runPip, toolsDir, uvEnv } from "./uv.ts";
+import {
+  ensureUv,
+  extractTopFolder,
+  runPip,
+  toolsDir,
+  UV_WINDOWS,
+  type UvRelease,
+  uvEnv,
+} from "./uv.ts";
 
 export { extractTopFolder };
 
@@ -59,6 +67,8 @@ export interface InstallOps {
   run(command: string, args: string[], opts: RunOptions): Promise<number>;
   /** The ComfyUI release to install: its tag and source zip URL. */
   release(version: string, signal: AbortSignal): Promise<{ tag: string; zip: string }>;
+  /** The uv build to download on Windows (UV_WINDOWS; tests pass their own). */
+  uv: UvRelease;
   platform: NodeJS.Platform;
 }
 
@@ -308,6 +318,7 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
 export function defaultOps(): InstallOps {
   return {
     platform: process.platform,
+    uv: UV_WINDOWS,
     async download(url, dest, onProgress, signal) {
       const res = await fetch(url, { signal, redirect: "follow" });
       if (!res.ok || !res.body)

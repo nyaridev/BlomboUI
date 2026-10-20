@@ -33,14 +33,22 @@ export const WildcardPath = z
   )
   .refine((p) => !/[:*?"<>|]/.test(p), 'Use a name without : * ? " < > |');
 
+export const WILDCARD_ENTRY_TYPES = ["file", "folder"] as const;
+export const WildcardEntryType = z.enum(WILDCARD_ENTRY_TYPES);
+export type WildcardEntryType = z.infer<typeof WildcardEntryType>;
+
 export const WildcardEntry = z.object({
   path: z.string(),
-  type: z.enum(["file", "folder"]),
+  type: WildcardEntryType,
   format: z.enum(WILDCARD_FORMATS).nullable(),
   size: z.number(),
   mtime: z.number(),
 });
 export type WildcardEntry = z.infer<typeof WildcardEntry>;
+
+/** GET /api/wildcards: the folder and every reference name in it. */
+export const WildcardList = z.object({ root: z.string(), names: z.array(z.string()) });
+export type WildcardList = z.infer<typeof WildcardList>;
 
 export const WildcardTree = z.object({
   root: z.string(),
@@ -67,7 +75,7 @@ export const SaveWildcardBody = z.object({
 });
 export const CreateWildcardBody = z.object({
   path: WildcardPath,
-  type: z.enum(["file", "folder"]),
+  type: WildcardEntryType,
 });
 export const MoveWildcardBody = z.object({ from: WildcardPath, to: WildcardPath });
 export const WildcardPathBody = z.object({ path: WildcardPath });

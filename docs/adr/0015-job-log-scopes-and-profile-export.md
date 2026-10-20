@@ -23,7 +23,7 @@ Phase 5 keeps a group of features that all need to remember things across sessio
 
 **Snippets** are human-readable state, so they're a JSON file too: `data/profiles/<id>/snippets.json`.
 
-**Profile export is a zip of the profile folder** (`services/backup.ts`, `blombo.profile-export/1`): everything except `trash/` and `secrets.json` (the Civitai key stays on this computer), with the database copied by `VACUUM INTO` so an open profile exports consistently. Import always creates a new profile (a free id; " (imported)" when the name is taken), checks every entry path, refuses zips without the manifest or bigger than 4 GB unpacked, and lists the profile only after its files are written.
+**Profile export is a zip of the profile folder** (`services/backup.ts`, `blombo.profile-export/1`): everything except `trash/` and `secrets.json` (the Civitai key stays on this computer), with the database copied by `VACUUM INTO` so an open profile exports consistently. Import always creates a new profile (a free id; " (imported)" when the name is taken), checks every entry path, refuses zips without the manifest or bigger than 4 GB unpacked, and lists the profile only after its files are written. Both directions stream (fflate's `Zip` / `Unzip`, the upload into `runtime/cache/imports/`), so a large profile never sits in memory whole.
 
 ## Options considered
 

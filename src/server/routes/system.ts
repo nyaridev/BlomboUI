@@ -1,8 +1,7 @@
 import { Hono } from "hono";
-import { z } from "zod";
 import type { SystemInfo } from "../../shared/api.ts";
 import { APP_NAME } from "../../shared/constants.ts";
-import { CheckPathBody } from "../../shared/profile.ts";
+import { CheckPathBody, PickFolderBody, PickImagesBody } from "../../shared/profile.ts";
 import type { ServerConfig } from "../config.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
@@ -36,21 +35,12 @@ export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
   });
 
   r.post("/pick-folder", async (c) => {
-    const body = await readJson(
-      c,
-      z.object({
-        title: z.string().max(120).default("Choose a folder"),
-        initial: z.string().optional(),
-      }),
-    );
+    const body = await readJson(c, PickFolderBody);
     return c.json({ path: await pickFolder(body.title, body.initial) });
   });
 
   r.post("/pick-images", async (c) => {
-    const body = await readJson(
-      c,
-      z.object({ title: z.string().max(120).default("Choose images") }),
-    );
+    const body = await readJson(c, PickImagesBody);
     return c.json({ paths: await pickImages(body.title) });
   });
 

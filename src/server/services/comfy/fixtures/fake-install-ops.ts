@@ -8,6 +8,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { zipSync } from "fflate";
 import type { InstallOps } from "../installer.ts";
+import { UV_WINDOWS } from "../uv.ts";
 
 const enc = (s: string) => new TextEncoder().encode(s);
 
@@ -29,6 +30,7 @@ export function fakeInstallOps(stepMs = 250): InstallOps {
   return {
     // Not win32: uv is "on PATH", so nothing downloads uv either.
     platform: "linux",
+    uv: UV_WINDOWS,
     async download(url, dest, onProgress, signal) {
       for (let i = 1; i <= 8; i++) {
         await wait(stepMs, signal);

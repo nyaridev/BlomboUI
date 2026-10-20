@@ -7,7 +7,7 @@
 import { cn } from "@client/lib/cn";
 import { useSettings } from "@client/lib/queries";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
-import { EditorState } from "@codemirror/state";
+import { EditorState, Transaction } from "@codemirror/state";
 import {
   placeholder as cmPlaceholder,
   Decoration,
@@ -231,7 +231,12 @@ export function PromptEditor({
     if (current === value) return;
     syncing.current = true;
     try {
-      v.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+      // Not an edit of the user's: kept out of undo, so Ctrl+Z can't bring back the text of the
+      // workflow shown before (and save it into this one).
+      v.dispatch({
+        changes: { from: 0, to: current.length, insert: value },
+        annotations: Transaction.addToHistory.of(false),
+      });
     } finally {
       syncing.current = false;
     }

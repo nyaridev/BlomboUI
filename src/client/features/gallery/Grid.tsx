@@ -16,7 +16,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { buildRows, dayLabel, GAP, type GalleryRow } from "./rows";
 
-export function Grid({
+export const Grid = memo(function Grid({
   items,
   total,
   layout,
@@ -105,7 +105,7 @@ export function Grid({
       ) : null}
     </div>
   );
-}
+});
 
 function Row({
   row,

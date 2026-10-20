@@ -15,6 +15,8 @@ export interface NumberControlProps {
   max: number;
   step?: number;
   label?: ReactNode;
+  /** The name screen readers use when there's no text label (a slider in a toolbar). */
+  ariaLabel?: string;
   unit?: string;
   defaultValue?: number;
   disabled?: boolean;
@@ -117,6 +119,7 @@ export function Slider({
   max,
   step = 1,
   label,
+  ariaLabel,
   unit,
   defaultValue,
   disabled,
@@ -222,10 +225,10 @@ export function Slider({
           aria-valuemax={max}
           aria-valuenow={value}
           aria-valuetext={format ? format(value) : `${formatNumber(value, step)}${unit ?? ""}`}
-          aria-label={typeof label === "string" ? label : undefined}
+          aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
           onKeyDown={onKeyDown}
           className={cn(
-            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[0_1px_3px_rgb(0_0_0/.5)] ring-2 outline-none",
+            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[var(--shadow-thumb)] ring-2 outline-none",
             tone === "generate" ? "ring-generate-hi" : "ring-accent",
             "transition-transform duration-150 focus-visible:ring-4 focus-visible:ring-accent-ink/40",
             dragging ? "scale-115" : "hover:scale-110",
@@ -246,6 +249,7 @@ export function ScrubField({
   max,
   step = 1,
   label,
+  ariaLabel,
   unit,
   defaultValue,
   disabled,
@@ -289,7 +293,7 @@ export function ScrubField({
       aria-valuemin={min}
       aria-valuemax={max}
       aria-valuenow={value}
-      aria-label={typeof label === "string" ? label : undefined}
+      aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
       onKeyDown={(e) => {
         if (editing) return;
         if (e.key === "Enter") {

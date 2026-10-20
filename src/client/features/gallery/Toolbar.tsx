@@ -85,7 +85,7 @@ export function Toolbar({
             max={400}
             step={10}
             size="sm"
-            label={undefined}
+            ariaLabel="Tile size"
           />
         </div>
         <Segmented
@@ -193,13 +193,7 @@ function FacetChip({
   const shown = (options ?? []).filter((o) => o.name.toLowerCase().includes(filter.toLowerCase()));
   if (value)
     return (
-      <Chip
-        size="sm"
-        icon={icon}
-        selected
-        onRemove={() => onChange(null)}
-        onClick={() => setOpen(true)}
-      >
+      <Chip size="sm" icon={icon} selected onRemove={() => onChange(null)}>
         <span className="max-w-[160px] truncate">{value}</span>
       </Chip>
     );

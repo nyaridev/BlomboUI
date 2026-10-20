@@ -57,11 +57,23 @@ export function CountBubble({ count }: { count: number }) {
   );
 }
 
-export function Kbd({ children, className }: { children: ReactNode; className?: string }) {
+/** A key cap. `onColor` sits on a filled surface (the Generate button). */
+export function Kbd({
+  children,
+  className,
+  onColor = false,
+}: {
+  children: ReactNode;
+  className?: string;
+  onColor?: boolean;
+}) {
   return (
     <kbd
       className={cn(
-        "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-xs border border-line-strong border-b-2 bg-field px-1 font-mono text-[10.5px] font-medium text-fg-2",
+        "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-xs border border-b-2 px-1 font-mono text-[10.5px] font-medium",
+        onColor
+          ? "border-white/30 bg-white/15 text-white"
+          : "border-line-strong bg-field text-fg-2",
         className,
       )}
     >

@@ -4,9 +4,7 @@
  * preprocessor, or is used as it is when it's already a map. Units chain before the base
  * sampler, so Hires fix follows them too (ADetailer redraws with the plain prompt).
  */
-import { Icon } from "@client/icons/Icon";
 import { api, stageImageUrl } from "@client/lib/api";
-import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { useGalleryImages } from "@client/lib/queries";
 import {
@@ -31,7 +29,7 @@ import {
   preprocessorLabel,
   type StageImage,
 } from "@shared/workflow/stages";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useStage, useValues } from "../../state";
 import { modelOptions, problemSummary, StageNotices, useStageStatus } from "./common";
 import { UnitBar, UnitHeader, useUnits } from "./units";
@@ -156,6 +154,7 @@ function ControlImage({
   onImage: (image: StageImage | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const replaceInput = useRef<HTMLInputElement>(null);
   const [picking, setPicking] = useState(false);
   const [map, setMap] = useState<{ key: string; url: string } | null>(null);
   const [mapping, setMapping] = useState(false);
@@ -259,25 +258,27 @@ function ControlImage({
             >
               {image.label} · {image.width}×{image.height}
             </span>
-            <label
-              className={cn(
-                "inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-sm px-2 text-xs text-fg-2 hover:bg-field hover:text-fg focus-within:ring-2 focus-within:ring-accent/40",
-                busy && "pointer-events-none opacity-50",
-              )}
+            {/* A real button (a label around a hidden input can't be reached with Tab). */}
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="upload"
+              disabled={busy}
+              onClick={() => replaceInput.current?.click()}
             >
-              <Icon name="upload" size={13} />
               Replace
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                hidden
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = "";
-                  if (f) void add(() => api.uploadStageImage(f, f.name));
-                }}
-              />
-            </label>
+            </Button>
+            <input
+              ref={replaceInput}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) void add(() => api.uploadStageImage(f, f.name));
+              }}
+            />
             <Button size="sm" variant="ghost" icon="x" onClick={() => onImage(null)}>
               Remove
             </Button>

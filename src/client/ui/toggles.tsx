@@ -44,7 +44,7 @@ export function Switch({
         layout
         transition={snappy}
         className={cn(
-          "block rounded-full shadow-[0_1px_2px_rgb(0_0_0/.4)]",
+          "block rounded-full shadow-[var(--shadow-knob)]",
           thumb,
           checked ? "bg-white" : "bg-fg-3",
         )}
@@ -202,7 +202,7 @@ export function Segmented<T extends string>({
                 <motion.span
                   layoutId="thumb"
                   transition={snappy}
-                  className="absolute inset-0 z-0 rounded-sm border border-line-strong bg-field shadow-[inset_0_1px_0_var(--edge-hi),0_1px_2px_rgb(0_0_0/.25)]"
+                  className="absolute inset-0 z-0 rounded-sm border border-line-strong bg-field shadow-[var(--shadow-card)]"
                 />
               ) : null}
               <span className="relative z-10 inline-flex items-center gap-1.5">

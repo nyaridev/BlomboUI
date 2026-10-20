@@ -26,8 +26,8 @@
   /* text */
   --fg: #e3e9f0;
   --fg-2: #a8b4c0;
-  --fg-3: #6b7885;
-  --fg-4: #4a5562;
+  --fg-3: #7d8995;
+  --fg-4: #616c79;
 
   /* palette families: base for fills, -ink for text/icons on dark */
   --red: #c02040;
@@ -78,6 +78,12 @@
   --glow-generate:
     0 0 0 1px color-mix(in oklab, var(--generate-hi) 55%, transparent),
     0 8px 28px -6px color-mix(in oklab, var(--generate) 70%, transparent);
+  /* raised fills (primary buttons, Generate): a light top edge, a darker bottom one */
+  --bevel-primary: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.3);
+  --bevel-generate: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -2px 0 rgb(0 0 0 / 0.15);
+  /* the round handles of sliders and switches */
+  --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.5);
+  --shadow-knob: 0 1px 2px rgb(0 0 0 / 0.4);
 }
 
 [data-theme="slate"] {
@@ -93,7 +99,7 @@
   --fg: #e8eef4;
   --fg-2: #c4ced6;
   --fg-3: #8794a0;
-  --fg-4: #5b6672;
+  --fg-4: #6b7783;
 }
 
 [data-theme="midnight"] {
@@ -109,7 +115,7 @@
   --fg: #e2eaf4;
   --fg-2: #b8c8d8;
   --fg-3: #7a8ea4;
-  --fg-4: #4c5d72;
+  --fg-4: #5c6e83;
 }
 
 [data-theme="ember"] {
@@ -125,7 +131,7 @@
   --fg: #f2eae2;
   --fg-2: #d0c4b4;
   --fg-3: #9a8c7c;
-  --fg-4: #66594c;
+  --fg-4: #786b5d;
 }
 
 [data-theme="moss"] {
@@ -141,7 +147,7 @@
   --fg: #e4eee8;
   --fg-2: #b8ccc0;
   --fg-3: #7a9084;
-  --fg-4: #4e6157;
+  --fg-4: #5f7368;
 }
 
 [data-theme="light"] {
@@ -159,23 +165,23 @@
   --fg: #172029;
   --fg-2: #3a4450;
   --fg-3: #5c6874;
-  --fg-4: #8b96a1;
+  --fg-4: #7c8793;
   --red-ink: #c02040;
-  --orange-ink: #c24e10;
-  --yellow-ink: #8f6a00;
-  --green-ink: #0a7d45;
-  --cyan-ink: #087a86;
+  --orange-ink: #b2480f;
+  --yellow-ink: #866400;
+  --green-ink: #0a7943;
+  --cyan-ink: #087581;
   --blue-ink: #2448c8;
   --purple-ink: #6a2ad0;
   --pink-ink: #c01a70;
   --generate: #d65410;
   --generate-hi: #f07228;
-  --generate-ink: #c24e10;
+  --generate-ink: #b2480f;
   --syn-weight: #8a6100;
   --syn-lora: #6a3fd0;
-  --syn-wildcard: #087a86;
-  --syn-break: #c24e10;
-  --syn-escape: #6b7885;
+  --syn-wildcard: #087581;
+  --syn-break: #b2480f;
+  --syn-escape: #5f6b76;
   --syn-invalid: #c02040;
   --syn-comment: #9aa5b0;
   --edge-hi: rgb(255 255 255 / 0.7);
@@ -183,7 +189,8 @@
   --shadow-card: 0 1px 2px rgb(23 32 41 / 0.06);
 }
 
-/* Profile accent. Set on <html data-accent="…">. Light-on-color families get dark text. */
+/* Profile accent. Set on <html data-accent="…">. Light-on-color families (yellow, green, cyan)
+   get dark text. contrast.test.ts checks every theme × accent. */
 [data-accent="blue"] {
   --accent: var(--blue);
   --accent-ink: var(--blue-ink);
@@ -193,7 +200,8 @@
   --accent-ink: var(--purple-ink);
 }
 [data-accent="pink"] {
-  --accent: var(--pink);
+  /* a shade deeper than the palette's pink, so white text on it reads (4.5:1) */
+  --accent: #d81c7a;
   --accent-ink: var(--pink-ink);
 }
 [data-accent="red"] {
@@ -201,7 +209,8 @@
   --accent-ink: var(--red-ink);
 }
 [data-accent="orange"] {
-  --accent: var(--orange);
+  /* a shade deeper than the palette's orange, so white text on it reads (4.5:1) */
+  --accent: #c94200;
   --accent-ink: var(--orange-ink);
 }
 [data-accent="yellow"] {
@@ -212,6 +221,7 @@
 [data-accent="green"] {
   --accent: var(--green);
   --accent-ink: var(--green-ink);
+  --on-accent: #04170c;
 }
 [data-accent="cyan"] {
   --accent: var(--cyan);

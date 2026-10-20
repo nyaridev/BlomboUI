@@ -145,7 +145,15 @@ const OLD_PRESETS_KEY = "blombo.layoutPresets";
  * Layout presets used to live in this browser's storage. Move any that are still there into
  * the profile once, so they're saved with it and show up in every window.
  */
-export async function adoptBrowserLayouts(): Promise<void> {
+let adopting: Promise<void> | null = null;
+
+/** Once per window (StrictMode runs effects twice; both would read the same list). */
+export function adoptBrowserLayouts(): Promise<void> {
+  adopting ??= adoptNow();
+  return adopting;
+}
+
+async function adoptNow(): Promise<void> {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(OLD_PRESETS_KEY);

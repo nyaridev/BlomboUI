@@ -87,6 +87,19 @@ export async function generate(): Promise<void> {
       ...(script?.script ? { script: script.script } : {}),
     });
     if (Object.keys(res.values).length) merge(res.values);
+    // The queued save was dropped (the request carried the values): keep the cached workflow
+    // in step, or switching away and back would show the values from before.
+    const profileId = useSession.getState().profileId;
+    queryClient.setQueryData<WorkflowDetail>(qk.workflow(profileId, workflowId), (old) =>
+      old
+        ? {
+            ...old,
+            values: { ...old.values, ...values, ...res.values },
+            run: { ...old.run, ...run },
+            stages: stages as unknown as WorkflowDetail["stages"],
+          }
+        : old,
+    );
     if (script?.plan)
       toast(
         `Queued ${script.plan.title}: ${res.jobs.length} image${res.jobs.length === 1 ? "" : "s"}`,

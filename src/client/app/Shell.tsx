@@ -15,7 +15,7 @@ import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
-import { useFollowScope } from "../features/scopes/thumbs";
+import { ScopeFollower } from "../features/scopes/thumbs";
 import { Header } from "./header/Header";
 import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
@@ -91,7 +91,6 @@ export function Shell() {
   const [visited, setVisited] = useState<Set<ViewId>>(() => new Set([view]));
   useBridgeToasts();
   useShortcuts();
-  useFollowScope();
 
   useEffect(() => {
     startLive();
@@ -127,6 +126,7 @@ export function Shell() {
 
   return (
     <div className="flex h-full flex-col bg-bg">
+      <ScopeFollower />
       <motion.div
         initial={{ y: -14, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

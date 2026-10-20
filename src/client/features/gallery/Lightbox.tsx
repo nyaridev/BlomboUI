@@ -8,7 +8,7 @@
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
-import { useHotkey } from "@client/lib/hooks";
+import { useHotkey, useModalFocus } from "@client/lib/hooks";
 import { glide } from "@client/lib/motion";
 import { formatBytes } from "@client/lib/number";
 import {
@@ -48,6 +48,8 @@ export function Lightbox({
 }) {
   const idx = images.findIndex((i) => i.id === current.id);
   const details = useGalleryImage(current.id);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useModalFocus(dialogRef);
   const favorite = useFavorite();
   const rate = useRateImages();
   // 1–5 set the stars, 0 clears (Settings → Shortcuts lists them).
@@ -119,6 +121,8 @@ export function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label={current.name}
+      ref={dialogRef}
+      tabIndex={-1}
     >
       <div className="relative flex min-w-0 flex-1 flex-col">
         <Stage image={current} zoom={zoom} onZoom={setZoom} />

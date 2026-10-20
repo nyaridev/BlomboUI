@@ -21,7 +21,7 @@ import {
 import type { LookupState } from "@shared/models";
 import { create } from "zustand";
 import { type GalleryPages, qk, queryClient } from "./queries";
-import { useSession } from "./session";
+import { reopenProfile, useSession } from "./session";
 
 export interface LivePreview {
   jobSeq: number;
@@ -119,6 +119,10 @@ function connect(): void {
     useLive.setState({ connected: true });
     send({ t: "subscribe", topics: [...BASE_TOPICS, ...extra.keys()] });
     sendVisible();
+    // Back after a drop (sleep, a server restart): what was announced meanwhile was missed.
+    if (everOpen)
+      for (const key of RESYNC_KEYS) void queryClient.invalidateQueries({ queryKey: [key] });
+    everOpen = true;
   };
   ws.onmessage = (e) => {
     if (typeof e.data === "string") onJson(e.data);
@@ -133,6 +137,27 @@ function connect(): void {
   };
 }
 
+let everOpen = false;
+/** Server data that changes with bus messages; refetched after a reconnect. */
+const RESYNC_KEYS = [
+  "gallery",
+  "history",
+  "workflows",
+  "workflow",
+  "download-history",
+  "error-log",
+];
+
+/**
+ * What a topic keeps in the store. Nobody follows it any more, so it stops being updated: drop
+ * it, so the next view that follows the topic starts from the server's snapshot, not a stale run.
+ */
+const TOPIC_STATE: Partial<Record<LiveTopic, () => void>> = {
+  batch: () => useLive.setState({ batch: null }),
+  install: () => useLive.setState({ install: null, nodeInstall: null }),
+  gallery: () => useLive.setState({ gallerySync: null }),
+};
+
 /** Follow an extra topic while a component is mounted (e.g. logs while the log view is open). */
 export function followTopic(topic: LiveTopic): () => void {
   const n = extra.get(topic) ?? 0;
@@ -144,6 +169,7 @@ export function followTopic(topic: LiveTopic): () => void {
     else {
       extra.delete(topic);
       send({ t: "unsubscribe", topics: [topic] });
+      TOPIC_STATE[topic]?.();
     }
   };
 }
@@ -168,10 +194,14 @@ function onJson(text: string): void {
   const msg = parsed.data;
   const s = useLive.getState();
   switch (msg.t) {
-    case "hello":
+    case "hello": {
       useLive.setState({ comfy: msg.comfy, queue: msg.queue });
+      const mine = useSession.getState().profileId;
+      // No profile open on the server: it restarted. (Another window switching is not this.)
+      if (mine && msg.profileId === null) reopenProfile(mine);
       if (msg.downloads) onDownloads(msg.downloads.items);
       break;
+    }
     case "comfy.status": {
       const wasRunning = s.comfy?.state === "running";
       useLive.setState({ comfy: msg.status });

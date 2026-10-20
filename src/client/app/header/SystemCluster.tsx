@@ -163,6 +163,17 @@ function QueueChip() {
   );
 }
 
+/** A word next to the dot whenever ComfyUI isn't simply running (status is never color alone). */
+const STATE_WORD: Partial<Record<ComfyState, string>> = {
+  stopped: "Stopped",
+  starting: "Starting",
+  stopping: "Stopping",
+  restarting: "Restarting",
+  crashed: "Crashed",
+  missing: "Not installed",
+  unreachable: "Offline",
+};
+
 function ComfyStatusButton() {
   const comfy = useLive((s) => s.comfy);
   const navigate = useNavigate();
@@ -183,6 +194,7 @@ function ComfyStatusButton() {
   const label = connected ? STATE_LABEL[state] : "Not connected to the BlomboUI server";
   const managed = comfy?.mode === "managed";
   const busy = ["starting", "restarting", "stopping"].includes(state);
+  const word = connected ? STATE_WORD[state] : "Offline";
 
   return (
     <>
@@ -193,9 +205,14 @@ function ComfyStatusButton() {
           <button
             type="button"
             aria-label={label}
-            className="grid h-8 w-8 place-items-center rounded-md hover:bg-field focus-ring data-[open]:bg-field"
+            title={label}
+            className={cn(
+              "flex h-8 min-w-8 items-center justify-center gap-1.5 rounded-md hover:bg-field focus-ring data-[open]:bg-field",
+              word ? "px-2" : "",
+            )}
           >
             <StatusDot tone={tone} pulse={busy} />
+            {word ? <span className="text-xs text-fg-2">{word}</span> : null}
           </button>
         }
       >

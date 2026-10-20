@@ -2,7 +2,7 @@
  * Which scope model cards show, and the picture a model has in it (shared/scopes.ts).
  *
  * The effective scope is the picked one, or with "auto" on, the scope whose tags best match the
- * Generate prompt. One follower (`useFollowScope`, mounted in Shell) works it out, debounced, so
+ * Generate prompt. One follower (`<ScopeFollower />`, mounted in Shell) works it out, debounced, so
  * cards re-render only when the scope changes, never per keystroke. A model without a picture in
  * that scope keeps its own preview (the server already falls back to the default scope).
  */
@@ -31,8 +31,16 @@ export const useEffectiveScope = create<EffectiveScope>((set, get) => ({
   },
 }));
 
-/** Keep the effective scope current (mount once). */
-export function useFollowScope(): void {
+/**
+ * Keeps the effective scope current. Mount once, as its own component (it follows the prompt,
+ * so whatever calls it re-renders on every keystroke).
+ */
+export function ScopeFollower(): null {
+  useFollowScope();
+  return null;
+}
+
+function useFollowScope(): void {
   const scopes = useScopes().data;
   const positive = useRoleBinding("prompt.positive");
   const prompt = useValues((s) => (positive ? s.values[positive.id] : undefined));

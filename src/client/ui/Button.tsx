@@ -13,8 +13,7 @@ const base =
   "active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45 focus-ring";
 
 const variants: Record<ButtonVariant, string> = {
-  primary:
-    "bg-accent text-on-accent shadow-[inset_0_1px_0_rgb(255_255_255/.18),0_1px_2px_rgb(0_0_0/.3)] hover:brightness-110",
+  primary: "bg-accent text-on-accent shadow-[var(--bevel-primary)] hover:brightness-110",
   secondary: "border border-line bg-field text-fg hover:border-line-strong hover:bg-field-hover",
   outline: "border border-line-strong text-fg-2 hover:border-fg-4 hover:text-fg",
   ghost: "text-fg-2 hover:bg-field hover:text-fg",

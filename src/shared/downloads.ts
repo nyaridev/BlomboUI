@@ -206,7 +206,9 @@ export function planFolder(
 /** The file name for a Civitai file, keeping its extension. */
 export function planFileName(input: PlanInput, naming: DownloadNaming): string {
   const dot = input.fileName.lastIndexOf(".");
-  const ext = dot > 0 ? input.fileName.slice(dot).toLowerCase() : ".safetensors";
+  const raw = dot > 0 ? input.fileName.slice(dot).toLowerCase() : "";
+  // Only a plain extension: a remote name like "m.st:x" (an NTFS stream) or "x./../y" is not one.
+  const ext = /^\.[a-z0-9]{1,10}$/.test(raw) ? raw : ".safetensors";
   const original = dot > 0 ? input.fileName.slice(0, dot) : input.fileName;
   const stem =
     naming === "model"

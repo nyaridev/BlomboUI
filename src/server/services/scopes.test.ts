@@ -71,6 +71,9 @@ describe("scope service", () => {
   it("refuses names that leave the scope folder", async () => {
     expect(scopeThumbPath(tmp, "default", "loras", "../evil")).toBeNull();
     expect(scopeThumbPath(tmp, "../x", "loras", "a.safetensors")).toBeNull();
+    // The kind comes from the thumbnail URL: a path there must not leave the scopes folder.
+    expect(scopeThumbPath(tmp, "default", "..\\..\\Users" as "loras", "x/y")).toBeNull();
+    expect(scopeThumbPath(tmp, "default", "loras", "a.safetensors:s")).toBeNull();
     await expect(scopes.thumbFile("default", "loras/../../profile.json")).rejects.toThrow();
   });
 

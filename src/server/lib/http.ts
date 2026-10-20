@@ -19,6 +19,37 @@ export class HttpError extends Error {
   }
 }
 
+/**
+ * A raw upload, refused with 413 as soon as it passes `max` bytes (by its Content-Length, or
+ * while it streams in), so an oversized body is never held in memory whole.
+ */
+export async function readBody(c: Context, max: number, tooLarge: string): Promise<Uint8Array> {
+  const declared = Number(c.req.header("content-length"));
+  if (Number.isFinite(declared) && declared > max) throw new HttpError(413, tooLarge, "too_large");
+  const body = c.req.raw.body;
+  if (!body) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  const reader = body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => undefined);
+      throw new HttpError(413, tooLarge, "too_large");
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let at = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return out;
+}
+
 export async function readJson<S extends z.ZodType>(c: Context, schema: S): Promise<z.output<S>> {
   let raw: unknown;
   try {

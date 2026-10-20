@@ -15,7 +15,7 @@ import {
 } from "../../shared/profile.ts";
 import type { ServerConfig } from "../config.ts";
 import { Emitter } from "../lib/emitter.ts";
-import { exists, readJsonFile, writeFileAtomic, writeJsonAtomic } from "../lib/fsx.ts";
+import { exists, movePath, readJsonFile, writeFileAtomic, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 
 const AVATAR_SIZE = 256;
@@ -30,6 +30,11 @@ type ProfileEvents = {
 export class ProfileService extends Emitter<ProfileEvents> {
   private readonly config: ServerConfig;
   private activeId: string | null = null;
+  /**
+   * Called before a profile's folder moves to the trash, to stop what still uses it (its open
+   * database, the queue, a sync). Set in context.ts.
+   */
+  beforeRemove: ((id: string) => Promise<void>) | null = null;
 
   constructor(config: ServerConfig) {
     super();
@@ -67,7 +72,17 @@ export class ProfileService extends Emitter<ProfileEvents> {
     patch: { civitai?: Partial<ProfileSecrets["civitai"]> },
   ): Promise<ProfileSecrets> {
     await this.get(id);
-    const current = await this.secrets(id);
+    let current: ProfileSecrets;
+    try {
+      current = await readJsonFile(this.secretsFile(id), ProfileSecrets, {});
+    } catch {
+      // Never write over a file we couldn't read: it may hold a key the user still wants.
+      throw new HttpError(
+        409,
+        "The profile's secrets.json can't be read. Fix or delete it in the profile folder, then try again.",
+        "secrets_unreadable",
+      );
+    }
     const next = ProfileSecrets.parse({
       ...current,
       civitai: { ...current.civitai, ...patch.civitai },
@@ -164,7 +179,7 @@ export class ProfileService extends Emitter<ProfileEvents> {
     return next;
   }
 
-  async setAvatar(id: string, image: ArrayBuffer): Promise<Profile> {
+  async setAvatar(id: string, image: Uint8Array): Promise<Profile> {
     await this.get(id);
     let webp: Buffer;
     try {
@@ -229,8 +244,17 @@ export class ProfileService extends Emitter<ProfileEvents> {
     await this.get(id);
     const reg = await this.registry();
     const trash = path.join(this.config.dataDir, "trash", `${id}-${Date.now()}`);
-    await fs.mkdir(path.dirname(trash), { recursive: true });
-    await fs.rename(this.dir(id), trash);
+    await this.beforeRemove?.(id);
+    if (this.activeId === id) this.activeId = null;
+    try {
+      await movePath(this.dir(id), trash);
+    } catch (error) {
+      throw new HttpError(
+        409,
+        `Couldn't move the profile to the trash: ${error instanceof Error ? error.message : error}. Close any app that has a file in its folder open and try again.`,
+        "remove_failed",
+      );
+    }
     await writeJsonAtomic(this.registryFile, {
       ...reg,
       order: reg.order.filter((item) => item !== id),

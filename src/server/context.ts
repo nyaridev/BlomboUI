@@ -374,6 +374,18 @@ export function createServices(config: ServerConfig): Services {
       }, 4000).unref();
     })().catch((error) => console.error("Opening the profile failed:", error));
   });
+  // Removing a profile: stop what still uses its folder (Windows can't move open files, and a
+  // late write would bring the folder back).
+  profiles.beforeRemove = async (id) => {
+    if (profiles.active === id) {
+      await jobs.reset();
+      lookup.stop();
+      await gallery.close();
+    }
+    downloads.dropProfile(id);
+    dbs.close(id);
+    settings.forget(id);
+  };
   profiles.on("updated", (profile) => {
     if (profile.id !== profiles.active) return;
     void supervisor.applyProfile(profile, "flag").catch((error) => console.error(error));

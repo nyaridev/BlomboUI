@@ -103,9 +103,19 @@ function isNsfw(info: CivitaiInfo | null): boolean {
 /** Stem of a model file ("foo.safetensors" → "foo"). */
 const stemOf = (file: string) => file.slice(0, file.length - path.extname(file).length);
 
-/** Files in one folder that belong to a model stem ("foo.preview.png", "foo.civitai.info"…). */
-function sidecarsFor(stem: string, files: Map<string, string>, dir: string): Sidecars {
+/**
+ * Files in one folder that belong to a model stem ("foo.preview.png", "foo.civitai.info"…).
+ * `stems` are the folder's model stems (lowercase): a file that also starts with a longer one
+ * ("foo.xl.preview.png" next to foo.xl.safetensors) belongs to that model, not to "foo".
+ */
+export function sidecarsFor(
+  stem: string,
+  files: Map<string, string>,
+  dir: string,
+  stems: string[] = [],
+): Sidecars {
   const lower = stem.toLowerCase();
+  const longer = stems.filter((t) => t !== lower && t.startsWith(`${lower}.`));
   const pick = (suffix: string) => {
     const name = files.get(lower + suffix);
     return name ? path.join(dir, name) : null;
@@ -117,7 +127,12 @@ function sidecarsFor(stem: string, files: Map<string, string>, dir: string): Sid
   }
   const all: string[] = [];
   for (const [low, name] of files)
-    if (low.startsWith(`${lower}.`) && !EXTENSIONS.has(path.extname(low))) all.push(name);
+    if (
+      low.startsWith(`${lower}.`) &&
+      !EXTENSIONS.has(path.extname(low)) &&
+      !longer.some((t) => low.startsWith(`${t}.`))
+    )
+      all.push(name);
   return { thumb, civitai: pick(".civitai.info"), json: pick(".json"), all };
 }
 
@@ -130,6 +145,8 @@ export class ModelService {
     entries: Map<string, Entry>;
   } | null = null;
   private scanning: Promise<void> | null = null;
+  /** Bumped by invalidate(): a scan that started before it doesn't fill the cache. */
+  private generation = 0;
 
   constructor(deps: ModelDeps) {
     this.deps = deps;
@@ -148,24 +165,34 @@ export class ModelService {
 
   invalidate(): void {
     this.cache = null;
+    this.generation++;
   }
 
   async list(force = false): Promise<ModelList> {
-    const { profileId, root } = await this.root();
-    if (!force && this.cache?.profileId === profileId && this.cache.root === root)
-      return this.cache.list;
-    if (this.scanning) await this.scanning;
-    else {
-      this.scanning = this.scan(profileId, root).finally(() => {
+    if (force) this.invalidate();
+    // A scan already running may be for another profile or folder, or older than a change:
+    // wait for it, then scan again unless the cache now matches.
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const { profileId, root } = await this.root();
+      const cache = this.cache;
+      if (cache?.profileId === profileId && cache.root === root) return cache.list;
+      if (this.scanning) {
+        await this.scanning.catch(() => undefined);
+        continue;
+      }
+      this.scanning = this.scan(profileId, root, this.generation).finally(() => {
         this.scanning = null;
       });
       await this.scanning;
     }
-    if (!this.cache) throw new HttpError(500, "Couldn't read the models folder.", "scan_failed");
-    return this.cache.list;
+    throw new HttpError(
+      503,
+      "The models folder keeps changing; try again in a moment.",
+      "scan_busy",
+    );
   }
 
-  private async scan(profileId: string, root: string): Promise<void> {
+  private async scan(profileId: string, root: string, generation: number): Promise<void> {
     const entries = new Map<string, Entry>();
     const rootExists = Boolean(root) && (await isDir(root));
     if (rootExists)
@@ -177,6 +204,7 @@ export class ModelService {
     const models = [...entries.values()]
       .map((e) => e.model)
       .sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+    if (generation !== this.generation) return;
     this.cache = {
       profileId,
       root,
@@ -208,6 +236,9 @@ export class ModelService {
     }
     const files = new Map<string, string>();
     for (const e of items) if (e.isFile()) files.set(e.name.toLowerCase(), e.name);
+    const stems = [...files.keys()]
+      .filter((low) => EXTENSIONS.has(path.extname(low)))
+      .map((low) => stemOf(low));
     const kindRoot = kindFolderOf(root, dir);
     for (const e of items) {
       if (e.name.startsWith(".")) continue;
@@ -224,7 +255,7 @@ export class ModelService {
         continue;
       }
       const stem = stemOf(e.name);
-      const sidecars = sidecarsFor(stem, files, dir);
+      const sidecars = sidecarsFor(stem, files, dir, stems);
       // No preview next to the model: a scope thumbnail Blombo made for it, if there is one.
       if (!sidecars.thumb) {
         const comfyName = toRel(path.relative(kindRoot, full));

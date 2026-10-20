@@ -8,8 +8,10 @@
  * and every path in the zip is checked to stay inside the new folder. Folders the profile points
  * at (models, outputs, wildcards) aren't in the zip; on another PC you set them in Settings.
  */
+import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { z } from "zod";
 import { type Profile, Profile as ProfileSchema } from "../../shared/profile.ts";
@@ -72,24 +74,38 @@ export class ProfileBackup {
     const dir = this.deps.profiles.dir(id);
     const outDir = path.join(this.deps.runtimeDir, "cache", "exports");
     await fs.mkdir(outDir, { recursive: true });
-    // Old exports are only a download's leftovers.
-    for (const f of await fs.readdir(outDir).catch(() => []))
-      await fs.rm(path.join(outDir, f), { force: true }).catch(() => undefined);
+    // Old exports are only a download's leftovers. Each export has its own folder, so one that's
+    // still downloading is never removed by the next.
+    const now = Date.now();
+    for (const f of await fs.readdir(outDir).catch(() => [])) {
+      const at = Number(f.split("-")[0]);
+      if (!Number.isFinite(at) || now - at > 3600_000)
+        await fs.rm(path.join(outDir, f), { recursive: true, force: true }).catch(() => undefined);
+    }
+    const workDir = path.join(outDir, `${now}-${randomUUID().slice(0, 8)}`);
+    await fs.mkdir(workDir, { recursive: true });
 
     const files: Record<string, Uint8Array> = {};
     for (const rel of await walk(dir))
       files[rel] = new Uint8Array(await fs.readFile(path.join(dir, rel)));
 
     // A consistent copy of the database, even while it's open.
-    const snapshot = path.join(outDir, `${id}-${Date.now()}.sqlite`);
-    const wasOpen = this.deps.profiles.active === id;
+    const snapshot = path.join(workDir, `${id}.sqlite`);
     try {
-      if (wasOpen || (await exists(path.join(dir, DB_FILE)))) {
+      if (this.deps.profiles.active === id || (await exists(path.join(dir, DB_FILE)))) {
         this.deps.dbs.get(id).db.exec(`VACUUM INTO '${snapshot.replace(/'/g, "''")}'`);
+        // The trash folder isn't exported, so its rows would point at nothing after an import.
+        const copy = new DatabaseSync(snapshot);
+        try {
+          copy.exec("DELETE FROM trash");
+        } finally {
+          copy.close();
+        }
         files[DB_FILE] = new Uint8Array(await fs.readFile(snapshot));
       }
     } finally {
-      if (!wasOpen) this.deps.dbs.close(id);
+      // Close a connection opened just for this, unless the profile was opened meanwhile.
+      if (this.deps.profiles.active !== id) this.deps.dbs.close(id);
       await fs.rm(snapshot, { force: true }).catch(() => undefined);
     }
     files[MANIFEST] = strToU8(
@@ -102,7 +118,7 @@ export class ProfileBackup {
     const zip = zipSync(files, { level: 6 });
     const stamp = new Date().toISOString().slice(0, 10);
     const name = `${id}-${stamp}.blombo-profile.zip`;
-    const file = path.join(outDir, name);
+    const file = path.join(workDir, name);
     await writeFileAtomic(file, zip);
     return { file, name };
   }
@@ -127,9 +143,14 @@ export class ProfileBackup {
       );
     }
     const manifestBytes = entries[MANIFEST];
-    const manifest = manifestBytes
-      ? ExportManifest.safeParse(JSON.parse(strFromU8(manifestBytes)))
-      : null;
+    let manifest: ReturnType<typeof ExportManifest.safeParse> | null = null;
+    try {
+      manifest = manifestBytes
+        ? ExportManifest.safeParse(JSON.parse(strFromU8(manifestBytes)))
+        : null;
+    } catch {
+      manifest = null;
+    }
     const profileBytes = entries["profile.json"];
     if (!manifest?.success || !profileBytes)
       throw new HttpError(

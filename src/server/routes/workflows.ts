@@ -8,7 +8,7 @@ import {
   type WorkflowManifest,
 } from "../../shared/workflow/manifest.ts";
 import type { ServerConfig } from "../config.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import type { BridgeService } from "../services/bridge.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 import type { LayoutService } from "../services/layouts.ts";
@@ -47,10 +47,12 @@ export function workflowRoutes(
 
   /** Raw file body; the name comes from ?filename= (and an optional ?name=). */
   r.post("/import", async (c) => {
-    const data = new Uint8Array(await c.req.arrayBuffer());
+    const data = await readBody(
+      c,
+      MAX_IMPORT_BYTES,
+      "That file is too large to be a workflow (64 MB max).",
+    );
     if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
-    if (data.byteLength > MAX_IMPORT_BYTES)
-      throw new HttpError(413, "That file is too large to be a workflow (64 MB max).", "too_large");
     const result = await importWorkflow(
       {
         bytes: data,

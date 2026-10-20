@@ -59,6 +59,17 @@ export async function checkPath(raw: string): Promise<CheckPathResult> {
 }
 
 /**
+ * PowerShell reads the dialog's title and starting folder from environment variables, never
+ * from the script text: quoting can't be escaped reliably (PowerShell also ends strings at curly
+ * quotes), and these values come from requests. Output is UTF-8 so any folder name comes back.
+ */
+const PS_PRELUDE = [
+  "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
+  "Add-Type -AssemblyName System.Windows.Forms",
+];
+const pickerEnv = (vars: Record<string, string>) => ({ ...process.env, ...vars });
+
+/**
  * Opens the OS folder dialog and resolves with the chosen path, or null when cancelled.
  * Windows uses PowerShell's FolderBrowserDialog; Linux tries zenity.
  */
@@ -66,26 +77,25 @@ export function pickFolder(title: string, initial?: string): Promise<string | nu
   return new Promise((resolve) => {
     let command: string;
     let args: string[];
+    let env: NodeJS.ProcessEnv | undefined;
     if (process.platform === "win32") {
-      const esc = (s: string) => s.replace(/'/g, "''");
       const script = [
-        "Add-Type -AssemblyName System.Windows.Forms",
+        ...PS_PRELUDE,
         "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-        `$d.Description = '${esc(title)}'`,
+        "$d.Description = $env:BLOMBO_PICK_TITLE",
         "$d.UseDescriptionForTitle = $true",
-        initial ? `$d.SelectedPath = '${esc(initial)}'` : "",
+        "if ($env:BLOMBO_PICK_INITIAL) { $d.SelectedPath = $env:BLOMBO_PICK_INITIAL }",
         "$f = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false}",
         "if ($d.ShowDialog($f) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }",
-      ]
-        .filter(Boolean)
-        .join("; ");
+      ].join("; ");
+      env = pickerEnv({ BLOMBO_PICK_TITLE: title, BLOMBO_PICK_INITIAL: initial ?? "" });
       command = "powershell.exe";
       args = ["-NoProfile", "-STA", "-Command", script];
     } else {
       command = "zenity";
       args = ["--file-selection", "--directory", `--title=${title}`];
     }
-    const child = spawn(command, args, { windowsHide: true });
+    const child = spawn(command, args, { windowsHide: true, env });
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString("utf8");
@@ -103,24 +113,25 @@ export function pickImages(title: string): Promise<string[]> {
   return new Promise((resolve) => {
     let command: string;
     let args: string[];
+    let env: NodeJS.ProcessEnv | undefined;
     if (process.platform === "win32") {
-      const esc = (s: string) => s.replace(/'/g, "''");
       const script = [
-        "Add-Type -AssemblyName System.Windows.Forms",
+        ...PS_PRELUDE,
         "$d = New-Object System.Windows.Forms.OpenFileDialog",
-        `$d.Title = '${esc(title)}'`,
+        "$d.Title = $env:BLOMBO_PICK_TITLE",
         "$d.Multiselect = $true",
         "$d.Filter = 'Images|*.png;*.jpg;*.jpeg;*.webp;*.bmp|All files|*.*'",
         "$f = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false}",
         "if ($d.ShowDialog($f) -eq 'OK') { [Console]::Out.Write(($d.FileNames -join \"`n\")) }",
       ].join("; ");
+      env = pickerEnv({ BLOMBO_PICK_TITLE: title });
       command = "powershell.exe";
       args = ["-NoProfile", "-STA", "-Command", script];
     } else {
       command = "zenity";
       args = ["--file-selection", "--multiple", "--separator=\n", `--title=${title}`];
     }
-    const child = spawn(command, args, { windowsHide: true });
+    const child = spawn(command, args, { windowsHide: true, env });
     let out = "";
     child.stdout.on("data", (chunk: Buffer) => {
       out += chunk.toString("utf8");

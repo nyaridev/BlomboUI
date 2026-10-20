@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createConfig, parseFlags } from "../config.ts";
 import { realPng } from "../lib/test-images.ts";
-import { ModelService } from "./models.ts";
+import { ModelService, sidecarsFor } from "./models.ts";
 import { ProfileService } from "./profiles.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-models-"));
@@ -147,5 +147,24 @@ describe("local models", () => {
       /already exists/,
     );
     expect(await fs.readFile(path.join(root, "loras", "plain.safetensors"), "utf8")).toBe("other");
+  });
+});
+
+describe("sidecarsFor", () => {
+  it("leaves a longer model's sidecars alone", () => {
+    const names = [
+      "detail.safetensors",
+      "detail.preview.png",
+      "detail.civitai.info",
+      "detail.xl.safetensors",
+      "detail.xl.preview.png",
+      "detail.xl.civitai.info",
+    ];
+    const files = new Map(names.map((n) => [n.toLowerCase(), n]));
+    const stems = ["detail", "detail.xl"];
+    const short = sidecarsFor("detail", files, "D:/m", stems);
+    expect(short.all.sort()).toEqual(["detail.civitai.info", "detail.preview.png"]);
+    const long = sidecarsFor("detail.xl", files, "D:/m", stems);
+    expect(long.all.sort()).toEqual(["detail.xl.civitai.info", "detail.xl.preview.png"]);
   });
 });

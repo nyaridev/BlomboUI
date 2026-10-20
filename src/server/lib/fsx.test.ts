@@ -57,6 +57,13 @@ describe("resolveInside", () => {
   it("allows nested paths and refuses escapes", () => {
     expect(resolveInside(dir, "a/b.json")).toBe(path.join(dir, "a", "b.json"));
     expect(() => resolveInside(dir, "../outside.json")).toThrow();
+    expect(() => resolveInside(dir, "..\\outside.json")).toThrow();
+    expect(() => resolveInside(dir, "a/../../outside.json")).toThrow();
+    expect(() => resolveInside(dir, "model.safetensors:hidden")).toThrow();
+    expect(() => resolveInside(dir, "C:/Windows/x")).toThrow();
+    expect(() => resolveInside(dir, "a\0b")).toThrow();
+    // A name that merely starts with two dots is fine.
+    expect(resolveInside(dir, "..hidden.txt")).toBe(path.join(dir, "..hidden.txt"));
   });
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "blombo-ui",
-  "version": "2.0.0-alpha.0",
+  "version": "1.0.0",
   "private": true,
   "description": "BlomboUI: a profile-based studio for ComfyUI with importable workflows, a customizable Generate screen, gallery, models and wildcards.",
   "type": "module",

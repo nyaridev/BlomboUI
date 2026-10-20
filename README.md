@@ -11,7 +11,7 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![Tauri](https://img.shields.io/badge/Desktop-Tauri%202-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
 [![ComfyUI](https://img.shields.io/badge/Engine-ComfyUI-1F1F1F)](https://github.com/comfyanonymous/ComfyUI)
-[![Status](https://img.shields.io/badge/status-alpha%20%C2%B7%20all%20phases%20built-orange)](#status)
+[![Status](https://img.shields.io/badge/release-1.0.0-blue)](#status)
 
 [Quick start](#quick-start) · [Status](#status) · [What it does](#what-it-does) · [How it works](#how-it-works) · [Development](#development) · [Docs](#documentation) · [Roadmap](#roadmap)
 
@@ -38,8 +38,8 @@ On first launch you'll see the **profile screen**. Create a profile: give it a n
 ## Status
 
 **All phases are built** and merged into `main` (Phases 0–5 plus a final pass of review fixes,
-performance, accessibility and contrast work). It's an alpha: everything has tests (`npm run check`:
-typecheck, lint, 433 tests, rules sync) and was clicked through against a **fake ComfyUI and a fake
+performance, accessibility and contrast work). This is release **1.0.0**: everything has tests (`npm run check`:
+typecheck, lint, 443 tests, rules sync) and was clicked through against a **fake ComfyUI and a fake
 Civitai**; on 2026-10-21 the parts that need a real ComfyUI were run on one too (see below).
 
 | | Verified |

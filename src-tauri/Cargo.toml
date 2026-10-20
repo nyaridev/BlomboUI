@@ -1,6 +1,6 @@
 [package]
 name = "blombo-ui"
-version = "2.0.0-alpha.0"
+version = "1.0.0"
 description = "BlomboUI desktop window"
 edition = "2021"
 publish = false

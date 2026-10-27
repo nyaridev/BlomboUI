@@ -5,7 +5,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { serveStatic } from "@hono/node-server/serve-static";
-import { Hono } from "hono";
+import { type Context, Hono } from "hono";
 import type { ApiErrorBody } from "../shared/api.ts";
 import type { Services } from "./context.ts";
 import { localOnly } from "./lib/guard.ts";
@@ -99,9 +99,23 @@ export function createApp(services: Services) {
         onFound: (_p, c) => c.header("cache-control", "public, max-age=31536000, immutable"),
       }),
     );
-    app.use("*", serveStatic({ root }));
+    // The page must be checked every time: a cached index.html keeps pointing at the old
+    // (immutable) assets, so a rebuilt client wouldn't show until the browser's guess expires.
+    const noCache = (c: Context) => c.header("cache-control", "no-cache");
+    app.use(
+      "*",
+      serveStatic({
+        root,
+        onFound: (p, c) => {
+          if (p.endsWith(".html")) noCache(c);
+        },
+      }),
+    );
     const index = fs.readFileSync(path.join(config.clientDist, "index.html"), "utf8");
-    app.get("*", (c) => c.html(index));
+    app.get("*", (c) => {
+      noCache(c);
+      return c.html(index);
+    });
   } else if (!config.dev) {
     app.get("*", (c) =>
       c.text("The web client is not built yet. Run `npm run build` or start-web.bat.", 503),

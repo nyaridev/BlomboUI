@@ -158,10 +158,10 @@ export function ModelCard({
   return (
     <div
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow,transform] duration-200",
+        "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow] duration-150",
         selected
-          ? "border-accent shadow-[0_0_0_1px_var(--accent),0_8px_24px_-8px_color-mix(in_oklab,var(--accent)_55%,transparent)]"
-          : "border-line hover:-translate-y-0.5 hover:border-line-strong hover:shadow-pop",
+          ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
+          : "border-line hover:border-line-strong",
         className,
       )}
     >
@@ -208,7 +208,7 @@ export function ModelCard({
             <Icon name="check" size={13} strokeWidth={2.5} />
           </span>
         ) : mark ? (
-          <span className="absolute top-2 right-2 inline-flex h-5 items-center gap-1 rounded-full bg-black/60 pr-2 pl-1.5 text-[10px] font-semibold text-white backdrop-blur-[2px]">
+          <span className="absolute top-2 right-2 inline-flex h-5 items-center gap-1 rounded-xs bg-black/60 pr-1.5 pl-1 text-[10px] font-semibold text-white backdrop-blur-[2px]">
             <Icon name={mark.icon} size={11} strokeWidth={2.25} className={MARK_ICON[mark.tone]} />
             {mark.label}
           </span>
@@ -230,7 +230,7 @@ export function ModelCard({
           className="absolute inset-x-0 top-0 z-10 flex flex-col items-center justify-center gap-1.5 text-white focus-ring"
           style={{ aspectRatio: String(ratio) }}
         >
-          <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-2xs font-semibold tracking-wide uppercase">
+          <span className="inline-flex items-center gap-1 rounded-xs bg-black/55 px-1.5 py-0.5 text-2xs font-semibold tracking-wide uppercase">
             <Icon name="eye-off" size={12} />
             NSFW
           </span>
@@ -244,7 +244,7 @@ export function ModelCard({
           aria-pressed={favorite}
           onClick={onFavorite}
           className={cn(
-            "absolute top-2 right-2 grid h-7 w-7 place-items-center rounded-full bg-black/45 text-white/80 backdrop-blur-[2px] transition-opacity hover:text-white",
+            "absolute top-2 right-2 grid h-7 w-7 place-items-center rounded-sm bg-black/45 text-white/80 backdrop-blur-[2px] transition-opacity hover:text-white",
             favorite
               ? "opacity-100"
               : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",

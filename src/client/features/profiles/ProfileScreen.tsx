@@ -68,26 +68,6 @@ export function ProfileScreen() {
 
   return (
     <div className="relative flex h-full flex-col overflow-auto bg-bg">
-      {/* backdrop: accent light from above + faint dot grid */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "radial-gradient(60% 45% at 50% -8%, color-mix(in oklab, var(--accent) 22%, transparent), transparent 70%)",
-        }}
-      />
-      <svg
-        className="pointer-events-none absolute inset-0 h-full w-full text-fg opacity-[.035]"
-        aria-hidden="true"
-      >
-        <defs>
-          <pattern id="grid-dots" width="22" height="22" patternUnits="userSpaceOnUse">
-            <circle cx="1.5" cy="1.5" r="1.1" fill="currentColor" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill="url(#grid-dots)" />
-      </svg>
-
       <header className="relative flex items-center justify-between px-8 py-6">
         <Wordmark />
         <div className="flex items-center gap-3 text-xs text-fg-3">
@@ -163,7 +143,7 @@ export function ProfileScreen() {
                 onClick={() => setWizard(true)}
                 className={cn(
                   "group flex h-[248px] w-[200px] flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-line-strong text-fg-3 transition-all duration-200 focus-ring",
-                  "hover:-translate-y-1 hover:border-accent/60 hover:bg-accent/5 hover:text-fg",
+                  "hover:border-accent/60 hover:bg-accent/5 hover:text-fg",
                   !profiles.length && "w-[260px] border-accent/50 bg-accent/5 text-fg",
                 )}
               >
@@ -283,18 +263,10 @@ function ProfileCard({
         onClick={onOpen}
         className={cn(
           "relative flex h-[248px] w-[200px] flex-col items-center gap-4 overflow-hidden rounded-xl border bg-surface pt-9 pb-5 transition-all duration-200 focus-ring",
-          "border-line hover:-translate-y-1 hover:border-accent/60",
-          "hover:shadow-[0_18px_40px_-16px_color-mix(in_oklab,var(--accent)_60%,transparent)]",
-          opening && "-translate-y-1 border-accent",
+          "border-line hover:border-accent/60 hover:bg-surface-2",
+          opening && "border-accent",
         )}
       >
-        <span
-          className="pointer-events-none absolute inset-x-0 top-0 h-28 opacity-60 transition-opacity group-hover:opacity-100"
-          style={{
-            background:
-              "radial-gradient(70% 90% at 50% 0%, color-mix(in oklab, var(--accent) 30%, transparent), transparent)",
-          }}
-        />
         <motion.span layoutId={`avatar-${profile.id}`} transition={glide} className="relative">
           <Avatar
             name={profile.name}
@@ -313,7 +285,7 @@ function ProfileCard({
           <span className="text-2xs text-fg-4">{timeAgo(profile.lastOpenedAt)}</span>
         </span>
         {isLaunch ? (
-          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 rounded-full bg-accent/18 px-2 py-0.5 text-2xs font-medium text-accent-ink">
+          <span className="absolute top-2.5 left-2.5 inline-flex items-center gap-1 rounded-xs bg-accent/18 px-1.5 py-0.5 text-2xs font-medium text-accent-ink">
             <Icon name="bolt" size={11} />
             Auto-opens
           </span>

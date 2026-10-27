@@ -131,7 +131,7 @@ export function Lightbox({
           aria-label="Previous image"
           disabled={idx <= 0}
           onClick={() => go(-1)}
-          className="absolute top-1/2 left-4 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/8 text-white/80 hover:bg-white/15 focus-ring disabled:opacity-25"
+          className="absolute top-1/2 left-4 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md bg-white/8 text-white/80 hover:bg-white/15 focus-ring disabled:opacity-25"
         >
           <Icon name="chevron-left" size={22} />
         </button>
@@ -140,7 +140,7 @@ export function Lightbox({
           aria-label="Next image"
           disabled={idx >= images.length - 1}
           onClick={() => go(1)}
-          className="absolute top-1/2 right-4 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-full bg-white/8 text-white/80 hover:bg-white/15 focus-ring disabled:opacity-25"
+          className="absolute top-1/2 right-4 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-md bg-white/8 text-white/80 hover:bg-white/15 focus-ring disabled:opacity-25"
         >
           <Icon name="chevron-right" size={22} />
         </button>

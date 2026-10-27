@@ -128,7 +128,7 @@ function RatingChip({ value, onChange }: { value: number; onChange: (v: number) 
         <button
           type="button"
           className={cn(
-            "inline-flex h-6 items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors focus-ring",
+            "inline-flex h-6 items-center gap-1.5 rounded-sm border px-2.5 text-xs transition-colors focus-ring",
             value
               ? "border-accent/60 bg-accent/12 text-fg"
               : "border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg",
@@ -205,7 +205,7 @@ function FacetChip({
       trigger={
         <button
           type="button"
-          className="inline-flex h-6 items-center gap-1.5 rounded-full border border-line bg-field px-2.5 text-xs text-fg-2 transition-colors hover:border-line-strong hover:text-fg focus-ring data-[open]:border-accent/60"
+          className="inline-flex h-6 items-center gap-1.5 rounded-sm border border-line bg-field px-2.5 text-xs text-fg-2 transition-colors hover:border-line-strong hover:text-fg focus-ring data-[open]:border-accent/60"
         >
           <Icon name={icon} size={12} />
           {label}

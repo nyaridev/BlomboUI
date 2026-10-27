@@ -6,11 +6,12 @@ How BlomboUI looks, moves and reads. The Design Lab (`/lab`, or avatar menu → 
 
 A dark, calm, precise workspace for making images. The images are the color; the UI stays out of their way.
 
-- **Deep blue-black surfaces**, one blue accent (the profile can change it), and **orange reserved for Generate**.
+- **Deep blue-black surfaces**, one blue accent (the profile can change it), and **orange reserved for Generate** (`#e04800`, its own token, whatever the accent).
+- **Tight corners, flat fills.** Controls have 4 px corners, cards 5, dialogs 6; nothing goes past 8. Fills are flat: no bevels, no glows, one tight shadow for floating layers. Only avatars, status dots, slider tracks and thumbs, switches and progress bars are fully round.
 - **Hand-built controls.** No component-library look. Every control is drawn here and behaves the same everywhere.
 - **Quick, physical motion.** Springs, not easing curves. Things respond at once and settle without wobbling.
 - **Dense but breathable.** 13 px UI text, 8 px grid, generous gaps between groups and tight gaps inside them.
-- **No glassmorphism, no gradients-as-decoration, no emoji icons.** The two gradients we use are functional: the Generate button and the avatar monogram.
+- **No glassmorphism, no gradients-as-decoration, no emoji icons.** Gradients only where they do a job: avatar monograms and accent swatches, placeholder art, and dark scrims behind text on images. The Generate button is a flat orange fill.
 
 ## Tokens
 
@@ -27,7 +28,7 @@ All raw colors live in `src/client/styles/tokens.css`. Tailwind sees only tokens
 | Palette | `red`…`pink` + `-ink` | Model-kind colors, tags, charts. `-ink` for text |
 | Status | `success`, `warning`, `danger`, `info` | Always with an icon or a word, never color alone |
 | Syntax | `syn-weight`, `syn-lora`, `syn-wildcard`, `syn-break`, `syn-escape`, `syn-invalid` | Prompt editor and the prompt guide |
-| Depth | `shadow-card`, `shadow-pop`, `bevel-primary`, `bevel-generate`, `shadow-thumb`, `shadow-knob` | Cards, floating layers, raised fills (primary buttons, Generate), slider and switch handles. Use them as `shadow-[var(--…)]`; never write an `rgb()` shadow in a component |
+| Depth | `shadow-card`, `shadow-pop`, `shadow-thumb`, `shadow-knob` | Cards (a hairline top edge), floating layers (one tight `0 8px 24px` shadow), slider and switch handles. Use them as `shadow-pop` / `shadow-[var(--…)]`; never write an `rgb()` shadow in a component. No glows, no bevels |
 
 **Themes** (`blombo`, `slate`, `midnight`, `ember`, `moss`, `light`) override surface and text tokens on `<html data-theme>`. **Profile accents** (`blue`, `purple`, `pink`, `red`, `orange`, `yellow`, `green`, `cyan`) override `--accent*` on `<html data-accent>`. Any subtree can preview another theme by setting `data-theme` on itself, which is how the theme picker cards work.
 
@@ -44,7 +45,8 @@ All raw colors live in `src/client/styles/tokens.css`. Tailwind sees only tokens
 
 ## Shape and space
 
-- Radius: `xs` 4 (badges, kbd) · `sm` 6 (small controls) · `md` 8 (controls) · `lg` 12 (cards) · `xl` 16 (dialogs, stage) · `2xl` 22 (hero).
+- Radius: `xs` 2 (badges on images, kbd, tiny chips) · `sm` 3 (small buttons, chips, tags) · `md` 4 (buttons, inputs, selects, Generate) · `lg` 5 (cards, menus, popovers, toasts) · `xl` 6 (dialogs, palette, image stage) · `2xl` 8 (the largest frames). Bare `rounded` is 4.
+- `rounded-full` only for avatars, status and pager dots, color swatches, count badges, slider tracks and thumbs, switches, progress bars and spinners. Buttons (including icon buttons over images), chips, tags and badges with words are square-ish.
 - Control heights: `sm` 28 · `md` 32 · `lg` 40. A toolbar row uses one height.
 - Gaps: 4–6 inside a control group, 8–12 between controls in a card, 12–16 between cards, 24–40 between page sections.
 - `card` utility: border + hairline top highlight + `radius-lg`. Use it for *objects* (a model, a stage, a stat), not for every block.
@@ -163,6 +165,6 @@ Presets in `src/client/lib/motion.ts`:
 - Visible focus ring (`focus-ring` utility / global `:focus-visible`) on everything interactive.
 - Every icon-only control has a label. Radios, tabs and sliders expose their ARIA roles and values.
 - Keyboard: arrows in segmented controls, tabs, menus and selects; Enter/Escape in editable values; `1`–`9` on the profile screen; app shortcuts from `shared/shortcuts.ts` (Ctrl+1–8 views, Ctrl+Enter generate, Ctrl+K palette, F1 help, R rescan…), rebindable in Settings → Shortcuts. Show keys with `useShortcutLabel()`, never a hardcoded string.
-- Contrast, checked by `src/client/styles/contrast.test.ts` for every theme × accent on every surface (`bg` to `field`): `fg`, `fg-2`, `fg-3`, every `-ink` and the syntax colors 4.5:1; `fg-4` 3:1 (hints, counts, disabled); `on-accent` on `accent` 4.5:1 (yellow, green and cyan accents use dark text; orange and pink use a shade deeper than their palette color). A new text token goes into that test. Known exception: white on the Generate gradient is 3.9:1 (the label is 18 px semibold); it's the brand orange, left for the owner to decide.
+- Contrast, checked by `src/client/styles/contrast.test.ts` for every theme × accent on every surface (`bg` to `field`): `fg`, `fg-2`, `fg-3`, every `-ink` and the syntax colors 4.5:1; `fg-4` 3:1 (hints, counts, disabled); `on-accent` on `accent` 4.5:1 (yellow, green and cyan accents use dark text; orange and pink use a shade deeper than their palette color). A new text token goes into that test. Known exception: white on the Generate orange is about 4.1:1 (3.9:1 in Light); the label is 18 px semibold, so it passes as large text.
 - Modal layers that aren't a `Dialog` (the lightbox, the tour) use `useModalFocus(ref)` from `lib/hooks`: focus moves in, Tab stays inside, focus returns on close. A file input is opened from a real `Button` (a `<label>` around a hidden input can't be reached with Tab). A slider without a visible label takes `ariaLabel`.
 - Status is never color alone: the header's ComfyUI dot gets a word (Stopped, Starting, Offline…) whenever ComfyUI isn't simply running.

@@ -560,7 +560,7 @@ function StyleGlyph({ style, active }: { style: string; active: boolean }) {
       return (
         <span className="flex gap-0.5">
           {[0, 1, 2].map((i) => (
-            <span key={i} className={cn("h-2.5 w-4 rounded-full", i === 1 ? c : line)} />
+            <span key={i} className={cn("h-2.5 w-4 rounded-xs", i === 1 ? c : line)} />
           ))}
         </span>
       );
@@ -595,6 +595,6 @@ function StyleGlyph({ style, active }: { style: string; active: boolean }) {
         </span>
       );
     default:
-      return <span className={cn("block h-2 w-10 rounded-full", line)} />;
+      return <span className={cn("block h-2 w-10 rounded-xs", line)} />;
   }
 }

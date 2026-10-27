@@ -65,14 +65,14 @@ export function Marks({
               {tags.map((t) => (
                 <span
                   key={t}
-                  className="inline-flex h-6 items-center gap-1 rounded-full border border-line bg-field pr-1 pl-2.5 text-xs text-fg-2"
+                  className="inline-flex h-6 items-center gap-1 rounded-sm border border-line bg-field pr-1 pl-2 text-xs text-fg-2"
                 >
                   {t}
                   <button
                     type="button"
                     aria-label={`Remove tag ${t}`}
                     onClick={() => tagImages.mutate({ ids: [image.id], remove: [t] })}
-                    className="grid h-4 w-4 place-items-center rounded-full text-fg-3 hover:bg-field-hover hover:text-fg focus-ring"
+                    className="grid h-4 w-4 place-items-center rounded-xs text-fg-3 hover:bg-field-hover hover:text-fg focus-ring"
                   >
                     <Icon name="x" size={10} />
                   </button>
@@ -103,7 +103,7 @@ export function Marks({
                   key={s.tag}
                   type="button"
                   onClick={() => addTag(s.tag)}
-                  className="rounded-full border border-dashed border-line px-2 py-0.5 text-2xs text-fg-3 hover:border-line-strong hover:text-fg focus-ring"
+                  className="rounded-sm border border-dashed border-line px-2 py-0.5 text-2xs text-fg-3 hover:border-line-strong hover:text-fg focus-ring"
                 >
                   + {s.tag}
                 </button>

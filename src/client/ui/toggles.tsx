@@ -241,7 +241,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border transition-colors duration-150",
+        "inline-flex items-center rounded-sm border transition-colors duration-150",
         size === "sm" ? "h-6 text-xs" : "h-7 text-sm",
         selected
           ? "border-accent/60 bg-accent/15 text-fg"
@@ -254,7 +254,7 @@ export function Chip({
         aria-pressed={onClick ? Boolean(selected) : undefined}
         onClick={onClick}
         className={cn(
-          "inline-flex h-full items-center gap-1.5 rounded-full focus-ring",
+          "inline-flex h-full items-center gap-1.5 rounded-sm focus-ring",
           size === "sm" ? "px-2.5" : "px-3",
           onRemove && "pr-1",
         )}
@@ -270,7 +270,7 @@ export function Chip({
           type="button"
           aria-label="Remove"
           onClick={onRemove}
-          className="mr-1 grid h-5 w-5 place-items-center rounded-full text-fg-3 hover:bg-field-hover hover:text-fg focus-ring"
+          className="mr-1 grid h-5 w-5 place-items-center rounded-xs text-fg-3 hover:bg-field-hover hover:text-fg focus-ring"
         >
           <Icon name="x" size={12} />
         </button>

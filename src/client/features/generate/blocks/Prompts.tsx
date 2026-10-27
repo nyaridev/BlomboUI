@@ -128,9 +128,8 @@ export function GenerateActions() {
         disabled={!ready}
         onClick={() => void generate()}
         className={cn(
-          "group relative flex h-[92px] flex-col items-center justify-center gap-1 overflow-hidden rounded-xl text-on-generate focus-ring disabled:opacity-50",
-          "bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] shadow-[var(--bevel-generate)]",
-          "transition-[box-shadow,filter] duration-200 hover:shadow-glow hover:brightness-105",
+          "group relative flex h-[92px] flex-col items-center justify-center gap-1 overflow-hidden rounded-md text-on-generate focus-ring disabled:opacity-50",
+          "bg-generate transition-[filter] duration-150 hover:brightness-110",
         )}
       >
         {running ? (

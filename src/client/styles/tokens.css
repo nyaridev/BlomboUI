@@ -24,7 +24,7 @@
   --overlay: rgb(3 5 8 / 0.72);
 
   /* text */
-  --fg: #e3e9f0;
+  --fg: #dde4ec;
   --fg-2: #a8b4c0;
   --fg-3: #7d8995;
   --fg-4: #616c79;
@@ -40,7 +40,7 @@
   --green-ink: #40f090;
   --cyan: #00a0b0;
   --cyan-ink: #40f0f0;
-  --blue: #2a56e8;
+  --blue: #2050e0;
   --blue-ink: #7aa2ff;
   --purple: #7020e0;
   --purple-ink: #b07cff;
@@ -51,9 +51,11 @@
   --accent: var(--blue);
   --accent-ink: var(--blue-ink);
   --on-accent: #ffffff;
-  --generate: #e64a06;
-  --generate-hi: #ff7a2e;
-  --generate-ink: #ff9a5c;
+  /* Generate has its own orange whatever the accent; -hi is the bright fill (progress,
+     sliders, dots), -ink the orange text on dark */
+  --generate: #e04800;
+  --generate-hi: #ff8a40;
+  --generate-ink: #ff8a40;
   --on-generate: #ffffff;
 
   /* status */
@@ -71,16 +73,10 @@
   --syn-invalid: #ff5a78;
   --syn-comment: #4a5562;
 
-  /* depth: a hairline top highlight instead of glass or heavy shadows */
+  /* depth: flat fills and borders; one tight shadow for floating layers, no glows or bevels */
   --edge-hi: rgb(255 255 255 / 0.035);
-  --shadow-pop: 0 18px 48px -12px rgb(0 0 0 / 0.7), 0 2px 6px rgb(0 0 0 / 0.35);
-  --shadow-card: 0 1px 0 var(--edge-hi) inset, 0 1px 2px rgb(0 0 0 / 0.25);
-  --glow-generate:
-    0 0 0 1px color-mix(in oklab, var(--generate-hi) 55%, transparent),
-    0 8px 28px -6px color-mix(in oklab, var(--generate) 70%, transparent);
-  /* raised fills (primary buttons, Generate): a light top edge, a darker bottom one */
-  --bevel-primary: inset 0 1px 0 rgb(255 255 255 / 0.18), 0 1px 2px rgb(0 0 0 / 0.3);
-  --bevel-generate: inset 0 1px 0 rgb(255 255 255 / 0.28), inset 0 -2px 0 rgb(0 0 0 / 0.15);
+  --shadow-pop: 0 8px 24px rgb(0 0 0 / 0.45);
+  --shadow-card: 0 1px 0 var(--edge-hi) inset;
   /* the round handles of sliders and switches */
   --shadow-thumb: 0 1px 3px rgb(0 0 0 / 0.5);
   --shadow-knob: 0 1px 2px rgb(0 0 0 / 0.4);
@@ -153,16 +149,16 @@
 [data-theme="light"] {
   color-scheme: light;
   --bg: #e8ecf0;
-  --surface: #f6f8fa;
+  --surface: #f4f6f8;
   --surface-2: #ffffff;
   --surface-3: #ffffff;
   --field: #ffffff;
   --field-hover: #f2f5f8;
   --sunken: #e1e6eb;
-  --line: #d2d9e0;
+  --line: #c8d0d8;
   --line-strong: #b8c2cc;
   --overlay: rgb(20 26 33 / 0.45);
-  --fg: #172029;
+  --fg: #1c242c;
   --fg-2: #3a4450;
   --fg-3: #5c6874;
   --fg-4: #7c8793;
@@ -174,7 +170,7 @@
   --blue-ink: #2448c8;
   --purple-ink: #6a2ad0;
   --pink-ink: #c01a70;
-  --generate: #d65410;
+  --generate: #d06020;
   --generate-hi: #f07228;
   --generate-ink: #b2480f;
   --syn-weight: #8a6100;
@@ -185,8 +181,8 @@
   --syn-invalid: #c02040;
   --syn-comment: #9aa5b0;
   --edge-hi: rgb(255 255 255 / 0.7);
-  --shadow-pop: 0 18px 40px -14px rgb(23 32 41 / 0.28), 0 2px 6px rgb(23 32 41 / 0.08);
-  --shadow-card: 0 1px 2px rgb(23 32 41 / 0.06);
+  --shadow-pop: 0 8px 24px rgb(23 32 41 / 0.18);
+  --shadow-card: none;
 }
 
 /* Profile accent. Set on <html data-accent="…">. Light-on-color families (yellow, green, cyan)

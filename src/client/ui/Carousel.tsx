@@ -118,7 +118,7 @@ export function Carousel({
               variant="secondary"
               size="sm"
               onClick={() => go(-1)}
-              className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-full opacity-0 shadow-pop transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-md opacity-0 shadow-pop transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
             />
             <IconButton
               icon="chevron-right"
@@ -126,18 +126,18 @@ export function Carousel({
               variant="secondary"
               size="sm"
               onClick={() => go(1)}
-              className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-full opacity-0 shadow-pop transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-md opacity-0 shadow-pop transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
             />
           </>
         ) : null}
         <div className="pointer-events-none absolute inset-x-2 bottom-2 z-20 flex items-center gap-1.5">
           {current.video ? (
-            <span className="inline-flex h-5 items-center gap-1 rounded-full bg-black/60 px-2 text-[10px] font-semibold text-white">
+            <span className="inline-flex h-5 items-center gap-1 rounded-xs bg-black/60 px-1.5 text-[10px] font-semibold text-white">
               <Icon name="play" size={10} />
               Video · first frame
             </span>
           ) : null}
-          <span className="ml-auto rounded-full bg-black/60 px-2 py-0.5 font-mono text-[10px] text-white tabular">
+          <span className="ml-auto rounded-xs bg-black/60 px-1.5 py-0.5 font-mono text-[10px] text-white tabular">
             {index + 1} / {count}
           </span>
         </div>

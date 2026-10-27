@@ -9,7 +9,9 @@ paths:
 
 Full spec: `docs/design-system.md`. Live reference: the Design Lab (`/lab`).
 
-**Direction.** Dark, calm, precise. The images are the color; the UI stays out of their way. Hand-built controls, no component-library look. **No glassmorphism, no decorative gradients, no emoji icons.** Orange belongs to Generate only.
+**Direction.** Dark, calm, precise. The images are the color; the UI stays out of their way. Hand-built controls, no component-library look. **No glassmorphism, no decorative gradients, no emoji icons.** Orange belongs to Generate only: a flat `bg-generate` fill, whatever the accent.
+
+**Shape.** Tight corners and flat fills. `rounded-md` (4 px) for buttons and inputs, `rounded-lg` (5) for cards, menus and toasts, `rounded-xl` (6) for dialogs; nothing past `2xl` (8). `rounded-full` only for avatars, dots, swatches, count badges, slider tracks and thumbs, switches, progress bars and spinners; buttons, chips, tags and word badges stay square-ish. No glows, bevels, hover lifts or big soft shadows: floating layers use `shadow-pop`.
 
 **Color**
 - Raw colors only in `src/client/styles/tokens.css`. Tailwind's default palette is cleared, so use token classes: `bg-surface`, `bg-surface-2`, `bg-field`, `bg-sunken`, `border-line`, `text-fg/fg-2/fg-3/fg-4`, `text-accent-ink`, `bg-accent`, palette `bg-purple/15 text-purple-ink`.

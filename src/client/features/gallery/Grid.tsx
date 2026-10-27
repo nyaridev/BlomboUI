@@ -186,7 +186,7 @@ export const Tile = memo(function Tile({
       ) : null}
       {image.rating ? (
         <div
-          className="pointer-events-none absolute top-1.5 left-1.5 flex items-center gap-0.5 rounded-full bg-black/45 px-1.5 py-0.5 font-mono text-2xs text-white/90 tabular"
+          className="pointer-events-none absolute top-1.5 left-1.5 flex items-center gap-0.5 rounded-xs bg-black/45 px-1.5 py-0.5 font-mono text-2xs text-white/90 tabular"
           role="img"
           aria-label={`${image.rating} of 5 stars`}
         >
@@ -200,7 +200,7 @@ export const Tile = memo(function Tile({
         aria-pressed={image.favorite}
         onClick={() => favorite.mutate({ ids: [image.id], favorite: !image.favorite })}
         className={cn(
-          "absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-full bg-black/40 text-white transition-opacity hover:bg-black/60 focus-ring",
+          "absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-sm bg-black/40 text-white transition-opacity hover:bg-black/60 focus-ring",
           image.favorite
             ? "opacity-100"
             : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",

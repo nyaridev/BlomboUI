@@ -210,8 +210,8 @@ function Appearance() {
                 <div className="flex h-14 gap-1.5 rounded-md border border-line bg-surface p-1.5">
                   <div className="w-7 rounded-sm bg-surface-2" />
                   <div className="flex flex-1 flex-col gap-1">
-                    <div className="h-2 w-3/4 rounded-full bg-field" />
-                    <div className="h-2 w-1/2 rounded-full bg-field" />
+                    <div className="h-2 w-3/4 rounded-xs bg-field" />
+                    <div className="h-2 w-1/2 rounded-xs bg-field" />
                     <div className="mt-auto flex gap-1">
                       <div className="h-3 w-8 rounded-sm bg-accent" />
                       <div className="h-3 w-5 rounded-sm bg-generate" />

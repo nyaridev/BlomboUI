@@ -201,7 +201,7 @@ export function Veil({
           className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1.5 bg-black/25 text-white focus-ring"
           aria-label={`${label}: click to reveal`}
         >
-          <span className="inline-flex items-center gap-1 rounded-full bg-black/55 px-2 py-0.5 text-2xs font-semibold tracking-wide uppercase">
+          <span className="inline-flex items-center gap-1 rounded-xs bg-black/55 px-1.5 py-0.5 text-2xs font-semibold tracking-wide uppercase">
             <Icon name="eye-off" size={12} />
             {label}
           </span>

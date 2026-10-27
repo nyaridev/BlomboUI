@@ -424,8 +424,8 @@ export function ProfileWizard({
                             <div className="flex h-12 gap-1.5 rounded-md border border-line bg-surface p-1.5">
                               <div className="w-6 rounded-sm bg-surface-2" />
                               <div className="flex flex-1 flex-col gap-1">
-                                <div className="h-2 w-3/4 rounded-full bg-field" />
-                                <div className="h-2 w-1/2 rounded-full bg-field" />
+                                <div className="h-2 w-3/4 rounded-xs bg-field" />
+                                <div className="h-2 w-1/2 rounded-xs bg-field" />
                                 <div className="mt-auto h-2.5 w-8 rounded-sm bg-accent" />
                               </div>
                             </div>

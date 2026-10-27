@@ -505,7 +505,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
           <Row label="Generate">
             <button
               type="button"
-              className="flex h-[72px] w-[220px] flex-col items-center justify-center gap-1 rounded-xl bg-[linear-gradient(180deg,var(--generate-hi),var(--generate))] text-on-generate shadow-[var(--bevel-generate)] transition-shadow hover:shadow-glow focus-ring"
+              className="flex h-[72px] w-[220px] flex-col items-center justify-center gap-1 rounded-md bg-generate text-on-generate transition-[filter] hover:brightness-110 focus-ring"
             >
               <span className="flex items-center gap-2 text-lg font-semibold">
                 <Icon name="sparkle" size={19} strokeWidth={2} /> Generate
@@ -929,6 +929,26 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 .card utility: border, hairline highlight, radius-lg
               </div>
             </div>
+          </div>
+          <h3 className="label-caps mt-6 mb-3">Corners</h3>
+          <div className="flex flex-wrap items-start gap-4">
+            {(
+              [
+                ["rounded-xs", "xs · 2px", "small chips, badges"],
+                ["rounded-sm", "sm · 3px", "small buttons, chips"],
+                ["rounded-md", "md · 4px", "buttons, inputs, Generate"],
+                ["rounded-lg", "lg · 5px", "cards, menus, toasts"],
+                ["rounded-xl", "xl · 6px", "dialogs, palette"],
+                ["rounded-2xl", "2xl · 8px", "the largest frames"],
+                ["rounded-full", "full", "avatars, dots, sliders, switches"],
+              ] as const
+            ).map(([cls, name, use]) => (
+              <div key={cls} className="flex w-28 flex-col gap-1.5">
+                <div className={cn("h-14 border border-line-strong bg-field", cls)} />
+                <span className="font-mono text-2xs text-fg">{name}</span>
+                <span className="text-2xs text-fg-3">{use}</span>
+              </div>
+            ))}
           </div>
         </Section>
 

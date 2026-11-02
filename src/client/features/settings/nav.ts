@@ -30,14 +30,14 @@ export const SETTINGS_PAGES: Array<{
     label: "Overview",
     icon: "gauge",
     group: "",
-    keywords: "stats usage images gpu time",
+    keywords: "stats usage images gpu time name rename picture avatar",
   },
   {
     id: "appearance",
     label: "Appearance",
     icon: "palette",
     group: "Profile",
-    keywords: "picture avatar image theme color accent font motion nsfw blur",
+    keywords: "theme color accent font motion nsfw blur",
   },
   {
     id: "files",

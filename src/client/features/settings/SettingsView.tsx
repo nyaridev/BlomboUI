@@ -29,7 +29,6 @@ import { GeneratePage } from "./GeneratePage";
 import { NotificationsPage } from "./NotificationsPage";
 import { type SettingsPage as PageId, SETTINGS_PAGES, useSettingsNav } from "./nav";
 import { OverviewPage } from "./OverviewPage";
-import { ProfilePicture } from "./ProfilePicture";
 import { ShortcutsPage } from "./ShortcutsPage";
 
 export function SettingsView() {
@@ -184,7 +183,6 @@ function Appearance() {
     <>
       <PageHeader title="Appearance" />
       <div className="flex flex-col gap-8">
-        {profile ? <ProfilePicture profile={profile} /> : null}
         <Field label="Theme" layout="left">
           <div className="grid grid-cols-3 gap-2">
             {THEMES.map((t) => (
@@ -230,11 +228,13 @@ function Appearance() {
                 aria-label={a}
                 aria-pressed={a === accent}
                 onClick={() => save({ accent: a })}
+                // The selected ring is drawn inside the swatch, so it never spills onto its
+                // neighbors: a ring in the text color, then a gap in the page color.
                 className={cn(
-                  "grid h-8 w-8 place-items-center rounded-full transition-transform focus-ring",
+                  "grid h-8 w-8 place-items-center rounded-full focus-ring",
                   a === accent
-                    ? "scale-110 ring-2 ring-fg ring-offset-2 ring-offset-bg"
-                    : "hover:scale-105",
+                    ? "shadow-[inset_0_0_0_2px_var(--fg),inset_0_0_0_4px_var(--bg)]"
+                    : "hover:shadow-[inset_0_0_0_2px_var(--line-strong)]",
                 )}
                 style={{ background: `linear-gradient(135deg, var(--${a}-ink), var(--${a}))` }}
               >

@@ -6,6 +6,20 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev:headless"],
       "port": 4382
+    },
+    {
+      "name": "blombo-throwaway",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "concurrently",
+        "-k",
+        "-n",
+        "server,web",
+        "node src/server/main.ts --dev --port 4391 --open none --data runtime/throwaway/data --runtime runtime/throwaway/runtime",
+        "vite"
+      ],
+      "env": { "BLOMBO_API_PORT": "4391", "BLOMBO_WEB_PORT": "4392" },
+      "port": 4392
     }
   ]
 }

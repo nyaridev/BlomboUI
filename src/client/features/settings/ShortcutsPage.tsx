@@ -2,11 +2,13 @@
  * Settings → Shortcuts: every shortcut, searchable. App-wide actions can be rebound (click the
  * keys, press new ones; Backspace removes the shortcut, Escape cancels); keys that belong to one
  * view are listed below them, read-only. Overrides are saved in settings.shortcuts.overrides.
+ * Three layouts are on trial behind the dev Layouts panel.
  */
 import { pauseShortcuts } from "@client/app/useShortcuts";
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useSettings, useUpdateSettings } from "@client/lib/queries";
+import { useVariant } from "@client/lib/variants";
 import { Button, IconButton, Kbd, Panel, TextField } from "@client/ui";
 import {
   comboFromEvent,
@@ -16,11 +18,18 @@ import {
   resolveShortcuts,
   SHORTCUT_ACTIONS,
   SHORTCUT_GROUPS,
+  type ShortcutAction,
   setShortcut,
   shortcutConflicts,
 } from "@shared/shortcuts";
-import { useEffect, useMemo, useState } from "react";
+import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "./common";
+
+const LAYOUTS = [
+  { id: "fields", label: "Key fields" },
+  { id: "table", label: "Table" },
+  { id: "cards", label: "Cards" },
+] as const;
 
 function Keys({ combo, muted }: { combo: string; muted?: boolean }) {
   const parts = combo.includes(" / ") ? combo.split(" / ") : [combo];
@@ -38,7 +47,22 @@ function Keys({ combo, muted }: { combo: string; muted?: boolean }) {
   );
 }
 
+/** One rebindable action, with everything a layout needs to draw it. */
+interface Item {
+  action: ShortcutAction;
+  combo: string;
+  changed: boolean;
+  /** Other actions with the same keys. */
+  clash: string[];
+  recording: boolean;
+  record: () => void;
+  stop: () => void;
+  onKey: (e: KeyboardEvent) => void;
+  reset: () => void;
+}
+
 export function ShortcutsPage() {
+  const layout = useVariant("shortcuts", "Shortcuts", LAYOUTS);
   const settings = useSettings().data;
   const update = useUpdateSettings();
   const overrides = settings?.shortcuts.overrides ?? [];
@@ -54,29 +78,50 @@ export function ShortcutsPage() {
 
   const q = query.trim().toLowerCase();
   const match = (text: string) => !q || text.toLowerCase().includes(q);
-  const actions = SHORTCUT_ACTIONS.filter(
-    (a) => match(a.label) || match(a.group) || match(bindings.get(a.id) ?? ""),
-  );
   const fixed = FIXED_SHORTCUTS.filter((f) => match(f.label) || match(f.where) || match(f.keys));
 
-  const onRecordKey = (action: string, e: React.KeyboardEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.key === "Escape") return setRecording(null);
-    if (e.key === "Backspace" || e.key === "Delete") {
-      save(setShortcut(overrides, action, ""));
-      return setRecording(null);
-    }
-    const combo = comboFromEvent(e.nativeEvent);
-    if (!combo) return;
-    save(setShortcut(overrides, action, combo));
-    setRecording(null);
+  const item = (a: ShortcutAction): Item => {
+    const combo = bindings.get(a.id) ?? "";
+    return {
+      action: a,
+      combo,
+      changed: overrides.some((o) => o.action === a.id),
+      clash: combo
+        ? (conflicts.get(combo) ?? [])
+            .filter((id) => id !== a.id)
+            .map((id) => SHORTCUT_ACTIONS.find((x) => x.id === id)?.label ?? id)
+        : [],
+      recording: recording === a.id,
+      record: () => setRecording(recording === a.id ? null : a.id),
+      stop: () => recording === a.id && setRecording(null),
+      onKey: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.key === "Escape") return setRecording(null);
+        if (e.key === "Backspace" || e.key === "Delete") {
+          save(setShortcut(overrides, a.id, ""));
+          return setRecording(null);
+        }
+        const next = comboFromEvent(e.nativeEvent);
+        if (!next) return;
+        save(setShortcut(overrides, a.id, next));
+        setRecording(null);
+      },
+      reset: () => save(overrides.filter((o) => o.action !== a.id)),
+    };
   };
+  const groups = SHORTCUT_GROUPS.map((group) => ({
+    group,
+    items: SHORTCUT_ACTIONS.filter(
+      (a) =>
+        a.group === group && (match(a.label) || match(a.group) || match(bindings.get(a.id) ?? "")),
+    ).map(item),
+  })).filter((g) => g.items.length);
 
   return (
     <>
       <PageHeader title="Shortcuts" />
-      <div className="mb-4 flex items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
         <TextField
           icon="search"
           size="sm"
@@ -84,7 +129,7 @@ export function ShortcutsPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
-          className="w-72"
+          className="w-72 max-lg:w-full"
         />
         <span className="ml-auto text-xs text-fg-3">
           {overrides.length
@@ -101,81 +146,31 @@ export function ShortcutsPage() {
           Reset all
         </Button>
       </div>
+      <p className="mb-6 flex items-center gap-2 text-xs text-fg-3">
+        <Icon name="edit" size={13} className="text-accent-ink" />
+        Click a shortcut to change it, then press the new keys. Backspace removes it, Esc cancels.
+      </p>
 
       <div className="flex flex-col gap-6">
-        {SHORTCUT_GROUPS.map((group) => {
-          const rows = actions.filter((a) => a.group === group);
-          if (!rows.length) return null;
-          return (
-            <section key={group} className="flex flex-col gap-2">
-              <h2 className="label-caps">{group}</h2>
-              <Panel className="flex flex-col divide-y divide-line">
-                {rows.map((a) => {
-                  const combo = bindings.get(a.id) ?? "";
-                  const changed = overrides.some((o) => o.action === a.id);
-                  const clash = combo ? conflicts.get(combo) : undefined;
-                  const isRecording = recording === a.id;
-                  return (
-                    <div key={a.id} className="flex min-h-11 items-center gap-3 px-4 py-1.5">
-                      <span className="flex min-w-0 flex-1 flex-col">
-                        <span className="text-sm text-fg">{a.label}</span>
-                        {clash ? (
-                          <span className="flex items-center gap-1 text-xs text-warning">
-                            <Icon name="info" size={12} />
-                            Same keys as{" "}
-                            {clash
-                              .filter((id) => id !== a.id)
-                              .map((id) => SHORTCUT_ACTIONS.find((x) => x.id === id)?.label)
-                              .join(", ")}
-                            ; only the first one runs.
-                          </span>
-                        ) : null}
-                      </span>
-                      {changed ? (
-                        <span className="text-2xs text-fg-4">
-                          default {normalizeCombo(a.keys) ? comboParts(a.keys).join(" ") : "none"}
-                        </span>
-                      ) : null}
-                      <button
-                        type="button"
-                        onClick={() => setRecording(isRecording ? null : a.id)}
-                        onKeyDown={isRecording ? (e) => onRecordKey(a.id, e) : undefined}
-                        onBlur={() => isRecording && setRecording(null)}
-                        aria-label={`${a.label}: ${combo || "no shortcut"}. Press to change.`}
-                        className={cn(
-                          "flex h-8 min-w-[120px] items-center justify-end gap-1 rounded-md border px-2 transition-colors focus-ring",
-                          isRecording
-                            ? "border-accent bg-accent/10 text-accent-ink"
-                            : "border-transparent hover:border-line hover:bg-field",
-                        )}
-                      >
-                        {isRecording ? (
-                          <span className="text-xs">Press keys… Backspace for none</span>
-                        ) : combo ? (
-                          <Keys combo={combo} />
-                        ) : (
-                          <span className="text-xs text-fg-4">None</span>
-                        )}
-                      </button>
-                      <IconButton
-                        icon="undo"
-                        size="sm"
-                        label="Back to the default"
-                        disabled={!changed}
-                        className={cn(!changed && "invisible")}
-                        onClick={() => save(overrides.filter((o) => o.action !== a.id))}
-                      />
-                    </div>
-                  );
-                })}
-              </Panel>
-            </section>
-          );
-        })}
+        {groups.map(({ group, items }) => (
+          <section key={group} className="flex flex-col gap-2">
+            <h2 className="label-caps">{group}</h2>
+            {layout === "fields" ? (
+              <FieldRows items={items} />
+            ) : layout === "table" ? (
+              <TableRows items={items} />
+            ) : (
+              <CardGrid items={items} />
+            )}
+          </section>
+        ))}
 
         {fixed.length ? (
           <section className="flex flex-col gap-2">
             <h2 className="label-caps">In one view</h2>
+            <p className="-mt-1 text-xs text-fg-3">
+              These belong to one screen and can't be changed.
+            </p>
             <Panel className="flex flex-col divide-y divide-line">
               {fixed.map((f) => (
                 <div
@@ -193,10 +188,172 @@ export function ShortcutsPage() {
           </section>
         ) : null}
 
-        {!actions.length && !fixed.length ? (
+        {!groups.length && !fixed.length ? (
           <p className="py-8 text-center text-sm text-fg-3">No shortcut matches “{query}”.</p>
         ) : null}
       </div>
     </>
+  );
+}
+
+/* ── pieces ───────────────────────────────────────────────────────────── */
+
+/**
+ * The keys as a control that looks editable: a field with a pencil, or (dashed) a chip.
+ * Click it and it records the next combo.
+ */
+function KeyButton({
+  item,
+  look,
+  className,
+}: {
+  item: Item;
+  look: "field" | "chip";
+  className?: string;
+}) {
+  const { action, combo, recording } = item;
+  return (
+    <button
+      type="button"
+      onClick={item.record}
+      onKeyDown={recording ? item.onKey : undefined}
+      onBlur={item.stop}
+      aria-label={`${action.label}: ${combo || "no shortcut"}. Press to change.`}
+      className={cn(
+        "group/key flex h-8 items-center gap-2 rounded-md border px-2 text-left transition-colors focus-ring",
+        recording
+          ? "border-accent bg-accent/10 text-accent-ink"
+          : look === "field"
+            ? "border-line bg-field hover:border-line-strong"
+            : "border-dashed border-line-strong hover:border-accent-ink/60 hover:bg-field",
+        className,
+      )}
+    >
+      <span className="flex min-w-0 flex-1 items-center gap-1">
+        {recording ? (
+          <span className="truncate text-xs">Press keys…</span>
+        ) : combo ? (
+          <Keys combo={combo} />
+        ) : (
+          <span className="text-xs text-fg-4">None</span>
+        )}
+      </span>
+      {recording ? (
+        <span className="text-2xs text-fg-3">Esc</span>
+      ) : (
+        <Icon
+          name="edit"
+          size={13}
+          className="shrink-0 text-fg-4 transition-colors group-hover/key:text-accent-ink"
+        />
+      )}
+    </button>
+  );
+}
+
+function Clash({ item }: { item: Item }) {
+  if (!item.clash.length) return null;
+  return (
+    <span className="flex items-center gap-1 text-xs text-warning">
+      <Icon name="info" size={12} />
+      Same keys as {item.clash.join(", ")}; only the first one runs.
+    </span>
+  );
+}
+
+const defaultLabel = (a: ShortcutAction) =>
+  normalizeCombo(a.keys) ? comboParts(a.keys).join(" ") : "none";
+
+function ResetButton({ item }: { item: Item }) {
+  return (
+    <IconButton
+      icon="undo"
+      size="sm"
+      label={`Back to the default (${defaultLabel(item.action)})`}
+      disabled={!item.changed}
+      className={cn(!item.changed && "invisible")}
+      onClick={item.reset}
+    />
+  );
+}
+
+/* ── 1. Key fields: rows like a form, the keys in a fixed-width field on the right ── */
+
+function FieldRows({ items }: { items: Item[] }) {
+  return (
+    <Panel className="flex flex-col divide-y divide-line">
+      {items.map((it) => (
+        <div key={it.action.id} className="flex min-h-12 items-center gap-3 px-4 py-2">
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-sm text-fg">{it.action.label}</span>
+            {it.changed ? (
+              <span className="text-xs text-fg-4">Default: {defaultLabel(it.action)}</span>
+            ) : null}
+            <Clash item={it} />
+          </span>
+          <KeyButton item={it} look="field" className="w-56 max-lg:w-40" />
+          <ResetButton item={it} />
+        </div>
+      ))}
+    </Panel>
+  );
+}
+
+/* ── 2. Table: Action · Shortcut · Default columns, the keys as dashed chips ── */
+
+function TableRows({ items }: { items: Item[] }) {
+  const cols = "grid grid-cols-[minmax(0,1fr)_200px_120px_32px] items-center gap-3";
+  return (
+    <Panel className="flex flex-col divide-y divide-line">
+      <div className={cn(cols, "px-4 py-2 text-2xs font-medium text-fg-4 max-lg:hidden")}>
+        <span>Action</span>
+        <span>Shortcut</span>
+        <span>Default</span>
+        <span />
+      </div>
+      {items.map((it) => (
+        <div
+          key={it.action.id}
+          className={cn(cols, "min-h-11 px-4 py-1.5 max-lg:grid-cols-[minmax(0,1fr)_auto_32px]")}
+        >
+          <span className="flex min-w-0 flex-col">
+            <span className="text-sm text-fg">{it.action.label}</span>
+            <Clash item={it} />
+          </span>
+          <KeyButton item={it} look="chip" className="w-full max-lg:w-36" />
+          <span
+            className={cn(
+              "font-mono text-xs max-lg:hidden",
+              it.changed ? "text-fg-2" : "text-fg-4",
+            )}
+          >
+            {defaultLabel(it.action)}
+          </span>
+          <ResetButton item={it} />
+        </div>
+      ))}
+    </Panel>
+  );
+}
+
+/* ── 3. Cards: two per row, the label above a full-width key field ── */
+
+function CardGrid({ items }: { items: Item[] }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 max-lg:grid-cols-1">
+      {items.map((it) => (
+        <Panel key={it.action.id} className="flex flex-col gap-2 p-3">
+          <div className="flex min-h-7 items-center gap-2">
+            <span className="min-w-0 flex-1 truncate text-sm text-fg">{it.action.label}</span>
+            {it.changed ? (
+              <span className="text-2xs text-fg-4">default {defaultLabel(it.action)}</span>
+            ) : null}
+            <ResetButton item={it} />
+          </div>
+          <KeyButton item={it} look="field" className="w-full" />
+          <Clash item={it} />
+        </Panel>
+      ))}
+    </div>
   );
 }

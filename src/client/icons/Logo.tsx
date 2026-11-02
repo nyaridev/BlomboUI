@@ -1,9 +1,14 @@
 import { cn } from "@client/lib/cn";
 
 /**
- * The Blombo mark: a lowercase "b" (stem + bowl) on an accent tile, with the generate-orange
- * spark. The tile follows the profile accent; the spark stays orange everywhere.
+ * The Blombo mark, Nodey: a ComfyUI node with a face. The left socket is an open input; the
+ * right one is the connected output, in generate orange (--mark-socket: white on the orange
+ * accent). The tile follows the profile accent.
+ * Same 32-grid shapes as favicon.svg; eyes and gaps are holes, so the tile shows through.
  */
+const NODEY =
+  "M7 12V11A3 3 0 0 1 10 8H22A3 3 0 0 1 25 11V12ZM7 13H25V14.25A3.25 3.25 0 0 0 25 20.75V21A3 3 0 0 1 22 24H10A3 3 0 0 1 7 21V20.75A3.25 3.25 0 0 0 7 14.25ZM12 16.25A1.25 1.25 0 0 1 14.5 16.25V18.75A1.25 1.25 0 0 1 12 18.75ZM17.5 16.25A1.25 1.25 0 0 1 20 16.25V18.75A1.25 1.25 0 0 1 17.5 18.75ZM4.5 17.5A2.5 2.5 0 1 0 9.5 17.5A2.5 2.5 0 1 0 4.5 17.5ZM6.1 17.5A0.9 0.9 0 1 0 7.9 17.5A0.9 0.9 0 1 0 6.1 17.5Z";
+
 export function Logo({ size = 28, className }: { size?: number; className?: string }) {
   return (
     <svg
@@ -13,25 +18,9 @@ export function Logo({ size = 28, className }: { size?: number; className?: stri
       className={cn("shrink-0", className)}
       aria-hidden="true"
     >
-      <defs>
-        <linearGradient id="blombo-tile" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="var(--accent-ink)" />
-          <stop offset="1" stopColor="var(--accent)" />
-        </linearGradient>
-      </defs>
-      <rect width="32" height="32" rx="9" fill="url(#blombo-tile)" />
-      <rect
-        x="0.5"
-        y="0.5"
-        width="31"
-        height="31"
-        rx="8.5"
-        fill="none"
-        stroke="rgb(255 255 255 / .18)"
-      />
-      <path d="M11 7.5v16" stroke="#fff" strokeWidth="3.2" strokeLinecap="round" fill="none" />
-      <circle cx="16.4" cy="18.6" r="5.2" stroke="#fff" strokeWidth="3.2" fill="none" />
-      <circle cx="23.6" cy="8.6" r="2.6" fill="var(--generate-hi)" />
+      <rect width="32" height="32" rx="7" fill="var(--accent)" />
+      <path d={NODEY} fill="var(--on-accent)" fillRule="evenodd" />
+      <circle cx="25" cy="17.5" r="2.5" fill="var(--mark-socket)" />
     </svg>
   );
 }

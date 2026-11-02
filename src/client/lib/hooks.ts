@@ -1,6 +1,6 @@
 import type { ViewId } from "@shared/constants";
 import { useNavigate } from "@tanstack/react-router";
-import { type RefObject, useEffect, useState } from "react";
+import { type RefObject, useEffect, useState, useSyncExternalStore } from "react";
 import { useSession } from "./session";
 
 /** Width of an element, kept current with ResizeObserver. */
@@ -94,4 +94,20 @@ export function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(t);
   }, [value, ms]);
   return settled;
+}
+
+// Tailwind's `lg` breakpoint: below it the layout is the compact one (`max-lg:` classes) that
+// phones, tablets and narrow windows get.
+const COMPACT = "(max-width: 1023.98px)";
+
+/** True below 1024px, for layouts CSS alone can't switch (a sidebar becoming a Sheet). */
+export function useCompact(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = matchMedia(COMPACT);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => matchMedia(COMPACT).matches,
+  );
 }

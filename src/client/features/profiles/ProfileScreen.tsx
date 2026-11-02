@@ -226,7 +226,7 @@ function ProfileCard({
           </span>
         ) : null}
       </button>
-      <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="absolute top-2 right-2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
         <Menu
           placement="bottom-end"
           width={220}

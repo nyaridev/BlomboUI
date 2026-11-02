@@ -21,11 +21,13 @@ Full spec: `docs/design-system.md`. Live reference: the Design Lab (`/lab`).
 
 **Type.** Geist / Geist Mono by default; the UI font is a setting through the `--font-ui` token, so never name a font family in components (use `font-sans` / `font-mono`). UI base `text-sm` (13 px). Group titles `label-caps`. Numbers `tabular`; seeds, sizes and paths `font-mono`. Headings `text-balance`.
 
-**Components.** Import from `@client/ui` only (`Button`, `IconButton`, `Slider`, `ScrubField`, `NumberField`, `Select`, `Segmented`, `Switch`, `Checkbox`, `Chip`, `Tabs`, `Tooltip`, `Popover`, `Menu`, `Dialog`, `Collapsible`, `InheritRow`, `ModelCard`, `Avatar`, `EmptyState`, `DropZone`, `Veil`, `ProgressBar`, `CopyButton`, `PropertyList`, `TreeRow`, `InlineInput`, `StarRating`, `CommandPalette`, `Tour`, `toast`…). Floating layers follow the z-index order in `docs/design-system.md` → Layers. Don't restyle a control locally: add a variant in `ui/` and show it in the Lab. Sensitive thumbnails use `Veil` / `ModelCard nsfw blurNsfw` (blurred until clicked, per the profile setting).
+**Components.** Import from `@client/ui` only (`Button`, `IconButton`, `Slider`, `ScrubField`, `NumberField`, `Select`, `Segmented`, `Switch`, `Checkbox`, `Chip`, `Tabs`, `Tooltip`, `Popover`, `Menu`, `Dialog`, `Sheet`, `Collapsible`, `InheritRow`, `ModelCard`, `Avatar`, `EmptyState`, `DropZone`, `Veil`, `ProgressBar`, `CopyButton`, `PropertyList`, `TreeRow`, `InlineInput`, `StarRating`, `CommandPalette`, `Tour`, `toast`…). Floating layers follow the z-index order in `docs/design-system.md` → Layers. Don't restyle a control locally: add a variant in `ui/` and show it in the Lab. Sensitive thumbnails use `Veil` / `ModelCard nsfw blurNsfw` (blurred until clicked, per the profile setting).
 
 **Icons.** `<Icon name>` from `@client/icons/Icon`, names from `icons/paths.ts`. Name new icons by action. Icon-only buttons are `IconButton` with a `label`.
 
 **Motion** (`lib/motion.ts`): `snappy` for direct responses, `bouncy` for arrivals, `glide` for large surfaces, `exitFast` for leaving. Keep it quick: ~100 ms for direct responses, ≤200 ms for large surfaces, hover fades 90 ms (the default), no transition on rows that follow the pointer or arrow keys. Shared morphs via `layoutId`. A sliding indicator sits on `z-0` under `z-10` labels.
+
+**Narrow screens.** Below 1024 px the layout is compact (`docs/design-system.md` → Narrow screens): add `max-lg:` classes on top of the desktop ones, never change the desktop layout to make room. Side-by-side panes stack or move into a `Sheet`; fixed widths get a `max-lg:` override. A control that appears on hover also gets `pointer-coarse:opacity-100`. Check new screens at 375 px wide as well.
 
 **Positioning gotcha.** Base styles live in `@layer base` so utilities win. When a component adds `relative` by default, let callers pass `absolute` (see `positioned()` in `ui/Art.tsx`) instead of stacking both.
 

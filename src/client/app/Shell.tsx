@@ -15,7 +15,7 @@ import { type ComponentType, lazy, type ReactNode, Suspense, useEffect, useState
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
-import { Header } from "./header/Header";
+import { Header, MobileNav } from "./header/Header";
 import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
 import { useTheme } from "./theme";
@@ -168,6 +168,7 @@ export function Shell() {
           )}
         </AnimatePresence>
       </main>
+      <MobileNav profileId={profileId} view={view} />
       <Palette />
     </div>
   );

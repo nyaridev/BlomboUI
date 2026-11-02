@@ -173,15 +173,15 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
   const unavailable = tab !== "wildcards" && models.data && !models.data.available;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
-      <div className="flex items-center gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3 max-lg:h-[75svh] max-lg:flex-none">
+      <div className="flex items-center gap-2 max-lg:flex-wrap">
         <TextField
           icon="search"
           placeholder={`Search ${tab === "other" ? OTHER_KINDS.find((k) => k.value === otherKind)?.label.toLowerCase() : tab}`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
-          className="w-80"
+          className="w-80 max-lg:w-auto max-lg:min-w-0 max-lg:flex-1"
         />
         {tab === "other" ? (
           <Segmented

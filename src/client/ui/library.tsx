@@ -315,7 +315,11 @@ export function PropertyList({
   const shown = items.filter((p) => p.value !== null && p.value !== undefined && p.value !== "");
   return (
     <dl
-      className={cn("grid gap-x-3 gap-y-1.5 text-sm", className)}
+      // Narrow screens: the label column shares the width instead of keeping its fixed size.
+      className={cn(
+        "grid gap-x-3 gap-y-1.5 text-sm max-lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]!",
+        className,
+      )}
       style={{ gridTemplateColumns: `${labelWidth}px minmax(0,1fr)` }}
     >
       {shown.map((p) => (
@@ -331,7 +335,7 @@ export function PropertyList({
               <CopyButton
                 text={p.copy}
                 label={`Copy ${p.label.toLowerCase()}`}
-                className="-my-0.5 opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                className="-my-0.5 opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100"
               />
             ) : null}
           </dd>
@@ -413,7 +417,7 @@ export function TreeRow({
         ) : null}
       </button>
       {actions ? (
-        <span className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <span className="flex shrink-0 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 group-focus-within:opacity-100">
           {actions}
         </span>
       ) : null}

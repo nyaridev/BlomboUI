@@ -36,11 +36,12 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
         : !ui.favorites && !ui.since);
 
   return (
-    <aside className="scroll-quiet flex w-[248px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-surface p-3">
+    <aside className="scroll-quiet flex w-[248px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-surface p-3 max-lg:w-full max-lg:flex-1 max-lg:border-r-0">
       <SideItem
         active={isView("all")}
         onClick={() =>
           ui.set({
+            drawer: false,
             view: "images",
             library: "all",
             favorites: false,
@@ -55,7 +56,14 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
       <SideItem
         active={isView("favorites")}
         onClick={() =>
-          ui.set({ view: "images", library: "all", favorites: true, since: null, collection: null })
+          ui.set({
+            drawer: false,
+            view: "images",
+            library: "all",
+            favorites: true,
+            since: null,
+            collection: null,
+          })
         }
         icon="heart"
         label="Favorites"
@@ -65,6 +73,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
         active={isView("week")}
         onClick={() =>
           ui.set({
+            drawer: false,
             view: "images",
             library: "all",
             favorites: false,
@@ -92,6 +101,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
             type="button"
             onClick={() =>
               ui.set({
+                drawer: false,
                 view: "images",
                 library: lib.id,
                 favorites: false,
@@ -139,7 +149,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
             </span>
           </button>
           {lib.builtin ? null : (
-            <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
               <Menu
                 width={210}
                 trigger={
@@ -184,6 +194,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
               type="button"
               onClick={() =>
                 ui.set({
+                  drawer: false,
                   view: "images",
                   library: "all",
                   favorites: false,
@@ -217,7 +228,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
                 </span>
               </span>
             </button>
-            <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+            <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
               <Menu
                 width={210}
                 trigger={
@@ -255,7 +266,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
       <div className="mt-auto flex flex-col gap-2 pt-4">
         <SideItem
           active={ui.view === "trash"}
-          onClick={() => ui.set({ view: "trash" })}
+          onClick={() => ui.set({ drawer: false, view: "trash" })}
           icon="trash"
           label="Trash"
           count={counts?.trash}
@@ -561,5 +572,18 @@ function CollectionDialog({
         </Field>
       </form>
     </Dialog>
+  );
+}
+
+/** Narrow screens: opens the sidebar (it's a Sheet there). */
+export function SidebarButton() {
+  const set = useGalleryUi((s) => s.set);
+  return (
+    <IconButton
+      icon="sidebar"
+      label="Libraries and collections"
+      onClick={() => set({ drawer: true })}
+      className="lg:hidden"
+    />
   );
 }

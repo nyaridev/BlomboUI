@@ -27,7 +27,7 @@ export function RollPanel({
   const result: RollResult | undefined = roll.data;
 
   return (
-    <aside className="flex w-[320px] shrink-0 flex-col border-l border-line bg-surface">
+    <aside className="flex w-[320px] shrink-0 flex-col border-l border-line bg-surface max-lg:h-[45%] max-lg:w-full max-lg:border-t max-lg:border-l-0">
       <div className="flex flex-col gap-2 border-b border-line p-3">
         <span className="flex items-center gap-1.5 text-sm font-medium text-fg">
           <Icon name="dice" size={15} className="text-accent-ink" />
@@ -89,7 +89,7 @@ export function RollPanel({
               <CopyButton
                 text={r.text}
                 label="Copy this roll"
-                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100"
               />
               <span className="font-mono text-[10px] text-fg-4" title="Seed">
                 {r.seed}

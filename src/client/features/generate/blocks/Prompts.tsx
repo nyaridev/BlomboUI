@@ -120,7 +120,7 @@ export function GenerateActions() {
   const scripted = script.plan ?? (script.error ? true : null);
 
   return (
-    <div className="flex w-[232px] shrink-0 flex-col gap-2">
+    <div className="flex w-[232px] shrink-0 flex-col gap-2 max-lg:w-full">
       <motion.button
         type="button"
         whileTap={{ scale: 0.97 }}
@@ -158,10 +158,11 @@ export function GenerateActions() {
           ) : script.error ? (
             <span>Script needs a fix</span>
           ) : (
-            <>
+            // Usually no keyboard on a narrow (touch) screen.
+            <span className="flex gap-1.5 max-lg:hidden">
               <Kbd onColor>Ctrl</Kbd>
               <Kbd onColor>Enter</Kbd>
-            </>
+            </span>
           )}
         </span>
       </motion.button>

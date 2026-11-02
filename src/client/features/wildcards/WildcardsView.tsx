@@ -2,9 +2,12 @@
  * Wildcard Manager: the profile's wildcards folder as a file tree, an editor for .txt and
  * .yaml files (raw text with YAML folding, lint and __reference__ completion, or line lists),
  * and a roll preview that samples what a wildcard expands to. Saving is atomic and refuses to
- * overwrite a file that changed on disk since it was opened.
+ * overwrite a file that changed on disk since it was opened. Narrow screens show one panel at a time:
+ * the tree, then the open file with a way back.
  */
 import { ApiError, api } from "@client/lib/api";
+import { cn } from "@client/lib/cn";
+import { useCompact } from "@client/lib/hooks";
 import { qk, useWildcardFile, useWildcardsChanged, useWildcardTree } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Badge, Button, EmptyState, IconButton, Kbd, Segmented, Skeleton, toast } from "@client/ui";
@@ -21,10 +24,11 @@ import { WildcardEditor } from "./WildcardEditor";
 
 export function WildcardsView() {
   const tree = useWildcardTree();
+  const open = useWildcardUi((s) => s.open);
   if (tree.isLoading)
     return (
       <div className="flex h-full">
-        <div className="w-[280px] space-y-2 border-r border-line p-3">
+        <div className="w-[280px] space-y-2 border-r border-line p-3 max-lg:w-full">
           {Array.from({ length: 8 }, (_, i) => (
             <Skeleton key={i} className="h-6" />
           ))}
@@ -60,19 +64,19 @@ export function WildcardsView() {
     );
   return (
     <div className="flex h-full">
-      <TreePanel tree={tree.data} />
-      <Editor names={tree.data.names} />
+      <TreePanel tree={tree.data} className={open ? "max-lg:hidden" : undefined} />
+      <Editor names={tree.data.names} className={open ? undefined : "max-lg:hidden"} />
     </div>
   );
 }
 
-function Editor({ names }: { names: string[] }) {
+function Editor({ names, className }: { names: string[]; className?: string }) {
   const open = useWildcardUi((s) => s.open);
   const file = useWildcardFile(open);
   if (!open)
     return (
       <EmptyState
-        className="flex-1"
+        className={cn("flex-1", className)}
         icon="wildcards"
         title="Pick a wildcard file"
         text="Open a file on the left or create one. In prompts, __colors__ picks a random line from colors.txt, and YAML keys work the same way: __outfits/fantasy__."
@@ -106,7 +110,9 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
   const draft = ui.drafts[file.path];
   const text = draft?.text ?? file.text;
   const [saving, setSaving] = useState(false);
-  const [rolling, setRolling] = useState(true);
+  const compact = useCompact();
+  // On a narrow screen the roll preview takes half the view, so it starts closed there.
+  const [rolling, setRolling] = useState(!compact);
   // Line-mode edits replace the text, so the raw editor reloads from it afterwards.
   const [rawKey, setRawKey] = useState(0);
 
@@ -176,9 +182,16 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
   }, [file.format, file.path, overrides]);
 
   return (
-    <div className="flex min-w-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-line px-4 py-2">
+    <div className="flex min-w-0 flex-1 max-lg:flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <div className="flex items-center gap-2 border-b border-line px-4 py-2 max-lg:flex-wrap max-lg:px-2">
+          <IconButton
+            icon="arrow-left"
+            label="Back to files"
+            size="sm"
+            onClick={() => ui.setOpen(null)}
+            className="lg:hidden"
+          />
           <span className="min-w-0 truncate font-mono text-sm text-fg" title={file.path}>
             {file.path}
           </span>
@@ -218,7 +231,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
               loading={saving}
               onClick={() => void save()}
             >
-              Save <Kbd className="ml-1">Ctrl S</Kbd>
+              Save <Kbd className="ml-1 max-lg:hidden">Ctrl S</Kbd>
             </Button>
           </div>
         </div>

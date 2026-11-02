@@ -279,7 +279,7 @@ function SavedFilters({
                     icon="x"
                     label={`Remove "${f.name}"`}
                     size="xs"
-                    className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                    className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100"
                     onClick={() => save(saved.filter((x) => x.id !== f.id))}
                   />
                 </div>

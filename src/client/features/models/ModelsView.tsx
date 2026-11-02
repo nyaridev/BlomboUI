@@ -17,7 +17,7 @@ export function ModelsView() {
   const setSub = useModelsNav((s) => s.setTab);
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-4 border-b border-line px-5 pt-2">
+      <div className="flex items-center gap-4 border-b border-line px-5 pt-2 max-lg:px-3">
         <Tabs
           variant="line"
           value={sub}
@@ -42,7 +42,10 @@ function FolderSummary() {
   const list = useLocalModels().data;
   if (!list?.root) return null;
   return (
-    <span className="ml-auto truncate pb-1.5 font-mono text-xs text-fg-3" title={list.root}>
+    <span
+      className="ml-auto truncate pb-1.5 font-mono text-xs text-fg-3 max-lg:hidden"
+      title={list.root}
+    >
       {list.root} · {list.models.length.toLocaleString()} files · {formatBytes(list.totalSize)}
     </span>
   );

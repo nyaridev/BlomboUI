@@ -4,7 +4,8 @@
  * active workflow's bindings and values; the params column is a layout document that's
  * editable in Customize mode. A batch workflow shows the batch runner instead of the prompts
  * and the image stage. Dropping an image anywhere loads its settings (ImageDrop); the first
- * visit starts the tour (GenerateTour).
+ * visit starts the tour (GenerateTour). On narrow screens the view scrolls as one column: prompt,
+ * Generate, then the image above the parameters; Customize stays a desktop tool.
  */
 import { glide } from "@client/lib/motion";
 import { useSession } from "@client/lib/session";
@@ -76,7 +77,7 @@ export function GenerateView() {
 
   return (
     <motion.div
-      className="relative flex h-full flex-col gap-3 p-3"
+      className="relative flex h-full flex-col gap-3 p-3 max-lg:scroll-quiet max-lg:overflow-y-auto max-lg:p-2"
       {...drop.handlers}
       initial="hidden"
       animate="show"
@@ -89,7 +90,7 @@ export function GenerateView() {
         <ModelsStrip onPick={(t) => setTab(t)} />
       </motion.div>
 
-      <motion.div variants={item} className="flex gap-3">
+      <motion.div variants={item} className="flex gap-3 max-lg:flex-col">
         <div data-tour="prompt" className="flex min-w-0 flex-1">
           <Prompts />
         </div>
@@ -98,14 +99,14 @@ export function GenerateView() {
         </div>
       </motion.div>
 
-      <motion.div variants={item} className="flex min-h-0 flex-1 flex-col">
+      <motion.div variants={item} className="flex min-h-0 flex-1 flex-col max-lg:flex-none">
         <div className="flex items-center gap-3">
           <Tabs
             variant="line"
             value={tab}
             onChange={setTab}
             label="Workspace"
-            className="flex-1"
+            className="min-w-0 flex-1"
             items={[
               { value: "generation", label: "Generation", icon: "sliders" },
               { value: "checkpoints", label: "Checkpoints", icon: "models" },
@@ -115,7 +116,7 @@ export function GenerateView() {
             ]}
           />
           {tab === "generation" && !customizing ? (
-            <div className="flex items-center gap-1.5 border-b border-line pb-1.5">
+            <div className="flex items-center gap-1.5 border-b border-line pb-1.5 max-lg:hidden">
               <LayoutPicker />
               <Button size="sm" icon="customize" onClick={() => setCustomizing(true)}>
                 Customize
@@ -125,9 +126,9 @@ export function GenerateView() {
         </div>
 
         {tab === "generation" ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3">
+          <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3 max-lg:flex-none">
             <AnimatePresence>{customizing ? <CustomizeBar /> : null}</AnimatePresence>
-            <div className="flex min-h-0 flex-1 gap-3">
+            <div className="flex min-h-0 flex-1 gap-3 max-lg:flex-none max-lg:flex-col-reverse">
               <div data-tour="params" className="contents">
                 <ParamsColumn />
               </div>

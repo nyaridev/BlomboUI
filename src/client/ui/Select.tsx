@@ -67,10 +67,11 @@ export function Select<T extends string>({
       flip({ padding: 8 }),
       sizeMw({
         padding: 8,
-        apply({ rects, availableHeight, elements }) {
+        apply({ rects, availableHeight, availableWidth, elements }) {
           Object.assign(elements.floating.style, {
             minWidth: `${rects.reference.width}px`,
             maxHeight: `${Math.min(340, availableHeight)}px`,
+            maxWidth: `${availableWidth}px`,
           });
         },
       }),

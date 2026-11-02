@@ -10,7 +10,7 @@ import { cn } from "@client/lib/cn";
 import { useGoToView } from "@client/lib/hooks";
 import { snappy } from "@client/lib/motion";
 import { useUpdateSettings, useWildcards } from "@client/lib/queries";
-import { Badge, Button, Kbd, Panel } from "@client/ui";
+import { Badge, Button, Kbd, Panel, Select } from "@client/ui";
 import { MODEL_FOLDERS } from "@shared/models";
 import { explainPrompt } from "@shared/prompt/explain";
 import { estimateTokens } from "@shared/prompt/tokenize";
@@ -60,8 +60,11 @@ export function HelpView() {
 
   return (
     <div ref={scroller} className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto grid max-w-[1120px] grid-cols-[220px_minmax(0,1fr)] gap-10 px-8 pt-8 pb-24">
-        <nav className="sticky top-8 flex flex-col gap-0.5 self-start" aria-label="Help topics">
+      <div className="mx-auto grid max-w-[1120px] grid-cols-[220px_minmax(0,1fr)] gap-10 px-8 pt-8 pb-24 max-lg:grid-cols-1 max-lg:gap-5 max-lg:px-3 max-lg:pt-3">
+        <nav
+          className="sticky top-8 flex flex-col gap-0.5 self-start max-lg:hidden"
+          aria-label="Help topics"
+        >
           <span className="label-caps px-2.5 pb-2 text-[10px]">Help</span>
           {HELP_TOPICS.map((t) => (
             <button
@@ -90,6 +93,14 @@ export function HelpView() {
             </button>
           ))}
         </nav>
+        {/* Narrow screens: the topics as a dropdown instead of a side menu. */}
+        <Select
+          label="Help topic"
+          value={active}
+          onChange={show}
+          options={HELP_TOPICS.map((t) => ({ value: t.id, label: t.title, icon: t.icon }))}
+          className="lg:hidden"
+        />
         <div className="flex min-w-0 max-w-[820px] flex-col gap-14">
           <GettingStarted />
           <LoadingModels />
@@ -242,7 +253,7 @@ function LoadingModels() {
       title="Loading models"
       lead="Models are files in the profile's models folder, one subfolder per kind, exactly as ComfyUI reads them. Subfolders inside a kind are fine."
     >
-      <Panel className="overflow-hidden">
+      <Panel className="overflow-hidden max-lg:overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs text-fg-3">
@@ -471,7 +482,7 @@ function PromptGuide() {
       title="Prompt guide"
       lead="Tags separated by commas, with a few marks for weight, LoRAs and randomness. The prompt editor colors each of them and underlines mistakes."
     >
-      <Panel className="overflow-hidden">
+      <Panel className="overflow-hidden max-lg:overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-line text-left text-xs text-fg-3">

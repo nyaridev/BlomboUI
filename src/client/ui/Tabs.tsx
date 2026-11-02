@@ -47,7 +47,8 @@ export function Tabs<T extends string>({
         role="tablist"
         aria-label={label}
         className={cn(
-          "flex items-center",
+          // Narrow screens: tabs that don't fit scroll sideways instead of being cut off.
+          "flex items-center max-lg:scroll-quiet max-lg:overflow-x-auto",
           variant === "pill" ? "gap-0.5" : "gap-1 border-b border-line",
           className,
         )}
@@ -67,7 +68,7 @@ export function Tabs<T extends string>({
               onClick={() => onChange(item.value)}
               onKeyDown={(e) => onKey(e, i)}
               className={cn(
-                "relative inline-flex items-center gap-2 text-sm font-medium transition-colors focus-ring",
+                "relative inline-flex shrink-0 items-center gap-2 text-sm font-medium transition-colors focus-ring",
                 variant === "pill" ? "h-8 rounded-md px-3" : "h-9 px-3",
                 active ? "text-fg" : "text-fg-3 hover:text-fg-2",
               )}
@@ -80,7 +81,7 @@ export function Tabs<T extends string>({
                     "absolute z-0",
                     variant === "pill"
                       ? "inset-0 rounded-md bg-field shadow-[inset_0_1px_0_var(--edge-hi)] ring-1 ring-line-strong"
-                      : "inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-ink",
+                      : "inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-ink max-lg:bottom-0",
                   )}
                 />
               ) : null}

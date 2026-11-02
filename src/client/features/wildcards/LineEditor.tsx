@@ -41,8 +41,8 @@ function YamlLines({ text, onChange }: { text: string; onChange: (text: string) 
       </div>
     );
   return (
-    <div className="flex h-full min-h-0">
-      <div className="flex w-56 shrink-0 flex-col border-r border-line">
+    <div className="flex h-full min-h-0 max-lg:flex-col">
+      <div className="flex w-56 shrink-0 flex-col border-r border-line max-lg:h-40 max-lg:w-full max-lg:border-r-0 max-lg:border-b">
         <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto p-1.5">
           {lists.map((l) => (
             <button
@@ -184,7 +184,7 @@ function LineList({
                   aria-label={`Line ${v.index + 1}`}
                   className="flex-1"
                 />
-                <span className="flex opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+                <span className="flex opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 group-focus-within:opacity-100">
                   <IconButton
                     icon="chevron-up"
                     label="Move up"

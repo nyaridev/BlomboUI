@@ -96,6 +96,7 @@ Presets in `src/client/lib/motion.ts`:
 | `UnitTabs` | A stage's units as small tabs with their run order, a sliding indicator, a strike-through for units that are off, a warning mark for units missing something, and an add button up to `max` |
 | `Badge`, `Kbd`, `StatusDot`, `Spinner`, `Skeleton`, `Meter`, `StageProgress`, `ProgressRing` | Feedback. `ProgressRing` is the small circle in header chips (generation queue, downloads), in the current text color. `Kbd onColor` sits on a filled surface (the Generate button). `Skeleton` stays hidden for its first 300 ms, so a fast local answer never flashes a placeholder |
 | `Dialog` | Modal with title, body and footer; `bare` drops the body's padding and scrolling so panes fill it (the profile wizard) |
+| `Sheet` | A side panel (`side="left"` or `"right"`) that slides in over the page, with Dialog's focus trap and dismiss. Narrow screens show sidebars in it: the gallery's libraries, model details |
 | `Avatar` | Image or monogram on the profile accent: a circle with an accent ring, or `shape="card"` filling its container (profile screen cards) |
 | `ModelCard`, `FallbackFace` | The one model card; designed fallback when there's no thumbnail. `nsfw` + `blurNsfw` blur the thumbnail until clicked (the first click only reveals); `meta` adds a small mono line (size); `mark` pins a status pill to the corner ("Installed" success, "Update" warning, "Downloading" accent); `typeLabel` shows the source's own type name ("LyCORIS") instead of the kind's |
 | `Art` | Seeded placeholder "renders" for previews and empty states |
@@ -156,6 +157,27 @@ Presets in `src/client/lib/motion.ts`:
 - **Drop to reuse:** dragging a file over Generate shows a dashed accent overlay on `bg/80` ("Drop to use this image's settings"), then "Reading the image…".
 - **Model pickers:** favorites first (heart on the card), then recently used, then the rest; tiles in the models strip show the model's picture.
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
+
+## Narrow screens
+
+Below 1024 px (Tailwind's `lg`: phones, tablets, narrow windows) the app switches to a compact
+layout. Desktop classes stay as they are; the compact rules are `max-lg:` additions on top, and
+`useCompact()` (`lib/hooks`) is for the few switches CSS can't make.
+
+- **Frame:** the header keeps the logo, workflow switcher, ComfyUI status, errors and avatar; the
+  search, VRAM and cache buttons hide. The five main views move to a bottom tab bar (`MobileNav`
+  in `app/header/Header.tsx`).
+- **One column:** views that put things side by side stack them and scroll as a page: Generate
+  (prompt, Generate, then the image above the parameters; Customize is desktop-only), the batch
+  runner, File Info, the lightbox (details below the image), the Overview grids.
+- **Sidebars:** the gallery's sidebar and model details open in a `Sheet` from a button; Settings
+  pages and Help topics become a `Select` at the top; the Manager's categories become a search
+  field and a `Select`; Wildcards shows the tree, then the open file with a back arrow.
+- **Built in:** `Tabs` scroll sideways instead of clipping; menus, popovers and selects never get
+  wider than the screen; `Field layout="left"` puts the label above; `PropertyList` shares the
+  width between label and value; `Dialog` keeps an 8 px margin.
+- **Touch:** controls that appear on hover also get `pointer-coarse:opacity-100`, so a touch
+  screen shows them (decorative hover overlays don't). Keyboard hints next to buttons hide.
 
 ## Copy
 

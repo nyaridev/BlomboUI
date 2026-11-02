@@ -38,7 +38,9 @@ import { Kbd } from "./feedback";
 
 type AnyElement = ReactElement<Record<string, unknown> & { ref?: Ref<HTMLElement> }>;
 
-const panel = "rounded-lg border border-line-strong bg-surface-3 text-fg shadow-pop outline-none";
+// Never wider than the screen (phones), whatever width the caller asked for.
+const panel =
+  "max-w-[calc(100vw-16px)] rounded-lg border border-line-strong bg-surface-3 text-fg shadow-pop outline-none";
 
 /* ── Tooltip ─────────────────────────────────────────────────────────────── */
 

@@ -144,7 +144,7 @@ function Recent({ onUse, onAdd }: { onUse: (t: string) => void; onAdd: (t: strin
                 icon="plus"
                 size="xs"
                 label="Add to the prompt"
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus:opacity-100"
                 onClick={() => onAdd(p.text)}
               />
             </div>
@@ -190,7 +190,7 @@ function Snippets({ prompt, onInsert }: { prompt: string; onInsert: (t: string) 
                 icon="trash"
                 size="xs"
                 label={`Remove “${s.name}”`}
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100"
+                className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus:opacity-100"
                 onClick={() => remove.mutate(s.id, { onError: (e) => toast(e.message, "error") })}
               />
             </div>

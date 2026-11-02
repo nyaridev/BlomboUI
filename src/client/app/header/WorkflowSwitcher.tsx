@@ -86,7 +86,7 @@ export function WorkflowSwitcher() {
       trigger={
         <button
           type="button"
-          className="group flex h-9 max-w-[280px] items-center gap-2.5 rounded-lg border border-line bg-field pr-2.5 pl-1 transition-colors hover:border-line-strong data-[open]:border-accent/60 focus-ring"
+          className="group flex h-9 min-w-0 max-w-[280px] items-center gap-2.5 rounded-lg border border-line bg-field pr-2.5 pl-1 transition-colors hover:border-line-strong data-[open]:border-accent/60 focus-ring"
         >
           <Art seed={current?.id ?? "none"} className="h-7 w-7 shrink-0 rounded-md" />
           <span className="flex min-w-0 flex-col text-left leading-tight">

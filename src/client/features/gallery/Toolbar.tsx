@@ -9,6 +9,7 @@ import { Chip, Popover, Segmented, Select, Slider, StarRating, TextField } from 
 import type { GalleryFacets } from "@shared/gallery";
 import type { GalleryLayout } from "@shared/settings";
 import { useState } from "react";
+import { SidebarButton } from "./Sidebar";
 import { type GallerySort, useGalleryUi } from "./state";
 
 export function Toolbar({
@@ -28,14 +29,15 @@ export function Toolbar({
   const facets = useGalleryFacets(ui.library);
   const tags = useGalleryTags();
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-2.5">
+    <div className="flex flex-wrap items-center gap-2 border-b border-line px-5 py-2.5 max-lg:px-3">
+      <SidebarButton />
       <TextField
         icon="search"
         placeholder="Search prompts, models, LoRAs, seeds…"
         value={ui.q}
         onChange={(e) => ui.set({ q: e.target.value })}
         onClear={() => ui.set({ q: "" })}
-        className="w-[340px]"
+        className="w-[340px] max-lg:w-auto max-lg:min-w-0 max-lg:flex-1"
         aria-label="Search images"
       />
       <div className="flex flex-wrap gap-1">
@@ -71,13 +73,16 @@ export function Toolbar({
           Favorites
         </Chip>
       </div>
-      <div className="ml-auto flex items-center gap-2">
+      <div className="ml-auto flex items-center gap-2 max-lg:ml-0 max-lg:w-full">
         {total !== null ? (
-          <span className="font-mono text-xs text-fg-3 tabular" aria-live="polite">
+          <span
+            className="font-mono text-xs whitespace-nowrap text-fg-3 tabular max-lg:mr-auto"
+            aria-live="polite"
+          >
             {total.toLocaleString()} {total === 1 ? "image" : "images"}
           </span>
         ) : null}
-        <div className="w-28" title="Tile size">
+        <div className="w-28 max-lg:hidden" title="Tile size">
           <Slider
             value={size}
             onChange={onSize}

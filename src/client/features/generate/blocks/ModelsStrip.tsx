@@ -232,7 +232,7 @@ function LoraTile({
           defaultValue={1}
         />
       </div>
-      <div className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+      <div className="absolute top-1 right-1 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
         <IconButton icon="x" label={`Remove ${tag.name}`} size="xs" onClick={onRemove} />
       </div>
     </motion.div>

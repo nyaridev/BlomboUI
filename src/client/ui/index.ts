@@ -34,6 +34,7 @@ export {
 export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
 export { NumberField } from "./NumberField";
 export { Select, type SelectOption } from "./Select";
+export { Sheet } from "./Sheet";
 export { type NumberControlProps, ScrubField, Slider } from "./Slider";
 export { StarRating } from "./StarRating";
 export { Notice, type UnitTab, UnitTabs } from "./stage";

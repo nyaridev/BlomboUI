@@ -7,7 +7,7 @@
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
-import { useElementWidth } from "@client/lib/hooks";
+import { useCompact, useElementWidth } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
 import { glide } from "@client/lib/motion";
 import { formatBytes } from "@client/lib/number";
@@ -34,6 +34,7 @@ import {
   ModelCard,
   PropertyList,
   Select,
+  Sheet,
   Skeleton,
   Spinner,
   TextField,
@@ -64,6 +65,7 @@ export function LocalModels() {
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("name");
   const [selected, setSelected] = useState<string | null>(null);
+  const compact = useCompact();
   // "Show in Models" from a download or a Civitai page selects the file here.
   const wanted = useModelsNav((s) => s.select);
   useEffect(() => {
@@ -147,12 +149,12 @@ export function LocalModels() {
 
   return (
     <div className="flex min-h-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5 pb-0">
+      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5 pb-0 max-lg:p-3 max-lg:pb-0">
         <div className="flex flex-wrap items-center gap-2">
           <TextField
             icon="search"
             placeholder="Search name, folder, trigger word, base model…"
-            className="w-[340px]"
+            className="w-[340px] max-lg:w-full"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onClear={() => setQuery("")}
@@ -224,8 +226,26 @@ export function LocalModels() {
           />
         )}
       </div>
+      {compact ? (
+        <Sheet
+          open={Boolean(current)}
+          onOpenChange={(o) => !o && setSelected(null)}
+          label="Model details"
+          side="right"
+          className="w-[min(92vw,380px)]"
+        >
+          {current ? (
+            <InfoSheet
+              model={current}
+              blurNsfw={blurNsfw}
+              onClose={() => setSelected(null)}
+              onMoved={(m) => setSelected(m.id)}
+            />
+          ) : null}
+        </Sheet>
+      ) : null}
       <AnimatePresence initial={false}>
-        {current ? (
+        {current && !compact ? (
           <motion.aside
             key="sheet"
             initial={{ width: 0, opacity: 0 }}
@@ -356,7 +376,7 @@ function InfoSheet({
   );
 
   return (
-    <div className="flex h-full w-[380px] flex-col">
+    <div className="flex h-full w-[380px] flex-col max-lg:w-full">
       <div className="flex items-center gap-2 border-b border-line px-4 py-3">
         <Icon name={style.icon} size={15} className="text-fg-3" />
         <span className="truncate text-sm font-semibold text-fg">{style.label}</span>

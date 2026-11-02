@@ -69,6 +69,7 @@ export const ICONS = {
   sliders: `<path d="M4 6.5h9M17 6.5h3M4 12h3M11 12h9M4 17.5h11M19 17.5h1"/><circle cx="15" cy="6.5" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17.5" r="2"/>`,
   "layout-grid": `<rect x="3.5" y="3.5" width="7" height="7" rx="1.75"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.75"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.75"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.75"/>`,
   "layout-rows": `<rect x="3.5" y="4" width="9" height="7" rx="1.5"/><rect x="14.5" y="4" width="6" height="7" rx="1.5"/><rect x="3.5" y="13" width="5" height="7" rx="1.5"/><rect x="10.5" y="13" width="10" height="7" rx="1.5"/>`,
+  sidebar: `<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M9.5 4.5v15"/><path d="M6 8.5h1M6 11.5h1"/>`,
   compare: `<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M12 2.5v19"/><path d="m8.5 10.5-2 1.5 2 1.5M15.5 10.5l2 1.5-2 1.5"/>`,
   maximize: `<path d="M14.5 3.5h6v6M9.5 20.5h-6v-6M20.5 3.5 14 10M3.5 20.5 10 14"/>`,
   "zoom-in": `<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.6-4.6"/><path d="M10.5 8v5M8 10.5h5"/>`,

@@ -203,7 +203,7 @@ export const Tile = memo(function Tile({
           "absolute top-1.5 right-1.5 grid h-7 w-7 place-items-center rounded-sm bg-black/40 text-white transition-opacity hover:bg-black/60 focus-ring",
           image.favorite
             ? "opacity-100"
-            : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+            : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100",
         )}
       >
         <Icon

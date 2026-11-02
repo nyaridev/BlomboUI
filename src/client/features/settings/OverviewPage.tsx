@@ -105,7 +105,7 @@ function DayBars({ days }: { days: Array<{ day: string; count: number }> }) {
       : new Date(`${day}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
   const total = days.reduce((n, d) => n + d.count, 0);
   return (
-    <Panel className="col-span-2 flex flex-col gap-3 p-4">
+    <Panel className="col-span-2 flex flex-col gap-3 p-4 max-lg:col-span-1">
       <div className="flex items-baseline justify-between">
         <span className="flex items-center gap-1.5 text-sm font-medium text-fg">
           <Icon name="chart" size={15} className="text-fg-3" />
@@ -159,7 +159,7 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
   return (
     <>
       <PageHeader title="Overview" />
-      <Panel className="mb-6 flex items-center gap-5 p-5">
+      <Panel className="mb-6 flex items-center gap-5 p-5 max-lg:flex-wrap max-lg:gap-4 max-lg:p-4">
         <Avatar
           name={profile?.name ?? "Profile"}
           src={profile ? avatarUrl(profile) : null}
@@ -167,7 +167,7 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           size={64}
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-lg font-semibold text-fg">{profile?.name ?? "…"}</span>
             <Badge tone="accent">{profile ? THEME_LABELS[profile.theme] : ""}</Badge>
             {s?.firstAt ? (
@@ -188,7 +188,7 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
             ))}
           </div>
         </div>
-        <Button icon="edit" onClick={() => onGo("files")}>
+        <Button icon="edit" onClick={() => onGo("files")} className="max-lg:w-full">
           Edit folders
         </Button>
       </Panel>
@@ -203,7 +203,7 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
         />
       ) : (
         <>
-          <div className="mb-6 grid grid-cols-4 gap-3">
+          <div className="mb-6 grid grid-cols-4 gap-3 max-lg:grid-cols-2">
             {stats.isLoading ? (
               Array.from({ length: 4 }, (_, i) => <Skeleton key={i} className="h-[104px]" />)
             ) : (
@@ -245,25 +245,34 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           </div>
 
           {s && s.runs.total === 0 ? (
-            <Panel className="mb-6 flex items-center gap-4 p-5">
+            <Panel className="mb-6 flex items-center gap-4 p-5 max-lg:flex-wrap max-lg:p-4">
               <span className="grid h-10 w-10 place-items-center rounded-lg bg-field text-accent-ink">
                 <Icon name="sparkle" size={18} />
               </span>
-              <div className="flex flex-1 flex-col gap-0.5">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-sm font-medium text-fg">Nothing generated yet</span>
                 <span className="text-xs text-fg-3">
                   Every run you make is counted here: images per day, GPU time and your most used
                   models, LoRAs and wildcards.
                 </span>
               </div>
-              <Button variant="primary" icon="generate" onClick={() => go("generate")}>
+              <Button
+                variant="primary"
+                icon="generate"
+                onClick={() => go("generate")}
+                className="max-lg:w-full"
+              >
                 Go to Generate
               </Button>
             </Panel>
           ) : null}
 
-          <div className="mb-6 grid grid-cols-2 gap-3">
-            {s ? <DayBars days={s.perDay} /> : <Skeleton className="col-span-2 h-[210px]" />}
+          <div className="mb-6 grid grid-cols-2 gap-3 max-lg:grid-cols-1">
+            {s ? (
+              <DayBars days={s.perDay} />
+            ) : (
+              <Skeleton className="col-span-2 h-[210px] max-lg:col-span-1" />
+            )}
             <RankList
               title="Most used models"
               icon="models"

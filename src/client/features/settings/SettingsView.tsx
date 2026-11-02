@@ -8,7 +8,7 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
 import { useSettings, useUpdateProfile, useUpdateSettings } from "@client/lib/queries";
-import { Field, Segmented, Slider, Switch, TextField } from "@client/ui";
+import { Field, Segmented, Select, Slider, Switch, TextField } from "@client/ui";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import {
   fontStack,
@@ -43,8 +43,11 @@ export function SettingsView() {
   );
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto grid max-w-[1120px] grid-cols-[220px_minmax(0,1fr)] gap-10 px-8 pt-8 pb-16">
-        <nav className="sticky top-8 flex flex-col gap-0.5 self-start" aria-label="Settings pages">
+      <div className="mx-auto grid max-w-[1120px] grid-cols-[220px_minmax(0,1fr)] gap-10 px-8 pt-8 pb-16 max-lg:grid-cols-1 max-lg:gap-5 max-lg:px-3 max-lg:pt-3">
+        <nav
+          className="sticky top-8 flex flex-col gap-0.5 self-start max-lg:hidden"
+          aria-label="Settings pages"
+        >
           <TextField
             icon="search"
             size="sm"
@@ -91,6 +94,19 @@ export function SettingsView() {
             </div>
           ))}
         </nav>
+        {/* Narrow screens: the pages as a dropdown instead of a side menu. */}
+        <Select
+          label="Settings page"
+          value={page}
+          onChange={setPage}
+          options={SETTINGS_PAGES.map((p) => ({
+            value: p.id,
+            label: p.label,
+            icon: p.icon,
+            group: p.group,
+          }))}
+          className="lg:hidden"
+        />
         <motion.div
           key={page}
           initial={{ opacity: 0, y: 6 }}

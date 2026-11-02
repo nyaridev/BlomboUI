@@ -118,7 +118,7 @@ export function Carousel({
               variant="secondary"
               size="sm"
               onClick={() => go(-1)}
-              className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-md opacity-0 shadow-pop transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              className="absolute top-1/2 left-2 z-20 -translate-y-1/2 rounded-md opacity-0 shadow-pop transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100"
             />
             <IconButton
               icon="chevron-right"
@@ -126,7 +126,7 @@ export function Carousel({
               variant="secondary"
               size="sm"
               onClick={() => go(1)}
-              className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-md opacity-0 shadow-pop transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+              className="absolute top-1/2 right-2 z-20 -translate-y-1/2 rounded-md opacity-0 shadow-pop transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100"
             />
           </>
         ) : null}

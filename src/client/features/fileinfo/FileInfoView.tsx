@@ -106,7 +106,7 @@ export function FileInfoView() {
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-6 px-8 pt-8 pb-16">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-6 px-8 pt-8 pb-16 max-lg:px-3 max-lg:pt-4">
         <div className="flex items-end gap-4">
           <div className="flex flex-1 flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight text-fg">File Info</h1>
@@ -128,7 +128,7 @@ export function FileInfoView() {
         />
 
         {!dropped && !target ? null : info.isLoading ? (
-          <div className="grid grid-cols-[320px_minmax(0,1fr)] gap-6">
+          <div className="grid grid-cols-[320px_minmax(0,1fr)] gap-6 max-lg:grid-cols-1">
             <Skeleton className="aspect-square" />
             <div className="flex flex-col gap-3">
               <Skeleton className="h-24 w-full" />
@@ -166,7 +166,7 @@ function Result({
         ? "safetensors"
         : "Unknown";
   return (
-    <div className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-6">
+    <div className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1">
       <Panel className="sticky top-0 flex flex-col overflow-hidden">
         {info.kind === "image" && imageSrc ? (
           <div className="checker grid max-h-[420px] place-items-center overflow-hidden">
@@ -361,7 +361,10 @@ function ImageSections({
         <Section title="ComfyUI graph" icon="workflow" count={image.comfy.length}>
           <div className="flex flex-col divide-y divide-line">
             {image.comfy.map((n) => (
-              <div key={n.id} className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 py-2">
+              <div
+                key={n.id}
+                className="grid grid-cols-[180px_minmax(0,1fr)] gap-3 py-2 max-lg:grid-cols-1 max-lg:gap-1"
+              >
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-medium text-fg">{n.title}</span>
                   <span className="truncate font-mono text-2xs text-fg-3">

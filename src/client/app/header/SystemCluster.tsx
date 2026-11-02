@@ -96,7 +96,7 @@ export function SystemCluster() {
         </Tooltip>
       ) : null}
 
-      <div className="ml-1 flex items-center">
+      <div className="ml-1 flex items-center max-lg:hidden">
         <IconButton
           icon="unload-models"
           label="Unload models from VRAM"

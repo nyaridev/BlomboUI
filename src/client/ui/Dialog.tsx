@@ -45,7 +45,7 @@ export function Dialog({
     <FloatingPortal>
       <AnimatePresence>
         {open ? (
-          <FloatingOverlay lockScroll className="z-[300] grid place-items-center p-4">
+          <FloatingOverlay lockScroll className="z-[300] grid place-items-center p-4 max-lg:p-2">
             <motion.div
               className="absolute inset-0 bg-overlay"
               initial={{ opacity: 0 }}

@@ -164,11 +164,11 @@ export function ProfileWizard({
       }}
       width={860}
       bare
-      className="h-[min(88vh,620px)]"
+      className="h-[min(88vh,620px)] max-lg:h-[min(94svh,760px)]"
     >
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)]">
-        {/* step rail */}
-        <aside className="flex flex-col gap-1 border-r border-line bg-surface p-3">
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)] max-lg:grid-cols-1">
+        {/* step rail (narrow screens show "Step n of 4" by the title instead) */}
+        <aside className="flex flex-col gap-1 border-r border-line bg-surface p-3 max-lg:hidden">
           <div className="mb-3 flex items-center gap-3 px-2 pt-1">
             <Avatar name={name || "New profile"} src={avatarUrl} accent={accent} size={36} />
             <div className="min-w-0">
@@ -225,13 +225,16 @@ export function ProfileWizard({
 
         {/* step body */}
         <div className="flex min-h-0 flex-col">
-          <div className="flex items-center gap-3 px-7 pt-5 pb-1">
+          <div className="flex items-center gap-3 px-7 pt-5 pb-1 max-lg:px-4 max-lg:pt-4">
             <h2 className="flex-1 text-lg font-semibold tracking-tight text-fg">
               {STEPS[step]?.title}
             </h2>
+            <span className="text-xs text-fg-3 lg:hidden">
+              Step {step + 1} of {STEPS.length}
+            </span>
             <IconButton icon="x" label="Close" size="sm" onClick={() => onOpenChange(false)} />
           </div>
-          <div className="scroll-quiet min-h-0 flex-1 overflow-auto px-7 pt-4 pb-6">
+          <div className="scroll-quiet min-h-0 flex-1 overflow-auto px-7 pt-4 pb-6 max-lg:px-4">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={step}
@@ -242,7 +245,7 @@ export function ProfileWizard({
                 className="flex flex-col gap-6"
               >
                 {step === 0 ? (
-                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-7">
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-7 max-lg:grid-cols-1 max-lg:gap-5">
                     <div className="flex flex-col items-center gap-2">
                       <button
                         type="button"
@@ -525,7 +528,7 @@ export function ProfileWizard({
               </motion.div>
             </AnimatePresence>
           </div>
-          <div className="flex items-center gap-2 border-t border-line bg-surface px-7 py-3">
+          <div className="flex items-center gap-2 border-t border-line bg-surface px-7 py-3 max-lg:px-4">
             {step > 0 ? (
               <Button variant="ghost" icon="arrow-left" onClick={() => setStep(step - 1)}>
                 Back

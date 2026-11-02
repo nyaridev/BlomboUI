@@ -67,9 +67,9 @@ export function ErrorsView() {
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-6 px-8 pt-8 pb-16">
-        <div className="flex items-end gap-4">
-          <div className="flex flex-1 flex-col gap-1">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-6 px-8 pt-8 pb-16 max-lg:px-3 max-lg:pt-4">
+        <div className="flex items-end gap-4 max-lg:flex-wrap max-lg:gap-2">
+          <div className="flex flex-1 flex-col gap-1 max-lg:basis-full">
             <h1 className="text-2xl font-semibold tracking-tight text-fg">Errors</h1>
           </div>
           <Segmented

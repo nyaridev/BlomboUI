@@ -14,9 +14,10 @@
         "concurrently",
         "-k",
         "-n",
-        "server,web",
-        "node src/server/main.ts --dev --port 4391 --open none --data runtime/throwaway/data --runtime runtime/throwaway/runtime --fake-comfy",
-        "vite"
+        "server,web,civitai",
+        "node src/server/main.ts --dev --port 4391 --open none --data runtime/throwaway/data --runtime runtime/throwaway/runtime --fake-comfy --civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json",
+        "vite",
+        "node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298"
       ],
       "env": { "BLOMBO_API_PORT": "4391", "BLOMBO_WEB_PORT": "4392" },
       "port": 4392

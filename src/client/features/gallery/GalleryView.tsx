@@ -4,6 +4,8 @@
  * + a virtualized grid in day sections, with a showcase hero on the home view and a lightbox.
  * New images arrive over the live bus while generating.
  */
+
+import { useCompact } from "@client/lib/hooks";
 import { followTopic, useLive } from "@client/lib/live";
 import {
   useGalleryImages,
@@ -12,7 +14,7 @@ import {
   useUpdateSettings,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, EmptyState, Skeleton } from "@client/ui";
+import { Button, EmptyState, Sheet, Skeleton } from "@client/ui";
 import type { GalleryImage } from "@shared/gallery";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
@@ -29,9 +31,19 @@ export function GalleryView() {
   useEffect(() => followTopic("gallery"), []);
   const overview = useGalleryOverview();
   const view = useGalleryUi((s) => s.view);
+  const drawer = useGalleryUi((s) => s.drawer);
+  const set = useGalleryUi((s) => s.set);
+  const compact = useCompact();
+  const sidebar = <Sidebar overview={overview.data} />;
   return (
     <div className="flex h-full">
-      <Sidebar overview={overview.data} />
+      {compact ? (
+        <Sheet open={drawer} onOpenChange={(o) => set({ drawer: o })} label="Libraries">
+          {sidebar}
+        </Sheet>
+      ) : (
+        sidebar
+      )}
       <div className="flex min-w-0 flex-1 flex-col">
         {view === "trash" ? <TrashView /> : <Images featured={overview.data?.featured ?? []} />}
       </div>

@@ -119,7 +119,7 @@ export function Generations() {
 
   return (
     <div ref={scroller} className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1120px] px-8 py-5">
+      <div className="mx-auto max-w-[1120px] px-8 py-5 max-lg:px-3">
         <div className="mb-3 flex items-center gap-2">
           <TextField
             icon="search"

@@ -33,12 +33,12 @@ export function HistoryView() {
   const [tab, setTab] = useState<Tab>("generations");
   return (
     <div className="flex h-full flex-col">
-      <div className="mx-auto flex w-full max-w-[1120px] items-end gap-4 px-8 pt-8">
+      <div className="mx-auto flex w-full max-w-[1120px] items-end gap-4 px-8 pt-8 max-lg:px-3 max-lg:pt-4">
         <div className="flex flex-col gap-1 pb-3">
           <h1 className="text-2xl font-semibold tracking-tight text-fg">History</h1>
         </div>
       </div>
-      <div className="mx-auto w-full max-w-[1120px] border-b border-line px-8">
+      <div className="mx-auto w-full max-w-[1120px] border-b border-line px-8 max-lg:px-3">
         <Tabs
           variant="line"
           label="History"
@@ -99,7 +99,7 @@ function Downloads() {
 
   if (q.isLoading)
     return (
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-2 px-8 py-6">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-2 px-8 py-6 max-lg:px-3">
         {Array.from({ length: 6 }, (_, i) => (
           <Skeleton key={i} className="h-16 w-full" />
         ))}
@@ -125,7 +125,7 @@ function Downloads() {
     );
   return (
     <div ref={scroller} className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto max-w-[1120px] px-8 py-5">
+      <div className="mx-auto max-w-[1120px] px-8 py-5 max-lg:px-3">
         <div className="mb-3 flex items-center gap-2 text-xs text-fg-3">
           <span className="tabular">
             {total.toLocaleString()} download{total === 1 ? "" : "s"} · keeps the last{" "}
@@ -220,7 +220,7 @@ function Civitai() {
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-8 py-6">
+      <div className="mx-auto flex max-w-[1120px] flex-col gap-8 px-8 py-6 max-lg:px-3">
         <section className="flex flex-col gap-3">
           <div className="flex items-center gap-2">
             <h2 className="label-caps">Searches</h2>

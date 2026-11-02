@@ -44,6 +44,7 @@ import {
   ScrubField,
   Segmented,
   Select,
+  Sheet,
   Skeleton,
   Slider,
   Spinner,
@@ -238,6 +239,8 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [line, setLine] = useState("generation");
   const [dialog, setDialog] = useState(false);
   const [bareDialog, setBareDialog] = useState(false);
+  const [sheet, setSheet] = useState(false);
+  const [sheetSide, setSheetSide] = useState<"left" | "right">("left");
   const [stageOn, setStageOn] = useState(true);
   const [ov, setOv] = useState(false);
   const [prompt, setPrompt] = useState(MOCK_PROMPT);
@@ -809,6 +812,27 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 </div>
               </div>
             </Dialog>
+          </Row>
+          <Row label="Sheet">
+            {(["left", "right"] as const).map((side) => (
+              <Button
+                key={side}
+                onClick={() => {
+                  setSheetSide(side);
+                  setSheet(true);
+                }}
+              >
+                Open from the {side}
+              </Button>
+            ))}
+            <Sheet open={sheet} onOpenChange={setSheet} label="Example sheet" side={sheetSide}>
+              <div className="flex flex-1 flex-col gap-2 p-4 text-sm text-fg-2">
+                A sidebar on narrow screens (gallery libraries, model details).
+                <Button className="mt-auto" onClick={() => setSheet(false)}>
+                  Close
+                </Button>
+              </div>
+            </Sheet>
           </Row>
           <Row label="Toasts">
             <Button size="sm" onClick={() => toast("Workflow saved", "success")}>

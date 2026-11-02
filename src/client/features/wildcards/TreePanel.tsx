@@ -17,7 +17,7 @@ type Ask =
   | { kind: "rename"; node: TreeNode }
   | null;
 
-export function TreePanel({ tree }: { tree: WildcardTree }) {
+export function TreePanel({ tree, className }: { tree: WildcardTree; className?: string }) {
   const ui = useWildcardUi();
   const changed = useWildcardsChanged();
   const [query, setQuery] = useState("");
@@ -75,7 +75,12 @@ export function TreePanel({ tree }: { tree: WildcardTree }) {
   };
 
   return (
-    <aside className="flex w-[280px] shrink-0 flex-col border-r border-line bg-surface">
+    <aside
+      className={cn(
+        "flex w-[280px] shrink-0 flex-col border-r border-line bg-surface max-lg:w-full max-lg:border-r-0",
+        className,
+      )}
+    >
       <div className="flex items-center gap-1 border-b border-line p-2">
         <TextField
           size="sm"

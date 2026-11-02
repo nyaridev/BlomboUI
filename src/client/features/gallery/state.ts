@@ -26,6 +26,8 @@ export interface GalleryUi {
   sort: GallerySort;
   /** Lightbox image id. */
   open: number | null;
+  /** Narrow screens: the sidebar is open as a Sheet. */
+  drawer: boolean;
   set: (patch: Partial<Omit<GalleryUi, "set" | "reset">>) => void;
   /** Back to everything, newest first. */
   reset: () => void;
@@ -48,6 +50,7 @@ const DEFAULTS = {
 export const useGalleryUi = create<GalleryUi>((set) => ({
   ...DEFAULTS,
   open: null,
+  drawer: false,
   set: (patch) => set(patch),
   reset: () => set({ ...DEFAULTS }),
 }));

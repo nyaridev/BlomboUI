@@ -247,7 +247,7 @@ export function ModelCard({
             "absolute top-2 right-2 grid h-7 w-7 place-items-center rounded-sm bg-black/45 text-white/80 backdrop-blur-[2px] transition-opacity hover:text-white",
             favorite
               ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100 focus-visible:opacity-100",
+              : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100",
             selected && "top-9",
           )}
         >

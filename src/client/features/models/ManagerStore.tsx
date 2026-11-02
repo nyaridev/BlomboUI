@@ -16,6 +16,7 @@ import {
   EmptyState,
   IconButton,
   ProgressBar,
+  Select,
   Skeleton,
   TextField,
   Tooltip,
@@ -135,9 +136,13 @@ export function ManagerStore() {
       />
     );
 
+  const filters = (["all", "installed", ...STORE_CATEGORIES] as Filter[]).filter(
+    (c) => c === "all" || c === "installed" || counts.get(c),
+  );
+
   return (
     <div className="flex min-h-0 flex-1">
-      <aside className="flex w-[232px] shrink-0 flex-col gap-0.5 border-r border-line p-3">
+      <aside className="flex w-[232px] shrink-0 flex-col gap-0.5 border-r border-line p-3 max-lg:hidden">
         <TextField
           size="sm"
           icon="search"
@@ -148,34 +153,26 @@ export function ManagerStore() {
           className="mb-2"
           aria-label="Search the catalog"
         />
-        {(["all", "installed", ...STORE_CATEGORIES] as Filter[])
-          .filter((c) => c === "all" || c === "installed" || counts.get(c))
-          .map((c) => (
-            <button
-              key={c}
-              type="button"
-              onClick={() => setFilter(c)}
-              aria-pressed={filter === c}
-              className={cn(
-                "flex h-8 items-center gap-2 rounded-md px-2.5 text-sm focus-ring",
-                filter === c ? "bg-field text-fg" : "text-fg-2 hover:bg-field/60",
-              )}
-            >
-              <Icon
-                name={c === "all" ? "stack" : c === "installed" ? "check-circle" : CATEGORY_ICON[c]}
-                size={14}
-                className={filter === c ? "text-accent-ink" : "text-fg-3"}
-              />
-              <span className="truncate">
-                {c === "all"
-                  ? "Everything"
-                  : c === "installed"
-                    ? "Installed"
-                    : STORE_CATEGORY_LABELS[c]}
-              </span>
-              <span className="ml-auto font-mono text-2xs text-fg-3">{counts.get(c) ?? 0}</span>
-            </button>
-          ))}
+        {filters.map((c) => (
+          <button
+            key={c}
+            type="button"
+            onClick={() => setFilter(c)}
+            aria-pressed={filter === c}
+            className={cn(
+              "flex h-8 items-center gap-2 rounded-md px-2.5 text-sm focus-ring",
+              filter === c ? "bg-field text-fg" : "text-fg-2 hover:bg-field/60",
+            )}
+          >
+            <Icon
+              name={filterIcon(c)}
+              size={14}
+              className={filter === c ? "text-accent-ink" : "text-fg-3"}
+            />
+            <span className="truncate">{filterLabel(c)}</span>
+            <span className="ml-auto font-mono text-2xs text-fg-3">{counts.get(c) ?? 0}</span>
+          </button>
+        ))}
         <div className="mt-auto flex items-center gap-1.5 border-t border-line pt-2.5 text-2xs text-fg-3">
           <span className="flex-1">
             {catalog.data.stale ? (
@@ -195,6 +192,32 @@ export function ManagerStore() {
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Narrow screens: search and category above the list instead of the sidebar. */}
+        <div className="flex gap-2 border-b border-line p-3 lg:hidden">
+          <TextField
+            size="sm"
+            icon="search"
+            placeholder="Search the catalog"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onClear={() => setQuery("")}
+            className="min-w-0 flex-1"
+            aria-label="Search the catalog"
+          />
+          <Select<Filter>
+            size="sm"
+            label="Category"
+            value={filter}
+            onChange={setFilter}
+            options={filters.map((c) => ({
+              value: c,
+              label: filterLabel(c),
+              icon: filterIcon(c),
+              hint: String(counts.get(c) ?? 0),
+            }))}
+            className="w-40"
+          />
+        </div>
         {catalog.data.noModelsFolder ? (
           <p className="flex items-center gap-2 border-b border-line bg-yellow/10 px-5 py-2 text-xs text-warning">
             <Icon name="info" size={13} />
@@ -224,6 +247,14 @@ export function ManagerStore() {
   );
 }
 
+function filterLabel(c: Filter): string {
+  return c === "all" ? "Everything" : c === "installed" ? "Installed" : STORE_CATEGORY_LABELS[c];
+}
+
+function filterIcon(c: Filter): IconName {
+  return c === "all" ? "stack" : c === "installed" ? "check-circle" : CATEGORY_ICON[c];
+}
+
 function List({ rows, noFolder }: { rows: Row[]; noFolder: boolean }) {
   const scroller = useRef<HTMLDivElement>(null);
   const virtual = useVirtualizer({
@@ -233,7 +264,10 @@ function List({ rows, noFolder }: { rows: Row[]; noFolder: boolean }) {
     overscan: 8,
   });
   return (
-    <div ref={scroller} className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 pb-5">
+    <div
+      ref={scroller}
+      className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 pb-5 max-lg:px-3"
+    >
       <div className="relative w-full" style={{ height: virtual.getTotalSize() }}>
         {virtual.getVirtualItems().map((v) => {
           const row = rows[v.index];
@@ -272,7 +306,7 @@ function EntryRow({ entry: e, noFolder }: { entry: CatalogEntry; noFolder: boole
       : null;
   return (
     <div className="flex h-[60px] items-center gap-3 rounded-lg border border-line bg-surface px-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-field text-fg-2">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-field text-fg-2 max-lg:hidden">
         <Icon name={CATEGORY_ICON[e.category]} size={17} />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -301,7 +335,7 @@ function EntryRow({ entry: e, noFolder }: { entry: CatalogEntry; noFolder: boole
             .join(" · ")}
         </span>
       </div>
-      <div className="flex w-44 shrink-0 items-center justify-end gap-1.5">
+      <div className="flex w-44 shrink-0 items-center justify-end gap-1.5 max-lg:w-auto">
         {e.installed ? (
           <Badge tone="success">
             <Icon name="check" size={11} /> Installed

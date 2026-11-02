@@ -113,7 +113,8 @@ export function Lightbox({
 
   return (
     <motion.div
-      className="fixed inset-0 z-[250] flex bg-black/94"
+      // Narrow screens: image on top, details below it, the whole thing scrolls.
+      className="fixed inset-0 z-[250] flex bg-black/94 max-lg:scroll-quiet max-lg:flex-col max-lg:overflow-y-auto"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
@@ -124,7 +125,7 @@ export function Lightbox({
       ref={dialogRef}
       tabIndex={-1}
     >
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-w-0 flex-1 flex-col max-lg:h-[60svh] max-lg:flex-none">
         <Stage image={current} zoom={zoom} onZoom={setZoom} />
         <button
           type="button"
@@ -144,7 +145,7 @@ export function Lightbox({
         >
           <Icon name="chevron-right" size={22} />
         </button>
-        <div className="scroll-quiet flex h-[86px] shrink-0 items-center justify-center gap-1.5 overflow-x-auto px-6 pb-4">
+        <div className="scroll-quiet flex h-[86px] shrink-0 items-center justify-center gap-1.5 overflow-x-auto px-6 pb-4 max-lg:hidden">
           {strip.map((i) => (
             <button
               key={i.id}
@@ -257,7 +258,7 @@ function Stage({
           />
         </div>
       ) : (
-        <div className="flex h-full items-center justify-center p-8">
+        <div className="flex h-full items-center justify-center p-8 max-lg:p-3">
           <motion.button
             key={image.id}
             type="button"
@@ -358,7 +359,7 @@ function Details({
   };
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-line bg-surface">
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-line bg-surface max-lg:w-full max-lg:border-t max-lg:border-l-0">
       <div className="flex items-center gap-2 border-b border-line px-4 py-3">
         <span className="text-sm font-semibold text-fg">Details</span>
         <Badge>
@@ -377,7 +378,7 @@ function Details({
           <IconButton icon="x" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
         </span>
       </div>
-      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 max-lg:overflow-visible">
         <Marks image={image} details={details} />
         {loading ? (
           <div className="flex flex-col gap-2">

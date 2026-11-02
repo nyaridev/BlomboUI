@@ -148,10 +148,11 @@ export function Field({
   if (layout === "left") {
     return (
       <div
-        className={cn("grid items-start gap-x-6 gap-y-1", className)}
+        // Narrow screens: the label goes above the control (the class beats the inline columns).
+        className={cn("grid items-start gap-x-6 gap-y-1 max-lg:grid-cols-1!", className)}
         style={{ gridTemplateColumns: `${labelWidth}px minmax(0,1fr)` }}
       >
-        <label htmlFor={id} className="pt-1.5 text-sm text-fg-2">
+        <label htmlFor={id} className="pt-1.5 text-sm text-fg-2 max-lg:pt-0">
           {label}
         </label>
         <div className="flex min-w-0 flex-col gap-1.5">

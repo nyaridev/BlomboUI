@@ -6,6 +6,7 @@ import { formatBytes } from "@client/lib/number";
 import { useEmptyTrash, useGalleryTrash, useRestoreImages } from "@client/lib/queries";
 import { Button, Dialog, EmptyState, IconButton, Skeleton, toast } from "@client/ui";
 import { useState } from "react";
+import { SidebarButton } from "./Sidebar";
 
 export function TrashView() {
   const trash = useGalleryTrash();
@@ -24,7 +25,8 @@ export function TrashView() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center gap-3 border-b border-line px-5 py-2.5">
+      <div className="flex items-center gap-3 border-b border-line px-5 py-2.5 max-lg:flex-wrap max-lg:px-3">
+        <SidebarButton />
         <div className="flex flex-col">
           <span className="text-sm font-medium text-fg">Trash</span>
           <span className="text-xs text-fg-3">
@@ -74,7 +76,7 @@ export function TrashView() {
                   loading="lazy"
                   className="h-full w-full object-cover opacity-80"
                 />
-                <div className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
+                <div className="absolute top-1.5 right-1.5 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
                   <IconButton
                     icon="restore"
                     label="Restore"

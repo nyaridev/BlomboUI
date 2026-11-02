@@ -51,7 +51,8 @@ function joinPath(folder: string, name: string): string {
 
 export function BatchView({ manifest }: { manifest: WorkflowDetail }) {
   return (
-    <div className="flex h-full min-h-0 gap-3 p-3">
+    // Narrow screens: one scrolling column, the run panel above the settings.
+    <div className="flex h-full min-h-0 gap-3 p-3 max-lg:scroll-quiet max-lg:flex-col max-lg:overflow-y-auto max-lg:p-2">
       <ParamsColumn batch />
       <BatchPanel manifest={manifest} />
     </div>
@@ -142,7 +143,7 @@ function BatchPanel({ manifest }: { manifest: WorkflowDetail }) {
   };
 
   return (
-    <Panel className="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <Panel className="flex min-w-0 flex-1 flex-col overflow-hidden max-lg:order-first max-lg:flex-none">
       <div className="flex items-start gap-3 border-b border-line px-4 py-3">
         <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-field text-fg-2">
           <Icon name="stack" size={17} />
@@ -159,7 +160,7 @@ function BatchPanel({ manifest }: { manifest: WorkflowDetail }) {
         </div>
       </div>
 
-      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4">
+      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 max-lg:overflow-visible">
         {problems.map((p) => (
           <ProblemNotice key={p.message} problem={p} />
         ))}

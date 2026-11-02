@@ -148,7 +148,7 @@ export function ImageStage() {
       : null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 max-lg:h-[min(calc(100vw+70px),75svh)] max-lg:flex-none">
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-line bg-sunken [container-type:size]">
         <div className="absolute inset-0 grid place-items-center p-5">
           {running || current ? (

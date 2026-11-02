@@ -109,6 +109,27 @@
   background-size: 16px 16px;
 }
 
+/* Skeletons stay hidden for their first 300 ms, so data that answers quickly never flashes a
+   placeholder; slower loads still get one. */
+@utility skeleton {
+  animation:
+    skeleton-wait 0s linear 300ms both,
+    skeleton-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) 300ms infinite;
+}
+@keyframes skeleton-wait {
+  from {
+    visibility: hidden;
+  }
+  to {
+    visibility: visible;
+  }
+}
+@keyframes skeleton-pulse {
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* Settings → Appearance → Motion: "system" follows Windows, "reduced" always, "full" never. */
 @layer base {
   @media (prefers-reduced-motion: reduce) {

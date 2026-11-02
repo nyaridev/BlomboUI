@@ -126,7 +126,7 @@ export function Skeleton({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "block animate-pulse rounded-md bg-[linear-gradient(90deg,var(--field),var(--field-hover),var(--field))] bg-[length:200%_100%]",
+        "skeleton block rounded-md bg-[linear-gradient(90deg,var(--field),var(--field-hover),var(--field))] bg-[length:200%_100%]",
         className,
       )}
     />

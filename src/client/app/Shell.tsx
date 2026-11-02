@@ -11,7 +11,7 @@ import { toast } from "@client/ui";
 import type { ViewId } from "@shared/constants";
 import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
+import { type ComponentType, lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
@@ -23,31 +23,43 @@ import { useShortcuts } from "./useShortcuts";
 
 const KEEP_ALIVE: ViewId[] = ["generate", "gallery"];
 
-// Views you don't open every session load on first visit, so startup only pays for Generate
-// and Gallery.
-const ModelsView = lazy(() =>
+// Views you don't open every session load after startup, when the window is idle, so startup
+// only pays for Generate and Gallery and a first visit doesn't wait for (and pop in after) its code.
+// Once preloaded, a view renders directly: `lazy` suspends on every first render, and React holds
+// a revealed Suspense boundary back ~300 ms, which showed as an empty view that popped in late.
+const preload: (() => Promise<unknown>)[] = [];
+function lazyView(load: () => Promise<{ default: ComponentType }>) {
+  let Loaded: ComponentType | null = null;
+  const Lazy = lazy(load);
+  preload.push(() => load().then((m) => (Loaded = m.default)));
+  return function View() {
+    return Loaded ? <Loaded /> : <Lazy />;
+  };
+}
+
+const ModelsView = lazyView(() =>
   import("../features/models/ModelsView").then((m) => ({ default: m.ModelsView })),
 );
-const FileInfoView = lazy(() =>
+const FileInfoView = lazyView(() =>
   import("../features/fileinfo/FileInfoView").then((m) => ({ default: m.FileInfoView })),
 );
-const WildcardsView = lazy(() =>
+const WildcardsView = lazyView(() =>
   import("../features/wildcards/WildcardsView").then((m) => ({ default: m.WildcardsView })),
 );
-const SettingsView = lazy(() =>
+const SettingsView = lazyView(() =>
   import("../features/settings/SettingsView").then((m) => ({ default: m.SettingsView })),
 );
-const HistoryView = lazy(() =>
+const HistoryView = lazyView(() =>
   import("../features/history/HistoryView").then((m) => ({ default: m.HistoryView })),
 );
 // Dev mode only (see router.tsx).
 const DesignLab = import.meta.env.DEV
   ? lazy(() => import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })))
   : () => null;
-const ErrorsView = lazy(() =>
+const ErrorsView = lazyView(() =>
   import("../features/errors/ErrorsView").then((m) => ({ default: m.ErrorsView })),
 );
-const HelpView = lazy(() =>
+const HelpView = lazyView(() =>
   import("../features/help/HelpView").then((m) => ({ default: m.HelpView })),
 );
 
@@ -90,6 +102,10 @@ export function Shell() {
   useEffect(() => {
     startLive();
     startNotifications();
+    const idle = requestIdleCallback(() => {
+      for (const load of preload) load().catch(() => {});
+    });
+    return () => cancelIdleCallback(idle);
   }, []);
 
   useEffect(() => {

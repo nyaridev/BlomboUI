@@ -1,21 +1,19 @@
 /**
- * Settings → Overview: the profile, what it has made and the settings people change most.
+ * Settings → Overview: the profile (name and picture edited in place) and what it has made.
  * Generated images, GPU time, speed and the most used models, LoRAs and wildcards come from the
  * job log (`/api/history/stats`); gallery size and favorites from the gallery index. The numbers
  * refresh when a run finishes (the live bus invalidates the history queries).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
-import { avatarUrl } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useGoToView } from "@client/lib/hooks";
-import { useLive } from "@client/lib/live";
 import { useUsageStats } from "@client/lib/queries";
-import { Avatar, Badge, Button, EmptyState, Panel, Skeleton, Tooltip } from "@client/ui";
-import { THEME_LABELS } from "@shared/constants";
+import { Button, EmptyState, Panel, Skeleton, Tooltip } from "@client/ui";
 import { formatDuration, type Usage } from "@shared/history";
 import type { ReactNode } from "react";
-import { PageHeader, QuickRow, useCurrentProfile } from "./common";
+import { PageHeader, useCurrentProfile } from "./common";
 import type { SettingsPage } from "./nav";
+import { ProfileCard } from "./ProfileCard";
 
 function StatTile({
   label,
@@ -152,46 +150,19 @@ function DayBars({ days }: { days: Array<{ day: string; count: number }> }) {
 export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
   const profile = useCurrentProfile();
   const stats = useUsageStats();
-  const comfy = useLive((st) => st.comfy);
   const go = useGoToView();
   const s = stats.data;
   const n = (v: number | undefined) => (v === undefined ? "—" : v.toLocaleString());
   return (
     <>
       <PageHeader title="Overview" />
-      <Panel className="mb-6 flex items-center gap-5 p-5 max-lg:flex-wrap max-lg:gap-4 max-lg:p-4">
-        <Avatar
-          name={profile?.name ?? "Profile"}
-          src={profile ? avatarUrl(profile) : null}
-          accent={profile?.accent}
-          size={64}
+      {profile ? (
+        <ProfileCard
+          profile={profile}
+          since={s?.firstAt ?? null}
+          onEditFolders={() => onGo("files")}
         />
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-lg font-semibold text-fg">{profile?.name ?? "…"}</span>
-            <Badge tone="accent">{profile ? THEME_LABELS[profile.theme] : ""}</Badge>
-            {s?.firstAt ? (
-              <span className="text-xs text-fg-3">
-                generating since{" "}
-                {new Date(s.firstAt).toLocaleDateString(undefined, { dateStyle: "medium" })}
-              </span>
-            ) : null}
-          </div>
-          <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-0.5 text-xs">
-            {(["models", "outputs", "wildcards"] as const).map((k) => (
-              <div key={k} className="contents">
-                <span className="text-fg-3 capitalize">{k}</span>
-                <span className="truncate font-mono text-fg-2">
-                  {profile?.paths[k] || "not set"}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-        <Button icon="edit" onClick={() => onGo("files")} className="max-lg:w-full">
-          Edit folders
-        </Button>
-      </Panel>
+      ) : null}
 
       {stats.error ? (
         <EmptyState
@@ -300,42 +271,6 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           </div>
         </>
       )}
-
-      <h2 className="label-caps mb-3">Quick settings</h2>
-      <Panel className="flex flex-col divide-y divide-line">
-        <QuickRow
-          icon="palette"
-          title="Appearance"
-          text="Theme, profile color, font and motion"
-          onClick={() => onGo("appearance")}
-        />
-        <QuickRow
-          icon="folder"
-          title="Folders"
-          text={profile?.paths.outputs || "No outputs folder yet"}
-          onClick={() => onGo("files")}
-          warn={!profile?.paths.outputs}
-        />
-        <QuickRow
-          icon="workflow"
-          title="ComfyUI"
-          text={
-            profile?.comfy.mode === "external"
-              ? `At ${profile.comfy.url}`
-              : profile?.comfy.mode === "local"
-                ? `Your own in ${profile.comfy.dir}${comfy?.state === "missing" ? " · not found" : ""}`
-                : `Managed · slot ${profile?.comfy.mode === "managed" ? profile.comfy.slot : "—"}${comfy?.state === "missing" ? " · not installed yet" : ""}`
-          }
-          onClick={() => onGo("comfy")}
-          warn={comfy?.state === "missing"}
-        />
-        <QuickRow
-          icon="bell"
-          title="Notifications"
-          text="Tell me when long runs, batches and downloads finish"
-          onClick={() => onGo("notifications")}
-        />
-      </Panel>
     </>
   );
 }

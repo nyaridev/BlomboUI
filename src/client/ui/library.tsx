@@ -429,17 +429,20 @@ export function TreeRow({
 
 /**
  * A borderless text input for dense lists (wildcard lines): it reads like text and shows a field
- * only on hover and focus. `muted` dims it (comments).
+ * only on hover and focus. `muted` dims it (comments). `size="lg"` is a title that's edited in
+ * place (the profile name on Overview): heading type, as wide as its text.
  */
 export function InlineInput({
   muted,
   mono = true,
+  size = "md",
   className,
   ref,
   ...rest
-}: InputHTMLAttributes<HTMLInputElement> & {
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "size"> & {
   muted?: boolean;
   mono?: boolean;
+  size?: "md" | "lg";
   ref?: Ref<HTMLInputElement>;
 }) {
   return (
@@ -447,9 +450,11 @@ export function InlineInput({
       ref={ref}
       spellCheck={false}
       className={cn(
-        "h-7 min-w-0 rounded-sm border border-transparent bg-transparent px-2 outline-none transition-colors",
+        "min-w-0 rounded-sm border border-transparent bg-transparent px-2 outline-none transition-colors",
         "hover:border-line focus:border-accent-ink/60 focus:bg-field disabled:opacity-45",
-        mono ? "font-mono text-[12.5px]" : "text-sm",
+        size === "lg"
+          ? "h-8 max-w-full text-lg font-semibold [field-sizing:content]"
+          : cn("h-7", mono ? "font-mono text-[12.5px]" : "text-sm"),
         muted ? "text-fg-4 italic" : "text-fg",
         className,
       )}

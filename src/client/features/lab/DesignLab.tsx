@@ -247,6 +247,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [treeOpen, setTreeOpen] = useState(true);
   const [treeSel, setTreeSel] = useState("outfits/fantasy.txt");
   const [lines, setLines] = useState(["silver cloak", "# a comment", "__colors__ armor"]);
+  const [title, setTitle] = useState("Anime");
   const [progress, setProgress] = useState(0.42);
   const [stars, setStars] = useState(3);
   const [palette, setPalette] = useState(false);
@@ -1239,6 +1240,12 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                     onChange={() => undefined}
                   />
                 </div>
+                <InlineInput
+                  size="lg"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  aria-label="Demo title"
+                />
               </Row>
               <Row label="PropertyList">
                 <PropertyList

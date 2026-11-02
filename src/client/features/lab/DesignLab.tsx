@@ -533,6 +533,11 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 <TextField id={id} value="B:\Nope" invalid mono onChange={() => undefined} />
               )}
             </Field>
+            <Field label="Valid" hint="A folder that exists.">
+              {(id) => (
+                <TextField id={id} value="B:\Models" valid mono onChange={() => undefined} />
+              )}
+            </Field>
             <Field label="Select (grouped)">
               <Select
                 value={sel}

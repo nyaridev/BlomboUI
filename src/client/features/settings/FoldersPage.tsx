@@ -5,10 +5,12 @@
  * restarts a managed ComfyUI.
  */
 
-import type { IconName } from "@client/icons/Icon";
+import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { cn } from "@client/lib/cn";
+import { useDebounced } from "@client/lib/hooks";
 import { useUpdateProfile } from "@client/lib/queries";
-import { Badge, Button, IconButton, InlineInput, SectionTitle, toast } from "@client/ui";
+import { Badge, Button, IconButton, InlineInput, SectionTitle, TextField, toast } from "@client/ui";
 import {
   FOLDER_KINDS,
   FolderId,
@@ -25,64 +27,97 @@ import { useEffect, useState } from "react";
 
 const KINDS: Record<
   FolderKind,
-  { title: string; icon: IconName; hint: string; empty: string; label: string }
+  { title: string; icon: IconName; hint: string; add: string; label: string; example: string }
 > = {
   models: {
     title: "Models",
     icon: "models",
     label: "Models",
     hint: "ComfyUI and the Models page read every folder; when two hold the same file, the higher one wins. Downloads go into the main one. A managed ComfyUI restarts to see a change.",
-    empty: "No models folder yet. Add the one with checkpoints/, loras/, vae/…",
+    add: "Add a models folder",
+    example: "D:\\AI\\Models",
   },
   outputs: {
     title: "Outputs",
     icon: "gallery",
     label: "Outputs",
     hint: "Generated images and batch results are saved in the main one. The gallery shows them all together, or one folder at a time from its sidebar.",
-    empty: "No output folder yet. Add one to save what you generate.",
+    add: "Add an output folder",
+    example: "D:\\AI\\Outputs",
   },
   wildcards: {
     title: "Wildcards",
     icon: "wildcards",
     label: "Wildcards",
     hint: "__wildcards__ in prompts come from every folder; when two have the same name, the higher one wins.",
-    empty: "No wildcards folder yet. Add one with .txt or .yaml files.",
+    add: "Add a wildcards folder",
+    example: "D:\\AI\\Wildcards",
   },
 };
 
-const NONE: ProfileFolders = { models: [], outputs: [], wildcards: [] };
+/** A draft row: the folder plus a key that stays put while its path is typed or it moves. */
+type Row = ProfileFolder & { key: string };
+type Draft = Record<FolderKind, Row[]>;
+const NO_FOLDERS: ProfileFolders = { models: [], outputs: [], wildcards: [] };
 
-/** What's wrong with a row, or null. */
-function problem(list: ProfileFolder[], i: number): string | null {
+let nextKey = 0;
+const keyed = (f: ProfileFolder): Row => ({ ...f, key: String(++nextKey) });
+const toDraft = (folders: ProfileFolders): Draft =>
+  Object.fromEntries(FOLDER_KINDS.map((k) => [k, folders[k].map(keyed)])) as Draft;
+/** What Save sends: rows with a path, trimmed, without their keys. Blank new rows are dropped. */
+const toFolders = (draft: Draft): ProfileFolders =>
+  Object.fromEntries(
+    FOLDER_KINDS.map((k) => [
+      k,
+      draft[k]
+        .filter((f) => f.path.trim())
+        .map((f) => ({ id: f.id, name: f.name.trim(), path: f.path.trim() })),
+    ]),
+  ) as ProfileFolders;
+
+const samePath = (a: string, b: string) =>
+  a
+    .trim()
+    .replace(/[\\/]+$/, "")
+    .toLowerCase() ===
+  b
+    .trim()
+    .replace(/[\\/]+$/, "")
+    .toLowerCase();
+
+/** The id a row gets from its name: the main id for a first folder, so gallery marks still match. */
+function autoId(kind: FolderKind, name: string, list: Row[], i: number): string {
+  const others = list.filter((_, j) => j !== i).map((f) => f.id);
+  if (i === 0 && !others.includes(MAIN_FOLDER_IDS[kind])) return MAIN_FOLDER_IDS[kind];
+  return name ? folderIdFrom(name, others) : "";
+}
+
+/** What's wrong with a row, or null. A row without a path is skipped, so it has no problem. */
+function problem(list: Row[], i: number): string | null {
   const f = list[i];
-  if (!f) return null;
+  if (!f?.path.trim()) return null;
+  if (list.findIndex((o) => samePath(o.path, f.path)) !== i)
+    return "This folder is already in the list.";
   if (!f.name.trim()) return "Give it a name.";
-  const id = FolderId.safeParse(f.id);
-  if (!id.success) return "Ids use a-z, 0-9 and dashes, and start with a letter or digit.";
+  if (!FolderId.safeParse(f.id).success)
+    return "Ids use a-z, 0-9 and dashes, and start with a letter or digit.";
   if (list.findIndex((o) => o.id === f.id) !== i) return `Another folder already uses "${f.id}".`;
   return null;
 }
 
 export function FoldersPage({ profile }: { profile: Profile | undefined }) {
   const update = useUpdateProfile();
-  const [draft, setDraft] = useState<ProfileFolders>(profile?.folders ?? NONE);
+  const [draft, setDraft] = useState<Draft>(() => toDraft(profile?.folders ?? NO_FOLDERS));
   useEffect(() => {
-    if (profile) setDraft(profile.folders);
+    if (profile) setDraft(toDraft(profile.folders));
   }, [profile]);
-  const dirty = profile !== undefined && JSON.stringify(draft) !== JSON.stringify(profile.folders);
+  const folders = toFolders(draft);
+  const dirty =
+    profile !== undefined && JSON.stringify(folders) !== JSON.stringify(profile.folders);
   const invalid = FOLDER_KINDS.some((k) => draft[k].some((_, i) => problem(draft[k], i)));
-
-  const setList = (kind: FolderKind, list: ProfileFolder[]) =>
-    setDraft((d) => ({ ...d, [kind]: list }));
 
   const save = () => {
     if (!profile) return;
-    const folders = Object.fromEntries(
-      FOLDER_KINDS.map((k) => [
-        k,
-        draft[k].map((f) => ({ id: f.id, name: f.name.trim(), path: f.path.trim() })),
-      ]),
-    ) as ProfileFolders;
     update.mutate(
       { id: profile.id, body: { folders } },
       {
@@ -99,7 +134,7 @@ export function FoldersPage({ profile }: { profile: Profile | undefined }) {
           key={kind}
           kind={kind}
           list={draft[kind]}
-          onChange={(list) => setList(kind, list)}
+          onChange={(list) => setDraft((d) => ({ ...d, [kind]: list }))}
         />
       ))}
       <div className="flex gap-2">
@@ -112,7 +147,7 @@ export function FoldersPage({ profile }: { profile: Profile | undefined }) {
           Save folders
         </Button>
         {dirty ? (
-          <Button variant="ghost" onClick={() => profile && setDraft(profile.folders)}>
+          <Button variant="ghost" onClick={() => profile && setDraft(toDraft(profile.folders))}>
             Undo changes
           </Button>
         ) : null}
@@ -127,42 +162,28 @@ function FolderList({
   onChange,
 }: {
   kind: FolderKind;
-  list: ProfileFolder[];
-  onChange: (list: ProfileFolder[]) => void;
+  list: Row[];
+  onChange: (list: Row[]) => void;
 }) {
   const info = KINDS[kind];
-  const [picking, setPicking] = useState(false);
+  const [focusKey, setFocusKey] = useState<string | null>(null);
 
-  const pick = async (title: string, initial?: string): Promise<string | null> => {
-    setPicking(true);
-    try {
-      return (await api.pickFolder(title, initial)).path ?? null;
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Couldn't open the folder picker.", "error");
-      return null;
-    } finally {
-      setPicking(false);
-    }
+  const add = () => {
+    const row = keyed({ id: "", name: "", path: "" });
+    setFocusKey(row.key);
+    onChange([...list, row]);
   };
-  const taken = (p: string, except = -1) =>
-    list.some((f, i) => i !== except && f.path.toLowerCase() === p.toLowerCase());
-
-  const add = async () => {
-    const p = await pick(`Add a ${info.label.toLowerCase()} folder`);
-    if (!p) return;
-    if (taken(p)) return toast("That folder is already in the list.", "error");
-    const name = folderNameOf(p, info.label);
-    const ids = list.map((f) => f.id);
-    // The first folder of a kind keeps the main id, so the gallery's marks find it.
-    const id = list.length ? folderIdFrom(name, ids) : MAIN_FOLDER_IDS[kind];
-    onChange([...list, { id, name, path: p }]);
-  };
-  const change = async (i: number) => {
-    const p = await pick(`Choose the folder for ${list[i]?.name}`, list[i]?.path);
-    if (!p) return;
-    if (taken(p, i)) return toast("That folder is already in the list.", "error");
-    onChange(list.map((f, j) => (j === i ? { ...f, path: p } : f)));
-  };
+  const setPath = (i: number, path: string) =>
+    onChange(
+      list.map((f, j) => {
+        if (j !== i) return f;
+        // Name and id follow the path until you change them yourself.
+        const autoName = f.name === "" || f.name === folderNameOf(f.path, info.label);
+        const name = autoName ? (path.trim() ? folderNameOf(path, info.label) : "") : f.name;
+        const autoIdNow = f.id === "" || f.id === autoId(kind, f.name, list, i);
+        return { ...f, path, name, id: autoIdNow ? autoId(kind, name, list, i) : f.id };
+      }),
+    );
   const move = (from: number, to: number) => {
     const next = [...list];
     const [f] = next.splice(from, 1);
@@ -174,82 +195,113 @@ function FolderList({
 
   return (
     <section className="flex flex-col gap-3">
-      <SectionTitle
-        icon={info.icon}
-        actions={
-          <Button size="sm" icon="folder-plus" loading={picking} onClick={add}>
-            Add folder
-          </Button>
-        }
-      >
-        {info.title}
-      </SectionTitle>
+      <SectionTitle icon={info.icon}>{info.title}</SectionTitle>
       <p className="max-w-[72ch] text-xs text-fg-3 text-pretty">{info.hint}</p>
-      {list.length ? (
-        <ol className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
-          {list.map((f, i) => (
-            <FolderRow
-              key={`${i}:${f.path}`}
-              folder={f}
-              index={i}
-              last={i === list.length - 1}
-              error={problem(list, i)}
-              onEdit={(patch) => edit(i, patch)}
-              onMove={(to) => move(i, to)}
-              onChangePath={() => change(i)}
-              onRemove={() => onChange(list.filter((_, j) => j !== i))}
-            />
-          ))}
-        </ol>
-      ) : (
-        <p className="rounded-lg border border-dashed border-line px-4 py-5 text-center text-sm text-fg-3">
-          {info.empty}
-        </p>
-      )}
+      <ol className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
+        {list.map((f, i) => (
+          <FolderRow
+            key={f.key}
+            kind={kind}
+            folder={f}
+            index={i}
+            last={i === list.length - 1}
+            autoFocus={f.key === focusKey}
+            error={problem(list, i)}
+            onPath={(p) => setPath(i, p)}
+            onEdit={(patch) => edit(i, patch)}
+            onMove={(to) => move(i, to)}
+            onRemove={() => onChange(list.filter((_, j) => j !== i))}
+          />
+        ))}
+        <li>
+          <button
+            type="button"
+            onClick={add}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-b-lg px-3 py-2.5 text-left text-sm text-fg-3 transition-colors hover:bg-field hover:text-fg focus-ring",
+              list.length === 0 && "rounded-t-lg",
+            )}
+          >
+            <span className="flex w-12 shrink-0 justify-center">
+              <span className="grid h-6 w-6 place-items-center rounded-md border border-dashed border-line-strong">
+                <Icon name="plus" size={14} />
+              </span>
+            </span>
+            {info.add}
+          </button>
+        </li>
+      </ol>
     </section>
   );
 }
 
 function FolderRow({
+  kind,
   folder,
   index,
   last,
+  autoFocus,
   error,
+  onPath,
   onEdit,
   onMove,
-  onChangePath,
   onRemove,
 }: {
-  folder: ProfileFolder;
+  kind: FolderKind;
+  folder: Row;
   index: number;
   last: boolean;
+  autoFocus: boolean;
   error: string | null;
+  onPath: (path: string) => void;
   onEdit: (patch: Partial<ProfileFolder>) => void;
   onMove: (to: number) => void;
-  onChangePath: () => void;
   onRemove: () => void;
 }) {
+  const info = KINDS[kind];
   const main = index === 0;
+  const path = useDebounced(folder.path.trim(), 250);
   const check = useQuery({
-    queryKey: ["check-path", folder.path],
-    queryFn: () => api.checkPath(folder.path),
+    queryKey: ["check-path", path],
+    queryFn: () => api.checkPath(path),
+    enabled: path.length > 0,
     staleTime: 5_000,
   });
-  const missing = check.data && (!check.data.exists || !check.data.isDirectory);
+  // Only judge the path once the check matches what's typed.
+  const checked = path === folder.path.trim() && check.data ? check.data : null;
+  const found = Boolean(checked?.exists && checked.isDirectory);
+  const missing = checked !== null && !found;
+  const [picking, setPicking] = useState(false);
+  const browse = async () => {
+    setPicking(true);
+    try {
+      const res = await api.pickFolder(
+        `Choose a ${info.label.toLowerCase()} folder`,
+        folder.path || undefined,
+      );
+      if (res.path) onPath(res.path);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't open the folder picker.", "error");
+    } finally {
+      setPicking(false);
+    }
+  };
+
   return (
-    <li className="flex items-start gap-3 px-3 py-2.5">
-      <div className="flex w-12 shrink-0 justify-center pt-1">
+    <li className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-3 py-2.5">
+      <div className="flex justify-center pt-1">
         {main ? (
           <Badge tone="accent">Main</Badge>
         ) : (
           <span className="pt-0.5 text-xs text-fg-4 tabular">{index + 1}</span>
         )}
       </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+      <div className="flex min-w-0 flex-col">
         <div className="flex min-w-0 flex-wrap items-center gap-x-2">
           <InlineInput
             mono={false}
             value={folder.name}
+            placeholder="Name"
             maxLength={60}
             onChange={(e) => onEdit({ name: e.target.value })}
             aria-label="Folder name"
@@ -259,6 +311,7 @@ function FolderRow({
             id
             <InlineInput
               value={folder.id}
+              placeholder="id"
               maxLength={48}
               onChange={(e) => onEdit({ id: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
               aria-label="Folder id"
@@ -266,13 +319,6 @@ function FolderRow({
             />
           </span>
         </div>
-        <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate font-mono text-xs text-fg-3" title={folder.path}>
-            {folder.path}
-          </span>
-          {missing ? <Badge tone="warning">Not found</Badge> : null}
-        </div>
-        {error ? <span className="text-xs text-danger">{error}</span> : null}
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
         {main ? null : (
@@ -298,13 +344,42 @@ function FolderRow({
           disabled={last}
           onClick={() => onMove(index + 1)}
         />
-        <IconButton size="sm" icon="folder-open" label="Change folder" onClick={onChangePath} />
         <IconButton
           size="sm"
           icon="x"
           label="Remove from the list (files stay)"
           onClick={onRemove}
         />
+      </div>
+      {/* The path runs under the buttons too, full width on narrow screens. */}
+      <div className="col-span-2 col-start-2 flex min-w-0 flex-col gap-1.5 max-lg:col-span-3 max-lg:col-start-1">
+        <TextField
+          size="sm"
+          mono
+          value={folder.path}
+          placeholder={info.example}
+          autoFocus={autoFocus}
+          onChange={(e) => onPath(e.target.value)}
+          valid={found}
+          invalid={missing}
+          aria-label={`${info.label} folder path`}
+          trailing={
+            <IconButton
+              size="xs"
+              icon="folder-open"
+              label="Browse"
+              disabled={picking}
+              onClick={() => void browse()}
+            />
+          }
+        />
+        {missing ? (
+          <span className="flex items-center gap-1.5 text-xs text-danger">
+            <Icon name="x-circle" size={13} />
+            {checked?.exists ? "That's a file, not a folder." : "This folder doesn't exist."}
+          </span>
+        ) : null}
+        {error ? <span className="text-xs text-danger">{error}</span> : null}
       </div>
     </li>
   );

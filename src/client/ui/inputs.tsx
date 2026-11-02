@@ -13,13 +13,17 @@ import {
 
 const fieldBox =
   "flex min-w-0 items-center gap-2 rounded-md border bg-field text-sm text-fg transition-[border-color,box-shadow] " +
-  "border-line hover:border-line-strong focus-within:border-accent-ink/70 focus-within:ring-2 focus-within:ring-accent/25";
+  "focus-within:border-accent-ink/70 focus-within:ring-2 focus-within:ring-accent/25";
+// Only one border color at a time: utilities of the same kind win by stylesheet order, not class order.
+const neutralBorder = "border-line hover:border-line-strong";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   icon?: IconName;
   trailing?: ReactNode;
   size?: "sm" | "md" | "lg";
   invalid?: boolean;
+  /** Confirmed good (a folder that exists): a green outline. */
+  valid?: boolean;
   onClear?: () => void;
   mono?: boolean;
   ref?: Ref<HTMLInputElement>;
@@ -30,6 +34,7 @@ export function TextField({
   trailing,
   size = "md",
   invalid,
+  valid,
   onClear,
   mono,
   className,
@@ -42,7 +47,11 @@ export function TextField({
       className={cn(
         fieldBox,
         h,
-        invalid && "border-red/70 focus-within:border-red-ink focus-within:ring-red/25",
+        invalid
+          ? "border-red/70 focus-within:border-red-ink focus-within:ring-red/25"
+          : valid
+            ? "border-green/70 focus-within:border-green-ink focus-within:ring-green/25"
+            : neutralBorder,
         rest.disabled && "opacity-45",
         className,
       )}

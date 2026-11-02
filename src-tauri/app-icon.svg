@@ -1,13 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="1024" height="1024">
-  <defs>
-    <linearGradient id="t" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#7aa2ff"/>
-      <stop offset="1" stop-color="#2a56e8"/>
-    </linearGradient>
-  </defs>
-  <rect width="32" height="32" rx="9" fill="url(#t)"/>
-  <rect x="0.5" y="0.5" width="31" height="31" rx="8.5" fill="none" stroke="#ffffff" stroke-opacity=".18"/>
-  <path d="M11 7.5v16" stroke="#fff" stroke-width="3.2" stroke-linecap="round" fill="none"/>
-  <circle cx="16.4" cy="18.6" r="5.2" stroke="#fff" stroke-width="3.2" fill="none"/>
-  <circle cx="23.6" cy="8.6" r="2.6" fill="#ff7a2e"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512">
+  <title>BlomboUI</title>
+  <rect width="512" height="512" rx="112" fill="#0d0f12"/>
+  <path fill="#f2ede6" fill-rule="evenodd" d="M116 196V184A44 44 0 0 1 160 140H352A44 44 0 0 1 396 184V196ZM116 210H396V253A37 37 0 0 0 396 327V328A44 44 0 0 1 352 372H160A44 44 0 0 1 116 328V327A37 37 0 0 0 116 253ZM199 290A21 38 0 1 0 241 290A21 38 0 1 0 199 290ZM271 290A21 38 0 1 0 313 290A21 38 0 1 0 271 290ZM86 290A30 30 0 1 0 146 290A30 30 0 1 0 86 290ZM105 290A11 11 0 1 0 127 290A11 11 0 1 0 105 290Z"/>
+  <circle cx="396" cy="290" r="30" fill="#ff7a2e"/>
 </svg>

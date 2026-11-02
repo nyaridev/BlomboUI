@@ -74,6 +74,7 @@ Presets in `src/client/lib/motion.ts`:
 - Sizes: 14 in dense rows, 15–16 in buttons, 18–22 in empty states and tiles.
 - Icon-only buttons always go through `IconButton`, which requires a `label` (tooltip + accessible name) and can show a shortcut.
 - To add an icon: draw it on the 24 grid, paste the inner markup into `ICONS`, check it in the Lab next to its neighbors at 16 and 22 px.
+- **The mark** is Nodey, a ComfyUI node with a face (`icons/Logo.tsx`, 32 grid). In the app its tile follows the profile accent and the output socket is generate orange (`--mark-socket`; white on the orange accent). The app icon (`src-tauri/app-icon.svg`, 512 grid), the favicon and the README banners (`assets/brand/`) use the fixed ink tile.
 
 ## Components (`src/client/ui`)
 

@@ -194,6 +194,9 @@ Everything goes through the server: `services/civitai/` (API client with cache, 
 ### Add a shortcut or a palette entry
 An app-wide action is one entry in `SHORTCUT_ACTIONS` (`shared/shortcuts.ts`: id, label, group, default keys or `""`, optional `view`) and one case in `runAction()` (`app/commands.ts`); Settings → Shortcuts, the palette's Actions and Help list it from there. Keys that only work inside one view go in `FIXED_SHORTCUTS` (listed, not rebindable). Other palette groups (workflows, models, settings pages, help topics) are built from their data in `app/Palette.tsx`. Show the current keys with `useShortcutLabel()`, never a hardcoded string.
 
+### Try layout variants
+To compare designs in the running app, render them behind `useVariant(key, label, options)` from `lib/variants.ts` (options a module constant; built apps get the first). In dev mode a floating "Layouts" panel in the bottom-left corner (`features/dev/VariantPanel.tsx`) switches every variant on screen, and remembers the pick in this browser. Once the owner picks one, delete the `useVariant` call and the other layouts.
+
 ### Add a UI control
 Build it in `src/client/ui/`, export from `ui/index.ts`, add every state to `features/lab/DesignLab.tsx`, document it in `docs/design-system.md`.
 

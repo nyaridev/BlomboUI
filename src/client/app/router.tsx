@@ -22,7 +22,21 @@ const DesignLab = import.meta.env.DEV
   ? lazy(() => import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })))
   : () => null;
 
-const rootRoute = createRootRoute({ component: Outlet });
+// Dev mode only: the floating layout-variant switcher (lib/variants.ts).
+const VariantPanel = import.meta.env.DEV
+  ? lazy(() => import("../features/dev/VariantPanel").then((m) => ({ default: m.VariantPanel })))
+  : () => null;
+
+const rootRoute = createRootRoute({
+  component: () => (
+    <>
+      <Outlet />
+      <Suspense fallback={null}>
+        <VariantPanel />
+      </Suspense>
+    </>
+  ),
+});
 
 const profilesRoute = createRoute({
   getParentRoute: () => rootRoute,

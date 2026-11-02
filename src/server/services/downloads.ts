@@ -7,7 +7,7 @@
  *    resumes with an HTTP range request instead of starting over.
  *  - Civitai files are checked against Civitai's SHA256; the profile's API key is sent only to
  *    Civitai itself, never to the storage host a download redirects to.
- *  - A finished Civitai download gets its sidecars (.civitai.info, .preview.png, unless turned
+ *  - A finished Civitai download gets its sidecars (.civitai.info, <model>_data/thumb.jpg, unless turned
  *    off), its hash and Civitai match go into the lookup tables, and the model lists refresh.
  *  - Every download is a row in the profile's database (the History view); unfinished ones come
  *    back paused when the profile opens again.
@@ -16,7 +16,6 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import sharp from "sharp";
 import { CIVITAI_TYPE_LABELS, civitaiKind } from "../../shared/civitai.ts";
 import {
   cleanFolder,
@@ -53,6 +52,7 @@ import { infoSidecar, lookupInfo, previewSource, primaryFile } from "./civitai/n
 import type { ModelLookup } from "./lookup.ts";
 import type { ManagerCatalog } from "./manager.ts";
 import type { ModelService } from "./models.ts";
+import { saveModelThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
 import type { SettingsService } from "./settings.ts";
 
@@ -83,7 +83,7 @@ interface Job {
   sha256: string | null;
   /** The .civitai.info to save next to the model. */
   info: Record<string, unknown> | null;
-  /** Remote image for the .preview.png. */
+  /** Remote image for the model's picture (<model>_data/thumb.jpg). */
   preview: string | null;
   /** What to remember about the file once it's in place. */
   lookup: LookupInfo | null;
@@ -701,7 +701,10 @@ export class DownloadQueue {
     return `The download failed (HTTP ${status}). Retry in a moment.`;
   }
 
-  /** .civitai.info and .preview.png next to the model, unless they're turned off or exist. */
+  /**
+   * .civitai.info next to the model and its picture in <model>_data/ (modelthumbs.ts), unless
+   * they're turned off or already there.
+   */
   private async sidecars(item: Item, final: string): Promise<void> {
     if (item.d.source !== "civitai") return;
     const opts = (await this.deps.settings.get(item.profileId)).civitai.downloads;
@@ -713,12 +716,7 @@ export class DownloadQueue {
       );
     if (opts.savePreview && item.job.preview) {
       const bytes = await this.deps.civitai.images.bytes(item.job.preview);
-      const png = await sharp(bytes, { failOn: "none" })
-        .rotate()
-        .resize({ width: 512, height: 768, fit: "inside", withoutEnlargement: true })
-        .png({ compressionLevel: 8 })
-        .toBuffer();
-      await writeFileIfAbsent(`${stem}.preview.png`, png);
+      await saveModelThumbs(final, bytes, { replace: false });
     }
   }
 

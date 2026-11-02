@@ -21,7 +21,7 @@ export const FEATURES = [
   "resolution",
   "seed",
   "image-stage",
-  /** Prompt matrix, XY plot and scope thumbnails (shared/scripts.ts). */
+  /** Prompt matrix, XY plot and thumbnails (shared/scripts.ts). */
   "scripts",
 ] as const;
 export type FeatureId = (typeof FEATURES)[number];

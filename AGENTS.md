@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0015, all accepted and built)
+- `docs/adr/`: decisions and why (0001–0016, all accepted and built)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 - `docs/status.md`: what's built, what was verified and how, and the phase roadmap
 - `docs/performance.md`: measured numbers (20k-image gallery, startup bundle) and how to repeat them
@@ -42,8 +42,8 @@ src/
 │                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
 │                 autocomplete (tag CSV, prompt context, formatting) · bridge (edit sessions)
 │                 scripts (matrix / XY / thumbnails planner) · batch (runner shapes)
-│                 history (job log, usage stats, snippets, model marks) · scopes (scope
-│                 definitions, pickScope) · shortcuts (actions, defaults, combos)
+│                 history (job log, usage stats, snippets, model marks)
+│                 shortcuts (actions, defaults, combos)
 │                 salvage (read saved data value by value: clamp, default, drop one item)
 │                 layout/schema · workflow/{roles,manifest,graph,stages,packs}
 │                 prompt/{tokenize,loras,wildcards,weight,explain}
@@ -55,14 +55,14 @@ src/
 │   │                 profiles · system · settings · comfy · workflows · jobs · wildcards
 │   │                 gallery · models · fileinfo · civitai · downloads · manager
 │   │                 stages · layouts · autocomplete · bridge (/api/bridge, CORS) · scripts · batch
-│   │                 history (job log, errors, prompts, stats, snippets, model marks) · scopes
+│   │                 history (job log, errors, prompts, stats, snippets, model marks)
 │   ├── services/     profiles · settings · system · window · live (bus) · jobs (queue)
 │   │                 wildcards · models · fileinfo · downloads (queue) · lookup (hash → Civitai)
 │   │                 manager (ComfyUI model catalog) · stages (packages, control images,
 │   │                 checks, map preview) · layouts (profile layouts/) · autocomplete (tag lists,
 │   │                 LoRAs, wildcards, frequent tags) · bridge (edit sessions, Save to Blombo)
-│   │                 scripts (groups → grids, scope thumbnails) · batch (the batch runner)
-│   │                 scopes (scopes.json, per-scope model pictures) · history (job log, error log,
+│   │                 scripts (groups → grids, thumbnails) · batch (the batch runner)
+│   │                 modelthumbs (a model's pictures in <model>_data/) · history (job log, error log,
 │   │                 stats, model marks) · timing (RunClock: time and it/s per stage) · snippets
 │   │                 backup (profile export / import zip)
 │   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (slots, progress)
@@ -84,7 +84,7 @@ src/
 │   │                 palette and shortcuts run) · Palette (Ctrl+K) · useShortcuts
 │   ├── features/     profiles · generate · gallery · fileinfo · models (local, civitai/, Manager)
 │   │                 wildcards · settings · downloads · history (generations, downloads, Civitai)
-│   │                 errors · help (guide, playground) · scopes · lab · preview
+│   │                 errors · help (guide, playground) · lab · preview
 │   ├── ui/           the design system (hand-built controls). Import from "@client/ui"
 │   ├── icons/        hand-drawn SVG icon set + Logo
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
@@ -107,17 +107,17 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Data flow:** client → `/api` (Zod-validated) → service → files in `data/` and ComfyUI's HTTP API. Live state comes back over one WebSocket per window, `/api/live` (ADR-0008): ComfyUI status, GPU stats at 1 Hz, queue snapshots, step progress, binary preview frames, errors, and ComfyUI's log while a log view is open. The server owns the single ComfyUI socket (`services/comfy/client.ts`) and fans it out (`services/live.ts`); the client keeps it in `lib/live.ts`.
 
-**Generating:** the Generate button posts the current values and stage settings to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → stages spliced at the ports → seed → filename prefix), uploads ControlNet images, sends it to ComfyUI and turns its socket events into progress (split into segments: base passes, then each stage), previews and images. The queue lives on the server, so reloads and other windows see the same thing. Stage blocks ask `/api/stages/check` what's missing before you run. With a **script** on (Scripts block: prompt matrix, XY plot, scope thumbnails; `shared/scripts.ts`), the same button queues a **group** of runs with one seed; `services/scripts.ts` puts a matrix or plot into a labeled grid (`lib/grid.ts`) or files scope thumbnails. `kind: "batch"` workflows show the **batch runner** instead (`services/batch.ts`): one queued run per input file, results and sidecar captions written to the output folder (ADR-0014).
+**Generating:** the Generate button posts the current values and stage settings to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → stages spliced at the ports → seed → filename prefix), uploads ControlNet images, sends it to ComfyUI and turns its socket events into progress (split into segments: base passes, then each stage), previews and images. The queue lives on the server, so reloads and other windows see the same thing. Stage blocks ask `/api/stages/check` what's missing before you run. With a **script** on (Scripts block: prompt matrix, XY plot, thumbnails; `shared/scripts.ts`), the same button queues a **group** of runs with one seed; `services/scripts.ts` puts a matrix or plot into a labeled grid (`lib/grid.ts`) or saves each image as its model's picture (`services/modelthumbs.ts`). `kind: "batch"` workflows show the **batch runner** instead (`services/batch.ts`): one queued run per input file, results and sidecar captions written to the output folder (ADR-0014).
 
 **Round trips with ComfyUI:** Edit in ComfyUI asks `/api/workflows/:id/edit-session` for a single-use token and opens ComfyUI with it; the blombo-bridge extension (`src/comfy-bridge/`, copied into managed slots before they start) loads the canvas and calls `/api/bridge/*` (CORS for that ComfyUI only) to save back; `services/workflows/resync.ts` carries values over and reports what changed, and `workflow.saved` on the live bus updates every window (ADR-0009). Export / import of `.blombo` bundles: `services/workflows/bundle.ts`.
 
 **Generate screen:** the params column is a layout document; built-in layouts are in `presets/layouts/`, the profile's in `layouts/`, and a workflow links one (`manifest.layout`; `GET /api/workflows/:id` returns the layout it shows). The prompt editor's autocomplete asks `/api/autocomplete` (tag lists in `presets/tags/` and the profile's `tags/`, LoRAs and trigger words, wildcards, frequent tags from the profile database); Ctrl+↑/↓ changes weights.
 
-**Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar thumbnails and info; the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
+**Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar info and each model's picture (`<model>_data/thumb.jpg`, full size in `thumb_raw.png`; `services/modelthumbs.ts`, ADR-0016); the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
 
 **Online:** the server talks to Civitai for the client (cached API answers and an image proxy in `runtime/cache/civitai/`; the profile's key in `secrets.json`, never sent to the page). Downloads are a server queue with resume, hash checks and smart folders, progress on the bus (`downloads` topic) and history in the profile database; local models without info files are matched on Civitai by hash in the background; Models → Manager installs from ComfyUI-Manager's catalog through the same queue (ADR-0012).
 
-**Polish (Phase 5, ADR-0015):** every run that leaves the queue is logged in the profile database (`services/history.ts`: values, stages, timings, what it used), which feeds Settings → Overview (`/api/history/stats`), History → Generations (Run again: `queue.rerun`), prompt history, the pickers' recent models and the Errors view (errors are logged too). `services/timing.ts` turns ComfyUI's `executing` / `progress` into time and it/s per stage (`Job.timings`, `progress.rate`). Scopes live in `data/profiles/<id>/scopes/` (`scopes.json` + pictures); the client works out the effective scope once (`features/scopes/thumbs.ts`) and cards swap in its pictures. Snippets are `snippets.json`. Gallery ratings, your tags and collections are marks keyed by library + path. A profile exports as a zip (`services/backup.ts`, without the trash and the Civitai key) and imports as a new profile. Client-side: the command palette (`app/Palette.tsx` on `ui/CommandPalette`), shortcuts (`shared/shortcuts.ts`, overrides in `settings.shortcuts`, `app/useShortcuts.ts`, actions in `app/commands.ts`), OS notifications (`lib/notifications.ts` → `notify()` in `lib/platform.ts`), Help (`features/help/`), the first-run tour (`ui/Tour` + `features/generate/GenerateTour.tsx`), PNG drop on Generate (`features/generate/ImageDrop.tsx`).
+**Polish (Phase 5, ADR-0015):** every run that leaves the queue is logged in the profile database (`services/history.ts`: values, stages, timings, what it used), which feeds Settings → Overview (`/api/history/stats`), History → Generations (Run again: `queue.rerun`), prompt history, the pickers' recent models and the Errors view (errors are logged too). `services/timing.ts` turns ComfyUI's `executing` / `progress` into time and it/s per stage (`Job.timings`, `progress.rate`). Snippets are `snippets.json`. Gallery ratings, your tags and collections are marks keyed by library + path. A profile exports as a zip (`services/backup.ts`, without the trash and the Civitai key) and imports as a new profile. Client-side: the command palette (`app/Palette.tsx` on `ui/CommandPalette`), shortcuts (`shared/shortcuts.ts`, overrides in `settings.shortcuts`, `app/useShortcuts.ts`, actions in `app/commands.ts`), OS notifications (`lib/notifications.ts` → `notify()` in `lib/platform.ts`), Help (`features/help/`), the first-run tour (`ui/Tour` + `features/generate/GenerateTour.tsx`), PNG drop on Generate (`features/generate/ImageDrop.tsx`).
 
 **Hardening (final pass):** `/api` answers only Blombo's own pages (`lib/guard.ts`: local Host, same-origin browser requests; `/api/bridge/*` keeps its own CORS). Uploads go through `readBody` with a limit (`readBodyToFile` streams a large one into runtime/). Profile export and import stream through fflate; the uv download is pinned and checked by SHA-256. Saved settings and stage settings are read value by value (`shared/salvage.ts`); settings updates per profile are queued (`updateWith` for read-modify-write) and never write over a damaged or newer file without keeping it. The client saves pending values before the server switches profiles (`session.onProfileSwitch`). A managed slot's library caches stay in `runtime/cache/comfy/` (`slotCacheEnv`). Details: `docs/architecture.md` → Hardening.
 

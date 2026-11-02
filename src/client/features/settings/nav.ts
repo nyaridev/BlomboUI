@@ -37,7 +37,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Appearance",
     icon: "palette",
     group: "Profile",
-    keywords: "theme color accent font motion nsfw blur",
+    keywords: "picture avatar image theme color accent font motion nsfw blur",
   },
   {
     id: "files",
@@ -65,7 +65,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Models",
     icon: "models",
     group: "Tools",
-    keywords: "nsfw blur thumbnails scopes",
+    keywords: "nsfw blur thumbnails pictures",
   },
   {
     id: "civitai",

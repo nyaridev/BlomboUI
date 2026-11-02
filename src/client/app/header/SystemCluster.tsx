@@ -225,8 +225,12 @@ function ComfyStatusButton() {
               <div className="flex min-w-0 flex-col">
                 <span className="text-sm font-medium text-fg">{label}</span>
                 <span className="truncate font-mono text-2xs text-fg-3">
-                  {managed ? `slot ${comfy?.slot ?? "—"}` : "external"} ·{" "}
-                  {comfy?.url.replace(/^https?:\/\//, "") ?? "—"}
+                  {comfy?.dir
+                    ? "your ComfyUI"
+                    : managed
+                      ? `slot ${comfy?.slot ?? "—"}`
+                      : "external"}{" "}
+                  · {comfy?.url.replace(/^https?:\/\//, "") ?? "—"}
                 </span>
               </div>
             </div>

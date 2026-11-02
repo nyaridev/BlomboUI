@@ -30,13 +30,13 @@ export interface ScriptDraft {
   x: AxisDraft;
   y: AxisDraft | null;
   grid: boolean;
-  thumbs: { target: "model" | "lora"; models: string[]; scope: string; loraWeight: number };
+  thumbs: { target: "model" | "lora"; models: string[]; loraWeight: number };
 }
 
 export const SCRIPT_LABELS: Record<Exclude<ScriptChoice, "off">, string> = {
   matrix: "Prompt matrix",
   xy: "XY plot",
-  thumbs: "Scope thumbnails",
+  thumbs: "Thumbnails",
 };
 
 const initial: ScriptDraft = {
@@ -45,7 +45,7 @@ const initial: ScriptDraft = {
   x: { source: "sampler.cfg", text: "4, 6, 8" },
   y: null,
   grid: true,
-  thumbs: { target: "model", models: [], scope: "default", loraWeight: 1 },
+  thumbs: { target: "model", models: [], loraWeight: 1 },
 };
 
 export const useScript = create<{
@@ -121,7 +121,6 @@ export function buildScript(
         target: t.target,
         binding,
         models: t.models,
-        scope: t.scope.trim() || "default",
         loraWeight: t.loraWeight,
       };
     }
@@ -129,7 +128,7 @@ export function buildScript(
     return { script: input as Script, plan, error: null };
   } catch (error) {
     if (error instanceof ScriptError) return { script: null, plan: null, error: error.message };
-    // Zod: a value the schema refuses (a scope name, too many values).
+    // Zod: a value the schema refuses (too many values).
     const issue = (error as { issues?: Array<{ message: string }> }).issues?.[0];
     return { script: null, plan: null, error: issue?.message ?? String(error) };
   }

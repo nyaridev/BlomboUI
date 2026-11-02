@@ -1,6 +1,7 @@
 /** Modal dialog: Floating UI focus trap + scroll lock, our surface and motion. */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
+import { exitFast, glide } from "@client/lib/motion";
 import {
   FloatingFocusManager,
   FloatingOverlay,
@@ -21,6 +22,7 @@ export function Dialog({
   children,
   footer,
   width = 520,
+  bare,
   className,
 }: {
   open: boolean;
@@ -30,6 +32,8 @@ export function Dialog({
   children: ReactNode;
   footer?: ReactNode;
   width?: number;
+  /** No padding or scrolling of its own: the children fill the dialog (multi-pane layouts). */
+  bare?: boolean;
   className?: string;
 }) {
   const { refs, context } = useFloating({ open, onOpenChange });
@@ -47,7 +51,7 @@ export function Dialog({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.16 }}
+              transition={{ duration: 0.1 }}
             />
             <FloatingFocusManager context={context}>
               <motion.div
@@ -55,8 +59,8 @@ export function Dialog({
                 {...getFloatingProps()}
                 initial={{ opacity: 0, scale: 0.96, y: 8 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, y: 4, transition: { duration: 0.12 } }}
-                transition={{ type: "spring", stiffness: 520, damping: 38 }}
+                exit={{ opacity: 0, scale: 0.98, transition: exitFast }}
+                transition={glide}
                 className={cn(
                   "relative flex max-h-[min(88vh,900px)] w-full flex-col overflow-hidden rounded-xl border border-line-strong bg-surface-2 shadow-pop",
                   className,
@@ -79,7 +83,12 @@ export function Dialog({
                     </button>
                   </div>
                 ) : null}
-                <div className="scroll-quiet min-h-0 flex-1 overflow-auto px-5 py-4">
+                <div
+                  className={cn(
+                    "min-h-0 flex-1",
+                    bare ? "flex flex-col" : "scroll-quiet overflow-auto px-5 py-4",
+                  )}
+                >
                   {children}
                 </div>
                 {footer ? (

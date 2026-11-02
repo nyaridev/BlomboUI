@@ -130,7 +130,7 @@ export const GenerateBody = z.object({
   seedMode: SeedMode.optional(),
   /** Keep queuing new runs (new seeds) until stopped. */
   loop: z.boolean().default(false),
-  /** Run a script instead (prompt matrix, XY plot, scope thumbnails); `count` is ignored. */
+  /** Run a script instead (prompt matrix, XY plot, thumbnails); `count` is ignored. */
   script: Script.optional(),
 });
 export type GenerateBody = z.infer<typeof GenerateBody>;

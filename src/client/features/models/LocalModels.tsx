@@ -9,6 +9,7 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useElementWidth } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
+import { glide } from "@client/lib/motion";
 import { formatBytes } from "@client/lib/number";
 import {
   qk,
@@ -40,15 +41,13 @@ import {
   toast,
 } from "@client/ui";
 import { MODEL_KINDS, type ModelKind } from "@shared/constants";
-import type { LocalModel, ModelDetails } from "@shared/models";
-import { comfyNameOf, scopeKey } from "@shared/scopes";
+import { comfyNameOf, type LocalModel, type ModelDetails, modelKey } from "@shared/models";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFileInfoTarget } from "../fileinfo/state";
-import { useScopeThumb } from "../scopes/thumbs";
 import { openCivitaiModel } from "./civitai/state";
 import { useModelsNav } from "./nav";
 
@@ -232,7 +231,7 @@ export function LocalModels() {
             initial={{ width: 0, opacity: 0 }}
             animate={{ width: 380, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 420, damping: 40 }}
+            transition={glide}
             className="shrink-0 overflow-hidden border-l border-line bg-surface"
           >
             <InfoSheet
@@ -272,7 +271,6 @@ function CardGrid({
     estimateSize: () => rowH,
     overscan: 3,
   });
-  const scoped = useScopeThumb();
   const marks = useModelMarks().data;
   const setFavorite = useSetModelFavorite();
   const favorites = useMemo(() => new Set(marks?.favorites ?? []), [marks]);
@@ -303,15 +301,15 @@ function CardGrid({
                 name={m.name}
                 kind={m.kind}
                 baseModel={m.baseModel ?? undefined}
-                thumb={scoped(m.kind, comfyNameOf(m)) ?? m.thumb}
-                nsfw={scoped(m.kind, comfyNameOf(m)) ? false : m.nsfw}
+                thumb={m.thumb}
+                nsfw={m.nsfw}
                 blurNsfw={blurNsfw}
-                favorite={favorites.has(scopeKey(m.kind, comfyNameOf(m)))}
+                favorite={favorites.has(modelKey(m.kind, comfyNameOf(m)))}
                 onFavorite={() =>
                   setFavorite.mutate({
                     kind: m.kind,
                     name: comfyNameOf(m),
-                    favorite: !favorites.has(scopeKey(m.kind, comfyNameOf(m))),
+                    favorite: !favorites.has(modelKey(m.kind, comfyNameOf(m))),
                   })
                 }
                 meta={formatBytes(m.size)}

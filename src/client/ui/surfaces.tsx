@@ -80,7 +80,7 @@ export function Collapsible({
   return (
     <div
       className={cn(
-        "overflow-hidden rounded-lg border transition-colors duration-200",
+        "overflow-hidden rounded-lg border transition-colors",
         tone === "surface" ? "bg-surface-2" : "bg-sunken",
         hasSwitch && enabled ? "border-accent/40" : "border-line",
         className,
@@ -111,10 +111,7 @@ export function Collapsible({
           <Icon
             name="chevron-down"
             size={15}
-            className={cn(
-              "ml-auto text-fg-3 transition-transform duration-200",
-              open && "rotate-180",
-            )}
+            className={cn("ml-auto text-fg-3 transition-transform", open && "rotate-180")}
           />
         </button>
         {actions}

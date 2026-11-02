@@ -23,7 +23,6 @@ const VIEW_ICONS: Record<string, IconName> = {
   "view.wildcards": "wildcards",
   "view.file-info": "file-info",
   "view.history": "history",
-  "view.scopes": "scopes",
   "view.errors": "errors",
   "view.settings": "settings",
   "view.help": "book",

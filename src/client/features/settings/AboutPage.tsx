@@ -1,6 +1,6 @@
 /**
  * Settings → About: version, where this profile lives, the Design Lab, and export / import of a
- * whole profile as a zip (services/backup.ts): the workflows, layouts, settings, scopes, inputs
+ * whole profile as a zip (services/backup.ts): the workflows, layouts, settings, inputs
  * and database go in; the trash and the Civitai key stay out. Import makes a new profile.
  */
 import { Icon } from "@client/icons/Icon";
@@ -39,7 +39,7 @@ export function AboutPage() {
 
   return (
     <>
-      <PageHeader title="About" text="This copy of Blombo and this profile's files." />
+      <PageHeader title="About" />
       <div className="flex flex-col gap-8">
         <Panel className="flex items-center gap-4 p-5">
           <span className="grid h-11 w-11 place-items-center rounded-xl bg-field text-accent-ink">
@@ -56,15 +56,17 @@ export function AboutPage() {
               {system?.dev ? " Development mode." : ""}
             </span>
           </div>
-          <Button variant="ghost" icon="lab" onClick={() => go("lab")}>
-            Design Lab
-          </Button>
+          {import.meta.env.DEV ? (
+            <Button variant="ghost" icon="lab" onClick={() => go("lab")}>
+              Design Lab
+            </Button>
+          ) : null}
         </Panel>
 
         <Field
           label="Profile folder"
           layout="left"
-          hint="Workflows, layouts, settings, scopes and the database of this profile."
+          hint="Workflows, layouts, settings and the database of this profile."
         >
           <div className="flex items-center gap-2">
             <Button

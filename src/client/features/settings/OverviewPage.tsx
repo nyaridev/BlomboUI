@@ -158,14 +158,11 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
   const n = (v: number | undefined) => (v === undefined ? "—" : v.toLocaleString());
   return (
     <>
-      <PageHeader
-        title="Overview"
-        text="Your profile at a glance. Counts come from the runs Blombo logged and the gallery."
-      />
+      <PageHeader title="Overview" />
       <Panel className="mb-6 flex items-center gap-5 p-5">
         <Avatar
           name={profile?.name ?? "Profile"}
-          src={profile ? avatarUrl(profile, profile.lastOpenedAt ?? "") : null}
+          src={profile ? avatarUrl(profile) : null}
           accent={profile?.accent}
           size={64}
         />
@@ -315,8 +312,10 @@ export function OverviewPage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           title="ComfyUI"
           text={
             profile?.comfy.mode === "external"
-              ? `Your own at ${profile.comfy.url}`
-              : `Managed · slot ${profile?.comfy.mode === "managed" ? profile.comfy.slot : "—"}${comfy?.state === "missing" ? " · not installed yet" : ""}`
+              ? `At ${profile.comfy.url}`
+              : profile?.comfy.mode === "local"
+                ? `Your own in ${profile.comfy.dir}${comfy?.state === "missing" ? " · not found" : ""}`
+                : `Managed · slot ${profile?.comfy.mode === "managed" ? profile.comfy.slot : "—"}${comfy?.state === "missing" ? " · not installed yet" : ""}`
           }
           onClick={() => onGo("comfy")}
           warn={comfy?.state === "missing"}

@@ -75,10 +75,7 @@ export function ShortcutsPage() {
 
   return (
     <>
-      <PageHeader
-        title="Shortcuts"
-        text="Keys for things you do often. Click a shortcut to change it. Saved to this profile."
-      />
+      <PageHeader title="Shortcuts" />
       <div className="mb-4 flex items-center gap-2">
         <TextField
           icon="search"

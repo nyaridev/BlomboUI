@@ -1,5 +1,6 @@
 /**
- * Settings → ComfyUI: which ComfyUI this profile uses (a managed slot or your own), the
+ * Settings → ComfyUI: which ComfyUI this profile uses (a managed slot, your own ComfyUI folder
+ * that Blombo starts, or the address of one you run), the
  * installed slots, and installing a slot with a progress view (the owner's choice over console
  * prompts). Progress comes from the server over the live bus, so it survives a page reload.
  * The bridge row says whether blombo-bridge (Edit in ComfyUI, ADR-0009) is loaded, and installs
@@ -26,6 +27,10 @@ import type { BridgeStatus } from "@shared/bridge";
 import { INSTALL_STEP_LABELS, type InstallState, type TorchVariant } from "@shared/install";
 import type { Profile } from "@shared/profile";
 import { useEffect, useState } from "react";
+import { FolderField } from "../profiles/FolderField";
+import { OwnComfyNotice } from "../profiles/OwnComfyNotice";
+
+type ComfyMode = Profile["comfy"]["mode"];
 
 export function ComfyPage({ profile }: { profile: Profile | undefined }) {
   useEffect(() => followTopic("install"), []);
@@ -35,33 +40,35 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
   const update = useUpdateProfile();
   const status = useLive((s) => s.comfy);
 
-  const [mode, setMode] = useState<"managed" | "external">(profile?.comfy.mode ?? "managed");
+  const [mode, setMode] = useState<ComfyMode>(profile?.comfy.mode ?? "managed");
   const [slot, setSlot] = useState(
     profile?.comfy.mode === "managed" ? profile.comfy.slot : "latest",
   );
+  const [dir, setDir] = useState(profile?.comfy.mode === "local" ? profile.comfy.dir : "");
   const [url, setUrl] = useState(
     profile?.comfy.mode === "external" ? profile.comfy.url : "http://127.0.0.1:8188",
   );
   useEffect(() => {
     if (!profile) return;
-    setMode(profile.comfy.mode);
-    if (profile.comfy.mode === "managed") setSlot(profile.comfy.slot);
-    else setUrl(profile.comfy.url);
+    const c = profile.comfy;
+    setMode(c.mode);
+    if (c.mode === "managed") setSlot(c.slot);
+    else if (c.mode === "local") setDir(c.dir);
+    else setUrl(c.url);
   }, [profile]);
 
   const installed = slots.data?.slots ?? [];
-  const dirty =
-    profile &&
-    (mode !== profile.comfy.mode ||
-      (mode === "managed" && profile.comfy.mode === "managed" && slot !== profile.comfy.slot) ||
-      (mode === "external" && profile.comfy.mode === "external" && url !== profile.comfy.url));
+  const next: Profile["comfy"] =
+    mode === "managed"
+      ? { mode, slot }
+      : mode === "local"
+        ? { mode, dir: dir.trim() }
+        : { mode, url: url.trim() };
+  const dirty = profile && JSON.stringify(next) !== JSON.stringify(profile.comfy);
   const save = () => {
     if (!profile) return;
     update.mutate(
-      {
-        id: profile.id,
-        body: { comfy: mode === "managed" ? { mode, slot } : { mode, url: url.trim() } },
-      },
+      { id: profile.id, body: { comfy: next } },
       {
         onSuccess: () => toast("ComfyUI choice saved", "success"),
         onError: (e) => toast(e.message, "error"),
@@ -77,8 +84,9 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
             value={mode}
             onChange={setMode}
             options={[
-              { value: "managed", label: "A ComfyUI Blombo manages", icon: "workflow" },
-              { value: "external", label: "My own ComfyUI", icon: "link" },
+              { value: "managed", label: "Managed install", icon: "workflow" },
+              { value: "local", label: "My own ComfyUI", icon: "folder" },
+              { value: "external", label: "Address", icon: "link" },
             ]}
           />
           {mode === "managed" ? (
@@ -97,6 +105,17 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
                 Slots live in runtime/comfyui/&lt;slot&gt;/.
               </span>
             </div>
+          ) : mode === "local" ? (
+            <div className="flex max-w-[560px] flex-col gap-3">
+              <FolderField
+                value={dir}
+                onChange={setDir}
+                pickTitle="Choose your ComfyUI folder"
+                placeholder="C:\ComfyUI_windows_portable"
+                checkComfy
+              />
+              <OwnComfyNotice />
+            </div>
           ) : (
             <TextField
               value={url}
@@ -108,7 +127,12 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
           )}
           {dirty ? (
             <div>
-              <Button variant="primary" loading={update.isPending} onClick={save}>
+              <Button
+                variant="primary"
+                loading={update.isPending}
+                disabled={mode === "local" && !dir.trim()}
+                onClick={save}
+              >
                 Use this ComfyUI
               </Button>
             </div>
@@ -210,7 +234,7 @@ function BridgeRow({ profile }: { profile: Profile | undefined }) {
           ? s.message
           : external
             ? "Blombo doesn't change a ComfyUI it doesn't run, so install the bridge into yours once (and again after Blombo updates it)."
-            : "Blombo puts the bridge into this slot and keeps it current every time ComfyUI starts."}
+            : "Blombo adds the bridge to this ComfyUI and keeps it current every time it starts."}
       </p>
       {external ? (
         <div className="flex flex-wrap items-center gap-2">

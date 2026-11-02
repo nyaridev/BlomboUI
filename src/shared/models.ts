@@ -1,11 +1,12 @@
 /**
- * Local models: files under the profile's models root, grouped by kind. Sidecar files next to
- * a model (same name, other extension) give it a thumbnail and Civitai-style info:
+ * Local models: files under the profile's models root, grouped by kind. Files next to a model
+ * give it Civitai-style info, and the folder named after it holds its pictures:
  *
  *   foo.safetensors
- *   foo.preview.png | foo.png | foo.jpg | foo.webp | foo.gif     thumbnail
- *   foo.civitai.info                                              Civitai model/version JSON
- *   foo.json                                                      A1111 extra-network notes
+ *   foo.civitai.info                  Civitai model/version JSON
+ *   foo.json                          A1111 extra-network notes
+ *   foo_data/thumb.jpg                what cards show
+ *   foo_data/thumb_raw.png            the full-size original (server/services/modelthumbs.ts)
  */
 import { z } from "zod";
 import { MODEL_KINDS, type ModelKind } from "./constants.ts";
@@ -36,18 +37,15 @@ export const MODEL_FOLDERS: Record<ModelKind, string[]> = {
   ultralytics: ["ultralytics"],
 };
 
-/** Sidecar thumbnail names, best first ("foo" + suffix). */
-export const THUMB_SUFFIXES = [
-  ".preview.png",
-  ".preview.webp",
-  ".preview.jpg",
-  ".preview.jpeg",
-  ".png",
-  ".webp",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-] as const;
+/** The name ComfyUI lists a local model under (its path inside the kind folder). */
+export function comfyNameOf(model: { folder: string; file: string }): string {
+  return model.folder ? `${model.folder}/${model.file}` : model.file;
+}
+
+/** The key a model's marks (favorites) are saved under: its kind and ComfyUI name. */
+export function modelKey(kind: ModelKind, comfyName: string): string {
+  return `${kind}/${comfyName.replace(/\\/g, "/")}`;
+}
 
 export const LocalModel = z.object({
   /** Path inside the models root with forward slashes ("loras/style/foo.safetensors"). */

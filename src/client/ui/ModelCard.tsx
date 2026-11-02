@@ -158,7 +158,7 @@ export function ModelCard({
   return (
     <div
       className={cn(
-        "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow] duration-150",
+        "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow]",
         selected
           ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
           : "border-line hover:border-line-strong",
@@ -177,7 +177,7 @@ export function ModelCard({
           <Art
             seed={thumb.slice(4)}
             className={cn(
-              "absolute inset-0 transition-[filter,transform] duration-500 group-hover:scale-[1.04]",
+              "absolute inset-0 transition-[filter,transform] duration-200 group-hover:scale-[1.04]",
               veiled && "scale-110 blur-xl saturate-50",
             )}
           />
@@ -188,7 +188,7 @@ export function ModelCard({
             loading="lazy"
             decoding="async"
             className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-[filter,transform] duration-300",
+              "absolute inset-0 h-full w-full object-cover transition-[filter,transform] duration-200",
               veiled && "scale-110 blur-xl saturate-50",
             )}
           />

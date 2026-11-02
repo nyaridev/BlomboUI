@@ -6,6 +6,7 @@
  */
 import { cn } from "@client/lib/cn";
 import { useModalFocus } from "@client/lib/hooks";
+import { glide, snappy } from "@client/lib/motion";
 import { FloatingPortal } from "@floating-ui/react";
 import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -149,7 +150,7 @@ export function Tour({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.18 }}
+            transition={{ duration: 0.1 }}
           >
             {/* The dim layer is one big shadow around the highlighted box. */}
             <motion.div
@@ -165,7 +166,7 @@ export function Tour({
                     }
                   : { left: "50%", top: "50%", width: 0, height: 0 }
               }
-              transition={{ type: "spring", stiffness: 380, damping: 36 }}
+              transition={glide}
               style={{ boxShadow: "0 0 0 9999px var(--overlay)" }}
             />
             <motion.div
@@ -180,7 +181,7 @@ export function Tour({
               className="absolute flex flex-col gap-3 rounded-xl border border-line-strong bg-surface-3 p-4 shadow-pop"
               style={{ width: CARD_W }}
               animate={{ left: pos.left, top: pos.top }}
-              transition={{ type: "spring", stiffness: 420, damping: 38 }}
+              transition={snappy}
             >
               <div className="flex items-center gap-2">
                 <span className="font-mono text-2xs text-fg-4 tabular">

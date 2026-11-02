@@ -43,7 +43,7 @@ const base: ScriptDraft = {
   x: { source: "sampler.cfg", text: "4, 6" },
   y: null,
   grid: true,
-  thumbs: { target: "model", models: [], scope: "default", loraWeight: 1 },
+  thumbs: { target: "model", models: [], loraWeight: 1 },
 };
 
 describe("buildScript", () => {
@@ -69,16 +69,6 @@ describe("buildScript", () => {
     expect(buildScript({ ...base, kind: "thumbs" }, bindings, values).error).toBe(
       "Pick the models to make thumbnails for.",
     );
-    const badScope = buildScript(
-      {
-        ...base,
-        kind: "thumbs",
-        thumbs: { ...base.thumbs, models: ["a.safetensors"], scope: "My Scope" },
-      },
-      bindings,
-      values,
-    );
-    expect(badScope.error).toMatch(/lowercase/);
   });
 
   it("thumbnails swap the checkpoint, one run per model", () => {

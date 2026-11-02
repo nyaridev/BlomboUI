@@ -9,7 +9,7 @@ export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
   "relative inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-medium " +
-  "transition-[background-color,border-color,color,box-shadow,transform] duration-150 ease-out " +
+  "transition-[background-color,border-color,color,box-shadow,transform] ease-out " +
   "active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45 focus-ring";
 
 const variants: Record<ButtonVariant, string> = {

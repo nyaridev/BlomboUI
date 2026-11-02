@@ -172,7 +172,7 @@ export const Tile = memo(function Tile({
           draggable={false}
           onLoad={() => setLoaded(true)}
           className={cn(
-            "h-full w-full object-cover transition-[opacity,transform] duration-300 group-hover:scale-[1.03]",
+            "h-full w-full object-cover transition-[opacity,transform] duration-200 group-hover:scale-[1.03]",
             loaded ? "opacity-100" : "opacity-0",
           )}
         />

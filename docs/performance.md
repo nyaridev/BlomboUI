@@ -49,7 +49,7 @@ images loaded through infinite pages):
 - JS heap 65 MB at the end.
 
 Typing in the gallery search no longer re-renders the grid (it's memoized), and prompt keystrokes no
-longer re-render the Shell, Generate and the gallery (the scope follower is its own component).
+longer re-render the Shell, Generate and the gallery.
 
 Frame timing couldn't be measured: the browser pane was hidden, which throttles animation frames.
 

@@ -1,6 +1,6 @@
 # ADR-0014: Generate scripts and the batch runner as groups in the job queue
 
-**Status:** Accepted (built in Phase 4b, on `main`; the four batch presets ran on a real ComfyUI on 2026-10-21; scripts against the fake ComfyUI only)
+**Status:** Accepted (built in Phase 4b, on `main`; the four batch presets ran on a real ComfyUI on 2026-10-21; scripts against the fake ComfyUI only). Scope thumbnails became Thumbnails, saved next to each model: [ADR-0016](0016-model-pictures-without-scopes.md)
 **Date:** 2026-10-20
 **Deciders:** nyaridev
 

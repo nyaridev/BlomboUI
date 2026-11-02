@@ -64,3 +64,44 @@ describe("removing a profile", () => {
     expect(services.profiles.active).toBeNull();
   });
 });
+
+describe("creating a profile", () => {
+  it("makes folders that are missing and leaves existing ones alone", async () => {
+    const root = path.join(dir, "master");
+    await fs.mkdir(path.join(root, "Models", "loras"), { recursive: true });
+    await fs.writeFile(path.join(root, "Models", "loras", "keep.safetensors"), "x");
+    const paths = {
+      models: path.join(root, "Models"),
+      outputs: path.join(root, "Output"),
+      wildcards: path.join(root, "Wildcards"),
+    };
+    const res = await app.request(
+      "/api/profiles",
+      json("POST", { name: "Master", paths, comfy: { mode: "external", url: DEAD } }),
+    );
+    expect(res.ok).toBe(true);
+    for (const folder of Object.values(paths))
+      expect((await fs.stat(folder)).isDirectory()).toBe(true);
+    expect(await fs.readFile(path.join(root, "Models", "loras", "keep.safetensors"), "utf8")).toBe(
+      "x",
+    );
+  });
+
+  it("refuses a folder it can't create, before making the profile", async () => {
+    const file = path.join(dir, "a-file");
+    await fs.writeFile(file, "x");
+    const res = await app.request(
+      "/api/profiles",
+      json("POST", {
+        name: "Blocked",
+        paths: { models: "", outputs: path.join(file, "Output"), wildcards: "" },
+        comfy: { mode: "external", url: DEAD },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const list = (await (await app.request("/api/profiles")).json()) as {
+      profiles: Array<{ name: string }>;
+    };
+    expect(list.profiles.some((p) => p.name === "Blocked")).toBe(false);
+  });
+});

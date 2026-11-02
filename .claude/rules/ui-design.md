@@ -25,7 +25,7 @@ Full spec: `docs/design-system.md`. Live reference: the Design Lab (`/lab`).
 
 **Icons.** `<Icon name>` from `@client/icons/Icon`, names from `icons/paths.ts`. Name new icons by action. Icon-only buttons are `IconButton` with a `label`.
 
-**Motion** (`lib/motion.ts`): `snappy` for direct responses, `bouncy` for arrivals, `glide` for large surfaces. 120–350 ms. Shared morphs via `layoutId`. A sliding indicator sits on `z-0` under `z-10` labels.
+**Motion** (`lib/motion.ts`): `snappy` for direct responses, `bouncy` for arrivals, `glide` for large surfaces, `exitFast` for leaving. Keep it quick: ~100 ms for direct responses, ≤200 ms for large surfaces, hover fades 90 ms (the default), no transition on rows that follow the pointer or arrow keys. Shared morphs via `layoutId`. A sliding indicator sits on `z-0` under `z-10` labels.
 
 **Positioning gotcha.** Base styles live in `@layer base` so utilities win. When a component adds `relative` by default, let callers pass `absolute` (see `positioned()` in `ui/Art.tsx`) instead of stacking both.
 

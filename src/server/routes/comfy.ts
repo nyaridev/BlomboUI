@@ -1,11 +1,17 @@
 import { Hono } from "hono";
-import { ComfyFileRef, type ComfyModelList, FreeMemoryBody } from "../../shared/comfy.ts";
+import {
+  CheckComfyFolderBody,
+  ComfyFileRef,
+  type ComfyFolderCheck,
+  type ComfyModelList,
+  FreeMemoryBody,
+} from "../../shared/comfy.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import { InstallBody, NodeInstallBody, type SlotsResponse } from "../../shared/install.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ComfyInstaller } from "../services/comfy/installer.ts";
 import type { NodePackInstaller } from "../services/comfy/nodepacks.ts";
-import { listSlots } from "../services/comfy/slots.ts";
+import { findLocal, listSlots } from "../services/comfy/slots.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 
 function requireApi(supervisor: ComfySupervisor) {
@@ -30,6 +36,16 @@ export function comfyRoutes(
   /** Installed managed slots and the installer's state. */
   r.get("/slots", async (c) => {
     const body: SlotsResponse = { slots: await listSlots(runtimeDir), install: installer.state() };
+    return c.json(body);
+  });
+
+  /** Check a folder the user picked for their own ComfyUI (read-only). */
+  r.post("/check-folder", async (c) => {
+    const { path } = await readJson(c, CheckComfyFolderBody);
+    const lookup = await findLocal(runtimeDir, path);
+    const body: ComfyFolderCheck = lookup.ok
+      ? { ok: true, comfyDir: lookup.layout.comfyDir, python: lookup.layout.python }
+      : { ok: false, reason: lookup.reason };
     return c.json(body);
   });
 

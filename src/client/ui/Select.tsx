@@ -139,8 +139,8 @@ export function Select<T extends string>({
                 <motion.div
                   initial={{ opacity: 0, y: -3 }}
                   animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, transition: { duration: 0.08 } }}
-                  transition={{ duration: 0.12 }}
+                  exit={{ opacity: 0, transition: { duration: 0.07 } }}
+                  transition={{ duration: 0.08 }}
                   className="scroll-quiet w-full overflow-auto rounded-lg border border-line-strong bg-surface-3 p-1 shadow-pop"
                 >
                   {options.map((o, i) => {
@@ -169,7 +169,7 @@ export function Select<T extends string>({
                           tabIndex={active ? 0 : -1}
                           className={cn(
                             "flex h-8 cursor-pointer items-center gap-2 rounded-sm px-2 text-sm outline-none",
-                            active ? "bg-field text-fg" : "text-fg-2",
+                            active ? "bg-fg/8 text-fg" : "text-fg-2",
                             o.disabled && "pointer-events-none opacity-40",
                           )}
                           {...getItemProps({

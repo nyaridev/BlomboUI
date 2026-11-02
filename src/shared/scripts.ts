@@ -7,7 +7,7 @@
  *   matrix  every combination of a few prompt terms (on or off)
  *   xy      one or two axes: any number or choice parameter, or a prompt search/replace
  *   thumbs  one image per picked model (checkpoints, or LoRAs added to the prompt), saved as that
- *           model's thumbnail in a scope
+ *           model's picture (<model>_data/thumb.jpg, server/services/modelthumbs.ts)
  *
  * Pure: the server plans with it, the client counts runs and checks values with it.
  */
@@ -20,11 +20,6 @@ export type ScriptKind = (typeof SCRIPT_KINDS)[number];
 /** One click queues at most this many runs. */
 export const MAX_SCRIPT_RUNS = 100;
 export const MAX_MATRIX_TERMS = 6;
-
-/** Scope names are folder names in data/profiles/<id>/scopes/. */
-export const ScopeName = z
-  .string()
-  .regex(/^[a-z0-9][a-z0-9-]{0,39}$/, "Use lowercase letters, numbers and dashes");
 
 export const AxisSpec = z.discriminatedUnion("type", [
   /** A number, choice or model parameter, one cell per value. */
@@ -68,7 +63,6 @@ export const ThumbsScript = z.object({
   binding: z.string().min(1),
   /** ComfyUI names ("sd15/dreamshaper_8.safetensors"). */
   models: z.array(z.string().min(1)).min(1).max(MAX_SCRIPT_RUNS),
-  scope: ScopeName.default("default"),
   loraWeight: z.number().min(-4).max(4).default(1),
 });
 
@@ -393,6 +387,6 @@ export function planScript(
     colLabels: cells.map((c) => c.label),
     rowLabels: [],
     grid: false,
-    title: `Scope thumbnails · ${cells.length} model${cells.length === 1 ? "" : "s"}`,
+    title: `Thumbnails · ${cells.length} model${cells.length === 1 ? "" : "s"}`,
   };
 }

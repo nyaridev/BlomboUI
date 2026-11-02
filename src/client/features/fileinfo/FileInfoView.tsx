@@ -110,10 +110,6 @@ export function FileInfoView() {
         <div className="flex items-end gap-4">
           <div className="flex flex-1 flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight text-fg">File Info</h1>
-            <p className="text-sm text-fg-3">
-              Drop an image to see how it was made, or a .safetensors model to read its training
-              details.
-            </p>
           </div>
         </div>
 

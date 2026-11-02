@@ -287,7 +287,6 @@ function onJson(text: string): void {
     }
     case "models.changed":
       void queryClient.invalidateQueries({ queryKey: ["local-models"] });
-      void queryClient.invalidateQueries({ queryKey: ["scopes"] });
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
       // A downloaded detector or ControlNet model can fix a stage.
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });

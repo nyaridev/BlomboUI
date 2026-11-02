@@ -4,12 +4,9 @@ import { cn } from "@client/lib/cn";
 import { useProfile } from "@client/lib/queries";
 import { useParams } from "@tanstack/react-router";
 
-export function PageHeader({ title, text }: { title: string; text?: string }) {
+export function PageHeader({ title }: { title: string }) {
   return (
-    <div className="mb-6 flex flex-col gap-1">
-      <h1 className="text-2xl font-semibold tracking-tight text-balance text-fg">{title}</h1>
-      {text ? <p className="text-sm text-fg-3">{text}</p> : null}
-    </div>
+    <h1 className="mb-6 text-2xl font-semibold tracking-tight text-balance text-fg">{title}</h1>
   );
 }
 

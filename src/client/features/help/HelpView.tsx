@@ -272,20 +272,17 @@ function LoadingModels() {
           },
           {
             title: "Copied files yourself?",
-            text: "Press Rescan in the header (R) so ComfyUI and Blombo see them. A picture next to a model (same name, .png or .preview.png) becomes its thumbnail.",
+            text: "Press Rescan in the header (R) so ComfyUI and Blombo see them. A model's picture is thumb.jpg in the folder named after it (Detailer_data/ next to Detailer.safetensors).",
           },
           {
-            title: "Thumbnails per style",
-            text: "Scopes keep a picture of each model per context (Anime, Photo…), made by the Scripts block or picked from the gallery. Find them in the avatar menu or Models → Scopes.",
+            title: "Pictures for your models",
+            text: "The Scripts block's Thumbnails makes one picture per model or LoRA and saves it as the model's picture; the one it replaces goes to the profile's trash.",
           },
         ]}
       />
       <div className="flex gap-2">
         <Button icon="models" onClick={() => go("models")}>
           Open Models
-        </Button>
-        <Button variant="ghost" icon="scopes" onClick={() => go("scopes")}>
-          Scopes
         </Button>
       </div>
     </Section>
@@ -404,8 +401,8 @@ function Batch() {
             text: "Any two settings (CFG × Steps, sampler × model, prompt search and replace) against each other, with the same seed, in one grid.",
           },
           {
-            title: "Scope thumbnails",
-            text: "One picture per model or LoRA, saved as its thumbnail in a scope. Models, the pickers and the palette show them.",
+            title: "Thumbnails",
+            text: "One picture per model or LoRA, saved as that model's picture. Models, the pickers and the palette show it.",
           },
           {
             title: "Batch tools",

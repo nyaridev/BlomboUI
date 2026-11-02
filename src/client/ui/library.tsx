@@ -184,7 +184,7 @@ export function Veil({
     <div className={cn("relative h-full w-full overflow-hidden", className)}>
       <div
         className={cn(
-          "h-full w-full transition-[filter,transform] duration-300",
+          "h-full w-full transition-[filter,transform] duration-200",
           veiled && "scale-110 blur-xl saturate-50",
         )}
         aria-hidden={veiled || undefined}
@@ -393,7 +393,7 @@ export function TreeRow({
             <Icon
               name="chevron-right"
               size={12}
-              className={cn("transition-transform duration-150", open && "rotate-90")}
+              className={cn("transition-transform", open && "rotate-90")}
             />
           ) : null}
         </span>

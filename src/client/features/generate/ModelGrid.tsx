@@ -3,8 +3,8 @@
  * model kinds, listed from ComfyUI and the profile's wildcards folder. Picking sets the
  * workflow's model, adds a <lora:…> tag or a __wildcard__ to the prompt. The grid is virtualized:
  * LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
- * the models folder's sidecars and the Civitai lookup (Models → Local's list), or the scope's
- * picture (Scopes). Favorites come first, then what you used recently (the job log).
+ * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
+ * list). Favorites come first, then what you used recently (the job log).
  */
 import { Icon } from "@client/icons/Icon";
 import { useElementWidth } from "@client/lib/hooks";
@@ -23,7 +23,6 @@ import { findLoraTags, formatLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useScopeThumb } from "../scopes/thumbs";
 import { modelDisplayName, modelFolder } from "./labels";
 import { pickerOrder } from "./pickerOrder";
 import { useValues } from "./state";
@@ -261,7 +260,6 @@ function VirtualGrid({
   favorites: Set<string> | null;
   onFavorite: (i: Item) => void;
 }) {
-  const scoped = useScopeThumb();
   const scroller = useRef<HTMLDivElement>(null);
   const width = useElementWidth(scroller);
   const columns = Math.max(1, Math.floor((Math.max(width, CARD_MIN) + GAP) / (CARD_MIN + GAP)));
@@ -297,9 +295,6 @@ function VirtualGrid({
               <PickerCard
                 key={item.id}
                 item={item}
-                scopedThumb={
-                  item.kind === "wildcards" ? null : scoped(item.kind as ModelKind, item.id)
-                }
                 blurNsfw={blurNsfw}
                 selected={isSelected(item)}
                 onPick={onPick}
@@ -316,7 +311,6 @@ function VirtualGrid({
 
 function PickerCard({
   item,
-  scopedThumb,
   blurNsfw,
   selected,
   onPick,
@@ -324,7 +318,6 @@ function PickerCard({
   onFavorite,
 }: {
   item: Item;
-  scopedThumb: string | null;
   blurNsfw: boolean;
   selected: boolean;
   onPick: (i: Item) => void;
@@ -336,8 +329,8 @@ function PickerCard({
       name={item.name}
       kind={item.kind}
       baseModel={item.local?.baseModel ?? item.folder ?? undefined}
-      thumb={scopedThumb ?? item.local?.thumb ?? null}
-      nsfw={scopedThumb ? false : item.local?.nsfw}
+      thumb={item.local?.thumb ?? null}
+      nsfw={item.local?.nsfw}
       blurNsfw={blurNsfw}
       meta={item.local?.triggerWords[0]}
       selected={selected}

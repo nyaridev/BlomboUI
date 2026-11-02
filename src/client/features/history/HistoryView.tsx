@@ -36,9 +36,6 @@ export function HistoryView() {
       <div className="mx-auto flex w-full max-w-[1120px] items-end gap-4 px-8 pt-8">
         <div className="flex flex-col gap-1 pb-3">
           <h1 className="text-2xl font-semibold tracking-tight text-fg">History</h1>
-          <p className="text-sm text-fg-3">
-            What you generated, downloaded and looked at on Civitai.
-          </p>
         </div>
       </div>
       <div className="mx-auto w-full max-w-[1120px] border-b border-line px-8">

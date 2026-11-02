@@ -10,7 +10,7 @@ Civitai**; on 2026-10-21 the parts that need a real ComfyUI were run on one too 
 | | Verified |
 |---|---|
 | Generate on a **real** ComfyUI (SD 1.5, live progress, previews, outputs) | Yes, in Phase 1 and again in the real-ComfyUI checks (ComfyUI 0.42.1, 26.6 it/s on an RTX 5080) |
-| Everything else (stages, scripts, batch tools, bridge, gallery, models, Civitai, downloads, history, scopes, palette, shortcuts, tour, export) | Against the fake ComfyUI / fake Civitai, in the browser (Blombo and Light themes) and in tests |
+| Everything else (stages, scripts, batch tools, bridge, gallery, models, Civitai, downloads, history, palette, shortcuts, tour, export) | Against the fake ComfyUI / fake Civitai, in the browser (Blombo and Light themes) and in tests |
 | Gallery with 20,000 images, startup bundle | Measured, see [`performance.md`](performance.md): first index 5.2 s, search about 10 ms, smooth virtual scrolling, first screen 236 KiB gzip |
 | Keyboard and screen-reader basics | Every main view: no unnamed controls, visible focus on every stop, modal layers keep focus; text contrast tested for every theme and accent |
 | Installing a managed ComfyUI slot; Hires fix, ADetailer and ControlNet with their custom node packs installed from the notices; the upscale, caption, dataset-prep and remove-background batches; blombo-bridge in the real ComfyUI frontend | Yes, on real models in a throwaway folder: all six checks passed, nothing written outside BlomboUI's folder except four empty uv lock files in %TEMP%. Results: [`review/real-comfyui-checks.md`](review/real-comfyui-checks.md) |
@@ -28,7 +28,6 @@ Civitai**; on 2026-10-21 the parts that need a real ComfyUI were run on one too 
 | **Gallery** | A showcase of your images: featured favorites, day sections in justified rows, extra library folders, search across prompts and models, favorites, star ratings, your own tags and collections across folders, a trash you can restore from, and a lightbox with the full parameters and **Use these settings**. New images appear as they're generated. |
 | **File Info** | Drop an image to see how it was made (BlomboUI, ComfyUI or A1111 metadata, the embedded graph) and import its workflow, or a `.safetensors` file to read its training details and tags. |
 | **Models** | Local models with one consistent card (thumbnails from the files next to them, NSFW blurred until clicked, a designed face when there's none), an info sheet, rename and move. A fast **Civitai browser** (filters, saved filters, model tabs, in-app model pages) with a **download queue** that sorts files into folders, resumes and saves previews; a **ComfyUI model store**; and background matching of your files on Civitai for thumbnails and trigger words. |
-| **Scopes** | A picture of each model per context (Anime, Photo…), made by a script or picked from the gallery; cards and pickers show the scope you pick, or the one your prompt's tags point to. |
 | **Help & shortcuts** | A Help view (F1) with a prompt guide and playground, a first-run tour, a command palette (Ctrl+K) and shortcuts you can rebind. |
 | **Wildcards** | File tree and a YAML editor with folding, lint and reference autocomplete, a line-by-line mode, and a roll preview. |
 | **Desktop or browser** | The same app in a native window (Tauri) or any browser. |
@@ -45,6 +44,6 @@ The complete feature inventory, with what's kept, new, or suggested, lives in [`
 | **3 · Online** | Civitai account and browser, model pages, download queue, Civitai lookup of local models, ComfyUI Manager store, History | done |
 | **4a · Generate** | Hires / ADetailer / ControlNet stages (with one-click custom node install), prompt autocomplete and weight keys, layouts saved in the profile and linked per workflow | done |
 | **4b · Bridge** | ComfyUI bridge extension, `.blombo` export and import, scripts, batch utilities | done |
-| **5 · Polish** | Settings stats, Help and prompt guide, Scopes, command palette, notifications, shortcuts, generation history, snippets, gallery ratings / tags / collections, tour, profile export | done |
+| **5 · Polish** | Settings stats, Help and prompt guide, command palette, notifications, shortcuts, generation history, snippets, gallery ratings / tags / collections, tour, profile export | done |
 | **Final pass** | Phases merged into `main`, whole-codebase review and fixes (API only for Blombo's own pages, safer saved data, queue and profile-switch fixes), 20k-image gallery and startup bundle, keyboard and contrast pass | done |
 | **Real-ComfyUI checks** | Stages and batch tools on real models and packs, the bridge in the real frontend, the slot installer ([results](review/real-comfyui-checks.md)) | done |

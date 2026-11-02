@@ -34,7 +34,7 @@ export function Switch({
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className={cn(
-        "relative inline-flex shrink-0 items-center rounded-full border p-[1px] transition-colors duration-150 focus-ring disabled:opacity-40",
+        "relative inline-flex shrink-0 items-center rounded-full border p-[1px] transition-colors focus-ring disabled:opacity-40",
         dims,
         checked ? on : "border-line-strong bg-sunken",
         checked ? "justify-end" : "justify-start",
@@ -74,7 +74,7 @@ export function Checkbox({
   const box = (
     <span
       className={cn(
-        "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-xs border transition-colors duration-150",
+        "grid h-[18px] w-[18px] shrink-0 place-items-center rounded-xs border transition-colors",
         on
           ? "border-accent bg-accent text-on-accent"
           : "border-line-strong bg-sunken group-hover:border-fg-4",
@@ -191,7 +191,7 @@ export function Segmented<T extends string>({
               onClick={() => onChange(opt.value)}
               onKeyDown={(e) => onKey(e, i)}
               className={cn(
-                "relative inline-flex items-center justify-center gap-1.5 rounded-sm font-medium transition-colors duration-150 focus-ring",
+                "relative inline-flex items-center justify-center gap-1.5 rounded-sm font-medium transition-colors focus-ring",
                 size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
                 !opt.label && (size === "sm" ? "w-7 px-0" : "w-8 px-0"),
                 full && "flex-1",
@@ -241,7 +241,7 @@ export function Chip({
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-sm border transition-colors duration-150",
+        "inline-flex items-center rounded-sm border transition-colors",
         size === "sm" ? "h-6 text-xs" : "h-7 text-sm",
         selected
           ? "border-accent/60 bg-accent/15 text-fg"

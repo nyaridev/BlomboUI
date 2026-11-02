@@ -60,8 +60,6 @@ export const qk = {
   modelMarks: (profileId: string | null) => ["history", profileId, "model-marks"] as const,
   errorLog: (profileId: string | null) => ["error-log", profileId] as const,
   snippets: (profileId: string | null) => ["snippets", profileId] as const,
-  /** Scopes and their pictures; refetched when model pictures change. */
-  scopes: (profileId: string | null) => ["scopes", profileId] as const,
   /** Files in the models folder (not ComfyUI's lists, which are `models`). */
   localModels: (profileId: string | null) => ["local-models", profileId] as const,
   modelDetails: (profileId: string | null, id: string | null) =>
@@ -130,6 +128,14 @@ export function useUploadAvatar() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, file }: { id: string; file: Blob }) => api.uploadAvatar(id, file),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.profiles }),
+  });
+}
+
+export function useRemoveAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.removeAvatar(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: qk.profiles }),
   });
 }
@@ -815,17 +821,5 @@ export function useRemoveSnippet() {
   return useMutation({
     mutationFn: (id: string) => api.removeSnippet(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["snippets"] }),
-  });
-}
-
-/* ── scopes ──────────────────────────────────────────────────────────────── */
-
-export function useScopes() {
-  const profileId = useSession((s) => s.profileId);
-  return useQuery({
-    queryKey: qk.scopes(profileId),
-    queryFn: api.scopes,
-    enabled: profileId !== null,
-    staleTime: 60_000,
   });
 }

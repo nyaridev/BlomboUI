@@ -9,7 +9,7 @@ import {
   UpdateProfileBody,
 } from "../../shared/profile.ts";
 import { HttpError, readBody, readBodyToFile, readJson } from "../lib/http.ts";
-import { sendFile } from "../lib/send.ts";
+import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { ProfileBackup } from "../services/backup.ts";
 import type { ProfileService } from "../services/profiles.ts";
 
@@ -101,7 +101,8 @@ export function profileRoutes(
       const data = await fs.readFile(profiles.avatarFile(pid));
       return c.body(data, 200, {
         "content-type": "image/webp",
-        "cache-control": "no-cache",
+        // ?v= is when the picture changed (avatarAt), so a versioned URL never goes stale.
+        "cache-control": c.req.query("v") ? IMMUTABLE : "no-cache",
       });
     } catch {
       throw new HttpError(404, "No avatar.", "no_avatar");

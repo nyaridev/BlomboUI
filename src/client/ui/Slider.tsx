@@ -206,7 +206,7 @@ export function Slider({
             className={cn(
               "absolute inset-y-0 left-0 rounded-full",
               fill,
-              !dragging && "transition-[width] duration-150",
+              !dragging && "transition-[width]",
             )}
             style={{ width: `${pct}%` }}
           />
@@ -230,7 +230,7 @@ export function Slider({
           className={cn(
             "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[var(--shadow-thumb)] ring-2 outline-none",
             tone === "generate" ? "ring-generate-hi" : "ring-accent",
-            "transition-transform duration-150 focus-visible:ring-4 focus-visible:ring-accent-ink/40",
+            "transition-transform focus-visible:ring-4 focus-visible:ring-accent-ink/40",
             dragging ? "scale-115" : "hover:scale-110",
             !dragging && "transition-[left,transform]",
             thumb,

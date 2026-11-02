@@ -43,7 +43,8 @@ async function put(rel: string, data: Uint8Array | string) {
 
 beforeAll(async () => {
   await put("loras/style/Detailer.safetensors", safetensors({ ss_network_dim: "16" }));
-  await put("loras/style/Detailer.preview.png", await realPng(30, 40));
+  await put("loras/style/Detailer_data/thumb.jpg", await realPng(30, 40));
+  await put("loras/style/Detailer_data/model_data.json", "{}");
   await put(
     "loras/style/Detailer.civitai.info",
     JSON.stringify({
@@ -57,6 +58,8 @@ beforeAll(async () => {
     }),
   );
   await put("loras/plain.safetensors", safetensors({}));
+  // The old sidecar picture isn't read anymore.
+  await put("loras/plain.preview.png", await realPng(30, 40));
   await put(
     "loras/plain.json",
     JSON.stringify({ "activation text": "foo, bar", "preferred weight": 0.7 }),
@@ -112,12 +115,12 @@ describe("local models", () => {
       url: "https://civitai.com/models/111?modelVersionId=222",
     });
     expect(d.header?.training.dim).toBe("16");
-    expect(d.sidecars.sort()).toEqual(["Detailer.civitai.info", "Detailer.preview.png"]);
+    expect(d.sidecars.sort()).toEqual(["Detailer.civitai.info", "Detailer_data"]);
     expect(d.folders).toEqual(["style"]);
     expect((await models.details("loras/plain.safetensors")).weight).toBe(0.7);
   });
 
-  it("makes thumbnails from sidecar images", async () => {
+  it("makes thumbnails from the picture in the model's data folder", async () => {
     const file = await models.thumbFile("loras/style/Detailer.safetensors");
     expect((await fs.readFile(file)).subarray(8, 12).toString("latin1")).toBe("WEBP");
     await expect(models.thumbFile("loras/plain.safetensors")).rejects.toThrow(/No thumbnail/);
@@ -129,9 +132,12 @@ describe("local models", () => {
     const files = (await fs.readdir(path.join(root, "loras", "style"))).sort();
     expect(files).toEqual([
       "Detailer v2.civitai.info",
-      "Detailer v2.preview.png",
       "Detailer v2.safetensors",
+      "Detailer v2_data",
     ]);
+    expect(
+      (await fs.readdir(path.join(root, "loras", "style", "Detailer v2_data"))).sort(),
+    ).toEqual(["model_data.json", "thumb.jpg"]);
     expect(changed).toBe(1);
     await expect(models.rename("loras/plain.safetensors", "../evil")).rejects.toThrow();
   });

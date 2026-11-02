@@ -15,7 +15,6 @@ import { lazy, type ReactNode, Suspense, useEffect, useState } from "react";
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
-import { ScopeFollower } from "../features/scopes/thumbs";
 import { Header } from "./header/Header";
 import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
@@ -41,17 +40,15 @@ const SettingsView = lazy(() =>
 const HistoryView = lazy(() =>
   import("../features/history/HistoryView").then((m) => ({ default: m.HistoryView })),
 );
-const DesignLab = lazy(() =>
-  import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })),
-);
+// Dev mode only (see router.tsx).
+const DesignLab = import.meta.env.DEV
+  ? lazy(() => import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })))
+  : () => null;
 const ErrorsView = lazy(() =>
   import("../features/errors/ErrorsView").then((m) => ({ default: m.ErrorsView })),
 );
 const HelpView = lazy(() =>
   import("../features/help/HelpView").then((m) => ({ default: m.HelpView })),
-);
-const ScopesView = lazy(() =>
-  import("../features/scopes/ScopesView").then((m) => ({ default: m.ScopesView })),
 );
 
 function renderView(view: ViewId): ReactNode {
@@ -76,8 +73,6 @@ function renderView(view: ViewId): ReactNode {
       return <ErrorsView />;
     case "help":
       return <HelpView />;
-    case "scopes":
-      return <ScopesView />;
   }
 }
 
@@ -126,7 +121,6 @@ export function Shell() {
 
   return (
     <div className="flex h-full flex-col bg-bg">
-      <ScopeFollower />
       <motion.div
         initial={{ y: -14, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}

@@ -13,7 +13,7 @@ import { findWildcards } from "@shared/prompt/wildcards";
 import type { Binding } from "@shared/workflow/manifest";
 import { AnimatePresence, motion } from "motion/react";
 import { useMemo } from "react";
-import { useModelThumb } from "../../scopes/thumbs";
+import { useModelThumb } from "../../models/thumbs";
 import { modelDisplayName, modelFolder } from "../labels";
 import { useValue } from "../state";
 import { useRoleBinding } from "../workflow";
@@ -22,7 +22,7 @@ type PickTab = "checkpoints" | "loras" | "wildcards" | "other";
 
 const stem = (f: string) => modelDisplayName(f).toLowerCase();
 
-/** A tile's picture: the scope's or the model's own preview, else the designed fallback. */
+/** A tile's picture: the model's own, else the designed fallback. */
 function TileFace({ kind, name, fallback }: { kind: ModelKind; name: string; fallback: string }) {
   const { thumb, nsfw } = useModelThumb(kind, name);
   const blur = useSettings().data?.models.blurNsfw ?? true;

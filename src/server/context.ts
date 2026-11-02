@@ -22,6 +22,7 @@ import { installBridge } from "./services/comfy/bridge.ts";
 import { fakeInstallOps } from "./services/comfy/fixtures/fake-install-ops.ts";
 import { ComfyInstaller } from "./services/comfy/installer.ts";
 import { NodePackInstaller } from "./services/comfy/nodepacks.ts";
+import { OWN_SLOT } from "./services/comfy/slots.ts";
 import { StatsSampler } from "./services/comfy/stats.ts";
 import { ComfySupervisor } from "./services/comfy/supervisor.ts";
 import { DownloadQueue } from "./services/downloads.ts";
@@ -34,7 +35,6 @@ import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
 import { ProfileService } from "./services/profiles.ts";
-import { ScopeService } from "./services/scopes.ts";
 import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
 import { SnippetService } from "./services/snippets.ts";
@@ -67,7 +67,6 @@ export interface Services {
   batch: BatchService;
   history: HistoryService;
   snippets: SnippetService;
-  scopes: ScopeService;
   backup: ProfileBackup;
   /** Install starter presets into a new profile; unknown ids are skipped with a warning. */
   installPresets: (profileId: string, presetIds: string[]) => Promise<void>;
@@ -213,13 +212,6 @@ export function createServices(config: ServerConfig): Services {
   // Finished runs and errors are logged in the profile database (History, Errors, Overview).
   const history = new HistoryService({ profiles, dbs, gallery });
   const backup = new ProfileBackup({ profiles, dbs, runtimeDir: config.runtimeDir });
-  const scopes = new ScopeService({
-    profiles,
-    onChanged: () => {
-      models.invalidate();
-      bus.publish(null, { t: "models.changed" });
-    },
-  });
   const snippets = new SnippetService(profiles);
   const reportError = (source: AppError["source"], title: string, detail: string) => {
     const error: AppError = { id: randomUUID(), at: Date.now(), source, title, detail };
@@ -296,6 +288,7 @@ export function createServices(config: ServerConfig): Services {
         const s = supervisor.status();
         if (!profiles.active) return null;
         if (s.mode === "external") return { mode: "external", url: s.url };
+        if (s.dir) return { mode: "managed", slot: OWN_SLOT, dir: s.dir };
         return s.slot ? { mode: "managed", slot: s.slot } : null;
       },
       running: () => supervisor.isRunning,
@@ -330,6 +323,7 @@ export function createServices(config: ServerConfig): Services {
     supervisor,
     publish: (msg) => bus.publish(null, msg),
     ingest: (ref) => gallery.ingestOutput(ref),
+    modelFile: (kind, comfyName) => models.fileFor(kind, comfyName),
     onThumbs: () => {
       models.invalidate();
       bus.publish(null, { t: "models.changed" });
@@ -423,7 +417,6 @@ export function createServices(config: ServerConfig): Services {
     batch,
     history,
     snippets,
-    scopes,
     backup,
     installPresets: async (profileId, presetIds) => {
       for (const id of presetIds) {

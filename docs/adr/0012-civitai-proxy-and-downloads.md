@@ -29,7 +29,7 @@ Phase 3 brings Civitai and the ComfyUI model catalog into the app: browsing, mod
 - Each file streams into `<target>.part` next to where it lands (same drive, so finishing is a rename) through `lib/fsx.ts` (`openPartFile`, `commitPart`, `writeFileIfAbsent`). Resume sends an HTTP range request; a server that ignores it restarts the file.
 - Civitai files are checked against Civitai's SHA256 before they're moved into place. `commitPart` never replaces a file: a taken name gets " (2)".
 - Where a file lands is a pure function in `shared/downloads.ts`: `<kind folder>/<base model>/<category>/<creator>/<name>` with the parts, author aliases and naming chosen in settings; the model page previews it and can override the kind folder and subfolder.
-- A finished Civitai download gets `.civitai.info` and `.preview.png` next to it (unless turned off), its hash and Civitai match go into the lookup tables, and the model lists refresh.
+- A finished Civitai download gets `.civitai.info` and `.preview.png` (since ADR-0016: `<model>_data/thumb.jpg` and `thumb_raw.png`) next to it (unless turned off), its hash and Civitai match go into the lookup tables, and the model lists refresh.
 - Every download is a row in the profile's database. Unfinished ones come back paused when the profile opens again; History lists them all.
 
 **Local models are matched by hash** (`services/lookup.ts`): models without a `.civitai.info` file are hashed in the background (smallest first, one at a time) and looked up by SHA256; answers are cached in the profile's database by path + size + mtime and fill names, thumbnails, base models and trigger words in Models → Local and the Generate pickers. Nothing is written next to the models.

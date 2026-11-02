@@ -1,6 +1,6 @@
 /**
  * Runs that belong together, end to end against the fake ComfyUI: a script's cells (an XY plot
- * becomes one grid, scope thumbnails land in the profile) and a batch's files (images and
+ * becomes one grid, thumbnails land in each model's data folder) and a batch's files (images and
  * captions in the output folder, existing results skipped, cancel).
  */
 import fs from "node:fs/promises";
@@ -18,7 +18,6 @@ import { type FakeComfy, startFakeComfy } from "./comfy/fixtures/fake-comfy.ts";
 import { ComfySupervisor } from "./comfy/supervisor.ts";
 import { JobQueue } from "./jobs.ts";
 import { ProfileService } from "./profiles.ts";
-import { scopeThumbPath } from "./scopes.ts";
 import { ScriptService } from "./scripts.ts";
 import { StageService } from "./stages.ts";
 import { installPreset } from "./workflows/presets.ts";
@@ -78,6 +77,7 @@ beforeAll(async () => {
     profiles,
     supervisor,
     publish: (msg) => messages.push(msg),
+    modelFile: async (kind, name) => path.join(tmp, "models", kind, ...name.split("/")),
   });
   batch = new BatchService({
     queue,
@@ -164,7 +164,11 @@ describe("scripts", () => {
     expect(cfgs.filter((v) => v !== undefined).length).toBeGreaterThan(0);
   });
 
-  it("files each model's image as its scope thumbnail", async () => {
+  it("saves each model's image as its picture, the old one going to the trash", async () => {
+    const data = path.join(tmp, "models", "checkpoints", "sd15", "dreamshaper_8_data");
+    await fs.mkdir(data, { recursive: true });
+    await fs.writeFile(path.join(data, "thumb.jpg"), "old picture");
+    await fs.writeFile(path.join(data, "model_data.json"), "{}");
     const res = await scripts.run({
       workflowId: "sd15",
       values: {},
@@ -175,20 +179,25 @@ describe("scripts", () => {
         target: "model",
         binding: "model.checkpoint",
         models: ["sd15/dreamshaper_8.safetensors"],
-        scope: "default",
         loraWeight: 1,
       },
     });
     expect(res.jobs).toHaveLength(1);
-    const thumb = scopeThumbPath(
-      profiles.dir(profileId),
-      "default",
-      "checkpoints",
-      "sd15/dreamshaper_8.safetensors",
-    ) as string;
-    for (let i = 0; i < 200 && !(await fs.stat(thumb).catch(() => null)); i++)
+    const raw = path.join(data, "thumb_raw.png");
+    for (let i = 0; i < 200 && !(await fs.stat(raw).catch(() => null)); i++)
       await new Promise((r) => setTimeout(r, 25));
-    expect((await sharp(await fs.readFile(thumb)).metadata()).format).toBe("webp");
+    await new Promise((r) => setTimeout(r, 100));
+    expect((await sharp(await fs.readFile(raw)).metadata()).format).toBe("png");
+    expect((await sharp(await fs.readFile(path.join(data, "thumb.jpg"))).metadata()).format).toBe(
+      "jpeg",
+    );
+    // Other tools' files stay; the replaced picture is in the profile's trash.
+    expect(await fs.readFile(path.join(data, "model_data.json"), "utf8")).toBe("{}");
+    const trash = path.join(profiles.dir(profileId), "trash", "model-pictures");
+    const [stamp] = await fs.readdir(trash);
+    expect(await fs.readFile(path.join(trash, stamp ?? "", "thumb.jpg"), "utf8")).toBe(
+      "old picture",
+    );
   });
 
   it("refuses a plan that can't work, saying why", async () => {

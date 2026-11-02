@@ -1,29 +1,25 @@
 /** Avatar button + menu: profile card, the secondary views, and switching profiles. */
 import { avatarUrl } from "@client/lib/api";
 import { useLive } from "@client/lib/live";
-import { glide } from "@client/lib/motion";
 import { Avatar, Badge, Menu } from "@client/ui";
 import type { ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
 import { useNavigate } from "@tanstack/react-router";
-import { motion } from "motion/react";
 import { useSettingsNav } from "../../features/settings/nav";
 import { useShortcutLabel } from "../useShortcuts";
 
 export function AvatarMenu({
   profile,
-  profileId,
   onNavigate,
 }: {
   profile: Profile | undefined;
-  profileId: string;
   onNavigate: (view: ViewId) => void;
 }) {
   const navigate = useNavigate();
   const keys = useShortcutLabel();
   const errors = useLive((s) => s.errors.length);
   const name = profile?.name ?? "Profile";
-  const src = profile ? avatarUrl(profile, profile.lastOpenedAt ?? profile.createdAt) : null;
+  const src = profile ? avatarUrl(profile) : null;
 
   return (
     <Menu
@@ -62,13 +58,6 @@ export function AvatarMenu({
           shortcut: errors ? undefined : keys("view.errors"),
           onSelect: () => onNavigate("errors"),
         },
-        {
-          id: "scopes",
-          label: "Scopes",
-          icon: "scopes",
-          shortcut: keys("view.scopes"),
-          onSelect: () => onNavigate("scopes"),
-        },
         { type: "separator", id: "s1" },
         {
           id: "help",
@@ -87,7 +76,16 @@ export function AvatarMenu({
             onNavigate("settings");
           },
         },
-        { id: "lab", label: "Design Lab", icon: "lab", onSelect: () => onNavigate("lab") },
+        ...(import.meta.env.DEV
+          ? [
+              {
+                id: "lab",
+                label: "Design Lab",
+                icon: "lab" as const,
+                onSelect: () => onNavigate("lab"),
+              },
+            ]
+          : []),
         { type: "separator", id: "s2" },
         {
           id: "switch",
@@ -102,9 +100,9 @@ export function AvatarMenu({
           aria-label={`${name}: profile menu`}
           className="rounded-full p-0.5 transition-transform hover:scale-105 focus-ring data-[open]:scale-105"
         >
-          <motion.span layoutId={`avatar-${profileId}`} transition={glide} className="block">
+          <span className="block">
             <Avatar name={name} src={src} accent={profile?.accent} size={30} />
-          </motion.span>
+          </span>
         </button>
       }
     />

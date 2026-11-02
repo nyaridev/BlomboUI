@@ -10,6 +10,8 @@
  * sneak in. Every color utility maps to a token that themes and profile accents override.
  */
 @theme inline {
+  /* Hover and state fades: short enough to read as instant. */
+  --default-transition-duration: 90ms;
   --color-*: initial;
   --color-white: #ffffff;
   --color-black: #000000;

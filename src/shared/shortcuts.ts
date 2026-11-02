@@ -43,7 +43,6 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
     view: "file-info",
   },
   { id: "view.history", label: "Go to History", group: "Views", keys: "Ctrl+6", view: "history" },
-  { id: "view.scopes", label: "Go to Scopes", group: "Views", keys: "Ctrl+7", view: "scopes" },
   { id: "view.errors", label: "Go to Errors", group: "Views", keys: "Ctrl+8", view: "errors" },
   { id: "view.settings", label: "Open Settings", group: "Views", keys: "Ctrl+,", view: "settings" },
   { id: "view.help", label: "Open Help", group: "Views", keys: "F1", view: "help" },

@@ -147,7 +147,7 @@ describe("planScript", () => {
     ).toThrow(/no parameter "nope"/);
   });
 
-  it("makes one run per model for scope thumbnails", () => {
+  it("makes one run per model for thumbnails", () => {
     const models = planScript(
       {
         kind: "thumbs",

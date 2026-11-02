@@ -53,7 +53,8 @@ describe("Civitai downloads", () => {
       modelId: 1001,
       model: { name: "Cinematic Lighting 1" },
     });
-    expect((await fs.stat(`${stem}.preview.png`)).size).toBeGreaterThan(100);
+    for (const pic of ["thumb.jpg", "thumb_raw.png"])
+      expect((await fs.stat(path.join(`${stem}_data`, pic))).size).toBeGreaterThan(100);
     // The redirect to storage never carries the key, and nothing is left half-written.
     expect(o.fake.requests.some((r) => r.path.startsWith("/blobs/") && r.auth)).toBe(false);
     expect(await fs.readdir(path.dirname(file))).not.toContain(

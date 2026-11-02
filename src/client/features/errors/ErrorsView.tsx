@@ -71,10 +71,6 @@ export function ErrorsView() {
         <div className="flex items-end gap-4">
           <div className="flex flex-1 flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight text-fg">Errors</h1>
-            <p className="text-sm text-fg-3">
-              What went wrong in this profile, newest first, with the details to copy into a bug
-              report.
-            </p>
           </div>
           <Segmented
             size="sm"

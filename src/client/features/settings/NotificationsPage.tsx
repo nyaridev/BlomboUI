@@ -32,10 +32,7 @@ export function NotificationsPage() {
   const on = s?.enabled ?? true;
   return (
     <>
-      <PageHeader
-        title="Notifications"
-        text="A note from Windows when something long finishes while Blombo is in the background. Saved to this profile."
-      />
+      <PageHeader title="Notifications" />
       <div className="flex flex-col gap-8">
         {permission === "denied" ? (
           <Notice tone="warning" title="Notifications are blocked for Blombo">

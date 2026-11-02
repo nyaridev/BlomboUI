@@ -1,6 +1,6 @@
 # ADR-0015: The job log, scopes and profile export
 
-**Status:** Accepted (built in Phase 5, on `main`; checked against the fake ComfyUI only)
+**Status:** Accepted (built in Phase 5, on `main`; checked against the fake ComfyUI only). Scopes superseded by [ADR-0016](0016-model-pictures-without-scopes.md): removed.
 **Date:** 2026-10-20
 **Deciders:** nyaridev
 

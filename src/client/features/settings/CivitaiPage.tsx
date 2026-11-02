@@ -183,7 +183,7 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
           <Field
             label="Preview image"
             layout="left"
-            hint="The first image as .preview.png, the model's thumbnail everywhere."
+            hint="The first image as the model's picture, in the folder named after it."
           >
             <Switch
               checked={dl.savePreview}

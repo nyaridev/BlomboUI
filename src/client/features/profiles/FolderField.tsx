@@ -1,4 +1,7 @@
-/** Folder input with a native Browse dialog and a live check of what's in the folder. */
+/**
+ * Folder input with a native Browse dialog and a live check of what's in the folder. With
+ * `checkComfy` the check is whether Blombo can start a ComfyUI from it (your own ComfyUI).
+ */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
@@ -12,6 +15,7 @@ export function FolderField({
   pickTitle,
   placeholder,
   expectModels,
+  checkComfy,
   id,
 }: {
   value: string;
@@ -19,6 +23,7 @@ export function FolderField({
   pickTitle: string;
   placeholder: string;
   expectModels?: boolean;
+  checkComfy?: boolean;
   id?: string;
 }) {
   const [debounced, setDebounced] = useState(value);
@@ -30,7 +35,13 @@ export function FolderField({
   const check = useQuery({
     queryKey: ["check-path", debounced],
     queryFn: () => api.checkPath(debounced),
-    enabled: debounced.trim().length > 0,
+    enabled: !checkComfy && debounced.trim().length > 0,
+    staleTime: 5_000,
+  });
+  const comfy = useQuery({
+    queryKey: ["check-comfy-folder", debounced],
+    queryFn: () => api.checkComfyFolder(debounced),
+    enabled: Boolean(checkComfy) && debounced.trim().length > 0,
     staleTime: 5_000,
   });
 
@@ -46,6 +57,13 @@ export function FolderField({
 
   const status = (() => {
     if (!value.trim()) return null;
+    if (checkComfy) {
+      const c = comfy.data;
+      if (!c) return { tone: "muted", icon: "clock", text: "Checking…" } as const;
+      return c.ok
+        ? ({ tone: "success", icon: "check-circle", text: "ComfyUI found." } as const)
+        : ({ tone: "danger", icon: "x-circle", text: c.reason } as const);
+    }
     const r = check.data;
     if (!r) return { tone: "muted", icon: "clock", text: "Checking…" } as const;
     if (r.exists && !r.isDirectory)

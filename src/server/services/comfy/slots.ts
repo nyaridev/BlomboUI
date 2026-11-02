@@ -9,6 +9,7 @@
  * Installing slots (downloading ComfyUI and Torch) is installer.ts's job; this module only finds
  * what's there. A slot with blombo/installing in it is unfinished and isn't started.
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { exists } from "../../lib/fsx.ts";
@@ -81,6 +82,56 @@ export async function findSlot(runtimeDir: string, slot: string): Promise<SlotLo
   return {
     ok: false,
     reason: `Slot "${slot}" has no Python next to ComfyUI (python_embeded, python, .venv or venv). Reinstall the slot.`,
+  };
+}
+
+/** Slot name a ComfyUI in the user's own folder goes by in logs and the custom node installer. */
+export const OWN_SLOT = "own";
+
+/**
+ * A ComfyUI in a folder the user picked (ComfyTarget "local"): a portable build's folder, a git
+ * checkout with its venv, or the ComfyUI folder inside a portable build. Blombo starts it with
+ * the Python it finds there; its own files for it (pid, extra_model_paths.yaml) go in
+ * runtime/comfy-own/<hash>/, so the user's folder only gets blombo-bridge in custom_nodes/.
+ */
+export async function findLocal(runtimeDir: string, folder: string): Promise<SlotLookup> {
+  const root = path.resolve(folder);
+  let comfyDir: string | null = null;
+  for (const dir of [root, path.join(root, "ComfyUI")])
+    if (await exists(path.join(dir, "main.py"))) {
+      comfyDir = dir;
+      break;
+    }
+  if (!comfyDir)
+    return {
+      ok: false,
+      reason:
+        "No ComfyUI in this folder (no main.py). Pick the folder that has ComfyUI's main.py, or a portable build's folder.",
+    };
+  // Python sits next to ComfyUI (venv) or one level up (portable build: python_embeded/).
+  for (const base of [...new Set([root, path.dirname(comfyDir), comfyDir])])
+    for (const rel of PYTHONS) {
+      const python = path.join(base, rel);
+      if (await exists(python)) {
+        const hash = createHash("sha256").update(root.toLowerCase()).digest("hex").slice(0, 12);
+        return {
+          ok: true,
+          layout: {
+            slot: OWN_SLOT,
+            dir: root,
+            comfyDir,
+            main: path.join(comfyDir, "main.py"),
+            python,
+            stateDir: path.join(runtimeDir, "comfy-own", hash),
+            torch: null,
+          },
+        };
+      }
+    }
+  return {
+    ok: false,
+    reason:
+      "Found ComfyUI but no Python next to it (python_embeded, venv or .venv). Blombo starts ComfyUI with that Python, so pick a portable build or a ComfyUI with a virtual environment.",
   };
 }
 

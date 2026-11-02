@@ -1,11 +1,11 @@
 /**
  * The Scripts block (layout feature "scripts"): turn Generate into a prompt matrix, an XY plot or
- * scope thumbnails. Off by default; when a script is on, the Generate button runs it instead
+ * thumbnails (one picture per model, saved as that model's picture). Off by default; when a script is on, the Generate button runs it instead
  * (features/generate/actions.ts) and the block shows how many images it makes or what's wrong.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { useModels, useScopes } from "@client/lib/queries";
+import { useModels } from "@client/lib/queries";
 import {
   Button,
   Checkbox,
@@ -60,7 +60,7 @@ export function ScriptsBlock() {
           ? built.error
             ? `${SCRIPT_LABELS[draft.kind as Exclude<ScriptChoice, "off">]} · needs a fix`
             : `${SCRIPT_LABELS[draft.kind as Exclude<ScriptChoice, "off">]} · ${count} image${count === 1 ? "" : "s"}`
-          : "Prompt matrix, XY plot, scope thumbnails"
+          : "Prompt matrix, XY plot, thumbnails"
       }
       enabled={on}
       onEnabledChange={(v) => set({ kind: v ? (draft.kind === "off" ? "xy" : draft.kind) : "off" })}
@@ -104,7 +104,7 @@ export function ScriptsBlock() {
           {built.error
             ? built.error
             : on
-              ? `Generate queues ${count} image${count === 1 ? "" : "s"} with one seed${draft.kind === "thumbs" ? `, saved as thumbnails in the "${draft.thumbs.scope || "default"}" scope` : draft.grid ? ", then a grid of them" : ""}.`
+              ? `Generate queues ${count} image${count === 1 ? "" : "s"} with one seed${draft.kind === "thumbs" ? ", each saved as its model's picture" : draft.grid ? ", then a grid of them" : ""}.`
               : `Turn on to queue up to ${MAX_SCRIPT_RUNS} images from one click.`}
         </p>
       </div>
@@ -231,11 +231,6 @@ function ThumbsEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Bindi
   const q = filter.trim().toLowerCase();
   const shown = q ? all.filter((m) => m.toLowerCase().includes(q)) : all;
   const patch = (p: Partial<ScriptDraft["thumbs"]>) => set({ thumbs: { ...t, ...p } });
-  const scopes = useScopes().data?.scopes ?? [];
-  const scopeOptions = [
-    ...scopes.map((sc) => ({ value: sc.id, label: sc.name, group: sc.group || undefined })),
-    ...(scopes.some((sc) => sc.id === t.scope) ? [] : [{ value: t.scope, label: t.scope }]),
-  ];
   const toggle = (m: string, on: boolean) =>
     patch({ models: on ? [...t.models, m] : t.models.filter((x) => x !== m) });
 
@@ -299,15 +294,7 @@ function ThumbsEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Bindi
         )}
       </div>
       <div className="flex items-center gap-2">
-        <Select
-          size="sm"
-          className="w-44"
-          label="Scope"
-          value={t.scope}
-          onChange={(scope) => patch({ scope })}
-          options={scopeOptions}
-        />
-        <span className="text-2xs text-fg-3">Scope · {t.models.length} picked</span>
+        <span className="text-2xs text-fg-3">{t.models.length} picked</span>
         {t.target === "lora" ? (
           <NumberField
             size="sm"

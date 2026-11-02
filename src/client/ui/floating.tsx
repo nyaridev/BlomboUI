@@ -4,6 +4,7 @@
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
+import { exitFast, snappy } from "@client/lib/motion";
 import {
   autoUpdate,
   FloatingFocusManager,
@@ -83,8 +84,8 @@ export function Tooltip({
               <motion.div
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, transition: { duration: 0.08 } }}
-                transition={{ duration: 0.12 }}
+                exit={{ opacity: 0, transition: exitFast }}
+                transition={{ duration: 0.08 }}
                 className="pointer-events-none rounded-sm border border-line-strong bg-surface-3 px-2 py-1 text-xs font-medium whitespace-nowrap text-fg shadow-pop"
               >
                 {content}
@@ -156,8 +157,8 @@ export function Popover({
                 <motion.div
                   initial={{ opacity: 0, y: -4, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -2, scale: 0.99, transition: { duration: 0.1 } }}
-                  transition={{ type: "spring", stiffness: 620, damping: 40, mass: 0.6 }}
+                  exit={{ opacity: 0, transition: exitFast }}
+                  transition={snappy}
                   className={cn(panel, className)}
                   style={{ transformOrigin: "top" }}
                 >
@@ -211,13 +212,21 @@ export function Menu({
   );
   labelsRef.current = actionable.map((i) => ("label" in i ? i.label : null));
 
-  const { refs, floatingStyles, context } = useFloating({
+  const {
+    refs,
+    floatingStyles,
+    context,
+    placement: side,
+  } = useFloating({
     open,
     onOpenChange: setOpen,
     placement,
     whileElementsMounted: autoUpdate,
-    middleware: [offset(8), flip({ padding: 8 }), shift({ padding: 8 })],
+    middleware: [offset(6), flip({ padding: 8 }), shift({ padding: 8 })],
   });
+  // Grow out of the trigger: from the side it's attached to, after flip() picked one.
+  const above = side.startsWith("top");
+  const origin = `${above ? "bottom" : "top"} ${side.endsWith("end") ? "right" : side.endsWith("start") ? "left" : "center"}`;
   const { getReferenceProps, getFloatingProps, getItemProps } = useInteractions([
     useClick(context),
     useDismiss(context),
@@ -246,15 +255,12 @@ export function Menu({
                 {...getFloatingProps()}
               >
                 <motion.div
-                  initial={{ opacity: 0, y: -4, scale: 0.98 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: -2, transition: { duration: 0.1 } }}
-                  transition={{ type: "spring", stiffness: 620, damping: 40, mass: 0.6 }}
+                  initial={{ opacity: 0, scale: 0.94, y: above ? 4 : -4 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: exitFast }}
+                  transition={snappy}
                   className={cn(panel, "overflow-hidden p-1")}
-                  style={{
-                    width,
-                    transformOrigin: placement.endsWith("end") ? "top right" : "top left",
-                  }}
+                  style={{ width, transformOrigin: origin }}
                 >
                   {header}
                   {items.map((item) => {
@@ -280,9 +286,9 @@ export function Menu({
                           listRef.current[i] = node;
                         }}
                         className={cn(
-                          "flex h-8 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm outline-none transition-colors",
+                          "flex h-8 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm outline-none",
                           item.tone === "danger" ? "text-red-ink" : "text-fg-2",
-                          active && (item.tone === "danger" ? "bg-red/15" : "bg-field text-fg"),
+                          active && (item.tone === "danger" ? "bg-red/15" : "bg-fg/8 text-fg"),
                           item.disabled && "opacity-40",
                         )}
                         {...getItemProps({

@@ -1,6 +1,6 @@
 # Design system
 
-How BlomboUI looks, moves and reads. The Design Lab (`/lab`, or avatar menu → Design Lab) shows everything on this page live, in every theme and accent. Decisions are recorded in [ADR-0007](adr/0007-design-system.md).
+How BlomboUI looks, moves and reads. The Design Lab (`/lab`, or avatar menu → Design Lab; dev mode only, the built app hides it) shows everything on this page live, in every theme and accent. Decisions are recorded in [ADR-0007](adr/0007-design-system.md).
 
 ## Direction
 
@@ -57,12 +57,13 @@ Presets in `src/client/lib/motion.ts`:
 
 | Preset | Feel | Use |
 |---|---|---|
-| `snappy` | stiff spring, no overshoot | Thumbs, tab and segment indicators, toggles, menus |
+| `snappy` | stiff spring, no overshoot, ~100 ms | Menus, popovers, the palette, thumbs, tab and segment indicators, toggles |
 | `bouncy` | small overshoot | Arrivals that deserve life: toasts, the Generate button press |
-| `glide` | soft, heavier | Large surfaces: views, the profile-open morph, collapsibles |
+| `glide` | heavier, no overshoot, ~200 ms | Large surfaces: views, dialogs, sheets, collapsibles |
+| `exitFast` | 70 ms fade | Anything leaving: menus, popovers, dialogs |
 
-- Keep most motion at 120–350 ms. Never animate layout while the user is typing or dragging a value.
-- Shared-element morphs use `layoutId` (profile avatar → header avatar).
+- Keep motion short: about 100 ms for direct responses, 200 ms at most for large surfaces; exits are quicker than entrances. Hover and state color changes use Tailwind's default transition, set to 90 ms in `index.css`. Rows that follow the pointer or arrow keys (menus, selects, the palette) change at once, with no transition. Data that changes over time (progress, temperature) may move slower. Never animate layout while the user is typing or dragging a value.
+- Shared-element morphs use `layoutId`.
 - Lists enter with a 40–70 ms stagger, once. No looping ambient animation except progress.
 - `MotionConfig reducedMotion="user"` honors the OS setting. CSS transitions collapse under `prefers-reduced-motion`.
 
@@ -94,7 +95,8 @@ Presets in `src/client/lib/motion.ts`:
 | `Notice` | Inline message with a status icon, text and the actions that fix it; `info` (something to pick), `warning` (something missing), `danger` (something broken) |
 | `UnitTabs` | A stage's units as small tabs with their run order, a sliding indicator, a strike-through for units that are off, a warning mark for units missing something, and an add button up to `max` |
 | `Badge`, `Kbd`, `StatusDot`, `Spinner`, `Skeleton`, `Meter`, `StageProgress`, `ProgressRing` | Feedback. `ProgressRing` is the small circle in header chips (generation queue, downloads), in the current text color. `Kbd onColor` sits on a filled surface (the Generate button) |
-| `Avatar` | Image or monogram on the profile accent, with an accent ring |
+| `Dialog` | Modal with title, body and footer; `bare` drops the body's padding and scrolling so panes fill it (the profile wizard) |
+| `Avatar` | Image or monogram on the profile accent: a circle with an accent ring, or `shape="card"` filling its container (profile screen cards) |
 | `ModelCard`, `FallbackFace` | The one model card; designed fallback when there's no thumbnail. `nsfw` + `blurNsfw` blur the thumbnail until clicked (the first click only reveals); `meta` adds a small mono line (size); `mark` pins a status pill to the corner ("Installed" success, "Update" warning, "Downloading" accent); `typeLabel` shows the source's own type name ("LyCORIS") instead of the kind's |
 | `Art` | Seeded placeholder "renders" for previews and empty states |
 | `toast()` + `Toaster` | `info` · `success` · `warning` · `error`, optional action |
@@ -117,6 +119,8 @@ Presets in `src/client/lib/motion.ts`:
 
 ## Layout patterns
 
+- **Create-profile wizard:** a bare `Dialog`: a step rail (avatar, name, step n of 4) and a pane with the step title, a close button and a pinned footer. Profile: a 2:3 picture card (click or drop) beside name and color. Folders: One folder for everything (Models, Output and Wildcards inside it, each marked Found or Will be created; profile create makes the missing ones and never touches existing ones) or each folder separately. ComfyUI: Managed install or My own ComfyUI (a folder). Then theme and starter workflows.
+- **Profile screen:** only the profile cards, centered: 224×336 (2:3) cards filled with the profile picture (or its monogram), name and image count over a dark scrim at the bottom; on hover the picture zooms in slightly, the border takes the accent and the options button shows (the menu grows out of it); a dashed New profile card; a version button with the GitHub mark in the bottom-right corner (opens the repo). No title, no keyboard hints.
 - **App frame:** 56 px header (brand + workflow switcher · centered main tabs · system cluster · avatar), a three-column grid: the tabs stay centered while there's room and are pushed aside, never covered, when the cluster grows (the orange generation-queue chip and the accent downloads chip appear only while busy). No footer.
 - **Generate:** models strip → prompts + Generate stack → workspace tabs → params column (layout document) + image stage.
 - **Settings:** centered, max 1120 px, left page rail with groups, Overview first.
@@ -134,24 +138,23 @@ Presets in `src/client/lib/motion.ts`:
 - **Prompt autocomplete:** a CodeMirror tooltip on `surface-3` in the UI font: a 22 px mark (a category dot in palette ink for tags, a star for frequent ones, a thumbnail for LoRAs and trigger words, blurred when NSFW per the profile), the label, and a mono detail on the right (count, "alias →", "trigger · LoRA", base model). Ctrl+Space opens it; Ctrl+↑/↓ changes the weight at the cursor.
 - **Layout picker (Generate tab, Customize bar):** a `Select` of Built-in and This profile layouts ("Default" hint on the profile's default), an "edited" badge for unsaved changes or a link mark when the workflow links the layout; the ⋯ menu makes it the profile's default, resets to default, renames or deletes.
 - **Settings → Autocomplete:** the on switch, a "Try it" prompt box, sources as switch rows, tag lists as a panel of rows (name, file and count, Bundled / This profile badge, remove, on/off) with a compact drop zone to add a CSV, insert behavior, the weight step, and frequent tags as chips with counts.
-- **Generate → Scripts:** a `Collapsible` (layout feature `scripts`) with an enable switch; its subtitle says the script and how many images it makes, or that it needs a fix. Inside: a `Segmented` (Matrix · XY plot · Thumbnails), then the script's fields (terms one per line; an axis is a `Select` of parameters and prompt search/replace plus a mono values field with a hint on the syntax and an "All N" button for choices; thumbnails pick models from a filtered checkbox list on `bg-sunken` with a scope name), the grid switch with its words next to it, and one line that says what Generate will queue or what's wrong (`text-warning` with an icon). While a script is on, the Generate button reads **Run script** with the image count.
+- **Generate → Scripts:** a `Collapsible` (layout feature `scripts`) with an enable switch; its subtitle says the script and how many images it makes, or that it needs a fix. Inside: a `Segmented` (Matrix · XY plot · Thumbnails), then the script's fields (terms one per line; an axis is a `Select` of parameters and prompt search/replace plus a mono values field with a hint on the syntax and an "All N" button for choices; thumbnails pick models from a filtered checkbox list on `bg-sunken` and a count of the picked ones), the grid switch with its words next to it, and one line that says what Generate will queue or what's wrong (`text-warning` with an icon). While a script is on, the Generate button reads **Run script** with the image count.
 - **Batch workflow (Generate):** the params column (Generate-only blocks hidden) beside a panel: a header with the workflow's name, a `batch` badge and its description; the workflow's notices (missing custom nodes with **Install**, missing models with **Find in Manager**); `Field` rows for Images (A folder · Files, a `FolderField` or a multiple `DropZone` with **Choose files…**), Output folder and Options (switches with their words next to them, the caption prefix when the workflow writes text); **Run batch** / **Stop the batch**; then the run: a status line with counts, a `ProgressBar`, the output path in mono, and a virtualized list of files on `bg-sunken`, each with a state icon in its ink plus the outputs or the error (never color alone).
 - **Workflow switcher footer:** Edit in ComfyUI · Duplicate · Export · Delete (two clicks); import is the icon next to search and the drop target (ComfyUI JSON, PNG, WebP, `.blombo`).
 - **ComfyUI's page (blombo-bridge):** the extension's floating bar sits under ComfyUI's menu, centered, in ComfyUI's own CSS variables (it isn't Blombo's page, so it doesn't use Blombo's tokens): "Editing **name** from Blombo", a short note, **Save to Blombo** (primary), Save as copy, Cancel; results come as ComfyUI toasts.
-- **Settings → ComfyUI:** which ComfyUI the profile uses, then the Blombo bridge row (a status badge: Loaded / Not loaded / Out of date / ComfyUI is off, the version, Check again, what to do, and **Install bridge…** for your own ComfyUI or **Restart ComfyUI** for a slot), then the installer: slot, PyTorch build, version, and a step list with a progress bar on the active step and the tools' output under "Show details".
+- **Settings → ComfyUI:** which ComfyUI the profile uses (Managed install · My own ComfyUI, a folder with a live check and the "clean managed install is recommended" warning · Address), then the Blombo bridge row (a status badge: Loaded / Not loaded / Out of date / ComfyUI is off, the version, Check again, what to do, and **Install bridge…** for your own ComfyUI or **Restart ComfyUI** for a slot), then the installer: slot, PyTorch build, version, and a step list with a progress bar on the active step and the tools' output under "Show details".
 - **Settings → Overview:** the profile card, four stat tiles (images generated with this week / today, GPU time, favorites of the gallery, speed with runs and failures), a 14-day bar chart (today in full accent, other days at 45%, a tooltip per day), four single-hue rank lists (models, LoRAs, wildcards, workflows), then quick settings rows. With no runs yet a panel points to Generate.
 - **Settings → Shortcuts:** a search field, "N changed from the defaults" and Reset all, then panels per group: label (a warning line with an icon when another action has the same keys), the default when changed, the keys as `Kbd`s in a button that records the next combo (Backspace for none, Esc cancels), and a reset icon. "In one view" lists fixed keys read-only.
 - **Settings → Notifications:** a `Notice` when this window can't show notifications or they're blocked, the on switch, three "when" switches with their words, the "long run" slider, Allow / Send a test.
-- **Settings → About:** version and data folder with Design Lab, Show in Explorer, Export "…", and a compact `DropZone` to import a profile zip.
+- **Settings → About:** version and data folder with Design Lab (dev mode only), Show in Explorer, Export "…", and a compact `DropZone` to import a profile zip.
 - **Help:** the settings layout (220 px topic rail with a sliding indicator that follows the section in view) and sections with numbered steps, tips (`info` icon), tables; the prompt guide is a table of syntax / example (`SyntaxText`, the editor's colors without an editor) / meaning; the playground is the real `PromptEditor` with tags as chips (weight > 1 in weight ink on yellow, < 1 muted, ×w in mono), LoRAs, wildcards (found / not in your folder badges), choices and syntax problems.
 - **Command palette:** centered at 12vh, 640 px, `surface-3`; groups Go to · Actions · Workflows · Settings · Help · Models · LoRAs; a footer with ↑ ↓ / Enter hints and the count. The header has a search icon button for it.
-- **Scopes:** "Cards show" select + "Pick from the prompt" switch (with what it picked now) above a 248 px rail of scopes by group (counts, a dot on the active one, New scope) and the scope's pane: name, group badge, its tags, Pictures | Lookup, edit; kind segmented, search, "Only without a picture", "N of M have a picture here", Make the missing ones; a virtualized ModelCard grid with a footer of Upload · From gallery · Remove. Lookup shows one model's picture in every scope as small 3:4 tiles. Edit and New use a dialog (name, group, comma-separated tags with a chip preview, Remove scope with a second click).
 - **History → Generations:** search, All / Done / Failed segmented, count, Clear (confirmation); rows with a 64 px thumbnail, workflow name, state badge, the group's title, the prompt in `SyntaxText`, a mono line (model, LoRA count, size, seed, duration, it/s with a per-stage tooltip), Run again and a ⋯ menu (new seed, Use these settings).
 - **Prompt history:** the clock icon beside a prompt opens a 460 px popover with Recent (search; prompts in `SyntaxText`, "3 min ago · 2 runs", + to add) and Snippets (insert at the cursor, remove on hover, a name field that saves the current prompt).
 - **Gallery marks:** the lightbox's details start with a `surface-2` box: Rating (`StarRating`), Tags (chips with × and an add field with suggestions), Albums (a collection picker with checkboxes and "New collection"). Tiles show `★ n` on rated images; the toolbar has Tag and Rating chips and a "Best rated" sort; the sidebar lists collections with covers and counts.
 - **Image stage timing:** a finished result's info chip adds "· 7.9 it/s" with a tooltip of time per part; while running, the progress card shows the server's it/s.
 - **Drop to reuse:** dragging a file over Generate shows a dashed accent overlay on `bg/80` ("Drop to use this image's settings"), then "Reading the image…".
-- **Model pickers:** favorites first (heart on the card), then recently used, then the rest; tiles in the models strip show the scope's or the model's picture.
+- **Model pickers:** favorites first (heart on the card), then recently used, then the rest; tiles in the models strip show the model's picture.
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
 
 ## Copy
@@ -165,7 +168,7 @@ Presets in `src/client/lib/motion.ts`:
 
 - Visible focus ring (`focus-ring` utility / global `:focus-visible`) on everything interactive.
 - Every icon-only control has a label. Radios, tabs and sliders expose their ARIA roles and values.
-- Keyboard: arrows in segmented controls, tabs, menus and selects; Enter/Escape in editable values; `1`–`9` on the profile screen; app shortcuts from `shared/shortcuts.ts` (Ctrl+1–8 views, Ctrl+Enter generate, Ctrl+K palette, F1 help, R rescan…), rebindable in Settings → Shortcuts. Show keys with `useShortcutLabel()`, never a hardcoded string.
+- Keyboard: arrows in segmented controls, tabs, menus and selects; Enter/Escape in editable values; app shortcuts from `shared/shortcuts.ts` (Ctrl+1–8 views, Ctrl+Enter generate, Ctrl+K palette, F1 help, R rescan…), rebindable in Settings → Shortcuts. Show keys with `useShortcutLabel()`, never a hardcoded string.
 - Contrast, checked by `src/client/styles/contrast.test.ts` for every theme × accent on every surface (`bg` to `field`): `fg`, `fg-2`, `fg-3`, every `-ink` and the syntax colors 4.5:1; `fg-4` 3:1 (hints, counts, disabled); `on-accent` on `accent` 4.5:1 (yellow, green and cyan accents use dark text; orange and pink use a shade deeper than their palette color). A new text token goes into that test. Known exception: white on the Generate orange is about 4.1:1 (3.9:1 in Light); the label is 18 px semibold, so it passes as large text.
 - Modal layers that aren't a `Dialog` (the lightbox, the tour) use `useModalFocus(ref)` from `lib/hooks`: focus moves in, Tab stays inside, focus returns on close. A file input is opened from a real `Button` (a `<label>` around a hidden input can't be reached with Tab). A slider without a visible label takes `ariaLabel`.
 - Status is never color alone: the header's ComfyUI dot gets a word (Stopped, Starting, Offline…) whenever ComfyUI isn't simply running.

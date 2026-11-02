@@ -7,6 +7,7 @@
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { fuzzyFilter } from "@client/lib/fuzzy";
+import { exitFast, snappy } from "@client/lib/motion";
 import {
   FloatingFocusManager,
   FloatingOverlay,
@@ -146,7 +147,7 @@ export function CommandPalette({
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              transition={{ duration: 0.14 }}
+              transition={{ duration: 0.1 }}
             />
             <FloatingFocusManager context={context} initialFocus={0}>
               <motion.div
@@ -155,8 +156,8 @@ export function CommandPalette({
                 aria-label="Command palette"
                 initial={{ opacity: 0, scale: 0.97, y: -6 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.98, transition: { duration: 0.1 } }}
-                transition={{ type: "spring", stiffness: 560, damping: 40 }}
+                exit={{ opacity: 0, scale: 0.98, transition: exitFast }}
+                transition={snappy}
                 className="relative flex h-fit max-h-[min(70vh,620px)] w-full max-w-[640px] flex-col overflow-hidden rounded-xl border border-line-strong bg-surface-3 shadow-pop"
               >
                 <div className="flex items-center gap-3 border-b border-line px-4">
@@ -208,7 +209,7 @@ export function CommandPalette({
                             onKeyDown={() => undefined}
                             className={cn(
                               "flex h-10 cursor-pointer items-center gap-3 rounded-md px-2.5 text-sm",
-                              selected ? "bg-field text-fg" : "text-fg-2",
+                              selected ? "bg-fg/8 text-fg" : "text-fg-2",
                             )}
                           >
                             {item.thumb ? (

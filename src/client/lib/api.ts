@@ -29,6 +29,7 @@ import {
 } from "@shared/civitai";
 import type {
   ComfyFileRef,
+  ComfyFolderCheck,
   ComfyLogLine,
   ComfyModelList,
   ComfyStatus,
@@ -79,7 +80,6 @@ import type {
   Profile,
   UpdateProfileBody,
 } from "@shared/profile";
-import type { SaveScopeBody, ScopeDef, ScopesState } from "@shared/scopes";
 import type { LibraryEntry, Settings, SettingsPatch } from "@shared/settings";
 import type {
   RollBody,
@@ -140,6 +140,8 @@ export const api = {
   system: () => request<SystemInfo>("GET", "/system"),
   revealProfileFolder: () => request<{ ok: true }>("POST", "/system/reveal-profile"),
   checkPath: (path: string) => request<CheckPathResult>("POST", "/system/check-path", { path }),
+  checkComfyFolder: (path: string) =>
+    request<ComfyFolderCheck>("POST", "/comfy/check-folder", { path }),
   pickFolder: (title: string, initial?: string) =>
     request<{ path: string | null }>("POST", "/system/pick-folder", {
       title,
@@ -337,32 +339,6 @@ export const api = {
   setModelFavorite: (kind: ModelKind, name: string, favorite: boolean) =>
     request<ModelMarks>("POST", "/history/model-marks", { kind, name, favorite }),
 
-  scopes: () => request<ScopesState>("GET", "/scopes"),
-  setScopeOptions: (patch: { active?: string; auto?: boolean }) =>
-    request<ScopesState>("PUT", "/scopes/options", patch),
-  createScope: (body: SaveScopeBody) => request<ScopeDef>("POST", "/scopes", body),
-  updateScope: (id: string, body: SaveScopeBody) =>
-    request<ScopeDef>("PATCH", `/scopes/${encodeURIComponent(id)}`, body),
-  removeScope: (id: string) => request<void>("DELETE", `/scopes/${encodeURIComponent(id)}`),
-  uploadScopeThumb: (scope: string, kind: ModelKind, name: string, file: Blob) =>
-    request<{ ok: true }>(
-      "PUT",
-      `/scopes/${encodeURIComponent(scope)}/thumbs?${query({ kind, name })}`,
-      undefined,
-      file,
-    ),
-  scopeThumbFromImage: (scope: string, kind: ModelKind, name: string, imageId: number) =>
-    request<{ ok: true }>("POST", `/scopes/${encodeURIComponent(scope)}/thumbs/from-image`, {
-      kind,
-      name,
-      imageId,
-    }),
-  removeScopeThumb: (scope: string, kind: ModelKind, name: string) =>
-    request<{ ok: true }>("POST", `/scopes/${encodeURIComponent(scope)}/thumbs/remove`, {
-      kind,
-      name,
-    }),
-
   localModels: (rescan = false) =>
     request<ModelList>("GET", `/models/local${rescan ? "?rescan=1" : ""}`),
   modelDetails: (id: string) =>
@@ -451,12 +427,9 @@ export function stageImageUrl(file: string): string {
   return `/api/stages/images/${encodeURIComponent(file)}`;
 }
 
-/** Avatar URL with a cache-buster tied to the profile record, so a new upload shows at once. */
-export function avatarUrl(
-  profile: Pick<Profile, "id" | "hasAvatar">,
-  version?: string,
-): string | null {
+/** Avatar URL versioned by when the picture changed, so a new upload shows at once. */
+export function avatarUrl(profile: Pick<Profile, "id" | "hasAvatar" | "avatarAt">): string | null {
   return profile.hasAvatar
-    ? `/api/profiles/${profile.id}/avatar?v=${encodeURIComponent(version ?? "")}`
+    ? `/api/profiles/${profile.id}/avatar?v=${encodeURIComponent(profile.avatarAt ?? "")}`
     : null;
 }

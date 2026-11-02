@@ -3,7 +3,13 @@
  * every view under a profile and keeps Generate and Gallery alive (hidden) when you switch away.
  */
 import { MAIN_VIEWS, MENU_VIEWS, type ViewId } from "@shared/constants";
-import { createRootRoute, createRoute, createRouter, Outlet } from "@tanstack/react-router";
+import {
+  createRootRoute,
+  createRoute,
+  createRouter,
+  Outlet,
+  redirect,
+} from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 import { ProfileScreen } from "../features/profiles/ProfileScreen";
 import { loadShell } from "./loadShell";
@@ -11,9 +17,10 @@ import { loadShell } from "./loadShell";
 // Its own chunk: the profile screen paints without Generate, Gallery and the prompt editor.
 const Shell = lazy(() => loadShell().then((m) => ({ default: m.Shell })));
 
-const DesignLab = lazy(() =>
-  import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })),
-);
+// Dev mode only, so the built app doesn't ship the Lab at all.
+const DesignLab = import.meta.env.DEV
+  ? lazy(() => import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })))
+  : () => null;
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -23,10 +30,13 @@ const profilesRoute = createRoute({
   component: ProfileScreen,
 });
 
-/** The Design Lab outside any profile (dev and style review). */
+/** The Design Lab outside any profile. Dev mode only; the built app sends /lab home. */
 const labRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/lab",
+  beforeLoad: () => {
+    if (!import.meta.env.DEV) throw redirect({ to: "/" });
+  },
   component: () => (
     <div className="h-full overflow-auto">
       <Suspense fallback={null}>
@@ -74,5 +84,6 @@ const VIEWS = new Set<string>([...MAIN_VIEWS, ...MENU_VIEWS]);
 
 export function viewFromPath(pathname: string): ViewId {
   const part = pathname.split("/")[3];
+  if (part === "lab" && !import.meta.env.DEV) return "generate";
   return part && VIEWS.has(part) ? (part as ViewId) : "generate";
 }

@@ -19,7 +19,7 @@ export function GeneratePage({ onGo }: { onGo: (p: SettingsPage) => void }) {
   ];
   return (
     <>
-      <PageHeader title="Generate" text="How the Generate screen starts. Saved to this profile." />
+      <PageHeader title="Generate" />
       <div className="flex flex-col gap-8">
         <Field
           label="Default layout"

@@ -29,6 +29,7 @@ import { GeneratePage } from "./GeneratePage";
 import { NotificationsPage } from "./NotificationsPage";
 import { type SettingsPage as PageId, SETTINGS_PAGES, useSettingsNav } from "./nav";
 import { OverviewPage } from "./OverviewPage";
+import { ProfilePicture } from "./ProfilePicture";
 import { ShortcutsPage } from "./ShortcutsPage";
 
 export function SettingsView() {
@@ -121,10 +122,7 @@ function Page({
     case "files":
       return (
         <>
-          <PageHeader
-            title="Folders"
-            text="Where this profile's models, images and wildcards live."
-          />
+          <PageHeader title="Folders" />
           <FoldersPage profile={profile} />
         </>
       );
@@ -133,10 +131,7 @@ function Page({
     case "comfy":
       return (
         <>
-          <PageHeader
-            title="ComfyUI"
-            text="The engine that generates. Blombo can install and run it for you."
-          />
+          <PageHeader title="ComfyUI" />
           <ComfyPage profile={profile} />
         </>
       );
@@ -145,27 +140,9 @@ function Page({
     case "models":
       return <ModelsPage />;
     case "autocomplete":
-      return (
-        <AutocompletePage
-          header={
-            <PageHeader
-              title="Autocomplete"
-              text="What the prompt editor suggests and how it goes in. Saved to this profile."
-            />
-          }
-        />
-      );
+      return <AutocompletePage header={<PageHeader title="Autocomplete" />} />;
     case "civitai":
-      return (
-        <CivitaiPage
-          header={
-            <PageHeader
-              title="Civitai"
-              text="Your account, browsing, where downloads land, and what Blombo remembers."
-            />
-          }
-        />
-      );
+      return <CivitaiPage header={<PageHeader title="Civitai" />} />;
     case "notifications":
       return <NotificationsPage />;
     case "shortcuts":
@@ -189,8 +166,9 @@ function Appearance() {
   };
   return (
     <>
-      <PageHeader title="Appearance" text="Saved to this profile. Changes apply right away." />
+      <PageHeader title="Appearance" />
       <div className="flex flex-col gap-8">
+        {profile ? <ProfilePicture profile={profile} /> : null}
         <Field label="Theme" layout="left">
           <div className="grid grid-cols-3 gap-2">
             {THEMES.map((t) => (
@@ -379,10 +357,7 @@ function GalleryPage() {
   }, [size, settings?.tileSize, update]);
   return (
     <>
-      <PageHeader
-        title="Gallery"
-        text="How the gallery lays out your images. Saved to this profile."
-      />
+      <PageHeader title="Gallery" />
       <div className="flex flex-col gap-8">
         <Field
           label="Layout"
@@ -432,7 +407,7 @@ function ModelsPage() {
   const update = useUpdateSettings();
   return (
     <>
-      <PageHeader title="Models" text="The Models view and model cards. Saved to this profile." />
+      <PageHeader title="Models" />
       <div className="flex flex-col gap-8">
         <Field
           label="Blur NSFW thumbnails"

@@ -237,6 +237,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [tab, setTab] = useState("generate");
   const [line, setLine] = useState("generation");
   const [dialog, setDialog] = useState(false);
+  const [bareDialog, setBareDialog] = useState(false);
   const [stageOn, setStageOn] = useState(true);
   const [ov, setOv] = useState(false);
   const [prompt, setPrompt] = useState(MOCK_PROMPT);
@@ -327,6 +328,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                   size={44}
                 />
               ))}
+              <div className="relative h-[96px] w-[64px] overflow-hidden rounded-lg border border-line">
+                <Avatar shape="card" name="Nari Main" accent="purple" size={64} />
+              </div>
             </div>
           </div>
         </Section>
@@ -782,6 +786,28 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                   <TextField id={id} defaultValue="Illustrious · Portrait (copy)" autoFocus />
                 )}
               </Field>
+            </Dialog>
+            <Button onClick={() => setBareDialog(true)}>Open bare dialog</Button>
+            <Dialog
+              open={bareDialog}
+              onOpenChange={setBareDialog}
+              bare
+              width={560}
+              className="h-80"
+            >
+              <div className="grid flex-1 grid-cols-[160px_minmax(0,1fr)]">
+                <aside className="border-r border-line bg-surface p-4 text-sm text-fg-2">
+                  Rail
+                </aside>
+                <div className="flex flex-col">
+                  <div className="flex-1 p-5 text-sm text-fg-2">Panes fill a bare dialog.</div>
+                  <div className="flex justify-end border-t border-line bg-surface px-5 py-3">
+                    <Button variant="primary" onClick={() => setBareDialog(false)}>
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              </div>
             </Dialog>
           </Row>
           <Row label="Toasts">

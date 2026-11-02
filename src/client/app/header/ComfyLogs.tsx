@@ -19,13 +19,7 @@ export function ComfyLogs({
   onOpenChange: (o: boolean) => void;
 }) {
   return (
-    <Dialog
-      open={open}
-      onOpenChange={onOpenChange}
-      title="ComfyUI log"
-      description="What ComfyUI prints while it starts and runs. New lines appear as they're written."
-      width={920}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange} title="ComfyUI log" width={920}>
       {open ? <LogLines /> : null}
     </Dialog>
   );

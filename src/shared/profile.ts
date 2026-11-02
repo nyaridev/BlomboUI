@@ -22,6 +22,8 @@ export const ComfyTarget = z.discriminatedUnion("mode", [
   z.object({ mode: z.literal("managed"), slot: z.string().default("latest") }),
   /** A ComfyUI the user runs themselves. */
   z.object({ mode: z.literal("external"), url: z.string().url() }),
+  /** A ComfyUI folder the user picked; Blombo starts it like a managed slot. */
+  z.object({ mode: z.literal("local"), dir: z.string().trim().min(1) }),
 ]);
 export type ComfyTarget = z.infer<typeof ComfyTarget>;
 
@@ -33,6 +35,8 @@ export const Profile = z.object({
   accent: z.enum(ACCENTS).default("blue"),
   theme: z.enum(THEMES).default("blombo"),
   hasAvatar: z.boolean().default(false),
+  /** When the picture last changed; versions its URL so a new one shows at once. */
+  avatarAt: z.string().nullable().default(null),
   paths: ProfilePaths.default({ models: "", outputs: "", wildcards: "" }),
   comfy: ComfyTarget.default({ mode: "managed", slot: "latest" }),
   createdAt: z.string(),

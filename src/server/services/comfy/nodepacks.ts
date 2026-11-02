@@ -35,7 +35,7 @@ import { Emitter } from "../../lib/emitter.ts";
 import { exists, movePath, readJsonFile, writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import { defaultOps, type InstallOps, type RunOptions } from "./installer.ts";
-import { findSlot } from "./slots.ts";
+import { findLocal, findSlot } from "./slots.ts";
 import {
   ensureUv,
   extractTopFolder,
@@ -55,8 +55,14 @@ const PINNED = new Set(["torch", "torchvision", "torchaudio"]);
 
 /** What the installer needs from ComfyUI (the supervisor in the app, a fake in tests). */
 export interface NodePackComfy {
-  /** The active profile's ComfyUI: a managed slot, an external URL, or none yet. */
-  target(): { mode: "managed"; slot: string } | { mode: "external"; url: string } | null;
+  /**
+   * The active profile's ComfyUI: a managed slot (with `dir`, the user's own folder), an
+   * external URL, or none yet.
+   */
+  target():
+    | { mode: "managed"; slot: string; dir?: string }
+    | { mode: "external"; url: string }
+    | null;
   running(): boolean;
   stop(): Promise<void>;
   /** Start ComfyUI and wait until it answers; false when it didn't come up. */
@@ -150,7 +156,9 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
       throw new HttpError(409, externalHowTo(packs.map((p) => p.pack)), "external");
     const blocked = this.deps.blocked();
     if (blocked) throw new HttpError(409, blocked, "blocked");
-    const lookup = await findSlot(this.deps.runtimeDir, target.slot);
+    const lookup = target.dir
+      ? await findLocal(this.deps.runtimeDir, target.dir)
+      : await findSlot(this.deps.runtimeDir, target.slot);
     if (!lookup.ok) throw new HttpError(409, lookup.reason, "no_slot");
     if (this.running) throw new HttpError(409, "Custom nodes are already being installed.", "busy");
 

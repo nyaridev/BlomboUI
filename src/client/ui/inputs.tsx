@@ -12,7 +12,7 @@ import {
 } from "react";
 
 const fieldBox =
-  "flex min-w-0 items-center gap-2 rounded-md border bg-field text-sm text-fg transition-[border-color,box-shadow] duration-150 " +
+  "flex min-w-0 items-center gap-2 rounded-md border bg-field text-sm text-fg transition-[border-color,box-shadow] " +
   "border-line hover:border-line-strong focus-within:border-accent-ink/70 focus-within:ring-2 focus-within:ring-accent/25";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {

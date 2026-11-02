@@ -6,7 +6,7 @@
 import type { StoreCategory } from "@shared/manager";
 import { create } from "zustand";
 
-export type ModelsTab = "local" | "civitai" | "manager" | "scopes";
+export type ModelsTab = "local" | "civitai" | "manager";
 
 interface ModelsNav {
   tab: ModelsTab;

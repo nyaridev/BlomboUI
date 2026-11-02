@@ -1,6 +1,6 @@
 /**
  * Header: brand · workflow switcher | main views | system status · errors · avatar.
- * Views that aren't daily tools (Settings, History, Errors, Scopes, Help) live in the avatar menu.
+ * Views that aren't daily tools (Settings, History, Errors, Help) live in the avatar menu.
  */
 import { Logo } from "@client/icons/Logo";
 import { cn } from "@client/lib/cn";
@@ -84,7 +84,7 @@ export function Header({
         />
         <SystemCluster />
         <span className="mx-1 h-6 w-px bg-line" />
-        <AvatarMenu profile={profile} profileId={profileId} onNavigate={go} />
+        <AvatarMenu profile={profile} onNavigate={go} />
       </div>
     </header>
   );

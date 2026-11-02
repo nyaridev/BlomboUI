@@ -66,6 +66,11 @@ export const StagesRecord = z.partialRecord(z.enum(STAGES), z.record(z.string(),
 export const WORKFLOW_KINDS = ["generate", "batch"] as const;
 export const WorkflowKind = z.enum(WORKFLOW_KINDS);
 export type WorkflowKind = z.infer<typeof WorkflowKind>;
+/** How each kind is named where workflows are grouped (the profile wizard's starter list). */
+export const WORKFLOW_KIND_LABELS: Record<WorkflowKind, string> = {
+  generate: "Image generation",
+  batch: "Utilities",
+};
 
 export const WorkflowManifest = z.object({
   format: z.literal("blombo.workflow/1"),

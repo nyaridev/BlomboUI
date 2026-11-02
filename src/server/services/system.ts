@@ -70,8 +70,71 @@ const PS_PRELUDE = [
 const pickerEnv = (vars: Record<string, string>) => ({ ...process.env, ...vars });
 
 /**
+ * The modern Windows folder dialog (Explorer-style, with the address bar): IFileOpenDialog in
+ * folder mode. Windows PowerShell runs .NET Framework, whose FolderBrowserDialog is the old tree
+ * dialog, so the COM interface is declared here (compiled by Add-Type, about 0.2 s).
+ */
+const FOLDER_PICKER_CS = `using System;
+using System.Runtime.InteropServices;
+public static class BlomboFolderPicker {
+  [ComImport, Guid("DC1C5A9C-E88A-4dde-A5A1-60F82A20AEF7")] class FileOpenDialogRCW {}
+  [ComImport, Guid("42f85136-db7e-439c-85f1-e4075d135fc8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IFileOpenDialog {
+    [PreserveSig] int Show(IntPtr hwndOwner);
+    void SetFileTypes(uint cFileTypes, IntPtr rgFilterSpec);
+    void SetFileTypeIndex(uint iFileType);
+    void GetFileTypeIndex(out uint piFileType);
+    void Advise(IntPtr pfde, out uint pdwCookie);
+    void Unadvise(uint dwCookie);
+    void SetOptions(uint fos);
+    void GetOptions(out uint pfos);
+    void SetDefaultFolder(IShellItem psi);
+    void SetFolder(IShellItem psi);
+    void GetFolder(out IShellItem ppsi);
+    void GetCurrentSelection(out IShellItem ppsi);
+    void SetFileName([MarshalAs(UnmanagedType.LPWStr)] string pszName);
+    void GetFileName([MarshalAs(UnmanagedType.LPWStr)] out string pszName);
+    void SetTitle([MarshalAs(UnmanagedType.LPWStr)] string pszTitle);
+    void SetOkButtonLabel([MarshalAs(UnmanagedType.LPWStr)] string pszText);
+    void SetFileNameLabel([MarshalAs(UnmanagedType.LPWStr)] string pszLabel);
+    void GetResult(out IShellItem ppsi);
+  }
+  [ComImport, Guid("43826D1E-E718-42EE-BC55-A1E261C37BFE"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+  interface IShellItem {
+    void BindToHandler(IntPtr pbc, ref Guid bhid, ref Guid riid, out IntPtr ppv);
+    void GetParent(out IShellItem ppsi);
+    void GetDisplayName(uint sigdnName, [MarshalAs(UnmanagedType.LPWStr)] out string ppszName);
+  }
+  [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+  static extern void SHCreateItemFromParsingName(string pszPath, IntPtr pbc, ref Guid riid, out IShellItem ppv);
+
+  public static string Pick(string title, string initial, IntPtr owner) {
+    var dlg = (IFileOpenDialog)new FileOpenDialogRCW();
+    uint opts;
+    dlg.GetOptions(out opts);
+    // FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM | FOS_PATHMUSTEXIST
+    dlg.SetOptions(opts | 0x20 | 0x40 | 0x800);
+    if (!String.IsNullOrEmpty(title)) dlg.SetTitle(title);
+    if (!String.IsNullOrEmpty(initial)) {
+      try {
+        Guid iid = typeof(IShellItem).GUID;
+        IShellItem folder;
+        SHCreateItemFromParsingName(initial, IntPtr.Zero, ref iid, out folder);
+        dlg.SetFolder(folder);
+      } catch { }
+    }
+    if (dlg.Show(owner) != 0) return null;
+    IShellItem item;
+    dlg.GetResult(out item);
+    string path;
+    item.GetDisplayName(0x80058000, out path); // SIGDN_FILESYSPATH
+    return path;
+  }
+}`;
+
+/**
  * Opens the OS folder dialog and resolves with the chosen path, or null when cancelled.
- * Windows uses PowerShell's FolderBrowserDialog; Linux tries zenity.
+ * Windows uses the modern folder dialog (FOLDER_PICKER_CS); Linux tries zenity.
  */
 export function pickFolder(title: string, initial?: string): Promise<string | null> {
   return new Promise((resolve) => {
@@ -81,13 +144,12 @@ export function pickFolder(title: string, initial?: string): Promise<string | nu
     if (process.platform === "win32") {
       const script = [
         ...PS_PRELUDE,
-        "$d = New-Object System.Windows.Forms.FolderBrowserDialog",
-        "$d.Description = $env:BLOMBO_PICK_TITLE",
-        "$d.UseDescriptionForTitle = $true",
-        "if ($env:BLOMBO_PICK_INITIAL) { $d.SelectedPath = $env:BLOMBO_PICK_INITIAL }",
+        `Add-Type -TypeDefinition @'\n${FOLDER_PICKER_CS}\n'@`,
+        // A hidden topmost window owns the dialog, so it opens in front of the browser.
         "$f = New-Object System.Windows.Forms.Form -Property @{TopMost=$true; ShowInTaskbar=$false}",
-        "if ($d.ShowDialog($f) -eq 'OK') { [Console]::Out.Write($d.SelectedPath) }",
-      ].join("; ");
+        "$p = [BlomboFolderPicker]::Pick($env:BLOMBO_PICK_TITLE, $env:BLOMBO_PICK_INITIAL, $f.Handle)",
+        "if ($p) { [Console]::Out.Write($p) }",
+      ].join("\n");
       env = pickerEnv({ BLOMBO_PICK_TITLE: title, BLOMBO_PICK_INITIAL: initial ?? "" });
       command = "powershell.exe";
       args = ["-NoProfile", "-STA", "-Command", script];

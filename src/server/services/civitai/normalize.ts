@@ -55,7 +55,7 @@ export function image(
   };
 }
 
-/** The remote URL of a version's first image at preview size (for the .preview.png sidecar). */
+/** The remote URL of a version's first image at preview size (the model's picture, modelthumbs.ts). */
 export function previewSource(
   version: RawVersion | undefined,
   allowed: (u: string) => boolean,

@@ -18,7 +18,8 @@ import { Emitter } from "../lib/emitter.ts";
 import { exists, movePath, readJsonFile, writeFileAtomic, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 
-const AVATAR_SIZE = 256;
+// Long edge of a stored avatar. Kept uncropped: the profile screen shows it as a full card.
+const AVATAR_MAX = 768;
 
 type ProfileEvents = {
   /** A profile was opened (also when the same one is opened again, e.g. after a reload). */
@@ -140,6 +141,19 @@ export class ProfileService extends Emitter<ProfileEvents> {
       comfy: body.comfy,
       createdAt: new Date().toISOString(),
     });
+    // Folders that don't exist yet are made (an existing one is used as it is, never touched).
+    for (const [kind, folder] of Object.entries(profile.paths)) {
+      if (!folder.trim() || !path.isAbsolute(folder)) continue;
+      try {
+        await fs.mkdir(folder, { recursive: true });
+      } catch (error) {
+        throw new HttpError(
+          400,
+          `Couldn't create the ${kind} folder ${folder} (${(error as NodeJS.ErrnoException).code ?? "error"}). Pick another folder.`,
+          "folder_create",
+        );
+      }
+    }
     await fs.mkdir(path.join(this.dir(id), "workflows"), { recursive: true });
     await fs.mkdir(path.join(this.dir(id), "layouts"), { recursive: true });
     await writeJsonAtomic(this.profileFile(id), profile);
@@ -185,7 +199,7 @@ export class ProfileService extends Emitter<ProfileEvents> {
     try {
       webp = await sharp(Buffer.from(image))
         .rotate()
-        .resize(AVATAR_SIZE, AVATAR_SIZE, { fit: "cover", position: "attention" })
+        .resize(AVATAR_MAX, AVATAR_MAX, { fit: "inside", withoutEnlargement: true })
         .webp({ quality: 88 })
         .toBuffer();
     } catch {
@@ -201,7 +215,7 @@ export class ProfileService extends Emitter<ProfileEvents> {
   }
 
   private async setHasAvatar(id: string, hasAvatar: boolean): Promise<Profile> {
-    const next = { ...(await this.get(id)), hasAvatar };
+    const next = { ...(await this.get(id)), hasAvatar, avatarAt: new Date().toISOString() };
     await writeJsonAtomic(this.profileFile(id), next);
     return next;
   }

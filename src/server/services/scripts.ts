@@ -6,12 +6,14 @@
  *                labeled grid (lib/grid.ts), saved in the outputs folder by day
  *                (<outputs>/<date>/grids/…, or the profile's grids/ without one) and shown as a
  *                finished "grid" job, so it lands on the image stage like any result
- *   thumbs       each finished image becomes that model's thumbnail in the scope (scopes.ts)
+ *   thumbs       each finished image becomes that model's picture (<model>_data/thumb.jpg,
+ *                modelthumbs.ts); the pictures it replaces go to the profile's trash
  *
  * Cancelling the group (Cancel, or the group's own cancel) still makes the grid of what finished.
  */
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import type { ModelKind } from "../../shared/constants.ts";
 import type { GenerateBody, GenerateResponse, Job, JobImage } from "../../shared/jobs.ts";
 import type { ServerMessage } from "../../shared/live.ts";
 import { randomSeed } from "../../shared/random.ts";
@@ -22,8 +24,8 @@ import { composeGrid } from "../lib/grid.ts";
 import { HttpError } from "../lib/http.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { JobQueue } from "./jobs.ts";
+import { saveModelThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
-import { saveScopeThumb } from "./scopes.ts";
 
 export interface ScriptDeps {
   queue: JobQueue;
@@ -32,7 +34,9 @@ export interface ScriptDeps {
   publish: (msg: ServerMessage) => void;
   /** Index a file Blombo wrote into the outputs folder (the gallery). */
   ingest?: (ref: { filename: string; subfolder: string; type: "output" }) => Promise<unknown>;
-  /** Scope thumbnails changed: model lists refresh. */
+  /** The file of a local model (kind + ComfyUI name), or null when it isn't in the folder. */
+  modelFile?: (kind: ModelKind, comfyName: string) => Promise<string | null>;
+  /** Model pictures changed: model lists refresh. */
   onThumbs?: () => void;
 }
 
@@ -180,15 +184,14 @@ export class ScriptService {
     const cell = g.plan.cells[job.group?.index ?? -1];
     const image = mainImage(job);
     if (!cell?.model || !image || !g.kind || g.script.kind !== "thumbs") return;
+    const file = await this.deps.modelFile?.(g.kind, cell.model);
+    if (!file) throw new Error(`${cell.model} isn't in the models folder anymore.`);
     const bytes = await this.imageBytes(image);
     if (!bytes) return;
-    await saveScopeThumb(
-      this.deps.profiles.dir(g.profileId),
-      g.script.scope,
-      g.kind,
-      cell.model,
-      bytes,
-    );
+    await saveModelThumbs(file, bytes, {
+      replace: true,
+      trashDir: path.join(this.deps.profiles.dir(g.profileId), "trash", "model-pictures"),
+    });
     this.deps.onThumbs?.();
   }
 

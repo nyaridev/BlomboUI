@@ -25,8 +25,10 @@ export type ComfyState = z.infer<typeof ComfyState>;
 export const ComfyStatus = z.object({
   state: ComfyState,
   mode: z.enum(["managed", "external"]),
-  /** Managed slot name; null for an external ComfyUI. */
+  /** Managed slot name; null for an external ComfyUI or the user's own folder. */
   slot: z.string().nullable(),
+  /** The user's own ComfyUI folder Blombo starts (profile target "local"); null otherwise. */
+  dir: z.string().nullable(),
   /** Base URL Blombo talks to, e.g. http://127.0.0.1:8188. */
   url: z.string(),
   pid: z.number().int().nullable(),
@@ -73,6 +75,13 @@ export const FreeMemoryBody = z.object({
   freeMemory: z.boolean().default(true),
 });
 export type FreeMemoryBody = z.infer<typeof FreeMemoryBody>;
+
+/** Is there a ComfyUI Blombo can start in this folder (profile target "local")? */
+export const CheckComfyFolderBody = z.object({ path: z.string().trim().min(1) });
+export type CheckComfyFolderBody = z.infer<typeof CheckComfyFolderBody>;
+export type ComfyFolderCheck =
+  | { ok: true; comfyDir: string; python: string }
+  | { ok: false; reason: string };
 
 /** GET /api/comfy/models/:kind: what ComfyUI lists for one model kind (empty while it's down). */
 export const ComfyModelList = z.object({

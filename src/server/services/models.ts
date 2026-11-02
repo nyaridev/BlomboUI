@@ -1,6 +1,7 @@
 /**
  * Local models: the files under the profile's models root, by kind (MODEL_FOLDERS), with their
- * sidecars: a thumbnail image and Civitai or A1111 info JSON next to the model.
+ * sidecars: Civitai or A1111 info JSON next to the model, and its pictures in the folder named
+ * after it (`<model>_data/thumb.*`, services/modelthumbs.ts).
  *
  * A scan reads each folder once and only the small sidecar JSON files, so a thousand LoRAs list
  * quickly; the result is cached until a rename, a move or a rescan. Renaming or moving takes the
@@ -15,6 +16,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import {
+  comfyNameOf,
   type LocalModel,
   type LookupInfo,
   MODEL_EXTENSIONS,
@@ -23,14 +25,13 @@ import {
   ModelFileStem,
   type ModelList,
   shortBaseModel,
-  THUMB_SUFFIXES,
 } from "../../shared/models.ts";
 import { headerLength, parseSafetensorsHeader } from "../../shared/safetensors.ts";
 import { exists, movePath, resolveInside } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { ThumbCache } from "../lib/thumbs.ts";
+import { DATA_SUFFIX, findThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
-import { DEFAULT_SCOPE, scopeThumbPath } from "./scopes.ts";
 
 export const MODEL_THUMB_MAX = 480;
 const EXTENSIONS = new Set<string>(MODEL_EXTENSIONS);
@@ -45,9 +46,13 @@ export interface ModelDeps {
 }
 
 interface Sidecars {
+  /** The picture cards show (`<model>_data/thumb.*`). */
   thumb: string | null;
   civitai: string | null;
   json: string | null;
+  /** The model's data folder (`<model>_data`), if it has one. */
+  dataDir: string | null;
+  /** Everything that moves with the model: "foo.*" files and the data folder. */
   all: string[];
 }
 
@@ -104,15 +109,18 @@ function isNsfw(info: CivitaiInfo | null): boolean {
 const stemOf = (file: string) => file.slice(0, file.length - path.extname(file).length);
 
 /**
- * Files in one folder that belong to a model stem ("foo.preview.png", "foo.civitai.info"…).
- * `stems` are the folder's model stems (lowercase): a file that also starts with a longer one
- * ("foo.xl.preview.png" next to foo.xl.safetensors) belongs to that model, not to "foo".
+ * What in one folder belongs to a model stem: "foo.civitai.info" and other "foo.*" files, and
+ * the "foo_data" folder (`dirs`: the folder's subfolders, lowercase → name). `stems` are the
+ * folder's model stems (lowercase): a file that also starts with a longer one
+ * ("foo.xl.civitai.info" next to foo.xl.safetensors) belongs to that model, not to "foo".
+ * The picture is filled in by the scan (it needs a read of the data folder).
  */
 export function sidecarsFor(
   stem: string,
   files: Map<string, string>,
   dir: string,
   stems: string[] = [],
+  dirs: Map<string, string> = new Map(),
 ): Sidecars {
   const lower = stem.toLowerCase();
   const longer = stems.filter((t) => t !== lower && t.startsWith(`${lower}.`));
@@ -120,12 +128,8 @@ export function sidecarsFor(
     const name = files.get(lower + suffix);
     return name ? path.join(dir, name) : null;
   };
-  let thumb: string | null = null;
-  for (const s of THUMB_SUFFIXES) {
-    thumb = pick(s);
-    if (thumb) break;
-  }
-  const all: string[] = [];
+  const dataName = dirs.get(lower + DATA_SUFFIX) ?? null;
+  const all: string[] = dataName ? [dataName] : [];
   for (const [low, name] of files)
     if (
       low.startsWith(`${lower}.`) &&
@@ -133,7 +137,13 @@ export function sidecarsFor(
       !longer.some((t) => low.startsWith(`${t}.`))
     )
       all.push(name);
-  return { thumb, civitai: pick(".civitai.info"), json: pick(".json"), all };
+  return {
+    thumb: null,
+    civitai: pick(".civitai.info"),
+    json: pick(".json"),
+    dataDir: dataName ? path.join(dir, dataName) : null,
+    all,
+  };
 }
 
 export class ModelService {
@@ -235,7 +245,10 @@ export class ModelService {
       return;
     }
     const files = new Map<string, string>();
-    for (const e of items) if (e.isFile()) files.set(e.name.toLowerCase(), e.name);
+    const dirs = new Map<string, string>();
+    for (const e of items)
+      if (e.isFile()) files.set(e.name.toLowerCase(), e.name);
+      else if (e.isDirectory()) dirs.set(e.name.toLowerCase(), e.name);
     const stems = [...files.keys()]
       .filter((low) => EXTENSIONS.has(path.extname(low)))
       .map((low) => stemOf(low));
@@ -244,6 +257,8 @@ export class ModelService {
       if (e.name.startsWith(".")) continue;
       const full = path.join(dir, e.name);
       if (e.isDirectory()) {
+        // A model's data folder holds its pictures, not more models.
+        if (isModelDataDir(e.name, stems)) continue;
         await this.scanFolder(profileId, root, full, kind, out, depth + 1);
         continue;
       }
@@ -255,18 +270,8 @@ export class ModelService {
         continue;
       }
       const stem = stemOf(e.name);
-      const sidecars = sidecarsFor(stem, files, dir, stems);
-      // No preview next to the model: a scope thumbnail Blombo made for it, if there is one.
-      if (!sidecars.thumb) {
-        const comfyName = toRel(path.relative(kindRoot, full));
-        const scoped = scopeThumbPath(
-          this.deps.profiles.dir(profileId),
-          DEFAULT_SCOPE,
-          kind,
-          comfyName,
-        );
-        if (scoped && (await exists(scoped))) sidecars.thumb = scoped;
-      }
+      const sidecars = sidecarsFor(stem, files, dir, stems, dirs);
+      if (sidecars.dataDir) sidecars.thumb = (await findThumbs(sidecars.dataDir)).thumb;
       const civitai = await readJson<CivitaiInfo>(sidecars.civitai);
       const a1111 = await readJson<A1111Info>(sidecars.json);
       const id = toRel(path.relative(root, full));
@@ -341,6 +346,14 @@ export class ModelService {
     );
   }
 
+  /** The file of a local model by kind and ComfyUI name, or null when it isn't in the folder. */
+  async fileFor(kind: ModelKind, comfyName: string): Promise<string | null> {
+    const list = await this.list();
+    const want = comfyName.replace(/\\/g, "/");
+    const model = list.models.find((m) => m.kind === kind && comfyNameOf(m) === want);
+    return model ? (this.cache?.entries.get(model.id)?.abs ?? null) : null;
+  }
+
   async filePath(id: string): Promise<string> {
     return (await this.entry(id)).entry.abs;
   }
@@ -396,7 +409,7 @@ export class ModelService {
     };
   }
 
-  /** Rename the model file and its sidecars ("foo.*" → "bar.*"). */
+  /** Rename the model file and its sidecars ("foo.*" → "bar.*", "foo_data" → "bar_data"). */
   async rename(id: string, name: string): Promise<LocalModel> {
     const { entry } = await this.entry(id);
     const dir = path.dirname(entry.abs);
@@ -500,6 +513,12 @@ function kindFolderOf(root: string, dir: string): string {
   return path.join(root, rel[0] ?? "");
 }
 
+/** "foo_data" next to foo.safetensors is that model's data folder, not a folder of models. */
+function isModelDataDir(name: string, stems: string[]): boolean {
+  const low = name.toLowerCase();
+  return low.endsWith(DATA_SUFFIX) && stems.includes(low.slice(0, -DATA_SUFFIX.length));
+}
+
 async function subfolders(
   dir: string,
   prefix = "",
@@ -513,8 +532,11 @@ async function subfolders(
   } catch {
     return out;
   }
+  const stems = items
+    .filter((e) => e.isFile() && EXTENSIONS.has(path.extname(e.name).toLowerCase()))
+    .map((e) => stemOf(e.name).toLowerCase());
   for (const e of items)
-    if (e.isDirectory() && !e.name.startsWith(".")) {
+    if (e.isDirectory() && !e.name.startsWith(".") && !isModelDataDir(e.name, stems)) {
       const rel = prefix ? `${prefix}/${e.name}` : e.name;
       out.push(rel);
       await subfolders(path.join(dir, e.name), rel, depth + 1, out);

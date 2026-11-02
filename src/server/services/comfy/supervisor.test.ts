@@ -7,7 +7,7 @@ import type { ComfyState } from "../../../shared/comfy.ts";
 import { Profile } from "../../../shared/profile.ts";
 import { startFakeComfy } from "./fixtures/fake-comfy.ts";
 import { extraModelPathsYaml } from "./paths.ts";
-import { findSlot } from "./slots.ts";
+import { findLocal, findSlot } from "./slots.ts";
 import { ComfySupervisor, findFreePort, type SupervisorOptions } from "./supervisor.ts";
 
 const fake = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-comfy.ts");
@@ -102,6 +102,62 @@ describe("findSlot", () => {
     );
     const found = await findSlot(runtimeDir, "cpu-slot");
     expect(found.ok && found.layout.torch).toBe("cpu");
+  });
+});
+
+/** A ComfyUI the user has: a portable build (python one level up) or a checkout with a venv. */
+async function makeOwn(name: string, kind: "portable" | "checkout") {
+  const root = path.join(tmp, "own", name);
+  const comfyDir = kind === "portable" ? path.join(root, "ComfyUI") : root;
+  await fs.mkdir(comfyDir, { recursive: true });
+  await fs.writeFile(path.join(comfyDir, "main.py"), "");
+  const py =
+    process.platform === "win32"
+      ? path.join(
+          root,
+          kind === "portable" ? "python_embeded/python.exe" : "venv/Scripts/python.exe",
+        )
+      : path.join(root, "venv", "bin", "python");
+  await fs.mkdir(path.dirname(py), { recursive: true });
+  await fs.writeFile(py, "");
+  return { root, comfyDir };
+}
+
+describe("findLocal", () => {
+  it("finds ComfyUI and its Python in a portable build, its inner folder, or a checkout", async () => {
+    const portable = await makeOwn("portable", "portable");
+    for (const pick of [portable.root, portable.comfyDir]) {
+      const found = await findLocal(runtimeDir, pick);
+      expect(found.ok && found.layout.comfyDir).toBe(portable.comfyDir);
+    }
+    const checkout = await makeOwn("checkout", "checkout");
+    const found = await findLocal(runtimeDir, checkout.root);
+    expect(found.ok && found.layout.main).toBe(path.join(checkout.root, "main.py"));
+    // Blombo's own files stay in runtime/, not in the user's folder.
+    expect(found.ok && found.layout.stateDir.startsWith(runtimeDir)).toBe(true);
+  });
+
+  it("explains a folder without ComfyUI or without Python", async () => {
+    expect(await findLocal(runtimeDir, path.join(tmp, "nowhere"))).toMatchObject({ ok: false });
+    const bare = path.join(tmp, "own", "bare");
+    await fs.mkdir(bare, { recursive: true });
+    await fs.writeFile(path.join(bare, "main.py"), "");
+    const lookup = await findLocal(runtimeDir, bare);
+    expect(lookup.ok ? "" : lookup.reason).toMatch(/no Python/);
+  });
+});
+
+describe("the user's own ComfyUI folder", () => {
+  it("starts from the folder, reports it, and puts blombo's files in runtime/", async () => {
+    const own = await makeOwn("started", "portable");
+    const before = (await fs.readdir(own.root, { recursive: true })).sort();
+    const s = await supervisor();
+    await s.applyProfile(profile({ mode: "local", dir: own.root }));
+    await until(s, "running");
+    expect(s.status()).toMatchObject({ mode: "managed", slot: null, dir: own.root });
+    expect((await fs.readdir(own.root, { recursive: true })).sort()).toEqual(before);
+    await s.stop();
+    expect(s.status().state).toBe("stopped");
   });
 });
 

@@ -1,11 +1,13 @@
 /**
- * Create-profile wizard (ADR-0006): identity → folders → ComfyUI → look & workflows.
- * Everything except the name can be changed later in Settings.
+ * Create-profile wizard (ADR-0006): profile → folders → ComfyUI → look & workflows.
+ * Folders come from one folder (Models, Output and Wildcards inside it, made when missing) or
+ * one by one; only the three paths are saved. ComfyUI is a managed install or your own folder.
  */
 import { useTheme } from "@client/app/theme";
 import { Icon, type IconName } from "@client/icons/Icon";
-import { ApiError } from "@client/lib/api";
+import { ApiError, api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
+import { useDebounced } from "@client/lib/hooks";
 import { snappy } from "@client/lib/motion";
 import { useCreateProfile, usePresets, useUploadAvatar } from "@client/lib/queries";
 import {
@@ -14,6 +16,8 @@ import {
   Checkbox,
   Dialog,
   Field,
+  IconButton,
+  Notice,
   Segmented,
   Select,
   TextField,
@@ -21,16 +25,31 @@ import {
 } from "@client/ui";
 import { ACCENTS, type AccentId, THEME_LABELS, THEMES, type ThemeId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
+import { WORKFLOW_KIND_LABELS, WORKFLOW_KINDS } from "@shared/workflow/manifest";
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { type DragEvent, useEffect, useRef, useState } from "react";
 import { FolderField } from "./FolderField";
+import { OwnComfyNotice } from "./OwnComfyNotice";
 
-const STEPS: Array<{ id: string; title: string; hint: string; icon: IconName }> = [
-  { id: "you", title: "Profile", hint: "Name, picture, color", icon: "user" },
-  { id: "folders", title: "Folders", hint: "Models, outputs, wildcards", icon: "folder" },
-  { id: "comfy", title: "ComfyUI", hint: "Engine for generation", icon: "workflow" },
-  { id: "start", title: "Start", hint: "Look and workflows", icon: "sparkle" },
+const STEPS: Array<{ id: string; title: string; icon: IconName }> = [
+  { id: "you", title: "Profile", icon: "user" },
+  { id: "folders", title: "Folders", icon: "folder" },
+  { id: "comfy", title: "ComfyUI", icon: "workflow" },
+  { id: "start", title: "Look and workflows", icon: "sparkle" },
 ];
+
+const SUBFOLDERS = [
+  { key: "models", name: "Models" },
+  { key: "outputs", name: "Output" },
+  { key: "wildcards", name: "Wildcards" },
+] as const;
+
+/** `root` + `name` with the separator the root already uses. */
+function inside(root: string, name: string): string {
+  const base = root.trim().replace(/[\\/]+$/, "");
+  return base ? `${base}${base.includes("/") && !base.includes("\\") ? "/" : "\\"}${name}` : "";
+}
 
 export function ProfileWizard({
   open,
@@ -47,12 +66,14 @@ export function ProfileWizard({
   const [theme, setTheme] = useState<ThemeId>("blombo");
   const [avatar, setAvatar] = useState<File | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [folderMode, setFolderMode] = useState<"one" | "each">("one");
+  const [root, setRoot] = useState("");
   const [models, setModels] = useState("");
   const [outputs, setOutputs] = useState("");
   const [wildcards, setWildcards] = useState("");
-  const [comfyMode, setComfyMode] = useState<"managed" | "external">("managed");
+  const [comfyMode, setComfyMode] = useState<"managed" | "local">("managed");
   const [slot, setSlot] = useState("latest");
-  const [comfyUrl, setComfyUrl] = useState("http://127.0.0.1:8188");
+  const [comfyDir, setComfyDir] = useState("");
   const [presets, setPresets] = useState<string[]>(["illustrious", "sdxl"]);
   const available = usePresets().data ?? [];
   const fileRef = useRef<HTMLInputElement>(null);
@@ -82,7 +103,22 @@ export function ProfileWizard({
     previewTheme({ accent: "blue", theme: "blombo" });
   };
 
-  const canNext = step === 0 ? name.trim().length > 0 : true;
+  const paths =
+    folderMode === "one"
+      ? {
+          models: inside(root, "Models"),
+          outputs: inside(root, "Output"),
+          wildcards: inside(root, "Wildcards"),
+        }
+      : { models: models.trim(), outputs: outputs.trim(), wildcards: wildcards.trim() };
+
+  const canNext =
+    step === 0
+      ? name.trim().length > 0
+      : step === 2
+        ? comfyMode !== "local" || !!comfyDir.trim()
+        : true;
+  const last = step === STEPS.length - 1;
 
   const submit = async () => {
     try {
@@ -90,23 +126,27 @@ export function ProfileWizard({
         name: name.trim(),
         accent,
         theme,
-        paths: { models: models.trim(), outputs: outputs.trim(), wildcards: wildcards.trim() },
+        paths,
         comfy:
           comfyMode === "managed"
             ? { mode: "managed", slot }
-            : { mode: "external", url: comfyUrl.trim() },
+            : { mode: "local", dir: comfyDir.trim() },
         presets,
       });
       let final = profile;
       if (avatar) final = await upload.mutateAsync({ id: profile.id, file: avatar });
       toast(`Profile "${final.name}" created`, "success");
       onCreated(final);
-      setStep(0);
-      setName("");
-      setAvatar(null);
+      reset();
     } catch (error) {
       toast(error instanceof ApiError ? error.message : "Couldn't create the profile.", "error");
     }
+  };
+
+  const next = () => {
+    if (!canNext) return;
+    if (last) void submit();
+    else setStep(step + 1);
   };
 
   const onDrop = (e: DragEvent) => {
@@ -122,14 +162,15 @@ export function ProfileWizard({
         if (!o) reset();
         onOpenChange(o);
       }}
-      width={820}
-      className="h-[min(88vh,640px)]"
+      width={860}
+      bare
+      className="h-[min(88vh,620px)]"
     >
-      <div className="-mx-5 -my-4 grid h-full min-h-[560px] grid-cols-[230px_minmax(0,1fr)]">
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_minmax(0,1fr)]">
         {/* step rail */}
-        <aside className="flex flex-col gap-1 border-r border-line bg-surface p-4">
-          <div className="mb-4 flex items-center gap-3 px-1">
-            <Avatar name={name || "New profile"} src={avatarUrl} accent={accent} size={40} />
+        <aside className="flex flex-col gap-1 border-r border-line bg-surface p-3">
+          <div className="mb-3 flex items-center gap-3 px-2 pt-1">
+            <Avatar name={name || "New profile"} src={avatarUrl} accent={accent} size={36} />
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-fg">{name || "New profile"}</div>
               <div className="text-xs text-fg-3">
@@ -140,227 +181,253 @@ export function ProfileWizard({
           {STEPS.map((s, i) => {
             const active = i === step;
             const done = i < step;
+            const reachable = i <= step || canNext;
             return (
               <button
                 key={s.id}
                 type="button"
-                disabled={i > step && !canNext}
-                onClick={() => (i <= step || canNext ? setStep(i) : undefined)}
+                disabled={!reachable}
+                onClick={() => setStep(i)}
                 className={cn(
-                  "relative flex items-center gap-3 rounded-md px-2.5 py-2 text-left transition-colors focus-ring",
-                  active ? "text-fg" : "text-fg-3 hover:bg-field hover:text-fg-2",
+                  "relative flex h-9 items-center gap-2.5 rounded-md px-2 text-left text-sm transition-colors focus-ring",
+                  active ? "text-fg" : "text-fg-3 hover:bg-fg/5 hover:text-fg-2",
+                  !reachable && "opacity-50",
                 )}
               >
                 {active ? (
                   <motion.span
                     layoutId="wizard-step"
                     transition={snappy}
-                    className="absolute inset-0 z-0 rounded-md bg-field ring-1 ring-line-strong"
+                    className="absolute inset-0 z-0 rounded-md bg-fg/8"
                   />
                 ) : null}
                 <span
                   className={cn(
-                    "relative z-10 grid h-7 w-7 place-items-center rounded-full border text-xs transition-colors",
+                    "relative z-10 grid h-6 w-6 place-items-center rounded-full text-xs",
                     active
-                      ? "border-accent bg-accent text-on-accent"
+                      ? "bg-accent text-on-accent"
                       : done
-                        ? "border-accent/50 text-accent-ink"
-                        : "border-line-strong",
+                        ? "bg-accent/15 text-accent-ink"
+                        : "border border-line-strong",
                   )}
                 >
-                  {done ? (
-                    <Icon name="check" size={14} strokeWidth={2.4} />
-                  ) : (
-                    <Icon name={s.icon} size={14} />
-                  )}
+                  <Icon
+                    name={done ? "check" : s.icon}
+                    size={13}
+                    strokeWidth={done ? 2.4 : undefined}
+                  />
                 </span>
-                <span className="relative z-10 flex flex-col">
-                  <span className="text-sm font-medium">{s.title}</span>
-                  <span className="text-2xs text-fg-3">{s.hint}</span>
-                </span>
+                <span className="relative z-10 font-medium">{s.title}</span>
               </button>
             );
           })}
-          <p className="mt-auto px-1 text-2xs leading-relaxed text-fg-4">
-            Everything except the name can be changed later in Settings.
-          </p>
         </aside>
 
         {/* step body */}
         <div className="flex min-h-0 flex-col">
-          <div className="scroll-quiet min-h-0 flex-1 overflow-auto px-7 pt-6 pb-4">
+          <div className="flex items-center gap-3 px-7 pt-5 pb-1">
+            <h2 className="flex-1 text-lg font-semibold tracking-tight text-fg">
+              {STEPS[step]?.title}
+            </h2>
+            <IconButton icon="x" label="Close" size="sm" onClick={() => onOpenChange(false)} />
+          </div>
+          <div className="scroll-quiet min-h-0 flex-1 overflow-auto px-7 pt-4 pb-6">
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={step}
-                initial={{ opacity: 0, x: 12 }}
+                initial={{ opacity: 0, x: 10 }}
                 animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -12 }}
-                transition={{ duration: 0.16 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.14 }}
                 className="flex flex-col gap-6"
               >
                 {step === 0 ? (
-                  <>
-                    <Header
-                      title="Create a profile"
-                      text="A profile keeps its own folders, workflows, layouts and settings."
-                    />
-                    <div className="flex items-center gap-6">
-                      <div
-                        className="group relative"
+                  <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-7">
+                    <div className="flex flex-col items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
                         onDragOver={(e) => e.preventDefault()}
                         onDrop={onDrop}
+                        aria-label="Choose a picture"
+                        className="group relative h-[180px] w-[120px] overflow-hidden rounded-lg border border-line focus-ring hover:border-accent/70"
                       >
-                        <Avatar name={name || "?"} src={avatarUrl} accent={accent} size={96} />
-                        <button
-                          type="button"
-                          onClick={() => fileRef.current?.click()}
-                          className="absolute inset-0 grid place-items-center rounded-full bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/50 group-hover:opacity-100 focus-ring"
-                          aria-label="Upload a picture"
-                        >
+                        <Avatar
+                          shape="card"
+                          name={name || "?"}
+                          src={avatarUrl}
+                          accent={accent}
+                          size={120}
+                        />
+                        <span className="absolute inset-0 grid place-items-center bg-black/0 text-white opacity-0 transition-all group-hover:bg-black/45 group-hover:opacity-100">
                           <Icon name="camera" size={22} />
-                        </button>
-                        <input
-                          ref={fileRef}
-                          type="file"
-                          accept="image/*"
-                          hidden
-                          onChange={(e) => setAvatar(e.target.files?.[0] ?? null)}
-                        />
-                      </div>
-                      <div className="flex flex-col gap-1.5">
-                        <div className="flex gap-2">
-                          <Button size="sm" icon="upload" onClick={() => fileRef.current?.click()}>
-                            Upload picture
-                          </Button>
-                          {avatar ? (
-                            <Button size="sm" variant="ghost" onClick={() => setAvatar(null)}>
-                              Remove
-                            </Button>
-                          ) : null}
-                        </div>
-                        <span className="text-xs text-fg-3">
-                          PNG, JPG or WebP. Drop an image on the circle too.
                         </span>
-                      </div>
-                    </div>
-                    <Field label="Name">
-                      {(id) => (
-                        <TextField
-                          id={id}
-                          autoFocus
-                          size="lg"
-                          value={name}
-                          maxLength={40}
-                          placeholder="e.g. Anime, Client work, Experiments"
-                          onChange={(e) => setName(e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && canNext && setStep(1)}
-                        />
+                      </button>
+                      {avatar ? (
+                        <Button size="sm" variant="ghost" onClick={() => setAvatar(null)}>
+                          Remove
+                        </Button>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          icon="upload"
+                          onClick={() => fileRef.current?.click()}
+                        >
+                          Picture
+                        </Button>
                       )}
-                    </Field>
-                    <Field label="Color">
-                      <div className="flex flex-wrap gap-2">
-                        {ACCENTS.map((a) => (
-                          <button
-                            key={a}
-                            type="button"
-                            aria-label={a}
-                            aria-pressed={a === accent}
-                            onClick={() => setAccent(a)}
-                            className={cn(
-                              "grid h-8 w-8 place-items-center rounded-full transition-transform focus-ring",
-                              a === accent
-                                ? "scale-110 ring-2 ring-fg ring-offset-2 ring-offset-surface-2"
-                                : "hover:scale-105",
-                            )}
-                            style={{
-                              background: `linear-gradient(135deg, var(--${a}-ink), var(--${a}))`,
-                            }}
-                          >
-                            {a === accent ? (
-                              <Icon
-                                name="check"
-                                size={14}
-                                strokeWidth={2.6}
-                                className="text-white"
-                              />
-                            ) : null}
-                          </button>
-                        ))}
-                      </div>
-                    </Field>
-                  </>
+                      <input
+                        ref={fileRef}
+                        type="file"
+                        accept="image/*"
+                        hidden
+                        onChange={(e) => {
+                          setAvatar(e.target.files?.[0] ?? null);
+                          e.target.value = "";
+                        }}
+                      />
+                    </div>
+                    <div className="flex flex-col gap-6">
+                      <Field label="Name">
+                        {(id) => (
+                          <TextField
+                            id={id}
+                            autoFocus
+                            size="lg"
+                            value={name}
+                            maxLength={40}
+                            placeholder="e.g. Anime, Client work"
+                            onChange={(e) => setName(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && next()}
+                          />
+                        )}
+                      </Field>
+                      <Field label="Color">
+                        <div className="flex flex-wrap gap-2">
+                          {ACCENTS.map((a) => (
+                            <button
+                              key={a}
+                              type="button"
+                              aria-label={a}
+                              aria-pressed={a === accent}
+                              onClick={() => setAccent(a)}
+                              className={cn(
+                                "grid h-8 w-8 place-items-center rounded-full transition-transform focus-ring",
+                                a === accent
+                                  ? "scale-110 ring-2 ring-fg ring-offset-2 ring-offset-surface-2"
+                                  : "hover:scale-105",
+                              )}
+                              style={{
+                                background: `linear-gradient(135deg, var(--${a}-ink), var(--${a}))`,
+                              }}
+                            >
+                              {a === accent ? (
+                                <Icon
+                                  name="check"
+                                  size={14}
+                                  strokeWidth={2.6}
+                                  className="text-white"
+                                />
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      </Field>
+                    </div>
+                  </div>
                 ) : null}
 
                 {step === 1 ? (
                   <>
-                    <Header
-                      title="Folders"
-                      text="Point BlomboUI at your files. Several profiles can share the same folders."
+                    <Segmented
+                      full
+                      value={folderMode}
+                      onChange={setFolderMode}
+                      options={[
+                        { value: "one", label: "One folder for everything", icon: "folder" },
+                        { value: "each", label: "Each folder separately", icon: "layers" },
+                      ]}
                     />
-                    <Field
-                      label="Models folder"
-                      hint="ComfyUI-style folder with checkpoints/, loras/, vae/ … inside."
-                    >
-                      {(id) => (
-                        <FolderField
-                          id={id}
-                          value={models}
-                          onChange={setModels}
-                          pickTitle="Choose your models folder"
-                          placeholder="B:\AI\Models"
-                          expectModels
-                        />
-                      )}
-                    </Field>
-                    <Field
-                      label="Outputs folder"
-                      hint="Generated images are saved here, sorted by date."
-                    >
-                      {(id) => (
-                        <FolderField
-                          id={id}
-                          value={outputs}
-                          onChange={setOutputs}
-                          pickTitle="Choose where images are saved"
-                          placeholder="B:\AI\Outputs"
-                        />
-                      )}
-                    </Field>
-                    <Field label="Wildcards folder" hint=".txt and .yaml wildcard files.">
-                      {(id) => (
-                        <FolderField
-                          id={id}
-                          value={wildcards}
-                          onChange={setWildcards}
-                          pickTitle="Choose your wildcards folder"
-                          placeholder="B:\AI\Wildcards"
-                        />
-                      )}
-                    </Field>
+                    {folderMode === "one" ? (
+                      <>
+                        <Field label="Folder">
+                          {(id) => (
+                            <FolderField
+                              id={id}
+                              value={root}
+                              onChange={setRoot}
+                              pickTitle="Choose a folder for models, outputs and wildcards"
+                              placeholder="D:\AI"
+                            />
+                          )}
+                        </Field>
+                        {root.trim() ? (
+                          <ul className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
+                            {SUBFOLDERS.map((f) => (
+                              <SubfolderRow key={f.key} label={f.name} path={paths[f.key]} />
+                            ))}
+                          </ul>
+                        ) : null}
+                      </>
+                    ) : (
+                      <>
+                        <Field
+                          label="Models folder"
+                          hint="ComfyUI-style folder with checkpoints/, loras/, vae/ … inside."
+                        >
+                          {(id) => (
+                            <FolderField
+                              id={id}
+                              value={models}
+                              onChange={setModels}
+                              pickTitle="Choose your models folder"
+                              placeholder="D:\AI\Models"
+                              expectModels
+                            />
+                          )}
+                        </Field>
+                        <Field label="Output folder">
+                          {(id) => (
+                            <FolderField
+                              id={id}
+                              value={outputs}
+                              onChange={setOutputs}
+                              pickTitle="Choose where images are saved"
+                              placeholder="D:\AI\Output"
+                            />
+                          )}
+                        </Field>
+                        <Field label="Wildcards folder">
+                          {(id) => (
+                            <FolderField
+                              id={id}
+                              value={wildcards}
+                              onChange={setWildcards}
+                              pickTitle="Choose your wildcards folder"
+                              placeholder="D:\AI\Wildcards"
+                            />
+                          )}
+                        </Field>
+                      </>
+                    )}
                   </>
                 ) : null}
 
                 {step === 2 ? (
                   <>
-                    <Header
-                      title="ComfyUI"
-                      text="BlomboUI drives ComfyUI to generate. Let it manage an install, or connect to yours."
-                    />
                     <Segmented
                       full
                       value={comfyMode}
                       onChange={setComfyMode}
                       options={[
                         { value: "managed", label: "Managed install", icon: "workflow" },
-                        { value: "external", label: "My own ComfyUI", icon: "link" },
+                        { value: "local", label: "My own ComfyUI", icon: "folder" },
                       ]}
                     />
                     {comfyMode === "managed" ? (
-                      <div className="flex flex-col gap-4">
-                        <Field
-                          label="Version"
-                          hint="Slots live in runtime/comfyui/<slot>/ with their own Python and Torch."
-                        >
+                      <>
+                        <Field label="Version">
                           <Select
                             value={slot}
                             onChange={setSlot}
@@ -371,39 +438,33 @@ export function ProfileWizard({
                             className="w-64"
                           />
                         </Field>
-                        <Note icon="info">
-                          The slot installs on first use, with progress shown in the app. The Save
-                          to Blombo extension is added automatically.
-                        </Note>
-                      </div>
+                        <Notice tone="info">
+                          Installs on first use into runtime/comfyui/, with its own Python and
+                          PyTorch. Progress shows in the app.
+                        </Notice>
+                      </>
                     ) : (
-                      <div className="flex flex-col gap-4">
-                        <Field label="ComfyUI address">
+                      <>
+                        <Field label="ComfyUI folder">
                           {(id) => (
-                            <TextField
+                            <FolderField
                               id={id}
-                              value={comfyUrl}
-                              onChange={(e) => setComfyUrl(e.target.value)}
-                              mono
-                              icon="globe"
+                              value={comfyDir}
+                              onChange={setComfyDir}
+                              pickTitle="Choose your ComfyUI folder"
+                              placeholder="D:\ComfyUI_windows_portable"
+                              checkComfy
                             />
                           )}
                         </Field>
-                        <Note icon="info">
-                          To edit workflows round-trip, install the blombo-bridge extension from
-                          Settings → ComfyUI after creating the profile.
-                        </Note>
-                      </div>
+                        <OwnComfyNotice />
+                      </>
                     )}
                   </>
                 ) : null}
 
                 {step === 3 ? (
                   <>
-                    <Header
-                      title="Look and starter workflows"
-                      text="Pick a theme and the workflows to start with. You can import more anytime."
-                    />
                     <Field label="Theme">
                       <div className="grid grid-cols-3 gap-2">
                         {THEMES.map((t) => (
@@ -436,21 +497,26 @@ export function ProfileWizard({
                         ))}
                       </div>
                     </Field>
-                    <Field
-                      label="Starter workflows"
-                      hint="Copied into this profile. Each one is yours to change."
-                    >
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2.5 rounded-lg border border-line bg-surface p-3">
-                        {available.map((p) => (
-                          <Checkbox
-                            key={p.id}
-                            checked={presets.includes(p.id)}
-                            onCheckedChange={(c) =>
-                              setPresets(c ? [...presets, p.id] : presets.filter((x) => x !== p.id))
-                            }
-                            label={p.name}
-                            description={p.description}
-                          />
+                    <Field label="Starter workflows">
+                      <div className="grid grid-cols-2 gap-4 rounded-lg border border-line bg-surface p-3">
+                        {WORKFLOW_KINDS.map((kind) => (
+                          <div key={kind} className="flex flex-col gap-2.5">
+                            <span className="label-caps">{WORKFLOW_KIND_LABELS[kind]}</span>
+                            {available
+                              .filter((p) => p.kind === kind)
+                              .map((p) => (
+                                <Checkbox
+                                  key={p.id}
+                                  checked={presets.includes(p.id)}
+                                  onCheckedChange={(c) =>
+                                    setPresets(
+                                      c ? [...presets, p.id] : presets.filter((x) => x !== p.id),
+                                    )
+                                  }
+                                  label={p.name}
+                                />
+                              ))}
+                          </div>
                         ))}
                       </div>
                     </Field>
@@ -459,32 +525,23 @@ export function ProfileWizard({
               </motion.div>
             </AnimatePresence>
           </div>
-          <div className="flex items-center gap-2 border-t border-line bg-surface px-7 py-3.5">
+          <div className="flex items-center gap-2 border-t border-line bg-surface px-7 py-3">
             {step > 0 ? (
               <Button variant="ghost" icon="arrow-left" onClick={() => setStep(step - 1)}>
                 Back
               </Button>
             ) : null}
             <span className="ml-auto" />
-            {step < STEPS.length - 1 ? (
-              <Button
-                variant="primary"
-                iconRight="arrow-right"
-                disabled={!canNext}
-                onClick={() => setStep(step + 1)}
-              >
-                Continue
-              </Button>
-            ) : (
-              <Button
-                variant="primary"
-                icon="check"
-                loading={create.isPending || upload.isPending}
-                onClick={submit}
-              >
-                Create profile
-              </Button>
-            )}
+            <Button
+              variant="primary"
+              icon={last ? "check" : undefined}
+              iconRight={last ? undefined : "arrow-right"}
+              disabled={!canNext}
+              loading={create.isPending || upload.isPending}
+              onClick={next}
+            >
+              {last ? "Create profile" : "Continue"}
+            </Button>
           </div>
         </div>
       </div>
@@ -492,20 +549,30 @@ export function ProfileWizard({
   );
 }
 
-function Header({ title, text }: { title: string; text: string }) {
+/** One of Models / Output / Wildcards inside the chosen folder: there already, or to be made. */
+function SubfolderRow({ label, path: typed }: { label: string; path: string }) {
+  const path = useDebounced(typed, 300);
+  const check = useQuery({
+    queryKey: ["check-path", path],
+    queryFn: () => api.checkPath(path),
+    staleTime: 5_000,
+  });
+  const found = check.data?.exists && check.data.isDirectory;
   return (
-    <div className="flex flex-col gap-1">
-      <h2 className="text-xl font-semibold tracking-tight text-fg">{title}</h2>
-      <p className="text-sm text-fg-3">{text}</p>
-    </div>
-  );
-}
-
-function Note({ icon, children }: { icon: IconName; children: React.ReactNode }) {
-  return (
-    <div className="flex gap-2.5 rounded-lg border border-line bg-surface px-3 py-2.5 text-sm text-fg-2">
-      <Icon name={icon} size={16} className="mt-0.5 text-accent-ink" />
-      <span>{children}</span>
-    </div>
+    <li className="flex items-center gap-3 px-3 py-2.5">
+      <Icon name="folder" size={15} className="text-fg-3" />
+      <span className="flex-1 text-sm font-medium text-fg">{label}</span>
+      {check.data ? (
+        <span
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 text-xs",
+            found ? "text-success" : "text-fg-3",
+          )}
+        >
+          <Icon name={found ? "check-circle" : "plus"} size={13} />
+          {found ? "Found" : "Will be created"}
+        </span>
+      ) : null}
+    </li>
   );
 }

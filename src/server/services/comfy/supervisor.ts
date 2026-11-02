@@ -1,6 +1,7 @@
 /**
  * The ComfyUI supervisor: one per server. It follows the active profile's ComfyUI target —
- * a managed slot it starts and stops, or an external URL it only connects to — owns the single
+ * a managed slot or the user's own ComfyUI folder it starts and stops, or an external URL it
+ * only connects to — owns the single
  * ComfyClient for that target, keeps recent log lines, and reports a ComfyStatus.
  *
  * Managed slots get `--extra-model-paths-config` from the profile's models folder and
@@ -23,11 +24,12 @@ import { Emitter } from "../../lib/emitter.ts";
 import { writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
 import { ComfyClient, type ComfyPreview, type ComfyWsMessage } from "./client.ts";
 import { extraModelPathsYaml } from "./paths.ts";
-import { findSlot, type SlotLayout } from "./slots.ts";
+import { findLocal, findSlot, type SlotLayout } from "./slots.ts";
 import { ensureSlotTemp, slotCacheEnv } from "./uv.ts";
 
+/** A ComfyUI Blombo starts: a managed slot, or (with `dir`) the user's own folder. */
 export type ComfyTarget =
-  | { mode: "managed"; slot: string; models: string; outputs: string }
+  | { mode: "managed"; slot: string | null; dir: string | null; models: string; outputs: string }
   | { mode: "external"; url: string };
 
 export interface LaunchSpec {
@@ -68,14 +70,15 @@ const PidFile = z.object({ pid: z.number().int(), port: z.number().int(), starte
 const MAX_LOG_LINES = 2000;
 
 export function targetFromProfile(profile: Profile): ComfyTarget {
-  return profile.comfy.mode === "external"
-    ? { mode: "external", url: profile.comfy.url.replace(/\/+$/, "") }
-    : {
-        mode: "managed",
-        slot: profile.comfy.slot,
-        models: profile.paths.models,
-        outputs: profile.paths.outputs,
-      };
+  const { comfy, paths } = profile;
+  if (comfy.mode === "external") return { mode: "external", url: comfy.url.replace(/\/+$/, "") };
+  return {
+    mode: "managed",
+    slot: comfy.mode === "managed" ? comfy.slot : null,
+    dir: comfy.mode === "local" ? comfy.dir : null,
+    models: paths.models,
+    outputs: paths.outputs,
+  };
 }
 
 function sameTarget(a: ComfyTarget | null, b: ComfyTarget | null): boolean {
@@ -109,6 +112,7 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       state: "stopped",
       mode: "managed",
       slot: null,
+      dir: null,
       url: `http://127.0.0.1:${PORTS.comfy}`,
       pid: null,
       startedAt: null,
@@ -158,6 +162,7 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       this.setStatus({
         mode: "external",
         slot: null,
+        dir: null,
         url: next.url,
         pid: null,
         startedAt: null,
@@ -172,6 +177,7 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     if (
       prev?.mode === "managed" &&
       prev.slot === next.slot &&
+      prev.dir === next.dir &&
       this.runningTarget &&
       (this.current.state === "running" || this.current.state === "starting")
     ) {
@@ -203,13 +209,16 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       return this.current;
 
     const gen = ++this.generation;
-    const lookup = await (this.opts.findSlot ?? findSlot)(this.opts.runtimeDir, target.slot);
+    const lookup = target.dir
+      ? await findLocal(this.opts.runtimeDir, target.dir)
+      : await (this.opts.findSlot ?? findSlot)(this.opts.runtimeDir, target.slot ?? "");
     if (gen !== this.generation) return this.current;
     if (!lookup.ok) {
       this.setStatus({
         state: "missing",
         mode: "managed",
         slot: target.slot,
+        dir: target.dir,
         pid: null,
         message: lookup.reason,
       });
@@ -260,11 +269,12 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       ? this.opts.launch(layout, args)
       : { command: layout.python, args, cwd: layout.comfyDir };
 
-    this.log("sys", `Starting ComfyUI (slot ${layout.slot}) on ${url}`);
+    this.log("sys", `Starting ComfyUI (${target.dir ?? `slot ${layout.slot}`}) on ${url}`);
     this.setStatus({
       state: "starting",
       mode: "managed",
-      slot: layout.slot,
+      slot: target.slot,
+      dir: target.dir,
       url,
       pid: null,
       startedAt: null,
@@ -279,8 +289,9 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
         cwd: spec.cwd,
         env: {
           ...process.env,
-          // Caches and settings of the slot's libraries stay in runtime/ (portable).
-          ...slotCacheEnv(this.opts.runtimeDir),
+          // Caches and settings of a slot's libraries stay in runtime/ (portable). The user's own
+          // ComfyUI keeps its usual ones, so it finds what it already downloaded.
+          ...(target.dir ? {} : slotCacheEnv(this.opts.runtimeDir)),
           PYTHONUNBUFFERED: "1",
           PYTHONIOENCODING: "utf-8",
           ...spec.env,
@@ -390,7 +401,11 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
   }
 
   /** Reattach to a ComfyUI this server started before it restarted (dev keep-alive). */
-  private async adopt(layout: SlotLayout, target: ComfyTarget, gen: number): Promise<boolean> {
+  private async adopt(
+    layout: SlotLayout,
+    target: Extract<ComfyTarget, { mode: "managed" }>,
+    gen: number,
+  ): Promise<boolean> {
     let info: z.infer<typeof PidFile>;
     try {
       info = PidFile.parse(
@@ -415,7 +430,8 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     this.setStatus({
       state: "starting",
       mode: "managed",
-      slot: layout.slot,
+      slot: target.slot,
+      dir: target.dir,
       url,
       pid: info.pid,
       startedAt: info.startedAt,

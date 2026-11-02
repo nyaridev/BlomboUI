@@ -1,7 +1,6 @@
 /**
- * Settings → Overview: the profile's pieces, which the Overview layouts arrange. The picture and
- * the name are edited in place: click (or drop an image on) the picture to replace it, click the
- * name to rename the profile.
+ * Settings → Overview: the profile's pieces. The picture and the name are edited in place: click
+ * (or drop an image on) the picture to replace it, click the name to rename the profile.
  */
 import { Icon } from "@client/icons/Icon";
 import { ApiError, avatarUrl } from "@client/lib/api";
@@ -31,70 +30,27 @@ export function ThemeBadge({ profile }: { profile: Profile }) {
 
 const FOLDERS = ["models", "outputs", "wildcards"] as const;
 
-/**
- * The profile's three folders. `grid`: label beside the full path; `stack`: label above the
- * path (narrow columns); `inline`: one line of label + folder name, the full path on hover.
- */
-export function Folders({
-  profile,
-  layout = "grid",
-}: {
-  profile: Profile;
-  layout?: "grid" | "stack" | "inline";
-}) {
-  if (layout === "inline")
-    return (
-      <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 text-xs">
-        {FOLDERS.map((k) => {
-          const path = profile.paths[k];
-          return (
-            <span key={k} className="flex min-w-0 gap-1.5" title={path || undefined}>
-              <span className="text-fg-3 capitalize">{k}</span>
-              <span className="truncate font-mono text-fg-2">
-                {path ? path.split(/[\\/]/).filter(Boolean).pop() : "not set"}
-              </span>
-            </span>
-          );
-        })}
-      </div>
-    );
+/** The profile's three folders on one line: label + folder name, the full path on hover. */
+export function Folders({ profile }: { profile: Profile }) {
   return (
-    <div
-      className={cn(
-        "text-xs",
-        layout === "grid"
-          ? "grid grid-cols-[72px_minmax(0,1fr)] gap-x-3 gap-y-0.5"
-          : "flex w-full flex-col gap-2 text-left",
-      )}
-    >
-      {FOLDERS.map((k) => (
-        <div key={k} className={layout === "grid" ? "contents" : "flex min-w-0 flex-col gap-0.5"}>
-          <span className={layout === "grid" ? "text-fg-3 capitalize" : "label-caps text-[10px]"}>
-            {k}
+    <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 text-xs">
+      {FOLDERS.map((k) => {
+        const path = profile.paths[k];
+        return (
+          <span key={k} className="flex min-w-0 gap-1.5" title={path || undefined}>
+            <span className="text-fg-3 capitalize">{k}</span>
+            <span className="truncate font-mono text-fg-2">
+              {path ? path.split(/[\\/]/).filter(Boolean).pop() : "not set"}
+            </span>
           </span>
-          <span className="truncate font-mono text-fg-2" title={profile.paths[k] || undefined}>
-            {profile.paths[k] || "not set"}
-          </span>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
 
-/**
- * The picture as a button: hover shows a camera, click or drop an image to replace it. A circle
- * of `size`, or a 2:3 card like the profile screen's.
- */
-export function PictureButton({
-  profile,
-  shape = "circle",
-  size = 64,
-}: {
-  profile: Profile;
-  shape?: "circle" | "card";
-  size?: number;
-}) {
-  const round = shape === "circle" ? "rounded-full" : "rounded-lg";
+/** The picture as a button: hover shows a camera, click or drop an image to replace it. */
+export function PictureButton({ profile, size = 64 }: { profile: Profile; size?: number }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const upload = useUploadAvatar();
   const use = (file: File | undefined) => {
@@ -117,24 +73,12 @@ export function PictureButton({
         onClick={() => fileRef.current?.click()}
         onDragOver={(e) => e.preventDefault()}
         onDrop={onDrop}
-        className={cn(
-          "group relative shrink-0 focus-ring",
-          round,
-          shape === "card" && "overflow-hidden border border-line",
-        )}
-        style={shape === "card" ? { width: size, height: size * 1.5 } : undefined}
+        className="group relative shrink-0 rounded-full focus-ring"
       >
-        <Avatar
-          name={profile.name}
-          src={avatarUrl(profile)}
-          accent={profile.accent}
-          size={size}
-          shape={shape}
-        />
+        <Avatar name={profile.name} src={avatarUrl(profile)} accent={profile.accent} size={size} />
         <span
           className={cn(
-            "absolute inset-0 grid place-items-center bg-black/55 text-white",
-            round,
+            "absolute inset-0 grid place-items-center rounded-full bg-black/55 text-white",
             !upload.isPending &&
               "opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100",
           )}

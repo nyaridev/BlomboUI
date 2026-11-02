@@ -132,7 +132,7 @@ function Page({
 }) {
   switch (page) {
     case "overview":
-      return <OverviewPage onGo={onGo} />;
+      return <OverviewPage />;
     case "appearance":
       return <Appearance />;
     case "files":

@@ -57,6 +57,8 @@
   --generate-hi: #ff8a40;
   --generate-ink: #ff8a40;
   --on-generate: #ffffff;
+  /* the logo's output socket: generate orange, except on the orange accent (below) */
+  --mark-socket: var(--generate-hi);
 
   /* status */
   --success: var(--green-ink);
@@ -208,6 +210,8 @@
   /* a shade deeper than the palette's orange, so white text on it reads (4.5:1) */
   --accent: #c94200;
   --accent-ink: var(--orange-ink);
+  /* an orange socket would vanish on an orange tile */
+  --mark-socket: var(--on-accent);
 }
 [data-accent="yellow"] {
   --accent: var(--yellow);

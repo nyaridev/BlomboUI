@@ -9,6 +9,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
 - `docs/adr/`: decisions and why (0001–0015, all accepted and built)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
+- `docs/status.md`: what's built, what was verified and how, and the phase roadmap
 - `docs/performance.md`: measured numbers (20k-image gallery, startup bundle) and how to repeat them
 - `docs/review/real-comfyui-checks.md`: the checks on a real ComfyUI (2026-10-21): results, downloads, findings
 
@@ -92,7 +93,9 @@ src/
 │                     contrast (+ test: text contrast in every theme × accent)
 └── comfy-bridge/ blombo-bridge, the ComfyUI extension (ADR-0009): __init__.py + web/blombo.js +
                   web/blombo-core.js (plain JS; tests import the core through its .d.ts)
-src-tauri/        Desktop shell: native window on --url, capability for localhost IPC
+src-tauri/        Desktop shell: native window on --url, capability for localhost IPC; app-icon.svg is
+                  the icon source (node tools/make-icons.ts)
+assets/brand/     README banners (light, dark) with the drawn wordmark
 presets/          workflows/ (sd15, sdxl, illustrious; batch: remove-background, upscale, caption,
                   dataset-prep) · stages/ (hires, adetailer, controlnet ×
                   checkpoint/diffusion) · layouts/ (default, compact) · tags/ (starter list)

@@ -309,7 +309,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
         <Section
           id="brand"
           title="Brand"
-          text="The mark follows the profile accent. The spark stays generate-orange."
+          text="Nodey follows the profile accent. Its output socket is generate orange (white on the orange accent)."
         >
           <div className="flex items-center gap-8">
             <Wordmark />

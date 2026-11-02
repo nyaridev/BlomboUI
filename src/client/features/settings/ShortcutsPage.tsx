@@ -2,13 +2,11 @@
  * Settings → Shortcuts: every shortcut, searchable. App-wide actions can be rebound (click the
  * keys, press new ones; Backspace removes the shortcut, Escape cancels); keys that belong to one
  * view are listed below them, read-only. Overrides are saved in settings.shortcuts.overrides.
- * Three layouts are on trial behind the dev Layouts panel.
  */
 import { pauseShortcuts } from "@client/app/useShortcuts";
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useSettings, useUpdateSettings } from "@client/lib/queries";
-import { useVariant } from "@client/lib/variants";
 import { Button, IconButton, Kbd, Panel, TextField } from "@client/ui";
 import {
   comboFromEvent,
@@ -24,12 +22,6 @@ import {
 } from "@shared/shortcuts";
 import { type KeyboardEvent, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "./common";
-
-const LAYOUTS = [
-  { id: "fields", label: "Key fields" },
-  { id: "table", label: "Table" },
-  { id: "cards", label: "Cards" },
-] as const;
 
 function Keys({ combo, muted }: { combo: string; muted?: boolean }) {
   const parts = combo.includes(" / ") ? combo.split(" / ") : [combo];
@@ -47,7 +39,7 @@ function Keys({ combo, muted }: { combo: string; muted?: boolean }) {
   );
 }
 
-/** One rebindable action, with everything a layout needs to draw it. */
+/** One rebindable action, with everything its row needs. */
 interface Item {
   action: ShortcutAction;
   combo: string;
@@ -62,7 +54,6 @@ interface Item {
 }
 
 export function ShortcutsPage() {
-  const layout = useVariant("shortcuts", "Shortcuts", LAYOUTS);
   const settings = useSettings().data;
   const update = useUpdateSettings();
   const overrides = settings?.shortcuts.overrides ?? [];
@@ -155,13 +146,7 @@ export function ShortcutsPage() {
         {groups.map(({ group, items }) => (
           <section key={group} className="flex flex-col gap-2">
             <h2 className="label-caps">{group}</h2>
-            {layout === "fields" ? (
-              <FieldRows items={items} />
-            ) : layout === "table" ? (
-              <TableRows items={items} />
-            ) : (
-              <CardGrid items={items} />
-            )}
+            <ShortcutTable items={items} />
           </section>
         ))}
 
@@ -198,19 +183,8 @@ export function ShortcutsPage() {
 
 /* ── pieces ───────────────────────────────────────────────────────────── */
 
-/**
- * The keys as a control that looks editable: a field with a pencil, or (dashed) a chip.
- * Click it and it records the next combo.
- */
-function KeyButton({
-  item,
-  look,
-  className,
-}: {
-  item: Item;
-  look: "field" | "chip";
-  className?: string;
-}) {
+/** The keys as a dashed chip with a pencil, so it reads as editable. Click it to record a combo. */
+function KeyButton({ item, className }: { item: Item; className?: string }) {
   const { action, combo, recording } = item;
   return (
     <button
@@ -223,9 +197,7 @@ function KeyButton({
         "group/key flex h-8 items-center gap-2 rounded-md border px-2 text-left transition-colors focus-ring",
         recording
           ? "border-accent bg-accent/10 text-accent-ink"
-          : look === "field"
-            ? "border-line bg-field hover:border-line-strong"
-            : "border-dashed border-line-strong hover:border-accent-ink/60 hover:bg-field",
+          : "border-dashed border-line-strong hover:border-accent-ink/60 hover:bg-field",
         className,
       )}
     >
@@ -277,31 +249,9 @@ function ResetButton({ item }: { item: Item }) {
   );
 }
 
-/* ── 1. Key fields: rows like a form, the keys in a fixed-width field on the right ── */
+/* ── the table: Action · Shortcut · Default, the keys as dashed chips ── */
 
-function FieldRows({ items }: { items: Item[] }) {
-  return (
-    <Panel className="flex flex-col divide-y divide-line">
-      {items.map((it) => (
-        <div key={it.action.id} className="flex min-h-12 items-center gap-3 px-4 py-2">
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span className="text-sm text-fg">{it.action.label}</span>
-            {it.changed ? (
-              <span className="text-xs text-fg-4">Default: {defaultLabel(it.action)}</span>
-            ) : null}
-            <Clash item={it} />
-          </span>
-          <KeyButton item={it} look="field" className="w-56 max-lg:w-40" />
-          <ResetButton item={it} />
-        </div>
-      ))}
-    </Panel>
-  );
-}
-
-/* ── 2. Table: Action · Shortcut · Default columns, the keys as dashed chips ── */
-
-function TableRows({ items }: { items: Item[] }) {
+function ShortcutTable({ items }: { items: Item[] }) {
   const cols = "grid grid-cols-[minmax(0,1fr)_200px_120px_32px] items-center gap-3";
   return (
     <Panel className="flex flex-col divide-y divide-line">
@@ -320,7 +270,7 @@ function TableRows({ items }: { items: Item[] }) {
             <span className="text-sm text-fg">{it.action.label}</span>
             <Clash item={it} />
           </span>
-          <KeyButton item={it} look="chip" className="w-full max-lg:w-36" />
+          <KeyButton item={it} className="w-full max-lg:w-36" />
           <span
             className={cn(
               "font-mono text-xs max-lg:hidden",
@@ -333,27 +283,5 @@ function TableRows({ items }: { items: Item[] }) {
         </div>
       ))}
     </Panel>
-  );
-}
-
-/* ── 3. Cards: two per row, the label above a full-width key field ── */
-
-function CardGrid({ items }: { items: Item[] }) {
-  return (
-    <div className="grid grid-cols-2 gap-2 max-lg:grid-cols-1">
-      {items.map((it) => (
-        <Panel key={it.action.id} className="flex flex-col gap-2 p-3">
-          <div className="flex min-h-7 items-center gap-2">
-            <span className="min-w-0 flex-1 truncate text-sm text-fg">{it.action.label}</span>
-            {it.changed ? (
-              <span className="text-2xs text-fg-4">default {defaultLabel(it.action)}</span>
-            ) : null}
-            <ResetButton item={it} />
-          </div>
-          <KeyButton item={it} look="field" className="w-full" />
-          <Clash item={it} />
-        </Panel>
-      ))}
-    </div>
   );
 }

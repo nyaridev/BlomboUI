@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="320" viewBox="0 0 1280 320" role="img" aria-labelledby="t d">
+  <title id="t">BlomboUI</title>
+  <desc id="d">A friendly face for ComfyUI. Profiles, workflows you import, a Generate screen you arrange, a gallery and your models.</desc>
+  <rect width="1280" height="320" rx="24" fill="#f6f3ee"/>
+  <g transform="translate(51.4 12.9) scale(0.52)">
+    <path fill="#0d0f12" fill-rule="evenodd" d="M116 196V184A44 44 0 0 1 160 140H352A44 44 0 0 1 396 184V196ZM116 210H396V253A37 37 0 0 0 396 327V328A44 44 0 0 1 352 372H160A44 44 0 0 1 116 328V327A37 37 0 0 0 116 253ZM199 290A21 38 0 1 0 241 290A21 38 0 1 0 199 290ZM271 290A21 38 0 1 0 313 290A21 38 0 1 0 271 290ZM86 290A30 30 0 1 0 146 290A30 30 0 1 0 86 290ZM105 290A11 11 0 1 0 127 290A11 11 0 1 0 105 290Z"/>
+    <circle cx="396" cy="290" r="30" fill="#e04800"/>
+  </g>
+  <path d="M341 75.6V170.8M341 142.8A28 28 0 1 0 397 142.8A28 28 0 1 0 341 142.8M437 75.6V170.8M475 142.8A28 28 0 1 0 531 142.8A28 28 0 1 0 475 142.8M569 114.8V170.8M569 139.8A25 25 0 0 1 619 139.8V170.8M619 139.8A25 25 0 0 1 669 139.8V170.8M715 75.6V170.8M715 142.8A28 28 0 1 0 771 142.8A28 28 0 1 0 715 142.8M807 142.8A28 28 0 1 0 863 142.8A28 28 0 1 0 807 142.8" fill="none" stroke="#0d0f12" stroke-width="22.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="332" y="266" fill="#6b6b66" font-family="'Segoe UI', Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22">A friendly face for ComfyUI.</text>
+  <g font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="16" fill="#6b6b66" text-anchor="end">
+    <text x="1180" y="150">profiles · workflows</text>
+    <text x="1180" y="182">gallery · models</text>
+  </g>
+  <rect x="1194" y="134" width="6" height="56" rx="3" fill="#e04800"/>
+</svg>

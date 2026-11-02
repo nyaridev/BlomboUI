@@ -46,16 +46,23 @@ export const WildcardEntry = z.object({
 });
 export type WildcardEntry = z.infer<typeof WildcardEntry>;
 
-/** GET /api/wildcards: the folder and every reference name in it. */
+/** GET /api/wildcards: the main wildcard folder ("" when none) and every name in all of them. */
 export const WildcardList = z.object({ root: z.string(), names: z.array(z.string()) });
 export type WildcardList = z.infer<typeof WildcardList>;
 
+/**
+ * The Wildcard Manager's tree over all of a profile's wildcard folders (main first). Entry paths
+ * start with the folder's id ("main/outfits/fantasy.txt"); each folder is a top-level entry.
+ */
 export const WildcardTree = z.object({
-  root: z.string(),
-  exists: z.boolean(),
+  folders: z.array(
+    z.object({ id: z.string(), name: z.string(), path: z.string(), exists: z.boolean() }),
+  ),
   entries: z.array(WildcardEntry),
   /** Every name a prompt can reference, from .txt files and YAML keys. */
   names: z.array(z.string()),
+  /** .txt files whose name a higher folder already has, so prompts never use them. */
+  hidden: z.array(z.string()),
 });
 export type WildcardTree = z.infer<typeof WildcardTree>;
 

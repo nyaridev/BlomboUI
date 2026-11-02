@@ -21,28 +21,36 @@ describe("SettingsService", () => {
       service.update("p", { appearance: { font: "inter" } }),
       service.update("p", { gallery: { tileSize: 300 } }),
       service.updateWith("p", (s) => ({
-        gallery: { libraries: [...s.gallery.libraries, { id: "a", name: "A", path: "D:/a" }] },
+        civitai: {
+          downloads: { aliases: [...s.civitai.downloads.aliases, { from: "a", to: "A" }] },
+        },
       })),
       service.updateWith("p", (s) => ({
-        gallery: { libraries: [...s.gallery.libraries, { id: "b", name: "B", path: "D:/b" }] },
+        civitai: {
+          downloads: { aliases: [...s.civitai.downloads.aliases, { from: "b", to: "B" }] },
+        },
       })),
     ]);
     const saved = JSON.parse(await fs.readFile(file(), "utf8"));
     expect(saved.appearance.font).toBe("inter");
     expect(saved.gallery.tileSize).toBe(300);
-    expect(saved.gallery.libraries.map((l: { id: string }) => l.id)).toEqual(["a", "b"]);
+    expect(saved.civitai.downloads.aliases.map((l: { from: string }) => l.from)).toEqual([
+      "a",
+      "b",
+    ]);
   });
 
   it("keeps the rest of a file with one bad value, and a copy of the original", async () => {
     const original = JSON.stringify({
       version: 1,
-      gallery: { tileSize: 999, libraries: [{ id: "a", name: "A", path: "D:/a" }] },
+      gallery: { tileSize: 999 },
+      civitai: { downloads: { aliases: [{ from: "a", to: "A" }] } },
     });
     await fs.writeFile(file(), original);
-    expect((await service.get("p")).gallery.libraries).toHaveLength(1);
+    expect((await service.get("p")).civitai.downloads.aliases).toHaveLength(1);
     await service.update("p", { appearance: { font: "inter" } });
     const saved = JSON.parse(await fs.readFile(file(), "utf8"));
-    expect(saved.gallery.libraries).toHaveLength(1);
+    expect(saved.civitai.downloads.aliases).toHaveLength(1);
     expect(saved.gallery.tileSize).toBe(400);
     const copies = (await fs.readdir(path.join(dir, "p"))).filter((n) =>
       n.startsWith("settings.invalid-"),

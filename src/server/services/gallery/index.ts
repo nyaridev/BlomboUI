@@ -1,5 +1,5 @@
 /**
- * The gallery service: indexes the profile's outputs folder and extra library folders into the
+ * The gallery service: indexes the profile's output folders (main and secondary) into the
  * profile database, answers list and search queries, makes thumbnails, and handles favorites
  * and the trash.
  *
@@ -41,7 +41,8 @@ import {
   searchText,
 } from "../../../shared/imageinfo.ts";
 import type { LiveTopic, ServerMessage } from "../../../shared/live.ts";
-import { type LibraryEntry, slugId } from "../../../shared/settings.ts";
+import { folderIdFrom, type ProfileFolder } from "../../../shared/profile.ts";
+import { slugId } from "../../../shared/settings.ts";
 import { type ProfileDb, type ProfileDbs, transaction } from "../../db/profileDb.ts";
 import { freePath, movePath, resolveInside } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
@@ -187,19 +188,24 @@ export class GalleryService {
     return this.openNow(active);
   }
 
+  /** The main output folder's id, as of the last `libraries()` read. */
+  private mainLibrary: string = OUTPUTS_LIBRARY;
+
   get searchMode(): "fts" | "like" {
     return this.current?.pdb.fts ? "fts" : "like";
   }
 
+  /** The profile's output folders; the first (main) is where generated images land. */
   async libraries(): Promise<LibraryRoot[]> {
     const { profileId } = this.need();
     const profile = await this.deps.profiles.get(profileId);
-    const settings = await this.deps.settings.get(profileId);
-    const out: LibraryRoot[] = [
-      { id: OUTPUTS_LIBRARY, name: "Outputs", path: profile.paths.outputs.trim(), builtin: true },
-    ];
-    for (const lib of settings.gallery.libraries)
-      out.push({ id: lib.id, name: lib.name, path: lib.path, builtin: false });
+    const out: LibraryRoot[] = profile.folders.outputs.map((f, i) => ({
+      id: f.id,
+      name: f.name,
+      path: f.path.trim(),
+      builtin: i === 0,
+    }));
+    this.mainLibrary = out[0]?.id ?? OUTPUTS_LIBRARY;
     return out;
   }
 
@@ -421,8 +427,8 @@ export class GalleryService {
   }
 
   /**
-   * Index an image a job just wrote (ComfyUI's output folder ref) when it's inside the outputs
-   * library. Returns the gallery row, or null when the file isn't there (external ComfyUI).
+   * Index an image a job just wrote (ComfyUI's output folder ref) when it's inside the main
+   * output folder. Returns the gallery row, or null when the file isn't there (external ComfyUI).
    */
   async ingestOutput(ref: {
     filename: string;
@@ -431,7 +437,7 @@ export class GalleryService {
   }): Promise<GalleryImage | null> {
     if (ref.type !== "output" || !this.deps.profiles.active) return null;
     const open = this.need();
-    const lib = (await this.libraries()).find((l) => l.id === OUTPUTS_LIBRARY);
+    const lib = (await this.libraries())[0];
     if (!lib?.path) return null;
     const rel = [ref.subfolder, ref.filename].filter(Boolean).join("/").replace(/\\/g, "/");
     if (rel.split("/").some((p) => p === ".." || p === "")) return null;
@@ -452,7 +458,7 @@ export class GalleryService {
 
   /**
    * Gallery rows for ComfyUI output refs (the job log's first images), without touching files.
-   * Refs outside the outputs library, or not indexed (yet), are left out.
+   * Refs outside the main output folder, or not indexed (yet), are left out.
    */
   findOutputs(
     refs: Array<{ filename: string; subfolder: string; type: string }>,
@@ -464,7 +470,7 @@ export class GalleryService {
     for (const ref of refs) {
       if (ref.type !== "output") continue;
       const rel = [ref.subfolder, ref.filename].filter(Boolean).join("/").replace(/\\/g, "/");
-      const row = find.get(OUTPUTS_LIBRARY, rel) as ImageRow | undefined;
+      const row = find.get(this.mainLibrary, rel) as ImageRow | undefined;
       if (row) out.set(rel, this.toImage(row));
     }
     return out;
@@ -1052,46 +1058,52 @@ export class GalleryService {
     });
   }
 
-  async addLibrary(name: string, folder: string): Promise<LibraryEntry> {
+  /** Add an output folder (a secondary one: the gallery shows it, nothing is saved there). */
+  async addLibrary(name: string, folder: string): Promise<ProfileFolder> {
     const { profileId } = this.need();
     const abs = path.resolve(folder.trim());
     if (!(await isDir(abs)))
       throw new HttpError(400, "That folder doesn't exist. Pick an existing folder.", "no_folder");
-    const outputs = (await this.libraries())[0]?.path ?? "";
-    const made: { entry?: LibraryEntry } = {};
-    // Read-modify-write inside the settings queue, so two adds at once both stay.
-    await this.deps.settings.updateWith(profileId, (current) => {
-      const libs = current.gallery.libraries;
-      const same = (p: string) => Boolean(p) && path.resolve(p).toLowerCase() === abs.toLowerCase();
-      if (same(outputs) || libs.some((l) => same(l.path)))
+    const made: { folder?: ProfileFolder } = {};
+    await this.deps.profiles.updateFolders(profileId, "outputs", (current) => {
+      const same = (p: string) => path.resolve(p).toLowerCase() === abs.toLowerCase();
+      if (current.some((f) => same(f.path)))
         throw new HttpError(409, "That folder is already in the gallery.", "duplicate");
-      const taken = new Set([OUTPUTS_LIBRARY, ...libs.map((l) => l.id)]);
-      const base = slugId(name, "library");
-      let id = base;
-      for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
-      made.entry = { id, name: name.trim(), path: abs };
-      return { gallery: { libraries: [...libs, made.entry] } };
+      made.folder = {
+        id: folderIdFrom(
+          name,
+          current.map((f) => f.id),
+          "library",
+        ),
+        name: name.trim(),
+        path: abs,
+      };
+      return [...current, made.folder];
     });
-    this.startSync();
-    return made.entry as LibraryEntry;
+    return made.folder as ProfileFolder;
   }
 
   async renameLibrary(id: string, name: string): Promise<void> {
     const { profileId } = this.need();
-    await this.deps.settings.updateWith(profileId, (current) => {
-      const libs = current.gallery.libraries;
-      if (!libs.some((l) => l.id === id))
+    await this.deps.profiles.updateFolders(profileId, "outputs", (current) => {
+      if (!current.some((f) => f.id === id))
         throw new HttpError(404, "That library isn't in this profile anymore.", "no_library");
-      return { gallery: { libraries: libs.map((l) => (l.id === id ? { ...l, name } : l)) } };
+      return current.map((f) => (f.id === id ? { ...f, name } : f));
     });
   }
 
   /** Stop showing a library. Its files are untouched; only the index rows go. */
   async removeLibrary(id: string): Promise<void> {
     const open = this.need();
-    await this.deps.settings.updateWith(open.profileId, (current) => ({
-      gallery: { libraries: current.gallery.libraries.filter((l) => l.id !== id) },
-    }));
+    await this.deps.profiles.updateFolders(open.profileId, "outputs", (current) => {
+      if (current[0]?.id === id)
+        throw new HttpError(
+          400,
+          "That's the main output folder. Change it in Settings → Folders.",
+          "main_folder",
+        );
+      return current.filter((f) => f.id !== id);
+    });
     // A sync that's reading this library would add its rows back: stop it first.
     const run = this.syncRun;
     run?.abort.abort();
@@ -1099,7 +1111,26 @@ export class GalleryService {
     if (this.current !== open) return;
     this.dropLibraryRows(open, id);
     this.deps.publish("gallery", { t: "gallery.changed" });
-    this.startSync();
+    // The profile's "updated" event starts the next sync (context.ts).
+  }
+
+  /**
+   * An output folder's id changed (same path, new id): its rows, ratings, tags, collection
+   * items and trash entries follow it, so nothing loses its place.
+   */
+  async relabelLibrary(from: string, to: string): Promise<void> {
+    const open = this.need();
+    const run = this.syncRun;
+    run?.abort.abort();
+    await run?.done.catch(() => undefined);
+    if (this.current !== open) return;
+    const { db } = open.pdb;
+    transaction(db, () => {
+      for (const table of ["images", "marks", "trash", "image_tags", "collection_items"])
+        db.prepare(`UPDATE ${table} SET library = ? WHERE library = ?`).run(to, from);
+    });
+    if (this.mainLibrary === from) this.mainLibrary = to;
+    this.deps.publish("gallery", { t: "gallery.changed" });
   }
 }
 

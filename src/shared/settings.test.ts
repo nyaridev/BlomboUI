@@ -13,7 +13,7 @@ describe("settings", () => {
     const s = migrateSettings({});
     expect(s.appearance.font).toBe("geist");
     expect(s.gallery.layout).toBe("justified");
-    expect(s.gallery.libraries).toEqual([]);
+    expect(s.civitai.downloads.aliases).toEqual([]);
     expect(s.models.blurNsfw).toBe(true);
   });
 
@@ -81,14 +81,12 @@ describe("readSettings", () => {
   it("pulls an out-of-range value to its limit and keeps the rest", () => {
     const r = readSettings({
       version: 1,
-      gallery: {
-        tileSize: 500,
-        libraries: [{ id: "renders", name: "Renders", path: "D:/renders" }],
-      },
+      gallery: { tileSize: 500 },
+      civitai: { downloads: { aliases: [{ from: "renders", to: "Renders" }] } },
       appearance: { font: "inter" },
     });
     expect(r.settings.gallery.tileSize).toBe(400);
-    expect(r.settings.gallery.libraries).toHaveLength(1);
+    expect(r.settings.civitai.downloads.aliases).toHaveLength(1);
     expect(r.settings.appearance.font).toBe("inter");
     expect(r.dropped).toEqual(["gallery.tileSize"]);
     expect(r.newer).toBe(false);
@@ -96,15 +94,17 @@ describe("readSettings", () => {
 
   it("drops one bad list item and keeps the rest", () => {
     const r = readSettings({
-      gallery: {
-        libraries: [
-          { id: "a", name: "A", path: "D:/a" },
-          { id: 5, name: "", path: 3 },
-          { id: "c", name: "C", path: "D:/c" },
-        ],
+      civitai: {
+        downloads: {
+          aliases: [
+            { from: "a", to: "A" },
+            { from: 5, to: "" },
+            { from: "c", to: "C" },
+          ],
+        },
       },
     });
-    expect(r.settings.gallery.libraries.map((l) => l.id)).toEqual(["a", "c"]);
+    expect(r.settings.civitai.downloads.aliases.map((l) => l.from)).toEqual(["a", "c"]);
   });
 
   it("flags a file from a newer version", () => {

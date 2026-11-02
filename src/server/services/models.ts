@@ -1,11 +1,15 @@
 /**
- * Local models: the files under the profile's models root, by kind (MODEL_FOLDERS), with their
+ * Local models: the files under the profile's model folders, by kind (MODEL_FOLDERS), with their
  * sidecars: Civitai or A1111 info JSON next to the model, and its pictures in the folder named
  * after it (`<model>_data/thumb.*`, services/modelthumbs.ts).
  *
  * A scan reads each folder once and only the small sidecar JSON files, so a thousand LoRAs list
  * quickly; the result is cached until a rename, a move or a rescan. Renaming or moving takes the
  * sidecars along. Nothing is ever deleted from the models folder.
+ *
+ * A profile can have several model folders (ADR-0017). They're scanned in order and a model's id
+ * is its path inside its folder, as ComfyUI names it, so when two folders hold the same file the
+ * higher one wins, as in ComfyUI. Renames and moves stay inside the model's own folder.
  *
  * Models without a .civitai.info file are filled in from the background lookup by hash
  * (services/lookup.ts): name, thumbnail, base model and trigger words, kept in the profile's
@@ -26,6 +30,7 @@ import {
   type ModelList,
   shortBaseModel,
 } from "../../shared/models.ts";
+import type { ProfileFolder } from "../../shared/profile.ts";
 import { headerLength, parseSafetensorsHeader } from "../../shared/safetensors.ts";
 import { exists, movePath, resolveInside } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
@@ -59,6 +64,8 @@ interface Sidecars {
 interface Entry {
   model: LocalModel;
   abs: string;
+  /** The model folder it's in. */
+  root: string;
   sidecars: Sidecars;
   lookup: LookupInfo | null;
 }
@@ -150,7 +157,8 @@ export class ModelService {
   private readonly deps: ModelDeps;
   private cache: {
     profileId: string;
-    root: string;
+    /** The folders it was scanned from (a change means a new scan). */
+    key: string;
     list: ModelList;
     entries: Map<string, Entry>;
   } | null = null;
@@ -162,11 +170,11 @@ export class ModelService {
     this.deps = deps;
   }
 
-  private async root(): Promise<{ profileId: string; root: string }> {
+  private async folders(): Promise<{ profileId: string; folders: ProfileFolder[]; key: string }> {
     const profileId = this.deps.profiles.active;
     if (!profileId) throw new HttpError(409, "Open a profile first.", "no_profile");
-    const profile = await this.deps.profiles.get(profileId);
-    return { profileId, root: profile.paths.models.trim() };
+    const folders = (await this.deps.profiles.get(profileId)).folders.models;
+    return { profileId, folders, key: JSON.stringify(folders) };
   }
 
   private thumbs(profileId: string): ThumbCache {
@@ -183,14 +191,14 @@ export class ModelService {
     // A scan already running may be for another profile or folder, or older than a change:
     // wait for it, then scan again unless the cache now matches.
     for (let attempt = 0; attempt < 4; attempt++) {
-      const { profileId, root } = await this.root();
+      const { profileId, folders, key } = await this.folders();
       const cache = this.cache;
-      if (cache?.profileId === profileId && cache.root === root) return cache.list;
+      if (cache?.profileId === profileId && cache.key === key) return cache.list;
       if (this.scanning) {
         await this.scanning.catch(() => undefined);
         continue;
       }
-      this.scanning = this.scan(profileId, root, this.generation).finally(() => {
+      this.scanning = this.scan(profileId, folders, key, this.generation).finally(() => {
         this.scanning = null;
       });
       await this.scanning;
@@ -202,26 +210,38 @@ export class ModelService {
     );
   }
 
-  private async scan(profileId: string, root: string, generation: number): Promise<void> {
+  private async scan(
+    profileId: string,
+    folders: ProfileFolder[],
+    key: string,
+    generation: number,
+  ): Promise<void> {
     const entries = new Map<string, Entry>();
-    const rootExists = Boolean(root) && (await isDir(root));
-    if (rootExists)
+    const listed: ModelList["folders"] = [];
+    for (const f of folders) {
+      const root = f.path.trim();
+      const found = Boolean(root) && (await isDir(root));
+      listed.push({ id: f.id, name: f.name, path: root, exists: found });
+      if (!found) continue;
       for (const kind of MODEL_KINDS)
         for (const folder of MODEL_FOLDERS[kind]) {
           const base = path.join(root, folder);
-          if (await isDir(base)) await this.scanFolder(profileId, root, base, kind, entries);
+          if (await isDir(base))
+            await this.scanFolder(profileId, { id: f.id, path: root }, base, kind, entries);
         }
+    }
     const models = [...entries.values()]
       .map((e) => e.model)
       .sort((a, b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
     if (generation !== this.generation) return;
     this.cache = {
       profileId,
-      root,
+      key,
       entries,
       list: {
-        root,
-        exists: rootExists,
+        root: listed[0]?.path ?? "",
+        exists: listed.some((f) => f.exists),
+        folders: listed,
         models,
         totalSize: models.reduce((n, m) => n + m.size, 0),
         scannedAt: Date.now(),
@@ -231,7 +251,7 @@ export class ModelService {
 
   private async scanFolder(
     profileId: string,
-    root: string,
+    from: { id: string; path: string },
     dir: string,
     kind: ModelKind,
     out: Map<string, Entry>,
@@ -252,6 +272,7 @@ export class ModelService {
     const stems = [...files.keys()]
       .filter((low) => EXTENSIONS.has(path.extname(low)))
       .map((low) => stemOf(low));
+    const root = from.path;
     const kindRoot = kindFolderOf(root, dir);
     for (const e of items) {
       if (e.name.startsWith(".")) continue;
@@ -259,10 +280,13 @@ export class ModelService {
       if (e.isDirectory()) {
         // A model's data folder holds its pictures, not more models.
         if (isModelDataDir(e.name, stems)) continue;
-        await this.scanFolder(profileId, root, full, kind, out, depth + 1);
+        await this.scanFolder(profileId, from, full, kind, out, depth + 1);
         continue;
       }
       if (!e.isFile() || !EXTENSIONS.has(path.extname(e.name).toLowerCase())) continue;
+      // The same file in a higher folder wins (ComfyUI picks that one too).
+      const id = toRel(path.relative(root, full));
+      if (out.has(id)) continue;
       let stat: import("node:fs").Stats;
       try {
         stat = await fs.stat(full);
@@ -274,7 +298,6 @@ export class ModelService {
       if (sidecars.dataDir) sidecars.thumb = (await findThumbs(sidecars.dataDir)).thumb;
       const civitai = await readJson<CivitaiInfo>(sidecars.civitai);
       const a1111 = await readJson<A1111Info>(sidecars.json);
-      const id = toRel(path.relative(root, full));
       let thumb: string | null = null;
       if (sidecars.thumb) {
         const t = await fs.stat(sidecars.thumb).catch(() => null);
@@ -292,10 +315,12 @@ export class ModelService {
       const activation = str(a1111?.["activation text"]);
       out.set(id, {
         abs: full,
+        root,
         sidecars,
         lookup: found,
         model: {
           id,
+          root: from.id,
           kind,
           name: str(civitai?.model?.name) ?? found?.name ?? stem,
           file: e.name,
@@ -332,7 +357,7 @@ export class ModelService {
     const entry = cache?.entries.get(id);
     if (!cache || !entry)
       throw new HttpError(404, "That model isn't in the models folder anymore.", "no_model");
-    return { entry, root: cache.root, profileId: cache.profileId };
+    return { entry, root: entry.root, profileId: cache.profileId };
   }
 
   async thumbFile(id: string): Promise<string> {
@@ -475,9 +500,8 @@ export class ModelService {
     }
     this.invalidate();
     this.deps.onChanged();
-    const { root } = await this.root();
     const list = await this.list();
-    const id = toRel(path.relative(root, newAbs));
+    const id = toRel(path.relative(entry.root, newAbs));
     const model = list.models.find((m) => m.id === id);
     if (!model)
       throw new HttpError(

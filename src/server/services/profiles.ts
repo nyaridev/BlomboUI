@@ -5,9 +5,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
+import { z } from "zod";
 import {
   type CreateProfileBody,
+  type FolderKind,
+  foldersFromPaths,
+  migrateProfile,
   Profile,
+  type ProfileFolder,
   ProfileRegistry,
   ProfileSecrets,
   slugifyProfileName,
@@ -24,8 +29,8 @@ const AVATAR_MAX = 768;
 type ProfileEvents = {
   /** A profile was opened (also when the same one is opened again, e.g. after a reload). */
   opened: (profile: Profile, previousId: string | null) => void;
-  /** A profile's settings changed. */
-  updated: (profile: Profile) => void;
+  /** A profile's record changed (name, look, folders, ComfyUI). */
+  updated: (profile: Profile, previous: Profile) => void;
 };
 
 export class ProfileService extends Emitter<ProfileEvents> {
@@ -116,7 +121,18 @@ export class ProfileService extends Emitter<ProfileEvents> {
 
   async find(id: string): Promise<Profile | null> {
     if (!(await exists(this.profileFile(id)))) return null;
-    return Profile.parse(JSON.parse(await fs.readFile(this.profileFile(id), "utf8")));
+    const raw: unknown = JSON.parse(await fs.readFile(this.profileFile(id), "utf8"));
+    if (raw && typeof raw === "object" && "folders" in raw) return Profile.parse(raw);
+    // A version 1 file: its paths, and the gallery's extra libraries from settings.json, become
+    // folder lists. Written back once, before settings.json drops the libraries on its next save.
+    const settings = await readJsonFile(
+      path.join(this.dir(id), "settings.json"),
+      z.object({ gallery: z.object({ libraries: z.unknown() }).partial() }).partial(),
+      {},
+    ).catch(() => ({ gallery: undefined }));
+    const profile = Profile.parse(migrateProfile(raw, settings.gallery?.libraries ?? []));
+    await writeJsonAtomic(this.profileFile(id), profile);
+    return profile;
   }
 
   async get(id: string): Promise<Profile> {
@@ -137,12 +153,12 @@ export class ProfileService extends Emitter<ProfileEvents> {
       name: body.name,
       accent: body.accent,
       theme: body.theme,
-      paths: body.paths,
+      folders: foldersFromPaths(body.paths),
       comfy: body.comfy,
       createdAt: new Date().toISOString(),
     });
     // Folders that don't exist yet are made (an existing one is used as it is, never touched).
-    for (const [kind, folder] of Object.entries(profile.paths)) {
+    for (const [kind, folder] of Object.entries(body.paths)) {
       if (!folder.trim() || !path.isAbsolute(folder)) continue;
       try {
         await fs.mkdir(folder, { recursive: true });
@@ -182,15 +198,50 @@ export class ProfileService extends Emitter<ProfileEvents> {
   }
 
   async update(id: string, patch: UpdateProfileBody): Promise<Profile> {
-    const current = await this.get(id);
-    const next = Profile.parse({
-      ...current,
-      ...patch,
-      paths: { ...current.paths, ...patch.paths },
+    return this.queued(id, async () => {
+      const current = await this.get(id);
+      const next = Profile.parse({
+        ...current,
+        ...patch,
+        folders: { ...current.folders, ...patch.folders },
+      });
+      await writeJsonAtomic(this.profileFile(id), next);
+      this.emit("updated", next, current);
+      return next;
     });
-    await writeJsonAtomic(this.profileFile(id), next);
-    this.emit("updated", next);
-    return next;
+  }
+
+  /**
+   * Change one kind's folder list from its current value (the gallery adds, renames and removes
+   * output folders this way), in the same queue as `update` so concurrent changes all stay.
+   */
+  async updateFolders(
+    id: string,
+    kind: FolderKind,
+    change: (current: ProfileFolder[]) => ProfileFolder[],
+  ): Promise<Profile> {
+    return this.queued(id, async () => {
+      const current = await this.get(id);
+      const next = Profile.parse({
+        ...current,
+        folders: { ...current.folders, [kind]: change(current.folders[kind]) },
+      });
+      await writeJsonAtomic(this.profileFile(id), next);
+      this.emit("updated", next, current);
+      return next;
+    });
+  }
+
+  private readonly queues = new Map<string, Promise<unknown>>();
+
+  /** Read-modify-write changes to one profile, one at a time. */
+  private queued<T>(id: string, run: () => Promise<T>): Promise<T> {
+    const result = (this.queues.get(id) ?? Promise.resolve()).then(run, run);
+    this.queues.set(
+      id,
+      result.catch(() => undefined),
+    );
+    return result;
   }
 
   async setAvatar(id: string, image: Uint8Array): Promise<Profile> {
@@ -227,7 +278,8 @@ export class ProfileService extends Emitter<ProfileEvents> {
     const opened = { ...profile, lastOpenedAt: new Date().toISOString() };
     await writeJsonAtomic(this.profileFile(id), opened);
     this.activeId = id;
-    const comfyRestart = previous !== null && previous.paths.models !== profile.paths.models;
+    const comfyRestart =
+      previous !== null && modelRoots(previous).join("\n") !== modelRoots(profile).join("\n");
     this.emit("opened", opened, previous?.id ?? null);
     return { profile: opened, comfyRestart };
   }
@@ -276,4 +328,9 @@ export class ProfileService extends Emitter<ProfileEvents> {
     });
     if (this.activeId === id) this.activeId = null;
   }
+}
+
+/** The model folders ComfyUI reads, in order (a change needs a ComfyUI restart). */
+export function modelRoots(profile: Profile): string[] {
+  return profile.folders.models.map((f) => f.path.trim()).filter(Boolean);
 }

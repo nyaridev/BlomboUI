@@ -1,7 +1,7 @@
 /**
  * extra_model_paths.yaml for a managed ComfyUI. ComfyUI reads it once at startup, which is why
- * changing a profile's models folder means a restart. Each key is a ComfyUI model folder name;
- * the value lists subfolders of the profile's models root, one per line.
+ * changing a profile's model folders means a restart. Each key is a ComfyUI model folder name;
+ * the value lists subfolders of each model folder, one per line.
  */
 import { stringify } from "yaml";
 
@@ -35,18 +35,26 @@ export function comfyFolderKeys(): string[] {
   return [...new Set(FOLDERS.flatMap(([, dirs]) => dirs))];
 }
 
-/** YAML text pointing every ComfyUI model folder at `modelsRoot`. Empty root → no file needed. */
-export function extraModelPathsYaml(modelsRoot: string): string | null {
-  const root = modelsRoot.trim();
-  if (!root) return null;
-  const section: Record<string, string | boolean> = {
-    // Forward slashes read the same on Windows and keep the YAML free of escapes.
-    base_path: root.replace(/\\/g, "/"),
-    is_default: true,
-  };
-  for (const [key, dirs] of FOLDERS) section[key] = dirs.join("\n");
-  return `# Written by BlomboUI from the active profile's models folder. Changes are overwritten.\n${stringify(
-    { blombo: section },
+/**
+ * YAML text pointing every ComfyUI model folder at the profile's model folders, one section per
+ * folder in order. The main one (first) is the default, so what ComfyUI saves itself lands there.
+ * No folders → no file needed.
+ */
+export function extraModelPathsYaml(modelRoots: string[]): string | null {
+  const roots = modelRoots.map((r) => r.trim()).filter(Boolean);
+  if (!roots.length) return null;
+  const sections: Record<string, Record<string, string | boolean>> = {};
+  roots.forEach((root, i) => {
+    const section: Record<string, string | boolean> = {
+      // Forward slashes read the same on Windows and keep the YAML free of escapes.
+      base_path: root.replace(/\\/g, "/"),
+    };
+    if (i === 0) section.is_default = true;
+    for (const [key, dirs] of FOLDERS) section[key] = dirs.join("\n");
+    sections[i === 0 ? "blombo" : `blombo_${i + 1}`] = section;
+  });
+  return `# Written by BlomboUI from the active profile's model folders. Changes are overwritten.\n${stringify(
+    sections,
     { lineWidth: 0 },
   )}`;
 }

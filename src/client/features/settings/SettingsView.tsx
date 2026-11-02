@@ -362,6 +362,7 @@ function FontPicker({
 /* ── gallery and models pages ───────────────────────────────────────────── */
 
 function GalleryPage() {
+  const profile = useCurrentProfile();
   const settings = useSettings().data?.gallery;
   const update = useUpdateSettings();
   const [size, setSize] = useState<number | null>(null);
@@ -405,12 +406,12 @@ function GalleryPage() {
         <Field
           label="Libraries"
           layout="left"
-          hint="Add, rename or remove folders from the gallery's sidebar."
+          hint="The gallery shows your output folders. Add, rename or reorder them in Folders."
         >
           <span className="pt-1.5 text-sm text-fg-2">
-            {settings?.libraries.length
-              ? settings.libraries.map((l) => l.name).join(", ")
-              : "Only the outputs folder so far."}
+            {profile?.folders.outputs.length
+              ? profile.folders.outputs.map((l) => l.name).join(", ")
+              : "No output folder yet."}
           </span>
         </Field>
       </div>

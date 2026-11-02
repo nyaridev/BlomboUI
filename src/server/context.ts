@@ -384,11 +384,21 @@ export function createServices(config: ServerConfig): Services {
     dbs.close(id);
     settings.forget(id);
   };
-  profiles.on("updated", (profile) => {
+  profiles.on("updated", (profile, previous) => {
     if (profile.id !== profiles.active) return;
     void supervisor.applyProfile(profile, "flag").catch((error) => console.error(error));
     models.invalidate();
-    gallery.startSync();
+    // An output folder whose id changed (same path) keeps its gallery rows and marks.
+    const renamed = previous.folders.outputs.flatMap((before) => {
+      const after = profile.folders.outputs.find((f) => f.path === before.path);
+      return after && after.id !== before.id ? [[before.id, after.id] as const] : [];
+    });
+    if (JSON.stringify(previous.folders.outputs) !== JSON.stringify(profile.folders.outputs))
+      void (async () => {
+        for (const [from, to] of renamed) await gallery.relabelLibrary(from, to);
+      })()
+        .catch((error) => console.error("Couldn't move the gallery's marks to the new id:", error))
+        .finally(() => gallery.startSync());
     lookup.start();
   });
 

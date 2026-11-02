@@ -4,6 +4,7 @@
  * mapped to store entries with their folder, size and whether the file is already in the
  * profile's models folder. Installing is a download (services/downloads.ts).
  */
+
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -15,6 +16,7 @@ import {
   kindOfFolder,
   storeCategory,
 } from "../../shared/manager.ts";
+import { mainFolder } from "../../shared/profile.ts";
 import { exists, resolveInside, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { fetchFollow, readLimited } from "../lib/remote.ts";
@@ -185,7 +187,8 @@ export class ManagerCatalog {
   private async root(): Promise<string> {
     const id = this.profiles.active;
     if (!id) throw new HttpError(409, "Open a profile first.", "no_profile");
-    return (await this.profiles.get(id)).paths.models.trim();
+    // Installs only ever go into the main model folder (ADR-0017).
+    return mainFolder(await this.profiles.get(id), "models").trim();
   }
 
   async catalog(force = false): Promise<Catalog> {

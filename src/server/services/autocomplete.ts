@@ -379,7 +379,7 @@ export class AutocompleteService {
 
   private async wildcards(q: string, limit: number): Promise<Suggestion[]> {
     const profile = await this.deps.profiles.get(this.profileId());
-    const names = await listWildcards(profile.paths.wildcards).catch(() => []);
+    const names = await listWildcards(profile.folders.wildcards.map((f) => f.path)).catch(() => []);
     const lower = q.toLowerCase();
     return names
       .filter((n) => n.toLowerCase().includes(lower))

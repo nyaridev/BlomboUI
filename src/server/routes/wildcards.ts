@@ -9,11 +9,10 @@ import {
   WildcardPath,
   WildcardPathBody,
 } from "../../shared/wildcards.ts";
-import { resolveInside } from "../lib/fsx.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
 import { revealInFileManager } from "../services/system.ts";
-import { listWildcards, WildcardFiles } from "../services/wildcards.ts";
+import { listWildcards, WildcardFolders } from "../services/wildcards.ts";
 
 export function wildcardRoutes(profiles: ProfileService) {
   const r = new Hono();
@@ -22,8 +21,8 @@ export function wildcardRoutes(profiles: ProfileService) {
     const id = profiles.active;
     if (!id) throw new HttpError(409, "Open a profile first.", "no_profile");
     const profile = await profiles.get(id);
-    return new WildcardFiles(
-      profile.paths.wildcards,
+    return new WildcardFolders(
+      profile.folders.wildcards,
       path.join(profiles.dir(id), "trash", "wildcards"),
     );
   };
@@ -31,7 +30,10 @@ export function wildcardRoutes(profiles: ProfileService) {
   /** Names only (prompt autocomplete, pickers). */
   r.get("/", async (c) => {
     const f = await files();
-    return c.json<WildcardList>({ root: f.root, names: await listWildcards(f.root) });
+    return c.json<WildcardList>({
+      root: f.folders[0]?.path ?? "",
+      names: await listWildcards(f.folders.map((folder) => folder.path)),
+    });
   });
 
   r.get("/tree", async (c) => c.json(await (await files()).tree()));
@@ -72,9 +74,7 @@ export function wildcardRoutes(profiles: ProfileService) {
 
   r.post("/reveal", async (c) => {
     const body = await readJson(c, WildcardPathBody);
-    const f = await files();
-    if (!f.root) throw new HttpError(409, "Set a wildcards folder first.", "no_root");
-    await revealInFileManager(resolveInside(f.root, body.path));
+    await revealInFileManager((await files()).abs(body.path));
     return c.json({ ok: true });
   });
 

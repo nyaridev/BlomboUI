@@ -27,16 +27,6 @@ export const UI_FONT_LABELS: Record<UiFont, string> = {
 export const GALLERY_LAYOUTS = ["justified", "grid"] as const;
 export type GalleryLayout = (typeof GALLERY_LAYOUTS)[number];
 
-export const LibraryId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/, "Invalid library id");
-
-/** An extra folder shown in the gallery next to the outputs folder. */
-export const LibraryEntry = z.object({
-  id: LibraryId,
-  name: z.string().trim().min(1).max(60),
-  path: z.string().trim().min(1),
-});
-export type LibraryEntry = z.infer<typeof LibraryEntry>;
-
 /** Animation: everything, fades only, or whatever Windows says (reduce animations). */
 export const MOTION_PREFS = ["full", "reduced", "system"] as const;
 export type MotionPref = (typeof MOTION_PREFS)[number];
@@ -52,7 +42,8 @@ export const GallerySettings = z.object({
   layout: z.enum(GALLERY_LAYOUTS).default("justified"),
   /** Target row height (justified) or tile width (grid), in CSS pixels. */
   tileSize: z.number().int().min(120).max(400).default(220),
-  libraries: z.array(LibraryEntry).default([]),
+  // The gallery's folders are the profile's output folders (ADR-0017); version 1 files kept
+  // them here as `libraries`, which profile.json's migration reads once.
 });
 
 export const ModelSettings = z.object({
@@ -132,7 +123,7 @@ export const CivitaiSettings = z.object({
       aliases: z.array(AuthorAlias).max(200).default([]),
       /** Save Civitai's info (.civitai.info) next to the model. */
       saveInfo: z.boolean().default(true),
-      /** Save the first image as the model's preview (.preview.png). */
+      /** Save the first image as the model's picture (`<model>_data/thumb.jpg`). */
       savePreview: z.boolean().default(true),
     })
     .prefault({}),

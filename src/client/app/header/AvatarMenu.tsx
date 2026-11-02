@@ -30,7 +30,7 @@ export function AvatarMenu({
           <div className="flex min-w-0 flex-col">
             <span className="truncate text-sm font-semibold text-fg">{name}</span>
             <span className="truncate font-mono text-2xs text-fg-3">
-              {profile?.paths.outputs || "No output folder yet"}
+              {profile?.folders.outputs[0]?.path || "No output folder yet"}
             </span>
           </div>
         </div>

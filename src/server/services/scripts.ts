@@ -11,11 +11,13 @@
  *
  * Cancelling the group (Cancel, or the group's own cancel) still makes the grid of what finished.
  */
+
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ModelKind } from "../../shared/constants.ts";
 import type { GenerateBody, GenerateResponse, Job, JobImage } from "../../shared/jobs.ts";
 import type { ServerMessage } from "../../shared/live.ts";
+import { mainFolder } from "../../shared/profile.ts";
 import { randomSeed } from "../../shared/random.ts";
 import { planScript, type Script, ScriptError, type ScriptPlan } from "../../shared/scripts.ts";
 import { bindingFor, type WorkflowManifest } from "../../shared/workflow/manifest.ts";
@@ -216,7 +218,7 @@ export class ScriptService {
     const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const stamp = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const profile = await this.deps.profiles.find(g.profileId);
-    const outputs = profile?.paths.outputs.trim() ?? "";
+    const outputs = profile ? mainFolder(profile, "outputs").trim() : "";
     const dir = outputs
       ? path.join(outputs, day, "grids")
       : path.join(this.deps.profiles.dir(g.profileId), "grids", day);

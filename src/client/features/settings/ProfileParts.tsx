@@ -30,18 +30,21 @@ export function ThemeBadge({ profile }: { profile: Profile }) {
 
 const FOLDERS = ["models", "outputs", "wildcards"] as const;
 
-/** The profile's three folders on one line: label + folder name, the full path on hover. */
+/** The profile's main folders on one line: label + name (+ how many more), the paths on hover. */
 export function Folders({ profile }: { profile: Profile }) {
   return (
     <div className="flex min-w-0 flex-wrap gap-x-4 gap-y-0.5 text-xs">
       {FOLDERS.map((k) => {
-        const path = profile.paths[k];
+        const list = profile.folders[k];
         return (
-          <span key={k} className="flex min-w-0 gap-1.5" title={path || undefined}>
+          <span
+            key={k}
+            className="flex min-w-0 gap-1.5"
+            title={list.map((f) => f.path).join("\n") || undefined}
+          >
             <span className="text-fg-3 capitalize">{k}</span>
-            <span className="truncate font-mono text-fg-2">
-              {path ? path.split(/[\\/]/).filter(Boolean).pop() : "not set"}
-            </span>
+            <span className="truncate font-mono text-fg-2">{list[0]?.name ?? "not set"}</span>
+            {list.length > 1 ? <span className="text-fg-4">+{list.length - 1}</span> : null}
           </span>
         );
       })}

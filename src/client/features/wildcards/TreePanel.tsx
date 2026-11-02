@@ -1,14 +1,26 @@
 /**
  * The wildcard file tree: search, new file and folder, drag a file or folder onto a folder to
  * move it, and per-row rename, reveal and move-to-trash. Virtualized for big wildcard packs.
+ * Each of the profile's wildcard folders is a top-level row (its id is the first path segment);
+ * files move only within one of them, and a file a higher folder overrides is marked.
  */
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useWildcardsChanged } from "@client/lib/queries";
-import { Button, Dialog, Field, IconButton, Menu, TextField, TreeRow, toast } from "@client/ui";
+import {
+  Badge,
+  Button,
+  Dialog,
+  Field,
+  IconButton,
+  Menu,
+  TextField,
+  TreeRow,
+  toast,
+} from "@client/ui";
 import type { WildcardTree } from "@shared/wildcards";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type DragEvent, useMemo, useRef, useState } from "react";
+import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useWildcardUi } from "./state";
 import { buildTree, folderOf, type TreeNode, visibleRows } from "./tree";
 
@@ -23,7 +35,13 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
   const [query, setQuery] = useState("");
   const [ask, setAsk] = useState<Ask>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const root = useMemo(() => buildTree(tree.entries), [tree.entries]);
+  const roots = useMemo(() => new Map(tree.folders.map((f, i) => [f.id, i])), [tree.folders]);
+  const root = useMemo(() => {
+    const r = buildTree(tree.entries);
+    // Wildcard folders keep their order from Settings → Folders (main first).
+    r.children.sort((a, b) => (roots.get(a.path) ?? 0) - (roots.get(b.path) ?? 0));
+    return r;
+  }, [tree.entries, roots]);
   const rows = useMemo(() => visibleRows(root, ui.expanded, query), [root, ui.expanded, query]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
@@ -33,16 +51,32 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
     overscan: 12,
   });
   const selectedType = ui.open ? "file" : null;
+  const hidden = useMemo(() => new Set(tree.hidden), [tree.hidden]);
+  const mainId = tree.folders[0]?.id ?? "";
+  // Where new files go: the selected file's folder, else the main folder.
+  const target = folderOf(ui.open, selectedType) || mainId;
+  const shownFolder = tree.folders.find((f) => f.id === target.split("/")[0]) ?? tree.folders[0];
+
+  // Wildcard folders start open, once each.
+  const seen = useRef(new Set<string>());
+  const toggle = ui.toggle;
+  useEffect(() => {
+    for (const f of tree.folders)
+      if (!seen.current.has(f.id)) {
+        seen.current.add(f.id);
+        toggle(f.id, true);
+      }
+  }, [tree.folders, toggle]);
 
   const move = async (from: string, folder: string) => {
     const name = from.split("/").pop() ?? from;
-    const to = folder ? `${folder}/${name}` : name;
-    if (to === from || to.startsWith(`${from}/`)) return;
+    const to = `${folder}/${name}`;
+    if (!folder || roots.has(from) || to === from || to.startsWith(`${from}/`)) return;
     try {
       await api.moveWildcard(from, to);
       ui.moved(from, to);
       changed();
-      toast(`Moved "${name}" to ${folder || "the top level"}`, "success");
+      toast(`Moved "${name}" to ${folder}`, "success");
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -96,26 +130,23 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
           icon="file-plus"
           label="New file"
           size="sm"
-          onClick={() => setAsk({ kind: "new-file", folder: folderOf(ui.open, selectedType) })}
+          disabled={!mainId}
+          onClick={() => setAsk({ kind: "new-file", folder: target })}
         />
         <IconButton
           icon="folder-plus"
           label="New folder"
           size="sm"
-          onClick={() => setAsk({ kind: "new-folder", folder: folderOf(ui.open, selectedType) })}
+          disabled={!mainId}
+          onClick={() => setAsk({ kind: "new-folder", folder: target })}
         />
       </div>
       <div
         ref={scrollRef}
-        className={cn(
-          "scroll-quiet min-h-0 flex-1 overflow-y-auto p-1.5",
-          dropTarget === "" && "bg-accent/6",
-        )}
-        onDragOver={allowDrop("")}
+        className="scroll-quiet min-h-0 flex-1 overflow-y-auto p-1.5"
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null);
         }}
-        onDrop={onDrop("")}
       >
         {rows.length === 0 ? (
           <p className="px-2 py-6 text-center text-xs text-fg-3">
@@ -130,12 +161,15 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
               if (!row) return null;
               const { node, depth } = row;
               const folder = node.type === "folder";
+              const rootIndex = depth === 0 ? roots.get(node.path) : undefined;
+              const isRoot = rootIndex !== undefined;
+              const isHidden = hidden.has(node.path);
               return (
                 <div
                   key={node.path}
                   className="absolute inset-x-0 top-0"
                   style={{ transform: `translateY(${v.start}px)` }}
-                  draggable
+                  draggable={!isRoot}
                   onDragStart={(e) => {
                     e.dataTransfer.setData("text/x-wildcard", node.path);
                     e.dataTransfer.effectAllowed = "move";
@@ -159,14 +193,29 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
                 >
                   <TreeRow
                     depth={depth}
-                    label={node.name}
+                    label={isRoot ? (tree.folders[rootIndex]?.name ?? node.name) : node.name}
+                    meta={
+                      rootIndex === 0 && tree.folders.length > 1 ? (
+                        <Badge tone="accent">Main</Badge>
+                      ) : isHidden ? (
+                        <span
+                          className="text-2xs text-fg-4"
+                          title="A file with the same name in a higher folder is used instead."
+                        >
+                          overridden
+                        </span>
+                      ) : undefined
+                    }
                     icon={
                       folder ? "folder" : node.entry?.format === "yaml" ? "raw-mode" : "file-text"
                     }
                     open={folder ? Boolean(query) || ui.expanded.has(node.path) : undefined}
                     selected={ui.open === node.path}
                     dirty={!folder && Boolean(ui.drafts[node.path])}
-                    className={cn(dropTarget === node.path && "bg-accent/15 ring-1 ring-accent/50")}
+                    className={cn(
+                      dropTarget === node.path && "bg-accent/15 ring-1 ring-accent/50",
+                      isHidden && "text-fg-4",
+                    )}
                     onClick={() => (folder ? ui.toggle(node.path) : ui.setOpen(node.path))}
                     actions={
                       <Menu
@@ -189,12 +238,16 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
                                 },
                               ]
                             : []),
-                          {
-                            id: "rename",
-                            label: "Rename",
-                            icon: "edit",
-                            onSelect: () => setAsk({ kind: "rename", node }),
-                          },
+                          ...(isRoot
+                            ? []
+                            : [
+                                {
+                                  id: "rename",
+                                  label: "Rename",
+                                  icon: "edit" as const,
+                                  onSelect: () => setAsk({ kind: "rename", node }),
+                                },
+                              ]),
                           {
                             id: "reveal",
                             label: "Show in Explorer",
@@ -204,14 +257,18 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
                                 .revealWildcard(node.path)
                                 .catch((e: Error) => toast(e.message, "error")),
                           },
-                          { type: "separator", id: "sep" },
-                          {
-                            id: "trash",
-                            label: "Move to trash",
-                            icon: "trash",
-                            tone: "danger",
-                            onSelect: () => void trash(node),
-                          },
+                          ...(isRoot
+                            ? []
+                            : [
+                                { type: "separator" as const, id: "sep" },
+                                {
+                                  id: "trash",
+                                  label: "Move to trash",
+                                  icon: "trash" as const,
+                                  tone: "danger" as const,
+                                  onSelect: () => void trash(node),
+                                },
+                              ]),
                         ]}
                       />
                     }
@@ -224,9 +281,9 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
       </div>
       <div
         className="truncate border-t border-line px-3 py-2 font-mono text-2xs text-fg-4"
-        title={tree.root}
+        title={shownFolder?.path}
       >
-        {tree.root}
+        {shownFolder?.path}
       </div>
       <AskDialog ask={ask} onClose={() => setAsk(null)} />
     </aside>
@@ -290,9 +347,9 @@ function AskDialog({ ask, onClose }: { ask: Ask; onClose: () => void }) {
       title={title}
       description={
         ask?.kind === "new-file"
-          ? `In ${ask.folder || "the wildcards folder"}. End the name in .txt (one option per line) or .yaml (lists under keys).`
+          ? `In ${ask.folder}. End the name in .txt (one option per line) or .yaml (lists under keys).`
           : ask?.kind === "new-folder"
-            ? `In ${ask.folder || "the wildcards folder"}.`
+            ? `In ${ask.folder}.`
             : "Prompts that use the old name need the new one."
       }
       width={460}

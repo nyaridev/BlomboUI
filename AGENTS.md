@@ -7,7 +7,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 - `docs/architecture.md`: the map (start here)
 - `docs/design-system.md`: tokens, type, motion, icons, components, copy
 - `docs/workflows.md`: workflow packages, roles, import, stages, compile
-- `docs/adr/`: decisions and why (0001–0016, all accepted and built)
+- `docs/adr/`: decisions and why (0001–0017, all accepted and built)
 - `docs/review/features.html`: the feature inventory with the owner's keep / later / drop decisions
 - `docs/status.md`: what's built, what was verified and how, and the phase roadmap
 - `docs/performance.md`: measured numbers (20k-image gallery, startup bundle) and how to repeat them
@@ -113,7 +113,9 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Generate screen:** the params column is a layout document; built-in layouts are in `presets/layouts/`, the profile's in `layouts/`, and a workflow links one (`manifest.layout`; `GET /api/workflows/:id` returns the layout it shows). The prompt editor's autocomplete asks `/api/autocomplete` (tag lists in `presets/tags/` and the profile's `tags/`, LoRAs and trigger words, wildcards, frequent tags from the profile database); Ctrl+↑/↓ changes weights.
 
-**Library:** the gallery indexes the outputs folder and extra library folders into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folder by kind with sidecar info and each model's picture (`<model>_data/thumb.jpg`, full size in `thumb_raw.png`; `services/modelthumbs.ts`, ADR-0016); the Wildcard Manager edits the wildcards folder. Settings live in `settings.json` (`shared/settings.ts`).
+**Folders:** a profile has ordered lists of models, output and wildcards folders (`profile.folders`, Settings → Folders, ADR-0017). The first of each is main: downloads, generated images and batch results go there; the others are read and edited in place, and a higher folder wins a name clash.
+
+**Library:** the gallery indexes the output folders (its libraries) into the profile's `blombo.sqlite` (header-only reads, FTS5 trigram search, favorites and the trash list in their own tables). Thumbnails are WebP files in `runtime/cache/<profile>/thumbs/` behind immutable URLs. Finished jobs are indexed as their images land and pushed over the live bus (`gallery` topic). Models → Local scans the models folders by kind with sidecar info and each model's picture (`<model>_data/thumb.jpg`, full size in `thumb_raw.png`; `services/modelthumbs.ts`, ADR-0016); the Wildcard Manager edits the wildcards folders (each a top-level row). Settings live in `settings.json` (`shared/settings.ts`).
 
 **Online:** the server talks to Civitai for the client (cached API answers and an image proxy in `runtime/cache/civitai/`; the profile's key in `secrets.json`, never sent to the page). Downloads are a server queue with resume, hash checks and smart folders, progress on the bus (`downloads` topic) and history in the profile database; local models without info files are matched on Civitai by hash in the background; Models → Manager installs from ComfyUI-Manager's catalog through the same queue (ADR-0012).
 

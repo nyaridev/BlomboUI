@@ -492,7 +492,10 @@ export class JobQueue extends Emitter<QueueEvents> {
       for (const s of [stages.hires, ...stages.adetailer.units])
         for (const field of ["prompt", "negative"] as const)
           if (s.unlinked.includes(field)) texts.push(s[field]);
-      const wildcards = await loadWildcards(profile?.paths.wildcards ?? "", texts);
+      const wildcards = await loadWildcards(
+        profile?.folders.wildcards.map((f) => f.path) ?? [],
+        texts,
+      );
       const anyStage =
         stages.hires.enabled || stages.adetailer.enabled || stages.controlnet.enabled;
       const controlFiles = stages.controlnet.enabled

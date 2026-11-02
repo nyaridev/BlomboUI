@@ -78,9 +78,10 @@ import type {
   PickFolderBody,
   PickImagesBody,
   Profile,
+  ProfileFolder,
   UpdateProfileBody,
 } from "@shared/profile";
-import type { LibraryEntry, Settings, SettingsPatch } from "@shared/settings";
+import type { Settings, SettingsPatch } from "@shared/settings";
 import type {
   RollBody,
   RollResult,
@@ -296,7 +297,7 @@ export const api = {
   gallerySync: () => request<SyncState>("POST", "/gallery/sync"),
   revealImage: (id: number) => request<{ ok: true }>("POST", `/gallery/images/${id}/reveal`),
   addLibrary: (name: string, path: string) =>
-    request<LibraryEntry>("POST", "/gallery/libraries", { name, path }),
+    request<ProfileFolder>("POST", "/gallery/libraries", { name, path }),
   renameLibrary: (id: string, name: string) =>
     request<{ ok: true }>("PATCH", `/gallery/libraries/${encodeURIComponent(id)}`, { name }),
   removeLibrary: (id: string) =>

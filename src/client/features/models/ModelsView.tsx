@@ -37,16 +37,19 @@ export function ModelsView() {
   );
 }
 
-/** "B:\Models · 1,284 files · 412 GB" for the open profile. */
+/** "B:\Models +1 · 1,284 files · 412 GB" for the open profile (main folder + how many more). */
 function FolderSummary() {
   const list = useLocalModels().data;
   if (!list?.root) return null;
+  const more = list.folders.length - 1;
   return (
     <span
       className="ml-auto truncate pb-1.5 font-mono text-xs text-fg-3 max-lg:hidden"
-      title={list.root}
+      title={list.folders.map((f) => f.path).join("\n")}
     >
-      {list.root} · {list.models.length.toLocaleString()} files · {formatBytes(list.totalSize)}
+      {list.root}
+      {more > 0 ? ` +${more}` : ""} · {list.models.length.toLocaleString()} files ·{" "}
+      {formatBytes(list.totalSize)}
     </span>
   );
 }

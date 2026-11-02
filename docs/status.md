@@ -46,4 +46,5 @@ The complete feature inventory, with what's kept, new, or suggested, lives in [`
 | **4b · Bridge** | ComfyUI bridge extension, `.blombo` export and import, scripts, batch utilities | done |
 | **5 · Polish** | Settings stats, Help and prompt guide, command palette, notifications, shortcuts, generation history, snippets, gallery ratings / tags / collections, tour, profile export | done |
 | **Final pass** | Phases merged into `main`, whole-codebase review and fixes (API only for Blombo's own pages, safer saved data, queue and profile-switch fixes), 20k-image gallery and startup bundle, keyboard and contrast pass | done |
+| **Folder lists** | Several models, output and wildcards folders per profile, the first one main (ADR-0017); gallery libraries are the output folders | done |
 | **Real-ComfyUI checks** | Stages and batch tools on real models and packs, the bridge in the real frontend, the slot installer ([results](review/real-comfyui-checks.md)) | done |

@@ -312,6 +312,7 @@ describe("gallery index", () => {
     await write("in-extra.png", await realPng(20, 20), extra);
     const lib = await gallery.addLibrary("Extra stuff", extra);
     expect(lib.id).toBe("extra-stuff");
+    gallery.startSync(); // context.ts does this when the profile's output folders change
     await gallery.whenSynced();
     expect(q({ library: "outputs" }).items.map((i) => i.name)).not.toContain("a1111.png");
     expect(q({ library: "extra-stuff" }).items.map((i) => i.name)).toEqual(["in-extra.png"]);

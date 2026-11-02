@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { listWildcards, loadWildcards, WildcardFiles } from "./wildcards.ts";
+import { listWildcards, loadWildcards, WildcardFiles, WildcardFolders } from "./wildcards.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-wildcards-"));
 const root = path.join(tmp, "wildcards");
@@ -30,7 +30,7 @@ afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
 
 describe("wildcard files", () => {
   it("lists txt names and YAML keys", async () => {
-    expect(await listWildcards(root)).toEqual([
+    expect(await listWildcards([root])).toEqual([
       "colors",
       "outfits/fantasy",
       "outfits/modern",
@@ -39,7 +39,7 @@ describe("wildcard files", () => {
   });
 
   it("resolves nested references from txt and YAML", async () => {
-    const resolve = await loadWildcards(root, ["__outfits/fantasy__ in __places/forest__"]);
+    const resolve = await loadWildcards([root], ["__outfits/fantasy__ in __places/forest__"]);
     expect(resolve("outfits/fantasy")).toEqual(["cloak", "__colors__ armor"]);
     expect(resolve("colors")).toEqual(["red", "blue"]);
     expect(resolve("nope")).toBeUndefined();
@@ -88,5 +88,50 @@ describe("wildcard files", () => {
     await expect(fs.access(path.join(root, "new"))).rejects.toThrow();
     const trashed = await fs.readdir(trash, { recursive: true });
     expect(trashed.some((f) => String(f).replace(/\\/g, "/").endsWith("new/two.txt"))).toBe(true);
+  });
+});
+
+describe("several wildcard folders", () => {
+  const second = path.join(tmp, "second");
+  const folders = new WildcardFolders(
+    [
+      { id: "main", name: "Main", path: root },
+      { id: "more", name: "More", path: second },
+    ],
+    trash,
+  );
+
+  beforeAll(async () => {
+    await fs.mkdir(path.join(second, "places"), { recursive: true });
+    await fs.writeFile(path.join(second, "colors.txt"), "teal");
+    await fs.writeFile(path.join(second, "animals.txt"), "fox\nowl");
+  });
+
+  it("looks names up in order: the higher folder wins", async () => {
+    const resolve = await loadWildcards([root, second], ["__colors__ __animals__"]);
+    expect(resolve("colors")).not.toContain("teal");
+    expect(resolve("animals")).toEqual(["fox", "owl"]);
+    expect(await listWildcards([root, second])).toContain("animals");
+  });
+
+  it("shows every folder as a top-level folder and marks the hidden names", async () => {
+    const tree = await folders.tree();
+    expect(tree.folders.map((f) => `${f.id}:${f.exists}`)).toEqual(["main:true", "more:true"]);
+    const paths = tree.entries.map((e) => e.path);
+    expect(paths).toContain("main");
+    expect(paths).toContain("more/animals.txt");
+    expect(paths).toContain("main/colors.txt");
+    expect(tree.hidden).toEqual(["more/colors.txt"]);
+  });
+
+  it("reads and writes by folder id, and keeps moves inside one folder", async () => {
+    expect((await folders.read("more/animals.txt")).text).toBe("fox\nowl");
+    const saved = await folders.save("more/animals.txt", "fox\nowl\nhare", null);
+    expect(saved.path).toBe("more/animals.txt");
+    await expect(folders.move("more/animals.txt", "main/animals.txt")).rejects.toThrow(
+      /within one wildcard folder/,
+    );
+    await expect(folders.read("gone/animals.txt")).rejects.toThrow(/isn't in this profile/);
+    await expect(folders.create("more", "folder")).rejects.toThrow(/inside a wildcard folder/);
   });
 });

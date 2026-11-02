@@ -4,8 +4,8 @@
  * only connects to — owns the single
  * ComfyClient for that target, keeps recent log lines, and reports a ComfyStatus.
  *
- * Managed slots get `--extra-model-paths-config` from the profile's models folder and
- * `--output-directory` from its outputs folder. In dev mode a managed ComfyUI keeps running when
+ * Managed slots get `--extra-model-paths-config` from the profile's model folders (main
+ * first) and `--output-directory` from its main outputs folder. In dev mode a managed ComfyUI keeps running when
  * the server restarts (node --watch) and is re-adopted from its pid file, so editing server code
  * doesn't reload every model.
  */
@@ -17,11 +17,12 @@ import path from "node:path";
 import { z } from "zod";
 import type { ComfyLogLine, ComfyStatus } from "../../../shared/comfy.ts";
 import { PORTS } from "../../../shared/constants.ts";
-import type { Profile } from "../../../shared/profile.ts";
+import { mainFolder, type Profile } from "../../../shared/profile.ts";
 import { NodeDef, type ObjectInfo } from "../../../shared/workflow/graph.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { Emitter } from "../../lib/emitter.ts";
 import { writeFileAtomic, writeJsonAtomic } from "../../lib/fsx.ts";
+import { modelRoots } from "../profiles.ts";
 import { ComfyClient, type ComfyPreview, type ComfyWsMessage } from "./client.ts";
 import { extraModelPathsYaml } from "./paths.ts";
 import { findLocal, findSlot, type SlotLayout } from "./slots.ts";
@@ -29,7 +30,14 @@ import { ensureSlotTemp, slotCacheEnv } from "./uv.ts";
 
 /** A ComfyUI Blombo starts: a managed slot, or (with `dir`) the user's own folder. */
 export type ComfyTarget =
-  | { mode: "managed"; slot: string | null; dir: string | null; models: string; outputs: string }
+  | {
+      mode: "managed";
+      slot: string | null;
+      dir: string | null;
+      /** Model folders, main first. */
+      models: string[];
+      outputs: string;
+    }
   | { mode: "external"; url: string };
 
 export interface LaunchSpec {
@@ -70,14 +78,14 @@ const PidFile = z.object({ pid: z.number().int(), port: z.number().int(), starte
 const MAX_LOG_LINES = 2000;
 
 export function targetFromProfile(profile: Profile): ComfyTarget {
-  const { comfy, paths } = profile;
+  const { comfy } = profile;
   if (comfy.mode === "external") return { mode: "external", url: comfy.url.replace(/\/+$/, "") };
   return {
     mode: "managed",
     slot: comfy.mode === "managed" ? comfy.slot : null,
     dir: comfy.mode === "local" ? comfy.dir : null,
-    models: paths.models,
-    outputs: paths.outputs,
+    models: modelRoots(profile),
+    outputs: mainFolder(profile, "outputs"),
   };
 }
 

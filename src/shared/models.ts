@@ -48,8 +48,13 @@ export function modelKey(kind: ModelKind, comfyName: string): string {
 }
 
 export const LocalModel = z.object({
-  /** Path inside the models root with forward slashes ("loras/style/foo.safetensors"). */
+  /**
+   * Path inside its model folder with forward slashes ("loras/style/foo.safetensors"), as
+   * ComfyUI names it. Unique: a higher folder's file hides the same path in a lower one.
+   */
   id: z.string(),
+  /** The id of the profile's model folder it's in. */
+  root: z.string(),
   kind: z.enum(MODEL_KINDS),
   /** Display name: Civitai's name when known, else the file name without extension. */
   name: z.string(),
@@ -109,8 +114,14 @@ export const LookupInfo = z.object({
 export type LookupInfo = z.infer<typeof LookupInfo>;
 
 export const ModelList = z.object({
+  /** The main model folder ("" when the profile has none). */
   root: z.string(),
+  /** Whether any of the profile's model folders is there. */
   exists: z.boolean(),
+  /** Every model folder, main first. */
+  folders: z.array(
+    z.object({ id: z.string(), name: z.string(), path: z.string(), exists: z.boolean() }),
+  ),
   models: z.array(LocalModel),
   totalSize: z.number(),
   scannedAt: z.number(),

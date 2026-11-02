@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import type { ComfyState } from "../../../shared/comfy.ts";
-import { Profile } from "../../../shared/profile.ts";
+import { foldersFromPaths, Profile } from "../../../shared/profile.ts";
 import { startFakeComfy } from "./fixtures/fake-comfy.ts";
 import { extraModelPathsYaml } from "./paths.ts";
 import { findLocal, findSlot } from "./slots.ts";
@@ -38,7 +38,7 @@ function profile(comfy: Profile["comfy"]): Profile {
     id: "t",
     name: "T",
     createdAt: new Date().toISOString(),
-    paths: { models: modelsDir, outputs: "", wildcards: "" },
+    folders: foldersFromPaths({ models: modelsDir, outputs: "", wildcards: "" }),
     comfy,
   });
 }
@@ -75,11 +75,19 @@ function until(s: ComfySupervisor, state: ComfyState, ms = 15_000): Promise<void
 
 describe("extraModelPathsYaml", () => {
   it("points every model folder at the profile's models root", () => {
-    const yaml = extraModelPathsYaml("D:\\AI\\Models") ?? "";
+    const yaml = extraModelPathsYaml(["D:\\AI\\Models"]) ?? "";
     expect(yaml).toContain("base_path: D:/AI/Models");
     expect(yaml).toContain("is_default: true");
     expect(yaml).toMatch(/diffusion_models: \|-?\n\s+diffusion_models\n\s+unet/);
-    expect(extraModelPathsYaml("  ")).toBeNull();
+    expect(extraModelPathsYaml(["  "])).toBeNull();
+    expect(extraModelPathsYaml([])).toBeNull();
+  });
+
+  it("adds one section per model folder, the main one as the default", () => {
+    const yaml = extraModelPathsYaml(["D:/Main", "E:/More"]) ?? "";
+    expect(yaml).toMatch(/blombo:\n\s+base_path: D:\/Main\n\s+is_default: true/);
+    expect(yaml).toMatch(/blombo_2:\n\s+base_path: E:\/More\n\s+checkpoints/);
+    expect(yaml.match(/is_default/g)).toHaveLength(1);
   });
 });
 

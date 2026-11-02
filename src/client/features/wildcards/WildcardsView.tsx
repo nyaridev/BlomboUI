@@ -45,20 +45,19 @@ export function WildcardsView() {
         action={<Button onClick={() => void tree.refetch()}>Try again</Button>}
       />
     );
-  if (!tree.data?.root || !tree.data.exists)
+  const gone = tree.data?.folders.filter((f) => !f.exists) ?? [];
+  if (!tree.data?.folders.length || gone.length === tree.data.folders.length)
     return (
       <EmptyState
         icon="wildcards"
         tone="warning"
         title={
-          tree.data?.root
-            ? "The wildcards folder isn't there"
-            : "This profile has no wildcards folder"
+          gone.length ? "The wildcards folder isn't there" : "This profile has no wildcards folder"
         }
         text={
-          tree.data?.root
-            ? `${tree.data.root} doesn't exist. Pick the folder again in Settings → Folders.`
-            : "Choose a folder for .txt and .yaml wildcards in Settings → Folders. __name__ in a prompt then picks a line from name.txt."
+          gone.length
+            ? `${gone.map((f) => f.path).join(", ")} doesn't exist. Pick the folder again in Settings → Folders.`
+            : "Add a folder for .txt and .yaml wildcards in Settings → Folders. __name__ in a prompt then picks a line from name.txt."
         }
       />
     );
@@ -69,6 +68,9 @@ export function WildcardsView() {
     </div>
   );
 }
+
+/** A .txt file's wildcard name: its tree path without the folder id ("main/a/b.txt" → "a/b"). */
+const nameOf = (treePath: string) => txtWildcardName(treePath.slice(treePath.indexOf("/") + 1));
 
 function Editor({ names, className }: { names: string[]; className?: string }) {
   const open = useWildcardUi((s) => s.open);
@@ -156,7 +158,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
 
   const knownNames = useMemo(() => {
     const out = new Set(names);
-    if (file.format === "txt") out.add(txtWildcardName(file.path));
+    if (file.format === "txt") out.add(nameOf(file.path));
     else
       try {
         for (const k of flattenYamlWildcards(parseYaml(text)).keys()) out.add(k);
@@ -167,7 +169,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
   }, [names, file.format, file.path, text]);
 
   const overrides = useMemo<Record<string, string[]>>(() => {
-    if (file.format === "txt") return { [txtWildcardName(file.path)]: wildcardLines(text) };
+    if (file.format === "txt") return { [nameOf(file.path)]: wildcardLines(text) };
     try {
       return Object.fromEntries(flattenYamlWildcards(parseYaml(text)));
     } catch {
@@ -176,7 +178,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
   }, [file.format, file.path, text]);
 
   const rollText = useMemo(() => {
-    if (file.format === "txt") return `__${txtWildcardName(file.path)}__`;
+    if (file.format === "txt") return `__${nameOf(file.path)}__`;
     const first = Object.keys(overrides)[0];
     return first ? `__${first}__` : "";
   }, [file.format, file.path, overrides]);

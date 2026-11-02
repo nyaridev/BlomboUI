@@ -1,5 +1,6 @@
 /**
- * Wildcard files in a profile's wildcards folder.
+ * Wildcard files in a profile's wildcard folders. A profile can have several (ADR-0017); a name
+ * is looked up in each in order and the higher folder wins, a .txt file before YAML keys.
  *
  *   __outfits/fantasy__  → <wildcards>/outfits/fantasy.txt, one option per line
  *                        → or the key path outfits/fantasy in any .yaml / .yml file
@@ -14,6 +15,7 @@ import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
+import type { ProfileFolder } from "../../shared/profile.ts";
 import {
   expandPrompt,
   findWildcards,
@@ -105,32 +107,38 @@ export async function yamlWildcards(root: string): Promise<Map<string, string[]>
 
 /** Load every wildcard the texts use (and the ones those use) into a resolver. */
 export async function loadWildcards(
-  root: string,
+  folders: readonly string[],
   texts: string[],
   overrides: Record<string, string[]> = {},
 ): Promise<WildcardResolver> {
   const found = new Map<string, string[]>(Object.entries(overrides));
-  if (!root.trim()) return (name) => found.get(name);
-  let yaml: Map<string, string[]> | null = null;
+  const roots = folders.map((r) => r.trim()).filter(Boolean);
+  if (!roots.length) return (name) => found.get(name);
+  const yaml: Array<Map<string, string[]> | null> = roots.map(() => null);
   const used = [...texts, ...Object.values(overrides).flat()].flatMap(findWildcards);
   let pending = [...new Set(used)];
   for (let depth = 0; pending.length && depth < 10; depth++) {
     const next: string[] = [];
     for (const name of pending) {
       if (found.has(name)) continue;
-      const file = fileFor(root, name);
       let lines: string[] | null = null;
-      if (file) {
-        try {
-          lines = wildcardLines(await fs.readFile(file, "utf8"));
-        } catch {
-          lines = null;
+      // Each folder in order: its .txt file, then its YAML keys. The first that has it wins.
+      for (let i = 0; i < roots.length && lines === null; i++) {
+        const root = roots[i] as string;
+        const file = fileFor(root, name);
+        if (file) {
+          try {
+            lines = wildcardLines(await fs.readFile(file, "utf8"));
+          } catch {
+            lines = null;
+          }
+        }
+        if (lines === null) {
+          yaml[i] ??= await yamlWildcards(root);
+          lines = yaml[i]?.get(name) ?? null;
         }
       }
-      if (lines === null) {
-        yaml ??= await yamlWildcards(root);
-        lines = yaml.get(name) ?? [];
-      }
+      lines ??= [];
       found.set(name, lines);
       for (const line of lines)
         for (const inner of findWildcards(line)) if (!found.has(inner)) next.push(inner);
@@ -143,14 +151,15 @@ export async function loadWildcards(
   };
 }
 
-/** Wildcard names under the folder ("outfits/fantasy"), from .txt files and YAML keys. */
-export async function listWildcards(root: string): Promise<string[]> {
-  if (!root.trim()) return [];
+/** Wildcard names in the folders ("outfits/fantasy"), from .txt files and YAML keys. */
+export async function listWildcards(folders: readonly string[]): Promise<string[]> {
   const out = new Set<string>();
-  await walkFiles(root, (abs) => {
-    if (wildcardFormat(abs) === "txt") out.add(txtWildcardName(toRel(path.relative(root, abs))));
-  });
-  for (const name of (await yamlWildcards(root)).keys()) out.add(name);
+  for (const root of folders.map((r) => r.trim()).filter(Boolean)) {
+    await walkFiles(root, (abs) => {
+      if (wildcardFormat(abs) === "txt") out.add(txtWildcardName(toRel(path.relative(root, abs))));
+    });
+    for (const name of (await yamlWildcards(root)).keys()) out.add(name);
+  }
   return [...out].sort((a, b) => a.localeCompare(b));
 }
 
@@ -176,7 +185,8 @@ export class WildcardFiles {
       throw new HttpError(400, "Wildcard files end in .txt, .yaml or .yml.", "bad_extension");
   }
 
-  async tree(): Promise<WildcardTree> {
+  /** Everything in this one folder, with paths inside it. */
+  async tree(): Promise<{ exists: boolean; entries: WildcardEntry[] }> {
     const exists_ = Boolean(this.root) && (await isDir(this.root));
     const entries: WildcardEntry[] = [];
     if (exists_) {
@@ -210,12 +220,7 @@ export class WildcardFiles {
       await walk(this.root, 0);
     }
     entries.sort((a, b) => a.path.localeCompare(b.path));
-    return {
-      root: this.root,
-      exists: exists_,
-      entries,
-      names: exists_ ? await listWildcards(this.root) : [],
-    };
+    return { exists: exists_, entries };
   }
 
   async read(rel: string): Promise<WildcardFile> {
@@ -296,7 +301,134 @@ export class WildcardFiles {
     seed: number | undefined,
     overrides: Record<string, string[]>,
   ): Promise<RollResult> {
-    const resolve = await loadWildcards(this.root, [text], overrides);
+    const resolve = await loadWildcards([this.root], [text], overrides);
+    const base = seed ?? Math.floor(Math.random() * 2 ** 32);
+    return {
+      rolls: Array.from({ length: count }, (_, i) => {
+        const s = (base + i) >>> 0;
+        const r = expandPrompt(text, rng(s), resolve);
+        return { seed: s, text: r.text, used: r.used, missing: r.missing };
+      }),
+    };
+  }
+}
+
+/**
+ * All of a profile's wildcard folders as one tree for the Wildcard Manager. Paths start with the
+ * folder's id ("main/outfits.yaml"), so the client works with plain paths; each folder is a top
+ * level folder of the tree. Moves stay inside one folder.
+ */
+export class WildcardFolders {
+  readonly folders: readonly ProfileFolder[];
+  private readonly trashDir: string;
+
+  constructor(folders: readonly ProfileFolder[], trashDir: string) {
+    this.folders = folders;
+    this.trashDir = trashDir;
+  }
+
+  private split(p: string): { files: WildcardFiles; rel: string; folder: ProfileFolder } {
+    const [id, ...rest] = p.split("/");
+    const folder = this.folders.find((f) => f.id === id);
+    if (!folder)
+      throw new HttpError(
+        404,
+        this.folders.length
+          ? "That wildcard folder isn't in this profile anymore."
+          : "Add a wildcards folder in Settings → Folders.",
+        "no_folder",
+      );
+    return {
+      files: new WildcardFiles(folder.path, path.join(this.trashDir, folder.id)),
+      rel: rest.join("/"),
+      folder,
+    };
+  }
+
+  /** A path inside one of the folders (not a folder itself). */
+  private inside(p: string) {
+    const parts = this.split(p);
+    if (!parts.rel)
+      throw new HttpError(400, "Pick a file or folder inside a wildcard folder.", "folder_root");
+    return parts;
+  }
+
+  async tree(): Promise<WildcardTree> {
+    const entries: WildcardEntry[] = [];
+    const folders: WildcardTree["folders"] = [];
+    const txtOwner = new Map<string, string>();
+    const hidden: string[] = [];
+    for (const f of this.folders) {
+      const sub = await new WildcardFiles(f.path, this.trashDir).tree();
+      folders.push({ id: f.id, name: f.name, path: f.path, exists: sub.exists });
+      entries.push({ path: f.id, type: "folder", format: null, size: 0, mtime: 0 });
+      for (const e of sub.entries) {
+        const full = `${f.id}/${e.path}`;
+        entries.push({ ...e, path: full });
+        if (e.format !== "txt") continue;
+        // A .txt name a higher folder already has is never used.
+        const name = txtWildcardName(e.path);
+        if (txtOwner.has(name)) hidden.push(full);
+        else txtOwner.set(name, full);
+      }
+    }
+    return {
+      folders,
+      entries,
+      names: await listWildcards(this.folders.map((f) => f.path)),
+      hidden,
+    };
+  }
+
+  async read(p: string): Promise<WildcardFile> {
+    const { files, rel, folder } = this.inside(p);
+    return { ...(await files.read(rel)), path: `${folder.id}/${rel}` };
+  }
+
+  async save(p: string, text: string, baseMtime: number | null): Promise<WildcardFile> {
+    const { files, rel, folder } = this.inside(p);
+    return { ...(await files.save(rel, text, baseMtime)), path: `${folder.id}/${rel}` };
+  }
+
+  async create(p: string, type: WildcardEntryType): Promise<void> {
+    const { files, rel } = this.inside(p);
+    await files.create(rel, type);
+  }
+
+  async move(from: string, to: string): Promise<void> {
+    const a = this.inside(from);
+    const b = this.inside(to);
+    if (a.folder.id !== b.folder.id)
+      throw new HttpError(
+        400,
+        "Files move within one wildcard folder. Copy it in Explorer to use it in another.",
+        "other_folder",
+      );
+    await a.files.move(a.rel, b.rel);
+  }
+
+  async remove(p: string): Promise<string> {
+    const { files, rel } = this.inside(p);
+    return files.remove(rel);
+  }
+
+  /** The file or folder on disk (the folder itself for a bare id), for Reveal. */
+  abs(p: string): string {
+    const { folder, rel } = this.split(p);
+    return rel ? resolveInside(folder.path, rel) : folder.path;
+  }
+
+  async roll(
+    text: string,
+    count: number,
+    seed: number | undefined,
+    overrides: Record<string, string[]>,
+  ): Promise<RollResult> {
+    const resolve = await loadWildcards(
+      this.folders.map((f) => f.path),
+      [text],
+      overrides,
+    );
     const base = seed ?? Math.floor(Math.random() * 2 ** 32);
     return {
       rolls: Array.from({ length: count }, (_, i) => {

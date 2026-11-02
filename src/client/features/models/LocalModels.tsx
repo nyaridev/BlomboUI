@@ -128,18 +128,20 @@ export function LocalModels() {
         action={<Button onClick={() => void list.refetch()}>Try again</Button>}
       />
     );
-  if (list.data && (!list.data.root || !list.data.exists))
+  if (list.data && !list.data.exists)
     return (
       <EmptyState
         icon="folder"
         tone="warning"
         title={
-          list.data.root ? "The models folder isn't there" : "This profile has no models folder"
+          list.data.folders.length
+            ? "The models folder isn't there"
+            : "This profile has no models folder"
         }
         text={
-          list.data.root
-            ? `${list.data.root} doesn't exist anymore. Pick the folder again in Settings → Folders.`
-            : "Choose the folder that holds checkpoints/, loras/ and the rest in Settings → Folders."
+          list.data.folders.length
+            ? `${list.data.folders.map((f) => f.path).join(", ")} doesn't exist anymore. Pick the folder again in Settings → Folders.`
+            : "Add the folder that holds checkpoints/, loras/ and the rest in Settings → Folders."
         }
       />
     );

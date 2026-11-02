@@ -12,6 +12,7 @@
  *  - Every download is a row in the profile's database (the History view); unfinished ones come
  *    back paused when the profile opens again.
  */
+
 import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
@@ -34,6 +35,7 @@ import {
 } from "../../shared/downloads.ts";
 import type { LiveTopic, ServerMessage } from "../../shared/live.ts";
 import { type LookupInfo, LookupInfo as LookupInfoSchema } from "../../shared/models.ts";
+import { mainFolder } from "../../shared/profile.ts";
 import type { ProfileDbs } from "../db/profileDb.ts";
 import {
   commitPart,
@@ -187,7 +189,8 @@ export class DownloadQueue {
   }
 
   private async rootOf(profileId: string): Promise<string | null> {
-    const root = (await this.deps.profiles.get(profileId)).paths.models.trim();
+    // Downloads only ever go into the main model folder (ADR-0017).
+    const root = mainFolder(await this.deps.profiles.get(profileId), "models").trim();
     if (!root) return null;
     return (await fs.stat(root).then(
       (s) => s.isDirectory(),

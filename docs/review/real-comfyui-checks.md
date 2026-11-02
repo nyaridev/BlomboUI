@@ -19,9 +19,9 @@ slot in `runtime/check-real/`, production build of `main` (53ab7cb) on 127.0.0.1
 ## Outside BlomboUI's folder
 
 Directory snapshots of `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%` (and `.cache`) and every folder
-under `B:\AI\Diffusion`, before and after: nothing from the check. No Hugging Face, torch, Ultralytics,
-uv, pip or transparent-background folders appeared or changed (they went to `runtime/cache/comfy/`), and
-nothing under `B:\` changed. The only leak: uv left four empty `uv-setuptools-*.lock` files in
+under the owner's AI folder (models, outputs, the old ComfyUI install), before and after: nothing from
+the check. No Hugging Face, torch, Ultralytics, uv, pip or transparent-background folders appeared or
+changed (they went to `runtime/cache/comfy/`), and nothing on that drive changed. The only leak: uv left four empty `uv-setuptools-*.lock` files in
 `%TEMP%` while building packs from source (deleted). Fix handed to the follow-up session: the slot's
 processes get `TMP`/`TEMP` inside `runtime/cache/comfy/tmp`.
 
@@ -47,9 +47,9 @@ Sizes below were read from the sources on 2026-10-20 (HEAD requests only).
 
 ## What changed since Phase 1
 
-- The owner's install is no longer at `B:\AI\Diffusion\Interfaces\ComfyUI\ComfyUI-Easy-Install`
-  (that folder now holds only `output_` and `output_comfy`). There's no managed slot in
-  `runtime/comfyui/` either. `B:\AI\Diffusion\Models` still has no checkpoints.
+- The owner's ComfyUI-Easy-Install is no longer where Phase 1 found it (that folder now holds only
+  `output_` and `output_comfy`). There's no managed slot in `runtime/comfyui/` either. The owner's
+  models folder still has no checkpoints.
 - So there are two ways to get a ComfyUI:
   - **A (recommended): Blombo installs its own managed slot** into a throwaway `--runtime`. This is
     what the stage and batch Install buttons need anyway (packs and their Python packages go into
@@ -62,7 +62,7 @@ Sizes below were read from the sources on 2026-10-20 (HEAD requests only).
 
 ## How it would run (option A)
 
-1. A temp folder `A:\Projects\_\BlomboUI-new\runtime\check-real\` (inside the repo's gitignored
+1. A temp folder `runtime\check-real\` (inside the repo's gitignored
    `runtime/`, so it stays portable) with `data\`, `runtime\`, `models\`, `outputs\`, `inputs\`.
 2. `node src/server/main.ts --dev --port 4391 --open none --data <tmp>\data --runtime <tmp>\runtime`
    and Vite on 4392, real Civitai not needed (`--civitai http://127.0.0.1:9`).
@@ -70,7 +70,7 @@ Sizes below were read from the sources on 2026-10-20 (HEAD requests only).
    managed slot (CUDA). Models go into `<tmp>\models` through Models → Manager where the catalog has
    them (that also checks real downloads, resume and hash checks), otherwise by direct download.
 4. After each check: note what passed; at the end stop ComfyUI and the server, compare
-   `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%\.cache` and `B:\AI\Diffusion` before and after (the
+   `%APPDATA%`, `%LOCALAPPDATA%`, `%USERPROFILE%\.cache` and the owner's AI folder before and after (the
    final pass moved the libraries' caches into `runtime/cache/comfy/`; this proves it), then delete
    the temp folder.
 

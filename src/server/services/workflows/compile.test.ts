@@ -147,6 +147,10 @@ describe("compile", () => {
     });
     expect(out.texts["prompt.positive"]).toBe("ghibli, painted, cabin, detailed");
     expect(out.prompt["6"]?.inputs.text).toBe("ghibli, painted, cabin, detailed");
+    // What's shown and kept: the tags too, each instant LoRA's beside its words.
+    expect(out.shown["prompt.positive"]).toBe(
+      "<lora:styles/ghibli_bg:0.6>, ghibli, painted, cabin <lora:detail_tweaker:0.7>, <lora:Detail Slider XL:1.2>, detailed",
+    );
     expect(out.loras).toEqual([
       { file: "detail_tweaker.safetensors", strength: 0.7, clipStrength: 0.7 },
       { file: "styles/ghibli_bg.safetensors", strength: 0.6, clipStrength: 0.6 },
@@ -166,6 +170,23 @@ describe("compile", () => {
         instant: [{ name: "gone", strength: 1 }],
       }),
     ).toThrow(/LoRAs above the prompt/);
+  });
+
+  it("shows the prompt with wildcards resolved and LoRA tags kept", () => {
+    const { prompt, manifest, values } = setup("sd15-api");
+    const out = compile({
+      manifest,
+      prompt,
+      values: { ...values, "prompt.positive": "a cabin in __weather__ <lora:detail_tweaker:0.5>" },
+      seed: 1,
+      wildcards,
+      loraFiles: LORAS,
+      filenamePrefix: "x",
+    });
+    expect(out.shown["prompt.positive"]).toMatch(
+      /^a cabin in (rain|snow) <lora:detail_tweaker:0\.5>$/,
+    );
+    expect(out.texts["prompt.positive"]).not.toContain("<lora:");
   });
 
   it("explains missing LoRAs and wildcards", () => {

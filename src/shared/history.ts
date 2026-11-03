@@ -32,6 +32,9 @@ export const JobRecord = z.object({
   wildcards: z.array(z.string()),
   prompt: z.string().nullable(),
   negative: z.string().nullable(),
+  /** The prompts as the run used them: wildcards resolved, instant LoRAs' tags and words in. */
+  finalPrompt: z.string().nullable().default(null),
+  finalNegative: z.string().nullable().default(null),
   timings: z.array(JobTiming),
   error: z.string().nullable(),
   /** The script or batch it belonged to ("XY plot · CFG × Steps"). */

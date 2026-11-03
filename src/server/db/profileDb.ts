@@ -218,6 +218,11 @@ export const MIGRATIONS: readonly string[] = [
     PRIMARY KEY (library, path)
   );
   `,
+  // 7: the prompts as a run used them (wildcards resolved, instant LoRAs' tags in)
+  `
+  ALTER TABLE job_log ADD COLUMN final_prompt TEXT;
+  ALTER TABLE job_log ADD COLUMN final_negative TEXT;
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

@@ -79,6 +79,8 @@ interface Run {
   stages: WorkflowManifest["stages"];
   inputs: RunInput[];
   clock?: RunClock;
+  /** The prompts as they ran (compile's `shown`), once compiled. */
+  shown?: Record<string, string>;
 }
 
 /** What a finished job ran with, for the job log ("Run again", usage stats). */
@@ -88,6 +90,8 @@ export interface RunContext {
   manifest: WorkflowManifest;
   values: Record<string, unknown>;
   stages: WorkflowManifest["stages"];
+  /** The prompts as they ran (wildcards resolved, instant LoRAs' tags in), by binding id. */
+  shown?: Record<string, string>;
 }
 
 type QueueEvents = {
@@ -530,6 +534,7 @@ export class JobQueue extends Emitter<QueueEvents> {
       });
       if (gone()) return;
       run.job.segments = compiled.segments;
+      run.shown = compiled.shown;
       run.clock?.setSegments(compiled.segments);
       const res = await api.queuePrompt(compiled.prompt, {
         preview_method: "auto",
@@ -539,7 +544,8 @@ export class JobQueue extends Emitter<QueueEvents> {
             name: run.job.workflowName,
             seed: run.job.seed,
             values: run.values,
-            prompts: compiled.texts,
+            // What the gallery and File info show: the prompt as it ran, LoRA tags included.
+            prompts: compiled.shown,
           },
         },
       });
@@ -606,6 +612,7 @@ export class JobQueue extends Emitter<QueueEvents> {
             manifest: run.manifest,
             values: run.values,
             stages: run.stages,
+            shown: run.shown,
           }
         : null,
     );

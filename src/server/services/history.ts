@@ -24,6 +24,7 @@ import type {
 import { JobHistoryQuery } from "../../shared/history.ts";
 import type { Job, JobTiming } from "../../shared/jobs.ts";
 import type { AppError } from "../../shared/live.ts";
+import { INSTANT_LORAS, readInstantLoras } from "../../shared/prompt/instant.ts";
 import { findLoraTags } from "../../shared/prompt/loras.ts";
 import { findWildcards } from "../../shared/prompt/wildcards.ts";
 import { bindingFor, type WorkflowManifest } from "../../shared/workflow/manifest.ts";
@@ -60,6 +61,8 @@ interface LogRow {
   model: string | null;
   prompt: string | null;
   negative: string | null;
+  final_prompt: string | null;
+  final_negative: string | null;
   values_json: string;
   stages_json: string | null;
   timings: string;
@@ -89,7 +92,12 @@ export function usesOf(
     .filter((b) => b.type === "prompt")
     .map((b) => values[b.id])
     .filter((v): v is string => typeof v === "string");
-  const loras = [...new Set(prompts.flatMap((p) => findLoraTags(p).map((t) => t.name)))];
+  const loras = [
+    ...new Set([
+      ...prompts.flatMap((p) => findLoraTags(p).map((t) => t.name)),
+      ...readInstantLoras(values[INSTANT_LORAS]).map((l) => l.name),
+    ]),
+  ];
   const wildcards = [...new Set(prompts.flatMap((p) => findWildcards(p)))];
   return {
     model,
@@ -141,6 +149,10 @@ export class HistoryService {
     if (job.state === "cancelled" && !job.startedAt) return;
     if (job.state === "queued" || job.state === "running") return;
     const uses = usesOf(context.manifest, context.values);
+    const final = (role: string) => {
+      const b = bindingFor(context.manifest.bindings, role);
+      return (b && context.shown?.[b.id]) || null;
+    };
     const started = ms(job.startedAt);
     const finished = ms(job.finishedAt) ?? Date.now();
     const kind: JobKind = job.group?.kind ?? "generate";
@@ -149,8 +161,9 @@ export class HistoryService {
       db.prepare(
         `INSERT OR REPLACE INTO job_log (id, workflow_id, workflow_name, kind, state, seed, width,
            height, images, created_at, started_at, finished_at, duration_ms, model, prompt,
-           negative, values_json, stages_json, timings, error, group_title, first_image)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           negative, values_json, stages_json, timings, error, group_title, first_image,
+           final_prompt, final_negative)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       ).run(
         job.id,
         job.workflowId,
@@ -176,6 +189,8 @@ export class HistoryService {
         job.images[0]
           ? JSON.stringify(job.images.find((i) => i.type === "output") ?? job.images[0])
           : null,
+        final("prompt.positive"),
+        final("prompt.negative"),
       );
       const use = db.prepare("INSERT INTO job_log_uses (job_id, kind, name) VALUES (?, ?, ?)");
       if (uses.model) use.run(job.id, "model", uses.model);
@@ -233,6 +248,8 @@ export class HistoryService {
         wildcards: uses.filter((u) => u.kind === "wildcard").map((u) => u.name),
         prompt: r.prompt,
         negative: r.negative,
+        finalPrompt: r.final_prompt ?? null,
+        finalNegative: r.final_negative ?? null,
         timings: safeJson<JobTiming[]>(r.timings, []),
         error: r.error,
         groupTitle: r.group_title,

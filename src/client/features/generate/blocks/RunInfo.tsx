@@ -84,14 +84,14 @@ export function RunInfo({ jobId }: { jobId: string }) {
         </Button>
       </div>
       <div className="grid grid-cols-4 gap-2 max-lg:grid-cols-2">
-        {record.prompt ? (
+        {(record.finalPrompt ?? record.prompt) ? (
           <Tile label="Prompt" wide raised>
-            <span className="font-mono text-xs">{record.prompt}</span>
+            <span className="font-mono text-xs">{record.finalPrompt ?? record.prompt}</span>
           </Tile>
         ) : null}
-        {record.negative ? (
+        {(record.finalNegative ?? record.negative) ? (
           <Tile label="Negative" wide>
-            {record.negative}
+            {record.finalNegative ?? record.negative}
           </Tile>
         ) : null}
         {sampling.map(([label, value]) =>

@@ -11,7 +11,7 @@
  */
 import type { InstantLora, TriggerAt } from "../../../shared/prompt/instant.ts";
 import { withTriggers } from "../../../shared/prompt/instant.ts";
-import { findLoraTags, stripLoraTags } from "../../../shared/prompt/loras.ts";
+import { findLoraTags, formatLoraTag, stripLoraTags } from "../../../shared/prompt/loras.ts";
 import { expandPrompt, type WildcardResolver } from "../../../shared/prompt/wildcards.ts";
 import { rng } from "../../../shared/random.ts";
 import type { ApiPrompt, ObjectInfo } from "../../../shared/workflow/graph.ts";
@@ -55,6 +55,11 @@ export interface CompileResult {
   prompt: ApiPrompt;
   /** Final texts after wildcards, with LoRA tags removed (stage prompts as "hires.prompt"). */
   texts: Record<string, string>;
+  /**
+   * The prompts as they ran, to show and keep: wildcards resolved, LoRA tags kept, and each
+   * instant LoRA's tag with its trigger words where they went (by binding id).
+   */
+  shown: Record<string, string>;
   loras: ResolvedLora[];
   /** The run's parts for the progress bar: base passes, then each stage. */
   segments: RunSegment[];
@@ -100,6 +105,7 @@ export function compile(input: CompileInput): CompileResult {
   // 2. Wildcards and choices, seeded by the image seed so a seed reproduces its prompt.
   const random = rng(input.seed);
   const texts: Record<string, string> = {};
+  const shown: Record<string, string> = {};
   const tags: ReturnType<typeof findLoraTags> = [];
   for (const b of input.manifest.bindings) {
     if (b.type !== "prompt") continue;
@@ -114,14 +120,16 @@ export function compile(input: CompileInput): CompileResult {
     tags.push(...findLoraTags(expanded.text));
     const clean = stripLoraTags(expanded.text);
     texts[b.id] = clean;
+    shown[b.id] = expanded.text.trim();
     set(b, clean);
   }
 
   const loras = resolveLoras(tags, input.loraFiles);
-  addInstant(input, loras, (start, end) => {
+  addInstant(input, loras, (start, end, shownStart, shownEnd) => {
     const positive = input.manifest.bindings.find((b) => b.role === "prompt.positive");
     if (!positive || !(positive.id in texts)) return;
     texts[positive.id] = withTriggers(texts[positive.id] ?? "", start, end);
+    shown[positive.id] = withTriggers(shown[positive.id] ?? "", shownStart, shownEnd);
     set(positive, texts[positive.id]);
   });
   if (loras.length) applyLoras(prompt, loras);
@@ -160,17 +168,23 @@ export function compile(input: CompileInput): CompileResult {
       set(out, input.filenamePrefix);
   }
 
-  return { prompt, texts, loras, segments, stages };
+  return { prompt, texts, shown, loras, segments, stages };
 }
 
 /** Instant LoRAs join after the tags' (a tag of the same file wins) and hand back their words. */
+/**
+ * Instant LoRAs join the stack; `triggers` gets their trigger words for the prompt ComfyUI reads
+ * and, for the prompt shown and kept, each one's <lora:…> tag with its words, at the start or end.
+ */
 function addInstant(
   input: CompileInput,
   loras: ResolvedLora[],
-  triggers: (start: string[], end: string[]) => void,
+  triggers: (start: string[], end: string[], shownStart: string[], shownEnd: string[]) => void,
 ): void {
   const start: string[] = [];
   const end: string[] = [];
+  const shownStart: string[] = [];
+  const shownEnd: string[] = [];
   for (const l of input.instant ?? []) {
     const file = resolveLoraFile(l.name, input.loraFiles);
     if (!file)
@@ -180,7 +194,11 @@ function addInstant(
     if (loras.some((r) => r.file === file)) continue;
     loras.push({ file, strength: l.strength, clipStrength: l.strength });
     const info = input.triggersFor?.(file);
-    if (info?.words.length) (info.at === "end" ? end : start).push(info.words.join(", "));
+    const words = info?.words.length ? info.words.join(", ") : "";
+    if (words) (info?.at === "end" ? end : start).push(words);
+    const tag = formatLoraTag(l.name, l.strength);
+    (info?.at === "end" ? shownEnd : shownStart).push(words ? `${tag}, ${words}` : tag);
   }
-  if (start.length || end.length) triggers(start, end);
+  if (start.length || end.length || shownStart.length || shownEnd.length)
+    triggers(start, end, shownStart, shownEnd);
 }

@@ -58,7 +58,7 @@ export function FolderTree({
   return (
     <nav
       aria-label="Folders"
-      className="scroll-quiet flex w-72 shrink-0 flex-col gap-0.5 overflow-y-auto rounded-lg border border-line bg-surface p-1.5 max-lg:hidden"
+      className="scroll-quiet flex w-80 shrink-0 flex-col gap-0.5 overflow-y-auto rounded-lg border border-line bg-surface p-1.5 max-lg:hidden"
     >
       <TreeRow
         size="lg"

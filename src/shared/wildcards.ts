@@ -88,6 +88,20 @@ export const MoveWildcardBody = z.object({ from: WildcardPath, to: WildcardPath 
 export const WildcardPathBody = z.object({ path: WildcardPath });
 /** A folder the pickers list ("people/actors", without the wildcards folder's id). */
 export const WildcardFolderBody = z.object({ folder: z.string().min(1).max(400) });
+/** Rename a picker's wildcard ("people/actors") or folder ("people"): `name` is the new last part. */
+export const RenameWildcardBody = z.object({
+  name: z.string().min(1).max(400),
+  folder: z.boolean().default(false),
+  to: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .refine(
+      (s) => !/[\\/:*?"<>|]/.test(s) && !/^\.+$/.test(s),
+      'Use a name without \\ / : * ? " < > |',
+    ),
+});
 
 export const RollBody = z.object({
   text: z.string().min(1).max(20_000),

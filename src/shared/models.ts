@@ -190,10 +190,23 @@ export const MoveModelBody = z.object({
   folder: z.string().max(400),
 });
 export const ModelIdBody = z.object({ id: z.string().min(1) });
-/** A folder the pickers list, below a kind folder ("style/anime"), for Show in Explorer. */
-export const ModelFolderBody = z.object({
+/**
+ * A folder the pickers list, below a kind folder ("style/anime"), for Show in Explorer. With
+ * `root` (a profile models folder's id) only that folder is looked in, and "" is its kind folder.
+ */
+export const ModelFolderBody = z
+  .object({
+    kind: z.enum(MODEL_KINDS),
+    root: z.string().max(80).optional(),
+    folder: z.string().max(400),
+  })
+  .refine((b) => b.folder || b.root, "Name a folder.");
+/** Rename a folder below a kind folder: `name` is its new last part. */
+export const RenameModelFolderBody = z.object({
   kind: z.enum(MODEL_KINDS),
+  root: z.string().max(80).optional(),
   folder: z.string().min(1).max(400),
+  name: ModelFileStem,
 });
 
 /**

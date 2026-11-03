@@ -5,6 +5,7 @@ import {
   ModelIdBody,
   MoveModelBody,
   RenameModelBody,
+  RenameModelFolderBody,
   SaveModelInfoBody,
 } from "../../shared/models.ts";
 import { HttpError, readBody, readJson } from "../lib/http.ts";
@@ -92,7 +93,13 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
 
   r.post("/open-folder", async (c) => {
     const body = await readJson(c, ModelFolderBody);
-    await openInFileManager(await models.folderPath(body.kind, body.folder));
+    await openInFileManager(await models.folderPath(body.kind, body.folder, body.root));
+    return c.json({ ok: true });
+  });
+
+  r.post("/rename-folder", async (c) => {
+    const body = await readJson(c, RenameModelFolderBody);
+    await models.renameFolder(body.kind, body.folder, body.name, body.root);
     return c.json({ ok: true });
   });
 

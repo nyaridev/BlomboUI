@@ -141,9 +141,8 @@ export function ModelCard({
       onContextMenu={onContextMenu}
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow]",
-        selected
-          ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
-          : "border-line hover:border-line-strong",
+        // Selected: the light outline and inner glow of a selected strip tile (`shadow-selected`).
+        selected ? "border-transparent shadow-selected" : "border-line hover:border-line-strong",
         className,
       )}
     >
@@ -185,11 +184,7 @@ export function ModelCard({
             </span>
           ) : null}
         </div>
-        {selected ? (
-          <span className="absolute top-2 right-2 grid h-5 w-5 place-items-center rounded-full bg-accent text-on-accent shadow">
-            <Icon name="check" size={13} strokeWidth={2.5} />
-          </span>
-        ) : mark ? (
+        {mark ? (
           <span className="absolute top-2 right-2 inline-flex h-5 items-center gap-1 rounded-xs bg-black/60 pr-1.5 pl-1 text-[10px] font-semibold text-white backdrop-blur-[2px]">
             <Icon name={mark.icon} size={11} strokeWidth={2.25} className={MARK_ICON[mark.tone]} />
             {mark.label}
@@ -204,6 +199,9 @@ export function ModelCard({
           </span>
         </div>
       </button>
+      {selected ? (
+        <span className="pointer-events-none absolute inset-0 z-[5] rounded-[inherit] shadow-selected" />
+      ) : null}
       {veiled ? (
         <button
           type="button"
@@ -220,7 +218,7 @@ export function ModelCard({
         </button>
       ) : null}
       {onFavorite || onInfo ? (
-        <div className={cn("absolute top-2 right-2 flex gap-1", selected && "top-9")}>
+        <div className="absolute top-2 right-2 z-[6] flex gap-1">
           {onInfo ? (
             <button
               type="button"

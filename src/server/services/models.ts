@@ -400,9 +400,9 @@ export class ModelService {
    * A picker's folder on disk: the first of the profile's models folders that has it below one
    * of the kind's folders (a higher folder wins, as for files).
    */
-  async folderPath(kind: ModelKind, folder: string): Promise<string> {
+  async folderPath(kind: ModelKind, folder: string, rootId?: string): Promise<string> {
     const list = await this.list();
-    for (const root of list.folders.filter((f) => f.exists))
+    for (const root of list.folders.filter((f) => f.exists && (!rootId || f.id === rootId)))
       for (const name of MODEL_FOLDERS[kind]) {
         const dir = resolveInside(path.join(root.path, name), folder);
         if (await isDir(dir)) return dir;
@@ -412,6 +412,33 @@ export class ModelService {
       "That folder isn't in this profile's models folders. ComfyUI may list it from another path.",
       "no_folder",
     );
+  }
+
+  /** Rename a folder below a kind folder (its models, sidecars and pictures go with it). */
+  async renameFolder(
+    kind: ModelKind,
+    folder: string,
+    name: string,
+    rootId?: string,
+  ): Promise<void> {
+    const parsed = ModelFileStem.safeParse(name);
+    if (!parsed.success)
+      throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid name.", "bad_name");
+    const dir = await this.folderPath(kind, folder, rootId);
+    const target = path.join(path.dirname(dir), parsed.data);
+    if (path.resolve(target) === path.resolve(dir)) return;
+    // A case-only change is the same folder on Windows; anything else must be free.
+    if (
+      path.resolve(target).toLowerCase() !== path.resolve(dir).toLowerCase() &&
+      (await exists(target))
+    )
+      throw new HttpError(
+        409,
+        `"${parsed.data}" already exists there. Pick another name.`,
+        "exists",
+      );
+    await movePath(dir, target);
+    this.changed();
   }
 
   /** The file of a local model by kind and ComfyUI name, or null when it isn't in the folder. */

@@ -97,6 +97,7 @@ import type {
   ProfileFolder,
   UpdateProfileBody,
 } from "@shared/profile";
+import type { RenameChange } from "@shared/prompt/renames";
 import type { Settings, SettingsPatch } from "@shared/settings";
 import type {
   RollBody,
@@ -295,6 +296,10 @@ export const api = {
   revealWildcard: (path: string) => request<{ ok: true }>("POST", "/wildcards/reveal", { path }),
   openWildcardFolder: (folder: string) =>
     request<{ ok: true }>("POST", "/wildcards/open-folder", { folder }),
+  renameWildcard: (name: string, to: string, folder: boolean) =>
+    request<RenameChange>("POST", "/wildcards/rename", { name, to, folder }),
+  renameRefs: (changes: RenameChange[]) =>
+    request<{ files: number }>("POST", "/wildcards/rename-refs", { changes }),
   rollWildcards: (body: RollBody) => request<RollResult>("POST", "/wildcards/roll", body),
 
   settings: () => request<Settings>("GET", "/settings"),
@@ -370,8 +375,10 @@ export const api = {
   moveModel: (id: string, folder: string) =>
     request<LocalModel>("POST", "/models/move", { id, folder }),
   revealModel: (id: string) => request<{ ok: true }>("POST", "/models/reveal", { id }),
-  openModelFolder: (kind: ModelKind, folder: string) =>
-    request<{ ok: true }>("POST", "/models/open-folder", { kind, folder }),
+  openModelFolder: (kind: ModelKind, folder: string, root?: string) =>
+    request<{ ok: true }>("POST", "/models/open-folder", { kind, folder, root }),
+  renameModelFolder: (kind: ModelKind, folder: string, name: string, root?: string) =>
+    request<{ ok: true }>("POST", "/models/rename-folder", { kind, folder, name, root }),
   saveModelInfo: (body: SaveModelInfoBody) => request<ModelDetails>("PATCH", "/models/info", body),
   setModelPicture: (id: string, image: Blob) =>
     request<{ ok: true }>("PUT", `/models/picture?id=${encodeURIComponent(id)}`, undefined, image),

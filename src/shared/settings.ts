@@ -96,6 +96,10 @@ export const GenerateSettings = z.object({
   /** Sampler and scheduler names left out of the pickers (a picked one still shows). */
   hiddenSamplers: z.array(z.string().max(120)).max(300).default([]),
   hiddenSchedulers: z.array(z.string().max(120)).max(300).default([]),
+  /** The pickers list what the workflow uses first, even when the search or filters leave it out. */
+  pickerShowLoaded: z.boolean().default(true),
+  /** A rename in the pickers also updates full <lora:…> and __wildcard__ references in wildcard files. */
+  renameRefs: z.boolean().default(true),
 });
 
 /** Ctrl+↑/↓ in the prompt editor changes weights by this much. */

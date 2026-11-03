@@ -252,4 +252,13 @@ describe("sidecarsFor", () => {
     const long = sidecarsFor("detail.xl", files, "D:/m", stems);
     expect(long.all.sort()).toEqual(["detail.xl.civitai.info", "detail.xl.preview.png"]);
   });
+
+  it("renames a folder below a kind folder and refuses a taken name", async () => {
+    await put("vae/old/a.safetensors", "x");
+    await put("vae/taken/b.safetensors", "x");
+    await expect(models.renameFolder("vae", "old", "taken")).rejects.toThrow(/already exists/);
+    await models.renameFolder("vae", "old", "fresh");
+    expect((await models.list()).models.map((m) => m.id)).toContain("vae/fresh/a.safetensors");
+    await expect(models.renameFolder("vae", "fresh", "a/b")).rejects.toThrow(/without/);
+  });
 });

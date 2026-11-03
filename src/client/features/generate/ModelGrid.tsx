@@ -8,20 +8,28 @@
  * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
  * list). Favorites come first, then what you used recently (the job log), unless another sort
  * is picked (name, path, created, modified, size; the square button beside it flips the order).
- * A folder tree on the left narrows the grid to one folder (right-click: Show in Explorer); the
- * top bar searches, filters by base models (several, grouped by maker), sorts and rescans.
+ * Newest files come first by default. A folder tree on the left narrows the grid to one folder
+ * (one top folder per profile models folder when files come from several); right-click a folder
+ * or a card to rename it or show it in Explorer. Renames carry over to the open workflow and,
+ * with the setting on, to full references in wildcard files (shared/prompt/renames.ts). The top
+ * bar searches, filters by base models (several, grouped by maker), keeps what the workflow
+ * uses first (the eye), sorts and rescans.
  */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useElementWidth } from "@client/lib/hooks";
 import {
+  qk,
   useLocalModels,
   useModelMarks,
   useModels,
+  useRenameModel,
   useSetModelFavorite,
   useSettings,
+  useUpdateSettings,
   useWildcards,
 } from "@client/lib/queries";
+import { useSession } from "@client/lib/session";
 import {
   type CardKind,
   IconButton,
@@ -46,7 +54,9 @@ import {
   removeLoraTag,
   swapLoraTag,
 } from "@shared/prompt/loras";
+import { type RenameChange, renameName, renameRefs } from "@shared/prompt/renames";
 import type { Binding } from "@shared/workflow/manifest";
+import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { rescanModels } from "../../app/commands";
@@ -56,6 +66,7 @@ import { FolderTree } from "./FolderTree";
 import { folderTree, inFolder } from "./folders";
 import { modelDisplayName, modelFolder } from "./labels";
 import { pickerOrder } from "./pickerOrder";
+import { RenameDialog, type RenameTarget } from "./RenameDialog";
 import { useValues } from "./state";
 import { useBindings } from "./workflow";
 
@@ -69,8 +80,12 @@ const OTHER_KINDS: Array<{ value: ModelKind; label: string }> = [
   { value: "embeddings", label: "Embeddings" },
 ];
 
-/** Cards are 256 x 384 (2:3); the row keeps what's left over (narrower only on small screens). */
-const CARD_W = 256;
+/**
+ * Cards (2:3) fill the row: 5 a row beside the folders, 7 without them; fewer on narrow screens
+ * so a card never gets thinner than MIN_CARD_W.
+ */
+const COLUMNS = { tree: 5, wide: 7 } as const;
+const MIN_CARD_W = 150;
 const CARD_RATIO = 2 / 3;
 const GAP = 12;
 
@@ -143,7 +158,10 @@ export function ModelGrid({
   const models = useModels(kind);
   const wildcards = useWildcards();
   const localList = useLocalModels().data;
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
+  const settings = useSettings().data;
+  const updateSettings = useUpdateSettings();
+  const blurNsfw = settings?.models.blurNsfw ?? true;
+  const showLoaded = settings?.generate.pickerShowLoaded ?? true;
   // ComfyUI lists names inside each kind folder; the local list has the same files with
   // thumbnails and info. Join them on the path below the kind folder.
   const local = useMemo(() => {
@@ -191,8 +209,12 @@ export function ModelGrid({
   const q = query.trim().toLowerCase();
   const [folder, setFolder] = useState<string | null>(null);
   const [baseModels, setBaseModels] = useState<string[]>([]);
-  const [sort, setSort] = useState<Sort>("suggested");
-  const [order, setOrder] = useState<Order>("asc");
+  const [pickedSort, setSort] = useState<Sort>("created");
+  const [order, setOrder] = useState<Order>("desc");
+  // Wildcards have no file dates or sizes: those sorts read as Name there.
+  const sort: Sort =
+    tab === "wildcards" && SORTS.find((s) => s.value === pickedSort)?.files ? "name" : pickedSort;
+  const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const [showTree, setShowTree] = useState(true);
   // Another tab or model kind has other folders and base models.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tab and kind are the triggers
@@ -215,46 +237,166 @@ export function ModelGrid({
       groupBaseModels(items.map((i) => i.local?.baseModel).filter((b): b is string => Boolean(b))),
     [items],
   );
-  // Search and base models first; the tree counts what they leave, the folder narrows further.
-  const found = useMemo(() => {
-    const wanted = new Set(baseModels);
-    return items.filter(
-      (i) =>
-        (!q || i.id.toLowerCase().includes(q)) &&
-        (!wanted.size || wanted.has(i.local?.baseModel ?? "")),
-    );
-  }, [items, q, baseModels]);
-  const tree = useMemo(() => folderTree(found.map((i) => i.id)), [found]);
-  const list = useMemo(() => {
-    const shown = found.filter((i) => inFolder(i.id, folder));
-    if (sort !== "suggested") {
-      const compare = COMPARE[sort];
-      return shown.sort(order === "asc" ? compare : (a, b) => compare(b, a));
-    }
-    const suggested =
-      tab === "wildcards"
-        ? shown
-        : pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
-    return order === "asc" ? suggested : suggested.reverse();
-  }, [found, folder, sort, order, tab, favorites, marks]);
-  const pickSort = (next: Sort) => {
-    setSort(next);
-    setOrder(SORTS.find((s) => s.value === next)?.order ?? "asc");
-  };
-  const openFolder = (path: string) =>
-    void (kind ? api.openModelFolder(kind, path) : api.openWildcardFolder(path)).catch((e: Error) =>
-      toast(e.message, "error"),
-    );
   const inPrompt = useMemo(
     () => new Set([...findLoraTags(prompt), ...instant].map((t) => t.name.toLowerCase())),
     [prompt, instant],
   );
-
   const isSelected = (item: Item) => {
     if (tab === "loras")
       return inPrompt.has(tagName(item.id).toLowerCase()) || inPrompt.has(item.name.toLowerCase());
     if (tab === "wildcards") return prompt.includes(`__${item.id}__`);
     return selectedValue === item.id;
+  };
+  // What the workflow uses (the eye keeps it first and past the search and base models).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: isSelected reads these
+  const loaded = useMemo(
+    () => new Set(showLoaded ? items.filter(isSelected).map((i) => i.id) : []),
+    [showLoaded, items, inPrompt, prompt, selectedValue, tab],
+  );
+
+  // Files from several profile models folders: one top folder per models folder, by its name.
+  const roots = localList?.folders ?? [];
+  const multiRoot = new Set(items.map((i) => i.local?.root).filter(Boolean)).size > 1;
+  const treeKey = (i: Item) => {
+    const root = multiRoot && i.local ? roots.find((r) => r.id === i.local?.root) : undefined;
+    return root ? `${root.name}/${i.id.replace(/\\/g, "/")}` : i.id;
+  };
+  /** A tree path back to its models folder (when grouped) and the path below the kind folder. */
+  const fromTree = (path: string): { root?: string; folder: string } => {
+    if (!multiRoot) return { folder: path };
+    const root = roots.find((r) => path === r.name || path.startsWith(`${r.name}/`));
+    return root ? { root: root.id, folder: path.slice(root.name.length + 1) } : { folder: path };
+  };
+
+  // Search and base models first; the tree counts what they leave, the folder narrows further.
+  const found = useMemo(() => {
+    const wanted = new Set(baseModels);
+    return items.filter(
+      (i) =>
+        loaded.has(i.id) ||
+        ((!q || i.id.toLowerCase().includes(q)) &&
+          (!wanted.size || wanted.has(i.local?.baseModel ?? ""))),
+    );
+  }, [items, q, baseModels, loaded]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: treeKey follows multiRoot and roots
+  const tree = useMemo(() => folderTree(found.map(treeKey)), [found, multiRoot, roots]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: treeKey follows multiRoot and roots
+  const list = useMemo(() => {
+    const shown = found.filter((i) => inFolder(treeKey(i), folder));
+    let sorted: Item[];
+    if (sort !== "suggested") {
+      const compare = COMPARE[sort];
+      sorted = shown.sort(order === "asc" ? compare : (a, b) => compare(b, a));
+    } else {
+      const suggested =
+        tab === "wildcards"
+          ? shown
+          : pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
+      sorted = order === "asc" ? suggested : suggested.reverse();
+    }
+    if (!loaded.size) return sorted;
+    return [...sorted.filter((i) => loaded.has(i.id)), ...sorted.filter((i) => !loaded.has(i.id))];
+  }, [found, folder, sort, order, tab, favorites, marks, loaded, multiRoot, roots]);
+  const pickSort = (next: Sort) => {
+    setSort(next);
+    setOrder(SORTS.find((s) => s.value === next)?.order ?? "asc");
+  };
+  const openFolder = (path: string) => {
+    const at = fromTree(path);
+    void (
+      kind ? api.openModelFolder(kind, at.folder, at.root) : api.openWildcardFolder(path)
+    ).catch((e: Error) => toast(e.message, "error"));
+  };
+
+  /* ── renaming ── */
+  const qc = useQueryClient();
+  const renameModel = useRenameModel();
+  // The open workflow follows a rename: model values, and (LoRAs, wildcards) prompts and
+  // instant LoRAs.
+  const carryOver = (c: RenameChange, modelKind: ModelKind | null, text: boolean) => {
+    const values = useValues.getState().values;
+    for (const b of bindings) {
+      const v = values[b.id];
+      if (typeof v !== "string") continue;
+      const next =
+        b.type === "model"
+          ? b.modelKind === modelKind
+            ? renameName(v, c)
+            : null
+          : text && b.role?.startsWith("prompt.")
+            ? renameRefs(v, c)
+            : null;
+      if (next !== null && next !== v) setValue(b.id, next);
+    }
+    if (text && c.kind === "lora") {
+      const next = instant.map((l) => ({ ...l, name: renameName(l.name, c, true) ?? l.name }));
+      if (next.some((l, i) => l.name !== instant[i]?.name)) setInstant(next);
+    }
+  };
+  /** `text`: a LoRA or wildcard, so prompts and wildcard files may name it. */
+  const afterRename = async (c: RenameChange, modelKind: ModelKind | null, text: boolean) => {
+    carryOver(c, modelKind, text);
+    if (text && settings?.generate.renameRefs !== false) {
+      const { files } = await api.renameRefs([c]);
+      if (files) toast(`Updated ${files} wildcard file${files === 1 ? "" : "s"}`, "success");
+    }
+    void qc.invalidateQueries({ queryKey: ["local-models"] });
+    void qc.invalidateQueries({ queryKey: qk.modelsAll });
+    void qc.invalidateQueries({ queryKey: qk.wildcards(useSession.getState().profileId) });
+  };
+  const lastPart = (p: string) => p.replace(/\\/g, "/").split("/").pop() ?? p;
+  const parentOf = (p: string) => {
+    const n = p.replace(/\\/g, "/");
+    return n.includes("/") ? n.slice(0, n.lastIndexOf("/") + 1) : "";
+  };
+  const renameItem = (item: Item) => {
+    const m = item.local;
+    if (tab === "wildcards")
+      return setRenaming({
+        title: "Rename wildcard",
+        description: "Its .txt file is renamed. Full __references__ to it follow.",
+        name: lastPart(item.id),
+        suffix: ".txt",
+        run: async (to) => afterRename(await api.renameWildcard(item.id, to, false), null, true),
+      });
+    if (!m || !kind) return;
+    const ext = m.file.slice(m.file.replace(/\.[^.]+$/, "").length);
+    setRenaming({
+      title: "Rename model",
+      description: "Its info files and pictures are renamed with it.",
+      name: m.file.slice(0, m.file.length - ext.length),
+      suffix: ext,
+      run: async (to) => {
+        const renamed = await renameModel.mutateAsync({ id: m.id, name: to });
+        const newId = parentOf(item.id) + renamed.file;
+        await afterRename(
+          { kind: "lora", from: item.id, to: newId, folder: false },
+          kind,
+          kind === "loras",
+        );
+      },
+    });
+  };
+  const renameFolder = (path: string) => {
+    const at = fromTree(path);
+    if (!at.folder) return;
+    setRenaming({
+      title: "Rename folder",
+      description: "Everything inside keeps its name; only the folder's changes.",
+      name: lastPart(at.folder),
+      run: async (to) => {
+        const change: RenameChange = {
+          kind: tab === "wildcards" ? "wildcard" : "lora",
+          from: at.folder,
+          to: parentOf(at.folder) + to,
+          folder: true,
+        };
+        if (tab === "wildcards") await api.renameWildcard(at.folder, to, true);
+        else if (kind) await api.renameModelFolder(kind, at.folder, to, at.root);
+        if (folder === path || (folder && inFolder(folder, path))) setFolder(null);
+        await afterRename(change, kind, tab === "wildcards" || tab === "loras");
+      },
+    });
   };
 
   const append = (text: string) => {
@@ -360,9 +502,20 @@ export function ModelGrid({
       disabled: isSelected(item) && tab !== "wildcards" && tab !== "loras",
       onSelect: () => pick(item),
     };
-    if (item.local) return modelMenu(item.local, { first: [use, { type: "separator", id: "s0" }] });
+    const rename: MenuEntry = {
+      id: "rename",
+      label: "Rename…",
+      icon: "edit",
+      onSelect: () => renameItem(item),
+    };
+    if (item.local)
+      return modelMenu(item.local, {
+        first: [use, { type: "separator", id: "s0" }],
+        file: [rename],
+      });
     return [
       use,
+      ...(tab === "wildcards" ? [rename] : []),
       {
         id: "copy",
         label: "Copy name",
@@ -420,6 +573,17 @@ export function ModelGrid({
             options={bases.map((b) => ({ value: b.name, label: b.label, group: b.group }))}
           />
         ) : null}
+        <IconButton
+          icon={showLoaded ? "eye" : "eye-off"}
+          label={
+            showLoaded
+              ? "Showing what the workflow uses first (click to list it like the rest)"
+              : "Show what the workflow uses first, past the search and filters"
+          }
+          variant="secondary"
+          active={showLoaded}
+          onClick={() => updateSettings.mutate({ generate: { pickerShowLoaded: !showLoaded } })}
+        />
         <Select<Sort>
           value={sort}
           onChange={pickSort}
@@ -461,6 +625,17 @@ export function ModelGrid({
                   icon: "folder-open",
                   onSelect: () => openFolder(path),
                 },
+                // A profile models folder's own top folder is renamed in Settings → Folders.
+                ...(fromTree(path).folder
+                  ? [
+                      {
+                        id: "rename",
+                        label: "Rename…",
+                        icon: "edit",
+                        onSelect: () => renameFolder(path),
+                      } satisfies MenuEntry,
+                    ]
+                  : []),
               ])
             }
           />
@@ -503,10 +678,12 @@ export function ModelGrid({
                 kind &&
                 setFavorite.mutate({ kind, name: item.id, favorite: !favorites.has(item.id) })
               }
+              columns={showTree ? COLUMNS.tree : COLUMNS.wide}
             />
           )}
         </div>
       </div>
+      <RenameDialog target={renaming} onClose={() => setRenaming(null)} />
     </div>
   );
 }
@@ -530,7 +707,10 @@ function VirtualGrid({
   blurNsfw,
   favorites,
   onFavorite,
+  columns: wanted,
 }: {
+  /** Cards a row when there's room. */
+  columns: number;
   items: Item[];
   isSelected: (i: Item) => boolean;
   onPick: (i: Item) => void;
@@ -542,8 +722,8 @@ function VirtualGrid({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const width = useElementWidth(scroller);
-  const columns = Math.max(1, Math.floor((width + GAP) / (CARD_W + GAP)));
-  const cardWidth = width > 0 ? Math.min(CARD_W, width) : CARD_W;
+  const columns = Math.max(1, Math.min(wanted, Math.floor((width + GAP) / (MIN_CARD_W + GAP))));
+  const cardWidth = width > 0 ? Math.floor((width - GAP * (columns - 1)) / columns) : MIN_CARD_W;
   const rowHeight = Math.round(cardWidth / CARD_RATIO) + GAP;
   const rows = Math.ceil(items.length / columns);
   const virtual = useVirtualizer({

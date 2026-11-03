@@ -16,6 +16,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { parse as parseYaml } from "yaml";
 import type { ProfileFolder } from "../../shared/profile.ts";
+import { type RenameChange, renameRefs } from "../../shared/prompt/renames.ts";
 import {
   expandPrompt,
   findWildcards,
@@ -424,6 +425,59 @@ export class WildcardFolders {
       "That folder isn't on disk: it may be a group inside a .yaml file.",
       "no_folder",
     );
+  }
+
+  /**
+   * Rename a picker's wildcard (its .txt file, in the first folder that has it) or folder (in
+   * every wildcards folder that has it, so the name keeps working). Returns the change made.
+   */
+  async rename(name: string, to: string, folder: boolean): Promise<RenameChange> {
+    const rel = name.replace(/\\/g, "/");
+    const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "";
+    const change: RenameChange = { kind: "wildcard", from: rel, to: parent + to, folder };
+    const moves: Array<{ from: string; to: string }> = [];
+    for (const f of this.folders) {
+      if (!f.path.trim()) continue;
+      const src = resolveInside(f.path, folder ? rel : `${rel}.txt`);
+      const dest = resolveInside(f.path, folder ? change.to : `${change.to}.txt`);
+      const stat = await fs.stat(src).catch(() => null);
+      if (!stat || stat.isDirectory() !== folder) continue;
+      if (src.toLowerCase() !== dest.toLowerCase() && (await exists(dest)))
+        throw new HttpError(
+          409,
+          `"${to}" already exists in ${f.name}. Pick another name.`,
+          "exists",
+        );
+      moves.push({ from: src, to: dest });
+      if (!folder) break;
+    }
+    if (!moves.length)
+      throw new HttpError(
+        404,
+        folder
+          ? "That folder isn't on disk: it may be a group inside a .yaml file."
+          : "That wildcard isn't a .txt file: it may come from a .yaml file. Rename it in the Wildcard Manager.",
+        "not_found",
+      );
+    for (const m of moves) await movePath(m.from, m.to);
+    return change;
+  }
+
+  /** Update full references to renamed LoRAs and wildcards in every wildcard file. */
+  async renameRefs(changes: readonly RenameChange[]): Promise<{ files: number }> {
+    const files: string[] = [];
+    for (const f of this.folders)
+      if (f.path.trim()) await walkFiles(f.path, (abs) => files.push(abs));
+    let changed = 0;
+    for (const file of files) {
+      const text = await fs.readFile(file, "utf8").catch(() => null);
+      if (text === null) continue;
+      const next = changes.reduce((t, c) => renameRefs(t, c), text);
+      if (next === text) continue;
+      await writeFileAtomic(file, next);
+      changed++;
+    }
+    return { files: changed };
   }
 
   /** The file or folder on disk (the folder itself for a bare id), for Reveal. */

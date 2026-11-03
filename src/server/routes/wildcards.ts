@@ -1,8 +1,10 @@
 import path from "node:path";
 import { Hono } from "hono";
+import { RenameRefsBody } from "../../shared/prompt/renames.ts";
 import {
   CreateWildcardBody,
   MoveWildcardBody,
+  RenameWildcardBody,
   RollBody,
   SaveWildcardBody,
   WildcardFolderBody,
@@ -77,6 +79,16 @@ export function wildcardRoutes(profiles: ProfileService) {
     const body = await readJson(c, WildcardPathBody);
     await revealInFileManager((await files()).abs(body.path));
     return c.json({ ok: true });
+  });
+
+  r.post("/rename", async (c) => {
+    const body = await readJson(c, RenameWildcardBody);
+    return c.json(await (await files()).rename(body.name, body.to, body.folder));
+  });
+
+  r.post("/rename-refs", async (c) => {
+    const body = await readJson(c, RenameRefsBody);
+    return c.json(await (await files()).renameRefs(body.changes));
   });
 
   r.post("/open-folder", async (c) => {

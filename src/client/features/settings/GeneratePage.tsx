@@ -1,6 +1,7 @@
 /**
  * Settings → Generate: the layout workflows show when they don't link one, the first-run tour,
- * the Size picker's Set list,
+ * the Size picker's Set list, the model pickers (what the workflow uses first, renames reaching
+ * wildcard files),
  * when the image stage shows the sampling preview, and the prompt weight step (stored with
  * autocomplete, where the prompt editor reads it). Saved to this profile.
  */
@@ -147,6 +148,38 @@ export function GeneratePage() {
                 label="Show the last step"
               />
               Show the last step
+            </label>
+          </Field>
+        </SettingsSection>
+        <SettingsSection title="Model pickers" icon="models">
+          <Field
+            label="Used first"
+            layout="left"
+            hint="The checkpoints, LoRAs and wildcards the workflow uses come first in the pickers and stay listed whatever the search or base models (the eye in their top bar)."
+          >
+            <label className="flex items-center gap-3 text-sm text-fg-2">
+              <Switch
+                checked={settings?.generate.pickerShowLoaded ?? true}
+                onCheckedChange={(pickerShowLoaded) =>
+                  update.mutate({ generate: { pickerShowLoaded } })
+                }
+                label="Show what the workflow uses first"
+              />
+              Show what the workflow uses first
+            </label>
+          </Field>
+          <Field
+            label="Renames"
+            layout="left"
+            hint="Renaming a LoRA, a wildcard or their folder from a picker also changes full <lora:…> and __wildcard__ references to it in your wildcard files."
+          >
+            <label className="flex items-center gap-3 text-sm text-fg-2">
+              <Switch
+                checked={settings?.generate.renameRefs ?? true}
+                onCheckedChange={(renameRefs) => update.mutate({ generate: { renameRefs } })}
+                label="Update references in wildcard files"
+              />
+              Update references in wildcard files
             </label>
           </Field>
         </SettingsSection>

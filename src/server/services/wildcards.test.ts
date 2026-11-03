@@ -134,4 +134,26 @@ describe("several wildcard folders", () => {
     await expect(folders.read("gone/animals.txt")).rejects.toThrow(/isn't in this profile/);
     await expect(folders.create("more", "folder")).rejects.toThrow(/inside a wildcard folder/);
   });
+
+  it("renames a picker's wildcard and folder, and updates full references", async () => {
+    await fs.mkdir(path.join(second, "zoo"), { recursive: true });
+    await fs.writeFile(path.join(second, "zoo", "cats.txt"), "tabby");
+    await fs.writeFile(path.join(second, "refs.txt"), "__zoo/cats__ __zoo/catsup__ <lora:x:1>");
+    const change = await folders.rename("zoo/cats", "felines", false);
+    expect(change).toEqual({
+      kind: "wildcard",
+      from: "zoo/cats",
+      to: "zoo/felines",
+      folder: false,
+    });
+    expect(await fs.readFile(path.join(second, "zoo", "felines.txt"), "utf8")).toBe("tabby");
+    expect(await folders.renameRefs([change])).toEqual({ files: 1 });
+    expect(await fs.readFile(path.join(second, "refs.txt"), "utf8")).toBe(
+      "__zoo/felines__ __zoo/catsup__ <lora:x:1>",
+    );
+    const dir = await folders.rename("zoo", "park", true);
+    expect(dir.to).toBe("park");
+    expect(await fs.readFile(path.join(second, "park", "felines.txt"), "utf8")).toBe("tabby");
+    await expect(folders.rename("outfits/fantasy", "x", false)).rejects.toThrow(/\.yaml/);
+  });
 });

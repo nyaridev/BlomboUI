@@ -1,14 +1,16 @@
 /**
- * The model info dialog (the old app's "model settings", rebuilt): the picture big on the left,
- * the file and its hashes in the middle, and what you can change on the right: trigger words,
- * a LoRA's strength and its slider's range, whether it's instant and where its trigger words go, and your notes, saved
- * into the model's A1111 .json, plus a new picture
- * (from a file or the latest Generate result) or none. Opened from any model's right-click menu
- * (`openModelInfo`); mounted once in Shell.
+ * The model info dialog (the old app's "model settings", rebuilt in its layout): the picture as
+ * tall as the dialog on the left, the file (fields to read and copy) and its hashes in the
+ * middle, and what you can change on the right: trigger words, a Strength box (strength, slider
+ * range), an Automatic LoRA box (instant, where its trigger words go) and your notes, saved into
+ * the model's A1111 .json. Under the columns, one wide button each: Cancel, Replace picture (from
+ * a file, the latest Generate result, or none) and Save. Opened from any model's right-click
+ * menu (`openModelInfo`); mounted once in Shell.
  */
 
 import { Icon } from "@client/icons/Icon";
 import { useClock } from "@client/lib/clock";
+import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import {
@@ -20,6 +22,7 @@ import {
 } from "@client/lib/queries";
 import {
   Button,
+  CopyButton,
   Dialog,
   FallbackFace,
   Field,
@@ -27,20 +30,20 @@ import {
   KIND_STYLE,
   Menu,
   NumberField,
-  PropertyList,
   ScrubField,
   Segmented,
   Skeleton,
   Spinner,
   Switch,
   TextArea,
+  TextField,
   toast,
   Veil,
 } from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
 import type { Job } from "@shared/jobs";
 import { DEFAULT_STRENGTH_RANGE, type LocalModel, type ModelDetails } from "@shared/models";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
 import { useModelActions, useModelInfo } from "./actions";
 
@@ -49,7 +52,7 @@ export function ModelInfoDialog() {
   const model = useLocalModels(id !== null).data?.models.find((m) => m.id === id) ?? null;
   const close = () => useModelInfo.setState({ id: null });
   return (
-    <Dialog open={id !== null} onOpenChange={(o) => !o && close()} bare width={1040}>
+    <Dialog open={id !== null} onOpenChange={(o) => !o && close()} bare width={1240}>
       {model ? (
         // Keyed by file: another model starts from its own values.
         <InfoBody key={`${model.id}:${model.mtime}`} model={model} onClose={close} />
@@ -203,56 +206,12 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
         <IconButton icon="x" label="Close" size="sm" onClick={onClose} />
       </header>
 
-      <div className="scroll-quiet grid min-h-0 flex-1 grid-cols-[240px_minmax(0,1fr)_minmax(0,1fr)] gap-5 overflow-y-auto p-5 max-lg:grid-cols-1 max-lg:p-4">
-        <div className="flex flex-col gap-2 max-lg:mx-auto max-lg:w-56">
+      {/* Three columns: the picture as tall as the dialog, the file, and what you can change. */}
+      <div className={cn(COLUMNS, "scroll-quiet min-h-0 flex-1 overflow-y-auto p-5 max-lg:p-4")}>
+        <div className="flex min-h-[480px] flex-col max-lg:mx-auto max-lg:min-h-0 max-lg:w-56">
           <Picture model={model} thumb={shownThumb} pending={picture !== null} />
-          <Menu
-            placement="bottom-start"
-            width={240}
-            trigger={
-              <Button icon="image" iconRight="chevron-down" className="w-full">
-                Replace picture
-              </Button>
-            }
-            items={[
-              {
-                id: "file",
-                label: "From a file…",
-                icon: "upload",
-                onSelect: () => fileInput.current?.click(),
-              },
-              {
-                id: "latest",
-                label: "From the latest result",
-                icon: "generate",
-                disabled: !latest,
-                hint: latest ? undefined : <span className="text-xs text-fg-4">none yet</span>,
-                onSelect: () => void fromLatest(),
-              },
-              { type: "separator", id: "s" },
-              {
-                id: "remove",
-                label: "Remove picture",
-                icon: "trash",
-                tone: "danger",
-                disabled: !hasPicture,
-                onSelect: () => setPicture("remove"),
-              },
-            ]}
-          />
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) setPicture(file);
-              e.target.value = "";
-            }}
-          />
           {picture !== null ? (
-            <p className="text-xs text-fg-3">
+            <p className="pt-2 text-xs text-fg-3">
               {picture === "remove"
                 ? "The picture moves to the profile's trash when you save."
                 : "The new picture is used when you save. The old one goes to the profile's trash."}
@@ -260,16 +219,17 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           ) : null}
         </div>
 
-        <section className="flex min-w-0 flex-col gap-4">
-          <h3 className="label-caps">File</h3>
+        <section className="flex min-w-0 flex-col gap-3">
+          <Heading>File</Heading>
           <FileFacts model={model} details={d} loading={details.isLoading} />
           {details.error ? <p className="text-sm text-danger">{details.error.message}</p> : null}
-          <h3 className="label-caps">Hashes</h3>
-          <Hashes model={model} />
+          <Group title="Hashes">
+            <Hashes model={model} />
+          </Group>
         </section>
 
-        <section className="flex min-w-0 flex-col gap-4">
-          <h3 className="label-caps">{style.label}</h3>
+        <section className="flex min-w-0 flex-col gap-3">
+          <Heading>{style.label}</Heading>
           {showWords ? (
             <Field
               label="Trigger words"
@@ -291,101 +251,107 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
             </Field>
           ) : null}
           {lora ? (
-            <Field
-              label="Strength"
-              hint="What it gets when you add it from the picker or autocomplete."
-              action={
-                weight !== null ? (
-                  <Button variant="ghost" size="sm" onClick={() => setWeight(null)}>
-                    Use 1
-                  </Button>
-                ) : null
-              }
-            >
-              <ScrubField
-                ariaLabel="Strength"
-                value={weight ?? 1}
-                onChange={setWeight}
-                min={-5}
-                max={5}
-                step={0.05}
-                defaultValue={1}
-                format={(v) => String(Number(v.toFixed(2)))}
-              />
-            </Field>
+            <Group title="Strength">
+              <Field
+                label="Strength"
+                layout="left"
+                labelWidth={96}
+                hint="What it gets when you add it from the picker or autocomplete."
+                action={
+                  weight !== null ? (
+                    <Button variant="ghost" size="sm" onClick={() => setWeight(null)}>
+                      Use 1
+                    </Button>
+                  ) : null
+                }
+              >
+                <ScrubField
+                  ariaLabel="Strength"
+                  value={weight ?? 1}
+                  onChange={setWeight}
+                  min={-5}
+                  max={5}
+                  step={0.05}
+                  defaultValue={1}
+                  format={(v) => String(Number(v.toFixed(2)))}
+                />
+              </Field>
+              <Field
+                label="Slider range"
+                layout="left"
+                labelWidth={96}
+                hint="Lowest and highest strength on its slider above the prompt."
+                error={rangeOk ? undefined : "Make the lowest strength smaller than the highest."}
+                action={
+                  sameRange(range, DEFAULT_STRENGTH_RANGE) ? null : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setRange(DEFAULT_STRENGTH_RANGE)}
+                    >
+                      Use 0–2
+                    </Button>
+                  )
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <NumberField
+                    label="Lowest strength"
+                    value={range[0]}
+                    onChange={(v) => setRange([v, range[1]])}
+                    min={-10}
+                    max={10}
+                    step={0.05}
+                    className="w-24"
+                  />
+                  <span className="text-fg-3">to</span>
+                  <NumberField
+                    label="Highest strength"
+                    value={range[1]}
+                    onChange={(v) => setRange([range[0], v])}
+                    min={-10}
+                    max={10}
+                    step={0.05}
+                    className="w-24"
+                  />
+                </div>
+              </Field>
+            </Group>
           ) : null}
           {lora ? (
-            <Field
-              label="Slider range"
-              hint="Lowest and highest strength on its slider above the prompt."
-              error={rangeOk ? undefined : "Make the lowest strength smaller than the highest."}
-              action={
-                sameRange(range, DEFAULT_STRENGTH_RANGE) ? null : (
-                  <Button
-                    variant="ghost"
+            <Group title="Automatic LoRA">
+              <Field
+                label="Instant LoRA"
+                layout="left"
+                labelWidth={96}
+                hint={
+                  instant
+                    ? "Picking it adds it beside the prompt, not into the text."
+                    : "Picking it puts a <lora:…> tag and its trigger words into the prompt."
+                }
+              >
+                <Switch checked={instant} onCheckedChange={setInstant} label="Instant LoRA" />
+              </Field>
+              {instant ? (
+                <Field
+                  label="Trigger words"
+                  layout="left"
+                  labelWidth={96}
+                  hint="Where they're added in the prompt when generating."
+                >
+                  <Segmented
+                    label="Trigger words go"
                     size="sm"
-                    onClick={() => setRange(DEFAULT_STRENGTH_RANGE)}
-                  >
-                    Use 0–2
-                  </Button>
-                )
-              }
-            >
-              <div className="flex items-center gap-2">
-                <NumberField
-                  label="Lowest strength"
-                  value={range[0]}
-                  onChange={(v) => setRange([v, range[1]])}
-                  min={-10}
-                  max={10}
-                  step={0.05}
-                  className="w-24"
-                />
-                <span className="text-fg-3">to</span>
-                <NumberField
-                  label="Highest strength"
-                  value={range[1]}
-                  onChange={(v) => setRange([range[0], v])}
-                  min={-10}
-                  max={10}
-                  step={0.05}
-                  className="w-24"
-                />
-              </div>
-            </Field>
-          ) : null}
-          {lora ? (
-            <Field
-              label="Instant LoRA"
-              layout="left"
-              labelWidth={120}
-              hint={
-                instant
-                  ? "Picking it adds it beside the prompt, not into the text."
-                  : "Picking it puts a <lora:…> tag and its trigger words into the prompt."
-              }
-            >
-              <Switch checked={instant} onCheckedChange={setInstant} label="Instant LoRA" />
-            </Field>
-          ) : null}
-          {lora && instant ? (
-            <Field
-              label="Trigger words go"
-              layout="left"
-              labelWidth={120}
-              hint="Where they're added in the prompt when generating."
-            >
-              <Segmented
-                label="Trigger words go"
-                size="sm"
-                value={triggerAt}
-                onChange={setTriggerAt}
-                options={[
-                  { value: "start", label: "At the start" },
-                  { value: "end", label: "At the end" },
-                ]}
-              />
-            </Field>
+                    value={triggerAt}
+                    onChange={setTriggerAt}
+                    options={[
+                      { value: "start", label: "At the start" },
+                      { value: "end", label: "At the end" },
+                    ]}
+                  />
+                </Field>
+              ) : null}
+            </Group>
           ) : null}
           <Field label="Notes" hint="Only for you: what it's good at, settings that work.">
             {(fieldId) => (
@@ -393,8 +359,8 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
                 id={fieldId}
                 value={notesValue}
                 onChange={(e) => setNotes(e.target.value)}
-                rows={4}
-                maxRows={14}
+                rows={3}
+                maxRows={12}
                 placeholder="Works best at 0.7 with DPM++ 2M"
               />
             )}
@@ -403,22 +369,88 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
         </section>
       </div>
 
-      <footer className="flex items-center justify-end gap-2 border-t border-line bg-surface px-5 py-3">
-        <span className="mr-auto truncate text-xs text-fg-3 max-lg:hidden">
-          Saved next to the model, in {model.file.replace(/\.[^.]+$/, "")}.json
-        </span>
-        <Button variant="ghost" onClick={onClose}>
+      {/* The old app's footer: one wide button under each column. */}
+      <footer className={cn(COLUMNS, "border-t border-line bg-surface px-5 py-3")}>
+        <Button variant="ghost" onClick={onClose} className="w-full">
           Cancel
         </Button>
+        <Menu
+          placement="top"
+          width={240}
+          trigger={
+            <Button icon="image" iconRight="chevron-down" className="w-full">
+              Replace picture
+            </Button>
+          }
+          items={[
+            {
+              id: "file",
+              label: "From a file…",
+              icon: "upload",
+              onSelect: () => fileInput.current?.click(),
+            },
+            {
+              id: "latest",
+              label: "From the latest result",
+              icon: "generate",
+              disabled: !latest,
+              hint: latest ? undefined : <span className="text-xs text-fg-4">none yet</span>,
+              onSelect: () => void fromLatest(),
+            },
+            { type: "separator", id: "s" },
+            {
+              id: "remove",
+              label: "Remove picture",
+              icon: "trash",
+              tone: "danger",
+              disabled: !hasPicture,
+              onSelect: () => setPicture("remove"),
+            },
+          ]}
+        />
         <Button
           variant="primary"
           disabled={!dirty || !rangeOk}
           loading={save.isPending}
           onClick={submit}
+          title={`Saved next to the model, in ${model.file.replace(/\.[^.]+$/, "")}.json`}
+          className="w-full"
         >
           Save
         </Button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) setPicture(file);
+            e.target.value = "";
+          }}
+        />
       </footer>
+    </div>
+  );
+}
+
+const COLUMNS =
+  "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1fr)] gap-5 max-lg:grid-cols-1";
+
+function Heading({ children }: { children: ReactNode }) {
+  return (
+    <h3 className="border-b border-line pb-1.5 text-sm font-semibold text-balance text-fg">
+      {children}
+    </h3>
+  );
+}
+
+/** A titled box inside a column (Hashes, Strength, Automatic LoRA). */
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
+      <h4 className="border-b border-line pb-1.5 text-xs font-semibold text-fg">{title}</h4>
+      {children}
     </div>
   );
 }
@@ -434,10 +466,10 @@ function Picture({
 }) {
   const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   return (
-    <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-line bg-sunken">
+    <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-sunken max-lg:aspect-[2/3] max-lg:flex-none">
       {thumb ? (
-        <Veil active={model.nsfw && blurNsfw && !pending} className="h-full w-full">
-          <img src={thumb} alt="" className="h-full w-full object-cover" />
+        <Veil active={model.nsfw && blurNsfw && !pending} className="absolute inset-0">
+          <img src={thumb} alt="" className="h-full w-full object-contain" />
         </Veil>
       ) : (
         <FallbackFace name={model.name} kind={model.kind} className="absolute inset-0" />
@@ -448,6 +480,37 @@ function Picture({
         </span>
       ) : null}
     </div>
+  );
+}
+
+/** A read-only value in a field box, with a copy button when it's worth copying. */
+function Value({
+  label,
+  value,
+  mono,
+  copy,
+}: {
+  label: string;
+  value: string | null | undefined;
+  mono?: boolean;
+  copy?: boolean;
+}) {
+  if (!value) return null;
+  return (
+    <Field label={label}>
+      {(id) => (
+        <TextField
+          id={id}
+          value={value}
+          readOnly
+          mono={mono}
+          title={value}
+          trailing={
+            copy ? <CopyButton text={value} label={`Copy ${label.toLowerCase()}`} /> : undefined
+          }
+        />
+      )}
+    </Field>
   );
 }
 
@@ -465,43 +528,41 @@ function FileFacts({
   if (loading)
     return (
       <div className="flex flex-col gap-2">
-        <Skeleton className="h-4 w-2/3" />
-        <Skeleton className="h-4 w-1/2" />
-        <Skeleton className="h-4 w-3/5" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-full" />
+        <Skeleton className="h-8 w-3/5" />
       </div>
     );
   const d = details;
+  const network = d?.header?.training.network
+    ? `${d.header.training.network}${d.header.training.dim ? ` · rank ${d.header.training.dim}` : ""}`
+    : null;
   return (
-    <PropertyList
-      labelWidth={88}
-      items={[
-        { label: "Path", value: d?.path, copy: d?.path, mono: true },
-        { label: "File", value: model.file, copy: model.file },
-        { label: "Folder", value: model.folder || "(top level)" },
-        { label: "Size", value: formatBytes(model.size) },
-        { label: "Modified", value: clock.dateTime(model.mtime) },
-        { label: "Base model", value: d?.header?.training.baseModel ?? model.baseModel },
-        {
-          label: "Network",
-          value: d?.header?.training.network
-            ? `${d.header.training.network}${d.header.training.dim ? ` · rank ${d.header.training.dim}` : ""}`
-            : null,
-        },
-        {
-          label: "Civitai",
-          value: d?.civitai?.modelId ? (
-            <button
-              type="button"
-              className="text-left text-accent-ink hover:underline focus-ring"
-              onClick={() => actions.civitai(model)}
-            >
-              {[d.civitai.name, d.civitai.version].filter(Boolean).join(" · ") || "Open its page"}
-            </button>
-          ) : null,
-        },
-        { label: "Creator", value: d?.civitai?.creator },
-      ]}
-    />
+    <>
+      <Value label="Path" value={d?.path} mono copy />
+      <Value label="File name" value={model.file} mono copy />
+      <div className="grid grid-cols-2 gap-3">
+        <Value label="Size" value={formatBytes(model.size)} mono />
+        <Value label="Modified" value={clock.dateTime(model.mtime)} mono />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Value label="Folder" value={model.folder || "(top level)"} />
+        <Value label="Base model" value={d?.header?.training.baseModel ?? model.baseModel} />
+      </div>
+      <Value label="Network" value={network} />
+      {d?.civitai?.modelId ? (
+        <Field label="Civitai">
+          <button
+            type="button"
+            className="w-fit text-left text-sm text-accent-ink hover:underline focus-ring"
+            onClick={() => actions.civitai(model)}
+          >
+            {[d.civitai.name, d.civitai.version].filter(Boolean).join(" · ") || "Open its page"}
+            {d.civitai.creator ? <span className="text-fg-3"> by {d.civitai.creator}</span> : null}
+          </button>
+        </Field>
+      ) : null}
+    </>
   );
 }
 
@@ -517,13 +578,10 @@ function Hashes({ model }: { model: LocalModel }) {
   if (hashes.error) return <p className="text-sm text-danger">{hashes.error.message}</p>;
   if (!hashes.data) return null;
   return (
-    <PropertyList
-      labelWidth={88}
-      items={[
-        { label: "SHA256", value: hashes.data.sha256, copy: hashes.data.sha256, mono: true },
-        { label: "AutoV2", value: hashes.data.autov2, copy: hashes.data.autov2, mono: true },
-      ]}
-    />
+    <>
+      <Value label="SHA256" value={hashes.data.sha256} mono copy />
+      <Value label="AutoV2" value={hashes.data.autov2} mono copy />
+    </>
   );
 }
 

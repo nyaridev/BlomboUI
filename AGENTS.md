@@ -46,7 +46,7 @@ src/
 │                 shortcuts (actions, defaults, combos)
 │                 salvage (read saved data value by value: clamp, default, drop one item)
 │                 layout/schema · workflow/{roles,manifest,graph,stages,packs}
-│                 prompt/{tokenize,loras,wildcards,weight,explain}
+│                 prompt/{tokenize,loras,wildcards,weight,explain,instant,renames}
 ├── server/       Node 22+ running TypeScript directly (type stripping) + Hono
 │   ├── main.ts       flags (--dev --port --open web|app|none --data --runtime --civitai --catalog)
 │   ├── context.ts    builds the services and wires their events together

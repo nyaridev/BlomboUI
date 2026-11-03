@@ -202,8 +202,8 @@
   /* a selected tile: a soft light glow outside and fading in from the edge (the old app's) */
   --glow-selected:
     0 0 7px color-mix(in srgb, var(--fg) 28%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--fg) 50%, transparent),
-    inset 0 0 12px color-mix(in srgb, var(--fg) 42%, transparent);
+    inset 0 0 0 1px color-mix(in srgb, var(--fg) 70%, transparent),
+    inset 0 0 18px color-mix(in srgb, var(--fg) 50%, transparent);
 }
 /* on light, dark text needs a bigger share to show, and a full-strength red mix turns loud */
 [data-theme="light"] {
@@ -215,7 +215,7 @@
   /* a dark glow reads as a shadow on light; the accent glows instead */
   --glow-selected:
     0 0 7px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 0 0 1px var(--accent),
-    inset 0 0 12px color-mix(in srgb, var(--accent) 45%, transparent);
+    inset 0 0 18px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 /* Profile accent. Set on <html data-accent="…">. Light-on-color families (yellow, green, cyan)

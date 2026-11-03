@@ -33,9 +33,9 @@ import {
   KIND_STYLE,
   Menu,
   NumberField,
-  ScrubField,
   Segmented,
   Skeleton,
+  Slider,
   Spinner,
   Switch,
   TextArea,
@@ -46,7 +46,15 @@ import {
 import { comfyViewUrl } from "@shared/comfy";
 import type { Job } from "@shared/jobs";
 import { DEFAULT_STRENGTH_RANGE, type LocalModel, type ModelDetails } from "@shared/models";
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactNode,
+  startTransition,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { PromptEditor } from "../generate/PromptEditor";
 import { useModelActions, useModelInfo } from "./actions";
 
@@ -277,15 +285,10 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
                   ) : null
                 }
               >
-                <ScrubField
-                  ariaLabel="Strength"
+                <StrengthSlider
                   value={weight ?? 1}
                   onChange={setWeight}
-                  min={-5}
-                  max={5}
-                  step={0.05}
-                  defaultValue={1}
-                  format={(v) => String(Number(v.toFixed(2)))}
+                  range={rangeOk ? range : DEFAULT_STRENGTH_RANGE}
                 />
               </Field>
               <Field
@@ -462,6 +465,43 @@ const COLUMNS =
 /** File and settings: their own scroll on wide screens, one shared column beside the picture below. */
 const COLUMN =
   "flex min-w-0 flex-col gap-3 sm:max-lg:col-start-2 lg:scroll-quiet lg:min-h-0 lg:overflow-y-auto lg:pr-1";
+
+/**
+ * The strength on the LoRA's own slider range (the one set below it, like the strip's slider).
+ * It keeps its value while dragging and hands it to the dialog as a low-priority update, so the
+ * rest of the dialog re-rendering never holds the thumb back.
+ */
+function StrengthSlider({
+  value,
+  onChange,
+  range: [min, max],
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  range: [number, number];
+}) {
+  const [shown, setShown] = useState(value);
+  // A change from outside ("Use 1") moves it too.
+  useEffect(() => setShown(value), [value]);
+  return (
+    <Slider
+      // An empty label gives the number box its row (the field's own label says "Strength").
+      label=""
+      ariaLabel="Strength"
+      value={shown}
+      onChange={(v) => {
+        setShown(v);
+        startTransition(() => onChange(v));
+      }}
+      min={min}
+      max={max}
+      step={0.05}
+      field
+      defaultValue={Math.min(max, Math.max(min, 1))}
+      format={(v) => String(Number(v.toFixed(2)))}
+    />
+  );
+}
 
 function Heading({ children }: { children: ReactNode }) {
   return (

@@ -240,6 +240,11 @@ export function normalizeTag(tag: string): string {
     .replace(/\s+/g, "_");
 }
 
+/** Words in a tag: "dark blue hair" and "dark_blue_hair" are 3. */
+export function tagWordCount(tag: string): number {
+  return normalizeTag(tag).split("_").filter(Boolean).length;
+}
+
 /**
  * The plain tags of a prompt, for "frequent tags": split at commas, weights and brackets
  * removed, LoRA tags, wildcards, choices and BREAK skipped.

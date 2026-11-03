@@ -27,6 +27,7 @@ import {
   type TagRow,
   type TagSource,
   type TagSourceInfo,
+  tagWordCount,
 } from "../../shared/autocomplete.ts";
 import type { AutocompleteSettings } from "../../shared/settings.ts";
 import type { ProfileDbs } from "../db/profileDb.ts";
@@ -160,7 +161,11 @@ export class AutocompleteService {
         error: parsed ? null : (this.errors.get(f.abs) ?? "It couldn't be read."),
       });
     }
-    return { lists, folder: this.tagsDir(profileId), frequent: this.frequent(50) };
+    return {
+      lists,
+      folder: this.tagsDir(profileId),
+      frequent: this.frequent(50, settings.frequentMaxWords),
+    };
   }
 
   async addList(file: string, bytes: Uint8Array): Promise<TagListInfo> {
@@ -318,13 +323,14 @@ export class AutocompleteService {
 
   /* ── frequent tags ────────────────────────────────────────────────────── */
 
-  /** Count the tags of the prompts a click sent. */
-  record(texts: string[]): void {
+  /** Count the tags of the prompts a click sent (parts longer than `frequentMaxWords` aren't). */
+  async record(texts: string[]): Promise<void> {
     const profileId = this.deps.profiles.active;
     if (!profileId) return;
-    const tags = [...new Set(texts.flatMap(promptTags))];
-    if (!tags.length) return;
     try {
+      const max = (await this.deps.settings.get(profileId)).autocomplete.frequentMaxWords;
+      const tags = [...new Set(texts.flatMap(promptTags))].filter((t) => tagWordCount(t) <= max);
+      if (!tags.length) return;
       const db = this.deps.dbs.get(profileId).db;
       const now = Date.now();
       const upsert = db.prepare(
@@ -343,16 +349,20 @@ export class AutocompleteService {
     }
   }
 
-  frequent(limit: number, prefix = ""): Array<{ tag: string; uses: number }> {
+  /**
+   * The most used tags of at most `maxWords` words. Tags are stored with underscores, so a tag
+   * has one word more than underscores; ones counted before the limit was lowered stay hidden.
+   */
+  frequent(limit: number, maxWords: number, prefix = ""): Array<{ tag: string; uses: number }> {
     const profileId = this.deps.profiles.active;
     if (!profileId) return [];
     const like = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     return this.deps.dbs
       .get(profileId)
       .db.prepare(
-        "SELECT tag, uses FROM tag_usage WHERE uses >= ? AND tag LIKE ? ESCAPE '\\' ORDER BY uses DESC, last_used DESC LIMIT ?",
+        "SELECT tag, uses FROM tag_usage WHERE uses >= ? AND tag LIKE ? ESCAPE '\\' AND LENGTH(tag) - LENGTH(REPLACE(tag, '_', '')) < ? ORDER BY uses DESC, last_used DESC LIMIT ?",
       )
-      .all(FREQUENT_MIN_USES, like, limit) as Array<{ tag: string; uses: number }>;
+      .all(FREQUENT_MIN_USES, like, maxWords, limit) as Array<{ tag: string; uses: number }>;
   }
 
   clearFrequent(): void {
@@ -385,7 +395,7 @@ export class AutocompleteService {
 
     const uses = new Map<string, number>();
     if (s.sources.frequent)
-      for (const f of this.frequent(Math.min(5, limit), want)) {
+      for (const f of this.frequent(Math.min(5, limit), s.frequentMaxWords, want)) {
         uses.set(f.tag, f.uses);
         push({
           kind: "tag",

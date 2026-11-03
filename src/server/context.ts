@@ -244,7 +244,7 @@ export function createServices(config: ServerConfig): Services {
     workflows,
     profiles,
     stages,
-    recordPrompts: (texts) => autocomplete.record(texts),
+    recordPrompts: (texts) => void autocomplete.record(texts),
     publish: (topic, msg) => {
       bus.publish(topic, msg);
       // New outputs appear in the gallery as they land, without a rescan.

@@ -91,9 +91,9 @@ describe("autocomplete", () => {
   });
 
   it("puts frequent tags first once they've been used twice", async () => {
-    service.record(["masterpiece, (glowing runes:1.2), <lora:x:1>"]);
+    await service.record(["masterpiece, (glowing runes:1.2), <lora:x:1>"]);
     expect(await service.suggest("glowing r", "tag", 5)).toEqual([]);
-    service.record(["glowing runes, smile"]);
+    await service.record(["glowing runes, smile"]);
     const out = await service.suggest("glow", "tag", 5);
     expect(out[0]).toMatchObject({ text: "glowing_runes", uses: 2, detail: "used 2×" });
     expect(out.map((s) => s.text)).toEqual(expect.arrayContaining(["glowing", "glowing_eyes"]));
@@ -101,6 +101,24 @@ describe("autocomplete", () => {
     expect((await service.suggest("glowing", "tag", 5))[1]?.text).toBe("glowing");
     service.clearFrequent();
     expect((await service.lists()).frequent).toEqual([]);
+  });
+
+  it("counts only tags of up to the set number of words", async () => {
+    const id = profiles.active as string;
+    const twice = [
+      "she has blue eyes, dark blue hair, smile",
+      "she has blue eyes, dark blue hair, smile",
+    ];
+    for (const p of twice) await service.record([p]);
+    expect((await service.lists()).frequent.map((f) => f.tag)).toEqual(
+      expect.arrayContaining(["dark_blue_hair", "smile"]),
+    );
+    expect((await service.lists()).frequent.map((f) => f.tag)).not.toContain("she_has_blue_eyes");
+    // Lowering the limit hides ones already counted.
+    await settings.update(id, { autocomplete: { frequentMaxWords: 2 } });
+    expect((await service.lists()).frequent.map((f) => f.tag)).toEqual(["smile"]);
+    await settings.update(id, { autocomplete: { frequentMaxWords: 3 } });
+    service.clearFrequent();
   });
 
   it("suggests LoRAs, their trigger words and wildcards", async () => {

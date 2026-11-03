@@ -19,7 +19,6 @@ import { useSession } from "@client/lib/session";
 import {
   Badge,
   Button,
-  Chip,
   Dialog,
   DropZone,
   Field,
@@ -230,6 +229,8 @@ function Downloads({ have }: { have: Set<string> }) {
 
 function FrequentTags() {
   const lists = useTagLists();
+  const maxWords = useSettings().data?.autocomplete.frequentMaxWords ?? 3;
+  const update = useUpdateSettings();
   const [confirm, setConfirm] = useState(false);
   const frequent = lists.data?.frequent ?? [];
   return (
@@ -247,14 +248,40 @@ function FrequentTags() {
           Forget them
         </Button>
       </div>
-      {frequent.length ? (
-        <div className="flex flex-wrap gap-1.5">
-          {frequent.map((f) => (
-            <Chip key={f.tag} size="sm" count={f.uses}>
-              {f.tag.replace(/_/g, " ")}
-            </Chip>
-          ))}
+      <div className="flex items-center gap-3 max-lg:flex-col max-lg:items-start">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <span className="text-sm text-fg">Longest tag counted</span>
+          <span className="text-xs text-fg-3">
+            Prompt parts with more words are left out: "dark blue hair" (3 words) counts, "she has
+            blue eyes" (4) doesn't.
+          </span>
         </div>
+        <NumberField
+          value={maxWords}
+          onChange={(frequentMaxWords) =>
+            update.mutate(
+              { autocomplete: { frequentMaxWords } },
+              { onSuccess: invalidateLists, onError: (e) => toast(message(e), "error") },
+            )
+          }
+          min={1}
+          max={10}
+          step={1}
+          unit="words"
+          label="Longest tag counted"
+          className="w-[130px]"
+        />
+      </div>
+      {frequent.length ? (
+        <ol className="scroll-quiet flex max-h-[360px] flex-col divide-y divide-line overflow-y-auto rounded-md border border-line">
+          {frequent.map((f, i) => (
+            <li key={f.tag} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+              <span className="w-6 shrink-0 text-right text-2xs text-fg-4 tabular">{i + 1}</span>
+              <span className="min-w-0 flex-1 truncate text-fg">{f.tag.replace(/_/g, " ")}</span>
+              <span className="text-xs text-fg-3 tabular">{f.uses}×</span>
+            </li>
+          ))}
+        </ol>
       ) : (
         <p className="text-sm text-fg-3">
           Tags you generate with at least twice show up here, and first in suggestions.

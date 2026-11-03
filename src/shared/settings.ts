@@ -86,6 +86,11 @@ export const AutocompleteSettings = z.object({
   insertTriggers: z.boolean().default(false),
   thumbnails: z.boolean().default(true),
   weightStep: z.number().min(0.01).max(0.25).default(0.05),
+  /**
+   * Frequent tags count only prompt parts of up to this many words: "dark blue hair" is a tag,
+   * "she has blue eyes" a sentence that shouldn't be suggested back.
+   */
+  frequentMaxWords: z.number().int().min(1).max(10).default(3),
 });
 export type AutocompleteSettings = z.infer<typeof AutocompleteSettings>;
 

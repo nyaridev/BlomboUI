@@ -6,6 +6,7 @@ import {
   parseTagCsv,
   promptTags,
   shortCount,
+  tagWordCount,
 } from "./autocomplete.ts";
 
 describe("parseTagCsv", () => {
@@ -22,6 +23,15 @@ describe("parseTagCsv", () => {
 
   it("skips duplicates and comments", () => {
     expect(parseTagCsv("# list\na,0,1\nA,0,5").map((r) => r.name)).toEqual(["a"]);
+  });
+});
+
+describe("tagWordCount", () => {
+  it("counts words with spaces or underscores", () => {
+    expect(tagWordCount("dark blue hair")).toBe(3);
+    expect(tagWordCount("dark_blue_hair")).toBe(3);
+    expect(tagWordCount(" 1girl ")).toBe(1);
+    expect(tagWordCount("she has blue eyes")).toBe(4);
   });
 });
 

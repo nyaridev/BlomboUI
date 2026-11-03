@@ -189,6 +189,14 @@ describe("local models", () => {
       "instant lora": false,
       "trigger position": "end",
     });
+    // The slider runs 0–2 until a range is saved; null goes back to it.
+    expect(d.strengthRange).toEqual([0, 2]);
+    expect((await models.saveInfo({ id, strengthRange: [-1, 1.5] })).strengthRange).toEqual([
+      -1, 1.5,
+    ]);
+    expect(JSON.parse(await fs.readFile(json, "utf8"))["strength range"]).toEqual([-1, 1.5]);
+    expect((await models.saveInfo({ id, strengthRange: null })).strengthRange).toEqual([0, 2]);
+    expect(JSON.parse(await fs.readFile(json, "utf8"))).not.toHaveProperty("strength range");
     // Your words win over Civitai's.
     const civitai = "loras/style/Detailer v2.safetensors";
     expect((await models.saveInfo({ id: civitai, triggerWords: ["mine"] })).triggerWords).toEqual([

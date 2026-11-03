@@ -24,6 +24,7 @@ import { CIVITAI_SITE_URLS } from "../../shared/civitai.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import {
   comfyNameOf,
+  DEFAULT_STRENGTH_RANGE,
   type LocalModel,
   type LookupInfo,
   MODEL_EXTENSIONS,
@@ -32,6 +33,7 @@ import {
   ModelFileStem,
   type ModelList,
   type SaveModelInfoBody,
+  StrengthRange,
   shortBaseModel,
 } from "../../shared/models.ts";
 import type { ProfileFolder } from "../../shared/profile.ts";
@@ -98,9 +100,17 @@ interface A1111Info {
   "instant lora"?: unknown;
   /** Blombo's own: "start" or "end", where an instant LoRA's trigger words go. */
   "trigger position"?: unknown;
+  /** Blombo's own: [lowest, highest] for the strength slider. */
+  "strength range"?: unknown;
 }
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
+
+/** A saved slider range, or the default when it's missing or broken (it's hand-editable). */
+function readRange(v: unknown): [number, number] {
+  const r = StrengthRange.safeParse(v);
+  return r.success ? r.data : DEFAULT_STRENGTH_RANGE;
+}
 
 async function readJson<T>(file: string | null): Promise<T | null> {
   if (!file) return null;
@@ -351,6 +361,7 @@ export class ModelService {
                 .filter(Boolean)
             : trained.map((w) => w.trim()),
           weight: Number.isFinite(weight) && weight !== 0 ? weight : null,
+          strengthRange: readRange(a1111?.["strength range"]),
           instant: a1111?.["instant lora"] !== false,
           triggerAt: a1111?.["trigger position"] === "end" ? "end" : "start",
           hasInfo: Boolean(civitai || a1111),
@@ -470,6 +481,8 @@ export class ModelService {
     if (body.notes !== undefined) info.notes = body.notes.trim();
     if (body.instant !== undefined) info["instant lora"] = body.instant;
     if (body.triggerAt !== undefined) info["trigger position"] = body.triggerAt;
+    if (body.strengthRange === null) delete info["strength range"];
+    else if (body.strengthRange) info["strength range"] = body.strengthRange;
     await writeJsonAtomic(file, info);
     this.changed();
     return this.details(body.id);

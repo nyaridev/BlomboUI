@@ -48,6 +48,14 @@ export function modelKey(kind: ModelKind, comfyName: string): string {
   return `${kind}/${comfyName.replace(/\\/g, "/")}`;
 }
 
+/** A LoRA's strength slider runs 0–2 unless its model info sets another range. */
+export const DEFAULT_STRENGTH_RANGE: [number, number] = [0, 2];
+
+/** A slider range: lowest and highest strength, lowest first. */
+export const StrengthRange = z
+  .tuple([z.number().min(-10).max(10), z.number().min(-10).max(10)])
+  .refine(([min, max]) => min < max, "Make the lowest strength smaller than the highest.");
+
 export const LocalModel = z.object({
   /**
    * Path inside its model folder with forward slashes ("loras/style/foo.safetensors"), as
@@ -72,6 +80,8 @@ export const LocalModel = z.object({
   triggerWords: z.array(z.string()),
   /** Strength a LoRA tag gets when it's added ("preferred weight" in the A1111 .json). */
   weight: z.number().nullable().default(null),
+  /** The strength slider's range (Blombo's "strength range" in the A1111 .json). */
+  strengthRange: z.tuple([z.number(), z.number()]).default(DEFAULT_STRENGTH_RANGE),
   /** A LoRA picked from a picker goes in without a prompt tag (shared/prompt/instant.ts). */
   instant: z.boolean().default(true),
   /** Where an instant LoRA's trigger words go in the prompt. */
@@ -181,7 +191,7 @@ export const ModelIdBody = z.object({ id: z.string().min(1) });
 
 /**
  * What the model info dialog saves into the model's A1111 .json (activation text, preferred
- * weight, notes, and Blombo's own "instant lora" and "trigger position"). Fields left out stay as they are; the file's other keys are kept.
+ * weight, notes, and Blombo's own "instant lora", "trigger position" and "strength range"). Fields left out stay as they are; the file's other keys are kept.
  */
 export const SaveModelInfoBody = z.object({
   id: z.string().min(1),
@@ -191,6 +201,8 @@ export const SaveModelInfoBody = z.object({
   notes: z.string().max(20_000).optional(),
   instant: z.boolean().optional(),
   triggerAt: z.enum(TRIGGER_AT).optional(),
+  /** Null goes back to the default range. */
+  strengthRange: StrengthRange.nullable().optional(),
 });
 export type SaveModelInfoBody = z.infer<typeof SaveModelInfoBody>;
 

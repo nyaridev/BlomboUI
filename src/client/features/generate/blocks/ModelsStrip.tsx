@@ -25,7 +25,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useModelThumb } from "../../models/thumbs";
+import { useModelThumb, useStrengthRange } from "../../models/thumbs";
 import { modelDisplayName } from "../labels";
 import { useValue } from "../state";
 import { useRoleBinding } from "../workflow";
@@ -207,6 +207,7 @@ interface TileProps {
  * bottom the name or, on hover, the strength slider.
  */
 function Tile(props: TileProps) {
+  const [min, max] = useStrengthRange(props.strength ? props.name : "");
   if (props.size === "text") return <TextTile {...props} />;
   const { size, kind, name, what, missing, strength, instant, onOpen, onRemove, sortable, active } =
     props;
@@ -283,12 +284,12 @@ function Tile(props: TileProps) {
             <Slider
               value={strength.value}
               onChange={strength.onChange}
-              min={-1}
-              max={2}
+              min={min}
+              max={max}
               step={0.05}
               size="sm"
               ariaLabel={`${modelDisplayName(name)} strength`}
-              defaultValue={1}
+              defaultValue={Math.min(max, Math.max(min, 1))}
             />
           </div>
         ) : null}
@@ -321,6 +322,7 @@ function TextTile({
   sortable,
   active,
 }: TileProps) {
+  const [min, max] = useStrengthRange(strength ? name : "");
   const shown = name ? modelDisplayName(name) : "Pick a model";
   return (
     <div
@@ -356,12 +358,12 @@ function TextTile({
           <ScrubField
             value={strength.value}
             onChange={strength.onChange}
-            min={-1}
-            max={2}
+            min={min}
+            max={max}
             step={0.05}
             size="sm"
             ariaLabel={`${modelDisplayName(name)} strength`}
-            defaultValue={1}
+            defaultValue={Math.min(max, Math.max(min, 1))}
             format={strengthText}
             className="h-full rounded-none border-y-0 border-r-0 text-xs"
           />

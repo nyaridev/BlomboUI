@@ -1,7 +1,7 @@
 /**
  * The model info dialog (the old app's "model settings", rebuilt): the picture big on the left,
  * the file and its hashes in the middle, and what you can change on the right: trigger words,
- * a LoRA's strength, whether it's instant and where its trigger words go, and your notes, saved
+ * a LoRA's strength and its slider's range, whether it's instant and where its trigger words go, and your notes, saved
  * into the model's A1111 .json, plus a new picture
  * (from a file or the latest Generate result) or none. Opened from any model's right-click menu
  * (`openModelInfo`); mounted once in Shell.
@@ -26,6 +26,7 @@ import {
   IconButton,
   KIND_STYLE,
   Menu,
+  NumberField,
   PropertyList,
   ScrubField,
   Segmented,
@@ -38,7 +39,7 @@ import {
 } from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
 import type { Job } from "@shared/jobs";
-import type { LocalModel, ModelDetails } from "@shared/models";
+import { DEFAULT_STRENGTH_RANGE, type LocalModel, type ModelDetails } from "@shared/models";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
 import { useModelActions, useModelInfo } from "./actions";
@@ -93,6 +94,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
   const startWords = model.triggerWords.join(", ");
   const [words, setWords] = useState(startWords);
   const [weight, setWeight] = useState<number | null>(model.weight);
+  const [range, setRange] = useState<[number, number]>(model.strengthRange);
   const [instant, setInstant] = useState(model.instant);
   const [triggerAt, setTriggerAt] = useState(model.triggerAt);
   const [notes, setNotes] = useState<string | null>(null);
@@ -111,11 +113,19 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
 
   const wordsChanged = splitWords(words).join(", ") !== splitWords(startWords).join(", ");
   const weightChanged = weight !== model.weight;
+  const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
+  const rangeChanged = !sameRange(range, model.strengthRange);
+  const rangeOk = range[0] < range[1];
   const instantChanged = instant !== model.instant;
   const triggerAtChanged = triggerAt !== model.triggerAt;
   const notesChanged = notes !== null && notes.trim() !== startNotes.trim();
   const infoChanged =
-    wordsChanged || weightChanged || instantChanged || triggerAtChanged || notesChanged;
+    wordsChanged ||
+    weightChanged ||
+    rangeChanged ||
+    instantChanged ||
+    triggerAtChanged ||
+    notesChanged;
   const dirty = infoChanged || picture !== null;
 
   const fromLatest = async () => {
@@ -136,6 +146,10 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           ...(wordsChanged ? { triggerWords: splitWords(words) } : {}),
           ...(weightChanged ? { weight } : {}),
           ...(instantChanged ? { instant } : {}),
+          // The default range is saved as no range, so a later default change reaches it.
+          ...(rangeChanged
+            ? { strengthRange: sameRange(range, DEFAULT_STRENGTH_RANGE) ? null : range }
+            : {}),
           ...(triggerAtChanged ? { triggerAt } : {}),
           ...(notesChanged ? { notes: notesValue } : {}),
         }
@@ -302,6 +316,46 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           ) : null}
           {lora ? (
             <Field
+              label="Slider range"
+              hint="Lowest and highest strength on its slider above the prompt."
+              error={rangeOk ? undefined : "Make the lowest strength smaller than the highest."}
+              action={
+                sameRange(range, DEFAULT_STRENGTH_RANGE) ? null : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setRange(DEFAULT_STRENGTH_RANGE)}
+                  >
+                    Use 0–2
+                  </Button>
+                )
+              }
+            >
+              <div className="flex items-center gap-2">
+                <NumberField
+                  label="Lowest strength"
+                  value={range[0]}
+                  onChange={(v) => setRange([v, range[1]])}
+                  min={-10}
+                  max={10}
+                  step={0.05}
+                  className="w-24"
+                />
+                <span className="text-fg-3">to</span>
+                <NumberField
+                  label="Highest strength"
+                  value={range[1]}
+                  onChange={(v) => setRange([range[0], v])}
+                  min={-10}
+                  max={10}
+                  step={0.05}
+                  className="w-24"
+                />
+              </div>
+            </Field>
+          ) : null}
+          {lora ? (
+            <Field
               label="Instant LoRA"
               layout="left"
               labelWidth={120}
@@ -356,7 +410,12 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
         <Button variant="ghost" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="primary" disabled={!dirty} loading={save.isPending} onClick={submit}>
+        <Button
+          variant="primary"
+          disabled={!dirty || !rangeOk}
+          loading={save.isPending}
+          onClick={submit}
+        >
           Save
         </Button>
       </footer>

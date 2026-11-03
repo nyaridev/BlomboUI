@@ -3,13 +3,15 @@
  * VAE, text encoders), then the LoRAs and the wildcards the prompt uses, each group under a
  * small label. Three looks (`settings.generate.tiles`): "pictures" puts each name on its
  * picture, "compact" shows smaller pictures only (names in the tooltip), "text" is one row of
- * chips without pictures. LoRAs are two-way: they come from <lora:…> tags; the strength control
- * and dragging a LoRA to another place rewrite the tags in the prompt.
+ * chips without pictures. LoRAs come from two places: instant LoRAs (the workflow's list, marked
+ * with a bolt; their trigger words are added when generating) and <lora:…> tags in the prompt.
+ * The strength control, remove and dragging change whichever one the tile shows.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useModels, useSettings, useUpdateSettings } from "@client/lib/queries";
 import { type CardKind, FallbackFace, IconButton, ScrubField, Slider, Tooltip } from "@client/ui";
+import { INSTANT_LORAS, type InstantLora, readInstantLoras } from "@shared/prompt/instant";
 import { findLoraTags, moveLoraTag, removeLoraTag, setLoraStrength } from "@shared/prompt/loras";
 import { findWildcards } from "@shared/prompt/wildcards";
 import type { Settings } from "@shared/settings";
@@ -32,12 +34,14 @@ type PickTab = "checkpoints" | "loras" | "wildcards" | "other";
 type TileSize = Settings["generate"]["tiles"];
 
 /**
- * The tile the picker below is changing: a model loader, a LoRA tag (by its place in the prompt)
- * or a wildcard. The + tiles are targets too (index -1, name ""), so picking adds.
+ * The tile the picker below is changing: a model loader, a LoRA tag (by its place in the prompt),
+ * an instant LoRA (by its place in the list) or a wildcard. The + tiles are targets too (index
+ * -1, name ""), so picking adds.
  */
 export type StripTarget =
   | { kind: "binding"; id: string }
   | { kind: "lora"; index: number }
+  | { kind: "instant"; index: number }
   | { kind: "wildcard"; name: string };
 
 export const sameTarget = (a: StripTarget | null, b: StripTarget | null) =>
@@ -60,6 +64,12 @@ function SelectedGlow({ on }: { on: boolean | undefined }) {
 
 const stem = (f: string) => modelDisplayName(f).toLowerCase();
 const strengthText = (v: number) => String(Number(v.toFixed(2)));
+const moveItem = <T,>(list: T[], from: number, to: number) => {
+  const next = [...list];
+  const [item] = next.splice(from, 1);
+  if (item !== undefined) next.splice(to, 0, item);
+  return next;
+};
 
 const TILE_WIDTH: Record<TileSize, string> = { pictures: "w-28", compact: "w-16", text: "" };
 const TILE = "relative aspect-[2/3] shrink-0 rounded-lg border";
@@ -182,6 +192,8 @@ interface TileProps {
   missing?: string | null;
   /** A LoRA's strength. */
   strength?: { value: number; onChange: (v: number) => void };
+  /** An instant LoRA (a bolt in the corner). */
+  instant?: boolean;
   onOpen: () => void;
   onRemove?: () => void;
   sortable?: Sortable;
@@ -196,7 +208,8 @@ interface TileProps {
  */
 function Tile(props: TileProps) {
   if (props.size === "text") return <TextTile {...props} />;
-  const { size, kind, name, what, missing, strength, onOpen, onRemove, sortable, active } = props;
+  const { size, kind, name, what, missing, strength, instant, onOpen, onRemove, sortable, active } =
+    props;
   const shown = name ? modelDisplayName(name) : "Pick a model";
   return (
     <div
@@ -248,6 +261,11 @@ function Tile(props: TileProps) {
         </Tooltip>
         {strength || missing ? (
           <span className="pointer-events-none absolute top-1 left-1 flex items-center gap-0.5">
+            {instant ? (
+              <span className="grid h-4 w-4 place-items-center rounded-xs bg-black/60 text-white">
+                <Icon name="bolt" size={11} />
+              </span>
+            ) : null}
             {strength ? (
               <span className="rounded-xs bg-black/60 px-1 font-mono text-[10px] leading-4 text-white tabular">
                 {strengthText(strength.value)}
@@ -508,8 +526,10 @@ export function ModelsStrip({
   const [prompt, setPrompt] = useValue<string>(positive?.id ?? "prompt.positive");
   const text = typeof prompt === "string" ? prompt : "";
   const loras = useMemo(() => findLoraTags(text), [text]);
+  const [savedInstant, setSavedInstant] = useValue<unknown>(INSTANT_LORAS);
+  const instant = useMemo(() => readInstantLoras(savedInstant), [savedInstant]);
   const wildcards = useMemo(() => findWildcards(text), [text]);
-  const loraFiles = useModels(loras.length ? "loras" : null).data?.names;
+  const loraFiles = useModels(loras.length || instant.length ? "loras" : null).data?.names;
   const size: TileSize = useSettings().data?.generate.tiles ?? "pictures";
   const updateSettings = useUpdateSettings();
   // Clicking the targeted tile again closes the picker.
@@ -523,6 +543,18 @@ export function ModelsStrip({
   const sortable = useSortableRow(loras.length, (from, to) =>
     loraEdit(moveLoraTag(text, from, to)),
   );
+  // Instant LoRA targets are places in the list, so they let go the same way.
+  const instantEdit = (next: InstantLora[]) => {
+    setSavedInstant(next);
+    if (target?.kind === "instant") onTarget(null);
+  };
+  const sortableInstant = useSortableRow(instant.length, (from, to) =>
+    instantEdit(moveItem(instant, from, to)),
+  );
+  const missingLora = (name: string) =>
+    loraFiles && !loraFiles.some((f) => stem(f) === stem(name))
+      ? "Not in your loras folder: generating will stop with an error"
+      : null;
   const main = checkpoint ?? unet;
   const models = [main, vae, clip, clip2].filter((b): b is Binding => Boolean(b));
 
@@ -555,6 +587,27 @@ export function ModelsStrip({
           <>
             {models.length ? <Divider /> : null}
             <Labeled label="LoRAs" size={size}>
+              {instant.map((l, i) => (
+                <Tile
+                  // Keyed by place, like the tags.
+                  key={`instant-${i}`}
+                  size={size}
+                  kind="loras"
+                  name={l.name}
+                  what="Instant LoRA"
+                  instant
+                  missing={missingLora(l.name)}
+                  strength={{
+                    value: l.strength,
+                    onChange: (v) =>
+                      setSavedInstant(instant.map((x) => (x === l ? { ...x, strength: v } : x))),
+                  }}
+                  active={sameTarget(target, { kind: "instant", index: i })}
+                  onOpen={() => open({ kind: "instant", index: i }, "loras")}
+                  onRemove={() => instantEdit(instant.filter((x) => x !== l))}
+                  sortable={sortableInstant(i)}
+                />
+              ))}
               {loras.map((tag, i) => (
                 // Keyed by place: a swap or a move changes the tile in place, no new tile.
                 <Tile
@@ -563,11 +616,7 @@ export function ModelsStrip({
                   kind="loras"
                   name={tag.name}
                   what="LoRA"
-                  missing={
-                    loraFiles && !loraFiles.some((f) => stem(f) === stem(tag.name))
-                      ? "Not in your loras folder: generating will stop with an error"
-                      : null
-                  }
+                  missing={missingLora(tag.name)}
                   strength={{
                     value: tag.strength,
                     onChange: (v) => setPrompt(setLoraStrength(text, tag, v)),

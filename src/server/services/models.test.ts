@@ -179,6 +179,16 @@ describe("local models", () => {
     expect((await models.list()).models.find((m) => m.id === id)?.weight).toBe(-1.5);
     await models.saveInfo({ id, weight: null });
     expect((await models.details(id)).weight).toBeNull();
+    // Instant by default with words at the start; both are saved as Blombo's own keys.
+    expect(d).toMatchObject({ instant: true, triggerAt: "start" });
+    expect(await models.saveInfo({ id, instant: false, triggerAt: "end" })).toMatchObject({
+      instant: false,
+      triggerAt: "end",
+    });
+    expect(JSON.parse(await fs.readFile(json, "utf8"))).toMatchObject({
+      "instant lora": false,
+      "trigger position": "end",
+    });
     // Your words win over Civitai's.
     const civitai = "loras/style/Detailer v2.safetensors";
     expect((await models.saveInfo({ id: civitai, triggerWords: ["mine"] })).triggerWords).toEqual([

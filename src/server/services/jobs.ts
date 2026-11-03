@@ -18,6 +18,8 @@ import {
   type QueueSnapshot,
 } from "../../shared/jobs.ts";
 import { encodePreviewFrame, type LiveTopic, type ServerMessage } from "../../shared/live.ts";
+import { comfyNameOf, type LocalModel } from "../../shared/models.ts";
+import { INSTANT_LORAS, readInstantLoras } from "../../shared/prompt/instant.ts";
 import { randomSeed } from "../../shared/random.ts";
 import { nodeInputs } from "../../shared/workflow/graph.ts";
 import {
@@ -48,7 +50,11 @@ export interface QueueDeps {
   reportError: (source: "job" | "comfy", title: string, detail: string) => void;
   /** The prompts of each click, for the frequent-tags list. */
   recordPrompts?: (texts: string[]) => void;
+  /** The profile's local LoRAs, for instant LoRAs' trigger words. */
+  loras?: () => Promise<LocalModel[]>;
 }
+
+const loraKey = (file: string) => file.replace(/\\/g, "/").toLowerCase();
 
 /** A file uploaded to ComfyUI's input folder right before the run, into an image binding. */
 export interface RunInput {
@@ -501,6 +507,9 @@ export class JobQueue extends Emitter<QueueEvents> {
       const controlFiles = stages.controlnet.enabled
         ? stages.controlnet.units.flatMap((u) => (u.enabled && u.image ? [u.image.file] : []))
         : [];
+      const instant = readInstantLoras(run.values[INSTANT_LORAS]);
+      const local = instant.length && this.deps.loras ? await this.deps.loras() : [];
+      const byFile = new Map(local.map((m) => [loraKey(comfyNameOf(m)), m]));
       const compiled = compile({
         manifest: run.manifest,
         prompt,
@@ -513,6 +522,11 @@ export class JobQueue extends Emitter<QueueEvents> {
         stagePackages: anyStage ? await this.deps.stages.packages() : [],
         stageImages: controlFiles.length ? await this.deps.stages.upload(controlFiles) : {},
         objectInfo: info,
+        instant,
+        triggersFor: (file) => {
+          const m = byFile.get(loraKey(file));
+          return m ? { words: m.triggerWords, at: m.triggerAt } : null;
+        },
       });
       if (gone()) return;
       run.job.segments = compiled.segments;

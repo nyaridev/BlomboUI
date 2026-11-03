@@ -1,7 +1,8 @@
 /**
  * The model info dialog (the old app's "model settings", rebuilt): the picture big on the left,
  * the file and its hashes in the middle, and what you can change on the right: trigger words,
- * a LoRA's strength and your notes, saved into the model's A1111 .json, plus a new picture
+ * a LoRA's strength, whether it's instant and where its trigger words go, and your notes, saved
+ * into the model's A1111 .json, plus a new picture
  * (from a file or the latest Generate result) or none. Opened from any model's right-click menu
  * (`openModelInfo`); mounted once in Shell.
  */
@@ -25,8 +26,10 @@ import {
   Menu,
   PropertyList,
   ScrubField,
+  Segmented,
   Skeleton,
   Spinner,
+  Switch,
   TextArea,
   toast,
   Veil,
@@ -88,6 +91,8 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
   const startWords = model.triggerWords.join(", ");
   const [words, setWords] = useState(startWords);
   const [weight, setWeight] = useState<number | null>(model.weight);
+  const [instant, setInstant] = useState(model.instant);
+  const [triggerAt, setTriggerAt] = useState(model.triggerAt);
   const [notes, setNotes] = useState<string | null>(null);
   const startNotes = d?.notes ?? "";
   const notesValue = notes ?? startNotes;
@@ -104,8 +109,12 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
 
   const wordsChanged = splitWords(words).join(", ") !== splitWords(startWords).join(", ");
   const weightChanged = weight !== model.weight;
+  const instantChanged = instant !== model.instant;
+  const triggerAtChanged = triggerAt !== model.triggerAt;
   const notesChanged = notes !== null && notes.trim() !== startNotes.trim();
-  const dirty = wordsChanged || weightChanged || notesChanged || picture !== null;
+  const infoChanged =
+    wordsChanged || weightChanged || instantChanged || triggerAtChanged || notesChanged;
+  const dirty = infoChanged || picture !== null;
 
   const fromLatest = async () => {
     if (!latest) return;
@@ -119,15 +128,16 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
   };
 
   const submit = () => {
-    const info =
-      wordsChanged || weightChanged || notesChanged
-        ? {
-            id: model.id,
-            ...(wordsChanged ? { triggerWords: splitWords(words) } : {}),
-            ...(weightChanged ? { weight } : {}),
-            ...(notesChanged ? { notes: notesValue } : {}),
-          }
-        : null;
+    const info = infoChanged
+      ? {
+          id: model.id,
+          ...(wordsChanged ? { triggerWords: splitWords(words) } : {}),
+          ...(weightChanged ? { weight } : {}),
+          ...(instantChanged ? { instant } : {}),
+          ...(triggerAtChanged ? { triggerAt } : {}),
+          ...(notesChanged ? { notes: notesValue } : {}),
+        }
+      : null;
     save.mutate(
       { info, picture: picture ? { id: model.id, image: picture } : null },
       {
@@ -249,7 +259,9 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
               label="Trigger words"
               hint={
                 lora
-                  ? "Added after the LoRA tag when autocomplete inserts it. Separate with commas."
+                  ? instant
+                    ? "Added to the prompt when generating. Separate with commas."
+                    : "Added after the LoRA tag when you pick it. Separate with commas."
                   : "Separate with commas."
               }
             >
@@ -265,7 +277,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           {lora ? (
             <Field
               label="Strength"
-              hint="What <lora:…> gets when you add it from the picker or autocomplete."
+              hint="What it gets when you add it from the picker or autocomplete."
               action={
                 weight !== null ? (
                   <Button variant="ghost" size="sm" onClick={() => setWeight(null)}>
@@ -283,6 +295,39 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
                 step={0.05}
                 defaultValue={1}
                 format={(v) => String(Number(v.toFixed(2)))}
+              />
+            </Field>
+          ) : null}
+          {lora ? (
+            <Field
+              label="Instant LoRA"
+              layout="left"
+              labelWidth={120}
+              hint={
+                instant
+                  ? "Picking it adds it beside the prompt, not into the text."
+                  : "Picking it puts a <lora:…> tag and its trigger words into the prompt."
+              }
+            >
+              <Switch checked={instant} onCheckedChange={setInstant} label="Instant LoRA" />
+            </Field>
+          ) : null}
+          {lora && instant ? (
+            <Field
+              label="Trigger words go"
+              layout="left"
+              labelWidth={120}
+              hint="Where they're added in the prompt when generating."
+            >
+              <Segmented
+                label="Trigger words go"
+                size="sm"
+                value={triggerAt}
+                onChange={setTriggerAt}
+                options={[
+                  { value: "start", label: "At the start" },
+                  { value: "end", label: "At the end" },
+                ]}
               />
             </Field>
           ) : null}

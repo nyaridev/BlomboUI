@@ -94,6 +94,10 @@ interface A1111Info {
   "activation text"?: unknown;
   "preferred weight"?: unknown;
   notes?: unknown;
+  /** Blombo's own: false puts the LoRA in the prompt as a tag instead (instant is the default). */
+  "instant lora"?: unknown;
+  /** Blombo's own: "start" or "end", where an instant LoRA's trigger words go. */
+  "trigger position"?: unknown;
 }
 
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -347,6 +351,8 @@ export class ModelService {
                 .filter(Boolean)
             : trained.map((w) => w.trim()),
           weight: Number.isFinite(weight) && weight !== 0 ? weight : null,
+          instant: a1111?.["instant lora"] !== false,
+          triggerAt: a1111?.["trigger position"] === "end" ? "end" : "start",
           hasInfo: Boolean(civitai || a1111),
           civitai: ids
             ? { ...ids, lookup: false }
@@ -441,7 +447,7 @@ export class ModelService {
   }
 
   /**
-   * Save trigger words, strength and notes into the model's A1111 .json ("foo.json", made when
+   * Save trigger words, strength, notes and the instant LoRA settings into the model's A1111 .json ("foo.json", made when
    * missing). Other keys in it are kept; a file that isn't valid JSON is left alone.
    */
   async saveInfo(body: SaveModelInfoBody): Promise<ModelDetails> {
@@ -462,6 +468,8 @@ export class ModelService {
     if (body.triggerWords) info["activation text"] = body.triggerWords.join(", ");
     if (body.weight !== undefined) info["preferred weight"] = body.weight ?? 0;
     if (body.notes !== undefined) info.notes = body.notes.trim();
+    if (body.instant !== undefined) info["instant lora"] = body.instant;
+    if (body.triggerAt !== undefined) info["trigger position"] = body.triggerAt;
     await writeJsonAtomic(file, info);
     this.changed();
     return this.details(body.id);

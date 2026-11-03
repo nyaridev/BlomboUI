@@ -122,6 +122,52 @@ describe("compile", () => {
     });
   });
 
+  it("adds instant LoRAs after the tags, with their trigger words at the start or end", () => {
+    const { prompt, manifest, values } = setup("sd15-api");
+    const triggers: Record<string, { words: string[]; at: "start" | "end" }> = {
+      "styles/ghibli_bg.safetensors": { words: ["ghibli", "painted"], at: "start" },
+      "SDXL\\Detail Slider XL.safetensors": { words: ["detailed"], at: "end" },
+      "detail_tweaker.safetensors": { words: ["tweak"], at: "start" },
+    };
+    const out = compile({
+      manifest,
+      prompt,
+      values: { ...values, "prompt.positive": "cabin <lora:detail_tweaker:0.7>" },
+      seed: 1,
+      wildcards,
+      loraFiles: LORAS,
+      filenamePrefix: "x",
+      instant: [
+        { name: "styles/ghibli_bg", strength: 0.6 },
+        { name: "Detail Slider XL", strength: 1.2 },
+        // Already a tag: the tag's strength wins and its words aren't added.
+        { name: "detail_tweaker", strength: 0.2 },
+      ],
+      triggersFor: (file) => triggers[file] ?? null,
+    });
+    expect(out.texts["prompt.positive"]).toBe("ghibli, painted, cabin, detailed");
+    expect(out.prompt["6"]?.inputs.text).toBe("ghibli, painted, cabin, detailed");
+    expect(out.loras).toEqual([
+      { file: "detail_tweaker.safetensors", strength: 0.7, clipStrength: 0.7 },
+      { file: "styles/ghibli_bg.safetensors", strength: 0.6, clipStrength: 0.6 },
+      { file: "SDXL\\Detail Slider XL.safetensors", strength: 1.2, clipStrength: 1.2 },
+    ]);
+    // The negative prompt gets nothing.
+    expect(out.prompt["7"]?.inputs.text).toBe(values["prompt.negative"]);
+    expect(() =>
+      compile({
+        manifest,
+        prompt,
+        values,
+        seed: 1,
+        wildcards,
+        loraFiles: LORAS,
+        filenamePrefix: "x",
+        instant: [{ name: "gone", strength: 1 }],
+      }),
+    ).toThrow(/LoRAs above the prompt/);
+  });
+
   it("explains missing LoRAs and wildcards", () => {
     const { prompt, manifest, values } = setup("sd15-api");
     const base = { manifest, prompt, seed: 1, wildcards, loraFiles: LORAS, filenamePrefix: "x" };

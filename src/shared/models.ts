@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import { MODEL_KINDS, type ModelKind } from "./constants.ts";
+import { TRIGGER_AT } from "./prompt/instant.ts";
 import { SafetensorsInfo } from "./safetensors.ts";
 
 export const MODEL_EXTENSIONS = [
@@ -71,6 +72,10 @@ export const LocalModel = z.object({
   triggerWords: z.array(z.string()),
   /** Strength a LoRA tag gets when it's added ("preferred weight" in the A1111 .json). */
   weight: z.number().nullable().default(null),
+  /** A LoRA picked from a picker goes in without a prompt tag (shared/prompt/instant.ts). */
+  instant: z.boolean().default(true),
+  /** Where an instant LoRA's trigger words go in the prompt. */
+  triggerAt: z.enum(TRIGGER_AT).default("start"),
   hasInfo: z.boolean(),
   /**
    * The Civitai model and version this file is, from its .civitai.info file or, without one,
@@ -176,7 +181,7 @@ export const ModelIdBody = z.object({ id: z.string().min(1) });
 
 /**
  * What the model info dialog saves into the model's A1111 .json (activation text, preferred
- * weight, notes). Fields left out stay as they are; the file's other keys are kept.
+ * weight, notes, and Blombo's own "instant lora" and "trigger position"). Fields left out stay as they are; the file's other keys are kept.
  */
 export const SaveModelInfoBody = z.object({
   id: z.string().min(1),
@@ -184,6 +189,8 @@ export const SaveModelInfoBody = z.object({
   /** Null clears it (tags then get 1). */
   weight: z.number().min(-10).max(10).nullable().optional(),
   notes: z.string().max(20_000).optional(),
+  instant: z.boolean().optional(),
+  triggerAt: z.enum(TRIGGER_AT).optional(),
 });
 export type SaveModelInfoBody = z.infer<typeof SaveModelInfoBody>;
 

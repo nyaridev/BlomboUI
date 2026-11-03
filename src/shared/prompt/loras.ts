@@ -1,6 +1,7 @@
 /**
- * <lora:…> tags in prompts. The prompt is the single place LoRAs are chosen: the models strip
- * edits the tags, and the compiler moves them out of the text into the graph's LoRA stack.
+ * <lora:…> tags in prompts (LoRAs picked with Instant on live beside the prompt instead:
+ * instant.ts). The models strip edits the tags, and the compiler moves them out of the text into
+ * the graph's LoRA stack.
  *
  *   <lora:name>              strength 1
  *   <lora:name:0.8>          model and CLIP strength 0.8

@@ -2,19 +2,28 @@
  * The compiler: a workflow package + values + a seed → the API graph sent to ComfyUI.
  *
  *   prompt.json → values onto bindings → wildcards and {a|b} choices (seeded) →
- *   <lora:…> tags out of the text and into the LoRA stack → enabled stages spliced at role
+ *   <lora:…> tags out of the text and into the LoRA stack, instant LoRAs after them (their
+ *   trigger words at the start or end of the positive prompt) → enabled stages spliced at role
  *   ports (controlnet → base → hires → adetailer units) → seed → filename prefix
  *
  * It's pure: wildcard files, the LoRA file list, stage packages and ComfyUI's node list are
  * passed in, so it's fully testable. Errors are CompileError with a message the user can act on.
  */
+import type { InstantLora, TriggerAt } from "../../../shared/prompt/instant.ts";
+import { withTriggers } from "../../../shared/prompt/instant.ts";
 import { findLoraTags, stripLoraTags } from "../../../shared/prompt/loras.ts";
 import { expandPrompt, type WildcardResolver } from "../../../shared/prompt/wildcards.ts";
 import { rng } from "../../../shared/random.ts";
 import type { ApiPrompt, ObjectInfo } from "../../../shared/workflow/graph.ts";
 import type { Binding, WorkflowManifest } from "../../../shared/workflow/manifest.ts";
 import type { RunSegment, StageSettings, StageStatus } from "../../../shared/workflow/stages.ts";
-import { applyLoras, CompileError, type ResolvedLora, resolveLoras } from "./loras.ts";
+import {
+  applyLoras,
+  CompileError,
+  type ResolvedLora,
+  resolveLoraFile,
+  resolveLoras,
+} from "./loras.ts";
 import { applyStages, baseSegments, type LoadedStage } from "./stages.ts";
 
 export { CompileError, type ResolvedLora, resolveLoraFile } from "./loras.ts";
@@ -36,6 +45,10 @@ export interface CompileInput {
   stageImages?: Record<string, string>;
   /** ComfyUI's node definitions, to check stage nodes and models; null when unknown. */
   objectInfo?: ObjectInfo | null;
+  /** LoRAs picked without a prompt tag (shared/prompt/instant.ts). */
+  instant?: InstantLora[];
+  /** A LoRA file's trigger words and where they go, from its model info. */
+  triggersFor?: (file: string) => { words: string[]; at: TriggerAt } | null;
 }
 
 export interface CompileResult {
@@ -105,6 +118,12 @@ export function compile(input: CompileInput): CompileResult {
   }
 
   const loras = resolveLoras(tags, input.loraFiles);
+  addInstant(input, loras, (start, end) => {
+    const positive = input.manifest.bindings.find((b) => b.role === "prompt.positive");
+    if (!positive || !(positive.id in texts)) return;
+    texts[positive.id] = withTriggers(texts[positive.id] ?? "", start, end);
+    set(positive, texts[positive.id]);
+  });
   if (loras.length) applyLoras(prompt, loras);
 
   // 4. Stages, at the ports the graph has now (after its LoRAs).
@@ -142,4 +161,26 @@ export function compile(input: CompileInput): CompileResult {
   }
 
   return { prompt, texts, loras, segments, stages };
+}
+
+/** Instant LoRAs join after the tags' (a tag of the same file wins) and hand back their words. */
+function addInstant(
+  input: CompileInput,
+  loras: ResolvedLora[],
+  triggers: (start: string[], end: string[]) => void,
+): void {
+  const start: string[] = [];
+  const end: string[] = [];
+  for (const l of input.instant ?? []) {
+    const file = resolveLoraFile(l.name, input.loraFiles);
+    if (!file)
+      throw new CompileError(
+        `LoRA "${l.name}" isn't in your loras folder. Remove it from the LoRAs above the prompt, or put the file back.`,
+      );
+    if (loras.some((r) => r.file === file)) continue;
+    loras.push({ file, strength: l.strength, clipStrength: l.strength });
+    const info = input.triggersFor?.(file);
+    if (info?.words.length) (info.at === "end" ? end : start).push(info.words.join(", "));
+  }
+  if (start.length || end.length) triggers(start, end);
 }

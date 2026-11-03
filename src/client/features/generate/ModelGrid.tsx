@@ -1,7 +1,9 @@
 /**
  * Model pickers beside Generation: checkpoints (or diffusion models), LoRAs, wildcards and other
  * model kinds, listed from ComfyUI and the profile's wildcards folder. Picking sets the
- * workflow's model, adds a <lora:…> tag or a __wildcard__ to the prompt. The grid is virtualized:
+ * workflow's model, adds a LoRA (instant: beside the prompt, its trigger words added when
+ * generating; with Instant off in its model info, a <lora:…> tag and its trigger words in the
+ * prompt) or adds a __wildcard__ to the prompt. The grid is virtualized:
  * LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
  * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
  * list). Favorites come first, then what you used recently (the job log), unless another sort
@@ -32,7 +34,8 @@ import {
 } from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import type { LocalModel } from "@shared/models";
-import { findLoraTags, formatLoraTag, swapLoraTag } from "@shared/prompt/loras";
+import { INSTANT_LORAS, type InstantLora, readInstantLoras } from "@shared/prompt/instant";
+import { findLoraTags, formatLoraTag, removeLoraTag, swapLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -141,6 +144,9 @@ export function ModelGrid({
   const selectedValue = useValues((s) => (setsBinding ? s.values[setsBinding.id] : undefined));
   const prompt = useValues((s) => (positive ? String(s.values[positive.id] ?? "") : ""));
   const setValue = useValues((s) => s.setValue);
+  const savedInstant = useValues((s) => s.values[INSTANT_LORAS]);
+  const instant = useMemo(() => readInstantLoras(savedInstant), [savedInstant]);
+  const setInstant = (list: InstantLora[]) => setValue(INSTANT_LORAS, list);
 
   const items: Item[] = useMemo(() => {
     if (tab === "wildcards")
@@ -208,8 +214,8 @@ export function ModelGrid({
     return pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
   }, [found, folder, sort, tab, favorites, marks]);
   const inPrompt = useMemo(
-    () => new Set(findLoraTags(prompt).map((t) => t.name.toLowerCase())),
-    [prompt],
+    () => new Set([...findLoraTags(prompt), ...instant].map((t) => t.name.toLowerCase())),
+    [prompt, instant],
   );
 
   const isSelected = (item: Item) => {
@@ -237,16 +243,40 @@ export function ModelGrid({
         : null;
     if (tab === "loras") {
       if (isSelected(item)) return;
+      const name = tagName(item.id);
+      // Instant unless its model info says otherwise (a LoRA ComfyUI lists but the models
+      // folder doesn't have info for counts as instant).
+      const asInstant = item.local?.instant ?? true;
+      const words = item.local?.triggerWords.join(", ") ?? "";
+      const tag = (strength: number) =>
+        words ? `${formatLoraTag(name, strength)}, ${words}` : formatLoraTag(name, strength);
+      const swapInstant = target?.kind === "instant" ? target.index : -1;
+      // One swap per tile click: the tile lets go afterwards, so the next pick adds.
       if (swapTag && positive) {
-        setValue(
-          positive.id,
-          swapLoraTag(prompt, swapTag, tagName(item.id), item.local?.weight ?? swapTag.strength),
-        );
-        // One swap per tile click: the tile lets go, so the next pick adds.
+        if (asInstant) {
+          setValue(positive.id, removeLoraTag(prompt, swapTag));
+          setInstant([...instant, { name, strength: item.local?.weight ?? swapTag.strength }]);
+        } else
+          setValue(
+            positive.id,
+            swapLoraTag(prompt, swapTag, name, item.local?.weight ?? swapTag.strength),
+          );
         onTarget(null);
         return;
       }
-      append(formatLoraTag(tagName(item.id), item.local?.weight ?? 1));
+      const old = instant[swapInstant];
+      if (old) {
+        const strength = item.local?.weight ?? old.strength;
+        if (asInstant) setInstant(instant.map((l) => (l === old ? { name, strength } : l)));
+        else {
+          setInstant(instant.filter((l) => l !== old));
+          append(tag(strength));
+        }
+        onTarget(null);
+        return;
+      }
+      if (asInstant) setInstant([...instant, { name, strength: item.local?.weight ?? 1 }]);
+      else append(tag(item.local?.weight ?? 1));
     } else if (tab === "wildcards") {
       if (swapWildcard && positive && prompt.includes(swapWildcard)) {
         if (swapWildcard === `__${item.id}__`) return;
@@ -275,7 +305,7 @@ export function ModelGrid({
       tab === "loras" || tab === "wildcards" || (tab === "other" && otherKind === "embeddings");
     const use: MenuEntry = {
       id: "use",
-      label: adds ? "Add to prompt" : "Use this model",
+      label: tab === "loras" ? "Add LoRA" : adds ? "Add to prompt" : "Use this model",
       icon: adds ? "plus" : "check",
       disabled: isSelected(item) && tab !== "wildcards",
       onSelect: () => pick(item),

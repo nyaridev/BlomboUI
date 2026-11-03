@@ -34,6 +34,7 @@
   --color-disabled: var(--disabled);
   --color-disabled-danger: var(--disabled-danger);
   --color-on-disabled: var(--on-disabled);
+  --color-track: var(--track);
 
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);

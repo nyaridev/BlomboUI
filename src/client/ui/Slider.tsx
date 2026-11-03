@@ -234,12 +234,7 @@ export function Slider({
         onPointerCancel={() => setDragging(false)}
         onDoubleClick={() => defaultValue !== undefined && onChange(defaultValue)}
       >
-        <div
-          className={cn(
-            "relative w-full overflow-hidden rounded-full bg-sunken ring-1 ring-line",
-            trackH,
-          )}
-        >
+        <div className={cn("relative w-full overflow-hidden rounded-full bg-track", trackH)}>
           <div
             className={cn(
               "absolute inset-y-0 left-0 rounded-full",

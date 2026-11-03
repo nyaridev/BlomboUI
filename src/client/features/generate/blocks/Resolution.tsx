@@ -142,7 +142,7 @@ function ResolutionRows({
           <span className="font-mono text-xs text-fg-3 tabular">{shown({ w, h })}</span>
         ) : null}
       </div>
-      <div className="grid grid-cols-[minmax(0,7fr)_auto_minmax(0,3fr)] items-center gap-3">
+      <div className="grid grid-cols-[minmax(0,7fr)_auto_minmax(0,3fr)] items-center gap-x-5 gap-y-3">
         <div className="flex min-w-0 flex-col gap-2">{sizeControls}</div>
         <IconButton
           icon="swap-vertical"

@@ -125,7 +125,11 @@ export function Select<T extends string>({
         <span className={cn("min-w-0 flex-1 truncate", !current && "text-fg-4")}>
           {current?.label ?? placeholder}
         </span>
-        <Icon name="chevrons-up-down" size={14} className="text-fg-3" />
+        <Icon
+          name="chevron-down"
+          size={14}
+          className={cn("text-fg-3 transition-transform", open && "rotate-180")}
+        />
       </button>
       <FloatingPortal>
         <AnimatePresence>

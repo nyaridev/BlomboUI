@@ -1,21 +1,24 @@
 /**
  * Seed: the seed field (with a new random one and the last run's) beside what happens to it after
- * each run. On its own it's a card; inside a card (`bare`, the default layout's First pass) it's
- * just the row. Batch count and size sit with the size (Resolution).
+ * each run. As in A1111, -1 means random: the field shows -1 while the mode is Randomize, typing
+ * a number switches to Fixed, and typing -1 switches back. On its own it's a card; inside a card
+ * (`bare`, the default layout's First pass) it's just the row. Batch count and size sit with the
+ * size (Resolution).
  */
 
 import { useLive } from "@client/lib/live";
 import { IconButton, SectionTitle, Select, TextField, toast } from "@client/ui";
 import { randomSeed } from "@shared/random";
 import type { SeedMode } from "@shared/workflow/manifest";
+import { useState } from "react";
 import { useValue, useValues } from "../state";
 import { useRoleBinding } from "../workflow";
 
 const MODES: Array<{ value: SeedMode; label: string }> = [
-  { value: "random", label: "Random" },
-  { value: "fixed", label: "Keep it" },
-  { value: "increment", label: "Add 1" },
-  { value: "decrement", label: "Subtract 1" },
+  { value: "random", label: "Randomize" },
+  { value: "fixed", label: "Fixed" },
+  { value: "increment", label: "Increment" },
+  { value: "decrement", label: "Decrement" },
 ];
 
 export function Seed({ bare = false }: { bare?: boolean }) {
@@ -38,6 +41,18 @@ function SeedRow({ seedId }: { seedId: string }) {
   const last = useLive(
     (s) => s.queue.jobs.find((j) => j.state === "done" && j.seed !== null)?.seed ?? null,
   );
+  // What's typed while editing ("-", "" or "-12" aren't values yet); the value shows otherwise.
+  const [draft, setDraft] = useState<string | null>(null);
+  const shown = mode === "random" ? "-1" : String(seed ?? 0);
+  const type = (text: string) => {
+    if (!/^-?\d*$/.test(text)) return;
+    setDraft(text);
+    if (text === "-1") setRun({ seedMode: "random" });
+    else if (/^\d+$/.test(text)) {
+      setSeed(Number(text));
+      if (mode === "random") setRun({ seedMode: "fixed" });
+    }
+  };
 
   return (
     <div className="flex items-end gap-3">
@@ -45,16 +60,13 @@ function SeedRow({ seedId }: { seedId: string }) {
         <span className="text-xs text-fg-2">Seed</span>
         <div className="flex gap-1.5">
           <TextField
-            value={mode === "random" ? "Random each run" : String(seed ?? 0)}
-            onChange={(e) => {
-              const n = Number(e.target.value.replace(/\D/g, ""));
-              if (Number.isFinite(n)) setSeed(n);
-            }}
-            disabled={mode === "random"}
+            value={draft ?? shown}
+            onChange={(e) => type(e.target.value.trim())}
+            onBlur={() => setDraft(null)}
+            inputMode="numeric"
             mono
-            icon="hash"
             className="flex-1"
-            aria-label="Seed"
+            aria-label="Seed (-1 is random)"
           />
           <IconButton
             icon="dice"

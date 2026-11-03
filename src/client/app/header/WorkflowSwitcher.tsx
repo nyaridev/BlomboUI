@@ -98,9 +98,9 @@ export function WorkflowSwitcher() {
             </span>
           </span>
           <Icon
-            name="chevrons-up-down"
+            name="chevron-down"
             size={14}
-            className="ml-1 text-fg-3 group-hover:text-fg-2"
+            className="ml-1 text-fg-3 transition-transform group-hover:text-fg-2 group-data-[open]:rotate-180"
           />
         </button>
       }

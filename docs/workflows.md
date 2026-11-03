@@ -193,7 +193,7 @@ The Scripts block on the Generate screen (layout feature `scripts`, `shared/scri
 |---|---|---|
 | **Prompt matrix** | every combination of up to 6 terms, on and off, added to the end of a prompt (3 terms → 8 images) | one grid: the first half of the terms across, the rest down |
 | **XY plot** | one or two axes, crossed: any number, choice, model or on/off parameter (`4, 6, 8`, ranges `10-50 (+10)`, `3-9 [4]`), or a prompt **search/replace** (the first value is the text to find) | one grid with the values as labels |
-| **Thumbnails** | one run per picked checkpoint (or LoRA, added to the prompt as `<lora:name:weight>`) | each image becomes that model's picture |
+| **Thumbnails** | one run per picked checkpoint (or LoRA, run as the only instant LoRA at the script's weight, so its trigger words go in; tags in the prompt stay) | each image becomes that model's picture |
 
 A script queues at most 100 runs; the block shows the count and what's wrong before you click. Grids are put together by the server (`lib/grid.ts`, sharp) into `<outputs>/<date>/grids/`, appear on the image stage and in the gallery. Thumbnails are saved next to the model, in the folder named after it: `<model>_data/thumb.jpg` (what cards show) and `thumb_raw.png` (full size); the pictures they replace move to the profile's trash (`trash/model-pictures/`). See ADR-0016.
 

@@ -309,6 +309,11 @@ function ThumbsEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Bindi
           />
         ) : null}
       </div>
+      {t.target === "lora" ? (
+        <span className="text-2xs text-fg-3">
+          Each LoRA runs on its own, with its trigger words, instead of your instant LoRAs.
+        </span>
+      ) : null}
     </div>
   );
 }

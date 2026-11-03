@@ -12,6 +12,7 @@
  * Pure: the server plans with it, the client counts runs and checks values with it.
  */
 import { z } from "zod";
+import { INSTANT_LORAS } from "./prompt/instant.ts";
 import type { Binding } from "./workflow/manifest.ts";
 
 export const SCRIPT_KINDS = ["matrix", "xy", "thumbs"] as const;
@@ -57,7 +58,10 @@ export const XYScript = z.object({
 
 export const ThumbsScript = z.object({
   kind: z.literal("thumbs"),
-  /** model: swap the model binding; lora: add <lora:…> to the prompt binding. */
+  /**
+   * model: swap the model binding; lora: run each LoRA as the only instant LoRA, so its trigger
+   * words go into the prompt binding's text (tags written in the prompt stay).
+   */
   target: z.enum(["model", "lora"]),
   /** The model binding (target model) or the prompt binding (target lora). */
   binding: z.string().min(1),
@@ -362,16 +366,15 @@ export function planScript(
     throw new ScriptError(`${b.label} isn't a model parameter.`);
   if (script.target === "lora" && b.type !== "prompt")
     throw new ScriptError("LoRA thumbnails add the LoRA to a prompt; pick the prompt.");
-  const base = String(values[b.id] ?? "").trim();
   const cells = script.models.map(
     (model, i): ScriptCell => ({
       overrides:
         script.target === "model"
           ? { [b.id]: model }
           : {
-              [b.id]: [base, `<lora:${model.replace(/\.[a-z0-9]+$/i, "")}:${script.loraWeight}>`]
-                .filter(Boolean)
-                .join(", "),
+              [INSTANT_LORAS]: [
+                { name: model.replace(/\.[a-z0-9]+$/i, ""), strength: script.loraWeight },
+              ],
             },
       col: i,
       row: 0,

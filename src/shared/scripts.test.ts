@@ -174,9 +174,10 @@ describe("planScript", () => {
       bindings,
       values,
     );
-    expect(loras.cells[0]?.overrides["prompt.positive"]).toBe(
-      "a red fox in the snow, <lora:styles/ink:0.8>",
-    );
+    // The LoRA runs alone as an instant LoRA (its trigger words come with it); the prompt stays.
+    expect(loras.cells[0]?.overrides).toEqual({
+      "loras.instant": [{ name: "styles/ink", strength: 0.8 }],
+    });
     expect(loras.cells[0]?.model).toBe("styles/ink.safetensors");
   });
 });

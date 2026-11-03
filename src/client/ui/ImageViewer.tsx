@@ -2,7 +2,7 @@
  * A full-screen look at one image, or a few (a run's results): the picture as large as it fits
  * between equal top and bottom margins, over the page dimmed and blurred. Esc or a click beside
  * the picture closes it; ← →, the side buttons or the wheel beside the picture step through the
- * images. The wheel on the picture zooms around the pointer (easing) and a drag moves it;
+ * images (a wheel notch is one image). The wheel on the picture zooms around the pointer (easing) and a drag moves it;
  * while zoomed in, the wheel anywhere zooms, so it only steps again once the picture is back to
  * its size. A middle click on the picture opens it in a new tab (`onOpenTab`). It sits on the
  * lightbox layer (z 250).
@@ -20,8 +20,8 @@ export interface ViewerImage {
 }
 
 const MAX_ZOOM = 8;
-/** One wheel gesture steps one image (trackpads send many events per swipe). */
-const STEP_GAP_MS = 350;
+/** Trackpads send small pixel steps: they add up to one image per this many pixels. */
+const TRACKPAD_STEP = 100;
 const ON_DARK = "bg-black/30 text-white/85 hover:bg-black/50 hover:text-white";
 
 interface View {
@@ -51,7 +51,7 @@ export function ImageViewer({
   const many = images.length > 1;
   const [view, setView] = useState<View>(FIT);
   // The wheel listener is native (it must preventDefault), so it reads the latest values here.
-  const live = useRef({ view, index, count: images.length, lastStep: 0 });
+  const live = useRef({ view, index, count: images.length, wheel: 0 });
   live.current.view = view;
   live.current.index = index;
   live.current.count = images.length;
@@ -109,11 +109,19 @@ export function ImageViewer({
         });
         return;
       }
-      if (count < 2 || e.deltaY === 0) return;
-      const now = performance.now();
-      if (now - live.current.lastStep < STEP_GAP_MS) return;
-      live.current.lastStep = now;
-      onIndex((live.current.index + (e.deltaY > 0 ? 1 : -1) + count) % count);
+      const delta = e.deltaY || e.deltaX;
+      if (count < 2 || delta === 0) return;
+      // A mouse wheel notch is one image, however fast it turns; a trackpad adds up.
+      const notch = e.deltaMode !== 0 || Math.abs(delta) >= 50;
+      if (!notch) {
+        live.current.wheel += delta;
+        if (Math.abs(live.current.wheel) < TRACKPAD_STEP) return;
+      }
+      const dir = (notch ? delta : live.current.wheel) > 0 ? 1 : -1;
+      live.current.wheel = 0;
+      // Count from the image just stepped to, before React has re-rendered.
+      live.current.index = (live.current.index + dir + count) % count;
+      onIndex(live.current.index);
     };
     root.addEventListener("wheel", onWheel, { passive: false });
     return () => root.removeEventListener("wheel", onWheel);
@@ -150,7 +158,8 @@ export function ImageViewer({
       role="dialog"
       aria-modal="true"
       aria-label={image.alt}
-      className="fixed inset-0 z-[250] overflow-hidden bg-black/55 backdrop-blur-xl"
+      // The old app's backdrop: the theme's background at 75%, a medium blur.
+      className="fixed inset-0 z-[250] overflow-hidden bg-bg/75 backdrop-blur-md"
     >
       {/* Equal margins top and bottom; the sides leave room for the step buttons. */}
       <div
@@ -210,8 +219,14 @@ export function ImageViewer({
           </div>
         </>
       ) : null}
-      <div className="absolute top-3 right-3">
-        <IconButton icon="x" label="Close" shortcut="Esc" onClick={onClose} className={ON_DARK} />
+      <div className="absolute top-1.5 right-1.5">
+        <IconButton
+          icon="x"
+          label="Close"
+          shortcut="Esc"
+          onClick={onClose}
+          className="text-fg-2 hover:text-fg"
+        />
       </div>
     </div>
   );

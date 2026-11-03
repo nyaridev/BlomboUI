@@ -226,6 +226,48 @@ export function a1111SamplerToComfy(name: string): { sampler: string; scheduler:
 }
 
 /** Joined text the gallery search runs over. */
+/** A model an image was made with (File Info looks each one up locally and on Civitai). */
+export interface UsedModel {
+  kind: "checkpoint" | "lora";
+  name: string;
+  strength: number | null;
+  /** The hash A1111 wrote for it ("Model hash", "Lora hashes"), uppercase; null without one. */
+  hash: string | null;
+}
+
+/** A model's name compared loosely: the file name without folders or extension, lowercase. */
+export function modelKey(name: string): string {
+  const file = name.trim().replace(/\\/g, "/").split("/").pop() ?? "";
+  return file.replace(/\.(safetensors|sft|ckpt|pt|pth|bin)$/i, "").toLowerCase();
+}
+
+/** The checkpoint and LoRAs an image used, with the hashes A1111 parameters carry. */
+export function usedModels(s: ImageSummary, a1111: Array<[string, string]> = []): UsedModel[] {
+  const get = (key: string) => a1111.find(([k]) => k.toLowerCase() === key)?.[1];
+  const hex = (v: string | undefined) => {
+    const h = v?.trim() ?? "";
+    return /^[0-9a-f]{8,64}$/i.test(h) ? h.toUpperCase() : null;
+  };
+  // "Lora hashes": "name: hash, other: hash"
+  const loraHashes = new Map<string, string>();
+  for (const part of (get("lora hashes") ?? "").split(",")) {
+    const at = part.lastIndexOf(":");
+    const h = at > 0 ? hex(part.slice(at + 1)) : null;
+    if (h) loraHashes.set(modelKey(part.slice(0, at)), h);
+  }
+  const out: UsedModel[] = [];
+  if (s.model)
+    out.push({ kind: "checkpoint", name: s.model, strength: null, hash: hex(get("model hash")) });
+  for (const l of s.loras)
+    out.push({
+      kind: "lora",
+      name: l.name,
+      strength: l.strength,
+      hash: loraHashes.get(modelKey(l.name)) ?? null,
+    });
+  return out;
+}
+
 export function searchText(name: string, s: ImageSummary): string {
   return [
     name,

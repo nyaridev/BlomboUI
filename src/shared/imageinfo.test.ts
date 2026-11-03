@@ -3,7 +3,9 @@ import {
   a1111SamplerToComfy,
   a1111ScheduleToComfy,
   a1111Summary,
+  modelKey,
   parseA1111,
+  usedModels,
 } from "./imageinfo.ts";
 
 const SAMPLE = `masterpiece, 1girl, <lora:Detailer:0.8>, silver hair
@@ -72,5 +74,25 @@ describe("A1111 schedule type", () => {
     ).toBe("karras");
     expect(a1111ScheduleToComfy("Automatic")).toBeNull();
     expect(a1111ScheduleToComfy("SGM Uniform")).toBe("sgm_uniform");
+  });
+});
+
+describe("usedModels", () => {
+  it("lists the checkpoint and LoRAs with the hashes A1111 wrote", () => {
+    const p = parseA1111(
+      `cat, <lora:styles/Detailer:0.8>, <lora:Plain:1>
+Steps: 20, Model hash: 0123abcd45, Model: waiIllustrious_v14, Lora hashes: "Detailer: 1a2b3c4d5e6f, Other: 99887766aa"`,
+    );
+    if (!p) throw new Error("not parsed");
+    expect(usedModels(a1111Summary(p).summary, p.settings)).toEqual([
+      { kind: "checkpoint", name: "waiIllustrious_v14", strength: null, hash: "0123ABCD45" },
+      { kind: "lora", name: "styles/Detailer", strength: 0.8, hash: "1A2B3C4D5E6F" },
+      { kind: "lora", name: "Plain", strength: 1, hash: null },
+    ]);
+  });
+
+  it("compares model names by file name", () => {
+    expect(modelKey("sdxl\\Juggernaut XL.safetensors")).toBe("juggernaut xl");
+    expect(modelKey("Juggernaut XL")).toBe("juggernaut xl");
   });
 });

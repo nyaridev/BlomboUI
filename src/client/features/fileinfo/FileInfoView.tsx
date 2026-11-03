@@ -2,8 +2,8 @@
  * File Info: drop, paste or pick a file and read what's inside. The top is the picture: an image
  * itself, or for a model the creator's images from Civitai (found by hash, CivitaiMatch.tsx) with
  * how the one on screen was made; the actions sit under it. Below come the file's facts and its
- * sections: for images how they were made (Blombo, ComfyUI or A1111 metadata), the graph and
- * every text chunk; for models the Civitai details and the header (Safetensors.tsx). Files picked
+ * sections: for images how they were made (Blombo, ComfyUI or A1111 metadata), the models they
+ * used (UsedModels.tsx: your copy, their Civitai page), the graph and every text chunk; for models the Civitai details and the header (Safetensors.tsx). Files picked
  * in the gallery or the Models view open here too, and a file dropped anywhere in the window.
  * Nothing is modified, except "Use as the model's picture", which asks for it.
  *
@@ -48,6 +48,7 @@ import { PageDropOverlay, usePageFileDrop } from "./PageDrop";
 import { Facts, Section, TextBlock } from "./parts";
 import { SafetensorsSections } from "./Safetensors";
 import { useFileInfoTarget } from "./state";
+import { UsedModels } from "./UsedModels";
 
 const ACCEPT = ".png,.webp,.jpg,.jpeg,.safetensors,.sft,image/png,image/webp,image/jpeg";
 const MAX_IMAGE_UPLOAD = 200 * 1024 * 1024;
@@ -420,23 +421,6 @@ function ImageSections({ image }: { image: ImageFileInfo }) {
             {s.negative ? <TextBlock label="Negative prompt" text={s.negative} /> : null}
             <Facts
               items={[
-                { label: "Model", value: s.model, copy: s.model ?? undefined, wide: true },
-                {
-                  label: "LoRAs",
-                  wide: true,
-                  value: s.loras.length ? (
-                    <span className="flex flex-wrap gap-1">
-                      {s.loras.map((l) => (
-                        <Badge key={l.name}>
-                          {l.name}
-                          {l.strength !== null ? (
-                            <span className="text-fg-3">{l.strength}</span>
-                          ) : null}
-                        </Badge>
-                      ))}
-                    </span>
-                  ) : null,
-                },
                 { label: "Sampler", value: s.sampler },
                 { label: "Scheduler", value: s.scheduler },
                 { label: "Steps", value: s.steps },
@@ -454,6 +438,8 @@ function ImageSections({ image }: { image: ImageFileInfo }) {
           </>
         )}
       </Panel>
+
+      <UsedModels image={image} />
 
       {image.a1111?.settings.length ? (
         <Section title="All parameters" icon="sliders" count={image.a1111.settings.length}>

@@ -48,7 +48,7 @@ describe("layouts", () => {
     expect(mine.id).toBe("portrait-work");
     expect(mine.name).toBe("Portrait work");
     const file = path.join(profiles.dir(profileId), "layouts", "portrait-work.json");
-    expect(JSON.parse(await fs.readFile(file, "utf8")).sizes).toEqual(base.sizes);
+    expect(JSON.parse(await fs.readFile(file, "utf8")).regions).toEqual(base.regions);
     expect((await layouts.create({ name: "Portrait work", doc: base })).id).toBe("portrait-work-2");
     // A name that's a built-in id gets a free one.
     expect((await layouts.create({ name: "Default", doc: base })).id).toBe("default-2");
@@ -66,8 +66,12 @@ describe("layouts", () => {
     await settings.update(profileId, { generate: { layout: "portrait-work" } });
     expect((await layouts.resolve(null)).doc.id).toBe("portrait-work");
 
-    const saved = await layouts.save("portrait-work", { ...mine, sizes: { params: 500 } });
-    expect(saved.sizes.params).toBe(500);
+    const params = mine.regions.params.slice(1);
+    const saved = await layouts.save("portrait-work", {
+      ...mine,
+      regions: { ...mine.regions, params },
+    });
+    expect(saved.regions.params).toEqual(params);
     await expect(layouts.save("default", mine)).rejects.toThrow(/Built-in layouts/);
 
     await layouts.remove("portrait-work");

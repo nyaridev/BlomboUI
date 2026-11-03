@@ -53,7 +53,9 @@ export function BatchView({ manifest }: { manifest: WorkflowDetail }) {
   return (
     // Narrow screens: one scrolling column, the run panel above the settings.
     <div className="flex h-full min-h-0 gap-3 p-3 max-lg:scroll-quiet max-lg:flex-col max-lg:overflow-y-auto max-lg:p-2">
-      <ParamsColumn batch />
+      <div className="scroll-quiet h-full w-[420px] shrink-0 overflow-y-auto pr-1.5 max-lg:h-auto max-lg:w-full max-lg:overflow-visible max-lg:pr-0">
+        <ParamsColumn batch />
+      </div>
       <BatchPanel manifest={manifest} />
     </div>
   );

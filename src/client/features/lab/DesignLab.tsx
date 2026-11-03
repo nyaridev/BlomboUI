@@ -29,6 +29,7 @@ import {
   EmptyState,
   Field,
   IconButton,
+  ImageViewer,
   InheritRow,
   InlineInput,
   Kbd,
@@ -51,6 +52,7 @@ import {
   Skeleton,
   Slider,
   Spinner,
+  Splitter,
   StageProgress,
   StarRating,
   StatusDot,
@@ -173,6 +175,59 @@ function useSampleImages(): CarouselImage[] {
     );
   }, []);
   return images;
+}
+
+/** Two panes and a Splitter, for the Lab. */
+function SplitterDemo() {
+  const row = useRef<HTMLDivElement>(null);
+  const [share, setShare] = useState(0.6);
+  return (
+    <div ref={row} className="flex h-24 w-full rounded-md border border-line">
+      <div
+        className="grid place-items-center text-xs text-fg-3"
+        style={{ width: `${share * 100}%` }}
+      >
+        Params {Math.round(share * 100)}%
+      </div>
+      <Splitter
+        container={row}
+        share={share}
+        onChange={setShare}
+        onReset={() => setShare(0.6)}
+        minLeft={60}
+        minRight={60}
+      />
+      <div className="grid flex-1 place-items-center text-xs text-fg-3">Image</div>
+    </div>
+  );
+}
+
+const VIEWER_SAMPLES = ["#3b82f6", "#a855f7", "#f97316"].map((color, i) => ({
+  key: color,
+  alt: `Sample ${i + 1}`,
+  src: `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="832" height="1216"><rect width="100%" height="100%" fill="${color}"/><circle cx="416" cy="520" r="220" fill="white" fill-opacity=".35"/></svg>`,
+  )}`,
+}));
+
+/** The full-screen viewer with three samples, for the Lab. */
+function ViewerDemo() {
+  const [index, setIndex] = useState<number | null>(null);
+  return (
+    <>
+      <Button icon="maximize" onClick={() => setIndex(0)}>
+        Open the viewer
+      </Button>
+      {index !== null ? (
+        <ImageViewer
+          images={VIEWER_SAMPLES}
+          index={index}
+          onIndex={setIndex}
+          onClose={() => setIndex(null)}
+        />
+      ) : null}
+    </>
+  );
 }
 
 /** A box with a ResizeGrip, for the Lab: its text decides what a double-click fits to. */
@@ -1279,6 +1334,12 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
         >
           <div className="grid grid-cols-2 gap-6">
             <div className="flex flex-col gap-4">
+              <Row label="Splitter (drag, double-click resets)">
+                <SplitterDemo />
+              </Row>
+              <Row label="ImageViewer">
+                <ViewerDemo />
+              </Row>
               <Row label="ProgressBar">
                 <div className="flex w-full flex-col gap-2">
                   <ProgressBar value={progress} label="Determinate" />

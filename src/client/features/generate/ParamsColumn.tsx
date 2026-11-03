@@ -235,10 +235,7 @@ export function ParamsColumn({ batch = false }: { batch?: boolean }) {
   const plain = <BlockList visible={visible} ctx={ctx} />;
 
   return (
-    <div
-      className="scroll-quiet h-full overflow-y-auto pr-1.5 max-lg:h-auto max-lg:w-full! max-lg:overflow-visible max-lg:pr-0"
-      style={{ width: doc?.sizes.params ?? 420 }}
-    >
+    <div className="min-w-0">
       {customizing ? (
         // While dnd-kit loads (the first Customize only), the blocks show without handles.
         <Suspense fallback={plain}>

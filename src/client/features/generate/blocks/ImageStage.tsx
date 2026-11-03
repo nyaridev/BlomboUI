@@ -1,36 +1,67 @@
 /**
- * The image stage: the selected result, or the live preview while generating; progress split by
- * part of the run (the workflow's sampling, then each stage) with speed and ETA; tools; the
- * strip of this session's results; and, for a finished result, how long each part took and how
- * fast it sampled (the server's timings, `Job.timings`). Everything comes from the live bus:
- * queue snapshots, step progress and binary preview frames.
+ * The image stage: a square box with the latest result, or the live preview while generating
+ * (on the steps Settings → Generate → Preview picks); progress split by part of the run (the
+ * workflow's sampling, then each stage) with speed and ETA; and, for a finished result, its size,
+ * seed and how long it took. Clicking the image opens it full screen, a middle click opens it in
+ * a new tab. A strip under the box shows the last run's images, only when it made more than one.
+ * Everything comes from the live bus: queue snapshots, step progress and binary preview frames.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { type LivePreview, useLive } from "@client/lib/live";
 import { openWindow } from "@client/lib/platform";
-import { IconButton, Spinner, StageProgress, type StageSegment, Tooltip, toast } from "@client/ui";
+import { useSettings } from "@client/lib/queries";
+import {
+  IconButton,
+  ImageViewer,
+  Spinner,
+  StageProgress,
+  type StageSegment,
+  Tooltip,
+} from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
 import { averageRate, formatDuration } from "@shared/history";
 import type { Job, JobImage } from "@shared/jobs";
+import { PreviewSettings } from "@shared/settings";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useValues } from "../state";
-import { useRoleBinding } from "../workflow";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { previewDue, useLastRun } from "../preview";
 
 interface Result {
   key: string;
   url: string;
-  /** File name for the full-size window's title. */
+  /** File name for the new tab's title. */
   name: string;
   job: Job;
 }
 
+const DEFAULT_PREVIEW = PreviewSettings.parse({});
 const keyOf = (job: Job, img: JobImage) => `${job.id}/${img.subfolder}/${img.filename}`;
 
 function seconds(job: Job): string | null {
   if (!job.startedAt || !job.finishedAt) return null;
   return `${((Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000).toFixed(1)}s`;
+}
+
+/** A job's pictures: a script's grid, or ComfyUI's saved images (its previews when it saved none). */
+function resultsOf(job: Job): Result[] {
+  if (job.file)
+    return [
+      {
+        key: job.id,
+        url: job.file.url,
+        name: job.file.path.split(/[\\/]/).pop() ?? "grid.png",
+        job,
+      },
+    ];
+  return job.images
+    .filter((img) => img.type === "output" || job.images.every((i) => i.type !== "output"))
+    .map((image) => ({
+      key: keyOf(job, image),
+      url: comfyViewUrl(image),
+      name: image.filename,
+      job,
+    }));
 }
 
 /** Steps per second from progress ticks, smoothed. */
@@ -58,6 +89,13 @@ function useSpeed(): number | null {
   return speed;
 }
 
+/** Middle click: the image in a new tab (or window, in the desktop app). */
+function middleOpen(e: MouseEvent, r: Result) {
+  if (e.button !== 1) return;
+  e.preventDefault();
+  void openWindow(r.url, r.name);
+}
+
 export function ImageStage() {
   const jobs = useLive((s) => s.queue.jobs);
   const running = jobs.find((j) => j.state === "running") ?? null;
@@ -65,45 +103,24 @@ export function ImageStage() {
     running && s.progress?.jobId === running.id ? s.progress.progress : null,
   );
   const preview = useLive((s) => (running && s.preview?.jobSeq === running.seq ? s.preview : null));
-  const widthId = useRoleBinding("latent.width")?.id;
-  const heightId = useRoleBinding("latent.height")?.id;
-  const seedId = useRoleBinding("sampler.seed")?.id;
-  const valueW = useValues((s) => (widthId ? Number(s.values[widthId]) : Number.NaN));
-  const valueH = useValues((s) => (heightId ? Number(s.values[heightId]) : Number.NaN));
+  const previewSettings = useSettings().data?.generate.preview ?? DEFAULT_PREVIEW;
+  const runIds = useLastRun((s) => s.ids);
   const smoothed = useSpeed();
   // The server measures from when the node started; before its first steps, our own estimate.
   const speed = progress?.rate ?? smoothed;
 
-  const results = useMemo<Result[]>(
-    () =>
-      jobs
-        // Batch files have their own panel; a script's grid is a picture Blombo made.
-        .filter((j) => j.state === "done" && j.group?.kind !== "batch")
-        .flatMap((job): Result[] =>
-          job.file
-            ? [
-                {
-                  key: job.id,
-                  url: job.file.url,
-                  name: job.file.path.split(/[\\/]/).pop() ?? "grid.png",
-                  job,
-                },
-              ]
-            : job.images
-                .filter(
-                  (img) => img.type === "output" || job.images.every((i) => i.type !== "output"),
-                )
-                .map((image) => ({
-                  key: keyOf(job, image),
-                  url: comfyViewUrl(image),
-                  name: image.filename,
-                  job,
-                })),
-        ),
-    [jobs],
-  );
+  // The last run: the newest finished job and, when the last click queued it, the rest of that
+  // click's jobs (oldest first, so the strip reads in run order).
+  const results = useMemo<Result[]>(() => {
+    // Batch files have their own panel.
+    const done = jobs.filter((j) => j.state === "done" && j.group?.kind !== "batch");
+    const newest = done[0];
+    if (!newest) return [];
+    const run = runIds.includes(newest.id) ? done.filter((j) => runIds.includes(j.id)) : [newest];
+    return run.reverse().flatMap(resultsOf);
+  }, [jobs, runIds]);
   const [selected, setSelected] = useState<string | null>(null);
-  const newest = results[0]?.key ?? null;
+  const newest = results.at(-1)?.key ?? null;
   const seenNewest = useRef<string | null>(null);
   useEffect(() => {
     // A new result arrived: show it.
@@ -112,14 +129,16 @@ export function ImageStage() {
       setSelected(newest);
     }
   }, [newest]);
-  const current = results.find((r) => r.key === selected) ?? results[0] ?? null;
+  const index = Math.max(
+    0,
+    results.findIndex((r) => r.key === selected),
+  );
+  const current = results.length ? (results[selected ? index : results.length - 1] ?? null) : null;
+  const [viewing, setViewing] = useState(false);
 
   const lastError = jobs.find((j) => j.state === "error" || j.state === "done");
   const [dismissed, setDismissed] = useState<string | null>(null);
   const error = lastError?.state === "error" && lastError.id !== dismissed ? lastError : null;
-
-  const w = running?.width ?? current?.job.width ?? (Number.isFinite(valueW) ? valueW : 1024);
-  const h = running?.height ?? current?.job.height ?? (Number.isFinite(valueH) ? valueH : 1024);
 
   // One segment per part of the run: the workflow's sampling, then each stage that samples.
   const parts = running?.segments;
@@ -147,40 +166,49 @@ export function ImageStage() {
       ? Math.round((progress.max - progress.value + passesLeft * progress.max) / speed)
       : null;
 
+  // Only the first part of a click's first run waits before its first preview.
+  const firstRun = !running || !runIds.includes(running.id) || runIds[0] === running.id;
+  const wait = (progress?.segment ?? 0) === 0 && (firstRun || !previewSettings.waitFirstOnly);
+  const drawPreview =
+    progress !== null && previewDue(progress.value, progress.max, previewSettings, wait);
+
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 max-lg:h-[min(calc(100vw+70px),75svh)] max-lg:flex-none">
-      <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-line bg-sunken [container-type:size]">
-        <div className="absolute inset-0 grid place-items-center p-5">
-          {running || current ? (
-            <div
-              className="relative overflow-hidden rounded-lg bg-surface shadow-pop"
-              style={{
-                aspectRatio: `${w} / ${h}`,
-                width: `min(100cqw - 40px, (100cqh - 40px) * ${w / h})`,
-              }}
-            >
-              {running ? (
-                preview ? (
-                  <PreviewCanvas preview={preview} />
-                ) : (
-                  <div className="absolute inset-0 grid place-items-center text-fg-3">
-                    <Spinner size={22} />
-                  </div>
-                )
-              ) : current ? (
-                <img
-                  key={current.key}
-                  src={current.url}
-                  alt={`Result, seed ${current.job.seed ?? "unknown"}`}
-                  className="absolute inset-0 h-full w-full object-contain"
-                  draggable
-                />
-              ) : null}
+    <div className="sticky top-0 flex min-w-0 flex-col gap-2">
+      <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-sunken">
+        {running ? (
+          <>
+            <div className="absolute inset-0 grid place-items-center text-fg-3">
+              <Spinner size={22} />
             </div>
-          ) : (
+            {previewSettings.show && preview ? (
+              <PreviewCanvas key={running.id} preview={preview} draw={drawPreview} />
+            ) : null}
+          </>
+        ) : current ? (
+          <button
+            type="button"
+            onClick={() => setViewing(true)}
+            onMouseDown={(e) => {
+              // Keep the browser's autoscroll from starting on a middle click.
+              if (e.button === 1) e.preventDefault();
+            }}
+            onAuxClick={(e) => middleOpen(e, current)}
+            aria-label="Show full screen"
+            className="absolute inset-0 cursor-zoom-in focus-ring"
+          >
+            <img
+              key={current.key}
+              src={current.url}
+              alt={`Result, seed ${current.job.seed ?? "unknown"}`}
+              className="h-full w-full object-contain"
+              draggable
+            />
+          </button>
+        ) : (
+          <div className="absolute inset-0 grid place-items-center p-6">
             <EmptyStage />
-          )}
-        </div>
+          </div>
+        )}
 
         <AnimatePresence>
           {running ? (
@@ -226,77 +254,24 @@ export function ImageStage() {
           </div>
         ) : null}
 
-        {current && !running ? (
-          <>
-            <div className="absolute top-3 right-3 flex flex-col gap-1 rounded-lg border border-line bg-surface-3/90 p-1 shadow-pop">
-              <IconButton
-                icon="maximize"
-                label="Open full size"
-                size="sm"
-                onClick={() => void openWindow(current.url, current.name)}
-              />
-              <IconButton
-                icon="copy"
-                label="Copy image"
-                size="sm"
-                onClick={() => void copyImage(current.url)}
-              />
-              {current.job.seed !== null && seedId ? (
-                <IconButton
-                  icon="seed"
-                  label={`Use this seed (${current.job.seed})`}
-                  size="sm"
-                  onClick={() => reuseSeed(seedId, current.job.seed as number)}
-                />
-              ) : null}
-            </div>
-            <div className="absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 font-mono text-2xs text-white/85 backdrop-blur-[2px]">
-              {current.job.width && current.job.height ? (
-                <span>
-                  {current.job.width}×{current.job.height}
-                </span>
-              ) : null}
-              {current.job.seed !== null ? (
-                <>
-                  <span className="text-white/40">·</span>
-                  <span>seed {current.job.seed}</span>
-                </>
-              ) : null}
-              {seconds(current.job) ? (
-                <>
-                  <span className="text-white/40">·</span>
-                  {current.job.timings.length ? (
-                    <Tooltip content={<Timings job={current.job} />}>
-                      <span className="cursor-default underline decoration-white/40 decoration-dotted underline-offset-2">
-                        {seconds(current.job)}
-                        {averageRate(current.job.timings)
-                          ? ` · ${(averageRate(current.job.timings) as number).toFixed(2)} it/s`
-                          : ""}
-                      </span>
-                    </Tooltip>
-                  ) : (
-                    <span>{seconds(current.job)}</span>
-                  )}
-                </>
-              ) : null}
-            </div>
-          </>
-        ) : null}
+        {current && !running ? <ResultInfo job={current.job} /> : null}
       </div>
 
-      <div className="scroll-quiet flex h-[76px] shrink-0 items-center gap-1.5 overflow-x-auto">
-        <AnimatePresence initial={false}>
+      {results.length > 1 && !running ? (
+        <div className="scroll-quiet flex shrink-0 gap-1.5 overflow-x-auto pb-0.5">
           {results.map((r) => (
-            <motion.button
+            <button
               key={r.key}
-              layout
-              initial={{ opacity: 0, scale: 0.8, width: 0 }}
-              animate={{ opacity: 1, scale: 1, width: 52 }}
               type="button"
               onClick={() => setSelected(r.key)}
+              onMouseDown={(e) => {
+                if (e.button === 1) e.preventDefault();
+              }}
+              onAuxClick={(e) => middleOpen(e, r)}
               aria-label={`Show result, seed ${r.job.seed ?? "unknown"}`}
+              aria-pressed={r.key === current?.key}
               className={cn(
-                "relative h-[70px] shrink-0 overflow-hidden rounded-md border-2 bg-surface transition-colors focus-ring",
+                "relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 bg-surface transition-colors focus-ring",
                 r.key === current?.key
                   ? "border-accent"
                   : "border-transparent opacity-75 hover:opacity-100",
@@ -308,20 +283,68 @@ export function ImageStage() {
                 loading="lazy"
                 className="absolute inset-0 h-full w-full object-cover"
               />
-            </motion.button>
+            </button>
           ))}
-        </AnimatePresence>
-        <span className="ml-auto shrink-0 pl-3 text-2xs text-fg-3">
-          {results.length
-            ? `${results.length} this session`
-            : "Results from this session appear here"}
-        </span>
-      </div>
+        </div>
+      ) : null}
+
+      {viewing && current ? (
+        <ImageViewer
+          images={results.map((r) => ({
+            key: r.key,
+            src: r.url,
+            alt: `Result, seed ${r.job.seed ?? "unknown"}`,
+          }))}
+          index={results.indexOf(current)}
+          onIndex={(i) => setSelected(results[i]?.key ?? null)}
+          onClose={() => setViewing(false)}
+          onOpenTab={(img) => {
+            const r = results.find((x) => x.key === img.key);
+            if (r) void openWindow(r.url, r.name);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
-/** How long each part of a finished run took (the image stage's tooltip). */
+/** Size, seed and time of a finished result, small in the corner. */
+function ResultInfo({ job }: { job: Job }) {
+  const time = seconds(job);
+  const rate = averageRate(job.timings);
+  return (
+    <div className="pointer-events-auto absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 font-mono text-2xs text-white/85 backdrop-blur-[2px]">
+      {job.width && job.height ? (
+        <span>
+          {job.width}×{job.height}
+        </span>
+      ) : null}
+      {job.seed !== null ? (
+        <>
+          <span className="text-white/40">·</span>
+          <span>seed {job.seed}</span>
+        </>
+      ) : null}
+      {time ? (
+        <>
+          <span className="text-white/40">·</span>
+          {job.timings.length ? (
+            <Tooltip content={<Timings job={job} />}>
+              <span className="cursor-default underline decoration-white/40 decoration-dotted underline-offset-2">
+                {time}
+                {rate ? ` · ${rate.toFixed(2)} it/s` : ""}
+              </span>
+            </Tooltip>
+          ) : (
+            <span>{time}</span>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+/** How long each part of a finished run took (the info chip's tooltip). */
 function Timings({ job }: { job: Job }) {
   return (
     <span className="flex min-w-[200px] flex-col gap-1 py-0.5">
@@ -356,48 +379,22 @@ function EmptyStage() {
   );
 }
 
-/** Draws the latest preview bitmap; bitmaps are decoded off the main paint by the live client. */
-function PreviewCanvas({ preview }: { preview: LivePreview }) {
+/**
+ * The live preview. Frames arrive every step but are drawn only when `draw` says so; the canvas
+ * keeps the last one in between (the live client frees each frame once the next one arrives).
+ */
+function PreviewCanvas({ preview, draw }: { preview: LivePreview; draw: boolean }) {
   const ref = useRef<HTMLCanvasElement>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: only a new frame draws; `draw` is read with it
   useEffect(() => {
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
+    if (!draw || !canvas || !ctx) return;
     if (canvas.width !== preview.bitmap.width || canvas.height !== preview.bitmap.height) {
       canvas.width = preview.bitmap.width;
       canvas.height = preview.bitmap.height;
     }
     ctx.drawImage(preview.bitmap, 0, 0);
   }, [preview]);
-  return (
-    <canvas
-      ref={ref}
-      className="absolute inset-0 h-full w-full object-contain [image-rendering:auto]"
-    />
-  );
-}
-
-async function copyImage(url: string) {
-  try {
-    const blob = await (await fetch(url)).blob();
-    const png = blob.type === "image/png" ? blob : await toPng(blob);
-    await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-    toast("Copied to clipboard", "success");
-  } catch {
-    toast("Couldn't copy the image. Open it full size and copy from there.", "error");
-  }
-}
-
-async function toPng(blob: Blob): Promise<Blob> {
-  const bitmap = await createImageBitmap(blob);
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
-  canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
-  return canvas.convertToBlob({ type: "image/png" });
-}
-
-function reuseSeed(seedId: string, seed: number) {
-  const { setValue, setRun } = useValues.getState();
-  setValue(seedId, seed);
-  setRun({ seedMode: "fixed" });
-  toast(`Seed ${seed} set; it stays fixed for the next runs`, "info");
+  return <canvas ref={ref} className="absolute inset-0 h-full w-full object-contain" />;
 }

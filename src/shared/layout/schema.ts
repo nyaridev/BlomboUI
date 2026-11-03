@@ -86,7 +86,6 @@ export const LayoutDocument = z.object({
     params: z.array(Block),
     stage: z.array(Block),
   }),
-  sizes: z.object({ params: z.number().min(300).max(720).default(420) }).default({ params: 420 }),
 });
 export type LayoutDocument = z.infer<typeof LayoutDocument>;
 

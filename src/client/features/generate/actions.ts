@@ -10,6 +10,7 @@ import { toast } from "@client/ui";
 import type { WorkflowDetail } from "@shared/workflow/manifest";
 import type { StageReport } from "@shared/workflow/stages";
 import { create } from "zustand";
+import { useLastRun } from "./preview";
 import { buildScript, useScript } from "./scripts";
 import { takePendingSave, useValues } from "./state";
 
@@ -86,6 +87,7 @@ export async function generate(): Promise<void> {
       loop: script ? false : useLoopIntent.getState().on,
       ...(script?.script ? { script: script.script } : {}),
     });
+    useLastRun.getState().set(res.jobs.map((j) => j.id));
     if (Object.keys(res.values).length) merge(res.values);
     // The queued save was dropped (the request carried the values): keep the cached workflow
     // in step, or switching away and back would show the values from before.

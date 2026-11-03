@@ -138,7 +138,7 @@ export class LayoutService {
    */
   async adopt(doc: LayoutDocument): Promise<string> {
     const same = (a: LayoutDocument, b: LayoutDocument) =>
-      JSON.stringify([a.regions, a.sizes]) === JSON.stringify([b.regions, b.sizes]);
+      JSON.stringify(a.regions) === JSON.stringify(b.regions);
     if ((await this.builtins()).some((l) => l.id === doc.id)) return doc.id;
     const custom = await readDir(this.dir());
     const match = custom.find((l) => l.id === doc.id && same(l, doc));

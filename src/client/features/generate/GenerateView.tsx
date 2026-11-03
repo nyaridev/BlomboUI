@@ -8,11 +8,13 @@
  * Generate, then the image above the parameters; Customize stays a desktop tool.
  */
 import { glide } from "@client/lib/motion";
+import { useSettings, useUpdateSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, Spinner, Tabs } from "@client/ui";
+import { Button, Spinner, Splitter, Tabs } from "@client/ui";
+import { GenerateSettings } from "@shared/settings";
 import { useLocation } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BatchView } from "./batch/BatchView";
 import { ImageStage } from "./blocks/ImageStage";
 import { ModelsStrip, type StripTarget } from "./blocks/ModelsStrip";
@@ -29,12 +31,20 @@ import { useActiveWorkflow } from "./workflow";
 
 type WorkTab = "generation" | PickerTab;
 
+const DEFAULT_SHARE = GenerateSettings.parse({}).paramsShare;
+
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: glide } };
 
 export function GenerateView() {
   const [tab, setTab] = useState<WorkTab>("generation");
   // The strip tile the picker is changing; any other way of changing tabs forgets it.
   const [target, setTarget] = useState<StripTarget | null>(null);
+  // The params' share of the row: follows the splitter while dragging, saved when it's let go.
+  const savedShare = useSettings().data?.generate.paramsShare;
+  const updateSettings = useUpdateSettings();
+  const [share, setShare] = useState<number | null>(null);
+  const row = useRef<HTMLDivElement>(null);
+  const paramsShare = share ?? savedShare ?? DEFAULT_SHARE;
   const changeTab = (next: WorkTab) => {
     setTab(next);
     setTarget(null);
@@ -87,7 +97,8 @@ export function GenerateView() {
 
   return (
     <motion.div
-      className="relative flex h-full flex-col gap-3 p-3 max-lg:scroll-quiet max-lg:overflow-y-auto max-lg:p-2"
+      // One scrollbar for the whole view: the strip, prompts, tabs and the params all scroll.
+      className="scroll-quiet relative flex h-full flex-col gap-3 overflow-y-auto p-3 max-lg:p-2"
       {...drop.handlers}
       initial="hidden"
       animate="show"
@@ -115,7 +126,7 @@ export function GenerateView() {
         </div>
       </motion.div>
 
-      <motion.div variants={item} className="flex min-h-0 flex-1 flex-col max-lg:flex-none">
+      <motion.div variants={item} className="flex flex-none flex-col">
         <div className="flex items-center gap-3">
           <Tabs
             variant="line"
@@ -142,14 +153,30 @@ export function GenerateView() {
         </div>
 
         {tab === "generation" ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-3 pt-3 max-lg:flex-none">
+          <div className="flex flex-col gap-3 pt-3">
             <AnimatePresence>{customizing ? <CustomizeBar /> : null}</AnimatePresence>
-            <div className="flex min-h-0 flex-1 gap-3 max-lg:flex-none max-lg:flex-col-reverse">
-              <div data-tour="params" className="contents">
+            <div ref={row} className="flex items-stretch pb-3 max-lg:flex-col-reverse max-lg:gap-3">
+              <div
+                data-tour="params"
+                className="min-w-0 shrink-0 max-lg:w-full!"
+                style={{ width: `${paramsShare * 100}%` }}
+              >
                 <ParamsColumn />
               </div>
+              <Splitter
+                container={row}
+                share={paramsShare}
+                onChange={setShare}
+                onCommit={(next) => updateSettings.mutate({ generate: { paramsShare: next } })}
+                onReset={() => {
+                  setShare(null);
+                  updateSettings.mutate({ generate: { paramsShare: DEFAULT_SHARE } });
+                }}
+                label="Resize the settings and the image"
+                className="max-lg:hidden"
+              />
               <AnimatePresence>{customizing ? <Inspector /> : null}</AnimatePresence>
-              <div data-tour="stage" className="contents">
+              <div data-tour="stage" className="min-w-0 flex-1">
                 <ImageStage />
               </div>
             </div>

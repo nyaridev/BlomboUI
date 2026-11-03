@@ -57,9 +57,26 @@ export const ModelSettings = z.object({
   blurNsfw: z.boolean().default(true),
 });
 
+/**
+ * When the image stage shows ComfyUI's preview while sampling: from step `after` (rounded up to
+ * a multiple of `every`), then every `every` steps, plus the last step when `lastStep` is on.
+ * With `waitFirstOnly`, the later runs of one click start on the interval without waiting.
+ */
+export const PreviewSettings = z.object({
+  show: z.boolean().default(true),
+  every: z.number().int().min(1).max(50).default(4),
+  after: z.number().int().min(1).max(50).default(8),
+  waitFirstOnly: z.boolean().default(true),
+  lastStep: z.boolean().default(true),
+});
+export type PreviewSettings = z.infer<typeof PreviewSettings>;
+
 export const GenerateSettings = z.object({
   /** The layout workflows show when they don't link one (a built-in or profile layout id). */
   layout: z.string().min(1).max(80).default("default"),
+  preview: PreviewSettings.prefault({}),
+  /** How much of the Generation tab's width the params take (the image gets the rest). */
+  paramsShare: z.number().min(0.3).max(0.75).default(0.6),
   /** The models strip: big pictures with names on them, small pictures only, or text chips. */
   tiles: z.enum(["pictures", "compact", "text"]).default("pictures"),
 });

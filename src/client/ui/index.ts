@@ -26,6 +26,7 @@ export {
   Popover,
   Tooltip,
 } from "./floating";
+export { ImageViewer, type ViewerImage } from "./ImageViewer";
 export { Field, TextArea, TextField } from "./inputs";
 export {
   CopyButton,
@@ -44,6 +45,7 @@ export { type ResizeAxis, ResizeGrip } from "./ResizeGrip";
 export { Select, type SelectOption } from "./Select";
 export { Sheet } from "./Sheet";
 export { type NumberControlProps, ScrubField, Slider } from "./Slider";
+export { Splitter } from "./Splitter";
 export { StarRating } from "./StarRating";
 export { Notice, type UnitTab, UnitTabs } from "./stage";
 export { Collapsible, Divider, InheritRow, Panel, SectionTitle } from "./surfaces";

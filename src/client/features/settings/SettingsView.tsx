@@ -470,17 +470,19 @@ function ModelsPage() {
     <>
       <PageHeader title="Models" />
       <div className="flex flex-col gap-8">
-        <Field
-          label="Blur NSFW thumbnails"
-          layout="left"
-          hint="Thumbnails whose info file marks them NSFW stay blurred until you click them."
-        >
-          <Switch
-            checked={settings?.models.blurNsfw ?? true}
-            onCheckedChange={(blurNsfw) => update.mutate({ models: { blurNsfw } })}
+        <SettingsSection title="Thumbnails" icon="image">
+          <Field
             label="Blur NSFW thumbnails"
-          />
-        </Field>
+            layout="left"
+            hint="Thumbnails whose info file marks them NSFW stay blurred until you click them."
+          >
+            <Switch
+              checked={settings?.models.blurNsfw ?? true}
+              onCheckedChange={(blurNsfw) => update.mutate({ models: { blurNsfw } })}
+              label="Blur NSFW thumbnails"
+            />
+          </Field>
+        </SettingsSection>
       </div>
     </>
   );

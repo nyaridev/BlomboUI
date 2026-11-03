@@ -46,10 +46,17 @@ export const sameTarget = (a: StripTarget | null, b: StripTarget | null) =>
 /** The target's border: an accent outline, over a missing file's yellow one. */
 const tileBorder = (active: boolean | undefined, missing: string | null | undefined) =>
   active
-    ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
+    ? "border-transparent"
     : missing
       ? "border-yellow/60"
       : "border-line hover:border-line-strong";
+
+/** The selected tile's glow, over the picture (an inset shadow on the tile would sit under it). */
+function SelectedGlow({ on }: { on: boolean | undefined }) {
+  return on ? (
+    <span className="pointer-events-none absolute inset-0 z-[2] rounded-[inherit] shadow-selected" />
+  ) : null;
+}
 
 const stem = (f: string) => modelDisplayName(f).toLowerCase();
 const strengthText = (v: number) => String(Number(v.toFixed(2)));
@@ -204,6 +211,7 @@ function Tile(props: TileProps) {
       )}
     >
       <DropMarker at={sortable?.marker ?? null} />
+      <SelectedGlow on={active} />
       <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
         <Tooltip content={missing ? `${what}: ${shown}. ${missing}` : `${what}: ${shown}`}>
           <button
@@ -307,6 +315,7 @@ function TextTile({
       )}
     >
       <DropMarker at={sortable?.marker ?? null} />
+      <SelectedGlow on={active} />
       <Tooltip content={missing ? `${what}: ${shown}. ${missing}` : `${what}: ${shown}`}>
         <button
           type="button"

@@ -4,7 +4,9 @@
  * workflow's model, adds a <lora:…> tag or a __wildcard__ to the prompt. The grid is virtualized:
  * LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
  * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
- * list). Favorites come first, then what you used recently (the job log).
+ * list). Favorites come first, then what you used recently (the job log), unless another sort
+ * is picked. A folder tree on the left narrows the grid to one folder; the top bar searches,
+ * filters by base model, sorts and rescans.
  */
 import { Icon } from "@client/icons/Icon";
 import { useElementWidth } from "@client/lib/hooks";
@@ -18,10 +20,12 @@ import {
 } from "@client/lib/queries";
 import {
   type CardKind,
+  IconButton,
   type MenuEntry,
   ModelCard,
   openContextMenu,
   Segmented,
+  Select,
   Spinner,
   TextField,
   toast,
@@ -32,8 +36,11 @@ import { findLoraTags, formatLoraTag, swapLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { rescanModels } from "../../app/commands";
 import { useModelMenu } from "../models/actions";
 import type { StripTarget } from "./blocks/ModelsStrip";
+import { FolderTree } from "./FolderTree";
+import { folderTree, inFolder } from "./folders";
 import { modelDisplayName, modelFolder } from "./labels";
 import { pickerOrder } from "./pickerOrder";
 import { useValues } from "./state";
@@ -49,8 +56,18 @@ const OTHER_KINDS: Array<{ value: ModelKind; label: string }> = [
   { value: "embeddings", label: "Embeddings" },
 ];
 
-const CARD_MIN = 170;
+/** Cards are 256 x 384 (2:3); the row keeps what's left over (narrower only on small screens). */
+const CARD_W = 256;
+const CARD_RATIO = 2 / 3;
 const GAP = 12;
+
+type Sort = "suggested" | "name" | "newest" | "largest";
+const SORTS: Array<{ value: Sort; label: string }> = [
+  { value: "suggested", label: "Favorites first" },
+  { value: "name", label: "Name" },
+  { value: "newest", label: "Newest files" },
+  { value: "largest", label: "Largest first" },
+];
 
 interface Item {
   id: string;
@@ -144,6 +161,16 @@ export function ModelGrid({
 
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
+  const [folder, setFolder] = useState<string | null>(null);
+  const [base, setBase] = useState("");
+  const [sort, setSort] = useState<Sort>("suggested");
+  const [showTree, setShowTree] = useState(true);
+  // Another tab or model kind has other folders and base models.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: tab and kind are the triggers
+  useEffect(() => {
+    setFolder(null);
+    setBase("");
+  }, [tab, kind]);
   const marks = useModelMarks().data;
   const setFavorite = useSetModelFavorite();
   const favorites = useMemo(() => {
@@ -154,11 +181,32 @@ export function ModelGrid({
         .map((f) => f.slice(prefix.length)),
     );
   }, [marks, kind]);
+  const bases = useMemo(
+    () =>
+      [
+        ...new Set(items.map((i) => i.local?.baseModel).filter((b): b is string => Boolean(b))),
+      ].sort(),
+    [items],
+  );
+  // Search and base model first; the tree counts what they leave, the folder narrows further.
+  const found = useMemo(
+    () =>
+      items.filter(
+        (i) => (!q || i.id.toLowerCase().includes(q)) && (!base || i.local?.baseModel === base),
+      ),
+    [items, q, base],
+  );
+  const tree = useMemo(() => folderTree(found.map((i) => i.id)), [found]);
   const list = useMemo(() => {
-    const found = q ? items.filter((i) => i.id.toLowerCase().includes(q)) : items;
-    if (tab === "wildcards") return found;
-    return pickerOrder(found, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
-  }, [items, q, tab, favorites, marks]);
+    const shown = found.filter((i) => inFolder(i.id, folder));
+    if (sort === "name") return shown.sort((a, b) => a.name.localeCompare(b.name));
+    if (sort === "newest")
+      return shown.sort((a, b) => (b.local?.mtime ?? 0) - (a.local?.mtime ?? 0));
+    if (sort === "largest")
+      return shown.sort((a, b) => (b.local?.size ?? 0) - (a.local?.size ?? 0));
+    if (tab === "wildcards") return shown;
+    return pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
+  }, [found, folder, sort, tab, favorites, marks]);
   const inPrompt = useMemo(
     () => new Set(findLoraTags(prompt).map((t) => t.name.toLowerCase())),
     [prompt],
@@ -252,13 +300,21 @@ export function ModelGrid({
     // The Generate view scrolls as a whole, so the grid gets a height of its own.
     <div className="flex h-[75svh] min-h-[420px] flex-col gap-3 pt-3">
       <div className="flex items-center gap-2 max-lg:flex-wrap">
+        <IconButton
+          icon="sidebar"
+          label={showTree ? "Hide folders" : "Show folders"}
+          variant="secondary"
+          active={showTree}
+          onClick={() => setShowTree((v) => !v)}
+          className="max-lg:hidden"
+        />
         <TextField
           icon="search"
           placeholder={`Search ${tab === "other" ? OTHER_KINDS.find((k) => k.value === otherKind)?.label.toLowerCase() : tab}`}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
-          className="w-80 max-lg:w-auto max-lg:min-w-0 max-lg:flex-1"
+          className="min-w-0 flex-1"
         />
         {tab === "other" ? (
           <Segmented
@@ -272,44 +328,83 @@ export function ModelGrid({
             options={OTHER_KINDS}
           />
         ) : null}
-        <span className="ml-auto text-xs text-fg-3">{list.length} items</span>
+        {bases.length ? (
+          <Select
+            value={base}
+            onChange={setBase}
+            label="Base model"
+            className="w-44"
+            options={[
+              { value: "", label: "All base models" },
+              ...bases.map((b) => ({ value: b, label: b })),
+            ]}
+          />
+        ) : null}
+        <Select<Sort>
+          value={sort}
+          onChange={setSort}
+          label="Sort"
+          className="w-40"
+          options={tab === "wildcards" ? SORTS.slice(0, 2) : SORTS}
+        />
+        {tab !== "wildcards" ? (
+          <IconButton
+            icon="rescan-models"
+            label="Rescan model folders"
+            variant="secondary"
+            onClick={() => void rescanModels()}
+          />
+        ) : null}
+        <span className="text-xs whitespace-nowrap text-fg-3 tabular">
+          {list.length} {list.length === 1 ? "item" : "items"}
+        </span>
       </div>
-      {loading ? (
-        <div className="grid flex-1 place-items-center text-fg-3">
-          <Spinner size={20} />
+      <div className="flex min-h-0 flex-1 gap-3">
+        {showTree && !loading && !unavailable ? (
+          <FolderTree nodes={tree} total={found.length} folder={folder} onFolder={setFolder} />
+        ) : null}
+        <div className="flex min-w-0 flex-1 flex-col">
+          {loading ? (
+            <div className="grid flex-1 place-items-center text-fg-3">
+              <Spinner size={20} />
+            </div>
+          ) : unavailable ? (
+            <Empty
+              icon="workflow"
+              text="Start ComfyUI to see your models. It lists what's in the profile's models folder."
+            />
+          ) : tab === "wildcards" && !wildcards.data?.root ? (
+            <Empty
+              icon="wildcards"
+              text="This profile has no wildcards folder. Set one in Settings to use __wildcards__."
+            />
+          ) : list.length === 0 ? (
+            <Empty
+              icon="search"
+              text={
+                q
+                  ? `Nothing matches "${query}" here.`
+                  : base || folder
+                    ? "Nothing here with these filters."
+                    : "Nothing here yet. Add files to the folder, then rescan models from the header."
+              }
+            />
+          ) : (
+            <VirtualGrid
+              items={list}
+              isSelected={isSelected}
+              onPick={pick}
+              onMenu={(e, item) => openContextMenu(e, menuFor(item))}
+              blurNsfw={blurNsfw}
+              favorites={tab === "wildcards" ? null : favorites}
+              onFavorite={(item) =>
+                kind &&
+                setFavorite.mutate({ kind, name: item.id, favorite: !favorites.has(item.id) })
+              }
+            />
+          )}
         </div>
-      ) : unavailable ? (
-        <Empty
-          icon="workflow"
-          text="Start ComfyUI to see your models. It lists what's in the profile's models folder."
-        />
-      ) : tab === "wildcards" && !wildcards.data?.root ? (
-        <Empty
-          icon="wildcards"
-          text="This profile has no wildcards folder. Set one in Settings to use __wildcards__."
-        />
-      ) : list.length === 0 ? (
-        <Empty
-          icon="search"
-          text={
-            q
-              ? `Nothing matches "${query}".`
-              : "Nothing here yet. Add files to the folder, then rescan models from the header."
-          }
-        />
-      ) : (
-        <VirtualGrid
-          items={list}
-          isSelected={isSelected}
-          onPick={pick}
-          onMenu={(e, item) => openContextMenu(e, menuFor(item))}
-          blurNsfw={blurNsfw}
-          favorites={tab === "wildcards" ? null : favorites}
-          onFavorite={(item) =>
-            kind && setFavorite.mutate({ kind, name: item.id, favorite: !favorites.has(item.id) })
-          }
-        />
-      )}
+      </div>
     </div>
   );
 }
@@ -345,9 +440,9 @@ function VirtualGrid({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const width = useElementWidth(scroller);
-  const columns = Math.max(1, Math.floor((Math.max(width, CARD_MIN) + GAP) / (CARD_MIN + GAP)));
-  const cardWidth = (Math.max(width, CARD_MIN) - GAP * (columns - 1)) / columns;
-  const rowHeight = Math.round((cardWidth * 4) / 3) + GAP;
+  const columns = Math.max(1, Math.floor((width + GAP) / (CARD_W + GAP)));
+  const cardWidth = width > 0 ? Math.min(CARD_W, width) : CARD_W;
+  const rowHeight = Math.round(cardWidth / CARD_RATIO) + GAP;
   const rows = Math.ceil(items.length / columns);
   const virtual = useVirtualizer({
     count: rows,
@@ -370,7 +465,7 @@ function VirtualGrid({
             className="absolute inset-x-0 grid"
             style={{
               top: row.start,
-              gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+              gridTemplateColumns: `repeat(${columns}, ${cardWidth}px)`,
               gap: GAP,
             }}
           >
@@ -419,6 +514,7 @@ function PickerCard({
       nsfw={item.local?.nsfw}
       blurNsfw={blurNsfw}
       meta={item.local?.triggerWords[0]}
+      ratio={CARD_RATIO}
       selected={selected}
       onClick={() => onPick(item)}
       onContextMenu={(e) => onMenu(e, item)}

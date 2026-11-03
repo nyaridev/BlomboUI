@@ -257,7 +257,13 @@ function positionPicture(
 
 /** The row under the mouse becomes the selected one (as in the command palette), so its picture shows. */
 const hoverSelects = ViewPlugin.define((view) => {
+  let last = "";
   const onMove = (e: MouseEvent) => {
+    // Chromium sends a mousemove when the list scrolls under a still pointer; only a real move
+    // selects, or ↓ at the bottom row would snap back to the row under the mouse.
+    const at = `${e.screenX},${e.screenY}`;
+    if (at === last) return;
+    last = at;
     const li = (e.target as Element).closest?.(".cm-tooltip-autocomplete li[role=option]");
     const i = Number(li?.id.slice(li.id.lastIndexOf("-") + 1));
     if (li && Number.isInteger(i) && i !== selectedCompletionIndex(view.state))

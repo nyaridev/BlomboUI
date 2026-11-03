@@ -79,7 +79,14 @@ import type { GenerateBody, GenerateResponse, Job, QueueSnapshot } from "@shared
 import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layout/schema";
 import type { AppError } from "@shared/live";
 import type { Catalog } from "@shared/manager";
-import type { LocalModel, LookupState, ModelDetails, ModelList } from "@shared/models";
+import type {
+  LocalModel,
+  LookupState,
+  ModelDetails,
+  ModelHashes,
+  ModelList,
+  SaveModelInfoBody,
+} from "@shared/models";
 import type {
   CreateProfileBody,
   PickFolderBody,
@@ -359,6 +366,13 @@ export const api = {
   moveModel: (id: string, folder: string) =>
     request<LocalModel>("POST", "/models/move", { id, folder }),
   revealModel: (id: string) => request<{ ok: true }>("POST", "/models/reveal", { id }),
+  saveModelInfo: (body: SaveModelInfoBody) => request<ModelDetails>("PATCH", "/models/info", body),
+  setModelPicture: (id: string, image: Blob) =>
+    request<{ ok: true }>("PUT", `/models/picture?id=${encodeURIComponent(id)}`, undefined, image),
+  removeModelPicture: (id: string) =>
+    request<{ ok: true }>("DELETE", `/models/picture?id=${encodeURIComponent(id)}`),
+  modelHashes: (id: string) =>
+    request<ModelHashes>("GET", `/models/hash?id=${encodeURIComponent(id)}`),
 
   fileInfo: (file: Blob, filename: string) =>
     request<FileInfo>(

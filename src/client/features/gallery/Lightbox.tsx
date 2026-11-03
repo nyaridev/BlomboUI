@@ -27,6 +27,7 @@ import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
 import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
+import { copyImage } from "./imageMenu";
 import { Marks } from "./Marks";
 
 export function Lightbox({
@@ -324,28 +325,6 @@ function Details({
       ? `${image.width}×${image.height} (made at ${s.width}×${s.height})`
       : `${image.width}×${image.height}`;
 
-  const copyImage = async () => {
-    try {
-      const blob = await (await fetch(fileUrl(image))).blob();
-      const png =
-        blob.type === "image/png"
-          ? blob
-          : await createImageBitmap(blob).then((bmp) => {
-              const c = document.createElement("canvas");
-              c.width = bmp.width;
-              c.height = bmp.height;
-              c.getContext("2d")?.drawImage(bmp, 0, 0);
-              return new Promise<Blob>((res, rej) =>
-                c.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/png"),
-              );
-            });
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
-      toast("Image copied", "success");
-    } catch {
-      toast("Couldn't copy the image. Your browser may not allow it here.", "error");
-    }
-  };
-
   const importIt = async () => {
     const blob = await (await fetch(fileUrl(image))).blob();
     importWorkflow.mutate(new File([blob], image.name, { type: blob.type }), {
@@ -484,7 +463,7 @@ function Details({
         >
           Reveal
         </Button>
-        <Button icon="copy" onClick={() => void copyImage()}>
+        <Button icon="copy" onClick={() => void copyImage(image)}>
           Copy
         </Button>
         <Button

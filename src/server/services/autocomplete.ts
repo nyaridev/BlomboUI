@@ -29,6 +29,7 @@ import {
   type TagSourceInfo,
   tagWordCount,
 } from "../../shared/autocomplete.ts";
+import { formatLoraTag } from "../../shared/prompt/loras.ts";
 import type { AutocompleteSettings } from "../../shared/settings.ts";
 import type { ProfileDbs } from "../db/profileDb.ts";
 import { exists, movePath, writeFileIfAbsent } from "../lib/fsx.ts";
@@ -500,7 +501,7 @@ export class AutocompleteService {
       const name = dup && m.folder ? `${m.folder}/${stem}` : stem;
       return {
         kind: "lora",
-        text: `<lora:${name}:1>`,
+        text: formatLoraTag(name, m.weight ?? 1),
         label: m.name,
         detail: m.baseModel ?? (m.folder || null),
         category: null,

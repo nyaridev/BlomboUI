@@ -67,7 +67,10 @@ export const LocalModel = z.object({
   /** Marked NSFW by its sidecar info (unknown counts as not NSFW). */
   nsfw: z.boolean(),
   baseModel: z.string().nullable(),
+  /** Your trigger words (the A1111 .json's activation text) or, without them, Civitai's. */
   triggerWords: z.array(z.string()),
+  /** Strength a LoRA tag gets when it's added ("preferred weight" in the A1111 .json). */
+  weight: z.number().nullable().default(null),
   hasInfo: z.boolean(),
   /**
    * The Civitai model and version this file is, from its .civitai.info file or, without one,
@@ -143,8 +146,8 @@ export const ModelDetails = LocalModel.extend({
       url: z.string().nullable(),
     })
     .nullable(),
-  /** Suggested strength from the sidecar ("preferred weight"). */
-  weight: z.number().nullable(),
+  /** It has a picture of its own (`<model>_data/thumb.*`), not only Civitai's. */
+  picture: z.boolean(),
   header: SafetensorsInfo.nullable(),
   headerError: z.string().nullable(),
   /** Folders inside this kind, for "Move to". */
@@ -170,6 +173,23 @@ export const MoveModelBody = z.object({
   folder: z.string().max(400),
 });
 export const ModelIdBody = z.object({ id: z.string().min(1) });
+
+/**
+ * What the model info dialog saves into the model's A1111 .json (activation text, preferred
+ * weight, notes). Fields left out stay as they are; the file's other keys are kept.
+ */
+export const SaveModelInfoBody = z.object({
+  id: z.string().min(1),
+  triggerWords: z.array(z.string().trim().min(1).max(300)).max(200).optional(),
+  /** Null clears it (tags then get 1). */
+  weight: z.number().min(-10).max(10).nullable().optional(),
+  notes: z.string().max(20_000).optional(),
+});
+export type SaveModelInfoBody = z.infer<typeof SaveModelInfoBody>;
+
+/** A model file's hashes, as Civitai lists them (AutoV2 is the SHA256's first 10 characters). */
+export const ModelHashes = z.object({ sha256: z.string(), autov2: z.string() });
+export type ModelHashes = z.infer<typeof ModelHashes>;
 
 /** Base-model labels shown on cards ("SDXL 1.0" → "SDXL"). */
 export function shortBaseModel(base: string | null): string | null {

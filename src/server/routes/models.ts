@@ -1,6 +1,12 @@
 import { Hono } from "hono";
-import { ModelIdBody, MoveModelBody, RenameModelBody } from "../../shared/models.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import {
+  type ModelHashes,
+  ModelIdBody,
+  MoveModelBody,
+  RenameModelBody,
+  SaveModelInfoBody,
+} from "../../shared/models.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { ModelLookup } from "../services/lookup.ts";
 import type { ModelService } from "../services/models.ts";
@@ -42,6 +48,30 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
       type: "image/webp",
     }),
   );
+
+  /** The model info dialog: trigger words, strength and notes (into the A1111 .json). */
+  r.patch("/info", async (c) =>
+    c.json(await models.saveInfo(await readJson(c, SaveModelInfoBody))),
+  );
+
+  /** The model's own picture: an image in the body replaces it; DELETE moves it to the trash. */
+  r.put("/picture", async (c) => {
+    const target = id(c.req.query("id"));
+    const bytes = await readBody(c, 64 * 1024 * 1024, "Pick an image under 64 MB.");
+    if (bytes.byteLength === 0) throw new HttpError(400, "The image is empty.", "empty");
+    await models.setPicture(target, bytes);
+    return c.json({ ok: true });
+  });
+  r.delete("/picture", async (c) => {
+    await models.removePicture(id(c.req.query("id")));
+    return c.json({ ok: true });
+  });
+
+  /** SHA256 and AutoV2 (hashed now when the background lookup hasn't yet). */
+  r.get("/hash", async (c) => {
+    const sha256 = await lookup.hashOf(id(c.req.query("id")));
+    return c.json({ sha256, autov2: sha256.slice(0, 10) } satisfies ModelHashes);
+  });
 
   r.post("/rename", async (c) => {
     const body = await readJson(c, RenameModelBody);

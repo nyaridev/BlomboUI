@@ -37,6 +37,7 @@ import {
   ModelCard,
   Notice,
   NumberField,
+  openContextMenu,
   Popover,
   ProgressBar,
   ProgressRing,
@@ -760,6 +761,39 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 },
               ]}
             />
+          </Row>
+          <Row label="Right-click menu">
+            <button
+              type="button"
+              onContextMenu={(e) =>
+                openContextMenu(e, [
+                  { id: "info", label: "Model info…", icon: "info", onSelect: () => undefined },
+                  {
+                    id: "fav",
+                    label: "Add to favorites",
+                    icon: "heart",
+                    onSelect: () => undefined,
+                  },
+                  { type: "separator", id: "s" },
+                  {
+                    id: "reveal",
+                    label: "Show in Explorer",
+                    icon: "folder-open",
+                    onSelect: () => toast("Shown in Explorer", "info"),
+                  },
+                  {
+                    id: "trash",
+                    label: "Move to trash",
+                    icon: "trash",
+                    tone: "danger",
+                    onSelect: () => undefined,
+                  },
+                ])
+              }
+              className="grid h-20 w-56 place-items-center rounded-lg border border-dashed border-line-strong text-sm text-fg-3 focus-ring"
+            >
+              Right-click here (or Shift+F10)
+            </button>
           </Row>
           <Row label="Command palette">
             <Button icon="search" onClick={() => setPalette(true)}>

@@ -154,6 +154,61 @@ describe("local models", () => {
     );
     expect(await fs.readFile(path.join(root, "loras", "plain.safetensors"), "utf8")).toBe("other");
   });
+
+  it("saves trigger words, strength and notes into the A1111 .json, keeping its other keys", async () => {
+    const id = "loras/style/plain.safetensors";
+    const json = path.join(root, "loras", "style", "plain.json");
+    await fs.writeFile(
+      json,
+      JSON.stringify({
+        "activation text": "foo, bar",
+        "preferred weight": 0.7,
+        "sd version": "XL",
+      }),
+    );
+    await models.list(true);
+    const d = await models.saveInfo({ id, triggerWords: ["blue hair", "smile"], notes: " soft " });
+    expect(d).toMatchObject({ triggerWords: ["blue hair", "smile"], weight: 0.7, notes: "soft" });
+    expect(JSON.parse(await fs.readFile(json, "utf8"))).toEqual({
+      "activation text": "blue hair, smile",
+      "preferred weight": 0.7,
+      "sd version": "XL",
+      notes: "soft",
+    });
+    await models.saveInfo({ id, weight: -1.5 });
+    expect((await models.list()).models.find((m) => m.id === id)?.weight).toBe(-1.5);
+    await models.saveInfo({ id, weight: null });
+    expect((await models.details(id)).weight).toBeNull();
+    // Your words win over Civitai's.
+    const civitai = "loras/style/Detailer v2.safetensors";
+    expect((await models.saveInfo({ id: civitai, triggerWords: ["mine"] })).triggerWords).toEqual([
+      "mine",
+    ]);
+    // A file that isn't JSON is never written over.
+    await put("checkpoints/base.json", "{oops");
+    await models.list(true);
+    await expect(models.saveInfo({ id: "checkpoints/base.ckpt", notes: "x" })).rejects.toThrow(
+      /isn't valid JSON/,
+    );
+    expect(await fs.readFile(path.join(root, "checkpoints", "base.json"), "utf8")).toBe("{oops");
+  });
+
+  it("replaces and removes a model's picture, keeping the old ones in the trash", async () => {
+    const id = "checkpoints/base.ckpt";
+    await models.setPicture(id, await realPng(40, 60));
+    expect((await models.details(id)).picture).toBe(true);
+    expect((await models.list()).models.find((m) => m.id === id)?.thumb).toMatch(/^\/api\/models/);
+    await models.setPicture(id, await realPng(20, 30));
+    // An image that can't be read leaves the current picture alone.
+    await expect(models.setPicture(id, new TextEncoder().encode("not an image"))).rejects.toThrow(
+      /isn't an image/,
+    );
+    expect((await models.details(id)).picture).toBe(true);
+    await models.removePicture(id);
+    expect((await models.details(id)).picture).toBe(false);
+    const trash = path.join(profiles.dir(profiles.active as string), "trash", "model-pictures");
+    expect(await fs.readdir(trash)).toHaveLength(2);
+  });
 });
 
 describe("sidecarsFor", () => {

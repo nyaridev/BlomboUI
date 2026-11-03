@@ -8,7 +8,18 @@ import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { qk, useAddLibrary, useCollections, useRemoveLibrary } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, Dialog, Field, IconButton, Menu, ProgressBar, TextField, toast } from "@client/ui";
+import {
+  Button,
+  Dialog,
+  Field,
+  IconButton,
+  Menu,
+  type MenuEntry,
+  openContextMenu,
+  ProgressBar,
+  TextField,
+  toast,
+} from "@client/ui";
 import type { Collection, GalleryOverview, LibraryInfo } from "@shared/gallery";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -95,168 +106,194 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
           onClick={() => setAdding(true)}
         />
       </div>
-      {overview?.libraries.map((lib) => (
-        <div key={lib.id} className="group relative">
-          <button
-            type="button"
-            onClick={() =>
-              ui.set({
-                drawer: false,
-                view: "images",
-                library: lib.id,
-                favorites: false,
-                since: null,
-                collection: null,
-              })
-            }
-            title={lib.path || "Set an outputs folder in Settings → Folders"}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-md p-1.5 pr-8 text-left transition-colors focus-ring",
-              ui.view === "images" && ui.library === lib.id && !ui.collection
-                ? "bg-field"
-                : "hover:bg-field/60",
-            )}
+      {overview?.libraries.map((lib) => {
+        const items: MenuEntry[] = [
+          { id: "rename", label: "Rename", icon: "edit", onSelect: () => setRenaming(lib) },
+          {
+            id: "remove",
+            label: "Remove from gallery",
+            icon: "x",
+            tone: "danger",
+            hint: <span className="text-2xs text-fg-4">files stay</span>,
+            onSelect: () =>
+              remove.mutate(lib.id, {
+                onSuccess: () => {
+                  toast(
+                    `Removed "${lib.name}" from the gallery. Its files are untouched.`,
+                    "success",
+                  );
+                  if (useGalleryUi.getState().library === lib.id) useGalleryUi.getState().reset();
+                },
+                onError: (e) => toast(e.message, "error"),
+              }),
+          },
+        ];
+        return (
+          <div
+            key={lib.id}
+            className="group relative"
+            onContextMenu={lib.builtin ? undefined : (e) => openContextMenu(e, items)}
           >
-            <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-sunken text-fg-3">
-              {lib.cover ? (
-                <img src={lib.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
-              ) : (
-                <Icon
-                  name={lib.exists ? "folder" : "errors"}
-                  size={16}
-                  className={lib.exists ? undefined : "text-warning"}
-                />
-              )}
-            </span>
-            <span className="flex min-w-0 flex-1 flex-col">
-              <span
-                className={cn("truncate text-sm", ui.library === lib.id ? "text-fg" : "text-fg-2")}
-              >
-                {lib.name}
-              </span>
-              <span
-                className={cn(
-                  "truncate text-2xs",
-                  lib.exists ? "font-mono text-fg-3 tabular" : "text-warning",
-                )}
-              >
-                {!lib.path
-                  ? "No outputs folder set"
-                  : lib.exists
-                    ? lib.count.toLocaleString()
-                    : "Folder not found"}
-              </span>
-            </span>
-          </button>
-          {lib.builtin ? null : (
-            <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
-              <Menu
-                width={210}
-                trigger={
-                  <IconButton icon="more-horizontal" label={`${lib.name} options`} size="xs" />
-                }
-                items={[
-                  { id: "rename", label: "Rename", icon: "edit", onSelect: () => setRenaming(lib) },
-                  {
-                    id: "remove",
-                    label: "Remove from gallery",
-                    icon: "x",
-                    tone: "danger",
-                    hint: <span className="text-2xs text-fg-4">files stay</span>,
-                    onSelect: () =>
-                      remove.mutate(lib.id, {
-                        onSuccess: () => {
-                          toast(
-                            `Removed "${lib.name}" from the gallery. Its files are untouched.`,
-                            "success",
-                          );
-                          if (useGalleryUi.getState().library === lib.id)
-                            useGalleryUi.getState().reset();
-                        },
-                        onError: (e) => toast(e.message, "error"),
-                      }),
-                  },
-                ]}
-              />
-            </div>
-          )}
-        </div>
-      ))}
-
-      <div className="label-caps mt-4 mb-1 flex items-center justify-between px-2 text-[10px]">
-        Collections
-        <IconButton icon="plus" label="New collection" size="xs" onClick={() => setNaming("new")} />
-      </div>
-      {collections.data?.length ? (
-        collections.data.map((c) => (
-          <div key={c.id} className="group relative">
             <button
               type="button"
               onClick={() =>
                 ui.set({
                   drawer: false,
                   view: "images",
-                  library: "all",
+                  library: lib.id,
                   favorites: false,
                   since: null,
-                  collection: c.id,
+                  collection: null,
                 })
               }
+              title={lib.path || "Set an outputs folder in Settings → Folders"}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md p-1.5 pr-8 text-left transition-colors focus-ring",
-                ui.view === "images" && ui.collection === c.id ? "bg-field" : "hover:bg-field/60",
+                ui.view === "images" && ui.library === lib.id && !ui.collection
+                  ? "bg-field"
+                  : "hover:bg-field/60",
               )}
             >
               <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-sunken text-fg-3">
-                {c.cover ? (
-                  <img src={c.cover} alt="" loading="lazy" className="h-full w-full object-cover" />
+                {lib.cover ? (
+                  <img
+                    src={lib.cover}
+                    alt=""
+                    loading="lazy"
+                    className="h-full w-full object-cover"
+                  />
                 ) : (
-                  <Icon name="stack" size={16} />
+                  <Icon
+                    name={lib.exists ? "folder" : "errors"}
+                    size={16}
+                    className={lib.exists ? undefined : "text-warning"}
+                  />
                 )}
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span
                   className={cn(
                     "truncate text-sm",
-                    ui.collection === c.id ? "text-fg" : "text-fg-2",
+                    ui.library === lib.id ? "text-fg" : "text-fg-2",
                   )}
                 >
-                  {c.name}
+                  {lib.name}
                 </span>
-                <span className="font-mono text-2xs text-fg-3 tabular">
-                  {c.count.toLocaleString()}
+                <span
+                  className={cn(
+                    "truncate text-2xs",
+                    lib.exists ? "font-mono text-fg-3 tabular" : "text-warning",
+                  )}
+                >
+                  {!lib.path
+                    ? "No outputs folder set"
+                    : lib.exists
+                      ? lib.count.toLocaleString()
+                      : "Folder not found"}
                 </span>
               </span>
             </button>
-            <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
-              <Menu
-                width={210}
-                trigger={
-                  <IconButton icon="more-horizontal" label={`${c.name} options`} size="xs" />
-                }
-                items={[
-                  { id: "rename", label: "Rename", icon: "edit", onSelect: () => setNaming(c) },
-                  {
-                    id: "remove",
-                    label: "Remove collection",
-                    icon: "x",
-                    tone: "danger",
-                    hint: <span className="text-2xs text-fg-4">images stay</span>,
-                    onSelect: () =>
-                      void api
-                        .removeCollection(c.id)
-                        .then(() => {
-                          toast(`Removed "${c.name}". Its images are untouched.`, "success");
-                          if (useGalleryUi.getState().collection === c.id)
-                            useGalleryUi.getState().reset();
-                        })
-                        .catch((e: Error) => toast(e.message, "error")),
-                  },
-                ]}
-              />
-            </div>
+            {lib.builtin ? null : (
+              <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
+                <Menu
+                  width={210}
+                  trigger={
+                    <IconButton icon="more-horizontal" label={`${lib.name} options`} size="xs" />
+                  }
+                  items={items}
+                />
+              </div>
+            )}
           </div>
-        ))
+        );
+      })}
+
+      <div className="label-caps mt-4 mb-1 flex items-center justify-between px-2 text-[10px]">
+        Collections
+        <IconButton icon="plus" label="New collection" size="xs" onClick={() => setNaming("new")} />
+      </div>
+      {collections.data?.length ? (
+        collections.data.map((c) => {
+          const items: MenuEntry[] = [
+            { id: "rename", label: "Rename", icon: "edit", onSelect: () => setNaming(c) },
+            {
+              id: "remove",
+              label: "Remove collection",
+              icon: "x",
+              tone: "danger",
+              hint: <span className="text-2xs text-fg-4">images stay</span>,
+              onSelect: () =>
+                void api
+                  .removeCollection(c.id)
+                  .then(() => {
+                    toast(`Removed "${c.name}". Its images are untouched.`, "success");
+                    if (useGalleryUi.getState().collection === c.id)
+                      useGalleryUi.getState().reset();
+                  })
+                  .catch((e: Error) => toast(e.message, "error")),
+            },
+          ];
+          return (
+            <div
+              key={c.id}
+              className="group relative"
+              onContextMenu={(e) => openContextMenu(e, items)}
+            >
+              <button
+                type="button"
+                onClick={() =>
+                  ui.set({
+                    drawer: false,
+                    view: "images",
+                    library: "all",
+                    favorites: false,
+                    since: null,
+                    collection: c.id,
+                  })
+                }
+                className={cn(
+                  "flex w-full items-center gap-2.5 rounded-md p-1.5 pr-8 text-left transition-colors focus-ring",
+                  ui.view === "images" && ui.collection === c.id ? "bg-field" : "hover:bg-field/60",
+                )}
+              >
+                <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-md bg-sunken text-fg-3">
+                  {c.cover ? (
+                    <img
+                      src={c.cover}
+                      alt=""
+                      loading="lazy"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <Icon name="stack" size={16} />
+                  )}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span
+                    className={cn(
+                      "truncate text-sm",
+                      ui.collection === c.id ? "text-fg" : "text-fg-2",
+                    )}
+                  >
+                    {c.name}
+                  </span>
+                  <span className="font-mono text-2xs text-fg-3 tabular">
+                    {c.count.toLocaleString()}
+                  </span>
+                </span>
+              </button>
+              <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
+                <Menu
+                  width={210}
+                  trigger={
+                    <IconButton icon="more-horizontal" label={`${c.name} options`} size="xs" />
+                  }
+                  items={items}
+                />
+              </div>
+            </div>
+          );
+        })
       ) : (
         <p className="px-2 text-2xs text-fg-4">
           Albums across folders. Add images from the lightbox.

@@ -4,7 +4,7 @@ import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
 import type { GalleryPage, GalleryQueryInput } from "@shared/gallery";
 import type { JobHistoryPage, JobHistoryQueryInput, SaveSnippetBody } from "@shared/history";
-import type { LocalModel, ModelList } from "@shared/models";
+import type { LocalModel, ModelList, SaveModelInfoBody } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
 import { deepMerge, type Settings, type SettingsPatch } from "@shared/settings";
 import type { WorkflowManifest } from "@shared/workflow/manifest";
@@ -64,6 +64,9 @@ export const qk = {
   localModels: (profileId: string | null) => ["local-models", profileId] as const,
   modelDetails: (profileId: string | null, id: string | null) =>
     ["local-models", profileId, "details", id] as const,
+  /** By size and time too: a changed file is hashed again. */
+  modelHashes: (profileId: string | null, id: string, version: string) =>
+    ["model-hashes", profileId, id, version] as const,
   comfySlots: ["comfy-slots"] as const,
   nodeInstall: ["node-install"] as const,
   civitaiAccount: (profileId: string | null) => ["civitai-account", profileId] as const,
@@ -546,6 +549,42 @@ export function useModelDetails(id: string | null) {
     queryKey: qk.modelDetails(profileId, id),
     queryFn: () => api.modelDetails(id as string),
     enabled: profileId !== null && id !== null,
+  });
+}
+
+/** SHA256 and AutoV2 of a local model; the server hashes it when it hasn't yet (big files take a while). */
+export function useModelHashes(model: LocalModel | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.modelHashes(profileId, model?.id ?? "", `${model?.size}-${model?.mtime}`),
+    queryFn: () => api.modelHashes((model as LocalModel).id),
+    enabled: profileId !== null && model !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/**
+ * The model info dialog's Save: trigger words, strength and notes (only the ones given), then
+ * the picture (a new image, or "remove"). The bus refreshes the lists as well.
+ */
+export function useSaveModelInfo() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({
+      info,
+      picture,
+    }: {
+      info: SaveModelInfoBody | null;
+      picture: { id: string; image: Blob | "remove" } | null;
+    }) => {
+      if (info) await api.saveModelInfo(info);
+      if (picture?.image === "remove") await api.removeModelPicture(picture.id);
+      else if (picture) await api.setModelPicture(picture.id, picture.image);
+    },
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["local-models"] });
+      void qc.invalidateQueries({ queryKey: qk.modelsAll });
+    },
   });
 }
 

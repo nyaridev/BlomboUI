@@ -15,6 +15,7 @@ import { type ComponentType, lazy, type ReactNode, Suspense, useEffect, useState
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
+import { ModelInfoDialog } from "../features/models/ModelInfoDialog";
 import { Header, MobileNav } from "./header/Header";
 import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
@@ -170,6 +171,7 @@ export function Shell() {
       </main>
       <MobileNav profileId={profileId} view={view} />
       <Palette />
+      <ModelInfoDialog />
     </div>
   );
 }

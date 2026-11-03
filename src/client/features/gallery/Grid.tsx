@@ -13,7 +13,7 @@ import { fileUrl, type GalleryImage } from "@shared/gallery";
 import type { GalleryLayout } from "@shared/settings";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { buildRows, dayLabel, GAP, type GalleryRow } from "./rows";
 
@@ -28,6 +28,7 @@ export const Grid = memo(function Grid({
   loadingMore,
   onLoadMore,
   onOpen,
+  onMenu,
   onUseSettings,
 }: {
   items: GalleryImage[];
@@ -41,6 +42,8 @@ export const Grid = memo(function Grid({
   loadingMore: boolean;
   onLoadMore: () => void;
   onOpen: (id: number) => void;
+  /** Right-click on a tile. */
+  onMenu: (e: MouseEvent<HTMLElement>, image: GalleryImage) => void;
   onUseSettings: () => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -95,6 +98,7 @@ export const Grid = memo(function Grid({
                 featured={featured}
                 total={total}
                 onOpen={onOpen}
+                onMenu={onMenu}
                 onUseSettings={onUseSettings}
               />
             </div>
@@ -113,12 +117,14 @@ function Row({
   featured,
   total,
   onOpen,
+  onMenu,
   onUseSettings,
 }: {
   row: GalleryRow;
   featured: GalleryImage[];
   total: number;
   onOpen: (id: number) => void;
+  onMenu: (e: MouseEvent<HTMLElement>, image: GalleryImage) => void;
   onUseSettings: () => void;
 }) {
   if (row.kind === "hero")
@@ -138,7 +144,7 @@ function Row({
     <div className="flex" style={{ gap: GAP }}>
       {row.items.map(({ item, width, height }) => (
         <div key={item.id} style={{ width, height }} className="shrink-0">
-          <Tile image={item} onOpen={onOpen} />
+          <Tile image={item} onOpen={onOpen} onMenu={onMenu} />
         </div>
       ))}
     </div>
@@ -150,14 +156,19 @@ function Row({
 export const Tile = memo(function Tile({
   image,
   onOpen,
+  onMenu,
 }: {
   image: GalleryImage;
   onOpen: (id: number) => void;
+  onMenu?: (e: MouseEvent<HTMLElement>, image: GalleryImage) => void;
 }) {
   const favorite = useFavorite();
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className="group relative h-full w-full overflow-hidden rounded-md bg-sunken">
+    <div
+      className="group relative h-full w-full overflow-hidden rounded-md bg-sunken"
+      onContextMenu={onMenu ? (e) => onMenu(e, image) : undefined}
+    >
       <button
         type="button"
         onClick={() => onOpen(image.id)}

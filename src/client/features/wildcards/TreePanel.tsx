@@ -14,6 +14,8 @@ import {
   Field,
   IconButton,
   Menu,
+  type MenuEntry,
+  openContextMenu,
   TextField,
   TreeRow,
   toast,
@@ -164,10 +166,55 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
               const rootIndex = depth === 0 ? roots.get(node.path) : undefined;
               const isRoot = rootIndex !== undefined;
               const isHidden = hidden.has(node.path);
+              // The ⋯ button and a right-click on the row show the same menu.
+              const items: MenuEntry[] = [
+                ...(folder
+                  ? [
+                      {
+                        id: "new",
+                        label: "New file here",
+                        icon: "file-plus" as const,
+                        onSelect: () => setAsk({ kind: "new-file", folder: node.path }),
+                      },
+                    ]
+                  : []),
+                ...(isRoot
+                  ? []
+                  : [
+                      {
+                        id: "rename",
+                        label: "Rename",
+                        icon: "edit" as const,
+                        onSelect: () => setAsk({ kind: "rename", node }),
+                      },
+                    ]),
+                {
+                  id: "reveal",
+                  label: "Show in Explorer",
+                  icon: "folder-open",
+                  onSelect: () =>
+                    void api
+                      .revealWildcard(node.path)
+                      .catch((e: Error) => toast(e.message, "error")),
+                },
+                ...(isRoot
+                  ? []
+                  : [
+                      { type: "separator" as const, id: "sep" },
+                      {
+                        id: "trash",
+                        label: "Move to trash",
+                        icon: "trash" as const,
+                        tone: "danger" as const,
+                        onSelect: () => void trash(node),
+                      },
+                    ]),
+              ];
               return (
                 <div
                   key={node.path}
                   className="absolute inset-x-0 top-0"
+                  onContextMenu={(e) => openContextMenu(e, items)}
                   style={{ transform: `translateY(${v.start}px)` }}
                   draggable={!isRoot}
                   onDragStart={(e) => {
@@ -227,49 +274,7 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
                             size="xs"
                           />
                         }
-                        items={[
-                          ...(folder
-                            ? [
-                                {
-                                  id: "new",
-                                  label: "New file here",
-                                  icon: "file-plus" as const,
-                                  onSelect: () => setAsk({ kind: "new-file", folder: node.path }),
-                                },
-                              ]
-                            : []),
-                          ...(isRoot
-                            ? []
-                            : [
-                                {
-                                  id: "rename",
-                                  label: "Rename",
-                                  icon: "edit" as const,
-                                  onSelect: () => setAsk({ kind: "rename", node }),
-                                },
-                              ]),
-                          {
-                            id: "reveal",
-                            label: "Show in Explorer",
-                            icon: "folder-open",
-                            onSelect: () =>
-                              void api
-                                .revealWildcard(node.path)
-                                .catch((e: Error) => toast(e.message, "error")),
-                          },
-                          ...(isRoot
-                            ? []
-                            : [
-                                { type: "separator" as const, id: "sep" },
-                                {
-                                  id: "trash",
-                                  label: "Move to trash",
-                                  icon: "trash" as const,
-                                  tone: "danger" as const,
-                                  onSelect: () => void trash(node),
-                                },
-                              ]),
-                        ]}
+                        items={items}
                       />
                     }
                   />

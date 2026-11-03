@@ -32,6 +32,7 @@ import {
   IconButton,
   KIND_STYLE,
   ModelCard,
+  openContextMenu,
   PropertyList,
   Select,
   Sheet,
@@ -42,13 +43,14 @@ import {
   toast,
 } from "@client/ui";
 import { MODEL_KINDS, type ModelKind } from "@shared/constants";
-import { comfyNameOf, type LocalModel, type ModelDetails, modelKey } from "@shared/models";
+import { comfyNameOf, type LocalModel, modelKey } from "@shared/models";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useFileInfoTarget } from "../fileinfo/state";
+import { openModelInfo, useModelMenu } from "./actions";
 import { openCivitaiModel } from "./civitai/state";
 import { useModelsNav } from "./nav";
 
@@ -76,6 +78,33 @@ export function LocalModels() {
     setSelected(wanted);
   }, [wanted, list.data]);
   const [rescanning, setRescanning] = useState(false);
+  // Rename and Move open from the info sheet and from a card's right-click menu.
+  const [dialog, setDialog] = useState<{
+    type: "rename" | "move";
+    model: LocalModel;
+    open: boolean;
+  } | null>(null);
+  const modelMenu = useModelMenu();
+  const menuFor = (m: LocalModel) =>
+    modelMenu(m, {
+      file: [
+        {
+          id: "rename",
+          label: "Rename…",
+          icon: "edit",
+          onSelect: () => setDialog({ type: "rename", model: m, open: true }),
+        },
+        {
+          id: "move",
+          label: "Move…",
+          icon: "move-to-folder",
+          onSelect: () => setDialog({ type: "move", model: m, open: true }),
+        },
+      ],
+    });
+  // A renamed or moved model gets a new id: keep it selected if it was.
+  const onMoved = (oldId: string, m: LocalModel) => setSelected((s) => (s === oldId ? m.id : s));
+  const closeDialog = (o: boolean) => !o && setDialog((d) => d && { ...d, open: false });
 
   const models = list.data?.models ?? [];
   const counts = useMemo(() => {
@@ -225,6 +254,7 @@ export function LocalModels() {
             blurNsfw={blurNsfw}
             selected={selected}
             onSelect={(id) => setSelected((s) => (s === id ? null : id))}
+            onMenu={(e, m) => openContextMenu(e, menuFor(m))}
           />
         )}
       </div>
@@ -241,7 +271,8 @@ export function LocalModels() {
               model={current}
               blurNsfw={blurNsfw}
               onClose={() => setSelected(null)}
-              onMoved={(m) => setSelected(m.id)}
+              onRename={() => setDialog({ type: "rename", model: current, open: true })}
+              onMove={() => setDialog({ type: "move", model: current, open: true })}
             />
           ) : null}
         </Sheet>
@@ -260,11 +291,29 @@ export function LocalModels() {
               model={current}
               blurNsfw={blurNsfw}
               onClose={() => setSelected(null)}
-              onMoved={(m) => setSelected(m.id)}
+              onRename={() => setDialog({ type: "rename", model: current, open: true })}
+              onMove={() => setDialog({ type: "move", model: current, open: true })}
             />
           </motion.aside>
         ) : null}
       </AnimatePresence>
+      {dialog?.type === "rename" ? (
+        <RenameDialog
+          key={dialog.model.id}
+          model={dialog.model}
+          open={dialog.open}
+          onOpenChange={closeDialog}
+          onDone={(m) => onMoved(dialog.model.id, m)}
+        />
+      ) : dialog?.type === "move" ? (
+        <MoveDialog
+          key={dialog.model.id}
+          model={dialog.model}
+          open={dialog.open}
+          onOpenChange={closeDialog}
+          onDone={(m) => onMoved(dialog.model.id, m)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -274,11 +323,13 @@ function CardGrid({
   blurNsfw,
   selected,
   onSelect,
+  onMenu,
 }: {
   models: LocalModel[];
   blurNsfw: boolean;
   selected: string | null;
   onSelect: (id: string) => void;
+  onMenu: (e: MouseEvent<HTMLElement>, m: LocalModel) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
@@ -337,6 +388,7 @@ function CardGrid({
                 meta={formatBytes(m.size)}
                 selected={selected === m.id}
                 onClick={() => onSelect(m.id)}
+                onContextMenu={(e) => onMenu(e, m)}
               />
             ))}
           </div>
@@ -357,16 +409,16 @@ function InfoSheet({
   model,
   blurNsfw,
   onClose,
-  onMoved,
+  onRename,
+  onMove,
 }: {
   model: LocalModel;
   blurNsfw: boolean;
   onClose: () => void;
-  onMoved: (m: LocalModel) => void;
+  onRename: () => void;
+  onMove: () => void;
 }) {
   const details = useModelDetails(model.id);
-  const [renaming, setRenaming] = useState(false);
-  const [moving, setMoving] = useState(false);
   const setTarget = useFileInfoTarget((s) => s.set);
   const navigate = useNavigate();
   const profileId = useSession((s) => s.profileId);
@@ -511,10 +563,13 @@ function InfoSheet({
         ) : null}
       </div>
       <div className="grid grid-cols-2 gap-1.5 border-t border-line p-3">
-        <Button icon="edit" onClick={() => setRenaming(true)}>
+        <Button icon="info" className="col-span-2" onClick={() => openModelInfo(model.id)}>
+          Model info…
+        </Button>
+        <Button icon="edit" onClick={onRename}>
           Rename
         </Button>
-        <Button icon="move-to-folder" onClick={() => setMoving(true)} disabled={!d}>
+        <Button icon="move-to-folder" onClick={onMove}>
           Move
         </Button>
         <Button
@@ -539,16 +594,6 @@ function InfoSheet({
           File info
         </Button>
       </div>
-      <RenameDialog model={model} open={renaming} onOpenChange={setRenaming} onDone={onMoved} />
-      {d ? (
-        <MoveDialog
-          model={model}
-          details={d}
-          open={moving}
-          onOpenChange={setMoving}
-          onDone={onMoved}
-        />
-      ) : null}
     </div>
   );
 }
@@ -629,17 +674,16 @@ function RenameDialog({
 
 function MoveDialog({
   model,
-  details,
   open,
   onOpenChange,
   onDone,
 }: {
   model: LocalModel;
-  details: ModelDetails;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   onDone: (m: LocalModel) => void;
 }) {
+  const folders = useModelDetails(model.id).data?.folders;
   const [folder, setFolder] = useState<string | null>(null);
   const move = useMoveModel();
   const value = folder ?? model.folder;
@@ -647,9 +691,9 @@ function MoveDialog({
   const options = useMemo(
     () => [
       { value: "", label: `${kindFolder}/ (top level)`, icon: "folder" as IconName },
-      ...details.folders.map((f) => ({ value: f, label: f, icon: "folder" as IconName })),
+      ...(folders ?? []).map((f) => ({ value: f, label: f, icon: "folder" as IconName })),
     ],
-    [details.folders, kindFolder],
+    [folders, kindFolder],
   );
   const submit = () =>
     move.mutate(

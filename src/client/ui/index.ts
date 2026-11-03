@@ -18,7 +18,14 @@ export {
   StatusDot,
   type Tone,
 } from "./feedback";
-export { Menu, type MenuEntry, Popover, Tooltip } from "./floating";
+export {
+  ContextMenuHost,
+  Menu,
+  type MenuEntry,
+  openContextMenu,
+  Popover,
+  Tooltip,
+} from "./floating";
 export { Field, TextArea, TextField } from "./inputs";
 export {
   CopyButton,

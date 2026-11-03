@@ -9,7 +9,7 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { hashString } from "@client/lib/seeded";
 import type { ModelKind } from "@shared/constants";
-import { type ReactNode, useState } from "react";
+import { type MouseEvent, type ReactNode, useState } from "react";
 import { Art, positioned } from "./Art";
 
 export type CardKind = ModelKind | "wildcards";
@@ -128,6 +128,8 @@ export interface ModelCardProps {
   typeLabel?: string;
   onClick?: () => void;
   onFavorite?: () => void;
+  /** Right-click (openContextMenu). */
+  onContextMenu?: (e: MouseEvent<HTMLElement>) => void;
   footer?: ReactNode;
   ratio?: number;
   className?: string;
@@ -142,6 +144,7 @@ export function ModelCard({
   favorite,
   onClick,
   onFavorite,
+  onContextMenu,
   footer,
   ratio = 3 / 4,
   nsfw,
@@ -157,6 +160,7 @@ export function ModelCard({
   const veiled = Boolean(thumb && nsfw && blurNsfw && !revealed);
   return (
     <div
+      onContextMenu={onContextMenu}
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow]",
         selected

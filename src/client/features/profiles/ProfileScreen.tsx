@@ -11,7 +11,7 @@ import { glide } from "@client/lib/motion";
 import { openWindow } from "@client/lib/platform";
 import { useDeleteProfile, useProfiles, useSystem } from "@client/lib/queries";
 import { leaveProfile, openProfileOnce } from "@client/lib/session";
-import { Avatar, Button, Dialog, Menu, toast } from "@client/ui";
+import { Avatar, Button, Dialog, Menu, type MenuEntry, openContextMenu, toast } from "@client/ui";
 import type { Profile } from "@shared/profile";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -188,9 +188,22 @@ function ProfileCard({
   onSetLaunch: (on: boolean) => void;
   onDelete: () => void;
 }) {
+  // The ⋯ button and a right-click show the same menu.
+  const items: MenuEntry[] = [
+    { id: "open", label: "Open", icon: "arrow-right", onSelect: onOpen },
+    {
+      id: "launch",
+      label: isLaunch ? "Don't auto-open" : "Open on launch",
+      icon: "bolt",
+      onSelect: () => onSetLaunch(!isLaunch),
+    },
+    { type: "separator", id: "s1" },
+    { id: "delete", label: "Delete…", icon: "trash", tone: "danger", onSelect: onDelete },
+  ];
   return (
     <div
       data-accent={profile.accent}
+      onContextMenu={(e) => openContextMenu(e, items)}
       className={cn("group relative transition-opacity duration-150", dimmed && "opacity-30")}
     >
       <button
@@ -239,17 +252,7 @@ function ProfileCard({
               <Icon name="more-horizontal" size={16} />
             </button>
           }
-          items={[
-            { id: "open", label: "Open", icon: "arrow-right", onSelect: onOpen },
-            {
-              id: "launch",
-              label: isLaunch ? "Don't auto-open" : "Open on launch",
-              icon: "bolt",
-              onSelect: () => onSetLaunch(!isLaunch),
-            },
-            { type: "separator", id: "s1" },
-            { id: "delete", label: "Delete…", icon: "trash", tone: "danger", onSelect: onDelete },
-          ]}
+          items={items}
         />
       </div>
     </div>

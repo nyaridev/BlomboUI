@@ -126,6 +126,20 @@ export class ModelLookup {
       .run(sha256.toUpperCase(), status, info ? JSON.stringify(info) : null, Date.now());
   }
 
+  /** SHA256 of a local model: the stored one, or hashed now (and stored) when it's missing. */
+  async hashOf(id: string): Promise<string> {
+    const profileId = this.deps.profiles.active;
+    if (!profileId) throw new HttpError(409, "Open a profile first.", "no_profile");
+    const model = (await this.deps.models.list()).models.find((m) => m.id === id);
+    if (!model)
+      throw new HttpError(404, "That model isn't in the models folder anymore.", "no_model");
+    const stored = this.storedHash(profileId, id, model.size, model.mtime);
+    if (stored) return stored;
+    const sha = await hashFile(await this.deps.models.filePath(id));
+    this.recordHash(profileId, id, model.size, model.mtime, sha);
+    return sha;
+  }
+
   private storedHash(profileId: string, id: string, size: number, mtime: number): string | null {
     const row = this.deps.dbs
       .get(profileId)

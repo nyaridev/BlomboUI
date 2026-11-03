@@ -16,13 +16,23 @@ import {
   useSettings,
   useWildcards,
 } from "@client/lib/queries";
-import { type CardKind, ModelCard, Segmented, Spinner, TextField, toast } from "@client/ui";
+import {
+  type CardKind,
+  type MenuEntry,
+  ModelCard,
+  openContextMenu,
+  Segmented,
+  Spinner,
+  TextField,
+  toast,
+} from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import type { LocalModel } from "@shared/models";
 import { findLoraTags, formatLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
+import { useModelMenu } from "../models/actions";
 import { modelDisplayName, modelFolder } from "./labels";
 import { pickerOrder } from "./pickerOrder";
 import { useValues } from "./state";
@@ -154,7 +164,7 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
   const pick = (item: Item) => {
     if (tab === "loras") {
       if (isSelected(item)) return;
-      append(formatLoraTag(tagName(item.id), 1));
+      append(formatLoraTag(tagName(item.id), item.local?.weight ?? 1));
       toast(`Added ${item.name} to the prompt`, "success");
     } else if (tab === "wildcards") {
       append(`__${item.id}__`);
@@ -167,6 +177,33 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
     } else {
       toast("This workflow doesn't use that kind of model.", "info");
     }
+  };
+
+  // Right-click: use it, then what any local model offers (info, favorite, Explorer…).
+  const modelMenu = useModelMenu();
+  const menuFor = (item: Item): MenuEntry[] => {
+    const adds =
+      tab === "loras" || tab === "wildcards" || (tab === "other" && otherKind === "embeddings");
+    const use: MenuEntry = {
+      id: "use",
+      label: adds ? "Add to prompt" : "Use this model",
+      icon: adds ? "plus" : "check",
+      disabled: isSelected(item) && tab !== "wildcards",
+      onSelect: () => pick(item),
+    };
+    if (item.local) return modelMenu(item.local, { first: [use, { type: "separator", id: "s0" }] });
+    return [
+      use,
+      {
+        id: "copy",
+        label: "Copy name",
+        icon: "copy",
+        onSelect: () =>
+          void navigator.clipboard
+            ?.writeText(item.id)
+            .then(() => toast(`Copied "${item.id}"`, "success")),
+      },
+    ];
   };
 
   const loading = tab === "wildcards" ? wildcards.isLoading : models.isLoading;
@@ -222,6 +259,7 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
           items={list}
           isSelected={isSelected}
           onPick={pick}
+          onMenu={(e, item) => openContextMenu(e, menuFor(item))}
           blurNsfw={blurNsfw}
           favorites={tab === "wildcards" ? null : favorites}
           onFavorite={(item) =>
@@ -248,6 +286,7 @@ function VirtualGrid({
   items,
   isSelected,
   onPick,
+  onMenu,
   blurNsfw,
   favorites,
   onFavorite,
@@ -255,6 +294,7 @@ function VirtualGrid({
   items: Item[];
   isSelected: (i: Item) => boolean;
   onPick: (i: Item) => void;
+  onMenu: (e: MouseEvent<HTMLElement>, i: Item) => void;
   blurNsfw: boolean;
   /** Null where favorites don't apply (wildcards). */
   favorites: Set<string> | null;
@@ -298,6 +338,7 @@ function VirtualGrid({
                 blurNsfw={blurNsfw}
                 selected={isSelected(item)}
                 onPick={onPick}
+                onMenu={onMenu}
                 favorite={favorites ? favorites.has(item.id) : null}
                 onFavorite={onFavorite}
               />
@@ -314,6 +355,7 @@ function PickerCard({
   blurNsfw,
   selected,
   onPick,
+  onMenu,
   favorite,
   onFavorite,
 }: {
@@ -321,6 +363,7 @@ function PickerCard({
   blurNsfw: boolean;
   selected: boolean;
   onPick: (i: Item) => void;
+  onMenu: (e: MouseEvent<HTMLElement>, i: Item) => void;
   favorite: boolean | null;
   onFavorite: (i: Item) => void;
 }) {
@@ -335,6 +378,7 @@ function PickerCard({
       meta={item.local?.triggerWords[0]}
       selected={selected}
       onClick={() => onPick(item)}
+      onContextMenu={(e) => onMenu(e, item)}
       favorite={favorite ?? undefined}
       onFavorite={favorite === null ? undefined : () => onFavorite(item)}
     />

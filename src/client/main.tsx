@@ -7,7 +7,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { router } from "./app/router";
 import { useApplyTheme, useTheme } from "./app/theme";
 import { queryClient } from "./lib/queries";
-import { Toaster } from "./ui";
+import { ContextMenuHost, Toaster } from "./ui";
 
 const REDUCED = { full: "never", reduced: "always", system: "user" } as const;
 
@@ -21,6 +21,7 @@ function App() {
           <RouterProvider router={router} />
         </LayoutGroup>
         <Toaster />
+        <ContextMenuHost />
       </MotionConfig>
     </QueryClientProvider>
   );

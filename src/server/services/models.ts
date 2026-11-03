@@ -5,7 +5,9 @@
  *
  * A scan reads each folder once and only the small sidecar JSON files, so a thousand LoRAs list
  * quickly; the result is cached until a rename, a move or a rescan. Renaming or moving takes the
- * sidecars along. Nothing is ever deleted from the models folder.
+ * sidecars along. The model info dialog writes trigger words, strength and notes into the A1111
+ * .json and replaces the picture (the old one goes to the profile's trash). Nothing is ever
+ * deleted from the models folder.
  *
  * A profile can have several model folders (ADR-0017). They're scanned in order and a model's id
  * is its path inside its folder, as ComfyUI names it, so when two folders hold the same file the
@@ -28,14 +30,15 @@ import {
   type ModelDetails,
   ModelFileStem,
   type ModelList,
+  type SaveModelInfoBody,
   shortBaseModel,
 } from "../../shared/models.ts";
 import type { ProfileFolder } from "../../shared/profile.ts";
 import { headerLength, parseSafetensorsHeader } from "../../shared/safetensors.ts";
-import { exists, movePath, resolveInside } from "../lib/fsx.ts";
+import { exists, movePath, resolveInside, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { ThumbCache } from "../lib/thumbs.ts";
-import { DATA_SUFFIX, findThumbs } from "./modelthumbs.ts";
+import { DATA_SUFFIX, dataDirOf, findThumbs, saveModelThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
 
 export const MODEL_THUMB_MAX = 480;
@@ -313,6 +316,7 @@ export class ModelService {
         ? civitai.trainedWords.filter((w): w is string => typeof w === "string" && w.trim() !== "")
         : (found?.trainedWords ?? []);
       const activation = str(a1111?.["activation text"]);
+      const weight = Number(a1111?.["preferred weight"]);
       out.set(id, {
         abs: full,
         root,
@@ -332,14 +336,14 @@ export class ModelService {
           baseModel: shortBaseModel(
             str(civitai?.baseModel) ?? str(a1111?.["sd version"]) ?? found?.baseModel ?? null,
           ),
-          triggerWords: trained.length
-            ? trained.map((w) => w.trim())
-            : activation
-              ? activation
-                  .split(",")
-                  .map((w) => w.trim())
-                  .filter(Boolean)
-              : [],
+          // Your own words (A1111's activation text) win over Civitai's list.
+          triggerWords: activation
+            ? activation
+                .split(",")
+                .map((w) => w.trim())
+                .filter(Boolean)
+            : trained.map((w) => w.trim()),
+          weight: Number.isFinite(weight) && weight !== 0 ? weight : null,
           hasInfo: Boolean(civitai || a1111),
           civitai: ids
             ? { ...ids, lookup: false }
@@ -401,7 +405,6 @@ export class ModelService {
       typeof civitai?.modelId === "number" ? civitai.modelId : (found?.modelId ?? null);
     const versionId = typeof civitai?.id === "number" ? civitai.id : (found?.versionId ?? null);
     const site = "https://civitai.com";
-    const weight = Number(a1111?.["preferred weight"]);
     const kindRoot = kindFolderOf(root, path.dirname(entry.abs));
     return {
       ...entry.model,
@@ -427,11 +430,78 @@ export class ModelService {
                 : null,
             }
           : null,
-      weight: Number.isFinite(weight) && weight > 0 ? weight : null,
+      picture: entry.sidecars.thumb !== null,
       header,
       headerError,
       folders: await subfolders(kindRoot),
     };
+  }
+
+  /**
+   * Save trigger words, strength and notes into the model's A1111 .json ("foo.json", made when
+   * missing). Other keys in it are kept; a file that isn't valid JSON is left alone.
+   */
+  async saveInfo(body: SaveModelInfoBody): Promise<ModelDetails> {
+    const { entry } = await this.entry(body.id);
+    const file =
+      entry.sidecars.json ?? path.join(path.dirname(entry.abs), `${stemOf(entry.model.file)}.json`);
+    let info: Record<string, unknown> = {};
+    if (await exists(file)) {
+      const read = await readJson<unknown>(file);
+      if (!read || typeof read !== "object" || Array.isArray(read))
+        throw new HttpError(
+          409,
+          `"${path.basename(file)}" next to the model isn't valid JSON. Fix or move it, then save again.`,
+          "bad_json",
+        );
+      info = read as Record<string, unknown>;
+    }
+    if (body.triggerWords) info["activation text"] = body.triggerWords.join(", ");
+    if (body.weight !== undefined) info["preferred weight"] = body.weight ?? 0;
+    if (body.notes !== undefined) info.notes = body.notes.trim();
+    await writeJsonAtomic(file, info);
+    this.changed();
+    return this.details(body.id);
+  }
+
+  /** Make an image the model's picture; the old one moves to the profile's trash. */
+  async setPicture(id: string, image: Uint8Array): Promise<void> {
+    const { entry, profileId } = await this.entry(id);
+    try {
+      await saveModelThumbs(entry.abs, image, {
+        replace: true,
+        trashDir: this.pictureTrash(profileId),
+      });
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      throw new HttpError(
+        400,
+        "That file isn't an image Blombo can read. Try a PNG, JPEG or WebP.",
+        "bad_image",
+      );
+    }
+    this.changed();
+  }
+
+  /** Move the model's picture to the profile's trash (cards show Civitai's or the fallback). */
+  async removePicture(id: string): Promise<void> {
+    const { entry, profileId } = await this.entry(id);
+    const dir = dataDirOf(entry.abs);
+    const old = await findThumbs(dir);
+    const stamp = `${Date.now().toString(36)}-${path.basename(dir)}`;
+    for (const file of [old.thumb, old.raw])
+      if (file)
+        await movePath(file, path.join(this.pictureTrash(profileId), stamp, path.basename(file)));
+    this.changed();
+  }
+
+  private pictureTrash(profileId: string): string {
+    return path.join(this.deps.profiles.dir(profileId), "trash", "model-pictures");
+  }
+
+  private changed(): void {
+    this.invalidate();
+    this.deps.onChanged();
   }
 
   /** Rename the model file and its sidecars ("foo.*" → "bar.*", "foo_data" → "bar_data"). */

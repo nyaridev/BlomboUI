@@ -14,13 +14,14 @@ import {
   useUpdateSettings,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, EmptyState, Sheet, Skeleton } from "@client/ui";
+import { Button, EmptyState, openContextMenu, Sheet, Skeleton } from "@client/ui";
 import type { GalleryImage } from "@shared/gallery";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { viewFromPath } from "../../app/router";
 import { Grid } from "./Grid";
+import { useImageMenu } from "./imageMenu";
 import { Lightbox } from "./Lightbox";
 import { Sidebar } from "./Sidebar";
 import { galleryQuery, isHomeView, useGalleryUi } from "./state";
@@ -124,6 +125,14 @@ function Images({ featured }: { featured: GalleryImage[] }) {
   }, [query]);
   const onOpen = useCallback((id: number) => useGalleryUi.getState().set({ open: id }), []);
   const onUseSettings = useCallback(() => go("generate"), [go]);
+  // The menu reads the latest hooks through a ref, so the grid's tiles keep one callback.
+  const imageMenu = useImageMenu(onOpen, go);
+  const menuRef = useRef(imageMenu);
+  menuRef.current = imageMenu;
+  const onMenu = useCallback(
+    (e: MouseEvent<HTMLElement>, image: GalleryImage) => openContextMenu(e, menuRef.current(image)),
+    [],
+  );
 
   const open = ui.open !== null && visible ? items.find((i) => i.id === ui.open) : undefined;
   const home = isHomeView({ ...ui, q });
@@ -180,6 +189,7 @@ function Images({ featured }: { featured: GalleryImage[] }) {
           loadingMore={isFetchingNextPage}
           onLoadMore={loadMore}
           onOpen={onOpen}
+          onMenu={onMenu}
           onUseSettings={onUseSettings}
         />
       )}

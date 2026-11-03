@@ -1,5 +1,6 @@
 /**
- * Everything that floats: Tooltip, Popover, Menu. Behavior (positioning, dismissal, focus,
+ * Everything that floats: Tooltip, Popover, Menu and the right-click menu (ContextMenuHost,
+ * opened with `openContextMenu`). Behavior (positioning, dismissal, focus,
  * keyboard navigation, typeahead) comes from Floating UI; every pixel of the look is ours.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
@@ -28,12 +29,17 @@ import { AnimatePresence, motion } from "motion/react";
 import {
   Children,
   cloneElement,
+  type MouseEvent,
+  type MutableRefObject,
   type ReactElement,
   type ReactNode,
   type Ref,
+  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
+import { create } from "zustand";
 import { Kbd } from "./feedback";
 
 type AnyElement = ReactElement<Record<string, unknown> & { ref?: Ref<HTMLElement> }>;
@@ -239,7 +245,6 @@ export function Menu({
   const child = Children.only(trigger) as AnyElement;
   const ref = useMergeRefs([refs.setReference, child.props.ref]);
 
-  let index = -1;
   return (
     <>
       {cloneElement(child, {
@@ -265,50 +270,13 @@ export function Menu({
                   style={{ width, transformOrigin: origin }}
                 >
                   {header}
-                  {items.map((item) => {
-                    if (item.type === "separator")
-                      return <div key={item.id} className="mx-1 my-1 h-px bg-line" />;
-                    if (item.type === "label")
-                      return (
-                        <div key={item.id} className="label-caps px-2.5 pt-2 pb-1 text-[10px]">
-                          {item.label}
-                        </div>
-                      );
-                    index += 1;
-                    const i = index;
-                    const active = activeIndex === i;
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        role="menuitem"
-                        tabIndex={active ? 0 : -1}
-                        disabled={item.disabled}
-                        ref={(node) => {
-                          listRef.current[i] = node;
-                        }}
-                        className={cn(
-                          "flex h-8 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm outline-none",
-                          item.tone === "danger" ? "text-red-ink" : "text-fg-2",
-                          active && (item.tone === "danger" ? "bg-red/15" : "bg-fg/8 text-fg"),
-                          item.disabled && "opacity-40",
-                        )}
-                        {...getItemProps({
-                          onClick() {
-                            item.onSelect();
-                            setOpen(false);
-                          },
-                        })}
-                      >
-                        {item.icon ? (
-                          <Icon name={item.icon} size={16} className="opacity-80" />
-                        ) : null}
-                        <span className="flex-1 truncate">{item.label}</span>
-                        {item.hint}
-                        {item.shortcut ? <Kbd>{item.shortcut}</Kbd> : null}
-                      </button>
-                    );
-                  })}
+                  <MenuItems
+                    items={items}
+                    activeIndex={activeIndex}
+                    listRef={listRef}
+                    getItemProps={getItemProps}
+                    onDone={() => setOpen(false)}
+                  />
                 </motion.div>
               </div>
             </FloatingFocusManager>
@@ -316,5 +284,198 @@ export function Menu({
         </AnimatePresence>
       </FloatingPortal>
     </>
+  );
+}
+
+/** The rows of a Menu or a context menu: items, separators and group labels. */
+function MenuItems({
+  items,
+  activeIndex,
+  listRef,
+  getItemProps,
+  onDone,
+}: {
+  items: MenuEntry[];
+  activeIndex: number | null;
+  listRef: MutableRefObject<Array<HTMLElement | null>>;
+  getItemProps: ReturnType<typeof useInteractions>["getItemProps"];
+  onDone: () => void;
+}) {
+  let index = -1;
+  return items.map((item) => {
+    if (item.type === "separator") return <div key={item.id} className="mx-1 my-1 h-px bg-line" />;
+    if (item.type === "label")
+      return (
+        <div key={item.id} className="label-caps px-2.5 pt-2 pb-1 text-[10px]">
+          {item.label}
+        </div>
+      );
+    index += 1;
+    const i = index;
+    const active = activeIndex === i;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        role="menuitem"
+        tabIndex={active ? 0 : -1}
+        disabled={item.disabled}
+        ref={(node) => {
+          listRef.current[i] = node;
+        }}
+        className={cn(
+          "flex h-8 w-full items-center gap-2.5 rounded-sm px-2.5 text-left text-sm outline-none",
+          item.tone === "danger" ? "text-red-ink" : "text-fg-2",
+          active && (item.tone === "danger" ? "bg-red/15" : "bg-fg/8 text-fg"),
+          item.disabled && "opacity-40",
+        )}
+        {...getItemProps({
+          onClick() {
+            item.onSelect();
+            onDone();
+          },
+        })}
+      >
+        {item.icon ? <Icon name={item.icon} size={16} className="opacity-80" /> : null}
+        <span className="flex-1 truncate">{item.label}</span>
+        {item.hint}
+        {item.shortcut ? <Kbd>{item.shortcut}</Kbd> : null}
+      </button>
+    );
+  });
+}
+
+/* ── Context menu ────────────────────────────────────────────────────────── */
+
+interface OpenContextMenu {
+  x: number;
+  y: number;
+  items: MenuEntry[];
+  /** Bumped on every open, so a second right-click replays the entrance. */
+  key: number;
+}
+
+const useContextMenu = create<{ menu: OpenContextMenu | null }>(() => ({ menu: null }));
+const closeContextMenu = () => useContextMenu.setState({ menu: null });
+
+/**
+ * Right-click: `onContextMenu={(e) => openContextMenu(e, items)}` opens the menu at the pointer
+ * (under the element when it comes from the keyboard: Shift+F10 or the menu key). It looks and
+ * works like Menu. Build the items in the handler, so a grid of cards builds none until used.
+ */
+export function openContextMenu(e: MouseEvent<HTMLElement>, items: MenuEntry[]): void {
+  if (!items.length) return;
+  e.preventDefault();
+  e.stopPropagation();
+  let { clientX: x, clientY: y } = e;
+  if (x === 0 && y === 0) {
+    const r = e.currentTarget.getBoundingClientRect();
+    x = r.left + 8;
+    y = r.top + Math.min(r.height, 32);
+  }
+  useContextMenu.setState((s) => ({ menu: { x, y, items, key: (s.menu?.key ?? 0) + 1 } }));
+}
+
+/** Renders the open right-click menu. Mounted once, next to the Toaster. */
+export function ContextMenuHost() {
+  const menu = useContextMenu((s) => s.menu);
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const listRef = useRef<Array<HTMLElement | null>>([]);
+  const labelsRef = useRef<Array<string | null>>([]);
+  const items = menu?.items ?? [];
+  labelsRef.current = items
+    .filter((i) => i.type === undefined || i.type === "item")
+    .map((i) => ("label" in i ? i.label : null));
+  const { refs, floatingStyles, context } = useFloating({
+    open: menu !== null,
+    onOpenChange: (open) => {
+      if (!open) closeContextMenu();
+    },
+    placement: "right-start",
+    strategy: "fixed",
+    whileElementsMounted: autoUpdate,
+    middleware: [
+      offset({ mainAxis: 2, alignmentAxis: 2 }),
+      flip({ padding: 8, fallbackPlacements: ["left-start", "right-end", "left-end"] }),
+      shift({ padding: 8 }),
+    ],
+  });
+  useLayoutEffect(() => {
+    if (!menu) return;
+    const { x, y } = menu;
+    refs.setPositionReference({
+      getBoundingClientRect: () => ({
+        x,
+        y,
+        left: x,
+        top: y,
+        right: x,
+        bottom: y,
+        width: 0,
+        height: 0,
+      }),
+    });
+    setActiveIndex(null);
+  }, [menu, refs]);
+  // A native menu closes when the page under it moves.
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: Event) => {
+      if (!(e.target instanceof Node && refs.floating.current?.contains(e.target)))
+        closeContextMenu();
+    };
+    window.addEventListener("scroll", close, { capture: true, passive: true });
+    window.addEventListener("resize", close);
+    window.addEventListener("blur", close);
+    return () => {
+      window.removeEventListener("scroll", close, { capture: true });
+      window.removeEventListener("resize", close);
+      window.removeEventListener("blur", close);
+    };
+  }, [menu, refs]);
+  const { getFloatingProps, getItemProps } = useInteractions([
+    useDismiss(context),
+    useRole(context, { role: "menu" }),
+    useListNavigation(context, { listRef, activeIndex, onNavigate: setActiveIndex, loop: true }),
+    useTypeahead(context, { listRef: labelsRef, activeIndex, onMatch: setActiveIndex }),
+  ]);
+  return (
+    <FloatingPortal>
+      <AnimatePresence>
+        {menu ? (
+          // Focus goes to the panel, so arrow keys and typeahead work right away.
+          <FloatingFocusManager
+            key={menu.key}
+            context={context}
+            modal={false}
+            initialFocus={refs.floating}
+          >
+            <div
+              ref={refs.setFloating}
+              style={floatingStyles}
+              className="z-[350] outline-none"
+              {...getFloatingProps()}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, transition: exitFast }}
+                transition={{ duration: 0.09 }}
+                className={cn(panel, "overflow-hidden p-1")}
+                style={{ width: 230, transformOrigin: "top left" }}
+              >
+                <MenuItems
+                  items={items}
+                  activeIndex={activeIndex}
+                  listRef={listRef}
+                  getItemProps={getItemProps}
+                  onDone={closeContextMenu}
+                />
+              </motion.div>
+            </div>
+          </FloatingFocusManager>
+        ) : null}
+      </AnimatePresence>
+    </FloatingPortal>
   );
 }

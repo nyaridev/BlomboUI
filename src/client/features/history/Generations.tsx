@@ -17,6 +17,8 @@ import {
   EmptyState,
   IconButton,
   Menu,
+  type MenuEntry,
+  openContextMenu,
   Segmented,
   Skeleton,
   TextField,
@@ -254,8 +256,32 @@ function RunRow({
 }) {
   const state = STATE[r.state];
   const rate = averageRate(r.timings);
+  const more: MenuEntry[] = [
+    {
+      id: "seed",
+      label: "Run with a new seed",
+      icon: "dice",
+      onSelect: () => onRerun(true),
+      disabled: r.kind === "batch",
+    },
+    { id: "use", label: "Use these settings", icon: "sliders", onSelect: onUse },
+  ];
+  // Right-click adds Run again on top of the ⋯ menu.
+  const menu: MenuEntry[] = [
+    {
+      id: "again",
+      label: "Run again",
+      icon: "refresh",
+      onSelect: () => onRerun(false),
+      disabled: r.kind === "batch",
+    },
+    ...more,
+  ];
   return (
-    <div className="group flex items-center gap-4 px-4 py-3">
+    <div
+      className="group flex items-center gap-4 px-4 py-3"
+      onContextMenu={(e) => openContextMenu(e, menu)}
+    >
       <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md border border-line bg-sunken">
         {r.thumb ? (
           <img src={r.thumb} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -335,16 +361,7 @@ function RunRow({
           Run again
         </Button>
         <Menu
-          items={[
-            {
-              id: "seed",
-              label: "Run with a new seed",
-              icon: "dice",
-              onSelect: () => onRerun(true),
-              disabled: r.kind === "batch",
-            },
-            { id: "use", label: "Use these settings", icon: "sliders", onSelect: onUse },
-          ]}
+          items={more}
           trigger={<IconButton icon="more-horizontal" label="More" tooltip={false} />}
         />
       </div>

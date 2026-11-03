@@ -65,12 +65,8 @@ export async function saveModelThumbs(
 ): Promise<boolean> {
   const dir = dataDirOf(modelFile);
   const old = await findThumbs(dir);
-  if (old.thumb || old.raw) {
-    if (!opts.replace) return false;
-    const stamp = `${Date.now().toString(36)}-${path.basename(dir)}`;
-    for (const file of [old.thumb, old.raw])
-      if (file) await movePath(file, path.join(opts.trashDir, stamp, path.basename(file)));
-  }
+  if ((old.thumb || old.raw) && !opts.replace) return false;
+  // Read the new image first: one that can't be read leaves the old picture where it is.
   const source = sharp(Buffer.from(image), { failOn: "none" }).rotate();
   const raw = await source.clone().png({ compressionLevel: 8 }).toBuffer();
   const thumb = await source
@@ -78,6 +74,11 @@ export async function saveModelThumbs(
     .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: "inside", withoutEnlargement: true })
     .jpeg({ quality: 86, mozjpeg: true })
     .toBuffer();
+  if (opts.replace) {
+    const stamp = `${Date.now().toString(36)}-${path.basename(dir)}`;
+    for (const file of [old.thumb, old.raw])
+      if (file) await movePath(file, path.join(opts.trashDir, stamp, path.basename(file)));
+  }
   await writeFileAtomic(path.join(dir, "thumb_raw.png"), raw);
   await writeFileAtomic(path.join(dir, "thumb.jpg"), thumb);
   return true;

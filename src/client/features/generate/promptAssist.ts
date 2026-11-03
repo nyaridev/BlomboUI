@@ -208,8 +208,16 @@ export const assistTheme = EditorView.theme({
     backgroundColor: "color-mix(in srgb, var(--fg) 8%, transparent)",
     color: "var(--fg)",
   },
-  ".cm-completionLabel": { fontSize: "14px", flex: "1", minWidth: "0" },
+  // A long label (trigger words) ends in "…" before the detail instead of running under it.
+  ".cm-completionLabel": {
+    fontSize: "14px",
+    flex: "1",
+    minWidth: "0",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
   ".cm-completionDetail": {
+    flexShrink: "0",
     color: "var(--fg-3)",
     fontStyle: "normal",
     fontSize: "12px",
@@ -231,7 +239,7 @@ export const assistTheme = EditorView.theme({
     flexShrink: "0",
   },
   // The selected entry's picture, beside the list (CodeMirror's info panel).
-  ".cm-tooltip.cm-completionInfo": { padding: "4px", maxWidth: "none" },
+  ".cm-tooltip.cm-completionInfo": { padding: "8px", maxWidth: "none" },
   ".cm-ac-picture": {
     display: "block",
     width: "200px",

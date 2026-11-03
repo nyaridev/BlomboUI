@@ -397,6 +397,8 @@ export const api = {
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
   civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),
   clearCivitaiViews: () => request<{ ok: true }>("DELETE", "/civitai/history/views"),
+  forgetCivitaiView: (modelId: number) =>
+    request<{ ok: true }>("DELETE", `/civitai/history/views/${modelId}`),
   civitaiSearches: () => request<CivitaiSearch[]>("GET", "/civitai/history/searches"),
   forgetCivitaiSearch: (q?: string) =>
     request<{ ok: true }>(
@@ -415,6 +417,8 @@ export const api = {
   downloadHistory: (offset: number, limit: number) =>
     request<DownloadHistoryPage>("GET", `/downloads/history?offset=${offset}&limit=${limit}`),
   clearDownloadHistory: () => request<{ ok: true }>("DELETE", "/downloads/history"),
+  removeDownloadRecord: (id: string) =>
+    request<{ ok: true }>("DELETE", `/downloads/history/${encodeURIComponent(id)}`),
 
   catalog: (refresh = false) =>
     request<Catalog>("GET", `/manager/catalog${refresh ? "?refresh=1" : ""}`),

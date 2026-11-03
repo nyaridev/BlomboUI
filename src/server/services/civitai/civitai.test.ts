@@ -54,6 +54,8 @@ describe("browsing", () => {
     expect(text).not.toMatch(/alert|javascript:/);
     expect(text).toContain("/models/1002");
     expect(o.services.civitai.views()[0]?.modelId).toBe(1001);
+    o.services.civitai.forgetView(1001);
+    expect(o.services.civitai.views().some((v) => v.modelId === 1001)).toBe(false);
   });
 
   it("marks models already in the models folder", async () => {

@@ -57,7 +57,16 @@ export function DownloadThumb({ d, size = 40 }: { d: Download; size?: number }) 
   );
 }
 
-export function DownloadRow({ d, dense }: { d: Download; dense?: boolean }) {
+/** `onRemove` (History only): a finished row gets "Remove from history". */
+export function DownloadRow({
+  d,
+  dense,
+  onRemove,
+}: {
+  d: Download;
+  dense?: boolean;
+  onRemove?: () => void;
+}) {
   const p = useLive((s) => s.downloadProgress[d.id]);
   const goTo = useGoToView();
   const received = p?.received ?? d.received;
@@ -184,6 +193,14 @@ export function DownloadRow({ d, dense }: { d: Download; dense?: boolean }) {
             label={d.state === "error" ? "Discard the partial file" : "Cancel"}
             size="sm"
             onClick={() => void act(() => api.cancelDownload(d.id))}
+          />
+        ) : null}
+        {onRemove && (d.state === "done" || d.state === "cancelled" || d.state === "error") ? (
+          <IconButton
+            icon="trash"
+            label="Remove from history (the model file stays)"
+            size="sm"
+            onClick={onRemove}
           />
         ) : null}
       </div>

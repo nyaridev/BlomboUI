@@ -16,7 +16,18 @@ import {
   useSettings,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, Chip, Dialog, EmptyState, ModelCard, Skeleton, Tabs, toast } from "@client/ui";
+import {
+  Button,
+  Chip,
+  Dialog,
+  EmptyState,
+  IconButton,
+  ModelCard,
+  openContextMenu,
+  Skeleton,
+  Tabs,
+  toast,
+} from "@client/ui";
 import { CIVITAI_TYPE_LABELS, civitaiKind } from "@shared/civitai";
 import type { Download } from "@shared/downloads";
 import { useQueryClient } from "@tanstack/react-query";
@@ -156,7 +167,15 @@ function Downloads() {
                 className="absolute inset-x-0 top-0 border-b border-line last:border-b-0"
                 style={{ transform: `translateY(${v.start}px)` }}
               >
-                <DownloadRow d={d} />
+                <DownloadRow
+                  d={d}
+                  onRemove={() =>
+                    void api
+                      .removeDownloadRecord(d.id)
+                      .then(() => qc.invalidateQueries({ queryKey: qk.downloadHistory(profileId) }))
+                      .catch((e: Error) => toast(e.message, "error"))
+                  }
+                />
               </div>
             );
           })}
@@ -242,7 +261,17 @@ function Civitai() {
           {searches.data?.length ? (
             <div className="flex flex-wrap gap-1.5">
               {searches.data.map((s) => (
-                <Chip key={s.query} size="sm" icon="search" onClick={() => searchFor(s.query)}>
+                <Chip
+                  key={s.query}
+                  size="sm"
+                  icon="search"
+                  onClick={() => searchFor(s.query)}
+                  onRemove={() =>
+                    void api
+                      .forgetCivitaiSearch(s.query)
+                      .then(() => qc.invalidateQueries({ queryKey: qk.civitaiSearches(profileId) }))
+                  }
+                >
                   {s.query}
                 </Chip>
               ))}
@@ -273,28 +302,56 @@ function Civitai() {
             <Skeleton className="h-40 w-full" />
           ) : views.data?.length ? (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3">
-              {views.data.map((v) => (
-                <ModelCard
-                  key={v.modelId}
-                  name={v.name}
-                  kind={civitaiKind(v.type) ?? "checkpoints"}
-                  thumb={v.image?.thumb ?? null}
-                  nsfw={v.image?.nsfw}
-                  blurNsfw={blurNsfw}
-                  typeLabel={CIVITAI_TYPE_LABELS[v.type] ?? v.type}
-                  onClick={() => {
-                    openCivitaiModel(v.modelId, v.name);
-                    goTo("models");
-                  }}
-                  footer={
-                    <span className="flex items-center gap-1 text-2xs text-fg-3">
-                      <Icon name="clock" size={11} />
-                      {new Date(v.viewedAt).toLocaleDateString()}
-                      {v.creator ? <span className="ml-auto truncate">{v.creator}</span> : null}
+              {views.data.map((v) => {
+                const forget = () =>
+                  void api
+                    .forgetCivitaiView(v.modelId)
+                    .then(() => qc.invalidateQueries({ queryKey: qk.civitaiViews(profileId) }))
+                    .catch((e: Error) => toast(e.message, "error"));
+                return (
+                  <div key={v.modelId} className="group/view relative">
+                    <ModelCard
+                      name={v.name}
+                      kind={civitaiKind(v.type) ?? "checkpoints"}
+                      thumb={v.image?.thumb ?? null}
+                      nsfw={v.image?.nsfw}
+                      blurNsfw={blurNsfw}
+                      typeLabel={CIVITAI_TYPE_LABELS[v.type] ?? v.type}
+                      onClick={() => {
+                        openCivitaiModel(v.modelId, v.name);
+                        goTo("models");
+                      }}
+                      onContextMenu={(e) =>
+                        openContextMenu(e, [
+                          {
+                            id: "remove",
+                            label: "Remove from history",
+                            icon: "trash",
+                            onSelect: forget,
+                          },
+                        ])
+                      }
+                      footer={
+                        <span className="flex items-center gap-1 text-2xs text-fg-3">
+                          <Icon name="clock" size={11} />
+                          {new Date(v.viewedAt).toLocaleDateString()}
+                          {v.creator ? <span className="ml-auto truncate">{v.creator}</span> : null}
+                        </span>
+                      }
+                    />
+                    {/* Over the card's corner on hover or focus (always on touch screens). */}
+                    <span className="absolute top-1.5 right-1.5 z-10 opacity-0 group-hover/view:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+                      <IconButton
+                        icon="x"
+                        label="Remove from history"
+                        size="xs"
+                        variant="secondary"
+                        onClick={forget}
+                      />
                     </span>
-                  }
-                />
-              ))}
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p className="text-sm text-fg-3">

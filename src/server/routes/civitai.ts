@@ -55,6 +55,14 @@ export function civitaiRoutes(civitai: CivitaiService) {
     return c.json({ ok: true });
   });
 
+  r.delete("/history/views/:id", (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isSafeInteger(id) || id <= 0)
+      throw new HttpError(400, "That isn't a Civitai model id.", "bad_id");
+    civitai.forgetView(id);
+    return c.json({ ok: true });
+  });
+
   r.get("/history/searches", (c) => c.json(civitai.searches()));
   r.delete("/history/searches", (c) => {
     const q = c.req.query("q");

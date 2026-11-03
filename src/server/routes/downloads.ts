@@ -28,6 +28,11 @@ export function downloadRoutes(downloads: DownloadQueue) {
     return c.json({ ok: true });
   });
 
+  r.delete("/history/:id", async (c) => {
+    await downloads.removeRecord(c.req.param("id"));
+    return c.json({ ok: true });
+  });
+
   r.post("/:id/pause", (c) => c.json(downloads.pause(c.req.param("id"))));
   r.post("/:id/resume", async (c) => c.json(await downloads.resume(c.req.param("id"))));
   r.post("/:id/cancel", async (c) => c.json(await downloads.cancel(c.req.param("id"))));

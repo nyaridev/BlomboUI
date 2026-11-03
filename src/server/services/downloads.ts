@@ -785,6 +785,41 @@ export class DownloadQueue {
       .db.exec("DELETE FROM downloads WHERE state IN ('done', 'error', 'cancelled')");
   }
 
+  /**
+   * Take one finished download out of the history (and off the list). The model file stays; a
+   * failed one's partial file goes, so nothing is left half-written.
+   */
+  async removeRecord(id: string): Promise<void> {
+    const profileId = this.active();
+    const row = this.deps.dbs
+      .get(profileId)
+      .db.prepare("SELECT state, dest FROM downloads WHERE id = ?")
+      .get(id) as { state: string; dest: string } | undefined;
+    const item = this.items.find((i) => i.d.id === id);
+    const state = (item?.d.state ?? row?.state) as DownloadState | undefined;
+    if (!state)
+      throw new HttpError(404, "That download isn't in the history anymore.", "no_download");
+    if (!isFinished(state))
+      throw new HttpError(
+        409,
+        "It's still downloading. Cancel it first, then remove it.",
+        "active",
+      );
+    if (state === "error") {
+      const root = await this.rootOf(profileId).catch(() => null);
+      const dest = item?.d.dest ?? row?.dest;
+      if (root && dest)
+        await removePart(resolveInside(root, dest) + PART_SUFFIX).catch(() => undefined);
+    }
+    this.deps.dbs.get(profileId).db.prepare("DELETE FROM downloads WHERE id = ?").run(id);
+    // Looked up again: the list may have changed while the partial file was removed.
+    const at = this.items.findIndex((i) => i.d.id === id);
+    if (at >= 0) {
+      this.items.splice(at, 1);
+      this.publish();
+    }
+  }
+
   private async trimHistory(profileId: string): Promise<void> {
     const limit = (await this.deps.settings.get(profileId)).civitai.history.downloads;
     this.deps.dbs

@@ -194,6 +194,28 @@ describe("Civitai downloads", () => {
         .items.find((i) => i.id === "old-one")?.state,
     ).toBe("paused");
   });
+
+  it("removes one finished download from the history and keeps its file", async () => {
+    const done = q()
+      .history(0, 100)
+      .items.find((i: Download) => i.state === "done");
+    if (!done) throw new Error("no finished download");
+    await q().removeRecord(done.id);
+    expect(
+      q()
+        .history(0, 100)
+        .items.some((i) => i.id === done.id),
+    ).toBe(false);
+    expect(
+      q()
+        .snapshot()
+        .items.some((i) => i.id === done.id),
+    ).toBe(false);
+    await fs.access(abs(done.dest));
+    await expect(q().removeRecord(done.id)).rejects.toThrow(/isn't in the history/);
+    // One that's still waiting has to be cancelled first.
+    await expect(q().removeRecord("old-one")).rejects.toThrow(/Cancel it first/);
+  });
 });
 
 describe("Manager installs", () => {

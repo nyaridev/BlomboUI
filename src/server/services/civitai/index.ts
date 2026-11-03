@@ -236,6 +236,14 @@ export class CivitaiService {
     this.deps.dbs.get(this.active()).db.exec("DELETE FROM civitai_views");
   }
 
+  /** Take one opened model out of the history. */
+  forgetView(modelId: number): void {
+    this.deps.dbs
+      .get(this.active())
+      .db.prepare("DELETE FROM civitai_views WHERE model_id = ?")
+      .run(modelId);
+  }
+
   searches(): CivitaiSearch[] {
     const rows = this.deps.dbs
       .get(this.active())

@@ -103,6 +103,12 @@ export function Generations() {
       toast(e instanceof Error ? e.message : String(e), "error");
     }
   };
+  const removeRun = (r: JobRecord) =>
+    api
+      .removeJobRecords({ ids: [r.id] })
+      .then(() => qc.invalidateQueries({ queryKey: qk.history(profileId) }))
+      .catch((e: Error) => toast(e.message, "error"));
+
   const loadSettingsOf = async (r: JobRecord) => {
     try {
       const detail = await api.jobRecord(r.id);
@@ -202,6 +208,7 @@ export function Generations() {
                     r={r}
                     onRerun={(newSeed) => void rerun(r, newSeed)}
                     onUse={() => void loadSettingsOf(r)}
+                    onRemove={() => void removeRun(r)}
                   />
                 </div>
               );
@@ -249,10 +256,12 @@ function RunRow({
   r,
   onRerun,
   onUse,
+  onRemove,
 }: {
   r: JobRecord;
   onRerun: (newSeed: boolean) => void;
   onUse: () => void;
+  onRemove: () => void;
 }) {
   const state = STATE[r.state];
   const rate = averageRate(r.timings);
@@ -265,6 +274,7 @@ function RunRow({
       disabled: r.kind === "batch",
     },
     { id: "use", label: "Use these settings", icon: "sliders", onSelect: onUse },
+    { id: "remove", label: "Remove from history", icon: "trash", onSelect: onRemove },
   ];
   // Right-click adds Run again on top of the ⋯ menu.
   const menu: MenuEntry[] = [
@@ -360,6 +370,12 @@ function RunRow({
         >
           Run again
         </Button>
+        <IconButton
+          icon="trash"
+          label="Remove from history (images stay)"
+          size="sm"
+          onClick={onRemove}
+        />
         <Menu
           items={more}
           trigger={<IconButton icon="more-horizontal" label="More" tooltip={false} />}

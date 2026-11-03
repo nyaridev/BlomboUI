@@ -10,8 +10,10 @@
  * A dropped .safetensors file's header is read in the browser; when it carries no hash Civitai
  * knows, the file streams to the server for its SHA256, and the server keeps nothing.
  */
+
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { useClock } from "@client/lib/clock";
 import { formatBytes } from "@client/lib/number";
 import { useImportWorkflow, useSaveModelInfo } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
@@ -241,6 +243,7 @@ function Result({
 
 /** Name, kind, size, dates, where it came from and its hashes. */
 function FileFacts({ info, civitai }: { info: FileInfo; civitai: FileCivitai | null }) {
+  const clock = useClock();
   const kindLabel =
     info.kind === "image"
       ? info.image?.format.toUpperCase()
@@ -267,7 +270,7 @@ function FileFacts({ info, civitai }: { info: FileInfo; civitai: FileCivitai | n
           },
           {
             label: "Modified",
-            value: info.modified ? new Date(info.modified).toLocaleString() : null,
+            value: info.modified ? clock.dateTime(info.modified) : null,
           },
           {
             label: "From",

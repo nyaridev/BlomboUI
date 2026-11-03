@@ -3,8 +3,10 @@
  * page): what it is, where it goes, its progress from the live bus, and the actions its state
  * allows (pause, resume or retry, cancel, reveal, show in Models).
  */
+
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { useClock } from "@client/lib/clock";
 import { cn } from "@client/lib/cn";
 import { useGoToView } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
@@ -68,6 +70,7 @@ export function DownloadRow({
   onRemove?: () => void;
 }) {
   const p = useLive((s) => s.downloadProgress[d.id]);
+  const clock = useClock();
   const goTo = useGoToView();
   const received = p?.received ?? d.received;
   const size = p?.size ?? d.size;
@@ -85,7 +88,7 @@ export function DownloadRow({
           .filter(Boolean)
           .join(" · ")
       : d.state === "done"
-        ? `${size ? formatBytes(size) : ""}${d.finishedAt ? ` · ${new Date(d.finishedAt).toLocaleString()}` : ""}`
+        ? `${size ? formatBytes(size) : ""}${d.finishedAt ? ` · ${clock.dateTime(d.finishedAt)}` : ""}`
         : d.state === "paused" && received > 0 && size
           ? `${formatBytes(received)} of ${formatBytes(size)} · resumes where it stopped`
           : d.state === "queued"

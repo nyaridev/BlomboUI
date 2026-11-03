@@ -204,6 +204,7 @@ layout. Desktop classes stay as they are; the compact rules are `max-lg:` additi
 - Errors say what went wrong and what to do: "Add your API key in Settings → Civitai."
 - Name things the way people see them: *workflow*, *layout*, *profile*, *stage*, never *manifest* or *binding* in the UI (except the Inspector's technical badges).
 - Toasts confirm in past tense: "Workflow saved", "Moved "Anime" to trash".
+- Times of day follow the OS clock (Windows' short time: "17:17" or "5:17 PM", whatever the browser's language): format them with `useClock()` from `lib/clock.ts` (`time`, `dateTime`), never `toLocaleTimeString` or a date's `toLocaleString`.
 
 ## Accessibility
 

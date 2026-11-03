@@ -5,8 +5,10 @@
  *
  * Keys: ← → browse, Esc close, F favorite, Z zoom, Delete move to trash.
  */
+
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { useClock } from "@client/lib/clock";
 import { cn } from "@client/lib/cn";
 import { useHotkey, useModalFocus } from "@client/lib/hooks";
 import { glide } from "@client/lib/motion";
@@ -318,6 +320,7 @@ function Details({
   onGo: (view: "generate" | "file-info") => void;
 }) {
   const importWorkflow = useImportWorkflow();
+  const clock = useClock();
   const setFileInfo = useFileInfoTarget((s) => s.set);
   const s = details?.summary;
   const sizeLine =
@@ -422,7 +425,7 @@ function Details({
                 : null,
             },
             { label: "Size on disk", value: formatBytes(image.size) },
-            { label: "Saved", value: new Date(image.mtime).toLocaleString() },
+            { label: "Saved", value: clock.dateTime(image.mtime) },
           ]}
         />
       </div>

@@ -6,7 +6,9 @@
  * (from a file or the latest Generate result) or none. Opened from any model's right-click menu
  * (`openModelInfo`); mounted once in Shell.
  */
+
 import { Icon } from "@client/icons/Icon";
+import { useClock } from "@client/lib/clock";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import {
@@ -400,6 +402,7 @@ function FileFacts({
   loading: boolean;
 }) {
   const actions = useModelActions();
+  const clock = useClock();
   if (loading)
     return (
       <div className="flex flex-col gap-2">
@@ -417,7 +420,7 @@ function FileFacts({
         { label: "File", value: model.file, copy: model.file },
         { label: "Folder", value: model.folder || "(top level)" },
         { label: "Size", value: formatBytes(model.size) },
-        { label: "Modified", value: new Date(model.mtime).toLocaleString() },
+        { label: "Modified", value: clock.dateTime(model.mtime) },
         { label: "Base model", value: d?.header?.training.baseModel ?? model.baseModel },
         {
           label: "Network",

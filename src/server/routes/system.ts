@@ -5,12 +5,18 @@ import { CheckPathBody, PickFolderBody, PickImagesBody } from "../../shared/prof
 import type { ServerConfig } from "../config.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
-import { checkPath, pickFolder, pickImages, revealInFileManager } from "../services/system.ts";
+import {
+  checkPath,
+  pickFolder,
+  pickImages,
+  readClock,
+  revealInFileManager,
+} from "../services/system.ts";
 
 export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
   const r = new Hono();
 
-  r.get("/", (c) => {
+  r.get("/", async (c) => {
     const info: SystemInfo = {
       app: APP_NAME,
       version: config.version,
@@ -18,6 +24,8 @@ export function systemRoutes(config: ServerConfig, profiles: ProfileService) {
       platform: process.platform,
       dataDir: config.dataDir,
       activeProfileId: profiles.active,
+      // Read each time, so a change in Windows' settings shows on the next load.
+      clock: await readClock(),
     };
     return c.json(info);
   });

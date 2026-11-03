@@ -3,8 +3,10 @@
  * database (services/history.ts) so it survives a reload: failed runs, ComfyUI crashes, script
  * follow-ups. Opening the view marks the header badge as read; Clear removes rows for good.
  */
+
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { type Clock, useClock } from "@client/lib/clock";
 import { cn } from "@client/lib/cn";
 import { dismissErrors, useLive } from "@client/lib/live";
 import { useErrorLog } from "@client/lib/queries";
@@ -30,13 +32,9 @@ const SOURCES: Record<AppError["source"], { label: string; icon: IconName }> = {
 
 type Filter = "all" | AppError["source"];
 
-function when(at: number): string {
-  const d = new Date(at);
-  const today = new Date();
-  const sameDay = d.toDateString() === today.toDateString();
-  return sameDay
-    ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" })
-    : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+function when(at: number, clock: Clock): string {
+  const sameDay = new Date(at).toDateString() === new Date().toDateString();
+  return sameDay ? clock.time(at, true) : clock.dateTime(at);
 }
 
 export function ErrorsView() {
@@ -127,6 +125,7 @@ export function ErrorsView() {
 }
 
 function ErrorRow({ error, onClear }: { error: AppError; onClear: () => void }) {
+  const clock = useClock();
   const [open, setOpen] = useState(false);
   const source = SOURCES[error.source];
   const long = error.detail.length > 220 || error.detail.includes("\n");
@@ -140,7 +139,9 @@ function ErrorRow({ error, onClear }: { error: AppError; onClear: () => void }) 
           <Badge>
             <Icon name={source.icon} size={11} /> {source.label}
           </Badge>
-          <span className="ml-auto font-mono text-2xs text-fg-4 tabular">{when(error.at)}</span>
+          <span className="ml-auto font-mono text-2xs text-fg-4 tabular">
+            {when(error.at, clock)}
+          </span>
         </div>
         {error.detail ? (
           <p

@@ -2,6 +2,7 @@
  * HTTP response shapes shared by the server routes and the client API wrapper.
  * Request bodies live next to their domain (profile.ts, workflow/…) as Zod schemas.
  */
+import type { ClockFormat } from "./clock.ts";
 import type { CheckPathResult, Profile, ProfileRegistry } from "./profile.ts";
 
 export interface SystemInfo {
@@ -11,6 +12,8 @@ export interface SystemInfo {
   platform: NodeJS.Platform | string;
   dataDir: string;
   activeProfileId: string | null;
+  /** How the OS shows the time of day (Windows' short time); null: the page's language decides. */
+  clock: ClockFormat | null;
 }
 
 export interface ProfilesResponse {

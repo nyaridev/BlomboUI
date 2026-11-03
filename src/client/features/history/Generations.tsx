@@ -4,8 +4,10 @@
  * values, stages and seed) or with a new seed; Use these settings loads it into Generate.
  * A virtualized list that pages in as you scroll.
  */
+
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { type Clock, useClock } from "@client/lib/clock";
 import { cn } from "@client/lib/cn";
 import { useDebounced, useGoToView } from "@client/lib/hooks";
 import { qk, useJobHistory } from "@client/lib/queries";
@@ -44,17 +46,9 @@ const STATE: Record<
   running: { label: "Running", tone: "neutral" },
 };
 
-function when(ms: number): string {
-  const d = new Date(ms);
-  const sameDay = d.toDateString() === new Date().toDateString();
-  return sameDay
-    ? d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
-    : d.toLocaleString(undefined, {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
+function when(ms: number, clock: Clock): string {
+  const sameDay = new Date(ms).toDateString() === new Date().toDateString();
+  return sameDay ? clock.time(ms) : clock.dateTime(ms, { month: "short", day: "numeric" });
 }
 
 const shortModel = (m: string) =>
@@ -263,6 +257,7 @@ function RunRow({
   onUse: () => void;
   onRemove: () => void;
 }) {
+  const clock = useClock();
   const state = STATE[r.state];
   const rate = averageRate(r.timings);
   const more: MenuEntry[] = [
@@ -307,7 +302,7 @@ function RunRow({
           <Badge tone={state.tone}>{state.label}</Badge>
           {r.groupTitle ? <Badge>{r.groupTitle}</Badge> : null}
           <span className="ml-auto shrink-0 font-mono text-2xs text-fg-4 tabular">
-            {when(r.finishedAt)}
+            {when(r.finishedAt, clock)}
           </span>
         </div>
         {r.error ? (

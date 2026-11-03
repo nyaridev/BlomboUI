@@ -3,8 +3,10 @@
  * temperature, the three memory actions, ComfyUI's state with start/stop/restart and its log,
  * and an errors badge that exists only when there's something to read.
  */
+
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { useClock } from "@client/lib/clock";
 import { cn } from "@client/lib/cn";
 import { useGoToView } from "@client/lib/hooks";
 import { dismissErrors, useLive } from "@client/lib/live";
@@ -355,6 +357,7 @@ const running = (s: ComfyState) => s === "running";
 
 function ErrorsButton() {
   const errors = useLive((s) => s.errors);
+  const clock = useClock();
   const go = useGoToView();
   return (
     <AnimatePresence>
@@ -388,7 +391,7 @@ function ErrorsButton() {
                         <span className="text-sm font-medium text-fg">{e.title}</span>
                         <span className="text-xs break-words text-fg-2">{e.detail}</span>
                         <span className="font-mono text-2xs text-fg-4">
-                          {new Date(e.at).toLocaleTimeString()}
+                          {clock.time(e.at, true)}
                         </span>
                       </div>
                     </div>

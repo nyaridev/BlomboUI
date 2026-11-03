@@ -3,9 +3,10 @@
  * picker (runs on the server, so it works without Tauri IPC) and path inspection for the
  * profile wizard.
  */
-import { spawn } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { type ClockFormat, parseTimePattern } from "../../shared/clock.ts";
 import type { CheckPathResult } from "../../shared/profile.ts";
 
 /** ComfyUI model folder names we look for to recognize a models root. */
@@ -206,6 +207,25 @@ export function pickImages(title: string): Promise<string[]> {
           .map((l) => l.trim())
           .filter(Boolean),
       ),
+    );
+  });
+}
+
+/**
+ * Windows' short time pattern (Settings → Time & language → Region), so the app's times read like
+ * the taskbar clock. Null on other systems or when it can't be read: the page's language decides.
+ */
+export function readClock(): Promise<ClockFormat | null> {
+  if (process.platform !== "win32") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    execFile(
+      "reg",
+      ["query", "HKCU\\Control Panel\\International", "/v", "sShortTime"],
+      { windowsHide: true, timeout: 3000 },
+      (error, stdout) => {
+        const pattern = /sShortTime\s+REG_SZ\s+(.+)/.exec(stdout)?.[1]?.trim();
+        resolve(error || !pattern ? null : parseTimePattern(pattern));
+      },
     );
   });
 }

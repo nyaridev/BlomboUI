@@ -62,6 +62,9 @@ export function CommandPalette({
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);
+  // Chromium sends a mousemove when the list scrolls under a still pointer; only a real move
+  // picks a row, or ↓ at the bottom row would snap back to the row under the mouse.
+  const lastPointer = useRef("");
   const baseId = useId();
 
   useEffect(() => {
@@ -204,7 +207,12 @@ export function CommandPalette({
                             tabIndex={-1}
                             aria-selected={selected}
                             data-index={i}
-                            onMouseMove={() => setActive(i)}
+                            onMouseMove={(e) => {
+                              const at = `${e.screenX},${e.screenY}`;
+                              if (at === lastPointer.current) return;
+                              lastPointer.current = at;
+                              setActive(i);
+                            }}
                             onClick={() => pick(item)}
                             onKeyDown={() => undefined}
                             className={cn(

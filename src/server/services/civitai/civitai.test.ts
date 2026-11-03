@@ -67,6 +67,14 @@ describe("browsing", () => {
     expect(match?.versionId).toBe(version?.id);
     expect(o.services.civitai.views()).toEqual([]);
     expect(await o.services.civitai.byHash("0".repeat(64))).toBeNull();
+    // A short hash (AutoV3 from a header) finds it too; images say who posted them and how.
+    const short = await o.services.civitai.byHash(version?.files[0]?.sha256?.slice(0, 12) ?? "");
+    const images = short?.model.versions.find((v) => v.id === short?.versionId)?.images ?? [];
+    expect(images[0]?.by).toBe(m.creator);
+    expect(images[2]?.by).toBe("a_fan");
+    expect(images[0]?.meta).toMatchObject({ negative: "blurry, lowres" });
+    expect(images[0]?.meta?.settings).toContainEqual(["Seed", "1234567"]);
+    expect(images[1]?.meta).toBeNull();
   });
 
   it("marks models already in the models folder", async () => {

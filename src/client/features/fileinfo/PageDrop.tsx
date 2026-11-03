@@ -1,7 +1,7 @@
 /**
- * Drop a file anywhere in the window while File Info is open (header included). Listens on the
- * window only while the view is mounted; drops a control handled first (the drop zone) are left
- * alone.
+ * Drop or paste a file anywhere in the window while File Info is open (header included). Listens
+ * on the window only while the view is mounted; drops and pastes a control handled first (the drop
+ * zone, a text field) are left alone.
  */
 import { Icon } from "@client/icons/Icon";
 import { AnimatePresence, motion } from "motion/react";
@@ -38,11 +38,19 @@ export function usePageFileDrop(onFile: (file: File) => void): boolean {
       const file = e.dataTransfer?.files[0];
       if (file) latest.current(file);
     };
+    const paste = (e: ClipboardEvent) => {
+      const file = e.clipboardData?.files[0];
+      if (!file || e.defaultPrevented) return;
+      e.preventDefault();
+      latest.current(file);
+    };
     window.addEventListener("dragenter", enter);
     window.addEventListener("dragover", over);
     window.addEventListener("dragleave", leave);
     window.addEventListener("drop", drop);
+    window.addEventListener("paste", paste);
     return () => {
+      window.removeEventListener("paste", paste);
       window.removeEventListener("dragenter", enter);
       window.removeEventListener("dragover", over);
       window.removeEventListener("dragleave", leave);

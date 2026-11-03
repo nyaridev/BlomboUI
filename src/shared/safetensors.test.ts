@@ -1,5 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { headerLength, parseSafetensorsHeader } from "./safetensors.ts";
+import { embeddedHashes, headerLength, parseSafetensorsHeader } from "./safetensors.ts";
+
+describe("embeddedHashes", () => {
+  it("turns the hashes a trainer wrote into ones Civitai can look up", () => {
+    expect(
+      embeddedHashes({
+        sshs_model_hash: "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+        "modelspec.hash_sha256":
+          "0xABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789",
+        sshs_legacy_hash: "1234abcd",
+      }),
+    ).toEqual(["ABCDEF012345", "1234ABCD"]);
+    expect(embeddedHashes({ sshs_model_hash: "not a hash", ss_tag_frequency: "{}" })).toEqual([]);
+  });
+});
 
 const LORA_HEADER = JSON.stringify({
   __metadata__: {

@@ -1,44 +1,52 @@
 /**
- * File Info: drop or pick a file and read what's inside, in sections. Images show how they
- * were made (Blombo, ComfyUI or A1111 metadata), the embedded graph and every text chunk, with
- * "Use these settings" and "Import as workflow". Safetensors files show their header: training
- * details, trigger words, the tag cloud and raw metadata, and the model found on Civitai by its
- * hash (CivitaiMatch.tsx: images, details, description). Files picked in the gallery or the
- * Models view open here too, and a file dropped anywhere in the window. Nothing is modified.
+ * File Info: drop, paste or pick a file and read what's inside. The top is the picture: an image
+ * itself, or for a model the creator's images from Civitai (found by hash, CivitaiMatch.tsx) with
+ * how the one on screen was made; the actions sit under it. Below come the file's facts and its
+ * sections: for images how they were made (Blombo, ComfyUI or A1111 metadata), the graph and
+ * every text chunk; for models the Civitai details and the header (Safetensors.tsx). Files picked
+ * in the gallery or the Models view open here too, and a file dropped anywhere in the window.
+ * Nothing is modified, except "Use as the model's picture", which asks for it.
  *
- * A dropped .safetensors file's header is read in the browser; for the hash the file streams to
- * the server, which keeps nothing.
+ * A dropped .safetensors file's header is read in the browser; when it carries no hash Civitai
+ * knows, the file streams to the server for its SHA256, and the server keeps nothing.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
-import { cn } from "@client/lib/cn";
 import { formatBytes } from "@client/lib/number";
-import { useImportWorkflow } from "@client/lib/queries";
+import { useImportWorkflow, useSaveModelInfo } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
   Badge,
   Button,
-  Chip,
-  Collapsible,
   CopyButton,
   DropZone,
   EmptyState,
   Panel,
   PropertyList,
-  SectionTitle,
   Skeleton,
-  TextField,
   toast,
 } from "@client/ui";
+import type { CivitaiImage } from "@shared/civitai";
 import type { FileInfo, ImageFileInfo } from "@shared/fileinfo";
-import { headerLength, MAX_HEADER_BYTES, type SafetensorsInfo } from "@shared/safetensors";
+import { headerLength, MAX_HEADER_BYTES } from "@shared/safetensors";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { useActiveChoice } from "../generate/workflow";
-import { CivitaiAbout, CivitaiImages, CivitaiMatchPanel } from "./CivitaiMatch";
+import {
+  authorImages,
+  CivitaiAbout,
+  CivitaiDetails,
+  CivitaiHero,
+  CivitaiLinks,
+  type FileCivitai,
+  ImageSettings,
+  useFileCivitai,
+} from "./CivitaiMatch";
 import { PageDropOverlay, usePageFileDrop } from "./PageDrop";
+import { Facts, Section, TextBlock } from "./parts";
+import { SafetensorsSections } from "./Safetensors";
 import { useFileInfoTarget } from "./state";
 
 const ACCEPT = ".png,.webp,.jpg,.jpeg,.safetensors,.sft,image/png,image/webp,image/jpeg";
@@ -72,6 +80,7 @@ export function FileInfoView() {
   const target = useFileInfoTarget((s) => s.target);
   const setTarget = useFileInfoTarget((s) => s.set);
   const [dropped, setDropped] = useState<File | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
   const preview = useMemo(
     () => (dropped && /^image\//.test(dropped.type) ? URL.createObjectURL(dropped) : null),
     [dropped],
@@ -103,7 +112,12 @@ export function FileInfoView() {
     setTarget(null);
     setDropped(file);
   };
+  const clear = () => {
+    setTarget(null);
+    setDropped(null);
+  };
   const dragging = usePageFileDrop(pick);
+  const open = Boolean(dropped || target);
   const imageSrc =
     preview ??
     (target?.type === "gallery" && info.data?.image
@@ -113,34 +127,44 @@ export function FileInfoView() {
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
       <PageDropOverlay show={dragging} />
-      <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-8 pt-8 pb-16 max-lg:px-3 max-lg:pt-4">
-        <div className="flex items-end gap-4">
-          <div className="flex flex-1 flex-col gap-1">
-            <h1 className="text-2xl font-semibold tracking-tight text-fg">File Info</h1>
-          </div>
+      <input
+        ref={picker}
+        type="file"
+        accept={ACCEPT}
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) pick(file);
+          e.target.value = "";
+        }}
+      />
+      <div className="mx-auto flex max-w-[1200px] flex-col gap-5 px-8 pt-8 pb-16 max-lg:px-3 max-lg:pt-4">
+        <div className="flex items-center gap-2">
+          <h1 className="flex-1 text-2xl font-semibold tracking-tight text-fg">File Info</h1>
+          {open ? (
+            <>
+              <Button variant="ghost" icon="x" onClick={clear}>
+                Clear
+              </Button>
+              <Button icon="file-info" onClick={() => picker.current?.click()}>
+                Pick a file
+              </Button>
+            </>
+          ) : null}
         </div>
 
-        <DropZone
-          onFile={pick}
-          accept={ACCEPT}
-          compact={Boolean(dropped || target)}
-          busy={info.isFetching}
-          title={
-            dropped || target
-              ? "Drop another file, or click to pick one"
-              : "Drop a file here, or click to pick one"
-          }
-          hint="Anywhere in the window works · PNG, WebP and JPEG images · .safetensors models, looked up on Civitai"
-          icon="file-info"
-        />
-
-        {!dropped && !target ? null : info.isLoading ? (
-          <div className="grid grid-cols-[360px_minmax(0,1fr)] gap-6 max-lg:grid-cols-1">
-            <Skeleton className="aspect-square" />
-            <div className="flex flex-col gap-3">
-              <Skeleton className="h-24 w-full" />
-              <Skeleton className="h-40 w-full" />
-            </div>
+        {!open ? (
+          <DropZone
+            onFile={pick}
+            accept={ACCEPT}
+            title="Drop or paste a file anywhere, or click to pick one"
+            hint="PNG, WebP and JPEG images · .safetensors models, looked up on Civitai by their hash"
+            icon="file-info"
+          />
+        ) : info.isLoading ? (
+          <div className="flex flex-col gap-4">
+            <Skeleton className="aspect-[16/9] max-h-[34rem] w-full" />
+            <Skeleton className="h-24 w-full" />
           </div>
         ) : info.error ? (
           <EmptyState
@@ -166,23 +190,56 @@ function Result({
   imageSrc: string | null;
   dropped: File | null;
 }) {
-  const profileId = useSession((s) => s.profileId);
-  // Model files are hashed for the Civitai lookup: a local model by the server (stored after the
-  // first time), a dropped one by streaming it to the server.
-  const modelId = info.origin?.type === "model" ? info.origin.id : null;
-  const hashes = useQuery({
-    queryKey: [
-      "fileinfo-hash",
-      profileId,
-      dropped ? `${dropped.name}:${dropped.size}:${dropped.lastModified}` : modelId,
-    ],
-    queryFn: () => (dropped ? api.fileHash(dropped) : api.modelHashes(modelId as string)),
-    enabled: info.kind === "safetensors" && (dropped !== null || modelId !== null),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  });
-  const sha256 = hashes.data?.sha256 ?? null;
-  const isModel = info.kind === "safetensors";
+  const civitai = useFileCivitai(info, dropped);
+  const [shown, setShown] = useState(0);
+  const images = useMemo(
+    () => (civitai?.match ? authorImages(civitai.match) : []),
+    [civitai?.match],
+  );
+  const current = images[shown] ?? null;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {civitai ? (
+        <CivitaiHero civitai={civitai} images={images} onIndexChange={setShown} />
+      ) : info.kind === "image" && imageSrc ? (
+        <div className="checker grid max-h-[34rem] place-items-center overflow-hidden rounded-xl border border-line">
+          <img src={imageSrc} alt="" className="max-h-[34rem] w-full object-contain" />
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {info.image ? <ImageActions image={info.image} info={info} dropped={dropped} /> : null}
+        {civitai?.match ? (
+          <>
+            {info.origin?.type === "model" && current ? (
+              <UseAsPicture modelId={info.origin.id} image={current} />
+            ) : null}
+            <CivitaiLinks match={civitai.match} />
+          </>
+        ) : null}
+      </div>
+
+      {current?.meta ? <ImageSettings meta={current.meta} /> : null}
+
+      <FileFacts info={info} civitai={civitai} />
+
+      {info.error ? (
+        <p className="flex items-start gap-2 rounded-md border border-yellow/30 bg-yellow/10 px-3 py-2.5 text-sm text-warning">
+          <Icon name="errors" size={15} className="mt-0.5 shrink-0" />
+          {info.error}
+        </p>
+      ) : null}
+      {civitai?.match ? <CivitaiDetails match={civitai.match} /> : null}
+      {info.image ? <ImageSections image={info.image} /> : null}
+      {info.safetensors ? <SafetensorsSections st={info.safetensors} /> : null}
+      {civitai?.match ? <CivitaiAbout match={civitai.match} /> : null}
+    </div>
+  );
+}
+
+/** Name, kind, size, dates, where it came from and its hashes. */
+function FileFacts({ info, civitai }: { info: FileInfo; civitai: FileCivitai | null }) {
   const kindLabel =
     info.kind === "image"
       ? info.image?.format.toUpperCase()
@@ -190,91 +247,81 @@ function Result({
         ? "safetensors"
         : "Unknown";
   return (
-    <div className="grid grid-cols-[360px_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1">
-      <div className="sticky top-0 flex flex-col gap-4 max-lg:static">
-        {isModel ? (
-          <CivitaiImages
-            sha256={sha256}
-            fallback={
-              <div className="grid h-40 place-items-center rounded-lg border border-line bg-surface-2 text-fg-3">
-                <Icon name="models" size={36} />
-              </div>
-            }
-          />
-        ) : null}
-        <Panel className="flex flex-col overflow-hidden">
-          {info.kind === "image" && imageSrc ? (
-            <div className="checker grid max-h-[460px] place-items-center overflow-hidden">
-              <img src={imageSrc} alt="" className="max-h-[460px] w-full object-contain" />
-            </div>
-          ) : isModel ? null : (
-            <div className="grid h-40 place-items-center bg-surface-2 text-fg-3">
-              <Icon name="file" size={36} />
-            </div>
-          )}
-          <div className="flex flex-col gap-3 p-4">
-            <div className="flex items-start gap-2">
-              <span className="min-w-0 flex-1 text-sm font-medium break-all text-fg">
-                {info.name}
-              </span>
-              <Badge>{kindLabel}</Badge>
-            </div>
-            <PropertyList
-              labelWidth={72}
-              items={[
-                { label: "Size", value: formatBytes(info.size) },
-                {
-                  label: "Modified",
-                  value: info.modified ? new Date(info.modified).toLocaleString() : null,
-                },
-                {
-                  label: "Pixels",
-                  value: info.image?.width ? `${info.image.width}×${info.image.height}` : null,
-                },
-                {
-                  label: "From",
-                  value: info.origin
-                    ? info.origin.type === "gallery"
-                      ? "Gallery"
-                      : "Models folder"
-                    : "Dropped file",
-                },
-                {
-                  label: "SHA256",
-                  value: sha256 ? <span className="break-all">{sha256}</span> : null,
-                  copy: sha256 ?? undefined,
-                  mono: true,
-                },
-                {
-                  label: "AutoV2",
-                  value: hashes.data?.autov2 ?? null,
-                  copy: hashes.data?.autov2,
-                  mono: true,
-                },
-              ]}
-            />
-          </div>
-        </Panel>
+    <Panel className="flex flex-col gap-4 p-5">
+      <div className="flex items-start gap-2">
+        <Icon
+          name={info.kind === "image" ? "image" : info.kind === "safetensors" ? "models" : "file"}
+          size={16}
+          className="mt-0.5 shrink-0 text-accent-ink"
+        />
+        <span className="min-w-0 flex-1 text-sm font-medium break-all text-fg">{info.name}</span>
+        <Badge>{kindLabel}</Badge>
       </div>
-      <div className="flex min-w-0 flex-col gap-5">
-        {isModel && (dropped || modelId) ? (
-          <CivitaiMatchPanel
-            sha256={sha256}
-            hashing={hashes.isLoading}
-            hashError={hashes.error?.message ?? null}
-          />
-        ) : null}
-        {info.error ? (
-          <p className="flex items-start gap-2 rounded-md border border-yellow/30 bg-yellow/10 px-3 py-2.5 text-sm text-warning">
-            <Icon name="errors" size={15} className="mt-0.5 shrink-0" />
-            {info.error}
-          </p>
-        ) : null}
-        {info.image ? <ImageSections image={info.image} info={info} dropped={dropped} /> : null}
-        {info.safetensors ? <SafetensorsSections st={info.safetensors} /> : null}
-        {isModel ? <CivitaiAbout sha256={sha256} /> : null}
-      </div>
-    </div>
+      <Facts
+        items={[
+          { label: "Size", value: formatBytes(info.size) },
+          {
+            label: "Pixels",
+            value: info.image?.width ? `${info.image.width}×${info.image.height}` : null,
+          },
+          {
+            label: "Modified",
+            value: info.modified ? new Date(info.modified).toLocaleString() : null,
+          },
+          {
+            label: "From",
+            value: info.origin
+              ? info.origin.type === "gallery"
+                ? "Gallery"
+                : "Models folder"
+              : "Dropped file",
+          },
+          {
+            label: "AutoV2",
+            value: civitai?.autov2,
+            copy: civitai?.autov2 ?? undefined,
+            mono: true,
+          },
+          {
+            label: "AutoV3",
+            value: civitai?.autov3,
+            copy: civitai?.autov3 ?? undefined,
+            mono: true,
+          },
+          {
+            label: "SHA256",
+            value: civitai?.sha256,
+            copy: civitai?.sha256 ?? undefined,
+            mono: true,
+            wide: true,
+          },
+        ]}
+      />
+    </Panel>
+  );
+}
+
+/** Make the Civitai image on screen the local model's picture. */
+function UseAsPicture({ modelId, image }: { modelId: string; image: CivitaiImage }) {
+  const save = useSaveModelInfo();
+  return (
+    <Button
+      icon="image"
+      loading={save.isPending}
+      onClick={() =>
+        void (async () => {
+          try {
+            const blob = await (await fetch(image.full)).blob();
+            await save.mutateAsync({ info: null, picture: { id: modelId, image: blob } });
+            toast("That image is now the model's picture.", "success");
+          } catch (e) {
+            toast(e instanceof Error ? e.message : String(e), "error");
+          }
+        })()
+      }
+    >
+      Use as the model's picture
+    </Button>
   );
 }
 
@@ -287,7 +334,7 @@ const SOURCE: Record<string, { label: string; icon: IconName }> = {
   none: { label: "No generation settings", icon: "info" },
 };
 
-function ImageSections({
+function ImageActions({
   image,
   info,
   dropped,
@@ -296,11 +343,9 @@ function ImageSections({
   info: FileInfo;
   dropped: File | null;
 }) {
-  const s = image.summary;
   const navigate = useNavigate();
   const profileId = useSession((st) => st.profileId);
   const importWorkflow = useImportWorkflow();
-  const source = SOURCE[s.source] ?? { label: s.source, icon: "info" as IconName };
 
   const importIt = async () => {
     let file = dropped;
@@ -326,6 +371,36 @@ function ImageSections({
 
   return (
     <>
+      {image.hasWorkflow ? (
+        <Button icon="import" loading={importWorkflow.isPending} onClick={() => void importIt()}>
+          Import as workflow
+        </Button>
+      ) : null}
+      <Button
+        variant="primary"
+        icon="generate"
+        disabled={image.summary.source === "none"}
+        onClick={() =>
+          void applyImageSettings(image.settings, image.summary.seed).then((ok) => {
+            if (ok && profileId)
+              void navigate({
+                to: "/p/$profileId/$view",
+                params: { profileId, view: "generate" },
+              });
+          })
+        }
+      >
+        Use these settings
+      </Button>
+    </>
+  );
+}
+
+function ImageSections({ image }: { image: ImageFileInfo }) {
+  const s = image.summary;
+  const source = SOURCE[s.source] ?? { label: s.source, icon: "info" as IconName };
+  return (
+    <>
       <Panel className="flex flex-col gap-4 p-5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-2 text-sm font-medium text-fg">
@@ -333,33 +408,6 @@ function ImageSections({
             {source.label}
           </span>
           {image.blombo?.name ? <Badge tone="accent">{image.blombo.name}</Badge> : null}
-          <span className="ml-auto flex gap-2">
-            {image.hasWorkflow ? (
-              <Button
-                icon="import"
-                loading={importWorkflow.isPending}
-                onClick={() => void importIt()}
-              >
-                Import as workflow
-              </Button>
-            ) : null}
-            <Button
-              variant="primary"
-              icon="generate"
-              disabled={s.source === "none"}
-              onClick={() =>
-                void applyImageSettings(image.settings, s.seed).then((ok) => {
-                  if (ok && profileId)
-                    void navigate({
-                      to: "/p/$profileId/$view",
-                      params: { profileId, view: "generate" },
-                    });
-                })
-              }
-            >
-              Use these settings
-            </Button>
-          </span>
         </div>
         {s.source === "none" ? (
           <p className="text-sm text-fg-3">
@@ -370,11 +418,12 @@ function ImageSections({
           <>
             {s.prompt ? <TextBlock label="Prompt" text={s.prompt} /> : null}
             {s.negative ? <TextBlock label="Negative prompt" text={s.negative} /> : null}
-            <PropertyList
+            <Facts
               items={[
-                { label: "Model", value: s.model, copy: s.model ?? undefined },
+                { label: "Model", value: s.model, copy: s.model ?? undefined, wide: true },
                 {
                   label: "LoRAs",
+                  wide: true,
                   value: s.loras.length ? (
                     <span className="flex flex-wrap gap-1">
                       {s.loras.map((l) => (
@@ -388,10 +437,8 @@ function ImageSections({
                     </span>
                   ) : null,
                 },
-                {
-                  label: "Sampler",
-                  value: [s.sampler, s.scheduler].filter(Boolean).join(" · ") || null,
-                },
+                { label: "Sampler", value: s.sampler },
+                { label: "Scheduler", value: s.scheduler },
                 { label: "Steps", value: s.steps },
                 { label: "CFG", value: s.cfg },
                 {
@@ -476,228 +523,4 @@ function ImageSections({
 function formatValue(v: unknown): string {
   if (typeof v === "string") return v;
   return JSON.stringify(v);
-}
-
-/* ── safetensors ──────────────────────────────────────────────────────────── */
-
-const GUESS: Record<SafetensorsInfo["guess"], string> = {
-  lora: "LoRA",
-  checkpoint: "Checkpoint",
-  diffusion: "Diffusion model",
-  vae: "VAE",
-  "text-encoder": "Text encoder",
-  embedding: "Embedding",
-  other: "Model",
-};
-
-function formatParams(n: number): string {
-  if (n >= 1e9) return `${(n / 1e9).toFixed(2)} B`;
-  if (n >= 1e6) return `${(n / 1e6).toFixed(1)} M`;
-  if (n >= 1e3) return `${(n / 1e3).toFixed(1)} K`;
-  return String(n);
-}
-
-function SafetensorsSections({ st }: { st: SafetensorsInfo }) {
-  const t = st.training;
-  const [metaFilter, setMetaFilter] = useState("");
-  const maxTag = t.tags[0]?.[1] ?? 1;
-  const meta = Object.entries(st.metadata).filter(
-    ([k, v]) => !metaFilter || `${k} ${v}`.toLowerCase().includes(metaFilter.toLowerCase()),
-  );
-  const hasTraining = Boolean(
-    t.network || t.dim || t.epochs || t.steps || t.baseModel || t.resolution,
-  );
-  return (
-    <>
-      <Panel className="flex flex-col gap-4 p-5">
-        <div className="flex items-center gap-2">
-          <Icon name="models" size={16} className="text-accent-ink" />
-          <span className="text-sm font-medium text-fg">{t.title ?? GUESS[st.guess]}</span>
-          <Badge tone="accent">{GUESS[st.guess]}</Badge>
-        </div>
-        <PropertyList
-          items={[
-            { label: "Base model", value: t.baseModel },
-            { label: "Tensors", value: st.tensors.toLocaleString() },
-            { label: "Parameters", value: formatParams(st.parameters) },
-            {
-              label: "Precision",
-              value: Object.entries(st.dtypes)
-                .sort((a, b) => b[1] - a[1])
-                .map(([d, n]) => `${d} (${n})`)
-                .join(", "),
-            },
-          ]}
-        />
-        {t.triggerWords.length ? (
-          <div className="flex flex-col gap-1.5">
-            <span className="label-caps">Trigger words</span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {t.triggerWords.map((w) => (
-                <Chip
-                  key={w}
-                  size="sm"
-                  onClick={() =>
-                    void navigator.clipboard
-                      ?.writeText(w)
-                      .then(() => toast(`Copied "${w}"`, "success"))
-                  }
-                >
-                  {w}
-                </Chip>
-              ))}
-              <CopyButton text={t.triggerWords.join(", ")} label="Copy all trigger words" />
-            </div>
-          </div>
-        ) : null}
-      </Panel>
-
-      {hasTraining ? (
-        <Section title="Training" icon="activity">
-          <PropertyList
-            labelWidth={130}
-            items={[
-              { label: "Network", value: t.network },
-              {
-                label: "Rank / alpha",
-                value: t.dim || t.alpha ? `${t.dim ?? "—"} / ${t.alpha ?? "—"}` : null,
-              },
-              { label: "Epochs", value: t.epochs },
-              { label: "Steps", value: t.steps },
-              { label: "Resolution", value: t.resolution },
-              { label: "Learning rate", value: t.learningRate },
-              { label: "Optimizer", value: t.optimizer },
-              { label: "Training images", value: t.images },
-            ]}
-          />
-          {t.datasets.length ? (
-            <div className="mt-4 flex flex-col gap-1.5">
-              <span className="label-caps">Dataset folders</span>
-              {t.datasets.map((d) => (
-                <div key={d.name} className="flex items-center gap-3 text-sm">
-                  <span className="flex-1 truncate font-mono text-xs text-fg-2">{d.name}</span>
-                  <span className="text-xs text-fg-3 tabular">
-                    {d.images} images × {d.repeats} repeats
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </Section>
-      ) : null}
-
-      {t.tags.length ? (
-        <Section title="Training tags" icon="tag" count={t.tags.length}>
-          <div className="mb-3 flex items-center gap-2">
-            <span className="text-xs text-fg-3">
-              Bigger tags were used more. Click a tag to copy it.
-            </span>
-            <CopyButton
-              text={t.tags
-                .slice(0, 20)
-                .map(([tag]) => tag)
-                .join(", ")}
-              label="Copy the top 20 tags"
-              className="ml-auto"
-            />
-          </div>
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-            {t.tags.slice(0, 150).map(([tag, n]) => {
-              const w = n / maxTag;
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  title={`${tag}: ${n}`}
-                  onClick={() =>
-                    void navigator.clipboard
-                      ?.writeText(tag)
-                      .then(() => toast(`Copied "${tag}"`, "success"))
-                  }
-                  className={cn(
-                    "rounded-xs leading-tight transition-colors hover:text-accent-ink focus-ring",
-                    w > 0.66 ? "text-fg" : w > 0.33 ? "text-fg-2" : "text-fg-3",
-                  )}
-                  style={{ fontSize: `${12 + Math.round(w * 8)}px` }}
-                >
-                  {tag}
-                  <span className="ml-0.5 font-mono text-[10px] text-fg-4">{n}</span>
-                </button>
-              );
-            })}
-          </div>
-        </Section>
-      ) : null}
-
-      {Object.keys(st.metadata).length ? (
-        <Section
-          title="All metadata"
-          icon="file-text"
-          count={Object.keys(st.metadata).length}
-          defaultOpen={false}
-        >
-          <TextField
-            size="sm"
-            icon="search"
-            placeholder="Filter keys and values"
-            value={metaFilter}
-            onChange={(e) => setMetaFilter(e.target.value)}
-            onClear={() => setMetaFilter("")}
-            className="mb-3 w-72"
-          />
-          <PropertyList
-            labelWidth={220}
-            items={meta.map(([k, v]) => ({
-              label: k,
-              value: v.length > 600 ? `${v.slice(0, 600)}…` : v,
-              copy: v,
-              mono: true,
-            }))}
-          />
-        </Section>
-      ) : (
-        <p className="text-sm text-fg-3">This file has no metadata besides its tensors.</p>
-      )}
-    </>
-  );
-}
-
-/* ── shared bits ──────────────────────────────────────────────────────────── */
-
-function Section({
-  title,
-  icon,
-  count,
-  children,
-  defaultOpen = true,
-}: {
-  title: string;
-  icon: IconName;
-  count?: number;
-  children: ReactNode;
-  defaultOpen?: boolean;
-}) {
-  return (
-    <Collapsible
-      title={title}
-      icon={icon}
-      defaultOpen={defaultOpen}
-      actions={count !== undefined ? <Badge>{count.toLocaleString()}</Badge> : undefined}
-    >
-      {children}
-    </Collapsible>
-  );
-}
-
-function TextBlock({ label, text }: { label: string; text: string }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <SectionTitle actions={<CopyButton text={text} label={`Copy ${label.toLowerCase()}`} />}>
-        {label}
-      </SectionTitle>
-      <p className="max-h-56 overflow-y-auto rounded-md border border-line bg-field p-3 text-sm leading-relaxed whitespace-pre-wrap text-fg-2">
-        {text}
-      </p>
-    </div>
-  );
 }

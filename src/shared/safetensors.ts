@@ -11,6 +11,24 @@ import { z } from "zod";
 /** Headers bigger than this aren't real safetensors files (the spec caps them at 100 MB). */
 export const MAX_HEADER_BYTES = 100 * 1024 * 1024;
 
+/**
+ * Hashes a trainer wrote into the header, to find the file on Civitai without reading all of it:
+ * kohya's `sshs_model_hash` (its first 12 = Civitai's AutoV3), `modelspec.hash_sha256` (the same
+ * kind of hash) and `sshs_legacy_hash` (AutoV1). Uppercase, best first, no repeats.
+ */
+export function embeddedHashes(meta: Record<string, string>): string[] {
+  const hex = (v: string | undefined) => (v ?? "").trim().replace(/^0x/i, "").toUpperCase();
+  const ok = (h: string) => /^[0-9A-F]{8,64}$/.test(h);
+  const out: string[] = [];
+  for (const key of ["sshs_model_hash", "modelspec.hash_sha256"]) {
+    const h = hex(meta[key]);
+    if (ok(h) && h.length >= 12) out.push(h.slice(0, 12));
+  }
+  const legacy = hex(meta.sshs_legacy_hash);
+  if (ok(legacy)) out.push(legacy.slice(0, 8));
+  return [...new Set(out)];
+}
+
 export function headerLength(first8: Uint8Array): number | null {
   if (first8.byteLength < 8) return null;
   const view = new DataView(first8.buffer, first8.byteOffset, 8);

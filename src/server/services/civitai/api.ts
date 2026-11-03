@@ -21,6 +21,8 @@ export interface RawImage {
   width?: number;
   height?: number;
   type?: string;
+  username?: string | null;
+  meta?: Record<string, unknown> | null;
 }
 
 export interface RawFile {

@@ -42,11 +42,12 @@ export function civitaiRoutes(civitai: CivitaiService) {
     return c.json(await civitai.model(id));
   });
 
-  r.get("/by-hash/:sha256", async (c) => {
-    const sha256 = c.req.param("sha256");
-    if (!/^[0-9a-fA-F]{64}$/.test(sha256))
-      throw new HttpError(400, "Pass the file's full SHA256 (64 hex characters).", "bad_hash");
-    return c.json(await civitai.byHash(sha256.toUpperCase()));
+  /** SHA256, AutoV2 (10), AutoV3 (12) or AutoV1 (8 hex characters). */
+  r.get("/by-hash/:hash", async (c) => {
+    const hash = c.req.param("hash");
+    if (!/^[0-9a-fA-F]{8,64}$/.test(hash))
+      throw new HttpError(400, "Pass a file hash: 8 to 64 hex characters.", "bad_hash");
+    return c.json(await civitai.byHash(hash.toUpperCase()));
   });
 
   r.get("/image", async (c) => {

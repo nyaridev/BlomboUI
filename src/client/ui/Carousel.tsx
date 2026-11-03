@@ -26,6 +26,7 @@ export function Carousel({
   ratio = 4 / 5,
   empty,
   className,
+  onIndexChange,
 }: {
   images: CarouselImage[];
   label: string;
@@ -35,6 +36,8 @@ export function Carousel({
   /** Shown when there are no images. */
   empty?: ReactNode;
   className?: string;
+  /** The image on the stage changed (pass a stable function, such as a state setter). */
+  onIndexChange?: (index: number) => void;
 }) {
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
@@ -59,6 +62,11 @@ export function Carousel({
     else if (left + el.offsetWidth > box.scrollLeft + box.clientWidth)
       box.scrollTo({ left: left + el.offsetWidth - box.clientWidth, behavior: "smooth" });
   }, [index]);
+
+  useEffect(
+    () => onIndexChange?.(Math.max(0, Math.min(index, count - 1))),
+    [index, count, onIndexChange],
+  );
 
   const go = (delta: number) => {
     if (count > 0) setIndex((i) => (i + delta + count) % count);

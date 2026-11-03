@@ -7,6 +7,7 @@ import {
   type CivitaiCard,
   type CivitaiFile,
   type CivitaiImage,
+  type CivitaiImageMeta,
   type CivitaiModel,
   type CivitaiVersion,
   civitaiImageVariant,
@@ -39,6 +40,40 @@ export function isNsfwImage(img: RawImage): boolean {
   return img.nsfw === true;
 }
 
+const IMAGE_SETTINGS: Array<[string, string[]]> = [
+  ["Model", ["Model"]],
+  ["Steps", ["steps", "Steps"]],
+  ["CFG", ["cfgScale", "CFG scale"]],
+  ["Sampler", ["sampler", "Sampler"]],
+  ["Scheduler", ["scheduler", "Schedule type"]],
+  ["Seed", ["seed", "Seed"]],
+  ["Size", ["Size", "size"]],
+  ["Clip skip", ["clipSkip", "Clip skip"]],
+  ["Denoise", ["denoise", "Denoising strength"]],
+];
+const META_TEXT = 4000;
+
+/** The generation settings a poster shared with an image, or null when there are none. */
+export function imageMeta(raw: unknown): CivitaiImageMeta | null {
+  if (!raw || typeof raw !== "object") return null;
+  const rec = raw as Record<string, unknown>;
+  const pick = (...keys: string[]): string | null => {
+    for (const k of keys) {
+      const v = rec[k];
+      if (typeof v === "number" && Number.isFinite(v)) return String(v);
+      if (typeof v === "string" && v.trim()) return v.trim().slice(0, META_TEXT);
+    }
+    return null;
+  };
+  const settings = IMAGE_SETTINGS.flatMap(([label, keys]): Array<[string, string]> => {
+    const v = pick(...keys);
+    return v ? [[label, v]] : [];
+  });
+  const prompt = pick("prompt");
+  const negative = pick("negativePrompt");
+  return prompt || negative || settings.length ? { prompt, negative, settings } : null;
+}
+
 export function image(
   img: RawImage | undefined,
   ctx: Pick<NormalizeContext, "allowed">,
@@ -52,6 +87,8 @@ export function image(
     height: typeof img.height === "number" ? img.height : null,
     nsfw: isNsfwImage(img),
     video,
+    by: str(img.username),
+    meta: imageMeta(img.meta),
   };
 }
 

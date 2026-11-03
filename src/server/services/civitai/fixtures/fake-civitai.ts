@@ -255,6 +255,21 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
       width: 832,
       height: 1216,
       type: img.video ? "video" : "image",
+      // The third image is someone else's post; the first carries its settings.
+      username: img.id % 100 === 2 ? "a_fan" : m.creator,
+      meta:
+        img.id % 100 === 0
+          ? {
+              prompt: `${m.name}, masterpiece, soft light`,
+              negativePrompt: "blurry, lowres",
+              steps: 28,
+              cfgScale: 6,
+              sampler: "Euler a",
+              seed: 1234567,
+              Size: "832x1216",
+              Model: "sdxl_base",
+            }
+          : null,
     })),
     downloadUrl: `${base}/api/download/models/${v.id}`,
     ...(withModel ? { model: { name: m.name, type: m.type, nsfw: m.nsfw, poi: false } } : {}),
@@ -375,9 +390,10 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
       }
       m = /^\/api\/v1\/model-versions\/by-hash\/([0-9a-fA-F]+)$/.exec(p);
       if (m) {
+        // A short hash (AutoV1–V3 are 8–12 characters) matches the start of a file's SHA256.
         const sha = (m[1] ?? "").toUpperCase();
         for (const [id, entry] of files)
-          if (sha256(id) === sha)
+          if (sha.length >= 8 && sha256(id).startsWith(sha))
             return json(res, 200, versionJson(entry.model, entry.version, true));
         return json(res, 404, { error: "Model not found" });
       }

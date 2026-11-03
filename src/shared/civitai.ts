@@ -136,6 +136,15 @@ export const SavedFilter = z.object({
 export type SavedFilter = z.infer<typeof SavedFilter>;
 
 /** One image, through Blombo's proxy. */
+/** How a Civitai sample image was made, as its poster shared it (File Info shows it). */
+export const CivitaiImageMeta = z.object({
+  prompt: z.string().nullable(),
+  negative: z.string().nullable(),
+  /** Label → value, in a fixed order (Model, Steps, CFG, Sampler…). */
+  settings: z.array(z.tuple([z.string(), z.string()])),
+});
+export type CivitaiImageMeta = z.infer<typeof CivitaiImageMeta>;
+
 export const CivitaiImage = z.object({
   /** Card-sized (450 px wide). */
   thumb: z.string(),
@@ -146,6 +155,9 @@ export const CivitaiImage = z.object({
   nsfw: z.boolean(),
   /** A video on Civitai; Blombo shows its first frame. */
   video: z.boolean(),
+  /** Who posted it, when Civitai says (images saved before this have none). */
+  by: z.string().nullable().default(null),
+  meta: CivitaiImageMeta.nullable().default(null),
 });
 export type CivitaiImage = z.infer<typeof CivitaiImage>;
 

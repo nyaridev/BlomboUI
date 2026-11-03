@@ -162,13 +162,21 @@ export class CivitaiService {
     return out;
   }
 
-  /** The model a file belongs to, by its SHA256 (File Info). Not added to the browse history. */
-  async byHash(sha256: string): Promise<CivitaiMatch> {
+  /**
+   * The model a file belongs to, by one of its hashes (SHA256, AutoV1–V3; File Info). Not added
+   * to the browse history. The version's images come from the by-hash answer, which carries who
+   * posted each one and how it was made.
+   */
+  async byHash(hash: string): Promise<CivitaiMatch> {
     this.active();
-    const version = await this.api.byHash(sha256);
-    if (!version?.modelId) return null;
-    const model = normalize.model(await this.rawModel(version.modelId), await this.context());
-    return { model, versionId: version.id };
+    const raw = await this.api.byHash(hash);
+    if (!raw?.modelId) return null;
+    const ctx = await this.context();
+    const model = normalize.model(await this.rawModel(raw.modelId), ctx);
+    const images = normalize.version(raw, ctx).images;
+    if (images.length)
+      model.versions = model.versions.map((v) => (v.id === raw.id ? { ...v, images } : v));
+    return { model, versionId: raw.id };
   }
 
   /* ── history ─────────────────────────────────────────────────────────── */

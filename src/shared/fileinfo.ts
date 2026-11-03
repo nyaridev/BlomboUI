@@ -48,6 +48,8 @@ export type ImageFileInfo = z.infer<typeof ImageFileInfo>;
 export const FileInfo = z.object({
   name: z.string(),
   size: z.number(),
+  /** Last change (ms since 1970), when known. */
+  modified: z.number().nullable(),
   kind: z.enum(["image", "safetensors", "unknown"]),
   image: ImageFileInfo.nullable(),
   safetensors: SafetensorsInfo.nullable(),

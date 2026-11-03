@@ -2,10 +2,12 @@
  * File Info: drop or pick a file and read what's inside, in sections. Images show how they
  * were made (Blombo, ComfyUI or A1111 metadata), the embedded graph and every text chunk, with
  * "Use these settings" and "Import as workflow". Safetensors files show their header: training
- * details, trigger words, the tag cloud and raw metadata. Files picked in the gallery or the
- * Models view open here too. Nothing is modified.
+ * details, trigger words, the tag cloud and raw metadata, and the model found on Civitai by its
+ * hash (CivitaiMatch.tsx: images, details, description). Files picked in the gallery or the
+ * Models view open here too, and a file dropped anywhere in the window. Nothing is modified.
  *
- * A dropped .safetensors file never uploads whole: only its header bytes are read and sent.
+ * A dropped .safetensors file's header is read in the browser; for the hash the file streams to
+ * the server, which keeps nothing.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
@@ -35,6 +37,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { useActiveChoice } from "../generate/workflow";
+import { CivitaiAbout, CivitaiImages, CivitaiMatchPanel } from "./CivitaiMatch";
+import { PageDropOverlay, usePageFileDrop } from "./PageDrop";
 import { useFileInfoTarget } from "./state";
 
 const ACCEPT = ".png,.webp,.jpg,.jpeg,.safetensors,.sft,image/png,image/webp,image/jpeg";
@@ -49,6 +53,7 @@ async function inspectFile(file: File): Promise<FileInfo> {
       return {
         name: file.name,
         size: file.size,
+        modified: file.lastModified,
         kind: "safetensors",
         image: null,
         safetensors: null,
@@ -56,11 +61,11 @@ async function inspectFile(file: File): Promise<FileInfo> {
         error: "This doesn't look like a safetensors file (its header is missing or cut off).",
       };
     const info = await api.fileInfo(file.slice(0, 8 + n), file.name);
-    return { ...info, size: file.size };
+    return { ...info, size: file.size, modified: file.lastModified };
   }
   if (file.size > MAX_IMAGE_UPLOAD)
     throw new Error("That file is too large to inspect (200 MB max for images).");
-  return api.fileInfo(file, file.name);
+  return { ...(await api.fileInfo(file, file.name)), modified: file.lastModified };
 }
 
 export function FileInfoView() {
@@ -98,6 +103,7 @@ export function FileInfoView() {
     setTarget(null);
     setDropped(file);
   };
+  const dragging = usePageFileDrop(pick);
   const imageSrc =
     preview ??
     (target?.type === "gallery" && info.data?.image
@@ -106,7 +112,8 @@ export function FileInfoView() {
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto flex max-w-[1120px] flex-col gap-6 px-8 pt-8 pb-16 max-lg:px-3 max-lg:pt-4">
+      <PageDropOverlay show={dragging} />
+      <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-8 pt-8 pb-16 max-lg:px-3 max-lg:pt-4">
         <div className="flex items-end gap-4">
           <div className="flex flex-1 flex-col gap-1">
             <h1 className="text-2xl font-semibold tracking-tight text-fg">File Info</h1>
@@ -123,12 +130,12 @@ export function FileInfoView() {
               ? "Drop another file, or click to pick one"
               : "Drop a file here, or click to pick one"
           }
-          hint="PNG, WebP and JPEG images · .safetensors models (only the header is read)"
+          hint="Anywhere in the window works · PNG, WebP and JPEG images · .safetensors models, looked up on Civitai"
           icon="file-info"
         />
 
         {!dropped && !target ? null : info.isLoading ? (
-          <div className="grid grid-cols-[320px_minmax(0,1fr)] gap-6 max-lg:grid-cols-1">
+          <div className="grid grid-cols-[360px_minmax(0,1fr)] gap-6 max-lg:grid-cols-1">
             <Skeleton className="aspect-square" />
             <div className="flex flex-col gap-3">
               <Skeleton className="h-24 w-full" />
@@ -159,6 +166,23 @@ function Result({
   imageSrc: string | null;
   dropped: File | null;
 }) {
+  const profileId = useSession((s) => s.profileId);
+  // Model files are hashed for the Civitai lookup: a local model by the server (stored after the
+  // first time), a dropped one by streaming it to the server.
+  const modelId = info.origin?.type === "model" ? info.origin.id : null;
+  const hashes = useQuery({
+    queryKey: [
+      "fileinfo-hash",
+      profileId,
+      dropped ? `${dropped.name}:${dropped.size}:${dropped.lastModified}` : modelId,
+    ],
+    queryFn: () => (dropped ? api.fileHash(dropped) : api.modelHashes(modelId as string)),
+    enabled: info.kind === "safetensors" && (dropped !== null || modelId !== null),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  });
+  const sha256 = hashes.data?.sha256 ?? null;
+  const isModel = info.kind === "safetensors";
   const kindLabel =
     info.kind === "image"
       ? info.image?.format.toUpperCase()
@@ -166,45 +190,80 @@ function Result({
         ? "safetensors"
         : "Unknown";
   return (
-    <div className="grid grid-cols-[300px_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1">
-      <Panel className="sticky top-0 flex flex-col overflow-hidden">
-        {info.kind === "image" && imageSrc ? (
-          <div className="checker grid max-h-[420px] place-items-center overflow-hidden">
-            <img src={imageSrc} alt="" className="max-h-[420px] w-full object-contain" />
-          </div>
-        ) : (
-          <div className="grid h-40 place-items-center bg-surface-2 text-fg-3">
-            <Icon name={info.kind === "safetensors" ? "models" : "file"} size={36} />
-          </div>
-        )}
-        <div className="flex flex-col gap-3 p-4">
-          <div className="flex items-start gap-2">
-            <span className="min-w-0 flex-1 text-sm font-medium break-all text-fg">
-              {info.name}
-            </span>
-            <Badge>{kindLabel}</Badge>
-          </div>
-          <PropertyList
-            labelWidth={72}
-            items={[
-              { label: "Size", value: formatBytes(info.size) },
-              {
-                label: "Pixels",
-                value: info.image?.width ? `${info.image.width}×${info.image.height}` : null,
-              },
-              {
-                label: "From",
-                value: info.origin
-                  ? info.origin.type === "gallery"
-                    ? "Gallery"
-                    : "Models folder"
-                  : "Dropped file",
-              },
-            ]}
+    <div className="grid grid-cols-[360px_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1">
+      <div className="sticky top-0 flex flex-col gap-4 max-lg:static">
+        {isModel ? (
+          <CivitaiImages
+            sha256={sha256}
+            fallback={
+              <div className="grid h-40 place-items-center rounded-lg border border-line bg-surface-2 text-fg-3">
+                <Icon name="models" size={36} />
+              </div>
+            }
           />
-        </div>
-      </Panel>
+        ) : null}
+        <Panel className="flex flex-col overflow-hidden">
+          {info.kind === "image" && imageSrc ? (
+            <div className="checker grid max-h-[460px] place-items-center overflow-hidden">
+              <img src={imageSrc} alt="" className="max-h-[460px] w-full object-contain" />
+            </div>
+          ) : isModel ? null : (
+            <div className="grid h-40 place-items-center bg-surface-2 text-fg-3">
+              <Icon name="file" size={36} />
+            </div>
+          )}
+          <div className="flex flex-col gap-3 p-4">
+            <div className="flex items-start gap-2">
+              <span className="min-w-0 flex-1 text-sm font-medium break-all text-fg">
+                {info.name}
+              </span>
+              <Badge>{kindLabel}</Badge>
+            </div>
+            <PropertyList
+              labelWidth={72}
+              items={[
+                { label: "Size", value: formatBytes(info.size) },
+                {
+                  label: "Modified",
+                  value: info.modified ? new Date(info.modified).toLocaleString() : null,
+                },
+                {
+                  label: "Pixels",
+                  value: info.image?.width ? `${info.image.width}×${info.image.height}` : null,
+                },
+                {
+                  label: "From",
+                  value: info.origin
+                    ? info.origin.type === "gallery"
+                      ? "Gallery"
+                      : "Models folder"
+                    : "Dropped file",
+                },
+                {
+                  label: "SHA256",
+                  value: sha256 ? <span className="break-all">{sha256}</span> : null,
+                  copy: sha256 ?? undefined,
+                  mono: true,
+                },
+                {
+                  label: "AutoV2",
+                  value: hashes.data?.autov2 ?? null,
+                  copy: hashes.data?.autov2,
+                  mono: true,
+                },
+              ]}
+            />
+          </div>
+        </Panel>
+      </div>
       <div className="flex min-w-0 flex-col gap-5">
+        {isModel && (dropped || modelId) ? (
+          <CivitaiMatchPanel
+            sha256={sha256}
+            hashing={hashes.isLoading}
+            hashError={hashes.error?.message ?? null}
+          />
+        ) : null}
         {info.error ? (
           <p className="flex items-start gap-2 rounded-md border border-yellow/30 bg-yellow/10 px-3 py-2.5 text-sm text-warning">
             <Icon name="errors" size={15} className="mt-0.5 shrink-0" />
@@ -213,6 +272,7 @@ function Result({
         ) : null}
         {info.image ? <ImageSections image={info.image} info={info} dropped={dropped} /> : null}
         {info.safetensors ? <SafetensorsSections st={info.safetensors} /> : null}
+        {isModel ? <CivitaiAbout sha256={sha256} /> : null}
       </div>
     </div>
   );

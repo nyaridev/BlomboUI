@@ -29,6 +29,7 @@ import {
   type BrowseFilter,
   browseQuery,
   type CivitaiAccount,
+  type CivitaiMatch,
   type CivitaiModel,
   type CivitaiPage,
   type CivitaiSearch,
@@ -381,6 +382,8 @@ export const api = {
       undefined,
       file,
     ),
+  /** A dropped model's SHA256: the file streams to the server, which keeps nothing. */
+  fileHash: (file: Blob) => request<ModelHashes>("POST", "/fileinfo/hash", undefined, file),
   galleryFileInfo: (id: number) => request<FileInfo>("GET", `/fileinfo/gallery/${id}`),
   modelFileInfo: (id: string) =>
     request<FileInfo>("GET", `/fileinfo/model?id=${encodeURIComponent(id)}`),
@@ -395,6 +398,8 @@ export const api = {
   civitaiModels: (filter: BrowseFilter, cursor: string | null) =>
     request<CivitaiPage>("GET", `/civitai/models?${browseQuery(filter, cursor)}`),
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
+  civitaiByHash: (sha256: string) =>
+    request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),
   civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),
   clearCivitaiViews: () => request<{ ok: true }>("DELETE", "/civitai/history/views"),
   forgetCivitaiView: (modelId: number) =>

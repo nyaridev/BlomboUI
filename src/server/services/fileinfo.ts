@@ -48,7 +48,16 @@ function imageInfo(head: ImageHead): ImageFileInfo {
 }
 
 function base(name: string, size: number): FileInfo {
-  return { name, size, kind: "unknown", image: null, safetensors: null, origin: null, error: null };
+  return {
+    name,
+    size,
+    modified: null,
+    kind: "unknown",
+    image: null,
+    safetensors: null,
+    origin: null,
+    error: null,
+  };
 }
 
 /** Inspect an uploaded file's bytes. */
@@ -84,7 +93,7 @@ export async function inspectPath(
   origin: NonNullable<FileInfo["origin"]>,
 ): Promise<FileInfo> {
   const stat = await fs.stat(file);
-  const info = { ...base(path.basename(file), stat.size), origin };
+  const info = { ...base(path.basename(file), stat.size), modified: stat.mtimeMs, origin };
   if (/\.(safetensors|sft)$/i.test(file)) {
     info.kind = "safetensors";
     try {

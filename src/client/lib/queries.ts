@@ -76,6 +76,8 @@ export const qk = {
     ["civitai", profileId, "models", filter] as const,
   civitaiModel: (profileId: string | null, id: number | null) =>
     ["civitai", profileId, "model", id] as const,
+  civitaiByHash: (profileId: string | null, sha256: string | null) =>
+    ["civitai", profileId, "by-hash", sha256] as const,
   civitaiViews: (profileId: string | null) => ["civitai", profileId, "views"] as const,
   civitaiSearches: (profileId: string | null) => ["civitai", profileId, "searches"] as const,
   downloadPlan: (profileId: string | null, body: EnqueueBody | null) =>
@@ -691,6 +693,18 @@ export function useCivitaiModels(filter: BrowseFilter | null) {
     // The server caches Civitai's answers; browsing back to a filter is instant.
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** The Civitai model a file belongs to, by its SHA256 (null when Civitai doesn't know it). */
+export function useCivitaiByHash(sha256: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiByHash(profileId, sha256),
+    queryFn: () => api.civitaiByHash(sha256 as string),
+    enabled: profileId !== null && sha256 !== null,
+    staleTime: 5 * 60_000,
+    retry: false,
   });
 }
 

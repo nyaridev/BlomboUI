@@ -1,6 +1,8 @@
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 import { realPng } from "../lib/test-images.ts";
+import { fileInfoRoutes } from "../routes/fileinfo.ts";
 import { inspectBytes } from "./fileinfo.ts";
 import { findLoras } from "./workflows/summary.ts";
 
@@ -13,6 +15,14 @@ const rgthree = JSON.parse(
 );
 
 describe("File Info", () => {
+  it("hashes an uploaded model as it streams in", async () => {
+    const bytes = new Uint8Array(3 * 1024 * 1024).map((_, i) => i % 251);
+    const app = fileInfoRoutes({} as never, {} as never);
+    const res = await app.request("/hash", { method: "POST", body: bytes });
+    const sha = createHash("sha256").update(bytes).digest("hex").toUpperCase();
+    expect(await res.json()).toEqual({ sha256: sha, autov2: sha.slice(0, 10) });
+  });
+
   it("shows a ComfyUI image's settings, nodes and chunks", async () => {
     const info = await inspectBytes(
       await realPng(10, 12, { prompt: graph, workflow: '{"nodes":[]}' }),

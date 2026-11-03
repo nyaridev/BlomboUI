@@ -7,6 +7,7 @@ import {
   type BrowseFilter,
   type CivitaiAccount,
   CivitaiImage,
+  type CivitaiMatch,
   type CivitaiModel,
   type CivitaiPage,
   type CivitaiSearch,
@@ -159,6 +160,15 @@ export class CivitaiService {
     const out = normalize.model(raw, await this.context());
     this.recordView(profileId, out);
     return out;
+  }
+
+  /** The model a file belongs to, by its SHA256 (File Info). Not added to the browse history. */
+  async byHash(sha256: string): Promise<CivitaiMatch> {
+    this.active();
+    const version = await this.api.byHash(sha256);
+    if (!version?.modelId) return null;
+    const model = normalize.model(await this.rawModel(version.modelId), await this.context());
+    return { model, versionId: version.id };
   }
 
   /* ── history ─────────────────────────────────────────────────────────── */

@@ -254,6 +254,10 @@ export const SetCivitaiKeyBody = z.object({
 });
 export type SetCivitaiKeyBody = z.input<typeof SetCivitaiKeyBody>;
 
+/** The Civitai model a file belongs to (found by its hash), and which version the file is. */
+export const CivitaiMatch = z.object({ model: CivitaiModel, versionId: z.number() }).nullable();
+export type CivitaiMatch = z.infer<typeof CivitaiMatch>;
+
 /* ── history ─────────────────────────────────────────────────────────────── */
 
 export const CivitaiView = z.object({

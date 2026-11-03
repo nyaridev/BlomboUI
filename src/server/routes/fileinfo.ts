@@ -1,5 +1,6 @@
 import { Hono } from "hono";
-import { HttpError, readBody } from "../lib/http.ts";
+import type { ModelHashes } from "../../shared/models.ts";
+import { HttpError, hashBody, readBody } from "../lib/http.ts";
 import { inspectBytes, inspectPath } from "../services/fileinfo.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
 import type { ModelService } from "../services/models.ts";
@@ -18,6 +19,12 @@ export function fileInfoRoutes(gallery: GalleryService, models: ModelService) {
     );
     if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
     return c.json(await inspectBytes(data, c.req.query("filename") ?? "file"));
+  });
+
+  /** A dropped model's SHA256, for the Civitai lookup: the bytes stream through, nothing is saved. */
+  r.post("/hash", async (c) => {
+    const sha256 = await hashBody(c);
+    return c.json({ sha256, autov2: sha256.slice(0, 10) } satisfies ModelHashes);
   });
 
   r.get("/gallery/:id", async (c) => {

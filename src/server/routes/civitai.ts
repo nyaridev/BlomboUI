@@ -42,6 +42,13 @@ export function civitaiRoutes(civitai: CivitaiService) {
     return c.json(await civitai.model(id));
   });
 
+  r.get("/by-hash/:sha256", async (c) => {
+    const sha256 = c.req.param("sha256");
+    if (!/^[0-9a-fA-F]{64}$/.test(sha256))
+      throw new HttpError(400, "Pass the file's full SHA256 (64 hex characters).", "bad_hash");
+    return c.json(await civitai.byHash(sha256.toUpperCase()));
+  });
+
   r.get("/image", async (c) => {
     const url = fromBase64Url(c.req.query("u") ?? "");
     if (!url) throw new HttpError(400, "Which image? Pass ?u=.", "no_image");

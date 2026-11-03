@@ -58,6 +58,17 @@ describe("browsing", () => {
     expect(o.services.civitai.views().some((v) => v.modelId === 1001)).toBe(false);
   });
 
+  it("finds a file's model by its hash, without adding it to the history", async () => {
+    const m = await o.services.civitai.model(1001);
+    o.services.civitai.clearViews();
+    const version = m.versions[0];
+    const match = await o.services.civitai.byHash(version?.files[0]?.sha256 ?? "");
+    expect(match?.model.id).toBe(1001);
+    expect(match?.versionId).toBe(version?.id);
+    expect(o.services.civitai.views()).toEqual([]);
+    expect(await o.services.civitai.byHash("0".repeat(64))).toBeNull();
+  });
+
   it("marks models already in the models folder", async () => {
     const dir = path.join(o.models, "loras");
     await fs.writeFile(path.join(dir, "mine.safetensors"), "x");

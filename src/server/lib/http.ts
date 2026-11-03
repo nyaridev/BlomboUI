@@ -2,6 +2,7 @@
  * HTTP helpers: a typed error that routes throw, and Zod-validated body parsing.
  * The app-level onError turns HttpError into `{ error, code }` JSON.
  */
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import type { Context } from "hono";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
@@ -49,6 +50,14 @@ async function streamBody(
     throw error;
   }
   return size;
+}
+
+/** SHA256 of a raw upload as it streams in (uppercase hex, as Civitai writes it); nothing is kept. */
+export async function hashBody(c: Context): Promise<string> {
+  const hash = createHash("sha256");
+  const size = await streamBody(c, Number.MAX_SAFE_INTEGER, "", (chunk) => hash.update(chunk));
+  if (size === 0) throw new HttpError(400, "The file is empty.", "empty");
+  return hash.digest("hex").toUpperCase();
 }
 
 /** A raw upload held in memory (small ones: images, lists), refused past `max` bytes. */

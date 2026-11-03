@@ -11,6 +11,7 @@ import {
   type CompletionContext,
   type CompletionResult,
   completionKeymap,
+  currentCompletions,
   selectedCompletionIndex,
   setSelectedCompletion,
   startCompletion,
@@ -26,10 +27,10 @@ export interface AssistSettings {
   blurNsfw: boolean;
 }
 
-/** Booru tag categories → palette tokens for the little dot. */
 /** How many suggestions come back (the most the server gives); the list scrolls through them. */
 const SUGGESTIONS = 50;
 
+/** Booru tag categories → palette tokens for the little dot. */
 const CATEGORY_COLOR: Record<number, string> = {
   0: "var(--blue-ink)",
   1: "var(--red-ink)",
@@ -281,9 +282,27 @@ const hoverSelects = ViewPlugin.define((view) => {
   return { destroy: () => view.dom.removeEventListener("mousemove", onMove) };
 });
 
+/** ↑/↓ through the suggestions, stopping at the first and last instead of wrapping around. */
+function moveSelection(by: 1 | -1) {
+  return (view: EditorView): boolean => {
+    const i = selectedCompletionIndex(view.state);
+    if (i === null) return false;
+    const next = Math.max(0, Math.min(currentCompletions(view.state).length - 1, i + by));
+    if (next !== i) view.dispatch({ effects: setSelectedCompletion(next) });
+    return true;
+  };
+}
+
 /** Autocomplete, its look, and the weight keys. */
 export function promptAssist(get: () => AssistSettings | null): Extension[] {
   return [
+    // Ahead of autocompletion(), whose own keymap is Prec.highest too.
+    Prec.highest(
+      keymap.of([
+        { key: "ArrowDown", run: moveSelection(1) },
+        { key: "ArrowUp", run: moveSelection(-1) },
+      ]),
+    ),
     autocompletion({
       override: [source(get)],
       icons: false,

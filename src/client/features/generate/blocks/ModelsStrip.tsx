@@ -10,17 +10,10 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useModels, useSettings, useUpdateSettings } from "@client/lib/queries";
 import { type CardKind, FallbackFace, IconButton, ScrubField, Slider, Tooltip } from "@client/ui";
-import {
-  findLoraTags,
-  type LoraTag,
-  moveLoraTag,
-  removeLoraTag,
-  setLoraStrength,
-} from "@shared/prompt/loras";
+import { findLoraTags, moveLoraTag, removeLoraTag, setLoraStrength } from "@shared/prompt/loras";
 import { findWildcards } from "@shared/prompt/wildcards";
 import type { Settings } from "@shared/settings";
 import type { Binding } from "@shared/workflow/manifest";
-import { AnimatePresence, motion } from "motion/react";
 import {
   type DragEvent,
   type KeyboardEvent,
@@ -523,13 +516,6 @@ export function ModelsStrip({
   );
   const main = checkpoint ?? unet;
   const models = [main, vae, clip, clip2].filter((b): b is Binding => Boolean(b));
-  // The same LoRA can be in the prompt twice; keys stay stable while tags move.
-  const seen = new Map<string, number>();
-  const loraKey = (t: LoraTag) => {
-    const n = seen.get(t.name) ?? 0;
-    seen.set(t.name, n + 1);
-    return `${t.name}#${n}`;
-  };
 
   return (
     <div className="flex items-stretch gap-2">
@@ -560,38 +546,29 @@ export function ModelsStrip({
           <>
             {models.length ? <Divider /> : null}
             <Labeled label="LoRAs" size={size}>
-              <AnimatePresence initial={false}>
-                {loras.map((tag, i) => (
-                  <motion.div
-                    key={loraKey(tag)}
-                    layout
-                    initial={{ opacity: 0, scale: 0.9 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.9 }}
-                    className="flex shrink-0"
-                  >
-                    <Tile
-                      size={size}
-                      kind="loras"
-                      name={tag.name}
-                      what="LoRA"
-                      missing={
-                        loraFiles && !loraFiles.some((f) => stem(f) === stem(tag.name))
-                          ? "Not in your loras folder: generating will stop with an error"
-                          : null
-                      }
-                      strength={{
-                        value: tag.strength,
-                        onChange: (v) => setPrompt(setLoraStrength(text, tag, v)),
-                      }}
-                      active={sameTarget(target, { kind: "lora", index: i })}
-                      onOpen={() => open({ kind: "lora", index: i }, "loras")}
-                      onRemove={() => loraEdit(removeLoraTag(text, tag))}
-                      sortable={sortable(i)}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+              {loras.map((tag, i) => (
+                // Keyed by place: a swap or a move changes the tile in place, no new tile.
+                <Tile
+                  key={i}
+                  size={size}
+                  kind="loras"
+                  name={tag.name}
+                  what="LoRA"
+                  missing={
+                    loraFiles && !loraFiles.some((f) => stem(f) === stem(tag.name))
+                      ? "Not in your loras folder: generating will stop with an error"
+                      : null
+                  }
+                  strength={{
+                    value: tag.strength,
+                    onChange: (v) => setPrompt(setLoraStrength(text, tag, v)),
+                  }}
+                  active={sameTarget(target, { kind: "lora", index: i })}
+                  onOpen={() => open({ kind: "lora", index: i }, "loras")}
+                  onRemove={() => loraEdit(removeLoraTag(text, tag))}
+                  sortable={sortable(i)}
+                />
+              ))}
               <AddTile
                 size={size}
                 what="LoRA"

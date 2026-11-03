@@ -17,6 +17,7 @@ export function ResizeGrip({
   fitSize,
   maxFit = { width: 900, height: 360 },
   label = "Resize",
+  onResize,
   className,
 }: {
   /** The box that changes size. */
@@ -26,6 +27,8 @@ export function ResizeGrip({
   fitSize?: () => { width?: number; height?: number };
   maxFit?: { width: number; height: number };
   label?: string;
+  /** After each change: `fitted` is true for a fit, false for a drag or arrow key. */
+  onResize?: (fitted: boolean) => void;
   className?: string;
 }) {
   const drag = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -64,6 +67,7 @@ export function ResizeGrip({
     if (doesY && want.height && want.height > base.height)
       el.style.height = `${Math.min(want.height, maxFit.height)}px`;
     measure();
+    onResize?.(true);
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
@@ -97,6 +101,7 @@ export function ResizeGrip({
     e.preventDefault();
     resizeBy(move[0], move[1]);
     measure();
+    onResize?.(false);
   };
 
   return (
@@ -112,8 +117,10 @@ export function ResizeGrip({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={() => {
+        if (!drag.current) return;
         drag.current = null;
         measure();
+        onResize?.(false);
       }}
       onPointerCancel={() => {
         drag.current = null;

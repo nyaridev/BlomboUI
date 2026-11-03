@@ -10,6 +10,7 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
+import { ResizeGrip } from "./ResizeGrip";
 
 const fieldBox =
   "flex min-w-0 items-center gap-2 rounded-md border bg-field text-sm text-fg transition-[border-color,box-shadow] " +
@@ -98,26 +99,39 @@ export function TextArea({
   ...rest
 }: TextAreaProps) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  // A size picked with the grip stays until a double-click fits the text again.
+  const sized = useRef(false);
   // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure when the text changes
   useLayoutEffect(() => {
     const el = ref.current;
-    if (!el || !autoGrow) return;
+    if (!el || !autoGrow || sized.current) return;
     el.style.height = "auto";
     const line = Number.parseFloat(getComputedStyle(el).lineHeight) || 19;
-    el.style.height = `${Math.min(el.scrollHeight, line * maxRows + 16)}px`;
+    const border = el.offsetHeight - el.clientHeight;
+    el.style.height = `${Math.min(el.scrollHeight + border, line * maxRows + 16)}px`;
   }, [value, autoGrow, maxRows]);
   return (
-    <textarea
-      ref={ref}
-      value={value}
-      className={cn(
-        "min-h-16 w-full resize-y rounded-md border border-line bg-field px-2.5 py-2 text-sm text-fg outline-none transition-[border-color,box-shadow]",
-        "placeholder:text-fg-4 hover:border-line-strong focus:border-accent-ink/70 focus:ring-2 focus:ring-accent/25",
-        mono && "font-mono text-[12.5px] leading-relaxed",
-        className,
-      )}
-      {...rest}
-    />
+    <div className="relative w-full">
+      <textarea
+        ref={ref}
+        value={value}
+        className={cn(
+          "block min-h-16 w-full resize-none rounded-md border border-line bg-field px-2.5 pt-2 pb-3 text-sm text-fg outline-none transition-[border-color,box-shadow]",
+          "placeholder:text-fg-4 hover:border-line-strong focus:border-accent-ink/70 focus:ring-2 focus:ring-accent/25",
+          mono && "font-mono text-[12.5px] leading-relaxed",
+          className,
+        )}
+        {...rest}
+      />
+      <ResizeGrip
+        target={ref}
+        // The text's height plus the top and bottom border.
+        fitSize={() => ({ height: (ref.current?.scrollHeight ?? 0) + 2 })}
+        onResize={(fitted) => {
+          sized.current = !fitted;
+        }}
+      />
+    </div>
   );
 }
 

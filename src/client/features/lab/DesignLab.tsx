@@ -266,6 +266,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   ]);
   const [num, setNum] = useState(832);
   const [sel, setSel] = useState("dpmpp_2m");
+  const [notes, setNotes] = useState("");
   const [tab, setTab] = useState("generate");
   const [line, setLine] = useState("generation");
   const [dialog, setDialog] = useState(false);
@@ -592,7 +593,14 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               />
             </Field>
             <Field label="Text area (auto-grow)">
-              {(id) => <TextArea id={id} placeholder="Notes about this workflow" />}
+              {(id) => (
+                <TextArea
+                  id={id}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="Notes about this workflow"
+                />
+              )}
             </Field>
             <Field label="Settings row" layout="left" labelWidth={120}>
               <TextField placeholder="Left-aligned label layout" />

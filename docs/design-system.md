@@ -86,7 +86,7 @@ Presets in `src/client/lib/motion.ts`:
 | `IconButton` | Required `label`; `shortcut`; `active`; `badge` slot (`CountBubble`) |
 | `TextField`, `TextArea`, `Field` | `Field` adds label, hint, error; `layout="left"` for settings rows. `invalid` gives a red outline, `valid` a green one (a checked path that exists) |
 | `NumberField` | Drag the field to scrub (Shift = fine), click to type, wheel while focused, steppers |
-| `ResizeGrip` | Resizes the `relative` box it sits in, instead of the browser's corner. Its place says the direction: a pill at the bottom center (height), on the right edge (width), a corner mark bottom right (both). Double-click or Enter fits the content (`fitSize`), never below the default size nor past `maxFit` (360 px tall); arrows resize by 16 px. Every prompt editor has one |
+| `ResizeGrip` | Resizes the `relative` box it sits in, instead of the browser's corner. Its place says the direction: a pill at the bottom center (height), on the right edge (width), a corner mark bottom right (both). Double-click or Enter fits the content (`fitSize`), never below the default size nor past `maxFit` (360 px tall); arrows resize by 16 px; `onResize(fitted)` tells the owner. Every prompt editor and `TextArea` has one (a `TextArea` stops auto-growing once you drag it, and grows again after a double-click fit) |
 | `Slider` | Track + thumb; value in the label row is click-to-type; double-click resets; `marks`; `tone="generate"` |
 | `ScrubField` | Field-sized bar; drag anywhere, click to type. Best in dense layouts |
 | `Select` | Custom listbox: groups, icons, hints, typeahead |

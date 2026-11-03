@@ -65,23 +65,34 @@ export async function askNotifyPermission(): Promise<NotifyPermission> {
   return Notification.requestPermission();
 }
 
+/** What `notify()` did: shown, skipped (Blombo is in front), blocked (no permission) or failed. */
+export type NotifyResult = "shown" | "skipped" | "blocked" | "failed";
+
 /**
  * An OS notification (the browser's, or WebView2's in the desktop window), only while the app is
  * in the background: hidden, minimized or not focused. Clicking it brings the window back.
- * `force` shows it even in the foreground (the settings page's test button).
+ * `force` shows it even in the foreground (the settings page's test button). No tag: a tag makes
+ * a repeat silently replace the last one instead of popping up again.
  */
-export async function notify(title: string, body: string, force = false): Promise<void> {
-  if (!force && document.visibilityState === "visible" && document.hasFocus()) return;
+export async function notify(title: string, body: string, force = false): Promise<NotifyResult> {
+  if (!force && document.visibilityState === "visible" && document.hasFocus()) return "skipped";
   const permission = notifyPermission();
-  if (permission === "unsupported" || permission === "denied") return;
-  if (permission === "default" && (await askNotifyPermission()) !== "granted") return;
+  if (permission === "unsupported" || permission === "denied") return "blocked";
+  if (permission === "default" && (await askNotifyPermission()) !== "granted") return "blocked";
   try {
-    const n = new Notification(title, { body, icon: "/favicon.svg", tag: `blombo-${title}` });
+    const n = new Notification(title, { body, icon: "/favicon.svg" });
     n.onclick = () => {
       window.focus();
       n.close();
     };
+    // The OS answers with show or error; no answer in time counts as shown.
+    return await new Promise<NotifyResult>((resolve) => {
+      n.onshow = () => resolve("shown");
+      n.onerror = () => resolve("failed");
+      setTimeout(() => resolve("shown"), 3000);
+    });
   } catch {
-    // Some webviews only allow notifications from a service worker; nothing to show then.
+    // Some webviews only allow notifications from a service worker.
+    return "failed";
   }
 }

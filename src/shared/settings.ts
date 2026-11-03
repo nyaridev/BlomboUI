@@ -150,7 +150,7 @@ export const NotificationSettings = z.object({
   /** A script or batch finished. */
   batches: z.boolean().default(true),
   downloads: z.boolean().default(true),
-  minSeconds: z.number().int().min(0).max(3600).default(20),
+  minSeconds: z.number().int().min(0).max(3600).default(30),
 });
 export type NotificationSettings = z.infer<typeof NotificationSettings>;
 

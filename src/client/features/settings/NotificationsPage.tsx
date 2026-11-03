@@ -11,7 +11,7 @@ import {
   notifyPermission,
 } from "@client/lib/platform";
 import { useSettings, useUpdateSettings } from "@client/lib/queries";
-import { Button, Field, Notice, Slider, Switch } from "@client/ui";
+import { Button, Field, Notice, Slider, Switch, toast } from "@client/ui";
 import type { NotificationSettings } from "@shared/settings";
 import { useEffect, useState } from "react";
 import { PageHeader } from "./common";
@@ -89,7 +89,7 @@ export function NotificationsPage() {
         >
           <div className="w-72">
             <Slider
-              value={secs ?? s?.minSeconds ?? 20}
+              value={secs ?? s?.minSeconds ?? 30}
               onChange={setSecs}
               min={0}
               max={300}
@@ -112,12 +112,24 @@ export function NotificationsPage() {
               icon="bell"
               disabled={permission === "denied" || permission === "unsupported"}
               onClick={async () => {
-                await notify(
+                const result = await notify(
                   "Blombo",
                   "Notifications work. You'll hear from us when things finish.",
                   true,
                 );
                 setPermission(notifyPermission());
+                if (result === "shown")
+                  toast(
+                    "Test sent. If no note appeared, Windows may be hiding it: check Settings → System → Notifications for your browser, and Do not disturb.",
+                    "success",
+                  );
+                else if (result === "blocked")
+                  toast("Notifications aren't allowed for Blombo in this browser.", "error");
+                else
+                  toast(
+                    "Windows didn't show it. Turn on notifications for your browser in Settings → System → Notifications, and turn off Do not disturb.",
+                    "error",
+                  );
               }}
             >
               Send a test

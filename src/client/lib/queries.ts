@@ -339,6 +339,8 @@ export function useUpdateSettings() {
         patch.gallery?.excludeInterrupted !== undefined
       )
         void qc.invalidateQueries({ queryKey: ["gallery"] });
+      // Results, pages and links come from the other Civitai site now.
+      if (patch.civitai?.site !== undefined) void qc.invalidateQueries({ queryKey: ["civitai"] });
     },
   });
 }

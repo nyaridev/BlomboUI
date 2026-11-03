@@ -7,7 +7,7 @@
  * `.default()` would return the literal object without filling it.
  */
 import { z } from "zod";
-import { BrowseFilter, SavedFilter } from "./civitai.ts";
+import { BrowseFilter, CIVITAI_SITES, SavedFilter } from "./civitai.ts";
 import { salvage } from "./salvage.ts";
 
 export const SETTINGS_VERSION = 1;
@@ -123,6 +123,8 @@ export const AuthorAlias = z.object({
 export type AuthorAlias = z.infer<typeof AuthorAlias>;
 
 export const CivitaiSettings = z.object({
+  /** Which Civitai site searches, downloads and links use (`CIVITAI_SITE_URLS`). */
+  site: z.enum(CIVITAI_SITES).default("com"),
   /** What the Civitai browser starts with. */
   browse: BrowseFilter.omit({ query: true, username: true }).prefault({}),
   downloads: z

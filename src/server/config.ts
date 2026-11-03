@@ -32,8 +32,11 @@ export interface ServerConfig {
   clientDist: string;
   presetsDir: string;
   tauriExe: string;
-  /** Civitai's site and API (a fake one in tests and dev checks). */
-  civitaiUrl: string;
+  /**
+   * A fixed Civitai address (`--civitai`: the fake one in tests and dev checks). Null: the
+   * profile's setting picks civitai.com or civitai.red.
+   */
+  civitaiUrl: string | null;
   /** The ComfyUI model catalog (ComfyUI-Manager's model-list.json). */
   catalogUrl: string;
   /**
@@ -43,7 +46,6 @@ export interface ServerConfig {
   fakeComfy: boolean;
 }
 
-export const CIVITAI_URL = "https://civitai.com";
 export const CATALOG_URL =
   "https://raw.githubusercontent.com/Comfy-Org/ComfyUI-Manager/main/model-list.json";
 
@@ -83,7 +85,7 @@ export function createConfig(flags: Flags): ServerConfig {
     clientDist: path.join(root, "dist", "client"),
     presetsDir: path.join(root, "presets"),
     tauriExe: path.join(root, "src-tauri", "target", "release", exe),
-    civitaiUrl: (flags.civitaiUrl ?? CIVITAI_URL).replace(/\/+$/, ""),
+    civitaiUrl: flags.civitaiUrl?.replace(/\/+$/, "") ?? null,
     catalogUrl: flags.catalogUrl ?? CATALOG_URL,
     fakeComfy: flags.dev && flags.fakeComfy === true,
   };

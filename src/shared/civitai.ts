@@ -101,6 +101,17 @@ export const CIVITAI_BASE_MODELS = [
 /** Images at this Civitai NSFW level and above are blurred (1 PG, 2 PG-13, 4 R, 8 X, 16 XXX). */
 export const NSFW_LEVEL = 4;
 
+/**
+ * Civitai's two sites (split in April 2026): civitai.com shows SFW models only, civitai.red
+ * has everything. Same API on both; the profile picks one (`settings.civitai.site`).
+ */
+export const CIVITAI_SITES = ["com", "red"] as const;
+export type CivitaiSite = (typeof CIVITAI_SITES)[number];
+export const CIVITAI_SITE_URLS: Record<CivitaiSite, string> = {
+  com: "https://civitai.com",
+  red: "https://civitai.red",
+};
+
 /* ── browsing ────────────────────────────────────────────────────────────── */
 
 export const BrowseFilter = z.object({
@@ -108,7 +119,7 @@ export const BrowseFilter = z.object({
   types: z.array(z.string().max(40)).max(12).default([]),
   baseModels: z.array(z.string().max(60)).max(12).default([]),
   sort: z.enum(CIVITAI_SORTS).default("Highest Rated"),
-  period: z.enum(CIVITAI_PERIODS).default("Month"),
+  period: z.enum(CIVITAI_PERIODS).default("AllTime"),
   /** Include models marked NSFW (their images stay blurred until clicked). */
   nsfw: z.boolean().default(true),
   /** A creator's models only. */

@@ -37,7 +37,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Appearance",
     icon: "palette",
     group: "Profile",
-    keywords: "theme color accent font motion nsfw blur",
+    keywords: "theme color accent font motion contrast",
   },
   {
     id: "files",

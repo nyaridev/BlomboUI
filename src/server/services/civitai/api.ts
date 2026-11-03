@@ -81,7 +81,7 @@ const TIMEOUT_MS = 20_000;
 export const PAGE_SIZE = 40;
 
 export interface CivitaiApiOptions {
-  /** "https://civitai.com", or the fake server's address. */
+  /** "https://civitai.com" to start with, or the fake server's address. */
   baseUrl: string;
   /** runtime/cache/civitai/api */
   cacheDir: string;
@@ -89,8 +89,8 @@ export interface CivitaiApiOptions {
 }
 
 export class CivitaiApi {
-  readonly baseUrl: string;
-  readonly origin: string;
+  baseUrl: string;
+  origin: string;
   private readonly cacheDir: string;
   private readonly doFetch: typeof fetch;
   private readonly memory = new Map<string, { at: number; body: unknown }>();
@@ -101,6 +101,12 @@ export class CivitaiApi {
     this.origin = new URL(this.baseUrl).origin;
     this.cacheDir = opts.cacheDir;
     this.doFetch = opts.fetch ?? fetch;
+  }
+
+  /** Switch to the other Civitai site. Cached answers are kept per site (`cacheKey`). */
+  setSite(baseUrl: string): void {
+    this.baseUrl = baseUrl.replace(/\/+$/, "");
+    this.origin = new URL(this.baseUrl).origin;
   }
 
   /** One page of models. `cursor` comes from the previous page. */
@@ -150,7 +156,7 @@ export class CivitaiApi {
       if (error instanceof HttpError && error.code === "civitai_auth")
         throw new HttpError(
           400,
-          "Civitai didn't accept that key. Copy it again from civitai.com → Account settings → API keys.",
+          `Civitai didn't accept that key. Copy it again from ${new URL(this.baseUrl).host} → Account settings → API keys.`,
           "civitai_bad_key",
         );
       throw error;

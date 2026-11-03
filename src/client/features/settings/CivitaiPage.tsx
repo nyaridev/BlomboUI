@@ -25,8 +25,11 @@ import {
   CIVITAI_FILTER_TYPES,
   CIVITAI_PERIOD_LABELS,
   CIVITAI_PERIODS,
+  CIVITAI_SITE_URLS,
+  CIVITAI_SITES,
   CIVITAI_SORTS,
   CIVITAI_TYPE_LABELS,
+  type CivitaiSite,
 } from "@shared/civitai";
 import { type PlanInput, planFileName, planFolder } from "@shared/downloads";
 import {
@@ -58,8 +61,8 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
   return (
     <>
       {header}
-      <div className="flex flex-col gap-10">
-        <Account />
+      <div className="flex flex-col gap-8">
+        <Account site={settings.site} onSite={(site) => save({ site })} />
 
         <SettingsSection title="Browsing" icon="search">
           <Field label="Sort" layout="left">
@@ -252,7 +255,7 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
 
 /* ── account ────────────────────────────────────────────────────────────── */
 
-function Account() {
+function Account({ site, onSite }: { site: CivitaiSite; onSite: (site: CivitaiSite) => void }) {
   const account = useCivitaiAccount();
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);
@@ -354,12 +357,12 @@ function Account() {
               <span className="text-xs text-fg-3">
                 Create one on{" "}
                 <a
-                  href="https://civitai.com/user/account"
+                  href={`${CIVITAI_SITE_URLS[site]}/user/account`}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="text-accent-ink hover:underline"
                 >
-                  civitai.com → Account settings → API keys
+                  civitai.{site} → Account settings → API keys
                 </a>
                 . It stays on this computer, in this profile's folder.
               </span>
@@ -389,6 +392,18 @@ function Account() {
           </div>
         )}
       </div>
+      <Field
+        label="Site"
+        layout="left"
+        hint="civitai.com shows SFW models only; civitai.red has every model, NSFW included. Browsing, downloads and Civitai links use the one you pick."
+      >
+        <Segmented
+          value={site}
+          onChange={onSite}
+          options={CIVITAI_SITES.map((s) => ({ value: s, label: `civitai.${s}` }))}
+          label="Civitai site"
+        />
+      </Field>
     </SettingsSection>
   );
 }

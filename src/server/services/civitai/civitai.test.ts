@@ -1,9 +1,12 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { BrowseFilter, fromBase64Url } from "../../../shared/civitai.ts";
+import { BrowseFilter, CIVITAI_SITE_URLS, fromBase64Url } from "../../../shared/civitai.ts";
+import { CivitaiApi } from "./api.ts";
 import { FAKE_KEY } from "./fixtures/fake-civitai.ts";
 import { type Online, setupOnline } from "./fixtures/setup.ts";
+import { imageHostAllowed } from "./images.ts";
 
 let o: Online;
 beforeAll(async () => {
@@ -104,5 +107,38 @@ describe("image proxy", () => {
     await expect(o.services.civitai.images.get("https://example.com/a.jpeg")).rejects.toThrow(
       /isn't from Civitai/,
     );
+  });
+
+  it("takes images from both Civitai sites and nowhere that only looks like them", () => {
+    const ok = (u: string) => imageHostAllowed(new URL(u), "http://127.0.0.1:1");
+    expect(ok("https://image.civitai.com/a/b.jpeg")).toBe(true);
+    expect(ok("https://image.civitai.red/a/b.jpeg")).toBe(true);
+    expect(ok("https://civitai.red/a.jpeg")).toBe(true);
+    expect(ok("https://civitai.red.example.com/a.jpeg")).toBe(false);
+    expect(ok("https://evilcivitai.red/a.jpeg")).toBe(false);
+    expect(ok("http://image.civitai.red/a.jpeg")).toBe(false);
+  });
+});
+
+describe("site", () => {
+  it("asks the site it's switched to, with the key going only there", async () => {
+    const calls: Array<{ url: string; auth: string | null }> = [];
+    const api = new CivitaiApi({
+      baseUrl: CIVITAI_SITE_URLS.com,
+      cacheDir: await fs.mkdtemp(path.join(os.tmpdir(), "blombo-civitai-site-")),
+      fetch: async (url, init) => {
+        calls.push({
+          url: String(url),
+          auth: new Headers(init?.headers).get("authorization"),
+        });
+        return Response.json({ items: [] });
+      },
+    });
+    await api.models(filter(), null, "KEY");
+    api.setSite(CIVITAI_SITE_URLS.red);
+    expect(api.origin).toBe("https://civitai.red");
+    await api.models(filter(), null, "KEY");
+    expect(calls.map((c) => new URL(c.url).host)).toEqual(["civitai.com", "civitai.red"]);
+    expect(calls.every((c) => c.auth === "Bearer KEY")).toBe(true);
   });
 });

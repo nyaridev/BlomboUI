@@ -3,12 +3,14 @@
  * the job queue and the live bus, the bus decides when GPU stats are sampled and logs are
  * followed, finished images go into the gallery index, finished downloads refresh the model
  * lists, and opening a profile points everything (ComfyUI, the profile database, the model
- * list, the download queue, the Civitai lookup) at that profile. Custom node packs installed
+ * * list, the download queue, the Civitai lookup and site) at that profile. Custom node packs installed
  * for a stage refresh ComfyUI's node list and the stage checks.
  */
 import { randomUUID } from "node:crypto";
 import path from "node:path";
+import { CIVITAI_SITE_URLS } from "../shared/civitai.ts";
 import type { AppError } from "../shared/live.ts";
+import type { Settings } from "../shared/settings.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
 import { AutocompleteService } from "./services/autocomplete.ts";
@@ -148,10 +150,11 @@ export function createServices(config: ServerConfig): Services {
       lookupRef?.start();
     },
     lookup: (profileId, id, size, mtime) => lookupRef?.infoFor(profileId, id, size, mtime) ?? null,
+    civitaiSite: () => civitaiApi.baseUrl,
   });
 
   const civitaiApi = new CivitaiApi({
-    baseUrl: config.civitaiUrl,
+    baseUrl: config.civitaiUrl ?? CIVITAI_SITE_URLS.com,
     cacheDir: cache("civitai", "api"),
   });
   const images = new ImageProxy({
@@ -166,7 +169,9 @@ export function createServices(config: ServerConfig): Services {
     models,
     api: civitaiApi,
     allowedImage: civitai.allowedImage,
-    site: civitai.site,
+    get site() {
+      return civitai.site;
+    },
     publish: (topic, msg) => bus.publish(topic, msg),
     onFound: () => {
       models.invalidate();
@@ -194,8 +199,13 @@ export function createServices(config: ServerConfig): Services {
     },
   });
   downloadQueue = downloads;
+  // The profile picks civitai.com or civitai.red, unless --civitai fixed an address.
+  const applyCivitaiSite = (s: Settings) => {
+    if (!config.civitaiUrl) civitaiApi.setSite(CIVITAI_SITE_URLS[s.civitai.site]);
+  };
   settings.on("updated", (profileId, next, previous) => {
     if (profileId !== profiles.active) return;
+    if (next.civitai.site !== previous.civitai.site) applyCivitaiSite(next);
     if (next.civitai.downloads.parallel !== previous.civitai.downloads.parallel)
       downloads.setParallel(next.civitai.downloads.parallel);
     if (next.civitai.lookup && !previous.civitai.lookup) lookup.start();
@@ -360,6 +370,7 @@ export function createServices(config: ServerConfig): Services {
   profiles.on("opened", (profile, previousId) => {
     void (async () => {
       await workflows.flush();
+      applyCivitaiSite(await settings.get(profile.id));
       if (previousId !== profile.id) {
         await jobs.reset();
         lookup.stop();

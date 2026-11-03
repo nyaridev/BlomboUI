@@ -1,7 +1,7 @@
 /**
  * Settings: centered, organized pages with a searchable rail. Overview first: the profile, what
  * it has made (job log and gallery) and the settings people change most. Appearance is live
- * (theme and accent save to the profile; font, motion and NSFW blur to its settings).
+ * (theme and accent save to the profile; font, contrast and motion to its settings).
  */
 import { useTheme } from "@client/app/theme";
 import { Icon } from "@client/icons/Icon";
@@ -275,19 +275,6 @@ function Appearance() {
                 { value: "reduced", label: "Reduced" },
                 { value: "system", label: "System" },
               ]}
-            />
-          </Field>
-        </SettingsSection>
-        <SettingsSection title="Images" icon="image">
-          <Field
-            label="Blur NSFW thumbnails"
-            layout="left"
-            hint="Model cards (and Civitai results later) marked NSFW stay blurred until you click them."
-          >
-            <Switch
-              checked={settings?.models.blurNsfw ?? true}
-              onCheckedChange={(blurNsfw) => updateSettings.mutate({ models: { blurNsfw } })}
-              label="Blur NSFW thumbnails"
             />
           </Field>
         </SettingsSection>

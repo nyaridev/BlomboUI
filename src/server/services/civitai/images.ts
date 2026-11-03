@@ -17,12 +17,14 @@ const MAX_BYTES = 20 * 1024 * 1024;
 const MISS_MS = 5 * 60_000;
 const TIMEOUT_MS = 30_000;
 
-/** Civitai's image hosts (and the configured Civitai origin, for the fake one in checks). */
+/** Civitai's image hosts, on either site (and a fixed origin, for the fake one in checks). */
 export function imageHostAllowed(url: URL, civitaiOrigin: string): boolean {
   if (url.origin === civitaiOrigin) return true;
   return (
     url.protocol === "https:" &&
-    (url.hostname === "civitai.com" || url.hostname.endsWith(".civitai.com"))
+    ["civitai.com", "civitai.red"].some(
+      (site) => url.hostname === site || url.hostname.endsWith(`.${site}`),
+    )
   );
 }
 

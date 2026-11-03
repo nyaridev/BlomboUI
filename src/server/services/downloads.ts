@@ -696,7 +696,7 @@ export class DownloadQueue {
     if (status === 401 || status === 403)
       return item.job.civitaiAuth
         ? key
-          ? "Civitai refused the download with your API key. The file may be early access or need you to log in on civitai.com."
+          ? "Civitai refused the download with your API key. The file may be early access or need you to log in on Civitai."
           : "Civitai needs your API key for this download. Add it in Settings → Civitai, then retry."
         : "The server refused the download (it may need a login). Download it in your browser and put it in the models folder.";
     if (status === 404) return "The file isn't there anymore.";

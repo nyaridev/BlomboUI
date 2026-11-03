@@ -160,7 +160,7 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                 rel="noreferrer noopener"
                 className="ml-auto inline-flex items-center gap-1 text-accent-ink hover:underline"
               >
-                civitai.com
+                {new URL(model.url).host}
                 <Icon name="external" size={12} />
               </a>
             </div>

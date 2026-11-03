@@ -20,6 +20,7 @@
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { CIVITAI_SITE_URLS } from "../../shared/civitai.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import {
   comfyNameOf,
@@ -49,6 +50,8 @@ export interface ModelDeps {
   runtimeDir: string;
   /** Model files changed on disk (ComfyUI's lists and open windows should refresh). */
   onChanged: () => void;
+  /** The Civitai site model links point at (the profile's choice; civitai.com when unset). */
+  civitaiSite?: () => string;
   /** What a lookup by hash found for a file (same size and mtime), if anything. */
   lookup?: (profileId: string, id: string, size: number, mtime: number) => LookupInfo | null;
 }
@@ -404,7 +407,7 @@ export class ModelService {
     const modelId =
       typeof civitai?.modelId === "number" ? civitai.modelId : (found?.modelId ?? null);
     const versionId = typeof civitai?.id === "number" ? civitai.id : (found?.versionId ?? null);
-    const site = "https://civitai.com";
+    const site = this.deps.civitaiSite?.() ?? CIVITAI_SITE_URLS.com;
     const kindRoot = kindFolderOf(root, path.dirname(entry.abs));
     return {
       ...entry.model,

@@ -3,6 +3,7 @@ import {
   findLoraTags,
   formatLoraTag,
   moveLoraTag,
+  removeLora,
   removeLoraTag,
   setLoraStrength,
   stripLoraTags,
@@ -39,6 +40,14 @@ describe("editing tags", () => {
     const text = "cat, <lora:detail:0.8>, dog";
     const [tag] = findLoraTags(text);
     expect(removeLoraTag(text, tag!)).toBe("cat, dog");
+  });
+
+  it("removes every tag of a LoRA with the trigger words picking added", () => {
+    const text = "cat, <lora:styles/ink:1>, ink, lineart, dog <lora:Ink:0.5>, <lora:other>";
+    expect(removeLora(text, ["styles/ink", "ink"], "ink, lineart")).toBe("cat, dog, <lora:other>");
+    // Words that only start the same way stay.
+    expect(removeLora("<lora:a:1>, inky, b", ["a"], "ink")).toBe("inky, b");
+    expect(removeLora("cat, <lora:a:1>", ["b"], "x")).toBe("cat, <lora:a:1>");
   });
 
   it("formats without trailing zeros", () => {

@@ -3,8 +3,8 @@
  * model kinds, listed from ComfyUI and the profile's wildcards folder. Picking sets the
  * workflow's model, adds a LoRA (instant: beside the prompt, its trigger words added when
  * generating; with Instant off in its model info, a <lora:…> tag and its trigger words in the
- * prompt) or adds a __wildcard__ to the prompt. The grid is virtualized:
- * LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
+ * prompt; clicking a LoRA in use takes it off again) or adds a __wildcard__ to the prompt. The
+ * grid is virtualized: LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
  * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
  * list). Favorites come first, then what you used recently (the job log), unless another sort
  * is picked. A folder tree on the left narrows the grid to one folder; the top bar searches,
@@ -35,7 +35,13 @@ import {
 import type { ModelKind } from "@shared/constants";
 import type { LocalModel } from "@shared/models";
 import { INSTANT_LORAS, type InstantLora, readInstantLoras } from "@shared/prompt/instant";
-import { findLoraTags, formatLoraTag, removeLoraTag, swapLoraTag } from "@shared/prompt/loras";
+import {
+  findLoraTags,
+  formatLoraTag,
+  removeLora,
+  removeLoraTag,
+  swapLoraTag,
+} from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
@@ -242,8 +248,19 @@ export function ModelGrid({
         ? `__${target.name}__`
         : null;
     if (tab === "loras") {
-      if (isSelected(item)) return;
       const name = tagName(item.id);
+      // A LoRA in use comes off again: its instant entry, or its tags and the words picking added.
+      if (isSelected(item)) {
+        const names = new Set([name.toLowerCase(), item.name.toLowerCase()]);
+        const words = item.local?.triggerWords.join(", ") ?? "";
+        if (instant.some((l) => names.has(l.name.toLowerCase())))
+          setInstant(instant.filter((l) => !names.has(l.name.toLowerCase())));
+        if (positive && findLoraTags(prompt).some((t) => names.has(t.name.toLowerCase())))
+          setValue(positive.id, removeLora(prompt, [...names], words));
+        // Tiles shift when one goes, so a held tile lets go.
+        if (target?.kind === "lora" || target?.kind === "instant") onTarget(null);
+        return;
+      }
       // Instant unless its model info says otherwise (a LoRA ComfyUI lists but the models
       // folder doesn't have info for counts as instant).
       const asInstant = item.local?.instant ?? true;
@@ -305,9 +322,16 @@ export function ModelGrid({
       tab === "loras" || tab === "wildcards" || (tab === "other" && otherKind === "embeddings");
     const use: MenuEntry = {
       id: "use",
-      label: tab === "loras" ? "Add LoRA" : adds ? "Add to prompt" : "Use this model",
-      icon: adds ? "plus" : "check",
-      disabled: isSelected(item) && tab !== "wildcards",
+      label:
+        tab === "loras"
+          ? isSelected(item)
+            ? "Remove LoRA"
+            : "Add LoRA"
+          : adds
+            ? "Add to prompt"
+            : "Use this model",
+      icon: tab === "loras" && isSelected(item) ? "x" : adds ? "plus" : "check",
+      disabled: isSelected(item) && tab !== "wildcards" && tab !== "loras",
       onSelect: () => pick(item),
     };
     if (item.local) return modelMenu(item.local, { first: [use, { type: "separator", id: "s0" }] });

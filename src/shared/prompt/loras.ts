@@ -76,7 +76,29 @@ export function swapLoraTag(text: string, tag: LoraTag, name: string, strength: 
 export function removeLoraTag(text: string, tag: LoraTag): string {
   const before = text.slice(0, tag.start).replace(/[,\s]*$/, "");
   const after = text.slice(tag.end);
-  return before && after && !/^[,\s]/.test(after) ? `${before}, ${after}` : before + after;
+  // A tag at the very start takes the separator after it instead.
+  if (!before) return after.replace(/^[,\s]+/, "");
+  return after && !/^[,\s]/.test(after) ? `${before}, ${after}` : before + after;
+}
+
+/**
+ * Remove every tag of one LoRA (any of `names`, ignoring case), with its trigger words when they
+ * follow a tag the way picking adds them ("<lora:x:1>, words").
+ */
+export function removeLora(text: string, names: string[], words = ""): string {
+  const want = new Set(names.map((n) => n.toLowerCase()));
+  let out = text;
+  for (;;) {
+    const tag = findLoraTags(out).find((t) => want.has(t.name.toLowerCase()));
+    if (!tag) return out;
+    let end = tag.end;
+    const gap = /^\s*,\s*/.exec(out.slice(end))?.[0];
+    if (words && gap !== undefined && out.startsWith(words, end + gap.length)) {
+      const after = end + gap.length + words.length;
+      if (/^($|[,\s])/.test(out.slice(after))) end = after;
+    }
+    out = removeLoraTag(out, { ...tag, end });
+  }
 }
 
 /** The prompt without any LoRA tags, with leftover separators tidied up. */

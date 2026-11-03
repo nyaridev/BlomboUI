@@ -109,6 +109,12 @@ describe("readSettings", () => {
     expect(r.settings.civitai.downloads.aliases.map((l) => l.from)).toEqual(["a", "c"]);
   });
 
+  it("starts the Set list with the SDXL sizes and drops a bad one from a saved list", () => {
+    expect(Settings.parse({}).generate.setResolutions).toContain("1216x832");
+    const r = readSettings({ generate: { setResolutions: ["1280x832", "huge", "896x640"] } });
+    expect(r.settings.generate.setResolutions).toEqual(["1280x832", "896x640"]);
+  });
+
   it("flags a file from a newer version", () => {
     const r = readSettings({ version: 9, appearance: { font: "inter" } });
     expect(r.newer).toBe(true);

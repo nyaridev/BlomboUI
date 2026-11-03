@@ -263,17 +263,17 @@ function Tile(props: TileProps) {
         {strength || missing ? (
           <span className="pointer-events-none absolute top-1 left-1 flex items-center gap-0.5">
             {instant ? (
-              <span className="grid h-4 w-4 place-items-center rounded-xs bg-black/60 text-white">
+              <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/60 text-white">
                 <Icon name="bolt" size={11} />
               </span>
             ) : null}
             {strength ? (
-              <span className="rounded-xs bg-black/60 px-1 font-mono text-[10px] leading-4 text-white tabular">
+              <span className="rounded-xs bg-black/60 px-1 font-mono text-xs leading-4.5 text-white tabular">
                 {strengthText(strength.value)}
               </span>
             ) : null}
             {missing ? (
-              <span className="grid h-4 w-4 place-items-center rounded-xs bg-black/60 text-yellow">
+              <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/60 text-yellow">
                 <Icon name="info" size={11} />
               </span>
             ) : null}

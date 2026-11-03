@@ -9,7 +9,7 @@
 import { z } from "zod";
 import { BrowseFilter, CIVITAI_SITES, SavedFilter } from "./civitai.ts";
 import { salvage } from "./salvage.ts";
-import { SIZE_MODES } from "./sizes.ts";
+import { SET_RESOLUTIONS, SIZE_MODES } from "./sizes.ts";
 
 export const SETTINGS_VERSION = 1;
 
@@ -88,6 +88,11 @@ export const GenerateSettings = z.object({
   tiles: z.enum(["pictures", "compact", "text"]).default("pictures"),
   /** How the Size picker sets the size: width and height, aspect and megapixels, or a list. */
   sizeMode: z.enum(SIZE_MODES).default("set"),
+  /** The Set mode's list, "WxH" with the long side first (turned vertical on Generate). */
+  setResolutions: z
+    .array(z.string().regex(/^\d{2,4}x\d{2,4}$/))
+    .max(40)
+    .default(() => [...SET_RESOLUTIONS]),
   /** Sampler and scheduler names left out of the pickers (a picked one still shows). */
   hiddenSamplers: z.array(z.string().max(120)).max(300).default([]),
   hiddenSchedulers: z.array(z.string().max(120)).max(300).default([]),

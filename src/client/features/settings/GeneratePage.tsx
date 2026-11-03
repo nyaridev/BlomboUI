@@ -1,12 +1,25 @@
 /**
  * Settings → Generate: the layout workflows show when they don't link one, the first-run tour,
+ * the Size picker's Set list,
  * when the image stage shows the sampling preview, and the prompt weight step (stored with
  * autocomplete, where the prompt editor reads it). Saved to this profile.
  */
 import { useGoToView } from "@client/lib/hooks";
 import { useLayouts, useSamplerLists, useSettings, useUpdateSettings } from "@client/lib/queries";
-import { Button, Checkbox, Field, Segmented, Select, Slider, Switch } from "@client/ui";
-import { type PreviewSettings, WEIGHT_STEPS } from "@shared/settings";
+import {
+  Button,
+  Checkbox,
+  Field,
+  IconButton,
+  NumberField,
+  Segmented,
+  Select,
+  Slider,
+  Switch,
+} from "@client/ui";
+import { GenerateSettings, type PreviewSettings, WEIGHT_STEPS } from "@shared/settings";
+import { formatSize, landscapeSize, parseSize, snapDim } from "@shared/sizes";
+import { useState } from "react";
 import { samplerLabel, schedulerLabel } from "../generate/labels";
 import { PageHeader, SettingsSection } from "./common";
 
@@ -62,6 +75,10 @@ export function GeneratePage() {
               Show the tour again
             </Button>
           </Field>
+          <SetResolutions
+            list={settings?.generate.setResolutions ?? DEFAULT_SET}
+            onChange={(setResolutions) => update.mutate({ generate: { setResolutions } })}
+          />
         </SettingsSection>
         <SettingsSection title="Preview" icon="eye">
           <Field
@@ -171,6 +188,95 @@ export function GeneratePage() {
         </SettingsSection>
       </div>
     </>
+  );
+}
+
+const DEFAULT_SET = GenerateSettings.parse({}).setResolutions;
+
+/**
+ * The Size picker's Set list: each size with a remove button, and width × height to add one.
+ * Sizes are kept long side first (Generate turns them vertical) and snap to 8 px.
+ */
+function SetResolutions({
+  list,
+  onChange,
+}: {
+  list: string[];
+  onChange: (list: string[]) => void;
+}) {
+  const [w, setW] = useState(1024);
+  const [h, setH] = useState(1024);
+  const adding = formatSize(landscapeSize({ w: snapDim(w), h: snapDim(h) }));
+  const isDefault = list.join() === DEFAULT_SET.join();
+  return (
+    <Field
+      label="Set resolutions"
+      layout="left"
+      hint="The sizes the Size picker's Set mode offers, horizontal or vertical."
+    >
+      <div className="flex w-full max-w-md flex-col gap-3">
+        {list.length ? (
+          <ul className="flex flex-wrap gap-1.5">
+            {list.map((key) => {
+              const size = parseSize(key);
+              const text = size ? `${size.w} × ${size.h}` : key;
+              return (
+                <li
+                  key={key}
+                  className="flex h-7 items-center gap-0.5 rounded-md border border-line bg-field pl-2 font-mono text-xs text-fg-2 tabular"
+                >
+                  {text}
+                  <IconButton
+                    icon="x"
+                    size="xs"
+                    label={`Remove ${text}`}
+                    onClick={() => onChange(list.filter((k) => k !== key))}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-fg-3">
+            No sizes: Set mode only shows the current one. Add some below.
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <NumberField
+            value={w}
+            onChange={setW}
+            min={64}
+            max={4096}
+            step={8}
+            label="Width"
+            className="w-28"
+          />
+          <span className="text-fg-3">×</span>
+          <NumberField
+            value={h}
+            onChange={setH}
+            min={64}
+            max={4096}
+            step={8}
+            label="Height"
+            className="w-28"
+          />
+          <Button
+            icon="plus"
+            disabled={list.includes(adding) || list.length >= 40}
+            title={list.includes(adding) ? "That size is already in the list" : undefined}
+            onClick={() => onChange([...list, adding])}
+          >
+            Add
+          </Button>
+          {isDefault ? null : (
+            <Button variant="ghost" onClick={() => onChange([...DEFAULT_SET])}>
+              Use the defaults
+            </Button>
+          )}
+        </div>
+      </div>
+    </Field>
   );
 }
 

@@ -2,8 +2,8 @@
  * Size, the old app's layout: Raw / Scaler / Set on top, then the size controls for that mode,
  * the swap button, and batch count and size beside them. Raw is width and height; Scaler an
  * aspect (buttons with the shape drawn on them) and megapixels, worked out from the current size
- * so nothing extra is saved; Set a
- * list of known-good resolutions turned horizontal or vertical. The mode is a setting. On its
+ * so nothing extra is saved; Set the
+ * profile's list of resolutions (Settings → Generate) turned horizontal or vertical. The mode is a setting. On its
  * own it's a card; inside a card (`bare`, the default layout's First pass) it's just the rows.
  */
 import { Icon } from "@client/icons/Icon";
@@ -19,14 +19,13 @@ import {
   MEGAPIXELS,
   orientSize,
   parseSize,
-  SET_RESOLUTIONS,
   type SizeMode,
   sizeFromScaler,
 } from "@shared/sizes";
 import { useValue, useValues } from "../state";
 import { useRoleBinding } from "../workflow";
 
-const DEFAULT_MODE = GenerateSettings.parse({}).sizeMode;
+const { sizeMode: DEFAULT_MODE, setResolutions: DEFAULT_SET } = GenerateSettings.parse({});
 
 const MODES: Array<{ value: SizeMode; label: string }> = [
   { value: "raw", label: "Raw" },
@@ -62,7 +61,9 @@ function ResolutionRows({
   const [batch, setBatch] = useValue<number>(batchBinding?.id ?? "latent.batch");
   const count = useValues((s) => s.run.count);
   const setRun = useValues((s) => s.setRun);
-  const mode = useSettings().data?.generate.sizeMode ?? DEFAULT_MODE;
+  const generateSettings = useSettings().data?.generate;
+  const mode = generateSettings?.sizeMode ?? DEFAULT_MODE;
+  const setList = generateSettings?.setResolutions ?? DEFAULT_SET;
   const updateSettings = useUpdateSettings();
   const w = typeof rawW === "number" && rawW > 0 ? rawW : 1024;
   const h = typeof rawH === "number" && rawH > 0 ? rawH : 1024;
@@ -93,7 +94,7 @@ function ResolutionRows({
               const size = parseSize(key);
               if (size) setSize(orientSize(size, vertical));
             }}
-            options={[...new Set([current, ...SET_RESOLUTIONS])].map((key) => {
+            options={[...new Set([current, ...setList])].map((key) => {
               const size = parseSize(key);
               return { value: key, label: size ? shown(orientSize(size, vertical)) : key };
             })}

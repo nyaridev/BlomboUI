@@ -412,6 +412,20 @@ export class WildcardFolders {
     return files.remove(rel);
   }
 
+  /** A pickers' folder ("people/actors", the same in every folder) in the first folder with it. */
+  async folderPath(folder: string): Promise<string> {
+    for (const f of this.folders) {
+      if (!f.path.trim()) continue;
+      const dir = resolveInside(f.path, folder);
+      if (await isDir(dir)) return dir;
+    }
+    throw new HttpError(
+      404,
+      "That folder isn't on disk: it may be a group inside a .yaml file.",
+      "no_folder",
+    );
+  }
+
   /** The file or folder on disk (the folder itself for a bare id), for Reveal. */
   abs(p: string): string {
     const { folder, rel } = this.split(p);

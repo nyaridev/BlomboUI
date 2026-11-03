@@ -36,6 +36,7 @@ import {
   Menu,
   Meter,
   ModelCard,
+  MultiSelect,
   Notice,
   NumberField,
   openContextMenu,
@@ -321,6 +322,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   ]);
   const [num, setNum] = useState(832);
   const [sel, setSel] = useState("dpmpp_2m");
+  const [multi, setMulti] = useState<string[]>(["Illustrious", "SDXL 1.0"]);
   const [notes, setNotes] = useState("");
   const [tab, setTab] = useState("generate");
   const [line, setLine] = useState("generation");
@@ -665,6 +667,20 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                   { value: "euler", label: "Euler", group: "Deterministic" },
                   { value: "dpmpp_2m", label: "DPM++ 2M", group: "Deterministic" },
                   { value: "dpmpp_2m_sde", label: "DPM++ 2M SDE", group: "SDE", hint: "slow" },
+                ]}
+              />
+            </Field>
+            <Field label="Multi-select (picker base models)">
+              <MultiSelect
+                value={multi}
+                onChange={setMulti}
+                clearLabel="All base models"
+                className="w-full"
+                options={[
+                  { value: "Flux.1 D", label: "Flux.1 D", group: "Black Forest Labs" },
+                  { value: "Illustrious", label: "Illustrious", group: "SDXL Community" },
+                  { value: "NoobAI", label: "NoobAI", group: "SDXL Community" },
+                  { value: "SDXL 1.0", label: "SDXL 1.0", group: "Stability AI" },
                 ]}
               />
             </Field>
@@ -1540,6 +1556,28 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                       />
                     </>
                   ) : null}
+                </div>
+              </Row>
+              <Row label="TreeRow lg (picker folders)">
+                <div className="flex w-72 flex-col gap-0.5 rounded-md border border-line bg-surface p-1.5">
+                  <TreeRow
+                    size="lg"
+                    depth={0}
+                    label="All"
+                    icon="stack"
+                    meta="128"
+                    selected
+                    onClick={() => undefined}
+                  />
+                  <TreeRow
+                    size="lg"
+                    depth={0}
+                    label="styles"
+                    icon="folder"
+                    open={false}
+                    meta="42"
+                    onClick={() => undefined}
+                  />
                 </div>
               </Row>
             </div>

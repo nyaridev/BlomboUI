@@ -7,10 +7,12 @@
  * grid is virtualized: LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
  * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
  * list). Favorites come first, then what you used recently (the job log), unless another sort
- * is picked. A folder tree on the left narrows the grid to one folder; the top bar searches,
- * filters by base model, sorts and rescans.
+ * is picked (name, path, created, modified, size; the square button beside it flips the order).
+ * A folder tree on the left narrows the grid to one folder (right-click: Show in Explorer); the
+ * top bar searches, filters by base models (several, grouped by maker), sorts and rescans.
  */
 import { Icon } from "@client/icons/Icon";
+import { api } from "@client/lib/api";
 import { useElementWidth } from "@client/lib/hooks";
 import {
   useLocalModels,
@@ -25,6 +27,7 @@ import {
   IconButton,
   type MenuEntry,
   ModelCard,
+  MultiSelect,
   openContextMenu,
   Segmented,
   Select,
@@ -32,6 +35,7 @@ import {
   TextField,
   toast,
 } from "@client/ui";
+import { groupBaseModels } from "@shared/basemodels";
 import type { ModelKind } from "@shared/constants";
 import type { LocalModel } from "@shared/models";
 import { INSTANT_LORAS, type InstantLora, readInstantLoras } from "@shared/prompt/instant";
@@ -70,13 +74,25 @@ const CARD_W = 256;
 const CARD_RATIO = 2 / 3;
 const GAP = 12;
 
-type Sort = "suggested" | "name" | "newest" | "largest";
-const SORTS: Array<{ value: Sort; label: string }> = [
-  { value: "suggested", label: "Favorites first" },
-  { value: "name", label: "Name" },
-  { value: "newest", label: "Newest files" },
-  { value: "largest", label: "Largest first" },
+type Sort = "suggested" | "name" | "created" | "modified" | "path" | "size";
+type Order = "asc" | "desc";
+/** Each sort with the order it starts in (dates and size newest / largest first). */
+const SORTS: Array<{ value: Sort; label: string; order: Order; files?: true }> = [
+  { value: "suggested", label: "Favorites first", order: "asc" },
+  { value: "name", label: "Name", order: "asc" },
+  { value: "path", label: "Path", order: "asc" },
+  { value: "created", label: "Date created", order: "desc", files: true },
+  { value: "modified", label: "Date modified", order: "desc", files: true },
+  { value: "size", label: "Size", order: "desc", files: true },
 ];
+const byText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+const COMPARE: Record<Exclude<Sort, "suggested">, (a: Item, b: Item) => number> = {
+  name: (a, b) => byText(a.name, b.name),
+  path: (a, b) => byText(a.id, b.id),
+  created: (a, b) => (a.local?.ctime ?? 0) - (b.local?.ctime ?? 0),
+  modified: (a, b) => (a.local?.mtime ?? 0) - (b.local?.mtime ?? 0),
+  size: (a, b) => (a.local?.size ?? 0) - (b.local?.size ?? 0),
+};
 
 interface Item {
   id: string;
@@ -174,14 +190,15 @@ export function ModelGrid({
   const [query, setQuery] = useState("");
   const q = query.trim().toLowerCase();
   const [folder, setFolder] = useState<string | null>(null);
-  const [base, setBase] = useState("");
+  const [baseModels, setBaseModels] = useState<string[]>([]);
   const [sort, setSort] = useState<Sort>("suggested");
+  const [order, setOrder] = useState<Order>("asc");
   const [showTree, setShowTree] = useState(true);
   // Another tab or model kind has other folders and base models.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tab and kind are the triggers
   useEffect(() => {
     setFolder(null);
-    setBase("");
+    setBaseModels([]);
   }, [tab, kind]);
   const marks = useModelMarks().data;
   const setFavorite = useSetModelFavorite();
@@ -195,30 +212,39 @@ export function ModelGrid({
   }, [marks, kind]);
   const bases = useMemo(
     () =>
-      [
-        ...new Set(items.map((i) => i.local?.baseModel).filter((b): b is string => Boolean(b))),
-      ].sort(),
+      groupBaseModels(items.map((i) => i.local?.baseModel).filter((b): b is string => Boolean(b))),
     [items],
   );
-  // Search and base model first; the tree counts what they leave, the folder narrows further.
-  const found = useMemo(
-    () =>
-      items.filter(
-        (i) => (!q || i.id.toLowerCase().includes(q)) && (!base || i.local?.baseModel === base),
-      ),
-    [items, q, base],
-  );
+  // Search and base models first; the tree counts what they leave, the folder narrows further.
+  const found = useMemo(() => {
+    const wanted = new Set(baseModels);
+    return items.filter(
+      (i) =>
+        (!q || i.id.toLowerCase().includes(q)) &&
+        (!wanted.size || wanted.has(i.local?.baseModel ?? "")),
+    );
+  }, [items, q, baseModels]);
   const tree = useMemo(() => folderTree(found.map((i) => i.id)), [found]);
   const list = useMemo(() => {
     const shown = found.filter((i) => inFolder(i.id, folder));
-    if (sort === "name") return shown.sort((a, b) => a.name.localeCompare(b.name));
-    if (sort === "newest")
-      return shown.sort((a, b) => (b.local?.mtime ?? 0) - (a.local?.mtime ?? 0));
-    if (sort === "largest")
-      return shown.sort((a, b) => (b.local?.size ?? 0) - (a.local?.size ?? 0));
-    if (tab === "wildcards") return shown;
-    return pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
-  }, [found, folder, sort, tab, favorites, marks]);
+    if (sort !== "suggested") {
+      const compare = COMPARE[sort];
+      return shown.sort(order === "asc" ? compare : (a, b) => compare(b, a));
+    }
+    const suggested =
+      tab === "wildcards"
+        ? shown
+        : pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
+    return order === "asc" ? suggested : suggested.reverse();
+  }, [found, folder, sort, order, tab, favorites, marks]);
+  const pickSort = (next: Sort) => {
+    setSort(next);
+    setOrder(SORTS.find((s) => s.value === next)?.order ?? "asc");
+  };
+  const openFolder = (path: string) =>
+    void (kind ? api.openModelFolder(kind, path) : api.openWildcardFolder(path)).catch((e: Error) =>
+      toast(e.message, "error"),
+    );
   const inPrompt = useMemo(
     () => new Set([...findLoraTags(prompt), ...instant].map((t) => t.name.toLowerCase())),
     [prompt, instant],
@@ -385,23 +411,31 @@ export function ModelGrid({
           />
         ) : null}
         {bases.length ? (
-          <Select
-            value={base}
-            onChange={setBase}
-            label="Base model"
-            className="w-44"
-            options={[
-              { value: "", label: "All base models" },
-              ...bases.map((b) => ({ value: b, label: b })),
-            ]}
+          <MultiSelect
+            value={baseModels}
+            onChange={setBaseModels}
+            label="Base models"
+            clearLabel="All base models"
+            className="w-52"
+            options={bases.map((b) => ({ value: b.name, label: b.label, group: b.group }))}
           />
         ) : null}
         <Select<Sort>
           value={sort}
-          onChange={setSort}
+          onChange={pickSort}
           label="Sort"
           className="w-40"
-          options={tab === "wildcards" ? SORTS.slice(0, 2) : SORTS}
+          options={tab === "wildcards" ? SORTS.filter((s) => !s.files) : SORTS}
+        />
+        <IconButton
+          icon={order === "asc" ? "sort-asc" : "sort-desc"}
+          label={
+            order === "asc"
+              ? "Ascending (click for descending)"
+              : "Descending (click for ascending)"
+          }
+          variant="secondary"
+          onClick={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
         />
         {tab !== "wildcards" ? (
           <IconButton
@@ -411,13 +445,25 @@ export function ModelGrid({
             onClick={() => void rescanModels()}
           />
         ) : null}
-        <span className="text-xs whitespace-nowrap text-fg-3 tabular">
-          {list.length} {list.length === 1 ? "item" : "items"}
-        </span>
       </div>
       <div className="flex min-h-0 flex-1 gap-3">
         {showTree && !loading && !unavailable ? (
-          <FolderTree nodes={tree} total={found.length} folder={folder} onFolder={setFolder} />
+          <FolderTree
+            nodes={tree}
+            total={found.length}
+            folder={folder}
+            onFolder={setFolder}
+            onMenu={(e, path) =>
+              openContextMenu(e, [
+                {
+                  id: "open",
+                  label: "Show in Explorer",
+                  icon: "folder-open",
+                  onSelect: () => openFolder(path),
+                },
+              ])
+            }
+          />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col">
           {loading ? (
@@ -440,7 +486,7 @@ export function ModelGrid({
               text={
                 q
                   ? `Nothing matches "${query}" here.`
-                  : base || folder
+                  : baseModels.length || folder
                     ? "Nothing here with these filters."
                     : "Nothing here yet. Add files to the folder, then rescan models from the header."
               }

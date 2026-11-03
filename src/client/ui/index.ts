@@ -41,7 +41,7 @@ export {
 export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
 export { NumberField } from "./NumberField";
 export { type ResizeAxis, ResizeGrip } from "./ResizeGrip";
-export { Select, type SelectOption } from "./Select";
+export { MultiSelect, Select, type SelectOption } from "./Select";
 export { Sheet } from "./Sheet";
 export {
   type NumberControlProps,

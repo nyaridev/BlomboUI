@@ -38,7 +38,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 src/
 ├── shared/       Vocabulary + Zod schemas + pure logic used by both sides
 │                 constants · profile · settings · api · comfy · jobs · live · random
-│                 gallery · imageinfo · fileinfo · safetensors · models · wildcards · install
+│                 gallery · imageinfo · fileinfo · safetensors · models · basemodels (groups) · wildcards · install
 │                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
 │                 autocomplete (tag CSV, prompt context, formatting) · bridge (edit sessions)
 │                 scripts (matrix / XY / thumbnails planner) · batch (runner shapes)

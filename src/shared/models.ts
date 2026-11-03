@@ -72,6 +72,8 @@ export const LocalModel = z.object({
   folder: z.string(),
   size: z.number(),
   mtime: z.number(),
+  /** When the file was created (birth time; Linux file systems without one give 0). */
+  ctime: z.number().default(0),
   thumb: z.string().nullable(),
   /** Marked NSFW by its sidecar info (unknown counts as not NSFW). */
   nsfw: z.boolean(),
@@ -188,6 +190,11 @@ export const MoveModelBody = z.object({
   folder: z.string().max(400),
 });
 export const ModelIdBody = z.object({ id: z.string().min(1) });
+/** A folder the pickers list, below a kind folder ("style/anime"), for Show in Explorer. */
+export const ModelFolderBody = z.object({
+  kind: z.enum(MODEL_KINDS),
+  folder: z.string().min(1).max(400),
+});
 
 /**
  * What the model info dialog saves into the model's A1111 .json (activation text, preferred

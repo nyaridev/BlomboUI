@@ -348,6 +348,7 @@ export class ModelService {
           folder: toRel(path.relative(kindRoot, dir)),
           size: stat.size,
           mtime: stat.mtimeMs,
+          ctime: stat.birthtimeMs,
           thumb: thumb ?? found?.image ?? null,
           nsfw: thumb ? isNsfw(civitai) : found ? found.imageNsfw || found.nsfw : isNsfw(civitai),
           baseModel: shortBaseModel(
@@ -392,6 +393,24 @@ export class ModelService {
       entry.sidecars.thumb,
       `${stat.size}-${stat.mtimeMs}`,
       MODEL_THUMB_MAX,
+    );
+  }
+
+  /**
+   * A picker's folder on disk: the first of the profile's models folders that has it below one
+   * of the kind's folders (a higher folder wins, as for files).
+   */
+  async folderPath(kind: ModelKind, folder: string): Promise<string> {
+    const list = await this.list();
+    for (const root of list.folders.filter((f) => f.exists))
+      for (const name of MODEL_FOLDERS[kind]) {
+        const dir = resolveInside(path.join(root.path, name), folder);
+        if (await isDir(dir)) return dir;
+      }
+    throw new HttpError(
+      404,
+      "That folder isn't in this profile's models folders. ComfyUI may list it from another path.",
+      "no_folder",
     );
   }
 

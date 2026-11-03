@@ -1,10 +1,11 @@
 /**
  * The pickers' left sidebar: "All", then the folders the files sit in (folders.ts). A click
  * shows that folder (its subfolders too) and opens it; a second click on the shown folder closes
- * it. Only folders are listed: a LoRA folder can hold thousands of files, and the grid shows them.
+ * it; right-click offers Show in Explorer. Only folders are listed: a LoRA folder can hold
+ * thousands of files, and the grid shows them. Rows are the roomy `lg` TreeRows.
  */
 import { TreeRow } from "@client/ui";
-import { useState } from "react";
+import { type MouseEvent, useState } from "react";
 import type { FolderNode } from "./folders";
 
 export function FolderTree({
@@ -12,11 +13,14 @@ export function FolderTree({
   total,
   folder,
   onFolder,
+  onMenu,
 }: {
   nodes: FolderNode[];
   total: number;
   folder: string | null;
   onFolder: (folder: string | null) => void;
+  /** Right-click on a folder (its path below the kind folder). */
+  onMenu: (e: MouseEvent<HTMLElement>, path: string) => void;
 }) {
   const [open, setOpen] = useState<Set<string>>(() => new Set());
   const toggle = (path: string, on: boolean) =>
@@ -33,12 +37,14 @@ export function FolderTree({
       return (
         <div key={n.path}>
           <TreeRow
+            size="lg"
+            onContextMenu={(e) => onMenu(e, n.path)}
             depth={depth}
             label={n.name}
             icon={isOpen ? "folder-open" : "folder"}
             open={n.children.length ? isOpen : undefined}
             selected={folder === n.path}
-            meta={<span className="text-2xs text-fg-4 tabular">{n.count}</span>}
+            meta={<span className="tabular">{n.count}</span>}
             onClick={() => {
               onFolder(n.path);
               toggle(n.path, folder === n.path ? !isOpen : true);
@@ -52,14 +58,15 @@ export function FolderTree({
   return (
     <nav
       aria-label="Folders"
-      className="scroll-quiet flex w-56 shrink-0 flex-col overflow-y-auto rounded-lg border border-line bg-surface p-1.5 max-lg:hidden"
+      className="scroll-quiet flex w-72 shrink-0 flex-col gap-0.5 overflow-y-auto rounded-lg border border-line bg-surface p-1.5 max-lg:hidden"
     >
       <TreeRow
+        size="lg"
         depth={0}
         label="All"
         icon="stack"
         selected={folder === null}
-        meta={<span className="text-2xs text-fg-4 tabular">{total}</span>}
+        meta={<span className="tabular">{total}</span>}
         onClick={() => onFolder(null)}
       />
       {rows(nodes, 0)}

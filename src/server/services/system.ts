@@ -230,6 +230,19 @@ export function readClock(): Promise<ClockFormat | null> {
   });
 }
 
+/** Open a folder in the OS file manager. Same rule as below: only paths the caller resolved. */
+export function openInFileManager(dir: string): Promise<void> {
+  return new Promise((resolve) => {
+    const child =
+      process.platform === "win32"
+        ? spawn("explorer.exe", [dir], { windowsHide: false, detached: true })
+        : spawn("xdg-open", [dir], { detached: true, stdio: "ignore" });
+    child.on("error", () => resolve());
+    child.unref();
+    setTimeout(resolve, 50);
+  });
+}
+
 /**
  * Show a file in the OS file manager (Explorer selects it). Callers pass paths they resolved
  * themselves from their own data, never a path straight from a request.

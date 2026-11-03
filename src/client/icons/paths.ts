@@ -31,7 +31,7 @@ export const ICONS = {
   // ── system ────────────────────────────────────────────────────────────────
   "unload-models": `<rect x="5.5" y="4.5" width="13" height="10" rx="2"/><path d="M9 2v2.5M15 2v2.5M3 8h2.5M18.5 8H21"/><path d="M12 8v12"/><path d="m8.5 16.5 3.5 3.5 3.5-3.5"/>`,
   "free-cache": `<path d="M19 3.5 12.5 11"/><path d="M8.6 10.2 14.8 13.6"/><path d="M8.6 10.2 4 17.5l6.5 3 4.3-6.9"/><path d="m7.3 18.9 1.6-3.3M10.3 19.6l1.5-3.1"/>`,
-  "rescan-models": `<path d="M20 11.5A8 8 0 0 0 5.6 6.8L4 8.5"/><path d="M4 4.5v4h4"/><path d="M4 12.5a8 8 0 0 0 14.4 4.7l1.6-1.7"/><path d="M20 19.5v-4h-4"/><path d="m12 9 3 1.6v3.3L12 15.5l-3-1.6v-3.3z"/>`,
+  "rescan-models": `<path d="M20 11.5A8 8 0 0 0 5.6 6.8L4 8.5"/><path d="M4 4.5v4h4"/><path d="M4 12.5a8 8 0 0 0 14.4 4.7l1.6-1.7"/><path d="M20 19.5v-4h-4"/>`,
   refresh: `<path d="M20 11.5A8 8 0 0 0 5.6 6.8L4 8.5"/><path d="M4 4.5v4h4"/><path d="M4 12.5a8 8 0 0 0 14.4 4.7l1.6-1.7"/><path d="M20 19.5v-4h-4"/>`,
   gpu: `<rect x="6" y="6" width="12" height="12" rx="2"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/><path d="M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3"/>`,
   thermometer: `<path d="M10 13.6V5a2 2 0 1 1 4 0v8.6a4 4 0 1 1-4 0z"/><path d="M12 9.5v5.5"/>`,
@@ -91,6 +91,8 @@ export const ICONS = {
   search: `<circle cx="10.5" cy="10.5" r="6.5"/><path d="m20 20-4.6-4.6"/>`,
   filter: `<path d="M4 5h16l-6 7.5V18l-4 2v-7.5z"/>`,
   sort: `<path d="M7 4v16"/><path d="m4 17 3 3 3-3"/><path d="M13.5 6h7M13.5 12h5M13.5 18h3"/>`,
+  "sort-asc": `<path d="M7 20V4"/><path d="m4 7 3-3 3 3"/><path d="M13.5 6h3M13.5 12h5M13.5 18h7"/>`,
+  "sort-desc": `<path d="M7 4v16"/><path d="m4 17 3 3 3-3"/><path d="M13.5 6h7M13.5 12h5M13.5 18h3"/>`,
   "more-horizontal": `${dot(6, 12, 1.4)}${dot(12, 12, 1.4)}${dot(18, 12, 1.4)}`,
   "more-vertical": `${dot(12, 6, 1.4)}${dot(12, 12, 1.4)}${dot(12, 18, 1.4)}`,
   grip: `${dot(9, 6, 1.25)}${dot(15, 6, 1.25)}${dot(9, 12, 1.25)}${dot(15, 12, 1.25)}${dot(9, 18, 1.25)}${dot(15, 18, 1.25)}`,

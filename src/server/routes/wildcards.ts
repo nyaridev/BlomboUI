@@ -5,13 +5,14 @@ import {
   MoveWildcardBody,
   RollBody,
   SaveWildcardBody,
+  WildcardFolderBody,
   type WildcardList,
   WildcardPath,
   WildcardPathBody,
 } from "../../shared/wildcards.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
-import { revealInFileManager } from "../services/system.ts";
+import { openInFileManager, revealInFileManager } from "../services/system.ts";
 import { listWildcards, WildcardFolders } from "../services/wildcards.ts";
 
 export function wildcardRoutes(profiles: ProfileService) {
@@ -75,6 +76,12 @@ export function wildcardRoutes(profiles: ProfileService) {
   r.post("/reveal", async (c) => {
     const body = await readJson(c, WildcardPathBody);
     await revealInFileManager((await files()).abs(body.path));
+    return c.json({ ok: true });
+  });
+
+  r.post("/open-folder", async (c) => {
+    const body = await readJson(c, WildcardFolderBody);
+    await openInFileManager(await (await files()).folderPath(body.folder));
     return c.json({ ok: true });
   });
 

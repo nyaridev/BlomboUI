@@ -293,6 +293,8 @@ export const api = {
     request<{ ok: true }>("POST", "/wildcards/move", { from, to }),
   trashWildcard: (path: string) => request<{ ok: true }>("POST", "/wildcards/trash", { path }),
   revealWildcard: (path: string) => request<{ ok: true }>("POST", "/wildcards/reveal", { path }),
+  openWildcardFolder: (folder: string) =>
+    request<{ ok: true }>("POST", "/wildcards/open-folder", { folder }),
   rollWildcards: (body: RollBody) => request<RollResult>("POST", "/wildcards/roll", body),
 
   settings: () => request<Settings>("GET", "/settings"),
@@ -368,6 +370,8 @@ export const api = {
   moveModel: (id: string, folder: string) =>
     request<LocalModel>("POST", "/models/move", { id, folder }),
   revealModel: (id: string) => request<{ ok: true }>("POST", "/models/reveal", { id }),
+  openModelFolder: (kind: ModelKind, folder: string) =>
+    request<{ ok: true }>("POST", "/models/open-folder", { kind, folder }),
   saveModelInfo: (body: SaveModelInfoBody) => request<ModelDetails>("PATCH", "/models/info", body),
   setModelPicture: (id: string, image: Blob) =>
     request<{ ok: true }>("PUT", `/models/picture?id=${encodeURIComponent(id)}`, undefined, image),

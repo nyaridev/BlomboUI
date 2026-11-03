@@ -86,6 +86,8 @@ export const CreateWildcardBody = z.object({
 });
 export const MoveWildcardBody = z.object({ from: WildcardPath, to: WildcardPath });
 export const WildcardPathBody = z.object({ path: WildcardPath });
+/** A folder the pickers list ("people/actors", without the wildcards folder's id). */
+export const WildcardFolderBody = z.object({ folder: z.string().min(1).max(400) });
 
 export const RollBody = z.object({
   text: z.string().min(1).max(20_000),

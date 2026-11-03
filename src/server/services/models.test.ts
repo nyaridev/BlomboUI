@@ -107,6 +107,12 @@ describe("local models", () => {
     });
   });
 
+  it("finds a picker's folder on disk and refuses ones outside the kind folder", async () => {
+    expect(await models.folderPath("loras", "style")).toBe(path.join(root, "loras", "style"));
+    await expect(models.folderPath("loras", "nope")).rejects.toThrow(/isn't in this profile/);
+    await expect(models.folderPath("loras", "../checkpoints")).rejects.toThrow();
+  });
+
   it("shows details with the safetensors header", async () => {
     const d = await models.details("loras/style/Detailer.safetensors");
     expect(d.civitai).toMatchObject({

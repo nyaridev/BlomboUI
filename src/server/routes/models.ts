@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import {
+  ModelFolderBody,
   type ModelHashes,
   ModelIdBody,
   MoveModelBody,
@@ -10,7 +11,7 @@ import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { ModelLookup } from "../services/lookup.ts";
 import type { ModelService } from "../services/models.ts";
-import { revealInFileManager } from "../services/system.ts";
+import { openInFileManager, revealInFileManager } from "../services/system.ts";
 
 /** Local model files (the profile's models root). ComfyUI's own lists are under /api/comfy. */
 export function modelRoutes(models: ModelService, lookup: ModelLookup) {
@@ -86,6 +87,12 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
   r.post("/reveal", async (c) => {
     const body = await readJson(c, ModelIdBody);
     await revealInFileManager(await models.filePath(body.id));
+    return c.json({ ok: true });
+  });
+
+  r.post("/open-folder", async (c) => {
+    const body = await readJson(c, ModelFolderBody);
+    await openInFileManager(await models.folderPath(body.kind, body.folder));
     return c.json({ ok: true });
   });
 

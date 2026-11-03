@@ -347,7 +347,10 @@ export function PropertyList({
 
 /* ── TreeRow ─────────────────────────────────────────────────────────────── */
 
-/** One row of a file tree: indent, disclosure chevron, icon, label, trailing actions. */
+/**
+ * One row of a file tree: indent, disclosure chevron, icon, label, trailing actions. `size="lg"`
+ * is the roomier row of the Generate pickers' folder sidebar (36 px, bigger icons).
+ */
 export function TreeRow({
   depth,
   label,
@@ -359,9 +362,13 @@ export function TreeRow({
   actions,
   onClick,
   onToggle,
+  onContextMenu,
+  size = "md",
   className,
 }: {
   depth: number;
+  size?: "md" | "lg";
+  onContextMenu?: (e: MouseEvent<HTMLElement>) => void;
   label: ReactNode;
   icon: IconName;
   /** Folders pass open/closed; files leave it undefined. */
@@ -376,34 +383,40 @@ export function TreeRow({
   className?: string;
 }) {
   const folder = open !== undefined;
+  const lg = size === "lg";
   return (
     <div
       className={cn(
-        "group relative flex h-7 items-center rounded-sm pr-1 text-sm transition-colors",
+        "group relative flex items-center pr-1 text-sm transition-colors",
+        lg ? "h-9 rounded-md" : "h-7 rounded-sm",
         selected ? "bg-accent/15 text-fg" : "text-fg-2 hover:bg-field hover:text-fg",
         className,
       )}
-      style={{ paddingLeft: 4 + depth * 14 }}
+      style={{ paddingLeft: (lg ? 8 : 4) + depth * (lg ? 16 : 14) }}
+      onContextMenu={onContextMenu}
     >
       <button
         type="button"
         onClick={folder ? (onToggle ?? onClick) : onClick}
         aria-expanded={folder ? open : undefined}
         aria-current={selected || undefined}
-        className="flex min-w-0 flex-1 items-center gap-1.5 self-stretch rounded-sm text-left focus-ring"
+        className={cn(
+          "flex min-w-0 flex-1 items-center self-stretch rounded-sm text-left focus-ring",
+          lg ? "gap-2" : "gap-1.5",
+        )}
       >
-        <span className="grid w-3.5 shrink-0 place-items-center text-fg-4">
+        <span className={cn("grid shrink-0 place-items-center text-fg-4", lg ? "w-4" : "w-3.5")}>
           {folder ? (
             <Icon
               name="chevron-right"
-              size={12}
+              size={lg ? 14 : 12}
               className={cn("transition-transform", open && "rotate-90")}
             />
           ) : null}
         </span>
         <Icon
           name={icon}
-          size={14}
+          size={lg ? 17 : 14}
           className={cn("shrink-0", selected ? "text-accent-ink" : "text-fg-3")}
         />
         <span className="truncate">{label}</span>
@@ -413,7 +426,11 @@ export function TreeRow({
           </span>
         ) : null}
         {meta ? (
-          <span className="ml-auto shrink-0 pl-2 font-mono text-2xs text-fg-4">{meta}</span>
+          <span
+            className={cn("ml-auto shrink-0 pl-2 font-mono text-fg-4", lg ? "text-xs" : "text-2xs")}
+          >
+            {meta}
+          </span>
         ) : null}
       </button>
       {actions ? (

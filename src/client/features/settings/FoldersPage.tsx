@@ -1,8 +1,8 @@
 /**
  * Settings → Folders: ordered lists of models, output and wildcards folders (ADR-0017). The first
  * of each kind is the main one: downloads, generated images and batch results go there. The others
- * are only read (and edited in place). Changes are a draft until Save, since a new models list
- * restarts a managed ComfyUI.
+ * are only read (and edited in place). Rows are dragged to reorder; the top one is main. Changes
+ * are a draft until Save, since a new models list restarts a managed ComfyUI.
  */
 
 import { Icon, type IconName } from "@client/icons/Icon";
@@ -10,10 +10,25 @@ import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useDebounced } from "@client/lib/hooks";
 import { useUpdateProfile } from "@client/lib/queries";
-import { Badge, Button, IconButton, InlineInput, SectionTitle, TextField, toast } from "@client/ui";
+import { Button, IconButton, SectionTitle, TextField, toast } from "@client/ui";
+import {
+  closestCenter,
+  DndContext,
+  type DragEndEvent,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import {
   FOLDER_KINDS,
-  FolderId,
   type FolderKind,
   folderIdFrom,
   folderNameOf,
@@ -33,7 +48,7 @@ const KINDS: Record<
     title: "Models",
     icon: "models",
     label: "Models",
-    hint: "ComfyUI and the Models page read every folder; when two hold the same file, the higher one wins. Downloads go into the main one. A managed ComfyUI restarts to see a change.",
+    hint: "ComfyUI and the Models page read every folder; when two hold the same file, the higher one wins. Downloads go into the top one. A managed ComfyUI restarts to see a change.",
     add: "Add a models folder",
     example: "D:\\AI\\Models",
   },
@@ -41,7 +56,7 @@ const KINDS: Record<
     title: "Outputs",
     icon: "gallery",
     label: "Outputs",
-    hint: "Generated images and batch results are saved in the main one. The gallery shows them all together, or one folder at a time from its sidebar.",
+    hint: "Generated images and batch results are saved in the top one. The gallery shows them all together, or one folder at a time from its sidebar.",
     add: "Add an output folder",
     example: "D:\\AI\\Outputs",
   },
@@ -64,16 +79,31 @@ let nextKey = 0;
 const keyed = (f: ProfileFolder): Row => ({ ...f, key: String(++nextKey) });
 const toDraft = (folders: ProfileFolders): Draft =>
   Object.fromEntries(FOLDER_KINDS.map((k) => [k, folders[k].map(keyed)])) as Draft;
-/** What Save sends: rows with a path, trimmed, without their keys. Blank new rows are dropped. */
-const toFolders = (draft: Draft): ProfileFolders =>
-  Object.fromEntries(
-    FOLDER_KINDS.map((k) => [
-      k,
-      draft[k]
-        .filter((f) => f.path.trim())
-        .map((f) => ({ id: f.id, name: f.name.trim(), path: f.path.trim() })),
-    ]),
-  ) as ProfileFolders;
+
+/**
+ * What Save sends: rows with a path, trimmed, without their keys. Blank new rows are dropped.
+ * Saved folders keep their id (gallery marks and wildcard paths point at it); a new one gets the
+ * main id when it's on top and that id is free, otherwise one made from its name.
+ */
+function toFolders(draft: Draft): ProfileFolders {
+  const out: ProfileFolders = { models: [], outputs: [], wildcards: [] };
+  for (const kind of FOLDER_KINDS) {
+    const rows = draft[kind].filter((f) => f.path.trim());
+    const taken = rows.map((f) => f.id).filter(Boolean);
+    out[kind] = rows.map((f, i) => {
+      let id = f.id;
+      if (!id) {
+        id =
+          i === 0 && !taken.includes(MAIN_FOLDER_IDS[kind])
+            ? MAIN_FOLDER_IDS[kind]
+            : folderIdFrom(f.name.trim(), taken);
+        taken.push(id);
+      }
+      return { id, name: f.name.trim(), path: f.path.trim() };
+    });
+  }
+  return out;
+}
 
 const samePath = (a: string, b: string) =>
   a
@@ -85,13 +115,6 @@ const samePath = (a: string, b: string) =>
     .replace(/[\\/]+$/, "")
     .toLowerCase();
 
-/** The id a row gets from its name: the main id for a first folder, so gallery marks still match. */
-function autoId(kind: FolderKind, name: string, list: Row[], i: number): string {
-  const others = list.filter((_, j) => j !== i).map((f) => f.id);
-  if (i === 0 && !others.includes(MAIN_FOLDER_IDS[kind])) return MAIN_FOLDER_IDS[kind];
-  return name ? folderIdFrom(name, others) : "";
-}
-
 /** What's wrong with a row, or null. A row without a path is skipped, so it has no problem. */
 function problem(list: Row[], i: number): string | null {
   const f = list[i];
@@ -99,9 +122,6 @@ function problem(list: Row[], i: number): string | null {
   if (list.findIndex((o) => samePath(o.path, f.path)) !== i)
     return "This folder is already in the list.";
   if (!f.name.trim()) return "Give it a name.";
-  if (!FolderId.safeParse(f.id).success)
-    return "Ids use a-z, 0-9 and dashes, and start with a letter or digit.";
-  if (list.findIndex((o) => o.id === f.id) !== i) return `Another folder already uses "${f.id}".`;
   return null;
 }
 
@@ -167,6 +187,10 @@ function FolderList({
 }) {
   const info = KINDS[kind];
   const [focusKey, setFocusKey] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   const add = () => {
     const row = keyed({ id: "", name: "", path: "" });
@@ -177,57 +201,57 @@ function FolderList({
     onChange(
       list.map((f, j) => {
         if (j !== i) return f;
-        // Name and id follow the path until you change them yourself.
+        // The name follows the path until you change it yourself.
         const autoName = f.name === "" || f.name === folderNameOf(f.path, info.label);
         const name = autoName ? (path.trim() ? folderNameOf(path, info.label) : "") : f.name;
-        const autoIdNow = f.id === "" || f.id === autoId(kind, f.name, list, i);
-        return { ...f, path, name, id: autoIdNow ? autoId(kind, name, list, i) : f.id };
+        return { ...f, path, name };
       }),
     );
-  const move = (from: number, to: number) => {
+  const onDragEnd = (e: DragEndEvent) => {
+    const from = list.findIndex((f) => f.key === e.active.id);
+    const to = list.findIndex((f) => f.key === e.over?.id);
+    if (from < 0 || to < 0 || from === to) return;
     const next = [...list];
     const [f] = next.splice(from, 1);
     if (f) next.splice(to, 0, f);
     onChange(next);
   };
-  const edit = (i: number, patch: Partial<ProfileFolder>) =>
-    onChange(list.map((f, j) => (j === i ? { ...f, ...patch } : f)));
 
   return (
     <section className="flex flex-col gap-3">
       <SectionTitle icon={info.icon}>{info.title}</SectionTitle>
       <p className="max-w-[72ch] text-xs text-fg-3 text-pretty">{info.hint}</p>
       <ol className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
-        {list.map((f, i) => (
-          <FolderRow
-            key={f.key}
-            kind={kind}
-            folder={f}
-            index={i}
-            last={i === list.length - 1}
-            autoFocus={f.key === focusKey}
-            error={problem(list, i)}
-            onPath={(p) => setPath(i, p)}
-            onEdit={(patch) => edit(i, patch)}
-            onMove={(to) => move(i, to)}
-            onRemove={() => onChange(list.filter((_, j) => j !== i))}
-          />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+          <SortableContext items={list.map((f) => f.key)} strategy={verticalListSortingStrategy}>
+            {list.map((f, i) => (
+              <FolderRow
+                key={f.key}
+                kind={kind}
+                folder={f}
+                autoFocus={f.key === focusKey}
+                error={problem(list, i)}
+                onPath={(p) => setPath(i, p)}
+                onName={(name) => onChange(list.map((o, j) => (j === i ? { ...o, name } : o)))}
+                onRemove={() => onChange(list.filter((_, j) => j !== i))}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
         <li>
           <button
             type="button"
             onClick={add}
+            aria-label={info.add}
+            title={info.add}
             className={cn(
-              "flex w-full items-center gap-3 rounded-b-lg px-3 py-2.5 text-left text-sm text-fg-3 transition-colors hover:bg-field hover:text-fg focus-ring",
+              "group flex w-full justify-center rounded-b-lg py-2 text-fg-3 transition-colors hover:bg-field hover:text-fg focus-ring",
               list.length === 0 && "rounded-t-lg",
             )}
           >
-            <span className="flex w-12 shrink-0 justify-center">
-              <span className="grid h-6 w-6 place-items-center rounded-md border border-dashed border-line-strong">
-                <Icon name="plus" size={14} />
-              </span>
+            <span className="grid h-6 w-6 place-items-center rounded-md border border-dashed border-line-strong group-hover:border-fg-4">
+              <Icon name="plus" size={14} />
             </span>
-            {info.add}
           </button>
         </li>
       </ol>
@@ -238,28 +262,24 @@ function FolderList({
 function FolderRow({
   kind,
   folder,
-  index,
-  last,
   autoFocus,
   error,
   onPath,
-  onEdit,
-  onMove,
+  onName,
   onRemove,
 }: {
   kind: FolderKind;
   folder: Row;
-  index: number;
-  last: boolean;
   autoFocus: boolean;
   error: string | null;
   onPath: (path: string) => void;
-  onEdit: (patch: Partial<ProfileFolder>) => void;
-  onMove: (to: number) => void;
+  onName: (name: string) => void;
   onRemove: () => void;
 }) {
   const info = KINDS[kind];
-  const main = index === 0;
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: folder.key,
+  });
   const path = useDebounced(folder.path.trim(), 250);
   const check = useQuery({
     queryKey: ["check-path", path],
@@ -288,71 +308,34 @@ function FolderRow({
   };
 
   return (
-    <li className="grid grid-cols-[3rem_minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1.5 px-3 py-2.5">
-      <div className="flex justify-center pt-1">
-        {main ? (
-          <Badge tone="accent">Main</Badge>
-        ) : (
-          <span className="pt-0.5 text-xs text-fg-4 tabular">{index + 1}</span>
-        )}
-      </div>
-      <div className="flex min-w-0 flex-col">
-        <div className="flex min-w-0 flex-wrap items-center gap-x-2">
-          <InlineInput
-            mono={false}
-            value={folder.name}
-            placeholder="Name"
-            maxLength={60}
-            onChange={(e) => onEdit({ name: e.target.value })}
-            aria-label="Folder name"
-            className="-ml-2 w-48 max-w-full font-medium"
-          />
-          <span className="flex items-center text-2xs text-fg-4">
-            id
-            <InlineInput
-              value={folder.id}
-              placeholder="id"
-              maxLength={48}
-              onChange={(e) => onEdit({ id: e.target.value.toLowerCase().replace(/\s+/g, "-") })}
-              aria-label="Folder id"
-              className="h-6 w-40 text-fg-2"
-            />
-          </span>
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        {main ? null : (
-          <IconButton
-            size="sm"
-            icon="crown"
-            label="Make main"
-            onClick={() => onMove(0)}
-            className="max-lg:hidden"
-          />
-        )}
-        <IconButton
+    <li
+      ref={setNodeRef}
+      // Rows only slide up and down.
+      style={{ transform: CSS.Translate.toString(transform && { ...transform, x: 0 }), transition }}
+      className={cn(
+        "relative flex flex-col gap-1 bg-surface px-2 py-1.5 first:rounded-t-lg",
+        isDragging && "z-10 rounded-lg shadow-pop",
+      )}
+    >
+      <div className="flex min-w-0 items-center gap-2">
+        <button
+          type="button"
+          aria-label={`Drag ${folder.name || "folder"} to reorder`}
+          className="grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded-xs text-fg-4 hover:text-fg-2 focus-ring active:cursor-grabbing"
+          {...attributes}
+          {...listeners}
+        >
+          <Icon name="grip" size={14} />
+        </button>
+        <TextField
           size="sm"
-          icon="arrow-up"
-          label="Move up"
-          disabled={main}
-          onClick={() => onMove(index - 1)}
+          value={folder.name}
+          placeholder="Name"
+          maxLength={60}
+          onChange={(e) => onName(e.target.value)}
+          aria-label="Folder name"
+          className="w-44 shrink-0 font-medium max-lg:w-28"
         />
-        <IconButton
-          size="sm"
-          icon="arrow-down"
-          label="Move down"
-          disabled={last}
-          onClick={() => onMove(index + 1)}
-        />
-        <IconButton
-          size="sm"
-          icon="x"
-          label="Remove from the list (files stay)"
-          onClick={onRemove}
-        />
-      </div>
-      {/* The path runs under the buttons too, full width on narrow screens. */}
-      <div className="col-span-2 col-start-2 flex min-w-0 flex-col gap-1.5 max-lg:col-span-3 max-lg:col-start-1">
         <TextField
           size="sm"
           mono
@@ -363,6 +346,7 @@ function FolderRow({
           valid={found}
           invalid={missing}
           aria-label={`${info.label} folder path`}
+          className="min-w-0 flex-1"
           trailing={
             <IconButton
               size="xs"
@@ -373,14 +357,24 @@ function FolderRow({
             />
           }
         />
-        {missing ? (
-          <span className="flex items-center gap-1.5 text-xs text-danger">
-            <Icon name="x-circle" size={13} />
-            {checked?.exists ? "That's a file, not a folder." : "This folder doesn't exist."}
-          </span>
-        ) : null}
-        {error ? <span className="text-xs text-danger">{error}</span> : null}
+        <IconButton
+          size="sm"
+          icon="x"
+          label="Remove from the list (files stay)"
+          onClick={onRemove}
+        />
       </div>
+      {missing || error ? (
+        <div className="flex flex-col gap-0.5 pb-0.5 pl-7 text-xs text-danger">
+          {missing ? (
+            <span className="flex items-center gap-1.5">
+              <Icon name="x-circle" size={13} />
+              {checked?.exists ? "That's a file, not a folder." : "This folder doesn't exist."}
+            </span>
+          ) : null}
+          {error ? <span>{error}</span> : null}
+        </div>
+      ) : null}
     </li>
   );
 }

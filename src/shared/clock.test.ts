@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatClock, parseTimePattern } from "./clock.ts";
+import { formatClock, parseTimePattern, pickClock } from "./clock.ts";
 
 describe("parseTimePattern", () => {
   it("reads 24-hour and 12-hour patterns", () => {
@@ -9,6 +9,17 @@ describe("parseTimePattern", () => {
     expect(parseTimePattern("hh:mm:ss tt")).toEqual({ hour12: true, pad: true });
     expect(parseTimePattern("H'h'mm")).toEqual({ hour12: false, pad: false });
     expect(parseTimePattern("")).toBeNull();
+  });
+});
+
+describe("pickClock", () => {
+  const os = { hour12: false, pad: false };
+  it("follows the OS unless the settings pick a clock", () => {
+    expect(pickClock("system", os)).toBe(os);
+    expect(pickClock("system", null)).toBeNull();
+    expect(pickClock("24h", os)).toEqual({ hour12: false, pad: false });
+    expect(pickClock("12h", os)).toEqual({ hour12: true, pad: false });
+    expect(pickClock("24h", null)).toEqual({ hour12: false, pad: true });
   });
 });
 

@@ -5,6 +5,8 @@
  * times with `formatClock`.
  */
 
+import type { ClockPref } from "./settings.ts";
+
 export interface ClockFormat {
   /** AM/PM instead of 0–23. */
   hour12: boolean;
@@ -19,6 +21,16 @@ export function parseTimePattern(pattern: string): ClockFormat | null {
   const hours = /H+|h+/.exec(fields)?.[0];
   if (!hours) return null;
   return { hour12: hours[0] === "h", pad: hours.length > 1 };
+}
+
+/**
+ * The clock to use: the OS one, or the 24-hour or AM/PM one the settings pick. A pick that
+ * matches the OS keeps its leading zero; otherwise 24-hour pads ("09:05") and AM/PM doesn't.
+ */
+export function pickClock(pref: ClockPref, os: ClockFormat | null): ClockFormat | null {
+  if (pref === "system") return os;
+  const hour12 = pref === "12h";
+  return { hour12, pad: os?.hour12 === hour12 ? os.pad : !hour12 };
 }
 
 /**

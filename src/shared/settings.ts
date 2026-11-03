@@ -33,6 +33,10 @@ export type GalleryLayout = (typeof GALLERY_LAYOUTS)[number];
 export const MOTION_PREFS = ["full", "reduced", "system"] as const;
 export type MotionPref = (typeof MOTION_PREFS)[number];
 
+/** Times of day: like Windows' clock, or always 24-hour or AM/PM. */
+export const CLOCK_PREFS = ["system", "24h", "12h"] as const;
+export type ClockPref = (typeof CLOCK_PREFS)[number];
+
 export const AppearanceSettings = z.object({
   font: z.enum(UI_FONTS).default(DEFAULT_UI_FONT),
   /** Family name for the "custom" choice, as installed on this computer. */
@@ -40,6 +44,7 @@ export const AppearanceSettings = z.object({
   motion: z.enum(MOTION_PREFS).default("system"),
   /** Stronger text, borders and fields in every theme (images stay as they are). */
   contrast: z.boolean().default(false),
+  clock: z.enum(CLOCK_PREFS).default("system"),
 });
 
 export const GallerySettings = z.object({

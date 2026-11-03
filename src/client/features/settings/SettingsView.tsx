@@ -7,10 +7,12 @@ import { useTheme } from "@client/app/theme";
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
-import { useSettings, useUpdateProfile, useUpdateSettings } from "@client/lib/queries";
+import { useSettings, useSystem, useUpdateProfile, useUpdateSettings } from "@client/lib/queries";
 import { Field, Segmented, Select, Slider, Switch, TextField } from "@client/ui";
+import { formatClock, pickClock } from "@shared/clock";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import {
+  type ClockPref,
   DEFAULT_UI_FONT,
   fontStack,
   type MotionPref,
@@ -278,9 +280,39 @@ function Appearance() {
               ]}
             />
           </Field>
+          <TimeFormat
+            value={settings?.appearance.clock ?? "system"}
+            onChange={(clock) => updateSettings.mutate({ appearance: { clock } })}
+          />
         </SettingsSection>
       </div>
     </>
+  );
+}
+
+/* ── time format ────────────────────────────────────────────────────────── */
+
+/** 24-hour or AM/PM for every time in the app; Windows by default. Each choice shows now. */
+function TimeFormat({ value, onChange }: { value: ClockPref; onChange: (v: ClockPref) => void }) {
+  const os = useSystem().data?.clock ?? null;
+  const now = Date.now();
+  const sample = (pref: ClockPref) => formatClock(now, pickClock(pref, os));
+  return (
+    <Field
+      label="Time format"
+      layout="left"
+      hint={`Windows follows Settings → Time & language → Region (${sample("system")} now).`}
+    >
+      <Segmented
+        value={value}
+        onChange={onChange}
+        options={[
+          { value: "system", label: "Windows" },
+          { value: "24h", label: "24-hour", title: sample("24h") },
+          { value: "12h", label: "AM/PM", title: sample("12h") },
+        ]}
+      />
+    </Field>
   );
 }
 

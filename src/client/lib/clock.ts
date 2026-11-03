@@ -1,10 +1,11 @@
 /**
- * Times of day on the OS clock (shared/clock.ts): every time the app shows goes through here, so
- * a 24-hour Windows reads "17:17" even in an English browser.
+ * Times of day on the OS clock (shared/clock.ts), unless Settings → Appearance picks 24-hour or
+ * AM/PM: every time the app shows goes through here, so a 24-hour Windows reads "17:17" even in
+ * an English browser.
  */
-import { type ClockFormat, formatClock } from "@shared/clock";
+import { type ClockFormat, formatClock, pickClock } from "@shared/clock";
 import { useMemo } from "react";
-import { useSystem } from "./queries";
+import { useSettings, useSystem } from "./queries";
 
 type When = Date | number | string;
 
@@ -28,6 +29,14 @@ function formatters(clock: ClockFormat | null) {
 export type Clock = ReturnType<typeof formatters>;
 
 export function useClock(): Clock {
-  const clock = useSystem().data?.clock ?? null;
-  return useMemo(() => formatters(clock), [clock]);
+  const os = useSystem().data?.clock ?? null;
+  const pref = useSettings().data?.appearance.clock ?? "system";
+  const picked = pickClock(pref, os);
+  const hour12 = picked?.hour12;
+  const pad = picked?.pad;
+  // Keyed by the two flags: a new settings or system object alone doesn't remake the formatters.
+  return useMemo(
+    () => formatters(hour12 === undefined || pad === undefined ? null : { hour12, pad }),
+    [hour12, pad],
+  );
 }

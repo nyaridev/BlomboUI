@@ -239,7 +239,10 @@ export const assistTheme = EditorView.theme({
     flexShrink: "0",
   },
   // The selected entry's picture, beside the list (CodeMirror's info panel).
-  ".cm-tooltip.cm-completionInfo": { padding: "8px", maxWidth: "none" },
+  ".cm-tooltip.cm-completionInfo": { padding: "4px", maxWidth: "none" },
+  // A gap between the list and the picture beside it.
+  ".cm-completionInfo.cm-completionInfo-right": { marginLeft: "8px" },
+  ".cm-completionInfo.cm-completionInfo-left": { marginRight: "8px" },
   ".cm-ac-picture": {
     display: "block",
     width: "200px",
@@ -262,14 +265,14 @@ function positionPicture(
   info: Rect,
   space: Rect,
 ): { style?: string; class?: string } {
-  const width = info.right - info.left;
+  const width = info.right - info.left + 8; // with the gap from the list
   const height = info.bottom - info.top;
   const top = Math.max(0, Math.min(option.top - list.top, space.bottom - list.top - height));
   if (space.right - list.right >= width)
     return { style: `top: ${top}px`, class: "cm-completionInfo-right" };
   if (list.left - space.left >= width)
     return { style: `top: ${top}px`, class: "cm-completionInfo-left" };
-  return { style: `top: ${list.bottom - list.top + 4}px; left: 0` };
+  return { style: `top: ${list.bottom - list.top + 8}px; left: 0` };
 }
 
 /** The row under the mouse becomes the selected one (as in the command palette), so its picture shows. */

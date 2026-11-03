@@ -2,10 +2,10 @@
  * A full-screen look at one image, or a few (a run's results): the picture as large as it fits
  * between equal top and bottom margins, over the page dimmed and blurred. Esc or a click beside
  * the picture closes it; ← →, the side buttons or the wheel beside the picture step through the
- * images. The wheel on the picture zooms around the pointer and a drag moves it; while zoomed in,
- * the wheel anywhere zooms, so it only steps again once the picture is back to its size. A
- * middle click on the picture opens it in a new tab (`onOpenTab`). It sits on the lightbox layer
- * (z 250).
+ * images. The wheel on the picture zooms around the pointer and a drag moves it, both easing;
+ * while zoomed in, the wheel anywhere zooms, so it only steps again once the picture is back to
+ * its size. A middle click on the picture opens it in a new tab (`onOpenTab`). It sits on the
+ * lightbox layer (z 250).
  */
 
 import { useModalFocus } from "@client/lib/hooks";
@@ -56,6 +56,7 @@ export function ImageViewer({
   live.current.index = index;
   live.current.count = images.length;
   const drag = useRef<{ id: number; x: number; y: number; from: View } | null>(null);
+  const [dragging, setDragging] = useState(false);
 
   const step = (dir: 1 | -1) => {
     if (!many) return;
@@ -93,11 +94,12 @@ export function ImageViewer({
           setView(FIT);
           return;
         }
-        // Keep the point under the pointer still: the box's center is where the picture sits
-        // before it's moved, and the transform scales around it.
-        const r = img.getBoundingClientRect();
-        const cx = r.left + r.width / 2 - v.x;
-        const cy = r.top + r.height / 2 - v.y;
+        // Keep the point under the pointer still. The transform scales around the box's center;
+        // read it from the layout (the on-screen box is mid-animation while zoom eases).
+        const stage = img.parentElement?.getBoundingClientRect();
+        if (!stage) return;
+        const cx = stage.left + img.offsetLeft + img.offsetWidth / 2;
+        const cy = stage.top + img.offsetTop + img.offsetHeight / 2;
         const dx = e.clientX - cx;
         const dy = e.clientY - cy;
         setView({
@@ -130,6 +132,7 @@ export function ImageViewer({
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: view };
+    setDragging(true);
   };
   const onPointerMove = (e: PointerEvent<HTMLImageElement>) => {
     const d = drag.current;
@@ -138,6 +141,7 @@ export function ImageViewer({
   };
   const endDrag = () => {
     drag.current = null;
+    setDragging(false);
   };
 
   return (
@@ -174,7 +178,10 @@ export function ImageViewer({
           className="max-h-full max-w-full touch-none object-contain select-none"
           style={{
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-            cursor: zoomed ? (drag.current ? "grabbing" : "grab") : "zoom-in",
+            // Zoom eases in; a drag follows closely, softened just enough to glide.
+            transition: `transform ${dragging ? "70ms linear" : "180ms cubic-bezier(0.2, 0, 0, 1)"}`,
+            willChange: "transform",
+            cursor: "move",
           }}
         />
       </div>

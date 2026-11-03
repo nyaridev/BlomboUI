@@ -170,7 +170,8 @@ export function Segmented<T extends string>({
         aria-label={label}
         className={cn(
           "inline-flex items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5",
-          full && "flex w-full",
+          // w-fit: as wide as its options, even where a column would stretch it (Field).
+          full ? "flex w-full" : "w-fit",
           className,
         )}
       >

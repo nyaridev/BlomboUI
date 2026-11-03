@@ -89,7 +89,7 @@ Presets in `src/client/lib/motion.ts`:
 | `Slider` | Track + thumb; value in the label row is click-to-type; double-click resets; `marks`; `tone="generate"` |
 | `ScrubField` | Field-sized bar; drag anywhere, click to type. Best in dense layouts |
 | `Select` | Custom listbox: groups, icons, hints, typeahead |
-| `Switch`, `Checkbox`, `Segmented`, `Chip` | `Segmented` has a sliding thumb and arrow-key navigation |
+| `Switch`, `Checkbox`, `Segmented`, `Chip` | `Segmented` has a sliding thumb and arrow-key navigation; it is as wide as its options (`full` fills the row) |
 | `Tabs` | `pill` (header) and `line` (panels), sliding indicator |
 | `Tooltip`, `Popover`, `Menu`, `Dialog` | Floating UI behavior; `Menu` has typeahead and arrow keys |
 | `openContextMenu(e, items)` | The right-click menu: `Menu`'s rows (same `MenuEntry` items) at the pointer, or under the element from Shift+F10. One `ContextMenuHost` renders it (mounted next to the Toaster). Build the items inside the handler. Anything with a ⋯ menu opens the same items on right-click; model cards, profile cards and gallery images have their own (see Right-click below) |

@@ -37,7 +37,7 @@ import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { rescanModels } from "../../app/commands";
-import { useModelMenu } from "../models/actions";
+import { openModelInfo, useModelMenu } from "../models/actions";
 import type { StripTarget } from "./blocks/ModelsStrip";
 import { FolderTree } from "./FolderTree";
 import { folderTree, inFolder } from "./folders";
@@ -505,6 +505,8 @@ function PickerCard({
   favorite: boolean | null;
   onFavorite: (i: Item) => void;
 }) {
+  // Only files in the models folder have info to show (wildcards and ComfyUI-only names don't).
+  const localId = item.local?.id;
   return (
     <ModelCard
       name={item.name}
@@ -520,6 +522,7 @@ function PickerCard({
       onContextMenu={(e) => onMenu(e, item)}
       favorite={favorite ?? undefined}
       onFavorite={favorite === null ? undefined : () => onFavorite(item)}
+      onInfo={localId ? () => openModelInfo(localId) : undefined}
     />
   );
 }

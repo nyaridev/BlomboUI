@@ -1330,7 +1330,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
         <Section
           id="cards"
           title="Model cards"
-          text="One card everywhere. No thumbnail? A designed face: kind color + icon + monogram."
+          text="One card everywhere. No thumbnail? A checkerboard in the kind's color with its icon. Hover for Model info and the heart."
         >
           <div className="grid grid-cols-6 gap-3">
             <ModelCard
@@ -1347,8 +1347,15 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               thumb="art:detail"
               favorite
               onFavorite={() => undefined}
+              onInfo={() => toast("Model info opens here", "info")}
             />
-            <ModelCard name="pixel_art_v3" kind="loras" baseModel="SDXL" />
+            <ModelCard
+              name="pixel_art_v3"
+              kind="loras"
+              baseModel="SDXL"
+              onFavorite={() => undefined}
+              onInfo={() => toast("Model info opens here", "info")}
+            />
             <ModelCard name="sdxl_vae_fp16fix" kind="vae" baseModel="SDXL" />
             <ModelCard name="4x-UltraSharp" kind="upscale_models" />
             <ModelCard name="controlnet-openpose-sdxl" kind="controlnet" baseModel="SDXL" />

@@ -386,6 +386,7 @@ function CardGrid({
                   })
                 }
                 meta={formatBytes(m.size)}
+                onInfo={() => openModelInfo(m.id)}
                 selected={selected === m.id}
                 onClick={() => onSelect(m.id)}
                 onContextMenu={(e) => onMenu(e, m)}

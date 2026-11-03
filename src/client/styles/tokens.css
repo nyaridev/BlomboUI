@@ -197,6 +197,8 @@
   --on-disabled: color-mix(in srgb, var(--fg) 40%, var(--bg));
   /* the empty part of a slider's track: a light grey, as in the old app */
   --track: color-mix(in srgb, var(--fg-2) 30%, var(--fg-3));
+  /* the second square of a model card's empty checkerboard (ModelCard's FallbackFace) */
+  --checker-alt: var(--line);
   /* a selected tile: a soft light glow outside and fading in from the edge (the old app's) */
   --glow-selected:
     0 0 7px color-mix(in srgb, var(--fg) 28%, transparent),
@@ -209,6 +211,7 @@
   --disabled-danger: color-mix(in srgb, var(--red) 22%, var(--bg));
   --on-disabled: color-mix(in srgb, var(--fg) 50%, var(--bg));
   --track: color-mix(in srgb, var(--fg-4) 45%, var(--bg));
+  --checker-alt: var(--sunken);
   /* a dark glow reads as a shadow on light; the accent glows instead */
   --glow-selected:
     0 0 7px color-mix(in srgb, var(--accent) 40%, transparent), inset 0 0 0 1px var(--accent),

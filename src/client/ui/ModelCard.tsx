@@ -1,13 +1,12 @@
 /**
  * The one model card used everywhere (Generate pickers, Models view, Civitai results).
- * When there is no thumbnail it shows a designed face: kind color, kind icon, monogram and
- * base-model badge, so a wall of un-thumbnailed LoRAs still reads well. Thumbnails marked NSFW
+ * When there is no thumbnail it shows a checkerboard tinted in the kind's color with the kind's
+ * icon (the old app's empty card), so a wall of un-thumbnailed LoRAs still reads by kind. Thumbnails marked NSFW
  * are blurred until clicked when `blurNsfw` is on (the profile's setting, on by default).
  * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading").
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { hashString } from "@client/lib/seeded";
 import type { ModelKind } from "@shared/constants";
 import { type MouseEvent, type ReactNode, useState } from "react";
 import { Art, positioned } from "./Art";
@@ -28,29 +27,19 @@ export const KIND_STYLE: Record<CardKind, { label: string; icon: IconName; color
   wildcards: { label: "Wildcard", icon: "wildcards", color: "cyan" },
 };
 
-function monogram(name: string): string {
-  const words = name
-    .replace(/\.[a-z0-9]+$/i, "")
-    .split(/[\s_\-.]+/)
-    .filter(Boolean);
-  const letters =
-    words.length > 1 ? words.slice(0, 2).map((w) => w[0]) : [words[0]?.[0], words[0]?.[1]];
-  return letters.filter(Boolean).join("").toUpperCase();
-}
+/** Squares of 14 px: two tints of the kind's color, over surface-2 and `--checker-alt`. */
+const CHECKER = 28;
 
 export function FallbackFace({
-  name,
   kind,
   className,
 }: {
-  name: string;
+  /** Kept so callers can pass the model; the face only follows the kind. */
+  name?: string;
   kind: CardKind;
   className?: string;
 }) {
-  const style = KIND_STYLE[kind];
-  const h = hashString(name);
-  const angle = h % 360;
-  const shift = (h >> 8) % 40;
+  const color = KIND_STYLE[kind].color;
   return (
     <div
       className={cn(
@@ -59,42 +48,28 @@ export function FallbackFace({
         className,
       )}
       style={{
-        background: `linear-gradient(${angle}deg, color-mix(in oklab, var(--${style.color}) ${18 + (shift % 14)}%, var(--surface-2)), var(--surface) 70%)`,
+        background: `repeating-conic-gradient(color-mix(in oklab, var(--${color}) 12%, var(--surface-2)) 0 25%, color-mix(in oklab, var(--${color}) 18%, var(--checker-alt)) 0 50%) 0 0 / ${CHECKER}px ${CHECKER}px`,
       }}
     >
       <span
-        className="pointer-events-none absolute -right-2 -bottom-6 font-bold leading-none tracking-tighter select-none"
-        style={{
-          fontSize: "7.5em",
-          color: `color-mix(in oklab, var(--${style.color}-ink) 14%, transparent)`,
-        }}
-      >
-        {monogram(name)}
-      </span>
-      <svg
-        className="pointer-events-none absolute inset-0 h-full w-full opacity-[.07]"
-        aria-hidden="true"
-      >
-        <defs>
-          <pattern id={`dots-${kind}`} width="14" height="14" patternUnits="userSpaceOnUse">
-            <circle cx="2" cy="2" r="1" fill="currentColor" />
-          </pattern>
-        </defs>
-        <rect width="100%" height="100%" fill={`url(#dots-${kind})`} className="text-fg" />
-      </svg>
-      <span
         className="relative grid h-12 w-12 place-items-center rounded-xl border"
         style={{
-          color: `var(--${style.color}-ink)`,
-          borderColor: `color-mix(in oklab, var(--${style.color}-ink) 30%, transparent)`,
-          background: `color-mix(in oklab, var(--${style.color}) 16%, transparent)`,
+          color: `var(--${color}-ink)`,
+          borderColor: `color-mix(in oklab, var(--${color}-ink) 30%, transparent)`,
+          background: `color-mix(in oklab, var(--${color}) 22%, var(--surface))`,
         }}
       >
-        <Icon name={style.icon} size={24} />
+        <Icon name={KIND_STYLE[kind].icon} size={24} />
       </span>
     </div>
   );
 }
+
+const CORNER_BUTTON =
+  "grid h-7 w-7 place-items-center rounded-sm bg-black/45 text-white/80 backdrop-blur-[2px] transition-opacity hover:text-white focus-ring";
+/** Shown while the card is hovered or a button in it has keyboard focus (always on touch). */
+const HOVER_ONLY =
+  "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100";
 
 export interface CardMark {
   label: string;
@@ -128,6 +103,8 @@ export interface ModelCardProps {
   typeLabel?: string;
   onClick?: () => void;
   onFavorite?: () => void;
+  /** Shows an info button beside the heart on hover (Model info…). */
+  onInfo?: () => void;
   /** Right-click (openContextMenu). */
   onContextMenu?: (e: MouseEvent<HTMLElement>) => void;
   footer?: ReactNode;
@@ -144,6 +121,7 @@ export function ModelCard({
   favorite,
   onClick,
   onFavorite,
+  onInfo,
   onContextMenu,
   footer,
   ratio = 3 / 4,
@@ -241,26 +219,35 @@ export function ModelCard({
           <span className="text-2xs text-white/75">Click to reveal</span>
         </button>
       ) : null}
-      {onFavorite ? (
-        <button
-          type="button"
-          aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
-          aria-pressed={favorite}
-          onClick={onFavorite}
-          className={cn(
-            "absolute top-2 right-2 grid h-7 w-7 place-items-center rounded-sm bg-black/45 text-white/80 backdrop-blur-[2px] transition-opacity hover:text-white",
-            favorite
-              ? "opacity-100"
-              : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100",
-            selected && "top-9",
-          )}
-        >
-          <Icon
-            name="heart"
-            size={14}
-            className={favorite ? "fill-current text-pink-ink" : undefined}
-          />
-        </button>
+      {onFavorite || onInfo ? (
+        <div className={cn("absolute top-2 right-2 flex gap-1", selected && "top-9")}>
+          {onInfo ? (
+            <button
+              type="button"
+              aria-label={`Model info: ${name}`}
+              title="Model info"
+              onClick={onInfo}
+              className={cn(CORNER_BUTTON, HOVER_ONLY)}
+            >
+              <Icon name="info" size={14} />
+            </button>
+          ) : null}
+          {onFavorite ? (
+            <button
+              type="button"
+              aria-label={favorite ? "Remove from favorites" : "Add to favorites"}
+              aria-pressed={favorite}
+              onClick={onFavorite}
+              className={cn(CORNER_BUTTON, favorite ? "opacity-100" : HOVER_ONLY)}
+            >
+              <Icon
+                name="heart"
+                size={14}
+                className={favorite ? "fill-current text-pink-ink" : undefined}
+              />
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {footer ? <div className="border-t border-line px-2.5 py-2">{footer}</div> : null}
     </div>

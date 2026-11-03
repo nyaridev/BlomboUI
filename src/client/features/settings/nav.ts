@@ -51,7 +51,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Generate",
     icon: "generate",
     group: "Tools",
-    keywords: "layout default prompt history tour",
+    keywords: "layout default prompt history tour weight step",
   },
   {
     id: "gallery",
@@ -79,7 +79,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Autocomplete",
     icon: "text",
     group: "Tools",
-    keywords: "tags suggestions weight lora wildcards",
+    keywords: "tags suggestions lora wildcards frequent",
   },
   {
     id: "notifications",

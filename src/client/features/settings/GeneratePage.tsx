@@ -1,10 +1,12 @@
 /**
- * Settings → Generate: the layout workflows show when they don't link one, the first-run tour,
+ * Settings → Generate: the layout workflows show when they don't link one, the prompt weight
+ * step (stored with autocomplete, where the prompt editor reads it), the first-run tour,
  * and where prompt history and snippets come from. Saved to this profile.
  */
 import { useGoToView } from "@client/lib/hooks";
 import { useLayouts, useSettings, useUpdateSettings } from "@client/lib/queries";
-import { Button, Field, Select } from "@client/ui";
+import { Button, Field, Segmented, Select } from "@client/ui";
+import { WEIGHT_STEPS } from "@shared/settings";
 import { PageHeader } from "./common";
 import type { SettingsPage } from "./nav";
 
@@ -48,6 +50,20 @@ export function GeneratePage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           >
             Show the tour again
           </Button>
+        </Field>
+        <Field
+          label="Weight step"
+          layout="left"
+          hint="How much Ctrl+↑ / Ctrl+↓ changes (tag:1.1) weights and <lora:name:0.8> strengths at the cursor."
+        >
+          <Segmented
+            size="sm"
+            className="w-fit justify-self-start"
+            label="Weight step"
+            value={String(settings?.autocomplete.weightStep ?? 0.05)}
+            onChange={(v) => update.mutate({ autocomplete: { weightStep: Number(v) } })}
+            options={WEIGHT_STEPS.map((n) => ({ value: String(n), label: String(n) }))}
+          />
         </Field>
         <Field
           label="Prompt history"

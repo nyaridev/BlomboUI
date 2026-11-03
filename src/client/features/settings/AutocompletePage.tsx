@@ -31,7 +31,6 @@ import {
   toast,
 } from "@client/ui";
 import type { TagSourceInfo } from "@shared/autocomplete";
-import { WEIGHT_STEPS } from "@shared/settings";
 import { type ReactNode, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
 
@@ -444,23 +443,6 @@ export function AutocompletePage({ header }: { header: ReactNode }) {
             "Thumbnails",
             "LoRA previews in the list (NSFW ones blurred, per Models).",
           )}
-        </section>
-        <section className="flex flex-col gap-5">
-          <h2 className="label-caps">Weights</h2>
-          <Field
-            label="Ctrl+↑ / Ctrl+↓ step"
-            layout="left"
-            hint="Changes (tag:1.1) weights and <lora:name:0.8> strengths at the cursor."
-          >
-            <Segmented
-              size="sm"
-              className="w-fit justify-self-start"
-              label="Weight step"
-              value={String(ac.weightStep)}
-              onChange={(v) => set({ weightStep: Number(v) })}
-              options={WEIGHT_STEPS.map((n) => ({ value: String(n), label: String(n) }))}
-            />
-          </Field>
         </section>
         <FrequentTags />
       </div>

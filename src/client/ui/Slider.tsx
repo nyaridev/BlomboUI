@@ -182,7 +182,6 @@ export function Slider({
   };
 
   const fill = tone === "generate" ? "bg-generate-hi" : "bg-accent";
-  const trackH = size === "sm" ? "h-1" : size === "lg" ? "h-2" : "h-1.5";
   const thumb = size === "sm" ? "h-3 w-3" : size === "lg" ? "h-[18px] w-[18px]" : "h-3.5 w-3.5";
 
   return (
@@ -234,7 +233,8 @@ export function Slider({
         onPointerCancel={() => setDragging(false)}
         onDoubleClick={() => defaultValue !== undefined && onChange(defaultValue)}
       >
-        <div className={cn("relative w-full overflow-hidden rounded-full bg-track", trackH)}>
+        {/* 4 px at every size; size changes the thumb and the hit area */}
+        <div className="relative h-1 w-full overflow-hidden rounded-full bg-track">
           <div
             className={cn(
               "absolute inset-y-0 left-0 rounded-full",

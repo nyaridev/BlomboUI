@@ -3,11 +3,11 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { bouncy } from "@client/lib/motion";
-import { Button, IconButton, Kbd, NumberField, Tooltip } from "@client/ui";
+import { Button, IconButton, Tooltip } from "@client/ui";
 import { estimateTokens } from "@shared/prompt/tokenize";
 import { motion } from "motion/react";
 import { useMemo, useRef } from "react";
-import { cancelAll, generate, interrupt, setLoop, useLoopIntent } from "../actions";
+import { cancelAll, generate, interrupt } from "../actions";
 import { PromptEditor, type PromptEditorHandle } from "../PromptEditor";
 import { useValue, useValues } from "../state";
 import { useRoleBinding } from "../workflow";
@@ -114,15 +114,12 @@ export function GenerateActions() {
   const serverLoop = useLive((s) => s.queue.loop);
   const progress = useLive((s) => s.progress?.progress.overall ?? 0);
   const ready = useValues((s) => s.workflowId !== null);
-  const count = useValues((s) => s.run.count);
-  const setRun = useValues((s) => s.setRun);
-  const loopIntent = useLoopIntent((s) => s.on);
   const busy = running || queued > 0;
-  const loop = serverLoop || loopIntent;
   const script = useBuiltScript();
   const scripted = script.plan ?? (script.error ? true : null);
 
   return (
+    // Stretches to the prompt boxes' height (the row's), so Generate grows when they're resized.
     <div className="flex w-[288px] shrink-0 flex-col gap-2 max-lg:w-full">
       <motion.button
         type="button"
@@ -131,7 +128,7 @@ export function GenerateActions() {
         disabled={!ready}
         onClick={() => void generate()}
         className={cn(
-          "group relative flex h-[114px] flex-col items-center justify-center gap-1 overflow-hidden rounded-md text-on-generate focus-ring disabled:opacity-50",
+          "group relative flex min-h-[72px] flex-1 flex-col items-center justify-center gap-1 overflow-hidden rounded-md text-on-generate focus-ring disabled:opacity-50",
           "bg-generate transition-[filter] hover:brightness-110",
         )}
       >
@@ -147,25 +144,15 @@ export function GenerateActions() {
           ) : null}
           {scripted ? "Run script" : busy ? "Add to queue" : "Generate"}
         </span>
-        <span className="relative flex items-center gap-1.5 text-xs text-white/80">
-          {busy ? (
-            <span className="tabular">
-              {Math.round(progress * 100)}% · {queued} queued
-            </span>
-          ) : script.plan ? (
-            <span className="tabular">
-              {script.plan.cells.length} image{script.plan.cells.length === 1 ? "" : "s"}
-            </span>
-          ) : script.error ? (
-            <span>Script needs a fix</span>
-          ) : (
-            // Usually no keyboard on a narrow (touch) screen.
-            <span className="flex gap-1.5 max-lg:hidden">
-              <Kbd onColor>Ctrl</Kbd>
-              <Kbd onColor>Enter</Kbd>
-            </span>
-          )}
-        </span>
+        {busy || scripted ? (
+          <span className="relative text-xs text-white/80 tabular">
+            {busy
+              ? `${Math.round(progress * 100)}% · ${queued} queued`
+              : script.plan
+                ? `${script.plan.cells.length} image${script.plan.cells.length === 1 ? "" : "s"}`
+                : "Script needs a fix"}
+          </span>
+        ) : null}
       </motion.button>
       <div className="grid grid-cols-2 gap-1.5">
         <Tooltip content="Stop this image; queued runs continue">
@@ -187,27 +174,6 @@ export function GenerateActions() {
             className="w-full"
           >
             Cancel
-          </Button>
-        </Tooltip>
-      </div>
-      <div className="grid grid-cols-2 gap-1.5">
-        <NumberField
-          value={count}
-          onChange={(n) => setRun({ count: n })}
-          min={1}
-          max={100}
-          label="Runs"
-          unit={count === 1 ? "run" : "runs"}
-        />
-        <Tooltip content="Keep generating until you turn it off or cancel">
-          <Button
-            icon="refresh"
-            pressed={loop}
-            tone="generate"
-            onClick={() => void setLoop(!loop, serverLoop)}
-            className="w-full"
-          >
-            Loop
           </Button>
         </Tooltip>
       </div>

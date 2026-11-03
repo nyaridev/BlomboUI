@@ -13,6 +13,7 @@ import { useDeleteProfile, useProfiles, useSystem } from "@client/lib/queries";
 import { leaveProfile, openProfileOnce } from "@client/lib/session";
 import { Avatar, Button, Dialog, Menu, type MenuEntry, openContextMenu, toast } from "@client/ui";
 import type { Profile } from "@shared/profile";
+import { DEFAULT_UI_FONT } from "@shared/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { motion } from "motion/react";
@@ -49,7 +50,13 @@ export function ProfileScreen() {
 
   useEffect(() => {
     if (!wizard)
-      setTheme({ theme: "blombo", accent: "blue", font: "geist", customFont: "", contrast: false });
+      setTheme({
+        theme: "blombo",
+        accent: "blue",
+        font: DEFAULT_UI_FONT,
+        customFont: "",
+        contrast: false,
+      });
   }, [wizard, setTheme]);
 
   const open = async (p: Profile) => {

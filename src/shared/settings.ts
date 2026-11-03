@@ -16,6 +16,7 @@ export const SETTINGS_VERSION = 1;
 /** UI fonts. Geist and Inter are bundled; the others come from the computer. */
 export const UI_FONTS = ["geist", "inter", "segoe", "system", "custom"] as const;
 export type UiFont = (typeof UI_FONTS)[number];
+export const DEFAULT_UI_FONT: UiFont = "segoe";
 
 export const UI_FONT_LABELS: Record<UiFont, string> = {
   geist: "Geist",
@@ -33,7 +34,7 @@ export const MOTION_PREFS = ["full", "reduced", "system"] as const;
 export type MotionPref = (typeof MOTION_PREFS)[number];
 
 export const AppearanceSettings = z.object({
-  font: z.enum(UI_FONTS).default("geist"),
+  font: z.enum(UI_FONTS).default(DEFAULT_UI_FONT),
   /** Family name for the "custom" choice, as installed on this computer. */
   customFont: z.string().trim().max(80).default(""),
   motion: z.enum(MOTION_PREFS).default("system"),

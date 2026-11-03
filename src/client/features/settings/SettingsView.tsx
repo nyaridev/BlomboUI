@@ -11,6 +11,7 @@ import { useSettings, useUpdateProfile, useUpdateSettings } from "@client/lib/qu
 import { Field, Segmented, Select, Slider, Switch, TextField } from "@client/ui";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import {
+  DEFAULT_UI_FONT,
   fontStack,
   type MotionPref,
   UI_FONT_LABELS,
@@ -255,7 +256,7 @@ function Appearance() {
         </SettingsSection>
         <SettingsSection title="Text and motion" icon="font">
           <FontPicker
-            font={settings?.appearance.font ?? "geist"}
+            font={settings?.appearance.font ?? DEFAULT_UI_FONT}
             custom={settings?.appearance.customFont ?? ""}
             onChange={(appearance) => updateSettings.mutate({ appearance })}
           />

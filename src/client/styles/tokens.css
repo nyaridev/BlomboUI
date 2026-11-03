@@ -51,10 +51,10 @@
   --accent: var(--blue);
   --accent-ink: var(--blue-ink);
   --on-accent: #ffffff;
-  /* Generate has its own orange whatever the accent; -hi is the bright fill (progress,
-     sliders, dots), -ink the orange text on dark */
+  /* Generate has its own orange whatever the accent; -hi is the fill for progress, sliders
+     and dots (the same orange here), -ink the orange text on dark (lighter, to read 4.5:1) */
   --generate: #e04800;
-  --generate-hi: #ff8a40;
+  --generate-hi: #e04800;
   --generate-ink: #ff8a40;
   --on-generate: #ffffff;
   /* the logo's output socket: generate orange, except on the orange accent (below) */
@@ -262,18 +262,18 @@
 
 /*
  * UI font (Settings → Appearance). Utilities and the body read --font-ui through --font-sans,
- * so switching is one attribute on <html data-font>. Geist and Inter are bundled; Segoe UI and
- * the system font come from the computer. "custom" sets --font-ui inline on <html>.
+ * so switching is one attribute on <html data-font>. Geist and Inter are bundled; Segoe UI (the
+ * default) and the system font come from the computer. "custom" sets --font-ui inline on <html>.
  */
 :root,
+[data-font="segoe"] {
+  --font-ui: "Segoe UI Variable Text", "Segoe UI", "Geist Variable", system-ui, sans-serif;
+}
 [data-font="geist"] {
   --font-ui: "Geist Variable", "Segoe UI", system-ui, sans-serif;
 }
 [data-font="inter"] {
   --font-ui: "Inter Variable", "Geist Variable", "Segoe UI", system-ui, sans-serif;
-}
-[data-font="segoe"] {
-  --font-ui: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
 }
 [data-font="system"] {
   --font-ui: system-ui, -apple-system, "Segoe UI", sans-serif;

@@ -26,7 +26,7 @@ const STEPS: TourStep[] = [
   {
     target: "[data-tour=generate]",
     title: "Generate",
-    text: "Click or press Ctrl+Enter. Clicking again while it runs adds to the queue; Loop keeps going until you stop it.",
+    text: "Click or press Ctrl+Enter. Clicking again while it runs adds to the queue.",
     placement: "left",
   },
   {

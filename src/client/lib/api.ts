@@ -276,7 +276,6 @@ export const api = {
   interrupt: () => request<QueueSnapshot>("POST", "/jobs/interrupt"),
   cancelAll: () => request<QueueSnapshot>("POST", "/jobs/cancel"),
   cancelJob: (id: string) => request<QueueSnapshot>("DELETE", `/jobs/${id}`),
-  setLoop: (on: boolean) => request<QueueSnapshot>("PUT", "/jobs/loop", { on }),
   cancelGroup: (id: string) =>
     request<QueueSnapshot>("POST", `/jobs/groups/${encodeURIComponent(id)}/cancel`),
 

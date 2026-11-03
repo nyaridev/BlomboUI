@@ -9,16 +9,9 @@ import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
 import type { WorkflowDetail } from "@shared/workflow/manifest";
 import type { StageReport } from "@shared/workflow/stages";
-import { create } from "zustand";
 import { useLastRun } from "./preview";
 import { buildScript, useScript } from "./scripts";
 import { takePendingSave, useValues } from "./state";
-
-/** "Generate forever" chosen for the next click (the server owns it once running). */
-export const useLoopIntent = create<{ on: boolean; set: (on: boolean) => void }>((set) => ({
-  on: false,
-  set: (on) => set({ on }),
-}));
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -84,7 +77,7 @@ export async function generate(): Promise<void> {
       stages,
       count: run.count,
       seedMode: run.seedMode,
-      loop: script ? false : useLoopIntent.getState().on,
+      loop: false,
       ...(script?.script ? { script: script.script } : {}),
     });
     useLastRun.getState().set(res.jobs.map((j) => j.id));
@@ -124,14 +117,8 @@ export async function interrupt(): Promise<void> {
 export async function cancelAll(): Promise<void> {
   try {
     await api.cancelAll();
-    useLoopIntent.getState().set(false);
     toast("Cancelled the run and cleared the queue", "warning");
   } catch (e) {
     toast(message(e), "error");
   }
-}
-
-export async function setLoop(on: boolean, running: boolean): Promise<void> {
-  useLoopIntent.getState().set(on);
-  if (!on && running) await api.setLoop(false).catch((e) => toast(message(e), "error"));
 }

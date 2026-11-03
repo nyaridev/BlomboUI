@@ -5,7 +5,7 @@
  * can preview others without saving.
  */
 import type { AccentId, ThemeId } from "@shared/constants";
-import { fontStack, type MotionPref, type UiFont } from "@shared/settings";
+import { DEFAULT_UI_FONT, fontStack, type MotionPref, type UiFont } from "@shared/settings";
 import { useEffect } from "react";
 import { create } from "zustand";
 
@@ -28,7 +28,7 @@ interface ThemeState {
 export const useTheme = create<ThemeState>((set) => ({
   theme: "blombo",
   accent: "blue",
-  font: "geist",
+  font: DEFAULT_UI_FONT,
   customFont: "",
   motion: "system",
   contrast: false,

@@ -11,7 +11,7 @@ import {
 describe("settings", () => {
   it("fills every default from an empty file", () => {
     const s = migrateSettings({});
-    expect(s.appearance.font).toBe("geist");
+    expect(s.appearance.font).toBe("segoe");
     expect(s.gallery.layout).toBe("justified");
     expect(s.civitai.downloads.aliases).toEqual([]);
     expect(s.models.blurNsfw).toBe(true);

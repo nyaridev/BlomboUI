@@ -85,7 +85,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   /** Accessible name and tooltip text. Required: icon-only buttons must say what they do. */
   label: string;
   shortcut?: string;
-  size?: "xs" | "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg" | "tall";
   variant?: "ghost" | "secondary" | "primary" | "danger";
   active?: boolean;
   tooltip?: boolean;
@@ -98,6 +98,8 @@ const iconSizes = {
   sm: ["h-7 w-7 rounded-sm", 15],
   md: ["h-8 w-8 rounded-md", 16],
   lg: ["h-10 w-10 rounded-md", 18],
+  /** As tall as its row (the result strip's side arrows). */
+  tall: ["h-full w-7 rounded-md", 16],
 } as const;
 
 const iconVariants = {

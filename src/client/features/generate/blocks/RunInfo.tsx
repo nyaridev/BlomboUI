@@ -1,21 +1,34 @@
 /**
- * What a finished run used, under the image (the old app's info grid): Open folder, then tiles
- * for the prompt, negative, sampling values, seed, size, model and LoRAs. It reads the job log
+ * What a finished run used, under the image (the old app's info grid): Open folder and Favorite
+ * (the gallery's heart), then tiles for the prompt (on a lighter tile), negative, sampling
+ * values, seed, size, model and LoRAs. It reads the job log
  * (`/api/history/jobs/:id`), which keeps each run's values by binding id; the run's workflow says
  * which binding has which role.
  */
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
-import { useJobRecord, useWorkflow } from "@client/lib/queries";
+import { useFavorite, useGalleryImage, useJobRecord, useWorkflow } from "@client/lib/queries";
 import { Button, toast } from "@client/ui";
 import type { Role } from "@shared/workflow/roles";
 import type { ReactNode } from "react";
 
-function Tile({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+function Tile({
+  label,
+  children,
+  wide,
+  raised,
+}: {
+  label: string;
+  children: ReactNode;
+  wide?: boolean;
+  /** A lighter tile, for the prompt. */
+  raised?: boolean;
+}) {
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-col gap-1 rounded-lg border border-line bg-surface p-2.5",
+        "flex min-w-0 flex-col gap-1 rounded-lg border border-line p-2.5",
+        raised ? "bg-surface-3" : "bg-surface",
         wide && "col-span-full",
       )}
     >
@@ -28,6 +41,8 @@ function Tile({ label, children, wide }: { label: string; children: ReactNode; w
 export function RunInfo({ jobId }: { jobId: string }) {
   const record = useJobRecord(jobId).data;
   const bindings = useWorkflow(record?.workflowId ?? null).data?.bindings ?? [];
+  const image = useGalleryImage(record?.imageId ?? null).data;
+  const favorite = useFavorite();
   if (!record) return null;
   const role = (r: Role): string | null => {
     const b = bindings.find((x) => x.role === r);
@@ -56,10 +71,21 @@ export function RunInfo({ jobId }: { jobId: string }) {
         >
           Open folder
         </Button>
+        <Button
+          icon="heart"
+          pressed={image?.favorite ?? false}
+          disabled={!image}
+          title={!image ? "The gallery hasn't found this image yet" : undefined}
+          onClick={() => {
+            if (image) favorite.mutate({ ids: [image.id], favorite: !image.favorite });
+          }}
+        >
+          {image?.favorite ? "Favorited" : "Favorite"}
+        </Button>
       </div>
       <div className="grid grid-cols-4 gap-2 max-lg:grid-cols-2">
         {record.prompt ? (
-          <Tile label="Prompt" wide>
+          <Tile label="Prompt" wide raised>
             <span className="font-mono text-xs">{record.prompt}</span>
           </Tile>
         ) : null}

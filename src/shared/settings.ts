@@ -83,11 +83,14 @@ export const GenerateSettings = z.object({
   layout: z.string().min(1).max(80).default("default"),
   preview: PreviewSettings.prefault({}),
   /** How much of the Generation tab's width the params take (the image gets the rest). */
-  paramsShare: z.number().min(0.3).max(0.75).default(0.6),
+  paramsShare: z.number().min(0.3).max(0.75).default(0.5),
   /** The models strip: big pictures with names on them, small pictures only, or text chips. */
   tiles: z.enum(["pictures", "compact", "text"]).default("pictures"),
   /** How the Size picker sets the size: width and height, aspect and megapixels, or a list. */
   sizeMode: z.enum(SIZE_MODES).default("set"),
+  /** Sampler and scheduler names left out of the pickers (a picked one still shows). */
+  hiddenSamplers: z.array(z.string().max(120)).max(300).default([]),
+  hiddenSchedulers: z.array(z.string().max(120)).max(300).default([]),
 });
 
 /** Ctrl+↑/↓ in the prompt editor changes weights by this much. */

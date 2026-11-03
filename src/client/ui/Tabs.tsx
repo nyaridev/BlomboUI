@@ -1,6 +1,8 @@
 /**
- * Tabs with a sliding indicator. `pill` is the header navigation look; `line` sits on top of
- * a panel (Generate workspace, Models sub-views). A tab with `checked` gets a checkbox before
+ * Tabs. `pill` is the header navigation look and `line` sits on top of a panel (Models
+ * sub-views), both with a sliding indicator; `folder` is the classic look (the Generate
+ * workspace and passes): the active tab is a `bg-surface` box with its top and sides drawn,
+ * open into the panel below. A tab with `checked` gets a checkbox before
  * its label that turns its view on or off (the Generate passes: Hires fix, ADetailer…); the
  * checkbox is the tab's sibling, not inside the tab button.
  */
@@ -33,7 +35,7 @@ export function Tabs<T extends string>({
   items: TabItem<T>[];
   value: T;
   onChange: (value: T) => void;
-  variant?: "pill" | "line";
+  variant?: "pill" | "line" | "folder";
   label?: string;
   className?: string;
 }) {
@@ -56,7 +58,11 @@ export function Tabs<T extends string>({
         className={cn(
           // Narrow screens: tabs that don't fit scroll sideways instead of being cut off.
           "flex items-center max-lg:scroll-quiet max-lg:overflow-x-auto",
-          variant === "pill" ? "gap-0.5" : "gap-1 border-b border-line",
+          variant === "pill"
+            ? "gap-0.5"
+            : variant === "folder"
+              ? "items-end gap-0.5 border-b border-line"
+              : "gap-1 border-b border-line",
           className,
         )}
       >
@@ -78,11 +84,16 @@ export function Tabs<T extends string>({
               className={cn(
                 "relative inline-flex shrink-0 items-center gap-2 text-sm font-medium transition-colors focus-ring",
                 variant === "pill" ? "h-8 rounded-md px-3" : "h-9 px-3",
+                // The active tab covers the line under it, so it opens into the panel.
+                variant === "folder" &&
+                  (active
+                    ? "-mb-px rounded-t-md border border-line border-b-surface bg-surface"
+                    : "-mb-px rounded-t-md border border-transparent"),
                 checkable && "pl-9",
                 active ? "text-fg" : "text-fg-3 hover:text-fg-2",
               )}
             >
-              {active ? (
+              {active && variant !== "folder" ? (
                 <motion.span
                   layoutId="tab-indicator"
                   transition={snappy}

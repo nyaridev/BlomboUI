@@ -1,14 +1,11 @@
 /**
- * Seed: the seed field (with a new random one and the last run's) beside what happens to it after
- * each run. As in A1111, -1 means random: the field shows -1 while the mode is Randomize, typing
+ * Seed: the seed field beside what happens to it after each run, close together like one control. As in A1111, -1 means random: the field shows -1 while the mode is Randomize, typing
  * a number switches to Fixed, and typing -1 switches back. On its own it's a card; inside a card
  * (`bare`, the default layout's First pass) it's just the row. Batch count and size sit with the
  * size (Resolution).
  */
 
-import { useLive } from "@client/lib/live";
-import { IconButton, SectionTitle, Select, TextField, toast } from "@client/ui";
-import { randomSeed } from "@shared/random";
+import { SectionTitle, Select, TextField } from "@client/ui";
 import type { SeedMode } from "@shared/workflow/manifest";
 import { useState } from "react";
 import { useValue, useValues } from "../state";
@@ -38,9 +35,6 @@ function SeedRow({ seedId }: { seedId: string }) {
   const [seed, setSeed] = useValue<number>(seedId);
   const mode = useValues((s) => s.run.seedMode);
   const setRun = useValues((s) => s.setRun);
-  const last = useLive(
-    (s) => s.queue.jobs.find((j) => j.state === "done" && j.seed !== null)?.seed ?? null,
-  );
   // What's typed while editing ("-", "" or "-12" aren't values yet); the value shows otherwise.
   const [draft, setDraft] = useState<string | null>(null);
   const shown = mode === "random" ? "-1" : String(seed ?? 0);
@@ -55,41 +49,17 @@ function SeedRow({ seedId }: { seedId: string }) {
   };
 
   return (
-    <div className="flex items-end gap-3">
+    <div className="flex items-end gap-1.5">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="text-xs text-fg-2">Seed</span>
-        <div className="flex gap-1.5">
-          <TextField
-            value={draft ?? shown}
-            onChange={(e) => type(e.target.value.trim())}
-            onBlur={() => setDraft(null)}
-            inputMode="numeric"
-            mono
-            className="flex-1"
-            aria-label="Seed (-1 is random)"
-          />
-          <IconButton
-            icon="dice"
-            label="New random seed"
-            variant="secondary"
-            onClick={() => {
-              setSeed(randomSeed());
-              if (mode === "random") setRun({ seedMode: "fixed" });
-            }}
-          />
-          <IconButton
-            icon="undo"
-            label={last !== null ? `Reuse last seed (${last})` : "Reuse last seed (none yet)"}
-            variant="secondary"
-            disabled={last === null}
-            onClick={() => {
-              if (last === null) return;
-              setSeed(last);
-              setRun({ seedMode: "fixed" });
-              toast(`Seed ${last} reused`, "info");
-            }}
-          />
-        </div>
+        <TextField
+          value={draft ?? shown}
+          onChange={(e) => type(e.target.value.trim())}
+          onBlur={() => setDraft(null)}
+          inputMode="numeric"
+          mono
+          aria-label="Seed (-1 is random)"
+        />
       </div>
       <div className="flex w-36 shrink-0 flex-col gap-1">
         <span className="text-xs text-fg-2">After generation</span>

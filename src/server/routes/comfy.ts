@@ -5,14 +5,17 @@ import {
   type ComfyFolderCheck,
   type ComfyModelList,
   FreeMemoryBody,
+  type SamplerLists,
 } from "../../shared/comfy.ts";
 import { MODEL_KINDS, type ModelKind } from "../../shared/constants.ts";
 import { InstallBody, NodeInstallBody, type SlotsResponse } from "../../shared/install.ts";
+import { nodeInputs } from "../../shared/workflow/graph.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ComfyInstaller } from "../services/comfy/installer.ts";
 import type { NodePackInstaller } from "../services/comfy/nodepacks.ts";
 import { findLocal, listSlots } from "../services/comfy/slots.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
+import { KSAMPLER } from "../services/workflows/nodes.ts";
 
 function requireApi(supervisor: ComfySupervisor) {
   const api = supervisor.api;
@@ -112,6 +115,17 @@ export function comfyRoutes(
       kind: kind as ModelKind,
       names: Array.isArray(names) ? names : [],
       available: true,
+    });
+  });
+
+  r.get("/samplers", async (c) => {
+    const info = supervisor.api ? await supervisor.objectInfo() : null;
+    const inputs = info ? nodeInputs(info[KSAMPLER]) : [];
+    const options = (name: string) => inputs.find((i) => i.name === name)?.options ?? [];
+    return c.json<SamplerLists>({
+      samplers: options("sampler_name"),
+      schedulers: options("scheduler"),
+      available: Boolean(info),
     });
   });
 

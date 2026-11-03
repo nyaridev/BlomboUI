@@ -42,6 +42,7 @@ import type {
   ComfyModelList,
   ComfyStatus,
   FreeMemoryBody,
+  SamplerLists,
 } from "@shared/comfy";
 import type { ModelKind } from "@shared/constants";
 import type {
@@ -187,6 +188,7 @@ export const api = {
   comfyFree: (body: Partial<FreeMemoryBody>) => request<{ ok: true }>("POST", "/comfy/free", body),
   comfyRefresh: () => request<{ ok: true }>("POST", "/comfy/refresh"),
   models: (kind: ModelKind) => request<ComfyModelList>("GET", `/comfy/models/${kind}`),
+  samplers: () => request<SamplerLists>("GET", "/comfy/samplers"),
 
   workflows: () => request<WorkflowSummary[]>("GET", "/workflows"),
   workflow: (id: string) => request<WorkflowDetail>("GET", `/workflows/${id}`),

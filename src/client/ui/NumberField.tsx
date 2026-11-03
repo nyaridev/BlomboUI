@@ -1,11 +1,12 @@
 /**
- * NumberField: a typed number input with steppers. Drag on the field (before it has focus) to
- * scrub; click to type; wheel changes the value while focused; arrows step (Shift ×10).
+ * NumberField: a typed number input with steppers. Click to type or select text like any text
+ * box (no drag to scrub: that's ScrubField); wheel changes the value while focused; arrows step
+ * (Shift ×10). Tabbing in selects the whole number.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { formatNumber, parseNumberInput, snap } from "@client/lib/number";
-import { type PointerEvent, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { NumberControlProps } from "./Slider";
 
 export function NumberField({
@@ -23,7 +24,8 @@ export function NumberField({
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(formatNumber(value, step));
   const [focused, setFocused] = useState(false);
-  const drag = useRef<{ x: number; start: number; moved: boolean } | null>(null);
+  // A click puts the caret where you click; only keyboard focus selects the whole number.
+  const pointer = useRef(false);
 
   useEffect(() => {
     if (!focused) setText(formatNumber(value, step));
@@ -52,28 +54,6 @@ export function NumberField({
   const bump = (dir: 1 | -1, big = false) =>
     onChange(snap(value + dir * step * (big ? 10 : 1), step, min, max));
 
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (disabled || focused || e.button !== 0) return;
-    if ((e.target as HTMLElement).closest("button")) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { x: e.clientX, start: value, moved: false };
-  };
-  const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    const d = drag.current;
-    if (!d) return;
-    const dx = e.clientX - d.x;
-    if (!d.moved && Math.abs(dx) < 3) return;
-    d.moved = true;
-    const perPx = step * (e.shiftKey ? 0.25 : 1) * (Math.abs(dx) > 120 ? 2 : 1);
-    onChange(snap(d.start + Math.round(dx / 2) * perPx, step, min, max));
-  };
-  const onPointerUp = () => {
-    const d = drag.current;
-    drag.current = null;
-    if (d && !d.moved) inputRef.current?.focus();
-  };
-
   const h = size === "sm" ? "h-7" : size === "lg" ? "h-10" : "h-8";
 
   return (
@@ -83,14 +63,10 @@ export function NumberField({
         focused
           ? "border-accent-ink/70 ring-2 ring-accent/25"
           : "border-line hover:border-line-strong",
-        !focused && "cursor-ew-resize",
         disabled && "pointer-events-none opacity-45",
         h,
         className,
       )}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
     >
       <input
         ref={inputRef}
@@ -100,9 +76,13 @@ export function NumberField({
         value={text}
         disabled={disabled}
         onChange={(e) => setText(e.target.value)}
+        onPointerDown={() => {
+          pointer.current = true;
+        }}
         onFocus={(e) => {
           setFocused(true);
-          e.currentTarget.select();
+          if (!pointer.current) e.currentTarget.select();
+          pointer.current = false;
         }}
         onBlur={() => {
           setFocused(false);
@@ -119,10 +99,7 @@ export function NumberField({
             bump(e.key === "ArrowUp" ? 1 : -1, e.shiftKey);
           }
         }}
-        className={cn(
-          "min-w-0 flex-1 bg-transparent pl-2.5 font-mono text-sm text-fg outline-none tabular",
-          !focused && "pointer-events-none",
-        )}
+        className="min-w-0 flex-1 bg-transparent pl-2.5 font-mono text-sm text-fg outline-none tabular"
       />
       {unit ? <span className="flex items-center pr-1.5 text-xs text-fg-3">{unit}</span> : null}
       <div className="flex w-5 flex-col border-l border-line">

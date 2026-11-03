@@ -626,6 +626,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <IconButton icon="plus" label="Add" variant="primary" />
             <IconButton icon="trash" label="Delete" variant="danger" />
             <IconButton icon="x" label="Close" size="xs" />
+            <div className="flex h-16 items-stretch">
+              <IconButton icon="chevron-left" label="Previous" size="tall" variant="secondary" />
+            </div>
           </Row>
           <Row label="Generate">
             <button
@@ -851,6 +854,18 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               ]}
             />
           </Row>
+          <Row label="Folder tabs (Generate workspace)">
+            <Tabs
+              variant="folder"
+              value={line}
+              onChange={setLine}
+              items={[
+                { value: "generation", label: "Generation", icon: "sliders" },
+                { value: "checkpoints", label: "Checkpoints", icon: "models" },
+                { value: "loras", label: "LoRAs", icon: "layers" },
+              ]}
+            />
+          </Row>
           <Row label="Line tabs (panels)">
             <Tabs
               variant="line"
@@ -863,9 +878,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               ]}
             />
           </Row>
-          <Row label="Line tabs with checkboxes (passes)">
+          <Row label="Folder tabs with checkboxes (Generate passes)">
             <Tabs
-              variant="line"
+              variant="folder"
               value={pass}
               onChange={setPass}
               items={[

@@ -3,10 +3,12 @@
  * (on the steps Settings → Generate → Preview picks; the last result stays until the first frame).
  * Progress is the old app's bars across the top: the part that's running (its steps, or the
  * percent and ETA when it's the only part), and above it, when stages add parts (hires fix,
- * ADetailer), the whole run with a divider between parts. A finished result shows its size, seed
- * and how long it took. Clicking the image opens it full screen, a middle click opens it in
- * a new tab. A strip under the box shows the last run's images, only when it made more than one,
- * and the shown image's run info (RunInfo) comes after it, kept while the next run goes. The column scrolls with the page.
+ * ADetailer), the whole run with a divider between parts. A finished result shows how long it
+ * took and how fast it went (it/s; images per second when the run made several). Clicking the
+ * image opens it full screen, a middle click opens it in a new tab (while a run goes too, until
+ * its preview covers the last picture). A strip under the box shows the last run's images, only
+ * when it made more than one (centered, arrows on both sides), and the shown image's run info
+ * (RunInfo) comes after it, kept while the next run goes. The column scrolls with the page.
  * Everything comes from the live bus: queue snapshots, step progress and binary preview frames.
  */
 import { Icon } from "@client/icons/Icon";
@@ -37,6 +39,15 @@ const keyOf = (job: Job, img: JobImage) => `${job.id}/${img.subfolder}/${img.fil
 function seconds(job: Job): string | null {
   if (!job.startedAt || !job.finishedAt) return null;
   return `${((Date.parse(job.finishedAt) - Date.parse(job.startedAt)) / 1000).toFixed(1)}s`;
+}
+
+/** Seconds from the first job's start to the last one's end (null if any is missing). */
+function runSeconds(jobs: Job[]): number | null {
+  const starts = jobs.map((j) => (j.startedAt ? Date.parse(j.startedAt) : Number.NaN));
+  const ends = jobs.map((j) => (j.finishedAt ? Date.parse(j.finishedAt) : Number.NaN));
+  if ([...starts, ...ends].some(Number.isNaN)) return null;
+  const span = (Math.max(...ends) - Math.min(...starts)) / 1000;
+  return span > 0 ? span : null;
 }
 
 /** A job's pictures: a script's grid, or ComfyUI's saved images (its previews when it saved none). */
@@ -131,6 +142,14 @@ export function ImageStage() {
   );
   const current = results.length ? (results[selected ? index : results.length - 1] ?? null) : null;
   const [viewing, setViewing] = useState(false);
+  const strip = useRef<HTMLDivElement>(null);
+  // The arrows can pick a thumbnail that's scrolled away: bring it into view.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the selection is the trigger
+  useEffect(() => {
+    strip.current
+      ?.querySelector('[aria-pressed="true"]')
+      ?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selected]);
 
   const lastError = jobs.find((j) => j.state === "error" || j.state === "done");
   const [dismissed, setDismissed] = useState<string | null>(null);
@@ -157,10 +176,26 @@ export function ImageStage() {
   const wait = (progress?.segment ?? 0) === 0 && (firstRun || !previewSettings.waitFirstOnly);
   const drawPreview =
     progress !== null && previewDue(progress.value, progress.max, previewSettings, wait);
+  // While a run goes, the last picture shows until its first preview frame covers it.
+  const [drawnFor, setDrawnFor] = useState<string | null>(null);
+  const lastShows = Boolean(running && current && drawnFor !== running.id);
+  const stepTo = (dir: 1 | -1) => {
+    if (!results.length) return;
+    const next = results[(index + dir + results.length) % results.length];
+    if (next) setSelected(next.key);
+  };
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
-      <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-sunken">
+      <div
+        className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-sunken"
+        onMouseDown={(e) => {
+          if (running && e.button === 1) e.preventDefault();
+        }}
+        onAuxClick={(e) => {
+          if (lastShows && current) middleOpen(e, current);
+        }}
+      >
         {running ? (
           <>
             {current ? (
@@ -175,7 +210,12 @@ export function ImageStage() {
               </div>
             )}
             {previewSettings.show && preview ? (
-              <PreviewCanvas key={running.id} preview={preview} draw={drawPreview} />
+              <PreviewCanvas
+                key={running.id}
+                preview={preview}
+                draw={drawPreview}
+                onDrawn={() => setDrawnFor(running.id)}
+              />
             ) : null}
           </>
         ) : current ? (
@@ -188,7 +228,7 @@ export function ImageStage() {
             }}
             onAuxClick={(e) => middleOpen(e, current)}
             aria-label="Show full screen"
-            className="absolute inset-0 cursor-zoom-in focus-ring"
+            className="absolute inset-0 cursor-default focus-ring"
           >
             {/* One element for every result: the last picture stays up while the next loads. */}
             <img
@@ -234,37 +274,56 @@ export function ImageStage() {
           </div>
         ) : null}
 
-        {current && !running ? <ResultInfo job={current.job} /> : null}
+        {current && !running ? <ResultInfo job={current.job} run={results} /> : null}
       </div>
 
       {results.length > 1 && !running ? (
-        <div className="scroll-quiet flex shrink-0 gap-1.5 overflow-x-auto pb-0.5">
-          {results.map((r) => (
-            <button
-              key={r.key}
-              type="button"
-              onClick={() => setSelected(r.key)}
-              onMouseDown={(e) => {
-                if (e.button === 1) e.preventDefault();
-              }}
-              onAuxClick={(e) => middleOpen(e, r)}
-              aria-label={`Show result, seed ${r.job.seed ?? "unknown"}`}
-              aria-pressed={r.key === current?.key}
-              className={cn(
-                "relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 bg-surface transition-colors focus-ring",
-                r.key === current?.key
-                  ? "border-accent"
-                  : "border-transparent opacity-75 hover:opacity-100",
-              )}
-            >
-              <img
-                src={r.url}
-                alt=""
-                loading="lazy"
-                className="absolute inset-0 h-full w-full object-cover"
-              />
-            </button>
-          ))}
+        <div className="flex h-16 items-stretch gap-1.5">
+          <IconButton
+            icon="chevron-left"
+            label="Previous image"
+            size="tall"
+            variant="secondary"
+            onClick={() => stepTo(-1)}
+          />
+          <div
+            ref={strip}
+            className="scroll-quiet flex min-w-0 flex-1 justify-center-safe gap-1.5 overflow-x-auto"
+          >
+            {results.map((r) => (
+              <button
+                key={r.key}
+                type="button"
+                onClick={() => setSelected(r.key)}
+                onMouseDown={(e) => {
+                  if (e.button === 1) e.preventDefault();
+                }}
+                onAuxClick={(e) => middleOpen(e, r)}
+                aria-label={`Show result, seed ${r.job.seed ?? "unknown"}`}
+                aria-pressed={r.key === current?.key}
+                className={cn(
+                  "relative h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 bg-surface transition-colors focus-ring",
+                  r.key === current?.key
+                    ? "border-accent"
+                    : "border-transparent opacity-75 hover:opacity-100",
+                )}
+              >
+                <img
+                  src={r.url}
+                  alt=""
+                  loading="lazy"
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+          <IconButton
+            icon="chevron-right"
+            label="Next image"
+            size="tall"
+            variant="secondary"
+            onClick={() => stepTo(1)}
+          />
         </div>
       ) : null}
 
@@ -290,35 +349,35 @@ export function ImageStage() {
   );
 }
 
-/** Size, seed and time of a finished result, small in the corner. */
-function ResultInfo({ job }: { job: Job }) {
-  const time = seconds(job);
+/**
+ * How long a finished result took, small in the corner: the run's time and images per second
+ * when it made several, else the job's; the sampling speed (it/s, time per part on hover).
+ */
+function ResultInfo({ job, run }: { job: Job; run: Result[] }) {
   const rate = averageRate(job.timings);
+  const many = run.length > 1 ? runSeconds(run.map((r) => r.job)) : null;
+  const time = many !== null ? `${many.toFixed(1)}s` : seconds(job);
+  const perSecond = many ? `${(run.length / many).toFixed(2)} img/s` : null;
   return (
     <div className="pointer-events-auto absolute bottom-3 left-3 flex items-center gap-2 rounded-md bg-black/55 px-2 py-1 font-mono text-2xs text-white/85 backdrop-blur-[2px]">
-      {job.width && job.height ? (
-        <span>
-          {job.width}×{job.height}
-        </span>
-      ) : null}
-      {job.seed !== null ? (
+      {time ? <span>{time}</span> : null}
+      {perSecond ? (
         <>
           <span className="text-white/40">·</span>
-          <span>seed {job.seed}</span>
+          <span>{perSecond}</span>
         </>
       ) : null}
-      {time ? (
+      {rate ? (
         <>
           <span className="text-white/40">·</span>
           {job.timings.length ? (
             <Tooltip content={<Timings job={job} />}>
               <span className="cursor-default underline decoration-white/40 decoration-dotted underline-offset-2">
-                {time}
-                {rate ? ` · ${rate.toFixed(2)} it/s` : ""}
+                {rate.toFixed(2)} it/s
               </span>
             </Tooltip>
           ) : (
-            <span>{time}</span>
+            <span>{rate.toFixed(2)} it/s</span>
           )}
         </>
       ) : null}
@@ -365,7 +424,16 @@ function EmptyStage() {
  * The live preview. Frames arrive every step but are drawn only when `draw` says so; the canvas
  * keeps the last one in between (the live client frees each frame once the next one arrives).
  */
-function PreviewCanvas({ preview, draw }: { preview: LivePreview; draw: boolean }) {
+function PreviewCanvas({
+  preview,
+  draw,
+  onDrawn,
+}: {
+  preview: LivePreview;
+  draw: boolean;
+  /** The first frame is on screen (it now covers the last picture). */
+  onDrawn: () => void;
+}) {
   const ref = useRef<HTMLCanvasElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: only a new frame draws; `draw` is read with it
   useEffect(() => {
@@ -377,6 +445,7 @@ function PreviewCanvas({ preview, draw }: { preview: LivePreview; draw: boolean 
       canvas.height = preview.bitmap.height;
     }
     ctx.drawImage(preview.bitmap, 0, 0);
+    if (!drawn) onDrawn();
     setDrawn(true);
   }, [preview]);
   // Clear until the first frame, so the last result shows through; then it covers it fully.

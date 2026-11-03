@@ -129,7 +129,7 @@ export function GenerateView() {
       <motion.div variants={item} className="flex flex-none flex-col">
         <div className="flex items-center gap-3">
           <Tabs
-            variant="line"
+            variant="folder"
             value={tab}
             onChange={changeTab}
             label="Workspace"
@@ -155,7 +155,11 @@ export function GenerateView() {
         {tab === "generation" ? (
           <div className="flex flex-col gap-3 pt-3">
             <AnimatePresence>{customizing ? <CustomizeBar /> : null}</AnimatePresence>
-            <div ref={row} className="flex items-stretch pb-3 max-lg:flex-col-reverse max-lg:gap-3">
+            {/* One lighter panel holds both sides. */}
+            <div
+              ref={row}
+              className="mb-3 flex items-stretch rounded-lg border border-line bg-surface p-3 max-lg:flex-col-reverse max-lg:gap-3"
+            >
               <div
                 data-tour="params"
                 className="min-w-0 shrink-0 max-lg:w-full!"

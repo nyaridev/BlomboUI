@@ -1,11 +1,13 @@
 /**
  * Size, the old app's layout: Raw / Scaler / Set on top, then the size controls for that mode,
  * the swap button, and batch count and size beside them. Raw is width and height; Scaler an
- * aspect and megapixels (worked out from the current size, so nothing extra is saved); Set a
+ * aspect (buttons with the shape drawn on them) and megapixels, worked out from the current size
+ * so nothing extra is saved; Set a
  * list of known-good resolutions turned horizontal or vertical. The mode is a setting. On its
  * own it's a card; inside a card (`bare`, the default layout's First pass) it's just the rows.
  */
 import { Icon } from "@client/icons/Icon";
+import { cn } from "@client/lib/cn";
 import { useSettings, useUpdateSettings } from "@client/lib/queries";
 import { Field, IconButton, SectionTitle, Segmented, Select, Slider } from "@client/ui";
 import { GenerateSettings } from "@shared/settings";
@@ -113,15 +115,36 @@ function ResolutionRows({
       </>
     ) : (
       <>
-        <Field label="Aspect">
-          <Select
-            value={scaler.aspect}
-            onChange={(aspect) => setSize(sizeFromScaler(aspect, scaler.megapixels))}
-            options={ASPECTS.map((a) => ({ value: a.id, label: a.label }))}
-            label="Aspect"
-            className="w-full"
-          />
-        </Field>
+        <div role="group" aria-label="Aspect" className="flex flex-wrap gap-1">
+          {ASPECTS.map((a) => {
+            const on = scaler.aspect === a.id;
+            const scale = 14 / Math.max(a.w, a.h);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                title={a.label}
+                aria-pressed={on}
+                onClick={() => setSize(sizeFromScaler(a.id, scaler.megapixels))}
+                className={cn(
+                  "flex h-7 items-center gap-1.5 rounded-sm border px-1.5 transition-colors focus-ring",
+                  on
+                    ? "border-accent/60 bg-accent/12 text-fg"
+                    : "border-transparent text-fg-3 hover:bg-field hover:text-fg-2",
+                )}
+              >
+                <span
+                  className={cn(
+                    "rounded-[2px] border-[1.5px]",
+                    on ? "border-accent-ink bg-accent/25" : "border-current",
+                  )}
+                  style={{ width: a.w * scale, height: a.h * scale }}
+                />
+                <span className="font-mono text-[10px] tabular">{a.id}</span>
+              </button>
+            );
+          })}
+        </div>
         <Slider
           label="Megapixels"
           value={scaler.megapixels}
@@ -142,7 +165,7 @@ function ResolutionRows({
           <span className="font-mono text-xs text-fg-3 tabular">{shown({ w, h })}</span>
         ) : null}
       </div>
-      <div className="grid grid-cols-[minmax(0,7fr)_auto_minmax(0,3fr)] items-center gap-x-5 gap-y-3">
+      <div className="grid grid-cols-[minmax(0,7fr)_auto_minmax(0,3fr)] items-center gap-x-3 gap-y-3">
         <div className="flex min-w-0 flex-col gap-2">{sizeControls}</div>
         <IconButton
           icon="swap-vertical"
@@ -150,7 +173,7 @@ function ResolutionRows({
           variant="secondary"
           onClick={() => setSize({ w: h, h: w })}
         />
-        <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex min-w-0 flex-col gap-2 pl-2">
           <Slider
             label="Batch count"
             value={count}

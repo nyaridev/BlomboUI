@@ -24,6 +24,7 @@ import {
   type ParamBlock,
 } from "@shared/layout/schema";
 import type { Binding } from "@shared/workflow/manifest";
+import { useChoiceFilter } from "../hiddenChoices";
 import { modelDisplayName, samplerGroup, samplerLabel, schedulerLabel } from "../labels";
 import { useValue } from "../state";
 
@@ -56,6 +57,13 @@ function numberPresets(b: Binding): number[] {
 export function ParamControl({ binding, block }: { binding: Binding; block: ParamBlock }) {
   const [value, setValue] = useValue<unknown>(binding.id);
   const family = bindingFamily(binding);
+  const shown = useChoiceFilter(
+    binding.role === "sampler.name"
+      ? "sampler"
+      : binding.role === "sampler.scheduler"
+        ? "scheduler"
+        : null,
+  );
   const style = block.control ?? defaultStyle(family);
   const size = block.size ?? "md";
   const label = block.label === "hidden" ? undefined : (block.title ?? binding.label);
@@ -147,8 +155,9 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
   }
 
   if (family === "enum") {
-    const options = binding.options ?? [];
-    const v = typeof value === "string" ? value : (options[0] ?? "");
+    const all = binding.options ?? [];
+    const v = typeof value === "string" ? value : (all[0] ?? "");
+    const options = shown(all, v);
     const set = (x: string) => setValue(x);
     let control: React.ReactNode;
     if (style === "segmented") {

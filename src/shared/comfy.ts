@@ -92,6 +92,14 @@ export const ComfyModelList = z.object({
 });
 export type ComfyModelList = z.infer<typeof ComfyModelList>;
 
+/** GET /api/comfy/samplers: KSampler's sampler and scheduler choices (empty while it's down). */
+export const SamplerLists = z.object({
+  samplers: z.array(z.string()),
+  schedulers: z.array(z.string()),
+  available: z.boolean(),
+});
+export type SamplerLists = z.infer<typeof SamplerLists>;
+
 /** Where a ComfyUI output file lives, as ComfyUI's /view endpoint names it. */
 export const ComfyFileRef = z.object({
   filename: z.string().min(1),

@@ -28,6 +28,7 @@ import {
 } from "@shared/workflow/stages";
 import { type ComponentProps, createContext, useContext } from "react";
 import { useModelsNav } from "../../../models/nav";
+import { useChoiceFilter } from "../../hiddenChoices";
 import { samplerLabel } from "../../labels";
 import { PromptEditor } from "../../PromptEditor";
 import { useValues } from "../../state";
@@ -226,7 +227,8 @@ export function InheritChoice({
   fallback?: string;
 }) {
   const base = useBaseValue(field);
-  const options = base.options ?? choices ?? [settings[field]];
+  const shownChoices = useChoiceFilter(field);
+  const options = shownChoices(base.options ?? choices ?? [settings[field]], settings[field]);
   const shown = typeof base.value === "string" ? base.value : (fallback ?? settings[field]);
   const label_ = (v: string) => (field === "sampler" ? samplerLabel(v) : v);
   return (

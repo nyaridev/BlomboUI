@@ -35,6 +35,8 @@ export const LORA_STACK_CLASSES = new Set(["Power Lora Loader (rgthree)"]);
 
 /** What the compiler inserts when a graph has no LoRA stack of its own. */
 export const LORA_LOADER = "LoraLoader";
+/** Its sampler_name and scheduler choices are ComfyUI's lists (Settings → Generate hides some). */
+export const KSAMPLER = "KSampler";
 export const LORA_LOADER_MODEL_ONLY = "LoraLoaderModelOnly";
 
 /** Output nodes recognized without object_info (with it, `output_node: true` decides). */

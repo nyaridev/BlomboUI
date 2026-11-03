@@ -43,7 +43,7 @@ function PromptField({
   const text = typeof value === "string" ? value : "";
   const editor = useRef<PromptEditorHandle | null>(null);
   // No label above the box (the placeholder says which is which); the token count and tools
-  // float in its top-right corner while the pointer is over it.
+  // sit on its bottom-right border while the pointer is over it, clear of the text.
   return (
     <div className="group/prompt relative">
       <PromptEditor
@@ -56,7 +56,7 @@ function PromptField({
         className={className}
         handle={editor}
       />
-      <div className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-sm bg-surface-3 pl-1.5 opacity-0 shadow-pop transition-opacity group-hover/prompt:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+      <div className="absolute right-2 bottom-0 z-10 flex translate-y-1/2 items-center gap-0.5 rounded-sm border border-line bg-surface-3 pl-1.5 opacity-0 shadow-pop transition-opacity group-hover/prompt:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
         <TokenCount text={text} />
         {tools ? (
           <>

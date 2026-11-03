@@ -94,7 +94,7 @@ export function Splitter({
       }}
       onDoubleClick={onReset}
       className={cn(
-        "group/split flex w-3 shrink-0 cursor-col-resize touch-none justify-center self-stretch rounded-xs focus-ring",
+        "group/split flex w-6 shrink-0 cursor-col-resize touch-none justify-center self-stretch rounded-xs focus-ring",
         className,
       )}
     >

@@ -2,7 +2,7 @@
 import type { BrowseFilter, CivitaiPage } from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
-import type { GalleryPage, GalleryQueryInput } from "@shared/gallery";
+import type { GalleryPage, GalleryQueryInput, ImageDetails } from "@shared/gallery";
 import type { JobHistoryPage, JobHistoryQueryInput, SaveSnippetBody } from "@shared/history";
 import type { LocalModel, ModelList, SaveModelInfoBody } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
@@ -30,6 +30,7 @@ export const qk = {
   workflow: (profileId: string | null, id: string | null) => ["workflow", profileId, id] as const,
   /** Model lists come from ComfyUI and change when it rescans. */
   models: (kind: ModelKind) => ["models", kind] as const,
+  samplers: ["comfy", "samplers"] as const,
   modelsAll: ["models"] as const,
   wildcards: (profileId: string | null) => ["wildcards", profileId] as const,
   wildcardTree: (profileId: string | null) => ["wildcard-tree", profileId] as const,
@@ -296,6 +297,11 @@ export function useModels(kind: ModelKind | null) {
   });
 }
 
+/** ComfyUI's sampler and scheduler names (Settings → Generate lists them to hide some). */
+export function useSamplerLists() {
+  return useQuery({ queryKey: qk.samplers, queryFn: api.samplers, staleTime: 5 * 60_000 });
+}
+
 export function useWildcards() {
   const profileId = useSession((s) => s.profileId);
   return useQuery({
@@ -430,6 +436,10 @@ export function useFavorite() {
               items: p.items.map((i) => (set.has(i.id) ? { ...i, favorite } : i)),
             })),
           },
+      );
+      qc.setQueriesData<ImageDetails>(
+        { queryKey: [...qk.gallery(useSession.getState().profileId), "image"] },
+        (old) => (old && set.has(old.id) ? { ...old, favorite } : old),
       );
     },
     // The live bus refreshes the lists once the server has it; a failure puts them back.

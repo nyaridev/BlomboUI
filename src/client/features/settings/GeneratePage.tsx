@@ -4,9 +4,10 @@
  * autocomplete, where the prompt editor reads it). Saved to this profile.
  */
 import { useGoToView } from "@client/lib/hooks";
-import { useLayouts, useSettings, useUpdateSettings } from "@client/lib/queries";
-import { Button, Field, Segmented, Select, Slider, Switch } from "@client/ui";
+import { useLayouts, useSamplerLists, useSettings, useUpdateSettings } from "@client/lib/queries";
+import { Button, Checkbox, Field, Segmented, Select, Slider, Switch } from "@client/ui";
 import { type PreviewSettings, WEIGHT_STEPS } from "@shared/settings";
+import { samplerLabel, schedulerLabel } from "../generate/labels";
 import { PageHeader, SettingsSection } from "./common";
 
 export function GeneratePage() {
@@ -26,6 +27,7 @@ export function GeneratePage() {
   const setPreview = (patch: Partial<PreviewSettings>) =>
     update.mutate({ generate: { preview: patch } });
   const off = !(preview?.show ?? true);
+  const samplers = useSamplerLists();
   return (
     <>
       <PageHeader title="Generate" />
@@ -131,6 +133,26 @@ export function GeneratePage() {
             </label>
           </Field>
         </SettingsSection>
+        <SettingsSection title="Samplers and schedulers" icon="sliders">
+          <ChoiceList
+            label="Samplers"
+            names={samplers.data?.samplers ?? []}
+            hidden={settings?.generate.hiddenSamplers ?? []}
+            format={samplerLabel}
+            loading={samplers.isLoading}
+            available={samplers.data?.available ?? true}
+            onChange={(hiddenSamplers) => update.mutate({ generate: { hiddenSamplers } })}
+          />
+          <ChoiceList
+            label="Schedulers"
+            names={samplers.data?.schedulers ?? []}
+            hidden={settings?.generate.hiddenSchedulers ?? []}
+            format={schedulerLabel}
+            loading={samplers.isLoading}
+            available={samplers.data?.available ?? true}
+            onChange={(hiddenSchedulers) => update.mutate({ generate: { hiddenSchedulers } })}
+          />
+        </SettingsSection>
         <SettingsSection title="Prompts" icon="text">
           <Field
             label="Weight step"
@@ -149,5 +171,62 @@ export function GeneratePage() {
         </SettingsSection>
       </div>
     </>
+  );
+}
+
+/**
+ * One of ComfyUI's lists as checkboxes: unticked ones are hidden from the Generate pickers.
+ * Names saved as hidden that this ComfyUI doesn't have stay hidden (another ComfyUI may).
+ */
+function ChoiceList({
+  label,
+  names,
+  hidden,
+  format,
+  loading,
+  available,
+  onChange,
+}: {
+  label: string;
+  names: string[];
+  hidden: string[];
+  format: (name: string) => string;
+  loading: boolean;
+  available: boolean;
+  onChange: (hidden: string[]) => void;
+}) {
+  const off = new Set(hidden);
+  const shownCount = names.filter((n) => !off.has(n)).length;
+  return (
+    <Field
+      label={label}
+      hint={
+        !available
+          ? "Start ComfyUI to see its list."
+          : `Untick the ones you don't use: they leave the pickers on Generate and in the stages. ${shownCount} of ${names.length} shown.`
+      }
+      action={
+        hidden.length ? (
+          <Button variant="ghost" size="sm" onClick={() => onChange([])}>
+            Show all
+          </Button>
+        ) : null
+      }
+    >
+      {loading ? null : names.length ? (
+        <div className="grid grid-cols-3 gap-x-4 gap-y-1.5 rounded-md border border-line bg-sunken p-3 max-lg:grid-cols-2">
+          {names.map((n) => (
+            <Checkbox
+              key={n}
+              checked={!off.has(n)}
+              onCheckedChange={(on) =>
+                onChange(on ? hidden.filter((h) => h !== n) : [...hidden, n])
+              }
+              label={<span title={n}>{format(n)}</span>}
+            />
+          ))}
+        </div>
+      ) : null}
+    </Field>
   );
 }

@@ -59,6 +59,7 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
 /** Keys that work inside one view; shown in the list, not rebindable. */
 export const FIXED_SHORTCUTS: Array<{ label: string; where: string; keys: string }> = [
   { label: "Suggestions", where: "Prompt editor", keys: "Ctrl+Space" },
+  { label: "Insert the selected suggestion", where: "Prompt editor", keys: "Tab / Enter" },
   { label: "Weight up / down", where: "Prompt editor", keys: "Ctrl+↑ / Ctrl+↓" },
   { label: "Previous / next image", where: "Lightbox", keys: "← / →" },
   { label: "Favorite", where: "Lightbox", keys: "F" },

@@ -6,6 +6,7 @@
  */
 import { api } from "@client/lib/api";
 import {
+  acceptCompletion,
   autocompletion,
   type Completion,
   type CompletionContext,
@@ -312,6 +313,8 @@ export function promptAssist(get: () => AssistSettings | null): Extension[] {
       keymap.of([
         { key: "ArrowDown", run: moveSelection(1) },
         { key: "ArrowUp", run: moveSelection(-1) },
+        // Tab inserts the highlighted suggestion too; with no list open it moves focus as usual.
+        { key: "Tab", run: acceptCompletion },
       ]),
     ),
     autocompletion({

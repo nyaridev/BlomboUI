@@ -20,6 +20,12 @@ const variants: Record<ButtonVariant, string> = {
   danger: "border border-red/35 bg-red/12 text-red-ink hover:bg-red/22",
 };
 
+/** A toggle that's on: a tinted fill. Orange only for toggles in the Generate stack. */
+const pressedLooks = {
+  accent: "border border-accent/60 bg-accent/15 text-fg hover:bg-accent/22",
+  generate: "border border-generate/50 bg-generate/15 text-generate-ink hover:bg-generate/22",
+};
+
 const sizes: Record<ButtonSize, string> = {
   sm: "h-7 rounded-sm px-2.5 text-xs",
   md: "h-8 rounded-md px-3 text-sm",
@@ -32,6 +38,9 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: IconName;
   iconRight?: IconName;
   loading?: boolean;
+  /** Makes it a toggle (aria-pressed); when on it shows `tone`'s tinted fill. */
+  pressed?: boolean;
+  tone?: keyof typeof pressedLooks;
   ref?: Ref<HTMLButtonElement>;
 }
 
@@ -41,6 +50,8 @@ export function Button({
   icon,
   iconRight,
   loading,
+  pressed,
+  tone = "accent",
   className,
   children,
   disabled,
@@ -52,7 +63,8 @@ export function Button({
     <button
       type={type}
       disabled={disabled || loading}
-      className={cn(base, variants[variant], sizes[size], className)}
+      aria-pressed={pressed}
+      className={cn(base, pressed ? pressedLooks[tone] : variants[variant], sizes[size], className)}
       {...rest}
     >
       {loading ? <Spinner size={iconSize} /> : icon ? <Icon name={icon} size={iconSize} /> : null}

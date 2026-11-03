@@ -6,6 +6,7 @@
 
 import { cn } from "@client/lib/cn";
 import { useSettings } from "@client/lib/queries";
+import { ResizeGrip } from "@client/ui";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { EditorState, Transaction } from "@codemirror/state";
 import {
@@ -156,6 +157,7 @@ export function PromptEditor({
   onSubmit?: () => void;
   handle?: RefObject<PromptEditorHandle | null>;
 }) {
+  const box = useRef<HTMLDivElement>(null);
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
@@ -244,13 +246,21 @@ export function PromptEditor({
 
   return (
     <div
-      ref={host}
+      ref={box}
       className={cn(
-        "min-h-0 resize-y overflow-hidden rounded-md border border-line bg-field transition-[border-color,box-shadow]",
+        "relative min-h-0 rounded-md border border-line bg-field transition-[border-color,box-shadow]",
         "hover:border-line-strong focus-within:border-accent-ink/60 focus-within:ring-2 focus-within:ring-accent/20",
         className,
       )}
       style={{ minHeight: `${minRows * 22 + 20}px` }}
-    />
+    >
+      <div ref={host} className="h-full overflow-hidden rounded-[inherit]" />
+      <ResizeGrip
+        target={box}
+        label={`Resize ${label.toLowerCase()}`}
+        // The text's height plus the box's top and bottom border.
+        fitSize={() => ({ height: (view.current?.contentHeight ?? 0) + 2 })}
+      />
+    </div>
   );
 }

@@ -3,7 +3,7 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { bouncy } from "@client/lib/motion";
-import { Button, IconButton, Kbd, NumberField, Switch, Tooltip } from "@client/ui";
+import { Button, IconButton, Kbd, NumberField, Tooltip } from "@client/ui";
 import { estimateTokens } from "@shared/prompt/tokenize";
 import { motion } from "motion/react";
 import { useMemo, useRef } from "react";
@@ -120,7 +120,7 @@ export function GenerateActions() {
   const scripted = script.plan ?? (script.error ? true : null);
 
   return (
-    <div className="flex w-[232px] shrink-0 flex-col gap-2 max-lg:w-full">
+    <div className="flex w-[288px] shrink-0 flex-col gap-2 max-lg:w-full">
       <motion.button
         type="button"
         whileTap={{ scale: 0.97 }}
@@ -128,7 +128,7 @@ export function GenerateActions() {
         disabled={!ready}
         onClick={() => void generate()}
         className={cn(
-          "group relative flex h-[92px] flex-col items-center justify-center gap-1 overflow-hidden rounded-md text-on-generate focus-ring disabled:opacity-50",
+          "group relative flex h-[114px] flex-col items-center justify-center gap-1 overflow-hidden rounded-md text-on-generate focus-ring disabled:opacity-50",
           "bg-generate transition-[filter] hover:brightness-110",
         )}
       >
@@ -138,12 +138,10 @@ export function GenerateActions() {
             style={{ width: `${progress * 100}%` }}
           />
         ) : null}
-        <span className="relative flex items-center gap-2 text-lg font-semibold tracking-tight">
-          <Icon
-            name={scripted ? "layout-grid" : busy ? "plus" : "sparkle"}
-            size={20}
-            strokeWidth={2}
-          />
+        <span className="relative flex items-center gap-2 text-xl font-semibold tracking-tight">
+          {scripted || busy ? (
+            <Icon name={scripted ? "layout-grid" : "plus"} size={20} strokeWidth={2} />
+          ) : null}
           {scripted ? "Run script" : busy ? "Add to queue" : "Generate"}
         </span>
         <span className="relative flex items-center gap-1.5 text-xs text-white/80">
@@ -189,28 +187,26 @@ export function GenerateActions() {
           </Button>
         </Tooltip>
       </div>
-      <div className="flex items-center gap-2">
+      <div className="grid grid-cols-2 gap-1.5">
         <NumberField
           value={count}
           onChange={(n) => setRun({ count: n })}
           min={1}
           max={100}
           label="Runs"
-          size="sm"
-          className="w-[84px]"
-          unit="×"
+          unit={count === 1 ? "run" : "runs"}
         />
-        <span className="text-xs text-fg-3">runs</span>
-        <span className="ml-auto flex items-center gap-1.5 text-xs text-fg-3">
-          <Icon name="refresh" size={13} /> Loop
-          <Switch
-            size="sm"
-            checked={loop}
-            onCheckedChange={(on) => void setLoop(on, serverLoop)}
-            label="Generate forever"
+        <Tooltip content="Keep generating until you turn it off or cancel">
+          <Button
+            icon="refresh"
+            pressed={loop}
             tone="generate"
-          />
-        </span>
+            onClick={() => void setLoop(!loop, serverLoop)}
+            className="w-full"
+          >
+            Loop
+          </Button>
+        </Tooltip>
       </div>
     </div>
   );

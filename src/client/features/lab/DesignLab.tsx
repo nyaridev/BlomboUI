@@ -42,6 +42,8 @@ import {
   ProgressBar,
   ProgressRing,
   PropertyList,
+  type ResizeAxis,
+  ResizeGrip,
   ScrubField,
   Segmented,
   Select,
@@ -66,7 +68,7 @@ import {
 import type { BatchRun } from "@shared/batch";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import { Link } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 
 const SECTIONS = [
   ["brand", "Brand"],
@@ -171,6 +173,34 @@ function useSampleImages(): CarouselImage[] {
     );
   }, []);
   return images;
+}
+
+/** A box with a ResizeGrip, for the Lab: its text decides what a double-click fits to. */
+function GripBox({ axis }: { axis: ResizeAxis }) {
+  const box = useRef<HTMLDivElement>(null);
+  const text = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      ref={box}
+      className="relative h-20 w-44 overflow-hidden rounded-md border border-line bg-field"
+    >
+      <div ref={text} className="w-max max-w-80 p-2.5 text-xs text-fg-2">
+        {axis === "y" ? "Height only: the grip sits bottom center." : null}
+        {axis === "x" ? "Width only: the grip sits on the right edge." : null}
+        {axis === "both" ? "Both ways: the grip sits in the corner." : null}
+        <br />
+        Double-click it to fit this text, or back to the default size.
+      </div>
+      <ResizeGrip
+        target={box}
+        axis={axis}
+        fitSize={() => ({
+          width: (text.current?.offsetWidth ?? 0) + 2,
+          height: (text.current?.offsetHeight ?? 0) + 2,
+        })}
+      />
+    </div>
+  );
 }
 
 function Section({
@@ -501,6 +531,17 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               Continue
             </Button>
           </Row>
+          <Row label="Toggles (pressed)">
+            <Button icon="eye" pressed>
+              On
+            </Button>
+            <Button icon="eye-off" pressed={false}>
+              Off
+            </Button>
+            <Button icon="refresh" pressed tone="generate">
+              Loop (Generate only)
+            </Button>
+          </Row>
           <Row label="Icon buttons">
             <IconButton icon="unload-models" label="Unload models" />
             <IconButton icon="free-cache" label="Free cache" />
@@ -516,9 +557,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               type="button"
               className="flex h-[72px] w-[220px] flex-col items-center justify-center gap-1 rounded-md bg-generate text-on-generate transition-[filter] hover:brightness-110 focus-ring"
             >
-              <span className="flex items-center gap-2 text-lg font-semibold">
-                <Icon name="sparkle" size={19} strokeWidth={2} /> Generate
-              </span>
+              <span className="text-lg font-semibold">Generate</span>
               <span className="text-xs text-white/80">Ctrl + Enter</span>
             </button>
           </Row>
@@ -559,6 +598,11 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               <TextField placeholder="Left-aligned label layout" />
             </Field>
           </div>
+          <Row label="Resize grip (drag, double-click fits)">
+            <GripBox axis="y" />
+            <GripBox axis="x" />
+            <GripBox axis="both" />
+          </Row>
         </Section>
 
         <Section

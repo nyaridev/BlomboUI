@@ -36,6 +36,8 @@ export const AppearanceSettings = z.object({
   /** Family name for the "custom" choice, as installed on this computer. */
   customFont: z.string().trim().max(80).default(""),
   motion: z.enum(MOTION_PREFS).default("system"),
+  /** Stronger text, borders and fields in every theme (images stay as they are). */
+  contrast: z.boolean().default(false),
 });
 
 export const GallerySettings = z.object({

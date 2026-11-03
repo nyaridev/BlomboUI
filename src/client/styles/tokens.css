@@ -230,6 +230,37 @@
 }
 
 /*
+ * High contrast (Settings → Appearance), on <html data-contrast="high">. It works on every theme
+ * by mixing from the theme's own tokens, so each keeps its tint: text moves toward the extreme,
+ * borders and fields away from the surface. Only these tokens change, never images. Theme
+ * previews nested in the page ([data-theme] on a swatch) follow it too.
+ */
+[data-contrast="high"],
+[data-contrast="high"] [data-theme] {
+  --fg: color-mix(in oklab, var(--surface) 6%, #ffffff);
+  --fg-2: color-mix(in oklab, var(--fg) 90%, var(--bg));
+  --fg-3: color-mix(in oklab, var(--fg) 78%, var(--bg));
+  --fg-4: color-mix(in oklab, var(--fg) 64%, var(--bg));
+  --line: color-mix(in oklab, var(--fg) 42%, var(--surface));
+  --line-strong: color-mix(in oklab, var(--fg) 56%, var(--surface));
+  --field: color-mix(in oklab, var(--fg) 13%, var(--surface));
+  --field-hover: color-mix(in oklab, var(--fg) 19%, var(--surface));
+}
+[data-contrast="high"][data-theme="light"],
+[data-contrast="high"] [data-theme="light"] {
+  --fg: color-mix(in oklab, var(--bg) 6%, #000000);
+  /* dark text bunches up fast on light, so its steps are wider */
+  --fg-2: color-mix(in oklab, var(--fg) 80%, var(--bg));
+  --fg-3: color-mix(in oklab, var(--fg) 66%, var(--bg));
+  --fg-4: color-mix(in oklab, var(--fg) 54%, var(--bg));
+  --line: color-mix(in oklab, var(--fg) 36%, var(--surface));
+  --line-strong: color-mix(in oklab, var(--fg) 50%, var(--surface));
+  /* light fields stay white; the stronger border sets them apart */
+  --field: var(--surface-2);
+  --field-hover: color-mix(in oklab, var(--fg) 6%, var(--surface-2));
+}
+
+/*
  * UI font (Settings → Appearance). Utilities and the body read --font-ui through --font-sans,
  * so switching is one attribute on <html data-font>. Geist and Inter are bundled; Segoe UI and
  * the system font come from the computer. "custom" sets --font-ui inline on <html>.

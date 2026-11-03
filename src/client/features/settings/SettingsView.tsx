@@ -245,6 +245,20 @@ function Appearance() {
             ))}
           </div>
         </Field>
+        <Field
+          label="High contrast"
+          layout="left"
+          hint="Brighter text, stronger borders and clearer fields in every theme. Images stay as they are."
+        >
+          <Switch
+            checked={settings?.appearance.contrast ?? false}
+            onCheckedChange={(contrast) => {
+              preview({ contrast });
+              updateSettings.mutate({ appearance: { contrast } });
+            }}
+            label="High contrast"
+          />
+        </Field>
         <FontPicker
           font={settings?.appearance.font ?? "geist"}
           custom={settings?.appearance.customFont ?? ""}

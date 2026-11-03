@@ -48,7 +48,8 @@ export function ProfileScreen() {
   useEffect(() => preloadShell(), []);
 
   useEffect(() => {
-    if (!wizard) setTheme({ theme: "blombo", accent: "blue", font: "geist", customFont: "" });
+    if (!wizard)
+      setTheme({ theme: "blombo", accent: "blue", font: "geist", customFont: "", contrast: false });
   }, [wizard, setTheme]);
 
   const open = async (p: Profile) => {

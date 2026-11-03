@@ -37,6 +37,7 @@ All raw colors live in `src/client/styles/tokens.css`. Tailwind sees only tokens
 ## Type
 
 - **Geist Variable** for UI by default, **Geist Mono Variable** for numbers, paths, seeds and code. Both are bundled with `@fontsource`, so they work offline.
+- **High contrast is a setting** (Settings → Appearance → High contrast). It sets `<html data-contrast="high">`, and one block at the end of the themes in `tokens.css` recomputes `fg`…`fg-4`, `line`, `line-strong`, `field` and `field-hover` with `color-mix()` from the theme's own `surface`, `bg` and `fg`, so it works on every theme and keeps its tint. Light keeps white fields and gets darker borders. Images, palette inks and the accent are untouched. Components need nothing: anything built on tokens follows.
 - **The UI font is a setting** (Settings → Appearance → Font): Geist, Inter (bundled), Segoe UI, the system font, or any font installed on the computer. It's one token, `--font-ui` in `tokens.css`, switched by `<html data-font>` (a custom family is set inline); `font-sans` and the body read it, so everything follows at once. Mono never changes. Components never name a font family; use `font-sans` / `font-mono`.
 - Scale (Tailwind names): `2xs` 11 · `xs` 12 · `sm` 13 (UI base) · `base` 14 · `lg` 16 · `xl` 20 · `2xl` 26 · `3xl` 34.
 - `label-caps`: 11 px, 600, uppercase, 0.08em tracking, `fg-3`. For group titles inside panels.

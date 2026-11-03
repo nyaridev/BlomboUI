@@ -121,7 +121,7 @@ export function Shell() {
     if (profile) setTheme({ theme: profile.theme, accent: profile.accent });
   }, [profile?.theme, profile?.accent, profile, setTheme]);
 
-  // The UI font comes from the profile's settings.
+  // The UI font, motion and contrast come from the profile's settings.
   const appearance = useSettings().data?.appearance;
   useEffect(() => {
     if (appearance)
@@ -129,6 +129,7 @@ export function Shell() {
         font: appearance.font,
         customFont: appearance.customFont,
         motion: appearance.motion,
+        contrast: appearance.contrast,
       });
   }, [appearance, setTheme]);
 

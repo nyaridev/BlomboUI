@@ -89,6 +89,8 @@ interface RenderContext {
   customizing: boolean;
   /** A batch workflow: its input image comes from the runner, and Generate-only blocks hide. */
   batch: boolean;
+  /** Rendering a card's children: feature blocks leave out their own card. */
+  inCard?: boolean;
   arrange: Arrange;
 }
 
@@ -161,8 +163,8 @@ function renderBlock(block: Block, ctx: RenderContext): ReactNode {
     case "card":
       return <Card block={block} ctx={ctx} />;
     case "feature":
-      if (block.feature === "resolution") return <Resolution />;
-      if (block.feature === "seed") return <Seed />;
+      if (block.feature === "resolution") return <Resolution bare={ctx.inCard} />;
+      if (block.feature === "seed") return <Seed bare={ctx.inCard} />;
       if (block.feature === "scripts") return <ScriptsBlock />;
       return null;
     case "stage":
@@ -197,7 +199,7 @@ function Card({ block, ctx }: { block: CardBlock; ctx: RenderContext }) {
         >
           {visible.map((child) => (
             <Item key={child.id} block={child} span={child.span ?? 12} compact>
-              {renderBlock(child, ctx)}
+              {renderBlock(child, { ...ctx, inCard: true })}
             </Item>
           ))}
         </div>

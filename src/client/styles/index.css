@@ -31,6 +31,9 @@
   --color-fg-2: var(--fg-2);
   --color-fg-3: var(--fg-3);
   --color-fg-4: var(--fg-4);
+  --color-disabled: var(--disabled);
+  --color-disabled-danger: var(--disabled-danger);
+  --color-on-disabled: var(--on-disabled);
 
   --color-accent: var(--accent);
   --color-accent-ink: var(--accent-ink);

@@ -10,20 +10,26 @@ export type ButtonSize = "sm" | "md" | "lg";
 const base =
   "relative inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap font-medium " +
   "transition-[background-color,border-color,color,box-shadow,transform] ease-out " +
-  "active:scale-[0.97] disabled:pointer-events-none disabled:opacity-45 focus-ring";
+  "active:scale-[0.97] disabled:pointer-events-none focus-ring";
+
+/** Disabled looks: filled buttons turn a solid quiet fill with dim text, bare ones only dim. */
+const solidOff = "disabled:border-transparent disabled:bg-disabled disabled:text-on-disabled";
+const bareOff = "disabled:text-on-disabled";
 
 const variants: Record<ButtonVariant, string> = {
-  primary: "bg-accent text-on-accent hover:brightness-110",
-  secondary: "border border-line bg-field text-fg hover:border-line-strong hover:bg-field-hover",
-  outline: "border border-line-strong text-fg-2 hover:border-fg-4 hover:text-fg",
-  ghost: "text-fg-2 hover:bg-field hover:text-fg",
-  danger: "border border-red/35 bg-red/12 text-red-ink hover:bg-red/22",
+  primary: `bg-accent text-on-accent hover:brightness-110 ${solidOff}`,
+  secondary: `border border-line bg-field text-fg hover:border-line-strong hover:bg-field-hover ${solidOff}`,
+  outline: `border border-line-strong text-fg-2 hover:border-fg-4 hover:text-fg ${bareOff}`,
+  ghost: `text-fg-2 hover:bg-field hover:text-fg ${bareOff}`,
+  danger:
+    "border border-red/35 bg-red/12 text-red-ink hover:bg-red/22 " +
+    "disabled:border-transparent disabled:bg-disabled-danger disabled:text-on-disabled",
 };
 
 /** A toggle that's on: a tinted fill. Orange only for toggles in the Generate stack. */
 const pressedLooks = {
-  accent: "border border-accent/60 bg-accent/15 text-fg hover:bg-accent/22",
-  generate: "border border-generate/50 bg-generate/15 text-generate-ink hover:bg-generate/22",
+  accent: `border border-accent/60 bg-accent/15 text-fg hover:bg-accent/22 ${solidOff}`,
+  generate: `border border-generate/50 bg-generate/15 text-generate-ink hover:bg-generate/22 ${solidOff}`,
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -95,10 +101,10 @@ const iconSizes = {
 } as const;
 
 const iconVariants = {
-  ghost: "text-fg-3 hover:bg-field hover:text-fg",
-  secondary: "border border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg",
-  primary: "bg-accent text-on-accent hover:brightness-110",
-  danger: "text-fg-3 hover:bg-red/15 hover:text-red-ink",
+  ghost: `text-fg-3 hover:bg-field hover:text-fg ${bareOff}`,
+  secondary: `border border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg ${solidOff}`,
+  primary: `bg-accent text-on-accent hover:brightness-110 ${solidOff}`,
+  danger: `text-fg-3 hover:bg-red/15 hover:text-red-ink ${bareOff}`,
 };
 
 export function IconButton({

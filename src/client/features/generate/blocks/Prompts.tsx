@@ -156,18 +156,12 @@ export function GenerateActions() {
       </motion.button>
       <div className="grid grid-cols-2 gap-1.5">
         <Tooltip content="Stop this image; queued runs continue">
-          <Button
-            icon="skip"
-            disabled={!running}
-            onClick={() => void interrupt()}
-            className="w-full"
-          >
+          <Button disabled={!running} onClick={() => void interrupt()} className="w-full">
             Interrupt
           </Button>
         </Tooltip>
         <Tooltip content="Stop and clear the queue">
           <Button
-            icon="stop"
             variant="danger"
             disabled={!busy && !serverLoop}
             onClick={() => void cancelAll()}

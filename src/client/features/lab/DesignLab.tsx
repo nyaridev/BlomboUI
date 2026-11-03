@@ -589,6 +589,23 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               Continue
             </Button>
           </Row>
+          <Row label="Disabled (solid fill, dim text; bare ones only dim)">
+            <Button variant="primary" disabled>
+              Primary
+            </Button>
+            <Button disabled>Interrupt</Button>
+            <Button variant="danger" disabled>
+              Cancel
+            </Button>
+            <Button variant="outline" disabled>
+              Outline
+            </Button>
+            <Button variant="ghost" icon="folder-open" disabled>
+              Ghost
+            </Button>
+            <IconButton icon="dice" label="Secondary icon" variant="secondary" disabled />
+            <IconButton icon="x" label="Ghost icon" disabled />
+          </Row>
           <Row label="Toggles (pressed)">
             <Button icon="eye" pressed>
               On
@@ -616,7 +633,6 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               className="flex h-[72px] w-[220px] flex-col items-center justify-center gap-1 rounded-md bg-generate text-on-generate transition-[filter] hover:brightness-110 focus-ring"
             >
               <span className="text-lg font-semibold">Generate</span>
-              <span className="text-xs text-white/80">Ctrl + Enter</span>
             </button>
           </Row>
         </Section>

@@ -187,6 +187,22 @@
   --shadow-card: none;
 }
 
+/* Disabled buttons: a solid, quiet fill and dim text instead of fading the whole button. Mixed
+   from each theme's own tokens, so every theme (and high contrast) follows; disabled controls
+   are exempt from the 4.5:1 text rule. */
+:root,
+[data-theme] {
+  --disabled: color-mix(in srgb, var(--fg) 20%, var(--bg));
+  --disabled-danger: color-mix(in srgb, var(--red) 40%, var(--bg));
+  --on-disabled: color-mix(in srgb, var(--fg) 40%, var(--bg));
+}
+/* on light, dark text needs a bigger share to show, and a full-strength red mix turns loud */
+[data-theme="light"] {
+  --disabled: color-mix(in srgb, var(--fg) 14%, var(--bg));
+  --disabled-danger: color-mix(in srgb, var(--red) 22%, var(--bg));
+  --on-disabled: color-mix(in srgb, var(--fg) 50%, var(--bg));
+}
+
 /* Profile accent. Set on <html data-accent="…">. Light-on-color families (yellow, green, cyan)
    get dark text. contrast.test.ts checks every theme × accent. */
 [data-accent="blue"] {

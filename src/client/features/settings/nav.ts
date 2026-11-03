@@ -51,7 +51,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Generate",
     icon: "generate",
     group: "Tools",
-    keywords: "layout default prompt history tour weight step",
+    keywords: "layout default tour weight step",
   },
   {
     id: "gallery",

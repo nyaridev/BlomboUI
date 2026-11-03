@@ -1,16 +1,15 @@
 /**
  * Settings → Generate: the layout workflows show when they don't link one, the prompt weight
- * step (stored with autocomplete, where the prompt editor reads it), the first-run tour,
- * and where prompt history and snippets come from. Saved to this profile.
+ * step (stored with autocomplete, where the prompt editor reads it) and the first-run tour.
+ * Saved to this profile.
  */
 import { useGoToView } from "@client/lib/hooks";
 import { useLayouts, useSettings, useUpdateSettings } from "@client/lib/queries";
 import { Button, Field, Segmented, Select } from "@client/ui";
 import { WEIGHT_STEPS } from "@shared/settings";
 import { PageHeader } from "./common";
-import type { SettingsPage } from "./nav";
 
-export function GeneratePage({ onGo }: { onGo: (p: SettingsPage) => void }) {
+export function GeneratePage() {
   const settings = useSettings().data;
   const update = useUpdateSettings();
   const layouts = useLayouts().data;
@@ -19,6 +18,10 @@ export function GeneratePage({ onGo }: { onGo: (p: SettingsPage) => void }) {
     ...(layouts?.builtins ?? []).map((l) => ({ value: l.id, label: l.name, group: "Built-in" })),
     ...(layouts?.custom ?? []).map((l) => ({ value: l.id, label: l.name, group: "This profile" })),
   ];
+  // A default that's gone (a deleted layout, the old built-in "compact") shows as what the
+  // server falls back to.
+  const saved = settings?.generate.layout ?? "default";
+  const layout = !layouts || options.some((o) => o.value === saved) ? saved : "default";
   return (
     <>
       <PageHeader title="Generate" />
@@ -29,27 +32,12 @@ export function GeneratePage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           hint="What workflows show when they don't link a layout of their own. Customize on the Generate screen to make new ones."
         >
           <Select
-            value={settings?.generate.layout ?? "default"}
+            value={layout}
             onChange={(layout) => update.mutate({ generate: { layout } })}
             options={options}
             className="w-72"
             label="Default layout"
           />
-        </Field>
-        <Field
-          label="Tour"
-          layout="left"
-          hint="A short walk through the Generate screen: workflows, models, prompts, the Generate button and the image stage."
-        >
-          <Button
-            icon="play"
-            onClick={() => {
-              update.mutate({ help: { tourDone: false } });
-              go("generate");
-            }}
-          >
-            Show the tour again
-          </Button>
         </Field>
         <Field
           label="Weight step"
@@ -66,18 +54,19 @@ export function GeneratePage({ onGo }: { onGo: (p: SettingsPage) => void }) {
           />
         </Field>
         <Field
-          label="Prompt history"
+          label="Tour"
           layout="left"
-          hint="The clock next to the prompt lists prompts you generated with (from History → Generations) and your snippets."
+          hint="A short walk through the Generate screen: workflows, models, prompts, the Generate button and the image stage."
         >
-          <div className="flex gap-2">
-            <Button variant="ghost" icon="history" onClick={() => go("history")}>
-              Open History
-            </Button>
-            <Button variant="ghost" icon="text" onClick={() => onGo("autocomplete")}>
-              Autocomplete settings
-            </Button>
-          </div>
+          <Button
+            icon="play"
+            onClick={() => {
+              update.mutate({ help: { tourDone: false } });
+              go("generate");
+            }}
+          >
+            Show the tour again
+          </Button>
         </Field>
       </div>
     </>

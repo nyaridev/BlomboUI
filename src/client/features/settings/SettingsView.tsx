@@ -113,22 +113,14 @@ export function SettingsView() {
           transition={{ duration: 0.18 }}
           className="min-w-0"
         >
-          <Page page={page} onGo={setPage} profile={profile} />
+          <Page page={page} profile={profile} />
         </motion.div>
       </div>
     </div>
   );
 }
 
-function Page({
-  page,
-  onGo,
-  profile,
-}: {
-  page: PageId;
-  onGo: (p: PageId) => void;
-  profile: ReturnType<typeof useCurrentProfile>;
-}) {
+function Page({ page, profile }: { page: PageId; profile: ReturnType<typeof useCurrentProfile> }) {
   switch (page) {
     case "overview":
       return <OverviewPage />;
@@ -142,7 +134,7 @@ function Page({
         </>
       );
     case "generate":
-      return <GeneratePage onGo={onGo} />;
+      return <GeneratePage />;
     case "comfy":
       return (
         <>

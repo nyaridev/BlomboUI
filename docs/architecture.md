@@ -77,7 +77,7 @@ BlomboUI-new/
 │   │                  upscale, caption, dataset-prep (planned: noobai, anima, krea2)
 │   ├── stages/        graph patches per family: hires-*, adetailer-*, controlnet-* (checkpoint,
 │   │                  diffusion); upscale later
-│   ├── layouts/       built-in Generate layouts (default, compact)
+│   ├── layouts/       built-in Generate layouts (default)
 │   └── tags/          the bundled starter tag list for prompt autocomplete
 ├── src-tauri/         desktop shell
 ├── tools/             ensure-build · ensure-app · sync-rules · dev-window · make-icons · build-presets

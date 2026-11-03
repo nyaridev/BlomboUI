@@ -98,7 +98,7 @@ src-tauri/        Desktop shell: native window on --url, capability for localhos
 assets/brand/     README banners (light, dark) with the drawn wordmark
 presets/          workflows/ (sd15, sdxl, illustrious; batch: remove-background, upscale, caption,
                   dataset-prep) · stages/ (hires, adetailer, controlnet ×
-                  checkpoint/diffusion) · layouts/ (default, compact) · tags/ (starter list)
+                  checkpoint/diffusion) · layouts/ (default) · tags/ (starter list)
 tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets ·
                   bench-gallery
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit

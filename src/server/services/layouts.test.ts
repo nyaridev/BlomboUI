@@ -36,13 +36,13 @@ afterAll(async () => {
 describe("layouts", () => {
   it("lists the built-in layouts with the default first", async () => {
     const list = await layouts.list();
-    expect(list.builtins.map((l) => l.id)).toEqual(["default", "compact"]);
+    expect(list.builtins.map((l) => l.id)).toEqual(["default"]);
     expect(list.custom).toEqual([]);
     expect(list.defaultId).toBe("default");
   });
 
   it("saves layouts into the profile and resolves links with a fallback", async () => {
-    const base = (await layouts.find("compact")) ?? (await layouts.builtins())[0];
+    const base = (await layouts.builtins())[0];
     if (!base) throw new Error("no built-in layout");
     const mine = await layouts.create({ name: "Portrait work", doc: base });
     expect(mine.id).toBe("portrait-work");

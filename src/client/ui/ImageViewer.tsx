@@ -2,7 +2,7 @@
  * A full-screen look at one image, or a few (a run's results): the picture as large as it fits
  * between equal top and bottom margins, over the page dimmed and blurred. Esc or a click beside
  * the picture closes it; ← →, the side buttons or the wheel beside the picture step through the
- * images. The wheel on the picture zooms around the pointer and a drag moves it, both easing;
+ * images. The wheel on the picture zooms around the pointer (easing) and a drag moves it;
  * while zoomed in, the wheel anywhere zooms, so it only steps again once the picture is back to
  * its size. A middle click on the picture opens it in a new tab (`onOpenTab`). It sits on the
  * lightbox layer (z 250).
@@ -89,7 +89,7 @@ export function ImageViewer({
       const { view: v, count } = live.current;
       const onImage = Boolean(img && e.target instanceof Node && img.contains(e.target));
       if (img && (onImage || v.scale > 1)) {
-        const scale = clamp(v.scale * Math.exp(-e.deltaY * 0.0015), 1, MAX_ZOOM);
+        const scale = clamp(v.scale * Math.exp(-e.deltaY * 0.002), 1, MAX_ZOOM);
         if (scale === 1) {
           setView(FIT);
           return;
@@ -178,10 +178,10 @@ export function ImageViewer({
           className="max-h-full max-w-full touch-none object-contain select-none"
           style={{
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-            // Zoom eases in; a drag follows closely, softened just enough to glide.
-            transition: `transform ${dragging ? "70ms linear" : "180ms cubic-bezier(0.2, 0, 0, 1)"}`,
+            // The old app's feel: zoom eases over 140 ms, a drag follows the pointer exactly.
+            transition: dragging ? "none" : "transform 140ms ease-out",
             willChange: "transform",
-            cursor: "move",
+            cursor: "all-scroll",
           }}
         />
       </div>

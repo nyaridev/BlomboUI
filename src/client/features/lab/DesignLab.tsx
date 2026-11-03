@@ -45,6 +45,7 @@ import {
   PropertyList,
   type ResizeAxis,
   ResizeGrip,
+  RunBar,
   ScrubField,
   Segmented,
   Select,
@@ -53,7 +54,6 @@ import {
   Slider,
   Spinner,
   Splitter,
-  StageProgress,
   StarRating,
   StatusDot,
   Switch,
@@ -1118,15 +1118,18 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <Meter label="VRAM" value={19.6} max={24} valueText="19.6/24G" width={80} />
             <Meter label="VRAM" value={23.2} max={24} valueText="23.2/24G" width={80} />
           </Row>
-          <Row label="Stage progress">
-            <div className="w-[420px]">
-              <StageProgress
-                segments={[
-                  { id: "a", label: "Base · 28 steps", progress: 1, state: "done" },
-                  { id: "b", label: "Hires fix", progress: 0.55, state: "active" },
-                  { id: "c", label: "ADetailer", progress: 0, state: "pending" },
-                ]}
-              />
+          <Row label="Run bar">
+            <div className="flex w-[420px] flex-col gap-3">
+              <RunBar value={0} label="Starting…" />
+              <RunBar value={0.45} label="45% · ETA 12s" />
+              <div className="flex flex-col">
+                <RunBar
+                  value={0.62}
+                  label="62% · ETA 9s"
+                  parts={["Sampling", "Hires fix", "ADetailer · Face"]}
+                />
+                <RunBar value={0.4} label="Hires fix · 6 / 15" />
+              </div>
             </div>
           </Row>
           <Row label="Skeleton">

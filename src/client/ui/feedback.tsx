@@ -178,54 +178,57 @@ export function Meter({
   );
 }
 
-export interface StageSegment {
-  id: string;
-  label: string;
-  /** 0..1 */
-  progress: number;
-  state: "pending" | "active" | "done";
-}
-
-/** Generation progress split by stage (base ▸ hires ▸ adetailer …). */
-export function StageProgress({
-  segments,
+/**
+ * The old app's generation bar: a flat 28 px strip, the fill carrying its text at its end (never
+ * narrower than the text, so it reads at 0%). `parts` draws a divider between equal parts of a run
+ * (base ▸ hires ▸ adetailer); each part's name is its tooltip.
+ */
+export function RunBar({
+  value,
+  label,
+  parts,
   className,
 }: {
-  segments: StageSegment[];
+  /** 0..1 */
+  value: number;
+  label: string;
+  parts?: string[];
   className?: string;
 }) {
   return (
-    <div className={cn("flex w-full gap-1", className)}>
-      {segments.map((s) => (
-        <div key={s.id} className="flex min-w-0 flex-1 flex-col gap-1">
-          <div className="relative h-1.5 overflow-hidden rounded-full bg-field">
-            <motion.div
-              className={cn(
-                "absolute inset-y-0 left-0 rounded-full",
-                s.state === "done" ? "bg-fg-3" : "bg-generate-hi",
-              )}
-              initial={false}
-              animate={{ width: `${(s.state === "done" ? 1 : s.progress) * 100}%` }}
-              transition={glide}
+    <div
+      role="progressbar"
+      aria-label={label}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(clampUnit(value) * 100)}
+      className={cn("relative h-7 overflow-hidden bg-field", className)}
+    >
+      <div
+        className="flex h-full min-w-fit items-center justify-end bg-accent px-2.5"
+        style={{ width: `${clampUnit(value) * 100}%` }}
+      >
+        <span className="text-sm font-semibold whitespace-nowrap text-on-accent tabular">
+          {label}
+        </span>
+      </div>
+      {parts && parts.length > 1 ? (
+        <div className="pointer-events-none absolute inset-0 flex">
+          {parts.map((name, i) => (
+            <div
+              // Two parts can share a name.
+              key={i}
+              title={name}
+              className="min-w-0 flex-1 border-r border-bg/50 last:border-0"
             />
-          </div>
-          <span
-            className={cn(
-              "truncate text-2xs",
-              s.state === "active"
-                ? "text-generate-ink"
-                : s.state === "done"
-                  ? "text-fg-3"
-                  : "text-fg-4",
-            )}
-          >
-            {s.label}
-          </span>
+          ))}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
+
+const clampUnit = (n: number) => Math.min(1, Math.max(0, n));
 
 export function ToneText({ tone, children }: { tone: Tone; children: ReactNode }) {
   return <span className={toneText[tone]}>{children}</span>;

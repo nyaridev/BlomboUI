@@ -1,10 +1,12 @@
 /**
  * The image stage: a square box with the latest result, or the live preview while generating
- * (on the steps Settings → Generate → Preview picks); progress split by part of the run (the
- * workflow's sampling, then each stage) with speed and ETA; and, for a finished result, its size,
- * seed and how long it took. Clicking the image opens it full screen, a middle click opens it in
+ * (on the steps Settings → Generate → Preview picks; the last result stays until the first frame).
+ * Progress is the old app's bars across the top: the part that's running (its steps, or the
+ * percent and ETA when it's the only part), and above it, when stages add parts (hires fix,
+ * ADetailer), the whole run with a divider between parts. A finished result shows its size, seed
+ * and how long it took. Clicking the image opens it full screen, a middle click opens it in
  * a new tab. A strip under the box shows the last run's images, only when it made more than one,
- * and the shown image's run info (RunInfo) comes after it. The column scrolls with the page.
+ * and the shown image's run info (RunInfo) comes after it, kept while the next run goes. The column scrolls with the page.
  * Everything comes from the live bus: queue snapshots, step progress and binary preview frames.
  */
 import { Icon } from "@client/icons/Icon";
@@ -12,19 +14,11 @@ import { cn } from "@client/lib/cn";
 import { type LivePreview, useLive } from "@client/lib/live";
 import { openWindow } from "@client/lib/platform";
 import { useSettings } from "@client/lib/queries";
-import {
-  IconButton,
-  ImageViewer,
-  Spinner,
-  StageProgress,
-  type StageSegment,
-  Tooltip,
-} from "@client/ui";
+import { IconButton, ImageViewer, RunBar, Spinner, Tooltip } from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
 import { averageRate, formatDuration } from "@shared/history";
 import type { Job, JobImage } from "@shared/jobs";
 import { PreviewSettings } from "@shared/settings";
-import { AnimatePresence, motion } from "motion/react";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { previewDue, useLastRun } from "../preview";
 import { RunInfo } from "./RunInfo";
@@ -142,31 +136,21 @@ export function ImageStage() {
   const [dismissed, setDismissed] = useState<string | null>(null);
   const error = lastError?.state === "error" && lastError.id !== dismissed ? lastError : null;
 
-  // One segment per part of the run: the workflow's sampling, then each stage that samples.
-  const parts = running?.segments;
-  const segments: StageSegment[] = useMemo(() => {
-    const list = parts?.length ? parts : [{ id: "base", label: "Sampling", nodes: [] }];
-    const current = progress?.segment ?? 0;
-    return list.map((seg, i) => {
-      const local =
-        i < current ? 1 : i > current || !progress ? 0 : Math.min(1, progress.value / progress.max);
-      const steps = i === current && progress ? ` · ${progress.max} steps` : "";
-      return {
-        id: seg.id,
-        label: `${seg.label}${steps}`,
-        progress: local,
-        state: i < current ? "done" : i === current ? "active" : "pending",
-      } satisfies StageSegment;
-    });
-  }, [parts, progress]);
-
   // Remaining steps of this part plus the parts still to come, at the current speed.
-  const passes = Math.max(1, parts?.length ?? 1);
+  const parts = running?.segments.map((seg) => seg.label) ?? [];
+  const passes = Math.max(1, parts.length);
   const passesLeft = progress ? Math.max(0, passes - 1 - (progress.segment ?? 0)) : 0;
   const eta =
     progress && speed && speed > 0
       ? Math.round((progress.max - progress.value + passesLeft * progress.max) / speed)
       : null;
+  const step = progress && progress.max > 0 ? progress.value / progress.max : 0;
+  const percent = (n: number) => `${Math.round(n * 100)}%${eta !== null ? ` · ETA ${eta}s` : ""}`;
+  const stepLabel = !progress
+    ? "Starting…"
+    : parts.length > 1
+      ? `${parts[progress.segment] ?? "Sampling"} · ${progress.value} / ${progress.max}`
+      : percent(step);
 
   // Only the first part of a click's first run waits before its first preview.
   const firstRun = !running || !runIds.includes(running.id) || runIds[0] === running.id;
@@ -179,9 +163,17 @@ export function ImageStage() {
       <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-sunken">
         {running ? (
           <>
-            <div className="absolute inset-0 grid place-items-center text-fg-3">
-              <Spinner size={22} />
-            </div>
+            {current ? (
+              <img
+                src={current.url}
+                alt=""
+                className="absolute inset-0 h-full w-full object-contain"
+              />
+            ) : (
+              <div className="absolute inset-0 grid place-items-center text-fg-3">
+                <Spinner size={22} />
+              </div>
+            )}
             {previewSettings.show && preview ? (
               <PreviewCanvas key={running.id} preview={preview} draw={drawPreview} />
             ) : null}
@@ -212,32 +204,18 @@ export function ImageStage() {
           </div>
         )}
 
-        <AnimatePresence>
-          {running ? (
-            <motion.div
-              initial={{ opacity: 0, y: -8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              className="absolute inset-x-3 top-3 flex flex-col gap-2 rounded-lg border border-line-strong bg-surface-3/95 p-3 shadow-pop"
-            >
-              <div className="flex items-center gap-2 text-xs">
-                <span className="font-medium text-generate-ink">
-                  {progress ? `Step ${progress.value} of ${progress.max}` : "Preparing…"}
-                </span>
-                {speed ? (
-                  <>
-                    <span className="text-fg-3">·</span>
-                    <span className="font-mono text-fg-2 tabular">{speed.toFixed(2)} it/s</span>
-                  </>
-                ) : null}
-                <span className="ml-auto font-mono text-fg-3 tabular">
-                  {eta !== null ? `ETA ${eta}s` : running.workflowName}
-                </span>
-              </div>
-              <StageProgress segments={segments} />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
+        {running ? (
+          <div className="absolute inset-x-0 top-0 flex flex-col">
+            {parts.length > 1 ? (
+              <RunBar
+                value={progress?.overall ?? 0}
+                label={percent(progress?.overall ?? 0)}
+                parts={parts}
+              />
+            ) : null}
+            <RunBar value={step} label={stepLabel} />
+          </div>
+        ) : null}
 
         {error && !running ? (
           <div className="absolute inset-x-3 top-3 flex items-start gap-2.5 rounded-lg border border-red/35 bg-surface-3/95 p-3 text-xs shadow-pop">
@@ -290,7 +268,7 @@ export function ImageStage() {
         </div>
       ) : null}
 
-      {current && !running ? <RunInfo jobId={current.job.id} /> : null}
+      {current ? <RunInfo jobId={current.job.id} /> : null}
 
       {viewing && current ? (
         <ImageViewer
@@ -399,6 +377,14 @@ function PreviewCanvas({ preview, draw }: { preview: LivePreview; draw: boolean 
       canvas.height = preview.bitmap.height;
     }
     ctx.drawImage(preview.bitmap, 0, 0);
+    setDrawn(true);
   }, [preview]);
-  return <canvas ref={ref} className="absolute inset-0 h-full w-full object-contain" />;
+  // Clear until the first frame, so the last result shows through; then it covers it fully.
+  const [drawn, setDrawn] = useState(false);
+  return (
+    <canvas
+      ref={ref}
+      className={cn("absolute inset-0 h-full w-full object-contain", drawn && "bg-sunken")}
+    />
+  );
 }

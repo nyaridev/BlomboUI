@@ -11,10 +11,9 @@ export {
   Kbd,
   Meter,
   ProgressRing,
+  RunBar,
   Skeleton,
   Spinner,
-  StageProgress,
-  type StageSegment,
   StatusDot,
   type Tone,
 } from "./feedback";

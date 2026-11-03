@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { zipSync } from "fflate";
 import { afterAll, describe, expect, it } from "vitest";
-import type { InstallState } from "../../../shared/install.ts";
+import { type InstallState, releaseTag, slotForRelease } from "../../../shared/install.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { ComfyInstaller, extractTopFolder, type InstallOps } from "./installer.ts";
 import { findSlot } from "./slots.ts";
@@ -127,6 +127,26 @@ describe("ComfyUI installer", () => {
     await expect(
       installer.start({ slot: "latest", torch: "cuda", version: "latest" }),
     ).rejects.toThrow(/already installed/);
+  });
+
+  it("names a slot after the release when no name is given, and looks it up once", async () => {
+    const runtime = path.join(tmp, "named");
+    const { ops, calls } = fakeOps();
+    const installer = new ComfyInstaller(runtime, ops);
+    const done = waitFor(installer, ["done", "error"]);
+    await installer.start({ slot: "", torch: "cpu", version: "0.9.9" });
+    const state = await done;
+    expect(state.error).toBeNull();
+    expect(state.slot).toBe("0.9.9");
+    expect(calls.filter((c) => c.startsWith("release"))).toEqual(["release v0.9.9"]);
+    expect((await findSlot(runtime, "0.9.9")).ok).toBe(true);
+    await expect(installer.start({ slot: "", torch: "cpu", version: "latest" })).rejects.toThrow(
+      /"0.9.9" is already installed/,
+    );
+    expect(releaseTag("0.43.0")).toBe("v0.43.0");
+    expect(releaseTag(" ")).toBe("latest");
+    expect(releaseTag("v0.43.0")).toBe("v0.43.0");
+    expect(slotForRelease("v0.43.0")).toBe("0.43.0");
   });
 
   it("stops on a failed step, keeps the slot unfinished and resumes", async () => {

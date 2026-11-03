@@ -24,7 +24,13 @@ import {
   toast,
 } from "@client/ui";
 import type { BridgeStatus } from "@shared/bridge";
-import { INSTALL_STEP_LABELS, type InstallState, type TorchVariant } from "@shared/install";
+import {
+  INSTALL_STEP_LABELS,
+  type InstallState,
+  releaseTag,
+  slotForRelease,
+  type TorchVariant,
+} from "@shared/install";
 import type { Profile } from "@shared/profile";
 import { useEffect, useState } from "react";
 import { FolderField } from "../profiles/FolderField";
@@ -158,13 +164,9 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
       <Field
         label="Install ComfyUI"
         layout="left"
-        hint="Downloads the latest ComfyUI, a private Python and PyTorch into a new slot. Plan on about 6 GB of disk and a few minutes."
+        hint="Downloads ComfyUI, a private Python and PyTorch into a new slot. Plan on about 6 GB of disk and a few minutes."
       >
-        <Installer
-          installed={installed}
-          state={install}
-          defaultSlot={mode === "managed" ? slot : "latest"}
-        />
+        <Installer installed={installed} state={install} />
       </Field>
     </div>
   );
@@ -256,20 +258,16 @@ function BridgeRow({ profile }: { profile: Profile | undefined }) {
   );
 }
 
-function Installer({
-  installed,
-  state,
-  defaultSlot,
-}: {
-  installed: string[];
-  state: InstallState | null;
-  defaultSlot: string;
-}) {
-  const [slot, setSlot] = useState(installed.includes(defaultSlot) ? "" : defaultSlot);
+function Installer({ installed, state }: { installed: string[]; state: InstallState | null }) {
+  const [version, setVersion] = useState("latest");
+  // Empty: the server names the slot after the release it installs ("latest" → "0.43.0").
+  const [slot, setSlot] = useState("");
   const [torch, setTorch] = useState<TorchVariant>("cuda");
   const [starting, setStarting] = useState(false);
   const running = state?.state === "running";
-  const slotTaken = installed.includes(slot.trim());
+  const tag = releaseTag(version);
+  const named = slot.trim() || (tag === "latest" ? "" : slotForRelease(tag));
+  const slotTaken = named !== "" && installed.includes(named);
 
   const start = async () => {
     setStarting(true);
@@ -277,7 +275,7 @@ function Installer({
       const s = await api.installComfy({
         slot: slot.trim(),
         torch,
-        version: "latest",
+        version: tag,
       });
       useLive.setState({ install: s });
     } catch (e) {
@@ -291,15 +289,30 @@ function Installer({
     <div className="flex flex-col gap-4">
       {!running ? (
         <Panel className="flex flex-col gap-4 p-4">
-          <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
-            <Field label="Slot name" error={slotTaken ? "Already installed" : undefined}>
+          <div className="grid grid-cols-3 gap-3 max-lg:grid-cols-1">
+            <Field label="ComfyUI version" hint="latest, or a release like 0.43.0">
+              {(id) => (
+                <TextField
+                  id={id}
+                  value={version}
+                  onChange={(e) => setVersion(e.target.value)}
+                  mono
+                  placeholder="latest"
+                />
+              )}
+            </Field>
+            <Field
+              label="Slot name"
+              hint={slot.trim() ? undefined : "Empty: named after the version"}
+              error={slotTaken ? `"${named}" is already installed` : undefined}
+            >
               {(id) => (
                 <TextField
                   id={id}
                   value={slot}
                   onChange={(e) => setSlot(e.target.value)}
                   mono
-                  placeholder="latest"
+                  placeholder={named || "0.43.0"}
                   invalid={slotTaken}
                 />
               )}
@@ -320,7 +333,7 @@ function Installer({
               variant="primary"
               icon="download"
               loading={starting}
-              disabled={!slot.trim() || slotTaken}
+              disabled={slotTaken}
               onClick={() => void start()}
             >
               {state?.state === "error" || state?.state === "cancelled"

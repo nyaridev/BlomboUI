@@ -31,11 +31,23 @@ export type TorchVariant = (typeof TORCH_VARIANTS)[number];
 export const SlotName = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/, "Invalid slot name");
 
 export const InstallBody = z.object({
-  slot: SlotName.default("latest"),
+  /** Empty: the slot is named after the release it installs ("0.43.0"). */
+  slot: z.union([SlotName, z.literal("")]).default(""),
   torch: z.enum(TORCH_VARIANTS).default("cuda"),
-  /** A ComfyUI release tag ("v0.3.60") or "latest". */
+  /** "latest", or a ComfyUI release ("v0.43.0", or "0.43.0" without the v). */
   version: z.string().trim().max(40).default("latest"),
 });
+
+/** A release as GitHub tags it: "0.43.0" → "v0.43.0"; "latest" and "v…" stay. */
+export function releaseTag(version: string): string {
+  const v = version.trim() || "latest";
+  return /^\d/.test(v) ? `v${v}` : v;
+}
+
+/** The slot name a release gets when none is given: its tag without the "v". */
+export function slotForRelease(tag: string): string {
+  return tag.replace(/^v(?=\d)/, "");
+}
 export type InstallBody = z.input<typeof InstallBody>;
 
 export const InstallStep = z.object({

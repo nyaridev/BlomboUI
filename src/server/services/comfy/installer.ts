@@ -22,6 +22,9 @@ import {
   type InstallState,
   type InstallStepId,
   idleInstall,
+  releaseTag,
+  SlotName,
+  slotForRelease,
   type TorchVariant,
 } from "../../../shared/install.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
@@ -58,6 +61,11 @@ export interface RunOptions {
   onLine: (line: string) => void;
 }
 
+interface Release {
+  tag: string;
+  zip: string;
+}
+
 export interface InstallOps {
   /** Download to `dest`, reporting 0–1 when the size is known. */
   download(
@@ -69,7 +77,7 @@ export interface InstallOps {
   /** Run a program; resolves with its exit code. */
   run(command: string, args: string[], opts: RunOptions): Promise<number>;
   /** The ComfyUI release to install: its tag and source zip URL. */
-  release(version: string, signal: AbortSignal): Promise<{ tag: string; zip: string }>;
+  release(version: string, signal: AbortSignal): Promise<Release>;
   /** The uv build to download on Windows (UV_WINDOWS; tests pass their own). */
   uv: UvRelease;
   platform: NodeJS.Platform;
@@ -110,9 +118,30 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
     return toolsDir(this.runtimeDir);
   }
 
-  /** Start installing; resolves once it has started (progress comes as events). */
-  async start(body: Required<InstallBody>): Promise<void> {
+  /**
+   * Start installing; resolves once it has started (progress comes as events). Without a slot
+   * name the release is looked up first and the slot is named after it ("latest" → "0.43.0").
+   */
+  async start(input: Required<InstallBody>): Promise<void> {
     if (this.running) throw new HttpError(409, "ComfyUI is already being installed.", "busy");
+    const version = releaseTag(input.version);
+    let release: Release | null = null;
+    let slot = input.slot;
+    if (!slot) {
+      try {
+        release = await this.ops.release(version, AbortSignal.timeout(20_000));
+      } catch (e) {
+        throw new HttpError(
+          502,
+          `${(e as Error).message} Check the version and your connection, or type a slot name.`,
+          "release",
+        );
+      }
+      slot = slotForRelease(release.tag);
+      if (!SlotName.safeParse(slot).success)
+        throw new HttpError(400, `Release "${release.tag}" needs a slot name. Type one.`, "slot");
+    }
+    const body = { ...input, slot, version };
     const slotDir = path.join(slotsRoot(this.runtimeDir), body.slot);
     const unfinished = await exists(path.join(slotDir, "blombo", "installing"));
     if (!unfinished && (await exists(path.join(slotDir, "ComfyUI", "main.py"))))
@@ -132,7 +161,7 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
       startedAt: Date.now(),
     };
     this.emitNow();
-    void this.install(body, abort.signal);
+    void this.install(body, abort.signal, release);
   }
 
   cancel(): void {
@@ -174,7 +203,11 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
 
   /* ── steps ───────────────────────────────────────────────────────────── */
 
-  private async install(body: Required<InstallBody>, signal: AbortSignal): Promise<void> {
+  private async install(
+    body: Required<InstallBody>,
+    signal: AbortSignal,
+    known: Release | null,
+  ): Promise<void> {
     const slotDir = path.join(slotsRoot(this.runtimeDir), body.slot);
     const marker = path.join(slotDir, "blombo", "installing");
     const comfyDir = path.join(slotDir, "ComfyUI");
@@ -213,7 +246,7 @@ export class ComfyInstaller extends Emitter<InstallerEvents> {
 
       await run("comfyui", async () => {
         if (await exists(path.join(comfyDir, "main.py"))) return "Already downloaded";
-        const release = await this.ops.release(body.version, signal);
+        const release = known ?? (await this.ops.release(body.version, signal));
         this.current = { ...this.current, version: release.tag };
         this.step("comfyui", { detail: `ComfyUI ${release.tag}` });
         const zip = path.join(this.toolsDir(), "downloads", `comfyui-${release.tag}.zip`);

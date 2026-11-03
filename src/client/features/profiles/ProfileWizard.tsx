@@ -19,7 +19,6 @@ import {
   IconButton,
   Notice,
   Segmented,
-  Select,
   TextField,
   toast,
 } from "@client/ui";
@@ -72,7 +71,6 @@ export function ProfileWizard({
   const [outputs, setOutputs] = useState("");
   const [wildcards, setWildcards] = useState("");
   const [comfyMode, setComfyMode] = useState<"managed" | "local">("managed");
-  const [slot, setSlot] = useState("latest");
   const [comfyDir, setComfyDir] = useState("");
   const [presets, setPresets] = useState<string[]>(["illustrious", "sdxl"]);
   const available = usePresets().data ?? [];
@@ -129,7 +127,7 @@ export function ProfileWizard({
         paths,
         comfy:
           comfyMode === "managed"
-            ? { mode: "managed", slot }
+            ? { mode: "managed", slot: "latest" }
             : { mode: "local", dir: comfyDir.trim() },
         presets,
       });
@@ -429,23 +427,10 @@ export function ProfileWizard({
                       ]}
                     />
                     {comfyMode === "managed" ? (
-                      <>
-                        <Field label="Version">
-                          <Select
-                            value={slot}
-                            onChange={setSlot}
-                            options={[
-                              { value: "latest", label: "Latest", hint: "recommended" },
-                              { value: "0.28.0", label: "0.28.0", hint: "pinned" },
-                            ]}
-                            className="w-64"
-                          />
-                        </Field>
-                        <Notice tone="info">
-                          Installs on first use into runtime/comfyui/, with its own Python and
-                          PyTorch. Progress shows in the app.
-                        </Notice>
-                      </>
+                      <Notice tone="info">
+                        Installs the latest ComfyUI on first use into runtime/comfyui/, with its own
+                        Python and PyTorch. Progress shows in the app.
+                      </Notice>
                     ) : (
                       <>
                         <Field label="ComfyUI folder">

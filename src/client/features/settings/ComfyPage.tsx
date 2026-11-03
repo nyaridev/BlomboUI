@@ -158,7 +158,7 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
       <Field
         label="Install ComfyUI"
         layout="left"
-        hint="Downloads ComfyUI, a private Python and PyTorch into a new slot. Plan on about 6 GB of disk and a few minutes."
+        hint="Downloads the latest ComfyUI, a private Python and PyTorch into a new slot. Plan on about 6 GB of disk and a few minutes."
       >
         <Installer
           installed={installed}
@@ -267,7 +267,6 @@ function Installer({
 }) {
   const [slot, setSlot] = useState(installed.includes(defaultSlot) ? "" : defaultSlot);
   const [torch, setTorch] = useState<TorchVariant>("cuda");
-  const [version, setVersion] = useState("latest");
   const [starting, setStarting] = useState(false);
   const running = state?.state === "running";
   const slotTaken = installed.includes(slot.trim());
@@ -278,7 +277,7 @@ function Installer({
       const s = await api.installComfy({
         slot: slot.trim(),
         torch,
-        version: version.trim() || "latest",
+        version: "latest",
       });
       useLive.setState({ install: s });
     } catch (e) {
@@ -292,7 +291,7 @@ function Installer({
     <div className="flex flex-col gap-4">
       {!running ? (
         <Panel className="flex flex-col gap-4 p-4">
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3 max-lg:grid-cols-1">
             <Field label="Slot name" error={slotTaken ? "Already installed" : undefined}>
               {(id) => (
                 <TextField
@@ -314,16 +313,6 @@ function Installer({
                   { value: "cpu", label: "CPU only", hint: "slow" },
                 ]}
               />
-            </Field>
-            <Field label="ComfyUI version" hint="A release tag like v0.3.60">
-              {(id) => (
-                <TextField
-                  id={id}
-                  value={version}
-                  onChange={(e) => setVersion(e.target.value)}
-                  mono
-                />
-              )}
             </Field>
           </div>
           <div className="flex items-center gap-3">

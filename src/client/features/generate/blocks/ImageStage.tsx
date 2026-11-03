@@ -198,8 +198,8 @@ export function ImageStage() {
             aria-label="Show full screen"
             className="absolute inset-0 cursor-zoom-in focus-ring"
           >
+            {/* One element for every result: the last picture stays up while the next loads. */}
             <img
-              key={current.key}
               src={current.url}
               alt={`Result, seed ${current.job.seed ?? "unknown"}`}
               className="h-full w-full object-contain"

@@ -819,6 +819,8 @@ export function useJobRecord(id: string | null) {
     queryKey: qk.jobRecord(profileId, id),
     queryFn: () => api.jobRecord(id as string),
     enabled: profileId !== null && id !== null,
+    // Switching between results keeps the last run's info until the next arrives (no jump).
+    placeholderData: keepPreviousData,
   });
 }
 

@@ -376,10 +376,9 @@ export class AutocompleteService {
     const profileId = this.profileId();
     const settings = (await this.deps.settings.get(profileId)).autocomplete;
     if (!settings.enabled) return [];
-    const max = Math.min(limit, settings.maxResults);
-    if (mode === "lora") return settings.sources.loras ? this.loras(q, max) : [];
-    if (mode === "wildcard") return settings.sources.wildcards ? this.wildcards(q, max) : [];
-    return this.tags(q, max, settings);
+    if (mode === "lora") return settings.sources.loras ? this.loras(q, limit) : [];
+    if (mode === "wildcard") return settings.sources.wildcards ? this.wildcards(q, limit) : [];
+    return this.tags(q, limit, settings);
   }
 
   private async tags(q: string, limit: number, s: AutocompleteSettings): Promise<Suggestion[]> {

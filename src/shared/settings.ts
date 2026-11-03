@@ -75,7 +75,8 @@ export const AutocompleteSettings = z.object({
   disabledLists: z.array(z.string().max(200)).max(100).default([]),
   /** Characters typed before suggestions appear. */
   minChars: z.number().int().min(1).max(5).default(2),
-  maxResults: z.number().int().min(5).max(50).default(15),
+  /** Rows the suggestion list shows before it scrolls (up to 50 suggestions come back). */
+  rows: z.number().int().min(3).max(20).default(8),
   /** "long_hair" goes in as "long hair". */
   replaceUnderscores: z.boolean().default(true),
   /** "name (artist)" goes in as "name \(artist\)", so parentheses aren't read as weights. */

@@ -411,14 +411,18 @@ export function AutocompletePage({ header }: { header: ReactNode }) {
               options={[1, 2, 3, 4].map((n) => ({ value: String(n), label: String(n) }))}
             />
           </Field>
-          <Field label="Suggestions shown" layout="left">
+          <Field
+            label="Rows shown"
+            layout="left"
+            hint="The list scrolls through more suggestions below them."
+          >
             <NumberField
-              value={ac.maxResults}
-              onChange={(maxResults) => set({ maxResults })}
-              min={5}
-              max={50}
+              value={ac.rows}
+              onChange={(rows) => set({ rows })}
+              min={3}
+              max={20}
               step={1}
-              label="Suggestions shown"
+              label="Rows shown"
               className="w-[110px]"
             />
           </Field>

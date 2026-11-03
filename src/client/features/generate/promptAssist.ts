@@ -27,6 +27,9 @@ export interface AssistSettings {
 }
 
 /** Booru tag categories → palette tokens for the little dot. */
+/** How many suggestions come back (the most the server gives); the list scrolls through them. */
+const SUGGESTIONS = 50;
+
 const CATEGORY_COLOR: Record<number, string> = {
   0: "var(--blue-ink)",
   1: "var(--red-ink)",
@@ -73,8 +76,10 @@ function source(get: () => AssistSettings | null) {
       return null;
     const controller = new AbortController();
     ctx.addEventListener("abort", () => controller.abort());
+    // The list shows `rows` of them and scrolls one row at a time through the rest.
+    ctx.view?.dom.style.setProperty("--ac-rows", String(ac.rows));
     const list = await api
-      .suggest(c.query.trim(), c.mode, ac.maxResults, controller.signal)
+      .suggest(c.query.trim(), c.mode, SUGGESTIONS, controller.signal)
       .catch(() => [] as Suggestion[]);
     if (controller.signal.aborted || !list.length) return null;
     const options: SuggestionCompletion[] = list.map((sug, i) => ({
@@ -180,7 +185,8 @@ export const assistTheme = EditorView.theme({
   ".cm-tooltip.cm-tooltip-autocomplete > ul": {
     borderRadius: "8px",
     fontFamily: "var(--font-ui)",
-    maxHeight: "320px",
+    // Rows are 32px (24 line + 8 padding), plus the list's own 8px padding.
+    maxHeight: "calc(var(--ac-rows, 8) * 32px + 8px)",
     minWidth: "300px",
     padding: "4px",
   },
@@ -280,7 +286,7 @@ export function promptAssist(get: () => AssistSettings | null): Extension[] {
       override: [source(get)],
       icons: false,
       activateOnTyping: true,
-      maxRenderedOptions: 50,
+      maxRenderedOptions: SUGGESTIONS,
       positionInfo: positionPicture,
       addToOptions: [
         { render: renderMark, position: 20 },

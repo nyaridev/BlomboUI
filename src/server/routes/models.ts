@@ -51,6 +51,11 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
     }),
   );
 
+  r.get("/picture/raw", async (c) => {
+    const { file, type } = await models.rawPicture(id(c.req.query("id")));
+    return sendFile(file, { cache: c.req.query("v") ? IMMUTABLE : "no-cache", type });
+  });
+
   /** The model info dialog: trigger words, strength and notes (into the A1111 .json). */
   r.patch("/info", async (c) =>
     c.json(await models.saveInfo(await readJson(c, SaveModelInfoBody))),

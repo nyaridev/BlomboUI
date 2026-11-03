@@ -41,7 +41,7 @@ import { headerLength, parseSafetensorsHeader } from "../../shared/safetensors.t
 import { exists, movePath, resolveInside, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { ThumbCache } from "../lib/thumbs.ts";
-import { DATA_SUFFIX, dataDirOf, findThumbs, saveModelThumbs } from "./modelthumbs.ts";
+import { DATA_SUFFIX, dataDirOf, findThumbs, RAW_TYPES, saveModelThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
 
 export const MODEL_THUMB_MAX = 480;
@@ -61,6 +61,8 @@ export interface ModelDeps {
 interface Sidecars {
   /** The picture cards show (`<model>_data/thumb.*`). */
   thumb: string | null;
+  /** The full-size picture (`<model>_data/thumb_raw.*`) when it's an image. */
+  raw: string | null;
   civitai: string | null;
   json: string | null;
   /** The model's data folder (`<model>_data`), if it has one. */
@@ -166,6 +168,7 @@ export function sidecarsFor(
       all.push(name);
   return {
     thumb: null,
+    raw: null,
     civitai: pick(".civitai.info"),
     json: pick(".json"),
     dataDir: dataName ? path.join(dir, dataName) : null,
@@ -315,7 +318,12 @@ export class ModelService {
       }
       const stem = stemOf(e.name);
       const sidecars = sidecarsFor(stem, files, dir, stems, dirs);
-      if (sidecars.dataDir) sidecars.thumb = (await findThumbs(sidecars.dataDir)).thumb;
+      if (sidecars.dataDir) {
+        const pictures = await findThumbs(sidecars.dataDir);
+        sidecars.thumb = pictures.thumb;
+        if (pictures.raw && RAW_TYPES[path.extname(pictures.raw).toLowerCase()])
+          sidecars.raw = pictures.raw;
+      }
       const civitai = await readJson<CivitaiInfo>(sidecars.civitai);
       const a1111 = await readJson<A1111Info>(sidecars.json);
       let thumb: string | null = null;
@@ -323,6 +331,12 @@ export class ModelService {
         const t = await fs.stat(sidecars.thumb).catch(() => null);
         if (t)
           thumb = `/api/models/thumb?id=${encodeURIComponent(id)}&v=${t.size.toString(36)}-${Math.round(t.mtimeMs).toString(36)}`;
+      }
+      let rawThumb: string | null = null;
+      if (sidecars.raw) {
+        const t = await fs.stat(sidecars.raw).catch(() => null);
+        if (t)
+          rawThumb = `/api/models/picture/raw?id=${encodeURIComponent(id)}&v=${t.size.toString(36)}-${Math.round(t.mtimeMs).toString(36)}`;
       }
       const ids = civitaiIds(civitai);
       // Without a Civitai info file, what a lookup by hash found fills the gaps.
@@ -350,6 +364,7 @@ export class ModelService {
           mtime: stat.mtimeMs,
           ctime: stat.birthtimeMs,
           thumb: thumb ?? found?.image ?? null,
+          rawThumb,
           nsfw: thumb ? isNsfw(civitai) : found ? found.imageNsfw || found.nsfw : isNsfw(civitai),
           baseModel: shortBaseModel(
             str(civitai?.baseModel) ?? str(a1111?.["sd version"]) ?? found?.baseModel ?? null,
@@ -383,6 +398,17 @@ export class ModelService {
     if (!cache || !entry)
       throw new HttpError(404, "That model isn't in the models folder anymore.", "no_model");
     return { entry, root: entry.root, profileId: cache.profileId };
+  }
+
+  /** The full-size picture of a local model and how to serve it. */
+  async rawPicture(id: string): Promise<{ file: string; type: string }> {
+    const { entry } = await this.entry(id);
+    const type = entry.sidecars.raw
+      ? RAW_TYPES[path.extname(entry.sidecars.raw).toLowerCase()]
+      : undefined;
+    if (!entry.sidecars.raw || !type)
+      throw new HttpError(404, "This model has no full-size picture.", "no_picture");
+    return { file: entry.sidecars.raw, type };
   }
 
   async thumbFile(id: string): Promise<string> {

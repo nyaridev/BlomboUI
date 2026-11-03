@@ -261,4 +261,18 @@ describe("sidecarsFor", () => {
     expect((await models.list()).models.map((m) => m.id)).toContain("vae/fresh/a.safetensors");
     await expect(models.renameFolder("vae", "fresh", "a/b")).rejects.toThrow(/without/);
   });
+
+  it("serves the full-size picture when it's an image, not a video", async () => {
+    await put("vae/pic.safetensors", "x");
+    await put("vae/pic_data/thumb_raw.png", await realPng(64, 32));
+    await put("vae/clip.safetensors", "x");
+    await put("vae/clip_data/thumb_raw.mp4", "not a picture");
+    models.invalidate();
+    const list = await models.list();
+    const pic = list.models.find((m) => m.id === "vae/pic.safetensors");
+    expect(pic?.rawThumb).toMatch(/^\/api\/models\/picture\/raw\?id=/);
+    expect((await models.rawPicture("vae/pic.safetensors")).type).toBe("image/png");
+    expect(list.models.find((m) => m.id === "vae/clip.safetensors")?.rawThumb).toBeNull();
+    await expect(models.rawPicture("vae/clip.safetensors")).rejects.toThrow(/full-size/);
+  });
 });

@@ -169,7 +169,8 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
     );
   };
 
-  const shownThumb = picture === "remove" ? null : (preview ?? model.thumb);
+  // The full-size picture when there is one: it's shown big here.
+  const shownThumb = picture === "remove" ? null : (preview ?? model.rawThumb ?? model.thumb);
   const hasPicture = picture === "remove" ? false : picture !== null || Boolean(d?.picture);
 
   return (
@@ -469,7 +470,7 @@ function Picture({
     <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-sunken max-lg:aspect-[2/3] max-lg:flex-none">
       {thumb ? (
         <Veil active={model.nsfw && blurNsfw && !pending} className="absolute inset-0">
-          <img src={thumb} alt="" className="h-full w-full object-contain" />
+          <img src={thumb} alt="" className="h-full w-full object-cover" />
         </Veil>
       ) : (
         <FallbackFace name={model.name} kind={model.kind} className="absolute inset-0" />

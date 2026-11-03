@@ -21,6 +21,14 @@ export const DATA_SUFFIX = "_data";
 const THUMB_MAX = 576;
 /** What `thumb.*` can be: an image the thumbnail cache can read. */
 const THUMB_EXTS = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+/** What a raw picture is served as; other raw files (videos) aren't shown as pictures. */
+export const RAW_TYPES: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".webp": "image/webp",
+  ".gif": "image/gif",
+};
 
 /** "…/Detailer.safetensors" → "…/Detailer_data". */
 export function dataDirOf(modelFile: string): string {

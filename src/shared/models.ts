@@ -75,6 +75,8 @@ export const LocalModel = z.object({
   /** When the file was created (birth time; Linux file systems without one give 0). */
   ctime: z.number().default(0),
   thumb: z.string().nullable(),
+  /** The full-size picture (`<model>_data/thumb_raw.*`, images only) for big views. */
+  rawThumb: z.string().nullable().default(null),
   /** Marked NSFW by its sidecar info (unknown counts as not NSFW). */
   nsfw: z.boolean(),
   baseModel: z.string().nullable(),

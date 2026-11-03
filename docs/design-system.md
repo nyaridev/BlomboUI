@@ -161,7 +161,11 @@ Presets in `src/client/lib/motion.ts`:
 - **Image stage timing:** a finished result's info chip adds "· 7.9 it/s" with a tooltip of time per part; while running, the progress card shows the server's it/s.
 - **Drop to reuse:** dragging a file over Generate shows a dashed accent overlay on `bg/80` ("Drop to use this image's settings"), then "Reading the image…".
 - **Model pickers:** favorites first (heart on the card), then recently used, then the rest.
-- **Models strip:** portrait 2:3 picture tiles, no text beside them. "Pictures" (112 px wide) puts the name on the picture over a dark gradient; "compact" (64 px) shows the picture only. The chevron on the left switches them (`settings.generate.tiles`). Corners: a LoRA's strength top left with a warning icon when the file is missing (yellow border too), remove top right on hover; the strength slider takes the name's place on hover (always on touch). The tooltip names the role and the model. Clicking a tile opens its picker tab; a dashed + tile adds a LoRA.
+- **Models strip:** three groups split by a line (models, LoRAs, wildcards), each under a `label-caps` label (one per model tile: Checkpoint, VAE…). Three looks (`settings.generate.tiles`), switched by a full-height column on the left (text toggle on top, bigger / smaller chevron below):
+  - "pictures": portrait 2:3 tiles, 112 px, the name on the picture over a dark gradient;
+  - "compact": 64 px, the picture only;
+  - "text": one row of `h-7` chips (role caps, name, a LoRA's strength as a `ScrubField`), no labels above.
+  Corners: a LoRA's strength top left, a warning icon when the file is missing (yellow border too), remove top right on hover; the strength slider takes the name's place on hover (always on touch). LoRAs reorder by dragging (native drag and drop, an accent line marks the drop) or Alt+←/→; controls inside a tile carry `data-no-drag`. Clicking a tile opens its picker tab; LoRAs and wildcards each end with a dashed + tile.
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
 
 ## Narrow screens

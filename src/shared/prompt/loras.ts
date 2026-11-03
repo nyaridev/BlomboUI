@@ -81,3 +81,22 @@ export function stripLoraTags(text: string): string {
     .replace(/[ \t]{2,}/g, " ")
     .trim();
 }
+
+/**
+ * Move the tag at `from` to position `to` among the prompt's tags. Tags trade places in the
+ * slots they already fill, so the text around them stays as typed.
+ */
+export function moveLoraTag(text: string, from: number, to: number): string {
+  const tags = findLoraTags(text);
+  if (from === to || !tags[from] || !tags[to]) return text;
+  const raw = tags.map((t) => text.slice(t.start, t.end));
+  const [moved] = raw.splice(from, 1);
+  raw.splice(to, 0, moved as string);
+  let out = "";
+  let at = 0;
+  tags.forEach((t, i) => {
+    out += text.slice(at, t.start) + raw[i];
+    at = t.end;
+  });
+  return out + text.slice(at);
+}

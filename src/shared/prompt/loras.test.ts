@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   findLoraTags,
   formatLoraTag,
+  moveLoraTag,
   removeLoraTag,
   setLoraStrength,
   stripLoraTags,
@@ -49,5 +50,15 @@ describe("stripLoraTags", () => {
   it("removes tags and tidies commas", () => {
     expect(stripLoraTags("<lora:a:1>, cat, <lora:b:0.5>, dog, <lora:c>")).toBe("cat, dog");
     expect(stripLoraTags("cat\n<lora:a>, dog")).toBe("cat\ndog");
+  });
+});
+
+describe("moveLoraTag", () => {
+  it("reorders tags in the slots they fill, keeping the text around them", () => {
+    const text = "cat, <lora:a:0.5>, dog <lora:b>\n<lora:c:1:0.2> end";
+    expect(moveLoraTag(text, 0, 2)).toBe("cat, <lora:b>, dog <lora:c:1:0.2>\n<lora:a:0.5> end");
+    expect(moveLoraTag(text, 2, 0)).toBe("cat, <lora:c:1:0.2>, dog <lora:a:0.5>\n<lora:b> end");
+    expect(moveLoraTag(text, 1, 1)).toBe(text);
+    expect(moveLoraTag(text, 0, 5)).toBe(text);
   });
 });

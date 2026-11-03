@@ -60,8 +60,8 @@ export const ModelSettings = z.object({
 export const GenerateSettings = z.object({
   /** The layout workflows show when they don't link one (a built-in or profile layout id). */
   layout: z.string().min(1).max(80).default("default"),
-  /** The models strip: big pictures with names on them, or small pictures only. */
-  tiles: z.enum(["pictures", "compact"]).default("pictures"),
+  /** The models strip: big pictures with names on them, small pictures only, or text chips. */
+  tiles: z.enum(["pictures", "compact", "text"]).default("pictures"),
 });
 
 /** Ctrl+↑/↓ in the prompt editor changes weights by this much. */

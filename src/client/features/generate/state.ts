@@ -10,7 +10,7 @@ import { api } from "@client/lib/api";
 import { qk, queryClient } from "@client/lib/queries";
 import { onProfileSwitch, useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
-import type { Block, LayoutDocument } from "@shared/layout/schema";
+import { allBlocks, type Block, type LayoutDocument } from "@shared/layout/schema";
 import type {
   RunSettings,
   StagesRecord,
@@ -206,15 +206,16 @@ interface LayoutState {
   redo: () => void;
   updateBlock: (id: string, patch: Partial<Block>) => void;
   moveParams: (from: number, to: number) => void;
-  moveInCard: (cardId: string, from: number, to: number) => void;
+  /** Reorder inside a group (a card or tabs), at any depth. */
+  moveIn: (groupId: string, from: number, to: number) => void;
 }
 
-function mapBlocks(blocks: Block[], id: string, patch: Partial<Block>): Block[] {
+function mapBlocks(blocks: Block[], fn: (b: Block) => Block): Block[] {
   return blocks.map((b) => {
-    if (b.id === id) return { ...b, ...patch } as Block;
-    if (b.type === "card")
-      return { ...b, children: mapBlocks(b.children, id, patch) as typeof b.children };
-    return b;
+    const next = fn(b);
+    if (next.type === "card" || next.type === "tabs")
+      return { ...next, children: mapBlocks(next.children, fn) } as Block;
+    return next;
   });
 }
 
@@ -279,7 +280,12 @@ export const useLayout = create<LayoutState>((set, get) => ({
     if (!s.doc) return;
     s.apply({
       ...s.doc,
-      regions: { ...s.doc.regions, params: mapBlocks(s.doc.regions.params, id, patch) },
+      regions: {
+        ...s.doc.regions,
+        params: mapBlocks(s.doc.regions.params, (b) =>
+          b.id === id ? ({ ...b, ...patch } as Block) : b,
+        ),
+      },
     });
   },
   moveParams: (from, to) => {
@@ -290,12 +296,12 @@ export const useLayout = create<LayoutState>((set, get) => ({
       regions: { ...s.doc.regions, params: arrayMove(s.doc.regions.params, from, to) },
     });
   },
-  moveInCard: (cardId, from, to) => {
+  moveIn: (groupId, from, to) => {
     const s = get();
     if (!s.doc) return;
-    const params = s.doc.regions.params.map((b) =>
-      b.type === "card" && b.id === cardId
-        ? { ...b, children: arrayMove(b.children, from, to) }
+    const params = mapBlocks(s.doc.regions.params, (b) =>
+      (b.type === "card" || b.type === "tabs") && b.id === groupId
+        ? ({ ...b, children: arrayMove<Block>(b.children, from, to) } as Block)
         : b,
     );
     s.apply({ ...s.doc, regions: { ...s.doc.regions, params } });
@@ -303,13 +309,5 @@ export const useLayout = create<LayoutState>((set, get) => ({
 }));
 
 export function findBlock(blocks: Block[], id: string | null): Block | undefined {
-  if (!id) return undefined;
-  for (const b of blocks) {
-    if (b.id === id) return b;
-    if (b.type === "card") {
-      const inner = b.children.find((c) => c.id === id);
-      if (inner) return inner;
-    }
-  }
-  return undefined;
+  return id ? allBlocks(blocks).find((b) => b.id === id) : undefined;
 }

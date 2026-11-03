@@ -3,7 +3,8 @@
  * (on the steps Settings → Generate → Preview picks); progress split by part of the run (the
  * workflow's sampling, then each stage) with speed and ETA; and, for a finished result, its size,
  * seed and how long it took. Clicking the image opens it full screen, a middle click opens it in
- * a new tab. A strip under the box shows the last run's images, only when it made more than one.
+ * a new tab. A strip under the box shows the last run's images, only when it made more than one,
+ * and the shown image's run info (RunInfo) comes after it. The column scrolls with the page.
  * Everything comes from the live bus: queue snapshots, step progress and binary preview frames.
  */
 import { Icon } from "@client/icons/Icon";
@@ -26,6 +27,7 @@ import { PreviewSettings } from "@shared/settings";
 import { AnimatePresence, motion } from "motion/react";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { previewDue, useLastRun } from "../preview";
+import { RunInfo } from "./RunInfo";
 
 interface Result {
   key: string;
@@ -173,7 +175,7 @@ export function ImageStage() {
     progress !== null && previewDue(progress.value, progress.max, previewSettings, wait);
 
   return (
-    <div className="sticky top-0 flex min-w-0 flex-col gap-2">
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="relative aspect-square w-full overflow-hidden rounded-xl border border-line bg-sunken">
         {running ? (
           <>
@@ -287,6 +289,8 @@ export function ImageStage() {
           ))}
         </div>
       ) : null}
+
+      {current && !running ? <RunInfo jobId={current.job.id} /> : null}
 
       {viewing && current ? (
         <ImageViewer

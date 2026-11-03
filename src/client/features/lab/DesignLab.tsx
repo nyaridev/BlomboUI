@@ -324,6 +324,8 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [notes, setNotes] = useState("");
   const [tab, setTab] = useState("generate");
   const [line, setLine] = useState("generation");
+  const [pass, setPass] = useState("first");
+  const [passOn, setPassOn] = useState({ controlnet: false, hires: true });
   const [dialog, setDialog] = useState(false);
   const [bareDialog, setBareDialog] = useState(false);
   const [sheet, setSheet] = useState(false);
@@ -741,6 +743,25 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               step={0.1}
               disabled
             />
+            <Slider
+              label="Large with a number box (Generate params) · Steps"
+              value={steps}
+              onChange={setSteps}
+              min={1}
+              max={100}
+              size="lg"
+              field
+            />
+            <Slider
+              label="Number box · CFG"
+              value={cfg}
+              onChange={setCfg}
+              min={1}
+              max={15}
+              step={0.5}
+              size="lg"
+              field
+            />
           </div>
         </Section>
 
@@ -823,6 +844,28 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 { value: "generation", label: "Generation", icon: "sliders" },
                 { value: "checkpoints", label: "Checkpoints", icon: "models" },
                 { value: "loras", label: "LoRAs", icon: "layers", badge: <Badge>1032</Badge> },
+              ]}
+            />
+          </Row>
+          <Row label="Line tabs with checkboxes (passes)">
+            <Tabs
+              variant="line"
+              value={pass}
+              onChange={setPass}
+              items={[
+                { value: "first", label: "First pass" },
+                {
+                  value: "controlnet",
+                  label: "ControlNet",
+                  checked: passOn.controlnet,
+                  onCheckedChange: (v) => setPassOn((o) => ({ ...o, controlnet: v })),
+                },
+                {
+                  value: "hires",
+                  label: "Hires fix",
+                  checked: passOn.hires,
+                  onCheckedChange: (v) => setPassOn((o) => ({ ...o, hires: v })),
+                },
               ]}
             />
           </Row>

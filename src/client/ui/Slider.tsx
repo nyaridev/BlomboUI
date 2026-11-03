@@ -1,12 +1,22 @@
 /**
  * Number controls driven by pointer capture:
- *  - Slider:     classic track + thumb, value shown and editable in the label row
+ *  - Slider:     classic track + thumb, value shown and editable in the label row (as text, or
+ *                with `field` as a number box with steppers, the Generate params' look)
  *  - ScrubField: a field-sized bar; drag anywhere to scrub, click to type (Blender-style)
  * Both: arrows ±step, Shift ×10, PageUp/PageDown ×10, Home/End, double-click resets to default.
  */
 import { cn } from "@client/lib/cn";
 import { clamp, formatNumber, parseNumberInput, snap } from "@client/lib/number";
-import { type KeyboardEvent, type PointerEvent, type ReactNode, useRef, useState } from "react";
+import {
+  createContext,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+  useContext,
+  useRef,
+  useState,
+} from "react";
+import { NumberField } from "./NumberField";
 
 export interface NumberControlProps {
   value: number;
@@ -112,6 +122,16 @@ function ValueEdit({
   );
 }
 
+export interface SliderLook {
+  size?: NumberControlProps["size"];
+  /** The value as a number box with steppers instead of text. */
+  field?: boolean;
+}
+
+/** Defaults for every Slider inside (the Generate params use large sliders with number boxes);
+ * a Slider's own props still win. */
+export const SliderLookContext = createContext<SliderLook>({});
+
 export function Slider({
   value,
   onChange,
@@ -123,12 +143,16 @@ export function Slider({
   unit,
   defaultValue,
   disabled,
-  size = "md",
+  size: ownSize,
+  field: ownField,
   format,
   marks,
   tone = "accent",
   className,
-}: NumberControlProps & { marks?: number[]; tone?: "accent" | "generate" }) {
+}: NumberControlProps & SliderLook & { marks?: number[]; tone?: "accent" | "generate" }) {
+  const look = useContext(SliderLookContext);
+  const size = ownSize ?? look.size ?? "md";
+  const field = ownField ?? look.field ?? false;
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
   const pct = max > min ? ((clamp(value, min, max) - min) / (max - min)) * 100 : 0;
@@ -158,7 +182,7 @@ export function Slider({
   };
 
   const fill = tone === "generate" ? "bg-generate-hi" : "bg-accent";
-  const trackH = size === "sm" ? "h-1" : "h-1.5";
+  const trackH = size === "sm" ? "h-1" : size === "lg" ? "h-2" : "h-1.5";
   const thumb = size === "sm" ? "h-3 w-3" : size === "lg" ? "h-[18px] w-[18px]" : "h-3.5 w-3.5";
 
   return (
@@ -172,15 +196,29 @@ export function Slider({
       {label !== undefined ? (
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-xs text-fg-2">{label}</span>
-          <ValueEdit
-            value={value}
-            step={step}
-            min={min}
-            max={max}
-            unit={unit}
-            format={format}
-            onCommit={onChange}
-          />
+          {field ? (
+            <NumberField
+              value={value}
+              onChange={onChange}
+              min={min}
+              max={max}
+              step={step}
+              unit={unit}
+              size="sm"
+              label={typeof label === "string" && label ? `${label} value` : "Value"}
+              className="w-[5.25rem] shrink-0"
+            />
+          ) : (
+            <ValueEdit
+              value={value}
+              step={step}
+              min={min}
+              max={max}
+              unit={unit}
+              format={format}
+              onCommit={onChange}
+            />
+          )}
         </div>
       ) : null}
       <div

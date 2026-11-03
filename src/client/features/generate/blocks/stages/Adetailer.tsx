@@ -3,7 +3,7 @@
  * optionally SAM for a tighter mask, then redraw it at a higher resolution. Units run in order
  * after Hires fix. Sampling and prompts follow the base until unlinked, per unit.
  */
-import { Collapsible, Field, Select, type SelectOption, Slider } from "@client/ui";
+import { Field, Select, type SelectOption, Slider } from "@client/ui";
 import { AdetailerUnit } from "@shared/workflow/stages";
 import { useStage } from "../../state";
 import {
@@ -12,6 +12,7 @@ import {
   InheritPrompt,
   modelOptions,
   problemSummary,
+  StageFrame,
   StageNotices,
   useStageStatus,
 } from "./common";
@@ -40,7 +41,7 @@ export function AdetailerStage() {
   const on = ad.units.filter((u) => u.enabled);
   const issue = problemSummary(status);
   return (
-    <Collapsible
+    <StageFrame
       title="ADetailer"
       icon="face-scan"
       subtitle={
@@ -203,6 +204,6 @@ export function AdetailerStage() {
           />
         )}
       </div>
-    </Collapsible>
+    </StageFrame>
   );
 }

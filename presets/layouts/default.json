@@ -26,72 +26,78 @@
     ],
     "params": [
       {
-        "type": "card",
-        "id": "card-first-pass",
-        "title": "First pass",
-        "icon": "activity",
+        "type": "tabs",
+        "id": "passes",
         "children": [
           {
-            "type": "param",
-            "id": "p-sampler",
-            "bind": "role:sampler.name",
-            "control": "select",
-            "span": 4
+            "type": "card",
+            "id": "card-first-pass",
+            "title": "First pass",
+            "icon": "activity",
+            "children": [
+              {
+                "type": "param",
+                "id": "p-sampler",
+                "bind": "role:sampler.name",
+                "control": "select",
+                "span": 4
+              },
+              {
+                "type": "param",
+                "id": "p-scheduler",
+                "bind": "role:sampler.scheduler",
+                "control": "select",
+                "span": 4
+              },
+              {
+                "type": "param",
+                "id": "p-steps",
+                "bind": "role:sampler.steps",
+                "control": "slider",
+                "span": 4
+              },
+              {
+                "type": "feature",
+                "feature": "resolution",
+                "id": "resolution"
+              },
+              {
+                "type": "param",
+                "id": "p-clipskip",
+                "bind": "role:clip.skip",
+                "control": "slider",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-cfg",
+                "bind": "role:sampler.cfg",
+                "control": "slider",
+                "span": 6
+              },
+              {
+                "type": "feature",
+                "feature": "seed",
+                "id": "seed"
+              }
+            ]
           },
           {
-            "type": "param",
-            "id": "p-scheduler",
-            "bind": "role:sampler.scheduler",
-            "control": "select",
-            "span": 4
+            "type": "stage",
+            "stage": "controlnet",
+            "id": "stage-controlnet"
           },
           {
-            "type": "param",
-            "id": "p-steps",
-            "bind": "role:sampler.steps",
-            "control": "slider",
-            "span": 4
+            "type": "stage",
+            "stage": "hires",
+            "id": "stage-hires"
           },
           {
-            "type": "feature",
-            "feature": "resolution",
-            "id": "resolution"
-          },
-          {
-            "type": "param",
-            "id": "p-clipskip",
-            "bind": "role:clip.skip",
-            "control": "chips",
-            "span": 6
-          },
-          {
-            "type": "param",
-            "id": "p-cfg",
-            "bind": "role:sampler.cfg",
-            "control": "slider",
-            "span": 6
-          },
-          {
-            "type": "feature",
-            "feature": "seed",
-            "id": "seed"
+            "type": "stage",
+            "stage": "adetailer",
+            "id": "stage-adetailer"
           }
         ]
-      },
-      {
-        "type": "stage",
-        "stage": "hires",
-        "id": "stage-hires"
-      },
-      {
-        "type": "stage",
-        "stage": "adetailer",
-        "id": "stage-adetailer"
-      },
-      {
-        "type": "stage",
-        "stage": "controlnet",
-        "id": "stage-controlnet"
       },
       {
         "type": "params-rest",

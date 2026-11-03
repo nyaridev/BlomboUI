@@ -62,6 +62,7 @@ export function Checkbox({
   description,
   disabled,
   indeterminate,
+  ariaLabel,
 }: {
   checked: boolean;
   onCheckedChange: (checked: boolean) => void;
@@ -69,6 +70,8 @@ export function Checkbox({
   description?: ReactNode;
   disabled?: boolean;
   indeterminate?: boolean;
+  /** The name when there's no visible label (a tab's checkbox). */
+  ariaLabel?: string;
 }) {
   const on = checked || indeterminate;
   const box = (
@@ -110,6 +113,7 @@ export function Checkbox({
       type="button"
       role="checkbox"
       aria-checked={indeterminate ? "mixed" : checked}
+      aria-label={ariaLabel}
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
       className="group inline-flex items-start gap-2.5 text-left focus-ring rounded-xs disabled:opacity-40"

@@ -61,16 +61,47 @@ export const CardBlock = z.object({
   ...common,
 });
 
+/** Passes shown one at a time: each card is a tab named by its title, each stage a tab with a
+ * checkbox that turns it on. Customize shows them stacked. */
+export const TabsBlock = z.object({
+  type: z.literal("tabs"),
+  children: z.array(z.discriminatedUnion("type", [CardBlock, StageBlock])),
+  ...common,
+});
+
 export const Block = z.discriminatedUnion("type", [
   ParamBlock,
   FeatureBlock,
   StageBlock,
   RestBlock,
   CardBlock,
+  TabsBlock,
 ]);
 export type Block = z.infer<typeof Block>;
 export type ParamBlock = z.infer<typeof ParamBlock>;
 export type CardBlock = z.infer<typeof CardBlock>;
+export type TabsBlock = z.infer<typeof TabsBlock>;
+
+/** The blocks a group (card or tabs) holds; none for the others. */
+export function blockChildren(block: Block): Block[] {
+  return block.type === "card" || block.type === "tabs" ? block.children : [];
+}
+
+/** The group directly holding `id`, at any depth (null at the top level or when missing). */
+export function parentBlock(blocks: Block[], id: string): Block | null {
+  for (const b of blocks) {
+    const kids = blockChildren(b);
+    if (kids.some((c) => c.id === id)) return b;
+    const deeper = parentBlock(kids, id);
+    if (deeper) return deeper;
+  }
+  return null;
+}
+
+/** Every block, groups before what they hold. */
+export function allBlocks(blocks: Block[]): Block[] {
+  return blocks.flatMap((b) => [b, ...allBlocks(blockChildren(b))]);
+}
 
 export const REGIONS = ["models", "prompt", "actions", "params", "stage"] as const;
 export type RegionId = (typeof REGIONS)[number];

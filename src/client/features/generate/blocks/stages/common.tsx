@@ -4,9 +4,19 @@
  * the inherited fields (steps, CFG, sampler, scheduler, prompts) that follow the base workflow
  * until unlinked.
  */
+
+import { cn } from "@client/lib/cn";
 import { useDebounced, useGoToView } from "@client/lib/hooks";
 import { useStageReport } from "@client/lib/queries";
-import { Button, InheritRow, Notice, NumberField, Select, type SelectOption } from "@client/ui";
+import {
+  Button,
+  Collapsible,
+  InheritRow,
+  Notice,
+  NumberField,
+  Select,
+  type SelectOption,
+} from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import type { StoreCategory } from "@shared/manager";
 import type { StageId } from "@shared/workflow/roles";
@@ -16,12 +26,28 @@ import {
   type StageProblem,
   type StageStatus,
 } from "@shared/workflow/stages";
+import { type ComponentProps, createContext, useContext } from "react";
 import { useModelsNav } from "../../../models/nav";
 import { samplerLabel } from "../../labels";
 import { PromptEditor } from "../../PromptEditor";
 import { useValues } from "../../state";
 import { useRoleBinding } from "../../workflow";
 import { NodesNotice } from "./NodesNotice";
+
+/** True inside the passes tabs: the tab names the stage and holds its checkbox. */
+export const StageTabContext = createContext(false);
+
+/** A stage's frame: a collapsible card with an enable switch, or only its body inside a tab
+ * (dimmed while the stage is off, still editable so it can be set up first). */
+export function StageFrame(props: ComponentProps<typeof Collapsible>) {
+  const inTab = useContext(StageTabContext);
+  if (!inTab) return <Collapsible {...props} />;
+  return (
+    <div className={cn("transition-opacity", props.enabled === false && "opacity-55")}>
+      {props.children}
+    </div>
+  );
+}
 
 /** The checks for every stage of the active workflow, following its settings (debounced). */
 export function useStageStatuses(): { statuses: StageStatus[]; checked: boolean } {

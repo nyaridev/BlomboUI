@@ -24,7 +24,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Block, CardBlock } from "@shared/layout/schema";
+import { allBlocks, type Block, blockChildren } from "@shared/layout/schema";
 import type { ReactNode } from "react";
 import { blockLabel } from "./blockLabel";
 import type { Arrange, ArrangeGroupProps, ArrangeItemProps } from "./ParamsColumn";
@@ -44,9 +44,9 @@ function SortableItem({ block, children, span, compact }: ArrangeItemProps) {
     gridColumn: span ? `span ${span} / span ${span}` : undefined,
   };
   const { label, icon } = blockLabel(block, bindings);
-  // A card is a container: it's selected through its label chip, and its children stay
-  // individually selectable. Every other block is selected by clicking anywhere on it.
-  const container = block.type === "card";
+  // A group (card, tabs) is a container: it's selected through its label chip, and its
+  // children stay individually selectable. Every other block is selected by clicking on it.
+  const container = block.type === "card" || block.type === "tabs";
   return (
     <div
       ref={setNodeRef}
@@ -109,7 +109,7 @@ function SortableItem({ block, children, span, compact }: ArrangeItemProps) {
   );
 }
 
-/** A card's children sort within the card's grid. */
+/** A group's children sort within the group (a card's grid, the stacked tabs). */
 function SortableGroup({ ids, children }: ArrangeGroupProps) {
   return (
     <SortableContext items={ids} strategy={rectSortingStrategy}>
@@ -132,7 +132,7 @@ export default function SortableParams({
   children: (arrange: Arrange) => ReactNode;
 }) {
   const moveParams = useLayout((s) => s.moveParams);
-  const moveInCard = useLayout((s) => s.moveInCard);
+  const moveIn = useLayout((s) => s.moveIn);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -147,15 +147,12 @@ export default function SortableParams({
       moveParams(top.indexOf(a), top.indexOf(o));
       return;
     }
-    const card = blocks.find(
-      (b): b is CardBlock =>
-        b.type === "card" &&
-        b.children.some((c) => c.id === a) &&
-        b.children.some((c) => c.id === o),
-    );
-    if (card) {
-      const childIds = card.children.map((c) => c.id);
-      moveInCard(card.id, childIds.indexOf(a), childIds.indexOf(o));
+    for (const group of allBlocks(blocks)) {
+      const childIds = blockChildren(group).map((c) => c.id);
+      if (childIds.includes(a) && childIds.includes(o)) {
+        moveIn(group.id, childIds.indexOf(a), childIds.indexOf(o));
+        return;
+      }
     }
   };
 

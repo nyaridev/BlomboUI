@@ -42,23 +42,10 @@ function PromptField({
   const [value, setValue] = useValue<string>(id);
   const text = typeof value === "string" ? value : "";
   const editor = useRef<PromptEditorHandle | null>(null);
+  // No label above the box (the placeholder says which is which); the token count and tools
+  // float in its top-right corner while the pointer is over it.
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 px-0.5">
-        <span className="text-xs font-medium text-fg-2">{label}</span>
-        <TokenCount text={text} />
-        {tools ? (
-          <span className="ml-auto flex items-center">
-            <PromptHistoryButton prompt={text} setPrompt={setValue} editor={editor} />
-            <IconButton
-              icon="eraser"
-              label={`Clear ${label.toLowerCase()}`}
-              size="xs"
-              onClick={() => setValue("")}
-            />
-          </span>
-        ) : null}
-      </div>
+    <div className="group/prompt relative">
       <PromptEditor
         label={label}
         value={text}
@@ -69,6 +56,22 @@ function PromptField({
         className={className}
         handle={editor}
       />
+      <div className="absolute top-1 right-1 z-10 flex items-center gap-0.5 rounded-sm bg-surface-3 pl-1.5 opacity-0 shadow-pop transition-opacity group-hover/prompt:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+        <TokenCount text={text} />
+        {tools ? (
+          <>
+            <PromptHistoryButton prompt={text} setPrompt={setValue} editor={editor} />
+            <IconButton
+              icon="eraser"
+              label={`Clear ${label.toLowerCase()}`}
+              size="xs"
+              onClick={() => setValue("")}
+            />
+          </>
+        ) : (
+          <span className="w-1" />
+        )}
+      </div>
     </div>
   );
 }

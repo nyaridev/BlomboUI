@@ -64,16 +64,22 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
   const step = binding.step ?? (binding.type === "int" ? 1 : 0.01);
 
   if (family === "number") {
-    const n = typeof value === "number" ? value : min;
-    const set = (v: number) => setValue(v);
+    // ComfyUI's CLIP skip counts down from -1; people know it as 1, 2… (A1111), so show it so.
+    const flip = binding.role === "clip.skip" && max <= 0;
+    const raw = typeof value === "number" ? value : flip ? max : min;
+    const n = flip ? -raw : raw;
+    const set = (v: number) => setValue(flip ? -v : v);
+    const lo = flip ? -max : min;
+    // shortcut: a flipped CLIP skip stops at 12 (deeper ones still show); widen it if anyone asks.
+    const hi = flip ? Math.max(Math.min(-min, 12), n) : max;
     if (style === "scrub")
       return (
         <ScrubField
           label={label ?? binding.label}
           value={n}
           onChange={set}
-          min={min}
-          max={max}
+          min={lo}
+          max={hi}
           step={step}
           size={size}
         />
@@ -84,8 +90,8 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
           <NumberField
             value={n}
             onChange={set}
-            min={min}
-            max={max}
+            min={lo}
+            max={hi}
             step={step}
             size={size}
             label={label}
@@ -95,15 +101,15 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
         <NumberField
           value={n}
           onChange={set}
-          min={min}
-          max={max}
+          min={lo}
+          max={hi}
           step={step}
           size={size}
           label={binding.label}
         />
       );
     if (style === "chips") {
-      const presets = numberPresets(binding);
+      const presets = flip ? [1, 2, 3, 4] : numberPresets(binding);
       return (
         <div className="flex flex-col gap-1.5">
           {label ? (
@@ -132,10 +138,10 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
         label={label ?? ""}
         value={n}
         onChange={set}
-        min={min}
-        max={max}
+        min={lo}
+        max={hi}
         step={step}
-        size={size}
+        size={block.size}
       />
     );
   }

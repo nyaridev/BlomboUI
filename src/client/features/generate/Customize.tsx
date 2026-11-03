@@ -18,7 +18,7 @@ import {
   Tooltip,
   toast,
 } from "@client/ui";
-import { CONTROL_STYLES } from "@shared/layout/schema";
+import { CONTROL_STYLES, parentBlock } from "@shared/layout/schema";
 import { resolveBind } from "@shared/workflow/manifest";
 import { motion } from "motion/react";
 import { useState } from "react";
@@ -332,9 +332,7 @@ export function Inspector() {
   const bindings = useBindings();
   const params = doc?.regions.params ?? [];
   const block = findBlock(params, selectedId);
-  const inCard = params.some(
-    (b) => b.type === "card" && b.children.some((c) => c.id === selectedId),
-  );
+  const inCard = selectedId ? parentBlock(params, selectedId)?.type === "card" : false;
 
   return (
     <motion.aside
@@ -385,7 +383,9 @@ export function Inspector() {
                     ? "Parameter"
                     : block.type === "card"
                       ? "Group"
-                      : "Feature block"}
+                      : block.type === "tabs"
+                        ? "Tabs"
+                        : "Feature block"}
                 </span>
               </div>
             </div>

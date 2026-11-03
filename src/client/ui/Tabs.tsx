@@ -1,18 +1,25 @@
 /**
  * Tabs with a sliding indicator. `pill` is the header navigation look; `line` sits on top of
- * a panel (Generate workspace, Models sub-views).
+ * a panel (Generate workspace, Models sub-views). A tab with `checked` gets a checkbox before
+ * its label that turns its view on or off (the Generate passes: Hires fix, ADetailer…); the
+ * checkbox is the tab's sibling, not inside the tab button.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
 import { LayoutGroup, motion } from "motion/react";
 import { type KeyboardEvent, type ReactNode, useId, useRef } from "react";
+import { Checkbox } from "./toggles";
 
 export interface TabItem<T extends string> {
   value: T;
   label: ReactNode;
   icon?: IconName;
   badge?: ReactNode;
+  /** Shows a checkbox before the label; its name is "Use <label>" unless `checkLabel` says. */
+  checked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+  checkLabel?: string;
 }
 
 export function Tabs<T extends string>({
@@ -55,7 +62,8 @@ export function Tabs<T extends string>({
       >
         {items.map((item, i) => {
           const active = item.value === value;
-          return (
+          const checkable = item.checked !== undefined;
+          const tab = (
             <button
               key={item.value}
               ref={(n) => {
@@ -70,6 +78,7 @@ export function Tabs<T extends string>({
               className={cn(
                 "relative inline-flex shrink-0 items-center gap-2 text-sm font-medium transition-colors focus-ring",
                 variant === "pill" ? "h-8 rounded-md px-3" : "h-9 px-3",
+                checkable && "pl-9",
                 active ? "text-fg" : "text-fg-3 hover:text-fg-2",
               )}
             >
@@ -97,6 +106,22 @@ export function Tabs<T extends string>({
                 {item.badge}
               </span>
             </button>
+          );
+          if (!checkable) return tab;
+          return (
+            <span key={item.value} className="relative inline-flex shrink-0">
+              {tab}
+              <span className="absolute top-1/2 left-3 z-20 -translate-y-1/2">
+                <Checkbox
+                  checked={Boolean(item.checked)}
+                  onCheckedChange={(v) => item.onCheckedChange?.(v)}
+                  ariaLabel={
+                    item.checkLabel ??
+                    (typeof item.label === "string" ? `Use ${item.label}` : "Use")
+                  }
+                />
+              </span>
+            </span>
           );
         })}
       </div>

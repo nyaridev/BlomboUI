@@ -21,6 +21,8 @@ export function blockLabel(block: Block, bindings: Binding[]): { label: string; 
     }
     case "card":
       return { label: block.title, icon: "layout-grid" };
+    case "tabs":
+      return { label: "Passes", icon: "layers" };
     case "stage":
       return { label: STAGE_LABELS[block.stage], icon: STAGE_ICONS[block.stage] };
     case "params-rest":

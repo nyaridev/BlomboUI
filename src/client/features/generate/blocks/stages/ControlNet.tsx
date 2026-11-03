@@ -9,7 +9,6 @@ import { useLive } from "@client/lib/live";
 import { useGalleryImages } from "@client/lib/queries";
 import {
   Button,
-  Collapsible,
   Dialog,
   DropZone,
   EmptyState,
@@ -31,7 +30,7 @@ import {
 } from "@shared/workflow/stages";
 import { useRef, useState } from "react";
 import { useStage, useValues } from "../../state";
-import { modelOptions, problemSummary, StageNotices, useStageStatus } from "./common";
+import { modelOptions, problemSummary, StageFrame, StageNotices, useStageStatus } from "./common";
 import { UnitBar, UnitHeader, useUnits } from "./units";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -324,7 +323,7 @@ export function ControlNetStage() {
   const on = cn_.units.filter((u) => u.enabled);
   const issue = problemSummary(status);
   return (
-    <Collapsible
+    <StageFrame
       title="ControlNet"
       icon="pose"
       subtitle={
@@ -425,7 +424,7 @@ export function ControlNetStage() {
           />
         </div>
       </div>
-    </Collapsible>
+    </StageFrame>
   );
 }
 

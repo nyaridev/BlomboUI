@@ -3,7 +3,7 @@
  * it again at a low denoise. Steps, CFG, sampler, scheduler and prompts follow the base until
  * unlinked; the size follows the base size by a factor, or a fixed target.
  */
-import { Checkbox, Collapsible, Field, NumberField, Segmented, Select, Slider } from "@client/ui";
+import { Checkbox, Field, NumberField, Segmented, Select, Slider } from "@client/ui";
 import { hiresSize } from "@shared/workflow/stages";
 import { useStage, useValues } from "../../state";
 import { useRoleBinding } from "../../workflow";
@@ -13,6 +13,7 @@ import {
   InheritPrompt,
   modelOptions,
   problemSummary,
+  StageFrame,
   StageNotices,
   useStageStatus,
 } from "./common";
@@ -34,7 +35,7 @@ export function HiresStage() {
   const diffusion = status?.family === "diffusion";
   const fallback = status?.problems.length ? problemSummary(status) : null;
   return (
-    <Collapsible
+    <StageFrame
       title="Hires fix"
       icon="upscale"
       subtitle={
@@ -180,6 +181,6 @@ export function HiresStage() {
           label="Also save the image before Hires fix"
         />
       </div>
-    </Collapsible>
+    </StageFrame>
   );
 }

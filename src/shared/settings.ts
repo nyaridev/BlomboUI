@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { BrowseFilter, CIVITAI_SITES, SavedFilter } from "./civitai.ts";
 import { salvage } from "./salvage.ts";
+import { SIZE_MODES } from "./sizes.ts";
 
 export const SETTINGS_VERSION = 1;
 
@@ -79,6 +80,8 @@ export const GenerateSettings = z.object({
   paramsShare: z.number().min(0.3).max(0.75).default(0.6),
   /** The models strip: big pictures with names on them, small pictures only, or text chips. */
   tiles: z.enum(["pictures", "compact", "text"]).default("pictures"),
+  /** How the Size picker sets the size: width and height, aspect and megapixels, or a list. */
+  sizeMode: z.enum(SIZE_MODES).default("set"),
 });
 
 /** Ctrl+↑/↓ in the prompt editor changes weights by this much. */

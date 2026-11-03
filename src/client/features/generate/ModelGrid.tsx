@@ -242,6 +242,8 @@ export function ModelGrid({
           positive.id,
           swapLoraTag(prompt, swapTag, tagName(item.id), item.local?.weight ?? swapTag.strength),
         );
+        // One swap per tile click: the tile lets go, so the next pick adds.
+        onTarget(null);
         return;
       }
       append(formatLoraTag(tagName(item.id), item.local?.weight ?? 1));
@@ -252,7 +254,7 @@ export function ModelGrid({
           positive.id,
           prompt.replace(swapWildcard, () => `__${item.id}__`),
         );
-        onTarget({ kind: "wildcard", name: item.id });
+        onTarget(null);
         return;
       }
       append(`__${item.id}__`);

@@ -187,6 +187,8 @@ export const assistTheme = EditorView.theme({
     fontFamily: "var(--font-ui)",
     // Rows are 32px (24 line + 8 padding), plus the list's own 8px padding.
     maxHeight: "calc(var(--ac-rows, 8) * 32px + 8px)",
+    // A window of rows that slides with the selection, no scrollbar (the wheel still scrolls).
+    scrollbarWidth: "none",
     minWidth: "300px",
     padding: "4px",
   },

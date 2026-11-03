@@ -2,9 +2,9 @@
  * Size, the old app's layout: Raw / Scaler / Set on top, then the size controls for that mode,
  * the swap button, and batch count and size beside them. Raw is width and height; Scaler an
  * aspect (buttons with the shape drawn on them) and megapixels, worked out from the current size
- * so nothing extra is saved; Set the
- * profile's list of resolutions (Settings → Generate) turned horizontal or vertical. The mode is a setting. On its
- * own it's a card; inside a card (`bare`, the default layout's First pass) it's just the rows.
+ * so nothing extra is saved; Set the profile's list of resolutions (Settings → Generate) turned
+ * horizontal or vertical. The mode is a setting. On its own it's a card titled Size; inside a
+ * card (`bare`, the default layout's First pass) it's just the rows, the mode switch first.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -160,7 +160,6 @@ function ResolutionRows({
   const rows = (
     <>
       <div className="flex items-center gap-3">
-        {bare ? <span className="text-xs text-fg-2">Size</span> : null}
         <Segmented size="sm" value={mode} onChange={pickMode} options={MODES} label="Size mode" />
         {mode === "scaler" ? (
           <span className="font-mono text-xs text-fg-3 tabular">{shown({ w, h })}</span>

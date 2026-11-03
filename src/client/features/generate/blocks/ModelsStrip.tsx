@@ -264,7 +264,7 @@ function Tile(props: TileProps) {
           <span className="pointer-events-none absolute top-1 left-1 flex items-center gap-0.5">
             {instant ? (
               <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/60 text-white">
-                <Icon name="bolt" size={11} />
+                <Icon name="bolt" size={11} fill="currentColor" />
               </span>
             ) : null}
             {strength ? (

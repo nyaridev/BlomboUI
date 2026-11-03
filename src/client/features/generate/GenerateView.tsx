@@ -7,6 +7,8 @@
  * visit starts the tour (GenerateTour). On narrow screens the view scrolls as one column: prompt,
  * Generate, then the image above the parameters; Customize stays a desktop tool.
  */
+
+import { cn } from "@client/lib/cn";
 import { glide } from "@client/lib/motion";
 import { useSettings, useUpdateSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
@@ -127,7 +129,7 @@ export function GenerateView() {
       </motion.div>
 
       <motion.div variants={item} className="flex flex-none flex-col">
-        <div className="flex items-center gap-3">
+        <div className="flex items-end gap-3">
           <Tabs
             variant="folder"
             value={tab}
@@ -143,7 +145,7 @@ export function GenerateView() {
             ]}
           />
           {tab === "generation" && !customizing ? (
-            <div className="flex items-center gap-1.5 border-b border-line pb-1.5 max-lg:hidden">
+            <div className="flex items-center gap-1.5 pb-1.5 max-lg:hidden">
               <LayoutPicker />
               <Button size="sm" icon="customize" onClick={() => setCustomizing(true)}>
                 Customize
@@ -152,47 +154,51 @@ export function GenerateView() {
           ) : null}
         </div>
 
-        {tab === "generation" ? (
-          <div className="flex flex-col gap-3 pt-3">
-            <AnimatePresence>{customizing ? <CustomizeBar /> : null}</AnimatePresence>
-            {/* One lighter panel holds both sides. */}
-            <div
-              ref={row}
-              className="mb-3 flex items-stretch rounded-lg border border-line bg-surface p-3 max-lg:flex-col-reverse max-lg:gap-3"
-            >
-              <div
-                data-tour="params"
-                className="min-w-0 shrink-0 max-lg:w-full!"
-                style={{ width: `${paramsShare * 100}%` }}
-              >
-                <ParamsColumn />
+        {/* One lighter panel under the tabs (book tabs: the active one joins it). */}
+        <div
+          className={cn(
+            "mb-3 flex flex-col gap-3 rounded-lg border border-line bg-surface p-3",
+            tab === "generation" && "rounded-tl-none",
+          )}
+        >
+          {tab === "generation" ? (
+            <>
+              <AnimatePresence>{customizing ? <CustomizeBar /> : null}</AnimatePresence>
+              <div ref={row} className="flex items-stretch max-lg:flex-col-reverse max-lg:gap-3">
+                <div
+                  data-tour="params"
+                  className="min-w-0 shrink-0 max-lg:w-full!"
+                  style={{ width: `${paramsShare * 100}%` }}
+                >
+                  <ParamsColumn />
+                </div>
+                <Splitter
+                  container={row}
+                  share={paramsShare}
+                  onChange={setShare}
+                  onCommit={(next) => updateSettings.mutate({ generate: { paramsShare: next } })}
+                  onReset={() => {
+                    setShare(null);
+                    updateSettings.mutate({ generate: { paramsShare: DEFAULT_SHARE } });
+                  }}
+                  label="Resize the settings and the image"
+                  className="max-lg:hidden"
+                />
+                <AnimatePresence>{customizing ? <Inspector /> : null}</AnimatePresence>
+                <div data-tour="stage" className="min-w-0 flex-1">
+                  <ImageStage />
+                </div>
               </div>
-              <Splitter
-                container={row}
-                share={paramsShare}
-                onChange={setShare}
-                onCommit={(next) => updateSettings.mutate({ generate: { paramsShare: next } })}
-                onReset={() => {
-                  setShare(null);
-                  updateSettings.mutate({ generate: { paramsShare: DEFAULT_SHARE } });
-                }}
-                label="Resize the settings and the image"
-                className="max-lg:hidden"
-              />
-              <AnimatePresence>{customizing ? <Inspector /> : null}</AnimatePresence>
-              <div data-tour="stage" className="min-w-0 flex-1">
-                <ImageStage />
-              </div>
-            </div>
-          </div>
-        ) : (
-          <ModelGrid
-            tab={tab}
-            target={target}
-            onTarget={setTarget}
-            onDone={() => changeTab("generation")}
-          />
-        )}
+            </>
+          ) : (
+            <ModelGrid
+              tab={tab}
+              target={target}
+              onTarget={setTarget}
+              onDone={() => changeTab("generation")}
+            />
+          )}
+        </div>
       </motion.div>
       <ImageDropOverlay over={drop.over} busy={drop.busy} />
       <GenerateTour ready={visible && tab === "generation" && !customizing} />

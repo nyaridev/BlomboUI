@@ -1,8 +1,9 @@
 /**
  * Tabs. `pill` is the header navigation look and `line` sits on top of a panel (Models
- * sub-views), both with a sliding indicator; `folder` is the classic look (the Generate
- * workspace and passes): the active tab is a `bg-surface` box with its top and sides drawn,
- * open into the panel below. A tab with `checked` gets a checkbox before
+ * sub-views, the Generate passes), both with a sliding indicator; `folder` is book tabs (the
+ * Generate workspace): each tab is a box with its top and sides drawn, and the active one is a
+ * little taller, `bg-surface`, and joins the `bg-surface` panel placed right under the tabs
+ * (the panel draws the line; give its corner under the first tab `rounded-tl-none`). A tab with `checked` gets a checkbox before
  * its label that turns its view on or off (the Generate passes: Hires fix, ADetailer…); the
  * checkbox is the tab's sibling, not inside the tab button.
  */
@@ -61,7 +62,7 @@ export function Tabs<T extends string>({
           variant === "pill"
             ? "gap-0.5"
             : variant === "folder"
-              ? "items-end gap-0.5 border-b border-line"
+              ? "items-end gap-1"
               : "gap-1 border-b border-line",
           className,
         )}
@@ -84,11 +85,11 @@ export function Tabs<T extends string>({
               className={cn(
                 "relative inline-flex shrink-0 items-center gap-2 text-sm font-medium transition-colors focus-ring",
                 variant === "pill" ? "h-8 rounded-md px-3" : "h-9 px-3",
-                // The active tab covers the line under it, so it opens into the panel.
+                // The active tab reaches 1 px into the panel below and covers its top line.
                 variant === "folder" &&
                   (active
-                    ? "-mb-px rounded-t-md border border-line border-b-surface bg-surface"
-                    : "-mb-px rounded-t-md border border-transparent"),
+                    ? "z-10 -mb-px h-10 rounded-t-md border border-b-0 border-line bg-surface"
+                    : "rounded-t-md border border-b-0 border-line hover:bg-surface/50"),
                 checkable && "pl-9",
                 active ? "text-fg" : "text-fg-3 hover:text-fg-2",
               )}

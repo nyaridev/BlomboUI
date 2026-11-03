@@ -297,7 +297,7 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
   });
   return (
     <div className="flex flex-col">
-      <Tabs variant="folder" items={items} value={active.id} onChange={setPicked} label="Passes" />
+      <Tabs variant="line" items={items} value={active.id} onChange={setPicked} label="Passes" />
       <div className="pt-3">
         {active.type === "card" ? (
           <CardGrid block={active} ctx={ctx} />

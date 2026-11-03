@@ -354,7 +354,7 @@ export function ModelGrid({
 
   return (
     // The Generate view scrolls as a whole, so the grid gets a height of its own.
-    <div className="flex h-[75svh] min-h-[420px] flex-col gap-3 pt-3">
+    <div className="flex h-[75svh] min-h-[420px] flex-col gap-3">
       <div className="flex items-center gap-2 max-lg:flex-wrap">
         <IconButton
           icon="sidebar"

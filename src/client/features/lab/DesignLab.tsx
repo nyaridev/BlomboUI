@@ -854,17 +854,25 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               ]}
             />
           </Row>
-          <Row label="Folder tabs (Generate workspace)">
-            <Tabs
-              variant="folder"
-              value={line}
-              onChange={setLine}
-              items={[
-                { value: "generation", label: "Generation", icon: "sliders" },
-                { value: "checkpoints", label: "Checkpoints", icon: "models" },
-                { value: "loras", label: "LoRAs", icon: "layers" },
-              ]}
-            />
+          <Row label="Book tabs on their panel (Generate workspace)">
+            <div className="flex w-full max-w-md flex-col">
+              <Tabs
+                variant="folder"
+                value={line}
+                onChange={setLine}
+                items={[
+                  { value: "generation", label: "Generation", icon: "sliders" },
+                  { value: "checkpoints", label: "Checkpoints", icon: "models" },
+                  { value: "loras", label: "LoRAs", icon: "layers" },
+                ]}
+              />
+              <div
+                className={cn(
+                  "h-16 rounded-lg border border-line bg-surface",
+                  line === "generation" && "rounded-tl-none",
+                )}
+              />
+            </div>
           </Row>
           <Row label="Line tabs (panels)">
             <Tabs
@@ -878,9 +886,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               ]}
             />
           </Row>
-          <Row label="Folder tabs with checkboxes (Generate passes)">
+          <Row label="Line tabs with checkboxes (Generate passes)">
             <Tabs
-              variant="folder"
+              variant="line"
               value={pass}
               onChange={setPass}
               items={[

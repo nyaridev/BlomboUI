@@ -1181,6 +1181,14 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               >
                 <p className="text-sm text-fg-2">Body</p>
               </Collapsible>
+              <Collapsible
+                title="Base tone (Generate params)"
+                icon="sliders"
+                subtitle="The darker panel, so fields stand out"
+                tone="base"
+              >
+                <p className="text-sm text-fg-2">Body</p>
+              </Collapsible>
               <div className="card p-4 text-sm text-fg-2">
                 .card utility: border, hairline highlight, radius-lg
               </div>

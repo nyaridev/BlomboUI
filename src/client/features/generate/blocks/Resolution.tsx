@@ -180,7 +180,7 @@ function ResolutionRows({
 
   if (bare) return <div className="flex flex-col gap-3">{rows}</div>;
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-3">
       <SectionTitle
         icon="aspect-ratio"
         actions={<span className="font-mono text-2xs text-fg-3 tabular">{mp.toFixed(2)} MP</span>}

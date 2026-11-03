@@ -24,7 +24,7 @@ export function Seed({ bare = false }: { bare?: boolean }) {
   const row = <SeedRow seedId={seedBinding.id} />;
   if (bare) return row;
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-3">
       <SectionTitle icon="seed">Seed</SectionTitle>
       {row}
     </div>

@@ -41,7 +41,7 @@ export const StageTabContext = createContext(false);
  * (dimmed while the stage is off, still editable so it can be set up first). */
 export function StageFrame(props: ComponentProps<typeof Collapsible>) {
   const inTab = useContext(StageTabContext);
-  if (!inTab) return <Collapsible {...props} />;
+  if (!inTab) return <Collapsible tone="base" {...props} />;
   return (
     <div className={cn("transition-opacity", props.enabled === false && "opacity-55")}>
       {props.children}

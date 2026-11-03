@@ -53,6 +53,7 @@ export function ScriptsBlock() {
 
   return (
     <Collapsible
+      tone="base"
       title="Scripts"
       icon="layout-grid"
       subtitle={

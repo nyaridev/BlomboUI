@@ -128,6 +128,7 @@ function RestBlock({ title, ctx }: { title: string; ctx: RenderContext }) {
     return ctx.customizing ? <Ghost text="Nothing else to show for this workflow" /> : null;
   return (
     <Collapsible
+      tone="base"
       title={title}
       icon="workflow"
       subtitle={`${rest.length} inputs found in the graph`}
@@ -228,7 +229,7 @@ function CardGrid({ block, ctx }: { block: CardBlock; ctx: RenderContext }) {
 function Card({ block, ctx }: { block: CardBlock; ctx: RenderContext }) {
   if (!cardChildren(block, ctx).length && !ctx.customizing) return null;
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-3">
       <SectionTitle icon={(block.icon as IconName) ?? "sliders"}>{block.title}</SectionTitle>
       <CardGrid block={block} ctx={ctx} />
     </div>
@@ -295,7 +296,7 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
     };
   });
   return (
-    <div className="flex flex-col rounded-lg border border-line bg-surface-2">
+    <div className="flex flex-col rounded-lg border border-line bg-surface">
       <Tabs variant="line" items={items} value={active.id} onChange={setPicked} label="Passes" />
       <div className="p-3">
         {active.type === "card" ? (

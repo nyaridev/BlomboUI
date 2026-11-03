@@ -266,9 +266,9 @@ export function Slider({
           aria-label={ariaLabel ?? (typeof label === "string" ? label : undefined)}
           onKeyDown={onKeyDown}
           className={cn(
-            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[var(--shadow-thumb)] ring-2 outline-none",
-            tone === "generate" ? "ring-generate-hi" : "ring-accent",
-            "transition-transform focus-visible:ring-4 focus-visible:ring-accent-ink/40",
+            // A white knob in a wide see-through ring (the old app's handle); focus tints the ring.
+            "absolute top-1/2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white shadow-[var(--shadow-thumb)] ring-4 ring-fg/20 outline-none",
+            "transition-transform focus-visible:ring-accent-ink/60",
             dragging ? "scale-115" : "hover:scale-110",
             !dragging && "transition-[left,transform]",
             thumb,

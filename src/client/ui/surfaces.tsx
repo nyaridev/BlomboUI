@@ -66,7 +66,9 @@ export function Collapsible({
   onOpenChange?: (open: boolean) => void;
   actions?: ReactNode;
   children: ReactNode;
-  tone?: "surface" | "inset";
+  /** surface-2 (default), sunken (`inset`), or surface (`base`: the Generate params, whose
+   * fields need the darker panel to stand out). */
+  tone?: "surface" | "inset" | "base";
   className?: string;
 }) {
   const [inner, setInner] = useState(defaultOpen);
@@ -81,7 +83,7 @@ export function Collapsible({
     <div
       className={cn(
         "overflow-hidden rounded-lg border transition-colors",
-        tone === "surface" ? "bg-surface-2" : "bg-sunken",
+        tone === "surface" ? "bg-surface-2" : tone === "base" ? "bg-surface" : "bg-sunken",
         hasSwitch && enabled ? "border-accent/40" : "border-line",
         className,
       )}

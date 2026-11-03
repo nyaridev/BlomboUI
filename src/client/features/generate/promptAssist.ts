@@ -11,10 +11,12 @@ import {
   type CompletionContext,
   type CompletionResult,
   completionKeymap,
+  selectedCompletionIndex,
+  setSelectedCompletion,
   startCompletion,
 } from "@codemirror/autocomplete";
 import { type Extension, Prec } from "@codemirror/state";
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView, keymap, type Rect, ViewPlugin } from "@codemirror/view";
 import { completeContext, formatTag, type Suggestion } from "@shared/autocomplete";
 import { nudgeWeight } from "@shared/prompt/weight";
 import type { AutocompleteSettings } from "@shared/settings";
@@ -81,8 +83,11 @@ function source(get: () => AssistSettings | null) {
         sug.kind === "tag" && ac.replaceUnderscores
           ? formatTag(sug.label, { replaceUnderscores: true, escapeParens: false })
           : sug.label,
-      detail: sug.detail ?? undefined,
+      // A tag you use often gets a star (renderStar) instead of "used 4×".
+      detail: sug.uses !== null ? undefined : (sug.detail ?? undefined),
       type: sug.kind,
+      // The picture shows big beside the list, for the selected entry only.
+      info: sug.thumb && ac.thumbnails ? () => picture(sug, s.blurNsfw) : undefined,
       boost: -i,
       suggestion: sug,
       apply: (view, _completion, from, to) => {
@@ -100,35 +105,39 @@ function source(get: () => AssistSettings | null) {
   };
 }
 
-function renderMark(get: () => AssistSettings | null) {
-  return (completion: Completion): Node | null => {
-    const sug = (completion as SuggestionCompletion).suggestion;
-    const s = get();
-    if (!sug) return null;
-    if (sug.thumb && s?.autocomplete.thumbnails) {
-      const img = document.createElement("img");
-      img.src = sug.thumb;
-      img.alt = "";
-      img.loading = "lazy";
-      img.className = `cm-ac-thumb${sug.nsfw && s.blurNsfw ? " cm-ac-blur" : ""}`;
-      return img;
-    }
-    const dot = document.createElement("span");
-    dot.className = "cm-ac-mark";
-    if (sug.kind === "tag" && sug.uses !== null) {
-      dot.textContent = "★";
-      dot.title = "You use this often";
-      dot.style.color = "var(--generate-ink)";
-    } else if (sug.kind === "tag" && sug.category !== null) {
-      dot.textContent = "●";
-      dot.title = CATEGORY_NAME[sug.category] ?? "Tag";
-      dot.style.color = CATEGORY_COLOR[sug.category] ?? "var(--fg-3)";
-    } else {
-      dot.textContent = sug.kind === "wildcard" ? "__" : sug.kind === "lora" ? "◆" : "✦";
-      dot.style.color = sug.kind === "wildcard" ? "var(--syn-wildcard)" : "var(--syn-lora)";
-    }
-    return dot;
-  };
+function picture(sug: Suggestion, blurNsfw: boolean): Node {
+  const img = document.createElement("img");
+  img.src = sug.thumb ?? "";
+  img.alt = "";
+  img.className = `cm-ac-picture${sug.nsfw && blurNsfw ? " cm-ac-blur" : ""}`;
+  return img;
+}
+
+function renderMark(completion: Completion): Node | null {
+  const sug = (completion as SuggestionCompletion).suggestion;
+  if (!sug) return null;
+  const dot = document.createElement("span");
+  dot.className = "cm-ac-mark";
+  if (sug.kind === "tag") {
+    dot.textContent = "●";
+    dot.title = sug.category !== null ? (CATEGORY_NAME[sug.category] ?? "Tag") : "Your tag";
+    dot.style.color =
+      sug.category !== null ? (CATEGORY_COLOR[sug.category] ?? "var(--fg-3)") : "var(--fg-4)";
+  } else {
+    dot.textContent = sug.kind === "wildcard" ? "__" : sug.kind === "lora" ? "◆" : "✦";
+    dot.style.color = sug.kind === "wildcard" ? "var(--syn-wildcard)" : "var(--syn-lora)";
+  }
+  return dot;
+}
+
+function renderStar(completion: Completion): Node | null {
+  const uses = (completion as SuggestionCompletion).suggestion?.uses;
+  if (uses == null) return null;
+  const star = document.createElement("span");
+  star.className = "cm-ac-star";
+  star.textContent = "★";
+  star.title = `You used this ${uses}×`;
+  return star;
 }
 
 function weightKey(get: () => AssistSettings | null, dir: 1 | -1) {
@@ -166,29 +175,35 @@ export const assistTheme = EditorView.theme({
     boxShadow: "var(--shadow-pop)",
     overflow: "hidden",
   },
+  // The picture panel sits outside the list's box, so this one can't clip.
+  ".cm-tooltip.cm-tooltip-autocomplete": { overflow: "visible" },
   ".cm-tooltip.cm-tooltip-autocomplete > ul": {
+    borderRadius: "8px",
     fontFamily: "var(--font-ui)",
-    maxHeight: "18em",
-    minWidth: "260px",
+    maxHeight: "320px",
+    minWidth: "300px",
     padding: "4px",
   },
-  ".cm-tooltip-autocomplete > ul > li": {
+  // Both classes, so these win over CodeMirror's own row styles.
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li": {
     display: "flex",
     alignItems: "center",
     gap: "8px",
-    padding: "3px 8px",
+    padding: "4px 10px 4px 6px",
     borderRadius: "5px",
-    lineHeight: "22px",
+    lineHeight: "24px",
+    color: "var(--fg-2)",
   },
-  ".cm-tooltip-autocomplete > ul > li[aria-selected]": {
-    backgroundColor: "var(--field)",
+  // The command palette's active row: a fill that shows on every surface and theme.
+  ".cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]": {
+    backgroundColor: "color-mix(in srgb, var(--fg) 8%, transparent)",
     color: "var(--fg)",
   },
-  ".cm-completionLabel": { fontSize: "13px", flex: "1", minWidth: "0" },
+  ".cm-completionLabel": { fontSize: "14px", flex: "1", minWidth: "0" },
   ".cm-completionDetail": {
     color: "var(--fg-3)",
     fontStyle: "normal",
-    fontSize: "11px",
+    fontSize: "12px",
     fontFamily: "var(--font-mono)",
     marginLeft: "12px",
   },
@@ -196,19 +211,60 @@ export const assistTheme = EditorView.theme({
   ".cm-ac-mark": {
     display: "inline-grid",
     placeItems: "center",
-    width: "22px",
+    width: "20px",
     fontSize: "10px",
     flexShrink: "0",
   },
-  ".cm-ac-thumb": {
-    width: "22px",
-    height: "22px",
-    borderRadius: "4px",
-    objectFit: "cover",
+  ".cm-ac-star": {
+    marginLeft: "12px",
+    fontSize: "13px",
+    color: "var(--generate-ink)",
     flexShrink: "0",
+  },
+  // The selected entry's picture, beside the list (CodeMirror's info panel).
+  ".cm-tooltip.cm-completionInfo": { padding: "4px", maxWidth: "none" },
+  ".cm-ac-picture": {
+    display: "block",
+    width: "200px",
+    height: "260px",
+    borderRadius: "5px",
+    objectFit: "cover",
     backgroundColor: "var(--sunken)",
   },
-  ".cm-ac-blur": { filter: "blur(4px)" },
+  ".cm-ac-blur": { filter: "blur(12px)" },
+});
+
+/**
+ * The picture goes beside the list, level with the selected row; when neither side has room
+ * (phones), under the whole list, so it never covers the rows below the selected one.
+ */
+function positionPicture(
+  _view: EditorView,
+  list: Rect,
+  option: Rect,
+  info: Rect,
+  space: Rect,
+): { style?: string; class?: string } {
+  const width = info.right - info.left;
+  const height = info.bottom - info.top;
+  const top = Math.max(0, Math.min(option.top - list.top, space.bottom - list.top - height));
+  if (space.right - list.right >= width)
+    return { style: `top: ${top}px`, class: "cm-completionInfo-right" };
+  if (list.left - space.left >= width)
+    return { style: `top: ${top}px`, class: "cm-completionInfo-left" };
+  return { style: `top: ${list.bottom - list.top + 4}px; left: 0` };
+}
+
+/** The row under the mouse becomes the selected one (as in the command palette), so its picture shows. */
+const hoverSelects = ViewPlugin.define((view) => {
+  const onMove = (e: MouseEvent) => {
+    const li = (e.target as Element).closest?.(".cm-tooltip-autocomplete li[role=option]");
+    const i = Number(li?.id.slice(li.id.lastIndexOf("-") + 1));
+    if (li && Number.isInteger(i) && i !== selectedCompletionIndex(view.state))
+      view.dispatch({ effects: setSelectedCompletion(i) });
+  };
+  view.dom.addEventListener("mousemove", onMove);
+  return { destroy: () => view.dom.removeEventListener("mousemove", onMove) };
 });
 
 /** Autocomplete, its look, and the weight keys. */
@@ -219,7 +275,11 @@ export function promptAssist(get: () => AssistSettings | null): Extension[] {
       icons: false,
       activateOnTyping: true,
       maxRenderedOptions: 50,
-      addToOptions: [{ render: renderMark(get), position: 20 }],
+      positionInfo: positionPicture,
+      addToOptions: [
+        { render: renderMark, position: 20 },
+        { render: renderStar, position: 90 },
+      ],
     }),
     Prec.high(
       keymap.of([
@@ -229,6 +289,7 @@ export function promptAssist(get: () => AssistSettings | null): Extension[] {
         { key: "Mod-Space", run: startCompletion },
       ]),
     ),
+    hoverSelects,
     assistTheme,
   ];
 }

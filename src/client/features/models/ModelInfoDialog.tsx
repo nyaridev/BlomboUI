@@ -4,8 +4,11 @@
  * middle, and what you can change on the right: trigger words, a Strength box (strength, slider
  * range), an Automatic LoRA box (instant, where its trigger words go) and your notes, saved into
  * the model's A1111 .json. Under the columns, one wide button each: Cancel, Replace picture (from
- * a file, the latest Generate result, or none) and Save. Opened from any model's right-click
- * menu (`openModelInfo`); mounted once in Shell.
+ * a file, the latest Generate result, or none) and Save. The dialog is one size for every model
+ * (each column scrolls on its own) and the picture is always 2:3, sized from its height. Below
+ * 1024 px the settings and the file share one column beside the picture (settings first);
+ * below 640 px the picture goes. Opened from any model's right-click menu (`openModelInfo`);
+ * mounted once in Shell.
  */
 
 import { Icon } from "@client/icons/Icon";
@@ -43,7 +46,7 @@ import {
 import { comfyViewUrl } from "@shared/comfy";
 import type { Job } from "@shared/jobs";
 import { DEFAULT_STRENGTH_RANGE, type LocalModel, type ModelDetails } from "@shared/models";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
 import { useModelActions, useModelInfo } from "./actions";
 
@@ -174,7 +177,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
   const hasPicture = picture === "remove" ? false : picture !== null || Boolean(d?.picture);
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" style={SIZES}>
       <header className="flex items-center gap-2 border-b border-line py-2.5 pr-2.5 pl-4">
         <Icon name={style.icon} size={16} className="shrink-0 text-fg-3" />
         <h2 className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">{model.name}</h2>
@@ -207,20 +210,28 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
         <IconButton icon="x" label="Close" size="sm" onClick={onClose} />
       </header>
 
-      {/* Three columns: the picture as tall as the dialog, the file, and what you can change. */}
-      <div className={cn(COLUMNS, "scroll-quiet min-h-0 flex-1 overflow-y-auto p-5 max-lg:p-4")}>
-        <div className="flex min-h-[480px] flex-col max-lg:mx-auto max-lg:min-h-0 max-lg:w-56">
-          <Picture model={model} thumb={shownThumb} pending={picture !== null} />
-          {picture !== null ? (
-            <p className="pt-2 text-xs text-fg-3">
-              {picture === "remove"
-                ? "The picture moves to the profile's trash when you save."
-                : "The new picture is used when you save. The old one goes to the profile's trash."}
-            </p>
-          ) : null}
+      {/* The picture, the file and what you can change (see the module comment for narrow screens). */}
+      <div
+        className={cn(
+          COLUMNS,
+          "scroll-quiet h-(--body-h) overflow-y-auto p-5 max-sm:grid-cols-1 lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden",
+        )}
+      >
+        <div className="h-(--pic-h) w-(--pic-w) max-lg:sticky max-lg:top-0 max-lg:row-span-2 max-lg:row-start-1 max-sm:hidden">
+          <Picture
+            model={model}
+            thumb={shownThumb}
+            pending={
+              picture === null
+                ? null
+                : picture === "remove"
+                  ? "The picture moves to the profile's trash when you save."
+                  : "The new picture is used when you save. The old one goes to the profile's trash."
+            }
+          />
         </div>
 
-        <section className="flex min-w-0 flex-col gap-3">
+        <section className={cn(COLUMN, "max-lg:row-start-2")}>
           <Heading>File</Heading>
           <FileFacts model={model} details={d} loading={details.isLoading} />
           {details.error ? <p className="text-sm text-danger">{details.error.message}</p> : null}
@@ -229,7 +240,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           </Group>
         </section>
 
-        <section className="flex min-w-0 flex-col gap-3">
+        <section className={cn(COLUMN, "max-lg:row-start-1")}>
           <Heading>{style.label}</Heading>
           {showWords ? (
             <Field
@@ -371,7 +382,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
       </div>
 
       {/* The old app's footer: one wide button under each column. */}
-      <footer className={cn(COLUMNS, "border-t border-line bg-surface px-5 py-3")}>
+      <footer className="grid grid-cols-[var(--pic-w)_minmax(0,1fr)_minmax(0,1fr)] gap-5 border-t border-line bg-surface px-5 py-3 max-sm:grid-cols-2">
         <Button variant="ghost" onClick={onClose} className="w-full">
           Cancel
         </Button>
@@ -379,7 +390,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           placement="top"
           width={240}
           trigger={
-            <Button icon="image" iconRight="chevron-down" className="w-full">
+            <Button icon="image" iconRight="chevron-down" className="w-full max-sm:hidden">
               Replace picture
             </Button>
           }
@@ -435,8 +446,22 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
   );
 }
 
+/**
+ * One size for every model: the body is as tall as fits (620 px at most), and the picture column
+ * is 2:3 of the body's inner height, so the footer's buttons line up under the columns.
+ */
+const SIZES = {
+  "--body-h": "min(620px, calc(min(88vh, 900px) - 6.5rem))",
+  "--pic-h": "calc(var(--body-h) - 2.5rem)",
+  "--pic-w": "calc(var(--pic-h) * 2 / 3)",
+} as CSSProperties;
+
 const COLUMNS =
-  "grid grid-cols-[minmax(0,0.85fr)_minmax(0,1fr)_minmax(0,1fr)] gap-5 max-lg:grid-cols-1";
+  "grid grid-cols-[var(--pic-w)_minmax(0,1fr)_minmax(0,1fr)] gap-5 max-lg:grid-cols-[var(--pic-w)_minmax(0,1fr)]";
+
+/** File and settings: their own scroll on wide screens, one shared column beside the picture below. */
+const COLUMN =
+  "flex min-w-0 flex-col gap-3 sm:max-lg:col-start-2 lg:scroll-quiet lg:min-h-0 lg:overflow-y-auto lg:pr-1";
 
 function Heading({ children }: { children: ReactNode }) {
   return (
@@ -463,22 +488,28 @@ function Picture({
 }: {
   model: LocalModel;
   thumb: string | null;
-  pending: boolean;
+  /** A picture change waiting for Save: what will happen, shown over the bottom. */
+  pending: string | null;
 }) {
   const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   return (
-    <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-sunken max-lg:aspect-[2/3] max-lg:flex-none">
+    <div className="relative h-full w-full overflow-hidden rounded-lg border border-line bg-sunken">
       {thumb ? (
-        <Veil active={model.nsfw && blurNsfw && !pending} className="absolute inset-0">
+        <Veil active={model.nsfw && blurNsfw && pending === null} className="absolute inset-0">
           <img src={thumb} alt="" className="h-full w-full object-cover" />
         </Veil>
       ) : (
         <FallbackFace name={model.name} kind={model.kind} className="absolute inset-0" />
       )}
-      {pending ? (
-        <span className="absolute top-2 left-2 rounded-xs bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white">
-          Not saved yet
-        </span>
+      {pending !== null ? (
+        <>
+          <span className="absolute top-2 left-2 rounded-xs bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white">
+            Not saved yet
+          </span>
+          <p className="absolute inset-x-0 bottom-0 bg-black/65 px-3 py-2 text-xs text-white/85">
+            {pending}
+          </p>
+        </>
       ) : null}
     </div>
   );

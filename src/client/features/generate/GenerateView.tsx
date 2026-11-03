@@ -15,7 +15,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useState } from "react";
 import { BatchView } from "./batch/BatchView";
 import { ImageStage } from "./blocks/ImageStage";
-import { ModelsStrip } from "./blocks/ModelsStrip";
+import { ModelsStrip, type StripTarget } from "./blocks/ModelsStrip";
 import { GenerateActions, Prompts } from "./blocks/Prompts";
 import { CustomizeBar, Inspector, LayoutPicker } from "./Customize";
 import { GenerateTour } from "./GenerateTour";
@@ -33,6 +33,12 @@ const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transiti
 
 export function GenerateView() {
   const [tab, setTab] = useState<WorkTab>("generation");
+  // The strip tile the picker is changing; any other way of changing tabs forgets it.
+  const [target, setTarget] = useState<StripTarget | null>(null);
+  const changeTab = (next: WorkTab) => {
+    setTab(next);
+    setTarget(null);
+  };
   const customizing = useLayout((s) => s.customizing);
   const setCustomizing = useLayout((s) => s.setCustomizing);
   const active = useActiveWorkflow();
@@ -44,6 +50,10 @@ export function GenerateView() {
   const visible = useLocation({
     select: (l) => (l.pathname.split("/")[3] ?? "generate") === "generate",
   });
+
+  useEffect(() => {
+    if (!visible) setTarget(null);
+  }, [visible]);
 
   // Show the workflow's saved values when it becomes active (before paint, so a switch never
   // shows one workflow's controls with the other's values).
@@ -87,7 +97,13 @@ export function GenerateView() {
       }}
     >
       <motion.div variants={item} data-tour="models">
-        <ModelsStrip onPick={(t) => setTab(t)} />
+        <ModelsStrip
+          target={target}
+          onTarget={(next, nextTab) => {
+            setTarget(next);
+            if (nextTab) setTab(nextTab);
+          }}
+        />
       </motion.div>
 
       <motion.div variants={item} className="flex gap-3 max-lg:flex-col">
@@ -104,7 +120,7 @@ export function GenerateView() {
           <Tabs
             variant="line"
             value={tab}
-            onChange={setTab}
+            onChange={changeTab}
             label="Workspace"
             className="min-w-0 flex-1"
             items={[
@@ -139,7 +155,12 @@ export function GenerateView() {
             </div>
           </div>
         ) : (
-          <ModelGrid tab={tab} onDone={() => setTab("generation")} />
+          <ModelGrid
+            tab={tab}
+            target={target}
+            onTarget={setTarget}
+            onDone={() => changeTab("generation")}
+          />
         )}
       </motion.div>
       <ImageDropOverlay over={drop.over} busy={drop.busy} />

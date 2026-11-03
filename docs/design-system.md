@@ -165,7 +165,8 @@ Presets in `src/client/lib/motion.ts`:
   - "pictures": portrait 2:3 tiles, 112 px, the name on the picture over a dark gradient;
   - "compact": 64 px, the picture only;
   - "text": one row of `h-7` chips (role caps, name, a LoRA's strength as a `ScrubField`), no labels above.
-  Corners: a LoRA's strength top left, a warning icon when the file is missing (yellow border too), remove top right on hover; the strength slider takes the name's place on hover (always on touch). LoRAs reorder by dragging (native drag and drop, an accent line marks the drop) or Alt+←/→; controls inside a tile carry `data-no-drag`. Clicking a tile opens its picker tab; LoRAs and wildcards each end with a dashed + tile.
+  Corners: a LoRA's strength top left, a warning icon when the file is missing (yellow border too), remove top right on hover; the strength slider takes the name's place on hover (always on touch). LoRAs reorder by dragging (native drag and drop, an accent line marks the drop) or Alt+←/→; controls inside a tile carry `data-no-drag`. LoRAs and wildcards each end with a dashed + tile.
+- **Strip target:** clicking a tile opens its picker tab (Other on the tile's kind) and outlines the tile in accent (`aria-pressed`); a pick then changes that tile: sets that loader (two text encoders stay apart), swaps that LoRA tag in place (its strength stays unless the new LoRA has a saved one) or that wildcard. A + tile is a target too, so picks add. Clicking another tile moves the target; clicking it again closes the picker. Changing tabs, leaving Generate, moving or removing LoRAs forget it (`GenerateView` state, not saved).
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
 
 ## Narrow screens

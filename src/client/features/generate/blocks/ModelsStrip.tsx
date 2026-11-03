@@ -38,6 +38,26 @@ import { useRoleBinding } from "../workflow";
 type PickTab = "checkpoints" | "loras" | "wildcards" | "other";
 type TileSize = Settings["generate"]["tiles"];
 
+/**
+ * The tile the picker below is changing: a model loader, a LoRA tag (by its place in the prompt)
+ * or a wildcard. The + tiles are targets too (index -1, name ""), so picking adds.
+ */
+export type StripTarget =
+  | { kind: "binding"; id: string }
+  | { kind: "lora"; index: number }
+  | { kind: "wildcard"; name: string };
+
+export const sameTarget = (a: StripTarget | null, b: StripTarget | null) =>
+  a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b);
+
+/** The target's border: an accent outline, over a missing file's yellow one. */
+const tileBorder = (active: boolean | undefined, missing: string | null | undefined) =>
+  active
+    ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
+    : missing
+      ? "border-yellow/60"
+      : "border-line hover:border-line-strong";
+
 const stem = (f: string) => modelDisplayName(f).toLowerCase();
 const strengthText = (v: number) => String(Number(v.toFixed(2)));
 
@@ -165,6 +185,8 @@ interface TileProps {
   onOpen: () => void;
   onRemove?: () => void;
   sortable?: Sortable;
+  /** The picker below is changing this tile. */
+  active?: boolean;
 }
 
 /**
@@ -174,7 +196,7 @@ interface TileProps {
  */
 function Tile(props: TileProps) {
   if (props.size === "text") return <TextTile {...props} />;
-  const { size, kind, name, what, missing, strength, onOpen, onRemove, sortable } = props;
+  const { size, kind, name, what, missing, strength, onOpen, onRemove, sortable, active } = props;
   const shown = name ? modelDisplayName(name) : "Pick a model";
   return (
     <div
@@ -183,7 +205,7 @@ function Tile(props: TileProps) {
         TILE,
         TILE_WIDTH[size],
         "group bg-surface-2 transition-[width,border-color,opacity] duration-200",
-        missing ? "border-yellow/60" : "border-line hover:border-line-strong",
+        tileBorder(active, missing),
         sortable && "cursor-grab active:cursor-grabbing",
         sortable?.dragging && "opacity-30",
       )}
@@ -196,6 +218,7 @@ function Tile(props: TileProps) {
             onClick={onOpen}
             onKeyDown={sortable?.onKeyDown}
             aria-label={`${what}: ${shown}`}
+            aria-pressed={active ?? false}
             aria-keyshortcuts={sortable ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
             className="absolute inset-0 block cursor-[inherit] focus-ring"
           >
@@ -268,14 +291,24 @@ function Tile(props: TileProps) {
 }
 
 /** The "text" look: one chip with the role, the name and, for a LoRA, a strength field. */
-function TextTile({ kind, name, what, missing, strength, onOpen, onRemove, sortable }: TileProps) {
+function TextTile({
+  kind,
+  name,
+  what,
+  missing,
+  strength,
+  onOpen,
+  onRemove,
+  sortable,
+  active,
+}: TileProps) {
   const shown = name ? modelDisplayName(name) : "Pick a model";
   return (
     <div
       {...sortable?.drag}
       className={cn(
         "group relative flex h-7 shrink-0 items-center rounded-md border bg-surface-2 transition-[border-color,opacity]",
-        missing ? "border-yellow/60" : "border-line hover:border-line-strong",
+        tileBorder(active, missing),
         sortable && "cursor-grab active:cursor-grabbing",
         sortable?.dragging && "opacity-30",
       )}
@@ -287,6 +320,7 @@ function TextTile({ kind, name, what, missing, strength, onOpen, onRemove, sorta
           onClick={onOpen}
           onKeyDown={sortable?.onKeyDown}
           aria-label={`${what}: ${shown}`}
+          aria-pressed={active ?? false}
           aria-keyshortcuts={sortable ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
           className="flex h-full max-w-60 min-w-0 cursor-[inherit] items-center gap-1.5 rounded-md px-2 text-xs focus-ring"
         >
@@ -331,7 +365,17 @@ function TextTile({ kind, name, what, missing, strength, onOpen, onRemove, sorta
   );
 }
 
-function AddTile({ size, what, onClick }: { size: TileSize; what: string; onClick: () => void }) {
+function AddTile({
+  size,
+  what,
+  active,
+  onClick,
+}: {
+  size: TileSize;
+  what: string;
+  active: boolean;
+  onClick: () => void;
+}) {
   const text = size === "text";
   return (
     <Tooltip content={`Add ${what}`}>
@@ -339,9 +383,12 @@ function AddTile({ size, what, onClick }: { size: TileSize; what: string; onClic
         type="button"
         onClick={onClick}
         aria-label={`Add ${what}`}
+        aria-pressed={active}
         className={cn(
-          "shrink-0 border-dashed border-line-strong text-fg-3 transition-[width,border-color,color] duration-200",
-          "hover:border-accent/60 hover:text-fg focus-ring",
+          "shrink-0 transition-[width,border-color,color] duration-200 focus-ring",
+          active
+            ? "border-accent text-accent-ink shadow-[0_0_0_1px_var(--accent)]"
+            : "border-dashed border-line-strong text-fg-3 hover:border-accent/60 hover:text-fg",
           text
             ? "flex h-7 items-center rounded-md border px-2"
             : cn(TILE, TILE_WIDTH[size], "grid place-items-center"),
@@ -356,10 +403,12 @@ function AddTile({ size, what, onClick }: { size: TileSize; what: string; onClic
 function BindingTile({
   binding,
   size,
+  active,
   onClick,
 }: {
   binding: Binding;
   size: TileSize;
+  active: boolean;
   onClick: () => void;
 }) {
   const [value] = useValue<string>(binding.id);
@@ -373,6 +422,7 @@ function BindingTile({
       what={binding.label}
       missing={missing ? "Not in your models folder" : null}
       onOpen={onClick}
+      active={active}
     />
   );
 }
@@ -439,7 +489,14 @@ function LookSwitch({ size, onChange }: { size: TileSize; onChange: (s: TileSize
   );
 }
 
-export function ModelsStrip({ onPick }: { onPick: (tab: PickTab) => void }) {
+export function ModelsStrip({
+  target,
+  onTarget,
+}: {
+  target: StripTarget | null;
+  /** Change the target, opening `tab` (leaving out `tab` keeps the one open). */
+  onTarget: (target: StripTarget | null, tab?: PickTab | "generation") => void;
+}) {
   const checkpoint = useRoleBinding("model.checkpoint");
   const unet = useRoleBinding("model.unet");
   const vae = useRoleBinding("model.vae");
@@ -453,8 +510,16 @@ export function ModelsStrip({ onPick }: { onPick: (tab: PickTab) => void }) {
   const loraFiles = useModels(loras.length ? "loras" : null).data?.names;
   const size: TileSize = useSettings().data?.generate.tiles ?? "pictures";
   const updateSettings = useUpdateSettings();
+  // Clicking the targeted tile again closes the picker.
+  const open = (t: StripTarget, tab: PickTab) =>
+    sameTarget(t, target) ? onTarget(null, "generation") : onTarget(t, tab);
+  // LoRA targets are places in the prompt: moving or removing tags makes them point elsewhere.
+  const loraEdit = (next: string) => {
+    setPrompt(next);
+    if (target?.kind === "lora" && target.index >= 0) onTarget(null);
+  };
   const sortable = useSortableRow(loras.length, (from, to) =>
-    setPrompt(moveLoraTag(text, from, to)),
+    loraEdit(moveLoraTag(text, from, to)),
   );
   const main = checkpoint ?? unet;
   const models = [main, vae, clip, clip2].filter((b): b is Binding => Boolean(b));
@@ -483,7 +548,10 @@ export function ModelsStrip({ onPick }: { onPick: (tab: PickTab) => void }) {
             <BindingTile
               binding={b}
               size={size}
-              onClick={() => onPick(b === main ? "checkpoints" : "other")}
+              active={sameTarget(target, { kind: "binding", id: b.id })}
+              onClick={() =>
+                open({ kind: "binding", id: b.id }, b === main ? "checkpoints" : "other")
+              }
             />
           </Labeled>
         ))}
@@ -516,14 +584,20 @@ export function ModelsStrip({ onPick }: { onPick: (tab: PickTab) => void }) {
                         value: tag.strength,
                         onChange: (v) => setPrompt(setLoraStrength(text, tag, v)),
                       }}
-                      onOpen={() => onPick("loras")}
-                      onRemove={() => setPrompt(removeLoraTag(text, tag))}
+                      active={sameTarget(target, { kind: "lora", index: i })}
+                      onOpen={() => open({ kind: "lora", index: i }, "loras")}
+                      onRemove={() => loraEdit(removeLoraTag(text, tag))}
                       sortable={sortable(i)}
                     />
                   </motion.div>
                 ))}
               </AnimatePresence>
-              <AddTile size={size} what="LoRA" onClick={() => onPick("loras")} />
+              <AddTile
+                size={size}
+                what="LoRA"
+                active={sameTarget(target, { kind: "lora", index: -1 })}
+                onClick={() => open({ kind: "lora", index: -1 }, "loras")}
+              />
             </Labeled>
 
             <Divider />
@@ -535,10 +609,16 @@ export function ModelsStrip({ onPick }: { onPick: (tab: PickTab) => void }) {
                   kind="wildcards"
                   name={w}
                   what="Wildcard"
-                  onOpen={() => onPick("wildcards")}
+                  active={sameTarget(target, { kind: "wildcard", name: w })}
+                  onOpen={() => open({ kind: "wildcard", name: w }, "wildcards")}
                 />
               ))}
-              <AddTile size={size} what="wildcard" onClick={() => onPick("wildcards")} />
+              <AddTile
+                size={size}
+                what="wildcard"
+                active={sameTarget(target, { kind: "wildcard", name: "" })}
+                onClick={() => open({ kind: "wildcard", name: "" }, "wildcards")}
+              />
             </Labeled>
           </>
         ) : null}

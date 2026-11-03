@@ -64,6 +64,13 @@ export function setLoraStrength(text: string, tag: LoraTag, strength: number): s
   );
 }
 
+/** Put another LoRA in one tag's place (the CLIP strength stays as it was). */
+export function swapLoraTag(text: string, tag: LoraTag, name: string, strength: number): string {
+  return (
+    text.slice(0, tag.start) + formatLoraTag(name, strength, tag.clipStrength) + text.slice(tag.end)
+  );
+}
+
 /** Remove one tag and the separator that came before it. */
 export function removeLoraTag(text: string, tag: LoraTag): string {
   const before = text.slice(0, tag.start).replace(/[,\s]*$/, "");

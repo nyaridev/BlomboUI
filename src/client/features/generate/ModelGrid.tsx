@@ -28,11 +28,12 @@ import {
 } from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import type { LocalModel } from "@shared/models";
-import { findLoraTags, formatLoraTag } from "@shared/prompt/loras";
+import { findLoraTags, formatLoraTag, swapLoraTag } from "@shared/prompt/loras";
 import type { Binding } from "@shared/workflow/manifest";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useModelMenu } from "../models/actions";
+import type { StripTarget } from "./blocks/ModelsStrip";
 import { modelDisplayName, modelFolder } from "./labels";
 import { pickerOrder } from "./pickerOrder";
 import { useValues } from "./state";
@@ -66,13 +67,28 @@ const joinKey = (kind: string, rel: string) => `${kind}:${rel.replace(/\\/g, "/"
 const tagName = (file: string) =>
   file.replace(/\\/g, "/").replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
 
-export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void }) {
+export function ModelGrid({
+  tab,
+  onDone,
+  target,
+  onTarget,
+}: {
+  tab: PickerTab;
+  onDone: () => void;
+  /** The strip's tile a pick changes (null: a pick adds, or sets the tab's first model). */
+  target: StripTarget | null;
+  onTarget: (target: StripTarget | null) => void;
+}) {
   const bindings = useBindings();
-  const [otherKind, setOtherKind] = useState<ModelKind>("vae");
+  const [pickedKind, setPickedKind] = useState<ModelKind>("vae");
   const main =
     bindings.find((b) => b.role === "model.checkpoint") ??
     bindings.find((b) => b.role === "model.unet");
   const positive = bindings.find((b) => b.role === "prompt.positive");
+  const targetBinding =
+    target?.kind === "binding" ? bindings.find((b) => b.id === target.id) : undefined;
+  // Other opens on the clicked tile's kind (a VAE, a text encoder…).
+  const otherKind: ModelKind = (tab === "other" && targetBinding?.modelKind) || pickedKind;
 
   const kind: ModelKind | null =
     tab === "checkpoints"
@@ -96,13 +112,16 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
   }, [localList]);
 
   // Which binding a pick sets (models), or how it edits the prompt (LoRAs, wildcards, embeddings).
-  const target: Binding | undefined =
+  // Two loaders can share a kind (two text encoders): the clicked one wins.
+  const setsBinding: Binding | undefined =
     tab === "checkpoints"
       ? main
       : tab === "other"
-        ? bindings.find((b) => b.type === "model" && b.modelKind === otherKind)
+        ? targetBinding?.modelKind === otherKind
+          ? targetBinding
+          : bindings.find((b) => b.type === "model" && b.modelKind === otherKind)
         : undefined;
-  const selectedValue = useValues((s) => (target ? s.values[target.id] : undefined));
+  const selectedValue = useValues((s) => (setsBinding ? s.values[setsBinding.id] : undefined));
   const prompt = useValues((s) => (positive ? String(s.values[positive.id] ?? "") : ""));
   const setValue = useValues((s) => s.setValue);
 
@@ -162,17 +181,41 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
   };
 
   const pick = (item: Item) => {
+    const swapTag =
+      tab === "loras" && target?.kind === "lora" ? findLoraTags(prompt)[target.index] : undefined;
+    const swapWildcard =
+      tab === "wildcards" && target?.kind === "wildcard" && target.name
+        ? `__${target.name}__`
+        : null;
     if (tab === "loras") {
       if (isSelected(item)) return;
+      if (swapTag && positive) {
+        setValue(
+          positive.id,
+          swapLoraTag(prompt, swapTag, tagName(item.id), item.local?.weight ?? swapTag.strength),
+        );
+        toast(`Swapped in ${item.name}`, "success");
+        return;
+      }
       append(formatLoraTag(tagName(item.id), item.local?.weight ?? 1));
       toast(`Added ${item.name} to the prompt`, "success");
     } else if (tab === "wildcards") {
+      if (swapWildcard && positive && prompt.includes(swapWildcard)) {
+        if (swapWildcard === `__${item.id}__`) return;
+        setValue(
+          positive.id,
+          prompt.replace(swapWildcard, () => `__${item.id}__`),
+        );
+        onTarget({ kind: "wildcard", name: item.id });
+        toast(`Swapped in __${item.id}__`, "success");
+        return;
+      }
       append(`__${item.id}__`);
       toast(`Added __${item.id}__ to the prompt`, "success");
     } else if (tab === "other" && otherKind === "embeddings") {
       append(`embedding:${tagName(item.id)}`);
-    } else if (target) {
-      setValue(target.id, item.id);
+    } else if (setsBinding) {
+      setValue(setsBinding.id, item.id);
       onDone();
     } else {
       toast("This workflow doesn't use that kind of model.", "info");
@@ -224,7 +267,10 @@ export function ModelGrid({ tab, onDone }: { tab: PickerTab; onDone: () => void 
           <Segmented
             size="sm"
             value={otherKind}
-            onChange={setOtherKind}
+            onChange={(k) => {
+              setPickedKind(k);
+              onTarget(null);
+            }}
             label="Model kind"
             options={OTHER_KINDS}
           />

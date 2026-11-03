@@ -6,6 +6,7 @@ import {
   removeLoraTag,
   setLoraStrength,
   stripLoraTags,
+  swapLoraTag,
 } from "./loras.ts";
 
 describe("findLoraTags", () => {
@@ -60,5 +61,16 @@ describe("moveLoraTag", () => {
     expect(moveLoraTag(text, 2, 0)).toBe("cat, <lora:c:1:0.2>, dog <lora:a:0.5>\n<lora:b> end");
     expect(moveLoraTag(text, 1, 1)).toBe(text);
     expect(moveLoraTag(text, 0, 5)).toBe(text);
+  });
+});
+
+describe("swapLoraTag", () => {
+  it("puts another LoRA in one tag's place", () => {
+    const text = "cat, <lora:a:0.5:0.2>, <lora:b>";
+    const [first] = findLoraTags(text);
+    if (!first) throw new Error("no tag");
+    expect(swapLoraTag(text, first, "styles/c", 0.8)).toBe(
+      "cat, <lora:styles/c:0.8:0.2>, <lora:b>",
+    );
   });
 });

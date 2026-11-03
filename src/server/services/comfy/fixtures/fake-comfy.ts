@@ -49,6 +49,11 @@ const objectInfo = fs.readFileSync(
 );
 const presetsDir = path.join(here, "..", "..", "..", "..", "..", "presets");
 const pageDir = path.join(here, "fake-comfy-page");
+/** What `/models/<kind>` lists, so the Generate pickers have something to pick and swap. */
+const FAKE_MODELS: Record<string, string[]> = {
+  checkpoints: ["sd15/dreamshaper_8.safetensors", "sd15/realistic_vision.safetensors"],
+  loras: ["Detailer.safetensors", "noPicture_lora.safetensors", "styles/ghost_style.safetensors"],
+};
 
 /** Node class → the custom_nodes folder of the pack that provides it (stages and batch presets). */
 function packClasses(): Map<string, string> {
@@ -338,7 +343,7 @@ export function startFakeComfy(
         });
       if (p === "/object_info") return json(res, 200, objectInfoFor(customNodesDir));
       if (p.startsWith("/models/"))
-        return json(res, 200, p.endsWith("/checkpoints") ? ["sd15/dreamshaper_8.safetensors"] : []);
+        return json(res, 200, FAKE_MODELS[p.slice("/models/".length)] ?? []);
       if (p === "/prompt" && req.method === "POST") {
         const parsed = JSON.parse(body) as {
           prompt: FakeComfy["prompts"][number]["prompt"];

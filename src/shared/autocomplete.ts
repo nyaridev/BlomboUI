@@ -66,6 +66,54 @@ export const TagListsResponse = z.object({
 });
 export type TagListsResponse = z.infer<typeof TagListsResponse>;
 
+/**
+ * Tag lists the app can download (Settings → Autocomplete), from the tag autocomplete extension
+ * for A1111 (MIT). Same CSV format; they land in the profile's tags folder like a dropped file.
+ */
+export const TAG_SOURCE_REPO = "DominikDoom/a1111-sd-webui-tagcomplete";
+export const TAG_SOURCES = [
+  {
+    id: "danbooru",
+    name: "Danbooru",
+    file: "danbooru.csv",
+    bytes: 3_518_020,
+    hint: "Anime tags with post counts and aliases. The usual pick for anime models.",
+  },
+  {
+    id: "danbooru-e621",
+    name: "Danbooru + e621",
+    file: "danbooru_e621_merged.csv",
+    bytes: 6_024_803,
+    hint: "Both in one list, for models trained on both (Pony, NoobAI).",
+  },
+  {
+    id: "e621",
+    name: "e621",
+    file: "e621.csv",
+    bytes: 2_681_621,
+    hint: "Furry and creature tags, NSFW ones included.",
+  },
+  {
+    id: "e621-sfw",
+    name: "e621 (safe)",
+    file: "e621_sfw.csv",
+    bytes: 711_674,
+    hint: "The e621 list without NSFW tags.",
+  },
+  {
+    id: "derpibooru",
+    name: "Derpibooru",
+    file: "derpibooru.csv",
+    bytes: 2_641_417,
+    hint: "Pony (My Little Pony) art tags.",
+  },
+] as const;
+export type TagSource = (typeof TAG_SOURCES)[number];
+export const TagSourceId = z.enum(
+  TAG_SOURCES.map((s) => s.id) as [TagSource["id"], ...TagSource["id"][]],
+);
+export const DownloadTagListBody = z.object({ source: TagSourceId });
+
 export const TagListName = z
   .string()
   .trim()

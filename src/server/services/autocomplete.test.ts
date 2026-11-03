@@ -126,3 +126,40 @@ describe("autocomplete", () => {
     await settings.update(profiles.active as string, { autocomplete: { enabled: true } });
   });
 });
+
+describe("downloading tag lists", () => {
+  const asked: string[] = [];
+  const online = new AutocompleteService({
+    presetsDir: config.presetsDir,
+    profiles,
+    settings,
+    dbs,
+    models: new ModelService({
+      profiles,
+      runtimeDir: config.runtimeDir,
+      onChanged: () => undefined,
+    }),
+    tagSources: "https://tags.test/lists/",
+    fetch: (async (url: URL | string) => {
+      asked.push(String(url));
+      return String(url).endsWith("/danbooru.csv")
+        ? new Response('1girl,0,6008644,"1girls,sole_female"\nsolo,0,5000954,\n')
+        : new Response("not here", { status: 404 });
+    }) as typeof fetch,
+  });
+
+  it("saves a known list into the profile's tags folder, once", async () => {
+    const info = await online.downloadList("danbooru");
+    expect(info).toMatchObject({ file: "danbooru.csv", source: "profile", tags: 2 });
+    expect(asked).toEqual(["https://tags.test/lists/danbooru.csv"]);
+    await fs.access(path.join(online.tagsDir(), "danbooru.csv"));
+    expect((await online.suggest("sole_fem", "tag", 5))[0]).toMatchObject({ text: "1girl" });
+    await expect(online.downloadList("danbooru")).rejects.toThrow(/already in your lists/);
+    expect(asked).toHaveLength(1);
+  });
+
+  it("says what went wrong and refuses unknown lists", async () => {
+    await expect(online.downloadList("e621")).rejects.toThrow(/Couldn't download e621 .*404/);
+    await expect(online.downloadList("nope")).rejects.toThrow(/Unknown tag list/);
+  });
+});

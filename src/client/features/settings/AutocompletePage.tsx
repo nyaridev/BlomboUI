@@ -1,10 +1,12 @@
 /**
  * Settings → Autocomplete: what the prompt editor suggests (tag lists, LoRAs and trigger words,
  * wildcards, frequent tags), how a suggestion goes in, and the Ctrl+↑/↓ weight step. Tag lists
- * are CSV files: a bundled starter list plus any you add, kept in the profile's tags folder.
+ * are CSV files: a bundled starter list plus any you add or download (TAG_SOURCES), kept in the
+ * profile's tags folder.
  */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { formatBytes } from "@client/lib/number";
 import { qk, queryClient, useSettings, useTagLists, useUpdateSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
@@ -22,6 +24,7 @@ import {
   Switch,
   toast,
 } from "@client/ui";
+import { TAG_SOURCE_REPO, TAG_SOURCES, type TagSource } from "@shared/autocomplete";
 import { WEIGHT_STEPS } from "@shared/settings";
 import { type ReactNode, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
@@ -108,6 +111,7 @@ function TagLists() {
           ))}
         </ul>
       )}
+      <Downloads have={new Set((lists.data?.lists ?? []).map((l) => l.file.toLowerCase()))} />
       <DropZone
         compact
         busy={adding}
@@ -128,6 +132,63 @@ function TagLists() {
         }}
       />
     </Panel>
+  );
+}
+
+/** Ready-made lists from the tag-complete repository, one click each. */
+function Downloads({ have }: { have: Set<string> }) {
+  const [busy, setBusy] = useState<TagSource["id"] | null>(null);
+  const download = async (s: TagSource) => {
+    setBusy(s.id);
+    try {
+      const info = await api.downloadTagList(s.id);
+      invalidateLists();
+      toast(`Added ${s.name} (${info.tags.toLocaleString()} tags)`, "success");
+    } catch (e) {
+      toast(message(e), "error");
+    } finally {
+      setBusy(null);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-baseline gap-2">
+        <span className="text-sm font-medium text-fg">Download a list</span>
+        <span className="text-xs text-fg-3">from {TAG_SOURCE_REPO} on GitHub</span>
+      </div>
+      <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
+        {TAG_SOURCES.map((s) => {
+          const added = have.has(s.file);
+          return (
+            <li key={s.id} className="flex items-center gap-3 px-3 py-2">
+              <Icon name="download" size={16} className="text-fg-3" />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-sm text-fg">{s.name}</span>
+                <span className="text-xs text-fg-3">{s.hint}</span>
+              </div>
+              <span className="font-mono text-2xs text-fg-4 tabular max-lg:hidden">
+                {formatBytes(s.bytes)}
+              </span>
+              {added ? (
+                <Badge tone="success">
+                  <Icon name="check" size={12} /> Added
+                </Badge>
+              ) : (
+                <Button
+                  size="sm"
+                  icon="download"
+                  loading={busy === s.id}
+                  disabled={busy !== null && busy !== s.id}
+                  onClick={() => void download(s)}
+                >
+                  Download
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import { Hono } from "hono";
-import { SuggestQuery, TagListName } from "../../shared/autocomplete.ts";
-import { HttpError, readBody } from "../lib/http.ts";
+import { DownloadTagListBody, SuggestQuery, TagListName } from "../../shared/autocomplete.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import type { AutocompleteService } from "../services/autocomplete.ts";
 import { revealInFileManager } from "../services/system.ts";
 
@@ -24,6 +24,12 @@ export function autocompleteRoutes(autocomplete: AutocompleteService) {
     if (!name.success) throw new HttpError(400, "Pick a .csv file.", "bad_name");
     const bytes = await readBody(c, 64 * 1024 * 1024, "That list is too large (64 MB at most).");
     return c.json(await autocomplete.addList(name.data, bytes), 201);
+  });
+
+  /** One of TAG_SOURCES, downloaded into the profile's tags folder. */
+  r.post("/lists/download", async (c) => {
+    const { source } = await readJson(c, DownloadTagListBody);
+    return c.json(await autocomplete.downloadList(source), 201);
   });
 
   r.delete("/lists/:file", async (c) => {

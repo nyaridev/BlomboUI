@@ -2,8 +2,9 @@
  * Prompt autocomplete: suggestions for the prompt editor from
  *
  *  - tag lists: bundled CSVs in presets/tags/ and the profile's own in data/profiles/<id>/tags/
- *    (shared/autocomplete.ts has the format), parsed once per file version and kept sorted by
- *    popularity, so a keystroke is a scan over a few hundred thousand short strings at most
+ *    (shared/autocomplete.ts has the format; added by drop or downloaded from TAG_SOURCES),
+ *    parsed once per file version and kept sorted by popularity, so a keystroke is a scan over a
+ *    few hundred thousand short strings at most
  *  - LoRAs and their trigger words, from Models → Local (Civitai info files and lookups)
  *  - wildcards, from the profile's wildcards folder
  *  - frequent tags: every Generate click counts the prompt's tags in the profile database
@@ -19,6 +20,8 @@ import {
   promptTags,
   type Suggestion,
   shortCount,
+  TAG_SOURCE_REPO,
+  TAG_SOURCES,
   type TagListInfo,
   type TagListsResponse,
   type TagRow,
@@ -27,6 +30,7 @@ import type { AutocompleteSettings } from "../../shared/settings.ts";
 import type { ProfileDbs } from "../db/profileDb.ts";
 import { exists, movePath, writeFileIfAbsent } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
+import { fetchFollow, readLimited } from "../lib/remote.ts";
 import type { ModelService } from "./models.ts";
 import type { ProfileService } from "./profiles.ts";
 import type { SettingsService } from "./settings.ts";
@@ -56,7 +60,12 @@ export interface AutocompleteDeps {
   settings: SettingsService;
   dbs: ProfileDbs;
   models: ModelService;
+  /** Where TAG_SOURCES files are fetched from (tests point it at a fake). */
+  tagSources?: string;
+  fetch?: typeof fetch;
 }
+
+const TAG_SOURCE_BASE = `https://raw.githubusercontent.com/${TAG_SOURCE_REPO}/main/tags/`;
 
 function listName(file: string): string {
   const stem = file.replace(/\.csv$/i, "").replace(/[-_]+/g, " ");
@@ -173,6 +182,35 @@ export class AutocompleteService {
       enabled: true,
       error: null,
     };
+  }
+
+  /** Download one of TAG_SOURCES into the profile's tags folder. */
+  async downloadList(id: string): Promise<TagListInfo> {
+    const source = TAG_SOURCES.find((s) => s.id === id);
+    if (!source) throw new HttpError(400, "Unknown tag list.", "bad_source");
+    if (await exists(path.join(this.tagsDir(), source.file)))
+      throw new HttpError(409, `${source.name} is already in your lists.`, "exists");
+    const url = new URL(source.file, this.deps.tagSources ?? TAG_SOURCE_BASE);
+    let bytes: Uint8Array;
+    try {
+      const res = await fetchFollow(url.href, {
+        allow: (u) => u.origin === url.origin,
+        fetch: this.deps.fetch,
+        signal: AbortSignal.timeout(120_000),
+      });
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new Error(`GitHub answered ${res.status}`);
+      }
+      bytes = await readLimited(res, MAX_LIST_BYTES);
+    } catch (e) {
+      throw new HttpError(
+        502,
+        `Couldn't download ${source.name} (${(e as Error).message}). Check your connection and try again.`,
+        "download",
+      );
+    }
+    return this.addList(source.file, bytes);
   }
 
   /** Move a profile list to data/profiles/<id>/trash/tags/. */

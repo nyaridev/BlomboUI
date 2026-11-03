@@ -9,7 +9,13 @@ import type {
   ProfilesResponse,
   SystemInfo,
 } from "@shared/api";
-import type { CompleteMode, Suggestion, TagListInfo, TagListsResponse } from "@shared/autocomplete";
+import type {
+  CompleteMode,
+  Suggestion,
+  TagListInfo,
+  TagListsResponse,
+  TagSource,
+} from "@shared/autocomplete";
 import type {
   BatchCheck,
   BatchRun,
@@ -248,6 +254,8 @@ export const api = {
       undefined,
       file,
     ),
+  downloadTagList: (source: TagSource["id"]) =>
+    request<TagListInfo>("POST", "/autocomplete/lists/download", { source }),
   removeTagList: (file: string) =>
     request<void>("DELETE", `/autocomplete/lists/${encodeURIComponent(file)}`),
   revealTagLists: () => request<{ ok: true }>("POST", "/autocomplete/lists/reveal"),

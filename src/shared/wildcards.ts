@@ -86,6 +86,21 @@ export const CreateWildcardBody = z.object({
 });
 export const MoveWildcardBody = z.object({ from: WildcardPath, to: WildcardPath });
 export const WildcardPathBody = z.object({ path: WildcardPath });
+/** Where a picker's wildcard is defined, how many entries it has and the first few. */
+export const WildcardInfo = z.object({
+  name: z.string(),
+  /** The defining file as the Wildcard Manager names it ("<folder id>/people/actors.txt"). */
+  path: z.string(),
+  format: z.enum(WILDCARD_FORMATS),
+  /** The wildcards folder's name from Settings. */
+  folder: z.string(),
+  count: z.number().int(),
+  sample: z.array(z.string()),
+});
+export type WildcardInfo = z.infer<typeof WildcardInfo>;
+/** How many entries Wildcard info lists. */
+export const WILDCARD_SAMPLE = 8;
+
 /** A folder the pickers list ("people/actors", without the wildcards folder's id). */
 export const WildcardFolderBody = z.object({ folder: z.string().min(1).max(400) });
 /** Rename a picker's wildcard ("people/actors") or folder ("people"): `name` is the new last part. */

@@ -2,14 +2,17 @@
  * Drop an image anywhere on the Generate screen to reuse its settings: the server reads what it
  * carries (Blombo's own data, a ComfyUI graph or A1111 parameters) and "Use these settings"
  * applies it, switching workflows when the image came from one of yours. Drops that a control
- * inside handles first (the ControlNet image) are left alone.
+ * inside handles first (the ControlNet image) are left alone, and so are drags that started in
+ * the page (a model card's picture): only files from outside count. The overlay covers the
+ * window wherever the view is scrolled.
  */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { toast } from "@client/ui";
 import { IMAGE_EXTENSIONS } from "@shared/gallery";
 import { AnimatePresence, motion } from "motion/react";
-import { type DragEvent, useRef, useState } from "react";
+import { type DragEvent, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { applyImageSettings } from "./applySettings";
 
 const isImage = (f: File) =>
@@ -20,7 +23,26 @@ export function useImageDrop() {
   const [over, setOver] = useState(false);
   const [busy, setBusy] = useState(false);
   const depth = useRef(0);
-  const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer.types).includes("Files");
+  // A drag that starts in the page (a card's picture) carries "Files" too; it isn't a drop.
+  const inPage = useRef(false);
+  useEffect(() => {
+    const start = () => {
+      inPage.current = true;
+    };
+    const end = () => {
+      inPage.current = false;
+    };
+    window.addEventListener("dragstart", start);
+    window.addEventListener("dragend", end);
+    window.addEventListener("drop", end);
+    return () => {
+      window.removeEventListener("dragstart", start);
+      window.removeEventListener("dragend", end);
+      window.removeEventListener("drop", end);
+    };
+  }, []);
+  const hasFiles = (e: DragEvent) =>
+    !inPage.current && Array.from(e.dataTransfer.types).includes("Files");
 
   const handlers = {
     onDragEnter: (e: DragEvent) => {
@@ -78,7 +100,7 @@ async function readSettingsFrom(file: File, setBusy: (b: boolean) => void): Prom
 }
 
 export function ImageDropOverlay({ over, busy }: { over: boolean; busy: boolean }) {
-  return (
+  return createPortal(
     <AnimatePresence>
       {over || busy ? (
         <motion.div
@@ -86,7 +108,7 @@ export function ImageDropOverlay({ over, busy }: { over: boolean; busy: boolean 
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.12 }}
-          className="pointer-events-none absolute inset-2 z-40 grid place-items-center rounded-xl border-2 border-dashed border-accent-ink/70 bg-bg/80"
+          className="pointer-events-none fixed inset-2 z-40 grid place-items-center rounded-xl border-2 border-dashed border-accent-ink/70 bg-bg/80"
         >
           <div className="flex flex-col items-center gap-3 text-center">
             <span className="grid h-14 w-14 place-items-center rounded-xl bg-accent/15 text-accent-ink">
@@ -106,6 +128,7 @@ export function ImageDropOverlay({ over, busy }: { over: boolean; busy: boolean 
           </div>
         </motion.div>
       ) : null}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

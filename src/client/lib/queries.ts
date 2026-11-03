@@ -34,6 +34,8 @@ export const qk = {
   modelsAll: ["models"] as const,
   wildcards: (profileId: string | null) => ["wildcards", profileId] as const,
   wildcardTree: (profileId: string | null) => ["wildcard-tree", profileId] as const,
+  wildcardInfo: (profileId: string | null, name: string | null) =>
+    ["wildcard-info", profileId, name] as const,
   wildcardFile: (profileId: string | null, path: string | null) =>
     ["wildcard-file", profileId, path] as const,
   settings: (profileId: string | null) => ["settings", profileId] as const,
@@ -640,6 +642,18 @@ export function useMoveModel() {
 }
 
 /* ── wildcards (manager) ─────────────────────────────────────────────────── */
+
+/** Wildcard info for the pickers; read fresh each time it opens (files change in the editor). */
+export function useWildcardInfo(name: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.wildcardInfo(profileId, name),
+    queryFn: () => api.wildcardInfo(name as string),
+    enabled: profileId !== null && name !== null,
+    staleTime: 0,
+    retry: false,
+  });
+}
 
 export function useWildcardTree() {
   const profileId = useSession((s) => s.profileId);

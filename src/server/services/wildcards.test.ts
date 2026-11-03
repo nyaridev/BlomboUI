@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { wildcardLines } from "../../shared/prompt/wildcards.ts";
 import { listWildcards, loadWildcards, WildcardFiles, WildcardFolders } from "./wildcards.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-wildcards-"));
@@ -133,6 +134,19 @@ describe("several wildcard folders", () => {
     );
     await expect(folders.read("gone/animals.txt")).rejects.toThrow(/isn't in this profile/);
     await expect(folders.create("more", "folder")).rejects.toThrow(/inside a wildcard folder/);
+  });
+
+  it("tells where a wildcard comes from, how many entries it has and the first few", async () => {
+    const txt = await folders.info("colors");
+    // An earlier test rewrites colors.txt: compare with what's on disk.
+    const lines = wildcardLines(await fs.readFile(path.join(root, "colors.txt"), "utf8"));
+    expect(txt).toMatchObject({ path: "main/colors.txt", format: "txt", folder: "Main" });
+    expect(txt.count).toBe(lines.length);
+    expect(txt.sample).toEqual(lines.slice(0, 8));
+    const yaml = await folders.info("outfits/fantasy");
+    expect(yaml).toMatchObject({ path: "main/packs/outfits.yaml", format: "yaml", count: 2 });
+    expect((await folders.info("animals")).folder).toBe("More");
+    await expect(folders.info("nope")).rejects.toThrow(/No wildcard named/);
   });
 
   it("renames a picker's wildcard and folder, and updates full references", async () => {

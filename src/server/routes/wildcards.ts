@@ -41,6 +41,13 @@ export function wildcardRoutes(profiles: ProfileService) {
 
   r.get("/tree", async (c) => c.json(await (await files()).tree()));
 
+  /** Wildcard info: where it's defined, its entry count and the first few (?name=people/actors). */
+  r.get("/info", async (c) => {
+    const name = c.req.query("name")?.trim();
+    if (!name) throw new HttpError(400, "Say which wildcard (?name=…).", "no_name");
+    return c.json(await (await files()).info(name));
+  });
+
   r.get("/file", async (c) => {
     const parsed = WildcardPath.safeParse(c.req.query("path") ?? "");
     if (!parsed.success) throw new HttpError(400, "Invalid wildcard path.", "bad_path");

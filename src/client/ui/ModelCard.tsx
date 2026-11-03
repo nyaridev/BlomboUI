@@ -66,7 +66,7 @@ export function FallbackFace({
 }
 
 const CORNER_BUTTON =
-  "grid h-7 w-7 place-items-center rounded-sm bg-black/45 text-white/80 backdrop-blur-[2px] transition-opacity hover:text-white focus-ring";
+  "grid h-7 w-7 place-items-center rounded-sm bg-black/75 text-white/85 backdrop-blur-[2px] transition-opacity hover:text-white focus-ring";
 /** Shown while the card is hovered or a button in it has keyboard focus (always on touch). */
 const HOVER_ONLY =
   "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100";
@@ -105,6 +105,8 @@ export interface ModelCardProps {
   onFavorite?: () => void;
   /** Shows an info button beside the heart on hover (Model info…). */
   onInfo?: () => void;
+  /** What the info button opens ("Model info" unless said: "Wildcard info"). */
+  infoLabel?: string;
   /** Right-click (openContextMenu). */
   onContextMenu?: (e: MouseEvent<HTMLElement>) => void;
   footer?: ReactNode;
@@ -122,6 +124,7 @@ export function ModelCard({
   onClick,
   onFavorite,
   onInfo,
+  infoLabel = "Model info",
   onContextMenu,
   footer,
   ratio = 3 / 4,
@@ -179,13 +182,13 @@ export function ModelCard({
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/85 via-black/35 to-transparent" />
         <div className="absolute top-2 left-2 flex gap-1">
           {baseModel ? (
-            <span className="rounded-xs bg-black/55 px-1.5 py-0.5 font-mono text-[10px] font-medium text-white/90 backdrop-blur-[2px]">
+            <span className="rounded-xs bg-black/75 px-1.5 py-0.5 font-mono text-[10px] font-medium text-white/90 backdrop-blur-[2px]">
               {baseModel}
             </span>
           ) : null}
         </div>
         {mark ? (
-          <span className="absolute top-2 right-2 inline-flex h-5 items-center gap-1 rounded-xs bg-black/60 pr-1.5 pl-1 text-[10px] font-semibold text-white backdrop-blur-[2px]">
+          <span className="absolute top-2 right-2 inline-flex h-5 items-center gap-1 rounded-xs bg-black/75 pr-1.5 pl-1 text-[10px] font-semibold text-white backdrop-blur-[2px]">
             <Icon name={mark.icon} size={11} strokeWidth={2.25} className={MARK_ICON[mark.tone]} />
             {mark.label}
           </span>
@@ -222,8 +225,8 @@ export function ModelCard({
           {onInfo ? (
             <button
               type="button"
-              aria-label={`Model info: ${name}`}
-              title="Model info"
+              aria-label={`${infoLabel}: ${name}`}
+              title={infoLabel}
               onClick={onInfo}
               className={cn(CORNER_BUTTON, HOVER_ONLY)}
             >

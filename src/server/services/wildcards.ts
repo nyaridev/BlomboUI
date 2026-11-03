@@ -28,9 +28,11 @@ import {
   flattenYamlWildcards,
   type RollResult,
   txtWildcardName,
+  WILDCARD_SAMPLE,
   type WildcardEntry,
   type WildcardEntryType,
   type WildcardFile,
+  type WildcardInfo,
   type WildcardTree,
   wildcardFormat,
 } from "../../shared/wildcards.ts";
@@ -75,33 +77,43 @@ async function walkFiles(root: string, onFile: (abs: string, e: Dirent) => void)
   await walk(root, 0);
 }
 
-/** Every YAML-defined wildcard name under `root`. First file (by path) wins on duplicates. */
-export async function yamlWildcards(root: string): Promise<Map<string, string[]>> {
+/** The YAML files under `root`, in the order their names win (by path). */
+async function yamlFiles(root: string): Promise<string[]> {
   const files: string[] = [];
   await walkFiles(root, (abs) => {
     if (wildcardFormat(abs) === "yaml") files.push(abs);
   });
-  files.sort((a, b) => a.localeCompare(b));
-  const out = new Map<string, string[]>();
-  for (const file of files) {
-    let mtime = 0;
+  return files.sort((a, b) => a.localeCompare(b));
+}
+
+/** The wildcard names one YAML file defines (cached by mtime); null when it's gone. */
+async function yamlNames(file: string): Promise<Map<string, string[]> | null> {
+  let mtime = 0;
+  try {
+    mtime = (await fs.stat(file)).mtimeMs;
+  } catch {
+    return null;
+  }
+  let cached = yamlCache.get(file);
+  if (!cached || cached.mtime !== mtime) {
+    let names = new Map<string, string[]>();
     try {
-      mtime = (await fs.stat(file)).mtimeMs;
+      names = flattenYamlWildcards(parseYaml(await fs.readFile(file, "utf8")));
     } catch {
-      continue;
+      // Invalid YAML defines nothing; the editor's lint says why.
     }
-    let cached = yamlCache.get(file);
-    if (!cached || cached.mtime !== mtime) {
-      let names = new Map<string, string[]>();
-      try {
-        names = flattenYamlWildcards(parseYaml(await fs.readFile(file, "utf8")));
-      } catch {
-        // Invalid YAML defines nothing; the editor's lint says why.
-      }
-      cached = { mtime, names };
-      yamlCache.set(file, cached);
-    }
-    for (const [k, v] of cached.names) if (!out.has(k)) out.set(k, v);
+    cached = { mtime, names };
+    yamlCache.set(file, cached);
+  }
+  return cached.names;
+}
+
+/** Every YAML-defined wildcard name under `root`. First file (by path) wins on duplicates. */
+export async function yamlWildcards(root: string): Promise<Map<string, string[]>> {
+  const out = new Map<string, string[]>();
+  for (const file of await yamlFiles(root)) {
+    const names = await yamlNames(file);
+    if (names) for (const [k, v] of names) if (!out.has(k)) out.set(k, v);
   }
   return out;
 }
@@ -411,6 +423,44 @@ export class WildcardFolders {
   async remove(p: string): Promise<string> {
     const { files, rel } = this.inside(p);
     return files.remove(rel);
+  }
+
+  /**
+   * Where a picker's wildcard comes from, in lookup order (each folder: its .txt file, then its
+   * YAML keys), with its entry count and the first few entries.
+   */
+  async info(name: string): Promise<WildcardInfo> {
+    const rel = name.replace(/\\/g, "/");
+    for (const f of this.folders) {
+      const root = f.path.trim();
+      if (!root) continue;
+      const file = fileFor(root, rel);
+      const text = file ? await fs.readFile(file, "utf8").catch(() => null) : null;
+      if (file && text !== null) {
+        const lines = wildcardLines(text);
+        return {
+          name: rel,
+          path: `${f.id}/${toRel(path.relative(root, file))}`,
+          format: "txt",
+          folder: f.name,
+          count: lines.length,
+          sample: lines.slice(0, WILDCARD_SAMPLE),
+        };
+      }
+      for (const yaml of await yamlFiles(root)) {
+        const lines = (await yamlNames(yaml))?.get(rel);
+        if (lines)
+          return {
+            name: rel,
+            path: `${f.id}/${toRel(path.relative(root, yaml))}`,
+            format: "yaml",
+            folder: f.name,
+            count: lines.length,
+            sample: lines.slice(0, WILDCARD_SAMPLE),
+          };
+      }
+    }
+    throw new HttpError(404, `No wildcard named "${rel}" in this profile's folders.`, "not_found");
   }
 
   /** A pickers' folder ("people/actors", the same in every folder) in the first folder with it. */

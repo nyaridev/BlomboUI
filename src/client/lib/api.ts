@@ -104,6 +104,7 @@ import type {
   RollResult,
   WildcardEntryType,
   WildcardFile,
+  WildcardInfo,
   WildcardList,
   WildcardTree,
 } from "@shared/wildcards";
@@ -284,6 +285,8 @@ export const api = {
 
   wildcards: () => request<WildcardList>("GET", "/wildcards"),
   wildcardTree: () => request<WildcardTree>("GET", "/wildcards/tree"),
+  wildcardInfo: (name: string) =>
+    request<WildcardInfo>("GET", `/wildcards/info?name=${encodeURIComponent(name)}`),
   wildcardFile: (path: string) =>
     request<WildcardFile>("GET", `/wildcards/file?path=${encodeURIComponent(path)}`),
   saveWildcard: (path: string, text: string, baseMtime: number | null) =>

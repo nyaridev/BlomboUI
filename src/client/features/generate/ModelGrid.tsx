@@ -68,6 +68,7 @@ import { modelDisplayName, modelFolder } from "./labels";
 import { pickerOrder } from "./pickerOrder";
 import { RenameDialog, type RenameTarget } from "./RenameDialog";
 import { useValues } from "./state";
+import { useEditWildcard, WildcardInfoDialog } from "./WildcardInfoDialog";
 import { useBindings } from "./workflow";
 
 export type PickerTab = "checkpoints" | "loras" | "wildcards" | "other";
@@ -215,6 +216,8 @@ export function ModelGrid({
   const sort: Sort =
     tab === "wildcards" && SORTS.find((s) => s.value === pickedSort)?.files ? "name" : pickedSort;
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
+  const [wildcardInfo, setWildcardInfo] = useState<string | null>(null);
+  const editWildcard = useEditWildcard();
   const [showTree, setShowTree] = useState(true);
   // Another tab or model kind has other folders and base models.
   // biome-ignore lint/correctness/useExhaustiveDependencies: tab and kind are the triggers
@@ -513,9 +516,32 @@ export function ModelGrid({
         first: [use, { type: "separator", id: "s0" }],
         file: [rename],
       });
+    const wildcardEntries: MenuEntry[] =
+      tab === "wildcards"
+        ? [
+            {
+              id: "info",
+              label: "Wildcard info…",
+              icon: "info",
+              onSelect: () => setWildcardInfo(item.id),
+            },
+            {
+              id: "edit",
+              label: "Edit in Wildcards",
+              icon: "wildcards",
+              onSelect: () =>
+                void api
+                  .wildcardInfo(item.id)
+                  .then((info) => editWildcard(info.path))
+                  .catch((e: Error) => toast(e.message, "error")),
+            },
+            { type: "separator", id: "s-w" },
+            rename,
+          ]
+        : [];
     return [
       use,
-      ...(tab === "wildcards" ? [rename] : []),
+      ...wildcardEntries,
       {
         id: "copy",
         label: "Copy name",
@@ -679,11 +705,13 @@ export function ModelGrid({
                 setFavorite.mutate({ kind, name: item.id, favorite: !favorites.has(item.id) })
               }
               columns={showTree ? COLUMNS.tree : COLUMNS.wide}
+              onInfo={tab === "wildcards" ? (item) => setWildcardInfo(item.id) : undefined}
             />
           )}
         </div>
       </div>
       <RenameDialog target={renaming} onClose={() => setRenaming(null)} />
+      <WildcardInfoDialog name={wildcardInfo} onClose={() => setWildcardInfo(null)} />
     </div>
   );
 }
@@ -708,9 +736,12 @@ function VirtualGrid({
   favorites,
   onFavorite,
   columns: wanted,
+  onInfo,
 }: {
   /** Cards a row when there's room. */
   columns: number;
+  /** The info button on cards without a local model (wildcards). */
+  onInfo?: (i: Item) => void;
   items: Item[];
   isSelected: (i: Item) => boolean;
   onPick: (i: Item) => void;
@@ -761,6 +792,7 @@ function VirtualGrid({
                 onMenu={onMenu}
                 favorite={favorites ? favorites.has(item.id) : null}
                 onFavorite={onFavorite}
+                onInfo={onInfo}
               />
             ))}
           </div>
@@ -778,8 +810,10 @@ function PickerCard({
   onMenu,
   favorite,
   onFavorite,
+  onInfo,
 }: {
   item: Item;
+  onInfo?: (i: Item) => void;
   blurNsfw: boolean;
   selected: boolean;
   onPick: (i: Item) => void;
@@ -804,7 +838,8 @@ function PickerCard({
       onContextMenu={(e) => onMenu(e, item)}
       favorite={favorite ?? undefined}
       onFavorite={favorite === null ? undefined : () => onFavorite(item)}
-      onInfo={localId ? () => openModelInfo(localId) : undefined}
+      onInfo={localId ? () => openModelInfo(localId) : onInfo ? () => onInfo(item) : undefined}
+      infoLabel={item.kind === "wildcards" ? "Wildcard info" : undefined}
     />
   );
 }

@@ -263,17 +263,17 @@ function Tile(props: TileProps) {
         {strength || missing ? (
           <span className="pointer-events-none absolute top-1 left-1 flex items-center gap-0.5">
             {instant ? (
-              <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/60 text-white">
+              <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/75 text-white">
                 <Icon name="bolt" size={11} fill="currentColor" />
               </span>
             ) : null}
             {strength ? (
-              <span className="rounded-xs bg-black/60 px-1 font-mono text-xs leading-4.5 text-white tabular">
+              <span className="rounded-xs bg-black/75 px-1 font-mono text-xs leading-4.5 text-white tabular">
                 {strengthText(strength.value)}
               </span>
             ) : null}
             {missing ? (
-              <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/60 text-yellow">
+              <span className="grid h-4.5 w-4.5 place-items-center rounded-xs bg-black/75 text-yellow">
                 <Icon name="info" size={11} />
               </span>
             ) : null}
@@ -301,7 +301,7 @@ function Tile(props: TileProps) {
               size="xs"
               tooltip={false}
               onClick={onRemove}
-              className="bg-black/60 text-white hover:bg-black/80 hover:text-white"
+              className="bg-black/75 text-white hover:bg-black/90 hover:text-white"
             />
           </div>
         ) : null}

@@ -1,6 +1,6 @@
 /**
  * Settings → Civitai: the profile's API key (sent to the server once, never shown again), what
- * the browser starts with, where downloads land and how they're named, author aliases, marks,
+ * the browser starts with, where downloads land and how they're named (author prefixes), marks,
  * the background lookup of local models, and how much history to keep. Saved to the profile.
  */
 import { Icon } from "@client/icons/Icon";
@@ -31,9 +31,10 @@ import {
   CIVITAI_TYPE_LABELS,
   type CivitaiSite,
 } from "@shared/civitai";
-import { type PlanInput, planFileName, planFolder } from "@shared/downloads";
+import { aliasFor, autoPrefix, type PlanInput, planFileName, planFolder } from "@shared/downloads";
 import {
   type AuthorAlias,
+  type CivitaiSettings,
   DOWNLOAD_FOLDER_LABELS,
   DOWNLOAD_FOLDER_PARTS,
   type DownloadFolderPart,
@@ -43,12 +44,12 @@ import { useEffect, useState } from "react";
 import { SettingsSection } from "./common";
 
 const EXAMPLE: PlanInput = {
-  fileName: "detail_tweaker_xl.safetensors",
-  modelName: "Detail Tweaker XL",
-  versionName: "v2.0",
+  fileName: "sakura_haruno_ilxl.safetensors",
+  modelName: "Sakura Haruno",
+  versionName: "v1.0",
   baseModel: "Illustrious",
-  creator: "some_creator",
-  tags: ["tool", "concept"],
+  creator: "yeetah145",
+  tags: ["character"],
 };
 
 export function CivitaiPage({ header }: { header: React.ReactNode }) {
@@ -133,34 +134,60 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
               onChange={(folderBy) => save({ downloads: { folderBy } })}
             />
           </Field>
-          <Field label="File name" layout="left">
+        </SettingsSection>
+
+        <SettingsSection title="File names" icon="file">
+          <Field label="Name files by" layout="left">
             <Segmented
               value={dl.naming}
               onChange={(naming) => save({ downloads: { naming } })}
               options={[
-                { value: "original", label: "Civitai's file name" },
                 { value: "model", label: "Model name" },
                 { value: "model-version", label: "Model and version" },
+                { value: "original", label: "Civitai's file name" },
               ]}
             />
+          </Field>
+          <Field
+            label="Author prefix"
+            layout="left"
+            hint="Each file starts with its author's prefix, so two authors' models with the same name never collide."
+          >
+            <Switch
+              checked={dl.prefix}
+              onCheckedChange={(prefix) => save({ downloads: { prefix } })}
+              label="Start file names with the author's prefix"
+            />
+          </Field>
+          <Field
+            label="Make prefixes"
+            layout="left"
+            hint="An author without a prefix gets one on their first download: the first letter, the consonants and the digits of their name (yeetah145 → yth145). It's kept in the list below."
+          >
+            <Switch
+              checked={dl.autoAliases}
+              disabled={!dl.prefix}
+              onCheckedChange={(autoAliases) => save({ downloads: { autoAliases } })}
+              label="Make prefixes automatically"
+            />
+          </Field>
+          <Field
+            label="Author prefixes"
+            layout="left"
+            hint="Change one by adding the author again with a new prefix. No two authors can share one."
+          >
+            <Aliases value={dl.aliases} onChange={(aliases) => save({ downloads: { aliases } })} />
           </Field>
           <Field label="Example" layout="left">
             <code className="pt-1.5 font-mono text-xs break-all text-fg-2">
               {[
                 "loras",
-                planFolder(EXAMPLE, dl.folderBy, dl.aliases),
-                planFileName(EXAMPLE, dl.naming),
+                planFolder(EXAMPLE, dl.folderBy),
+                planFileName(EXAMPLE, dl.naming, examplePrefix(dl)),
               ]
                 .filter(Boolean)
                 .join("/")}
             </code>
-          </Field>
-          <Field
-            label="Author aliases"
-            layout="left"
-            hint="Folder names for creators, when sorting by creator."
-          >
-            <Aliases value={dl.aliases} onChange={(aliases) => save({ downloads: { aliases } })} />
           </Field>
         </SettingsSection>
 
@@ -410,6 +437,18 @@ function Account({ site, onSite }: { site: CivitaiSite; onSite: (site: CivitaiSi
 
 /* ── pieces ─────────────────────────────────────────────────────────────── */
 
+/** The example author's prefix, worked out the way a download would. */
+function examplePrefix(dl: CivitaiSettings["downloads"]): string | null {
+  const creator = EXAMPLE.creator ?? "";
+  if (!dl.prefix || !creator) return null;
+  const known = aliasFor(creator, dl.aliases);
+  if (known || !dl.autoAliases) return known;
+  return autoPrefix(
+    creator,
+    dl.aliases.map((a) => a.to),
+  );
+}
+
 function FolderParts({
   value,
   onChange,
@@ -451,28 +490,38 @@ function Aliases({
 }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const same = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+  // A prefix another author has would let their files collide.
+  const clash = to.trim() ? value.find((a) => same(a.to, to) && !same(a.from, from)) : undefined;
+  const sorted = [...value].sort((a, b) => a.from.localeCompare(b.from));
   return (
-    <div className="flex max-w-xl flex-col gap-1.5">
-      {value.map((a) => (
-        <div key={a.from} className="flex items-center gap-2 text-sm">
-          <span className="min-w-0 flex-1 truncate font-mono text-fg-2">{a.from}</span>
-          <Icon name="arrow-right" size={13} className="text-fg-4" />
-          <span className="min-w-0 flex-1 truncate text-fg">{a.to}</span>
-          <IconButton
-            icon="x"
-            label={`Remove the alias for ${a.from}`}
-            size="xs"
-            onClick={() => onChange(value.filter((x) => x.from !== a.from))}
-          />
-        </div>
-      ))}
+    <div className="flex max-w-xl flex-col gap-2">
+      {sorted.length ? (
+        <ul className="scroll-quiet flex max-h-56 flex-col divide-y divide-line overflow-y-auto rounded-md border border-line">
+          {sorted.map((a) => (
+            <li key={a.from} className="flex items-center gap-2 px-2.5 py-1 text-sm">
+              <span className="min-w-0 flex-1 truncate font-mono text-fg-2">{a.from}</span>
+              <Icon name="arrow-right" size={13} className="text-fg-4" />
+              <span className="min-w-0 flex-1 truncate font-mono text-fg">{a.to}</span>
+              <IconButton
+                icon="x"
+                label={`Remove the prefix for ${a.from}`}
+                size="xs"
+                onClick={() => onChange(value.filter((x) => x.from !== a.from))}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <span className="text-xs text-fg-3">No prefixes yet.</span>
+      )}
       <form
         className="flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!from.trim() || !to.trim()) return;
+          if (!from.trim() || !to.trim() || clash) return;
           onChange([
-            ...value.filter((x) => x.from.toLowerCase() !== from.trim().toLowerCase()),
+            ...value.filter((x) => !same(x.from, from)),
             { from: from.trim(), to: to.trim() },
           ]);
           setFrom("");
@@ -483,6 +532,7 @@ function Aliases({
           size="sm"
           mono
           value={from}
+          maxLength={60}
           onChange={(e) => setFrom(e.target.value)}
           placeholder="Civitai username"
           className="flex-1"
@@ -491,16 +541,30 @@ function Aliases({
         <Icon name="arrow-right" size={13} className="text-fg-4" />
         <TextField
           size="sm"
+          mono
           value={to}
+          maxLength={40}
+          invalid={Boolean(clash)}
           onChange={(e) => setTo(e.target.value)}
-          placeholder="Folder name"
+          placeholder="Prefix"
           className="flex-1"
-          aria-label="Folder name for that creator"
+          aria-label="Prefix for that author"
         />
-        <Button size="sm" type="submit" icon="plus" disabled={!from.trim() || !to.trim()}>
+        <Button
+          size="sm"
+          type="submit"
+          icon="plus"
+          disabled={!from.trim() || !to.trim() || Boolean(clash)}
+        >
           Add
         </Button>
       </form>
+      {clash ? (
+        <span className="flex items-center gap-1.5 text-xs text-danger">
+          <Icon name="x-circle" size={13} />
+          {clash.from} already uses "{clash.to}". Pick another prefix.
+        </span>
+      ) : null}
     </div>
   );
 }

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  aliasFor,
+  autoPrefix,
   categoryOf,
   cleanFolder,
   kindFolder,
@@ -21,26 +23,36 @@ const input: PlanInput = {
 
 describe("download destinations", () => {
   it("sorts into base model, category and creator folders", () => {
-    expect(planFolder(input, ["baseModel"], [])).toBe("Illustrious");
-    expect(planFolder(input, ["baseModel", "category", "creator"], [])).toBe(
+    expect(planFolder(input, ["baseModel"])).toBe("Illustrious");
+    expect(planFolder(input, ["baseModel", "category", "creator"])).toBe(
       "Illustrious/Character/some_user_123",
     );
-    expect(planFolder(input, ["creator"], [{ from: "SOME_USER_123", to: "Some User" }])).toBe(
-      "Some User",
-    );
-    expect(planFolder(input, [], [])).toBe("");
+    expect(planFolder(input, [])).toBe("");
   });
 
   it("skips parts a model doesn't have", () => {
-    expect(planFolder({ ...input, baseModel: null, tags: [] }, ["baseModel", "category"], [])).toBe(
-      "",
-    );
+    expect(planFolder({ ...input, baseModel: null, tags: [] }, ["baseModel", "category"])).toBe("");
   });
 
   it("names files from Civitai or from the model", () => {
     expect(planFileName(input, "original")).toBe("Detail_Tweaker.safetensors");
     expect(planFileName(input, "model")).toBe("Detail Tweaker XL.safetensors");
     expect(planFileName(input, "model-version")).toBe("Detail Tweaker XL - v2.0.safetensors");
+    expect(planFileName(input, "model", "smsr123")).toBe("smsr123_Detail Tweaker XL.safetensors");
+    expect(planFileName(input, "model", "a:b")).toBe("a b_Detail Tweaker XL.safetensors");
+  });
+
+  it("makes short, unique author prefixes", () => {
+    expect(autoPrefix("yeetah145", [])).toBe("yth145");
+    expect(autoPrefix("some_user_123", [])).toBe("smsr123");
+    expect(autoPrefix("Kitty", [])).toBe("kty");
+    expect(autoPrefix("Bartholomew_the_Great", [])).toBe("brthlm");
+    expect(autoPrefix("yeetah145", ["YTH145"])).toBe("yth145-2");
+    expect(autoPrefix("yeetah145", ["yth145", "yth145-2"])).toBe("yth145-3");
+    expect(autoPrefix("さくら", [])).toBe("さくら");
+    expect(autoPrefix("___", [])).toBe("author");
+    expect(aliasFor("YeeTah145", [{ from: "yeetah145", to: "mine" }])).toBe("mine");
+    expect(aliasFor("someone", [])).toBeNull();
   });
 
   it("makes names Windows accepts", () => {

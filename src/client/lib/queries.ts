@@ -744,6 +744,8 @@ export function useStartDownload() {
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["download-plan"] });
       void qc.invalidateQueries({ queryKey: ["download-history"] });
+      // A first download from an author saves their file-name prefix into the settings.
+      void qc.invalidateQueries({ queryKey: qk.settings(useSession.getState().profileId) });
     },
   });
 }

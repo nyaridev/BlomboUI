@@ -43,7 +43,9 @@ describe("settings", () => {
   it("gives older files the Civitai defaults", () => {
     const s = migrateSettings({ models: { blurNsfw: false } });
     expect(s.civitai.browse.nsfw).toBe(true);
-    expect(s.civitai.downloads.folderBy).toEqual(["baseModel"]);
+    expect(s.civitai.downloads.folderBy).toEqual(["baseModel", "category", "creator"]);
+    expect(s.civitai.downloads).toMatchObject({ naming: "model", prefix: true, autoAliases: true });
+    expect(s.civitai.browse.period).toBe("AllTime");
     expect(s.civitai.lookup).toBe(true);
     expect(s.models.blurNsfw).toBe(false);
   });

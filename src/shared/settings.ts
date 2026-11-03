@@ -115,10 +115,10 @@ export const DOWNLOAD_FOLDER_LABELS: Record<DownloadFolderPart, string> = {
 export const DOWNLOAD_NAMING = ["original", "model", "model-version"] as const;
 export type DownloadNaming = (typeof DOWNLOAD_NAMING)[number];
 
-/** A creator's folder name: "some_user_123" → "Some User". */
+/** A creator's file-name prefix: "yeetah145" → "yth145" (made by `autoPrefix`, or your own). */
 export const AuthorAlias = z.object({
   from: z.string().trim().min(1).max(60),
-  to: z.string().trim().min(1).max(60),
+  to: z.string().trim().min(1).max(40),
 });
 export type AuthorAlias = z.infer<typeof AuthorAlias>;
 
@@ -132,9 +132,17 @@ export const CivitaiSettings = z.object({
       /** Files downloading at the same time. */
       parallel: z.number().int().min(1).max(4).default(2),
       /** Subfolders inside the kind folder, in order. Empty: straight into loras/, checkpoints/… */
-      folderBy: z.array(z.enum(DOWNLOAD_FOLDER_PARTS)).max(3).default(["baseModel"]),
-      naming: z.enum(DOWNLOAD_NAMING).default("original"),
-      aliases: z.array(AuthorAlias).max(200).default([]),
+      folderBy: z
+        .array(z.enum(DOWNLOAD_FOLDER_PARTS))
+        .max(3)
+        .default(["baseModel", "category", "creator"]),
+      naming: z.enum(DOWNLOAD_NAMING).default("model"),
+      /** Start file names with the author's prefix ("yth145_Sakura Haruno.safetensors"). */
+      prefix: z.boolean().default(true),
+      /** Make a prefix for an author without one on their first download (kept in `aliases`). */
+      autoAliases: z.boolean().default(true),
+      /** Author → prefix, yours or made automatically. Prefixes are unique per profile. */
+      aliases: z.array(AuthorAlias).max(5000).default([]),
       /** Save Civitai's info (.civitai.info) next to the model. */
       saveInfo: z.boolean().default(true),
       /** Save the first image as the model's picture (`<model>_data/thumb.jpg`). */

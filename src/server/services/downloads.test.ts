@@ -23,27 +23,42 @@ const abs = (rel: string) => path.join(o.models, ...rel.split("/"));
 
 describe("Civitai downloads", () => {
   it("plans the destination from the settings", async () => {
+    const body = { source: "civitai", modelId: 1001, versionId: 10011 } as const;
     await o.services.settings.update(o.profileId, {
-      civitai: {
-        downloads: {
-          folderBy: ["baseModel", "creator"],
-          aliases: [{ from: "pixelsmith", to: "Pixel Smith" }],
-        },
-      },
+      civitai: { downloads: { folderBy: ["baseModel", "creator"] } },
     });
-    const plan = await q().plan({ source: "civitai", modelId: 1001, versionId: 10011 });
+    // By default: the model's name after a prefix made from the author, not saved by a plan.
+    const plan = await q().plan(body);
     expect(plan.kindFolder).toBe("loras");
-    expect(plan.folder).toBe("SDXL 1.0/Pixel Smith");
-    expect(plan.file).toBe("Cinematic_Lighting_v1.safetensors");
+    expect(plan.folder).toBe("SDXL 1.0/pixelsmith");
+    expect(plan.file).toBe("pxlsmt_Cinematic Lighting 1.safetensors");
     expect(plan.blocked).toBeNull();
     expect(plan.installed).toBeNull();
+    expect((await o.services.settings.get(o.profileId)).civitai.downloads.aliases).toEqual([]);
+
+    // Your own prefix wins; no prefix and Civitai's name when you say so.
+    await o.services.settings.update(o.profileId, {
+      civitai: { downloads: { aliases: [{ from: "PixelSmith", to: "pxs" }] } },
+    });
+    expect((await q().plan(body)).file).toBe("pxs_Cinematic Lighting 1.safetensors");
+    await o.services.settings.update(o.profileId, {
+      civitai: { downloads: { prefix: false, naming: "original" } },
+    });
+    expect((await q().plan(body)).file).toBe("Cinematic_Lighting_v1.safetensors");
+    await o.services.settings.update(o.profileId, {
+      civitai: { downloads: { prefix: true, naming: "model", aliases: [] } },
+    });
   });
 
   it("downloads, checks the hash, saves sidecars and marks the model installed", async () => {
     const d = await q().enqueue({ source: "civitai", modelId: 1001, versionId: 10011 });
+    // The author's new prefix is kept for their next downloads.
+    expect((await o.services.settings.get(o.profileId)).civitai.downloads.aliases).toEqual([
+      { from: "pixelsmith", to: "pxlsmt" },
+    ]);
     const done = await finished(d.id);
     expect(done.state).toBe("done");
-    expect(done.dest).toBe("loras/SDXL 1.0/Pixel Smith/Cinematic_Lighting_v1.safetensors");
+    expect(done.dest).toBe("loras/SDXL 1.0/pixelsmith/pxlsmt_Cinematic Lighting 1.safetensors");
     const file = abs(done.dest);
     expect(new Uint8Array(await fs.readFile(file))).toEqual(o.fake.bytesOf(100111));
     const stem = file.replace(/\.safetensors$/, "");
@@ -58,7 +73,7 @@ describe("Civitai downloads", () => {
     // The redirect to storage never carries the key, and nothing is left half-written.
     expect(o.fake.requests.some((r) => r.path.startsWith("/blobs/") && r.auth)).toBe(false);
     expect(await fs.readdir(path.dirname(file))).not.toContain(
-      "Cinematic_Lighting_v1.safetensors.part",
+      "pxlsmt_Cinematic Lighting 1.safetensors.part",
     );
     const list = await o.services.models.list();
     expect(list.models.find((m) => m.id === done.dest)?.civitai).toMatchObject({

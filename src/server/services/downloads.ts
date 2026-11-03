@@ -19,6 +19,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { CIVITAI_TYPE_LABELS, civitaiKind } from "../../shared/civitai.ts";
 import {
+  aliasFor,
+  autoPrefix,
   cleanFolder,
   type Download,
   type DownloadHistoryPage,
@@ -36,6 +38,7 @@ import {
 import type { LiveTopic, ServerMessage } from "../../shared/live.ts";
 import { type LookupInfo, LookupInfo as LookupInfoSchema } from "../../shared/models.ts";
 import { mainFolder } from "../../shared/profile.ts";
+import type { CivitaiSettings } from "../../shared/settings.ts";
 import type { ProfileDbs } from "../db/profileDb.ts";
 import {
   commitPart,
@@ -269,10 +272,50 @@ export class DownloadQueue {
   /* ── planning ────────────────────────────────────────────────────────── */
 
   async plan(body: EnqueueBody): Promise<DownloadPlan> {
-    return (await this.prepare(this.active(), body)).plan;
+    return (await this.prepare(this.active(), body, false)).plan;
   }
 
-  private async prepare(profileId: string, body: EnqueueBody): Promise<Prepared> {
+  /**
+   * The author's file-name prefix: theirs from the list, or a new one when `autoAliases` is on.
+   * A real download (`remember`) saves a new one, so the author keeps it from then on.
+   */
+  private async authorPrefix(
+    profileId: string,
+    creator: string | null,
+    dl: CivitaiSettings["downloads"],
+    remember: boolean,
+  ): Promise<string | null> {
+    if (!dl.prefix || !creator) return null;
+    const known = aliasFor(creator, dl.aliases);
+    if (known || !dl.autoAliases) return known;
+    if (!remember)
+      return autoPrefix(
+        creator,
+        dl.aliases.map((a) => a.to),
+      );
+    let made = "";
+    // Worked out again inside the queued update, so two downloads can't take the same prefix.
+    await this.deps.settings.updateWith(profileId, (current) => {
+      const aliases = current.civitai.downloads.aliases;
+      const had = aliasFor(creator, aliases);
+      made =
+        had ??
+        autoPrefix(
+          creator,
+          aliases.map((a) => a.to),
+        );
+      return had
+        ? {}
+        : { civitai: { downloads: { aliases: [...aliases, { from: creator, to: made }] } } };
+    });
+    return made;
+  }
+
+  private async prepare(
+    profileId: string,
+    body: EnqueueBody,
+    remember: boolean,
+  ): Promise<Prepared> {
     const root = await this.rootOf(profileId);
     const blockedRoot = root
       ? null
@@ -344,10 +387,9 @@ export class DownloadQueue {
       tags: raw.tags ?? [],
     };
     const folder =
-      body.folder !== undefined
-        ? cleanFolder(body.folder)
-        : planFolder(input, settings.folderBy, settings.aliases);
-    const file = planFileName(input, settings.naming);
+      body.folder !== undefined ? cleanFolder(body.folder) : planFolder(input, settings.folderBy);
+    const prefix = await this.authorPrefix(profileId, input.creator, settings, remember);
+    const file = planFileName(input, settings.naming, prefix);
     const kf = kind ? kindFolder(kind) : "";
     const rel = [kf, folder, file].filter(Boolean).join("/");
     const abs = root && kind ? resolveInside(root, rel) : null;
@@ -419,7 +461,7 @@ export class DownloadQueue {
 
   async enqueue(body: EnqueueBody): Promise<Download> {
     const profileId = this.active();
-    const prepared = await this.prepare(profileId, body);
+    const prepared = await this.prepare(profileId, body, true);
     if (prepared.plan.blocked) throw new HttpError(409, prepared.plan.blocked, "blocked");
     if (body.source === "manager" && prepared.plan.installed)
       throw new HttpError(409, `"${prepared.plan.file}" is already installed.`, "installed");

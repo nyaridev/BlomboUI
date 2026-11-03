@@ -174,21 +174,39 @@ export function categoryOf(tags: string[]): string | null {
   return hit ? hit[0]?.toUpperCase() + hit.slice(1) : null;
 }
 
-export function creatorFolder(
-  creator: string | null,
-  aliases: CivitaiSettings["downloads"]["aliases"],
-): string | null {
-  if (!creator) return null;
-  const alias = aliases.find((a) => a.from.toLowerCase() === creator.toLowerCase());
-  return alias?.to ?? creator;
+type Aliases = CivitaiSettings["downloads"]["aliases"];
+
+/** The prefix you or Blombo gave this author, or null. */
+export function aliasFor(creator: string, aliases: Aliases): string | null {
+  return aliases.find((a) => a.from.toLowerCase() === creator.toLowerCase())?.to ?? null;
 }
 
-/** The sorted subfolder for a Civitai file ("Illustrious/Character"), "" for none. */
-export function planFolder(
-  input: PlanInput,
-  folderBy: DownloadFolderPart[],
-  aliases: CivitaiSettings["downloads"]["aliases"],
-): string {
+/**
+ * A short prefix made from a username: the first letter, the consonants after it (repeats
+ * collapsed, up to 6 letters) and the digits, so "yeetah145" → "yth145". When another author
+ * already has it, "-2", "-3"… follows.
+ */
+export function autoPrefix(creator: string, taken: Iterable<string>): string {
+  const plain = creator
+    .normalize("NFKD")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+  const letters = plain.replace(/\d/g, "");
+  const short = `${letters.slice(0, 1)}${letters.slice(1).replace(/[aeiou]/g, "")}`
+    .replace(/(.)\1+/g, "$1")
+    .slice(0, 6);
+  const base =
+    `${short}${plain.replace(/\D/g, "").slice(0, 6)}` ||
+    safeSegment(creator, 12).replace(/[\s._-]+/g, "") ||
+    "author";
+  const used = new Set([...taken].map((t) => t.toLowerCase()));
+  let prefix = base;
+  for (let n = 2; used.has(prefix.toLowerCase()); n++) prefix = `${base}-${n}`;
+  return prefix;
+}
+
+/** The sorted subfolder for a Civitai file ("Illustrious/Character/yeetah145"), "" for none. */
+export function planFolder(input: PlanInput, folderBy: DownloadFolderPart[]): string {
   const parts: string[] = [];
   for (const part of folderBy) {
     const value =
@@ -196,15 +214,19 @@ export function planFolder(
         ? input.baseModel
         : part === "category"
           ? categoryOf(input.tags)
-          : creatorFolder(input.creator, aliases);
+          : input.creator;
     const seg = value ? safeSegment(value, 60) : "";
     if (seg) parts.push(seg);
   }
   return parts.join("/");
 }
 
-/** The file name for a Civitai file, keeping its extension. */
-export function planFileName(input: PlanInput, naming: DownloadNaming): string {
+/** The file name for a Civitai file, keeping its extension; `prefix` goes first ("yth145_"). */
+export function planFileName(
+  input: PlanInput,
+  naming: DownloadNaming,
+  prefix: string | null = null,
+): string {
   const dot = input.fileName.lastIndexOf(".");
   const raw = dot > 0 ? input.fileName.slice(dot).toLowerCase() : "";
   // Only a plain extension: a remote name like "m.st:x" (an NTFS stream) or "x./../y" is not one.
@@ -216,7 +238,9 @@ export function planFileName(input: PlanInput, naming: DownloadNaming): string {
       : naming === "model-version"
         ? `${input.modelName} - ${input.versionName}`
         : original;
-  return `${safeSegment(stem, 150) || safeSegment(original, 150) || "model"}${ext}`;
+  const name = safeSegment(stem, 150) || safeSegment(original, 150) || "model";
+  const lead = prefix ? safeSegment(prefix, 40) : "";
+  return `${lead ? `${lead}_` : ""}${name}${ext}`;
 }
 
 /** The first folder of a kind ("loras" for LoRAs, "diffusion_models" not "unet"). */

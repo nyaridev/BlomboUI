@@ -23,7 +23,7 @@ import { AboutPage } from "./AboutPage";
 import { AutocompletePage } from "./AutocompletePage";
 import { CivitaiPage } from "./CivitaiPage";
 import { ComfyPage } from "./ComfyPage";
-import { PageHeader, useCurrentProfile } from "./common";
+import { PageHeader, SettingsSection, useCurrentProfile } from "./common";
 import { FoldersPage } from "./FoldersPage";
 import { GeneratePage } from "./GeneratePage";
 import { NotificationsPage } from "./NotificationsPage";
@@ -175,116 +175,122 @@ function Appearance() {
     <>
       <PageHeader title="Appearance" />
       <div className="flex flex-col gap-8">
-        <Field label="Theme" layout="left">
-          <div className="grid grid-cols-3 gap-2">
-            {THEMES.map((t) => (
-              <button
-                key={t}
-                type="button"
-                data-theme={t}
-                data-accent={accent}
-                onClick={() => save({ theme: t })}
-                className={cn(
-                  "flex flex-col gap-2 rounded-lg border bg-bg p-2 text-left focus-ring",
-                  t === theme
-                    ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
-                    : "border-line hover:border-line-strong",
-                )}
-              >
-                <div className="flex h-14 gap-1.5 rounded-md border border-line bg-surface p-1.5">
-                  <div className="w-7 rounded-sm bg-surface-2" />
-                  <div className="flex flex-1 flex-col gap-1">
-                    <div className="h-2 w-3/4 rounded-xs bg-field" />
-                    <div className="h-2 w-1/2 rounded-xs bg-field" />
-                    <div className="mt-auto flex gap-1">
-                      <div className="h-3 w-8 rounded-sm bg-accent" />
-                      <div className="h-3 w-5 rounded-sm bg-generate" />
+        <SettingsSection title="Colors" icon="palette">
+          <Field label="Theme" layout="left">
+            <div className="grid grid-cols-3 gap-2">
+              {THEMES.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  data-theme={t}
+                  data-accent={accent}
+                  onClick={() => save({ theme: t })}
+                  className={cn(
+                    "flex flex-col gap-2 rounded-lg border bg-bg p-2 text-left focus-ring",
+                    t === theme
+                      ? "border-accent shadow-[0_0_0_1px_var(--accent)]"
+                      : "border-line hover:border-line-strong",
+                  )}
+                >
+                  <div className="flex h-14 gap-1.5 rounded-md border border-line bg-surface p-1.5">
+                    <div className="w-7 rounded-sm bg-surface-2" />
+                    <div className="flex flex-1 flex-col gap-1">
+                      <div className="h-2 w-3/4 rounded-xs bg-field" />
+                      <div className="h-2 w-1/2 rounded-xs bg-field" />
+                      <div className="mt-auto flex gap-1">
+                        <div className="h-3 w-8 rounded-sm bg-accent" />
+                        <div className="h-3 w-5 rounded-sm bg-generate" />
+                      </div>
                     </div>
                   </div>
-                </div>
-                <span className="px-0.5 text-xs font-medium text-fg">{THEME_LABELS[t]}</span>
-              </button>
-            ))}
-          </div>
-        </Field>
-        <Field
-          label="Profile color"
-          layout="left"
-          hint="Used for the avatar ring, selection, sliders and focus."
-        >
-          <div className="flex flex-wrap gap-2">
-            {ACCENTS.map((a) => (
-              <button
-                key={a}
-                type="button"
-                aria-label={a}
-                aria-pressed={a === accent}
-                onClick={() => save({ accent: a })}
-                // The selected ring is drawn inside the swatch, so it never spills onto its
-                // neighbors: a ring in the text color, then a gap in the page color.
-                className={cn(
-                  "grid h-8 w-8 place-items-center rounded-full focus-ring",
-                  a === accent
-                    ? "shadow-[inset_0_0_0_2px_var(--fg),inset_0_0_0_4px_var(--bg)]"
-                    : "hover:shadow-[inset_0_0_0_2px_var(--line-strong)]",
-                )}
-                style={{ background: `linear-gradient(135deg, var(--${a}-ink), var(--${a}))` }}
-              >
-                {a === accent ? (
-                  <Icon name="check" size={14} strokeWidth={2.6} className="text-white" />
-                ) : null}
-              </button>
-            ))}
-          </div>
-        </Field>
-        <Field
-          label="High contrast"
-          layout="left"
-          hint="Brighter text, stronger borders and clearer fields in every theme. Images stay as they are."
-        >
-          <Switch
-            checked={settings?.appearance.contrast ?? false}
-            onCheckedChange={(contrast) => {
-              preview({ contrast });
-              updateSettings.mutate({ appearance: { contrast } });
-            }}
+                  <span className="px-0.5 text-xs font-medium text-fg">{THEME_LABELS[t]}</span>
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field
+            label="Profile color"
+            layout="left"
+            hint="Used for the avatar ring, selection, sliders and focus."
+          >
+            <div className="flex flex-wrap gap-2">
+              {ACCENTS.map((a) => (
+                <button
+                  key={a}
+                  type="button"
+                  aria-label={a}
+                  aria-pressed={a === accent}
+                  onClick={() => save({ accent: a })}
+                  // The selected ring is drawn inside the swatch, so it never spills onto its
+                  // neighbors: a ring in the text color, then a gap in the page color.
+                  className={cn(
+                    "grid h-8 w-8 place-items-center rounded-full focus-ring",
+                    a === accent
+                      ? "shadow-[inset_0_0_0_2px_var(--fg),inset_0_0_0_4px_var(--bg)]"
+                      : "hover:shadow-[inset_0_0_0_2px_var(--line-strong)]",
+                  )}
+                  style={{ background: `linear-gradient(135deg, var(--${a}-ink), var(--${a}))` }}
+                >
+                  {a === accent ? (
+                    <Icon name="check" size={14} strokeWidth={2.6} className="text-white" />
+                  ) : null}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field
             label="High contrast"
+            layout="left"
+            hint="Brighter text, stronger borders and clearer fields in every theme. Images stay as they are."
+          >
+            <Switch
+              checked={settings?.appearance.contrast ?? false}
+              onCheckedChange={(contrast) => {
+                preview({ contrast });
+                updateSettings.mutate({ appearance: { contrast } });
+              }}
+              label="High contrast"
+            />
+          </Field>
+        </SettingsSection>
+        <SettingsSection title="Text and motion" icon="font">
+          <FontPicker
+            font={settings?.appearance.font ?? "geist"}
+            custom={settings?.appearance.customFont ?? ""}
+            onChange={(appearance) => updateSettings.mutate({ appearance })}
           />
-        </Field>
-        <FontPicker
-          font={settings?.appearance.font ?? "geist"}
-          custom={settings?.appearance.customFont ?? ""}
-          onChange={(appearance) => updateSettings.mutate({ appearance })}
-        />
-        <Field
-          label="Motion"
-          layout="left"
-          hint="Reduced keeps fades but drops movement. System follows Windows (Settings → Accessibility → Visual effects)."
-        >
-          <Segmented
-            value={settings?.appearance.motion ?? "system"}
-            onChange={(m: MotionPref) => {
-              preview({ motion: m });
-              updateSettings.mutate({ appearance: { motion: m } });
-            }}
-            options={[
-              { value: "full", label: "Full" },
-              { value: "reduced", label: "Reduced" },
-              { value: "system", label: "System" },
-            ]}
-          />
-        </Field>
-        <Field
-          label="Blur NSFW thumbnails"
-          layout="left"
-          hint="Model cards (and Civitai results later) marked NSFW stay blurred until you click them."
-        >
-          <Switch
-            checked={settings?.models.blurNsfw ?? true}
-            onCheckedChange={(blurNsfw) => updateSettings.mutate({ models: { blurNsfw } })}
+          <Field
+            label="Motion"
+            layout="left"
+            hint="Reduced keeps fades but drops movement. System follows Windows (Settings → Accessibility → Visual effects)."
+          >
+            <Segmented
+              value={settings?.appearance.motion ?? "system"}
+              onChange={(m: MotionPref) => {
+                preview({ motion: m });
+                updateSettings.mutate({ appearance: { motion: m } });
+              }}
+              options={[
+                { value: "full", label: "Full" },
+                { value: "reduced", label: "Reduced" },
+                { value: "system", label: "System" },
+              ]}
+            />
+          </Field>
+        </SettingsSection>
+        <SettingsSection title="Images" icon="image">
+          <Field
             label="Blur NSFW thumbnails"
-          />
-        </Field>
+            layout="left"
+            hint="Model cards (and Civitai results later) marked NSFW stay blurred until you click them."
+          >
+            <Switch
+              checked={settings?.models.blurNsfw ?? true}
+              onCheckedChange={(blurNsfw) => updateSettings.mutate({ models: { blurNsfw } })}
+              label="Blur NSFW thumbnails"
+            />
+          </Field>
+        </SettingsSection>
       </div>
     </>
   );
@@ -382,68 +388,76 @@ function GalleryPage() {
     <>
       <PageHeader title="Gallery" />
       <div className="flex flex-col gap-8">
-        <Field
-          label="Layout"
-          layout="left"
-          hint="Justified rows keep every image's shape; the grid crops to squares."
-        >
-          <Segmented
-            value={settings?.layout ?? "justified"}
-            onChange={(layout) => update.mutate({ gallery: { layout } })}
-            options={[
-              { value: "justified", label: "Justified rows", icon: "layout-rows" },
-              { value: "grid", label: "Square grid", icon: "layout-grid" },
-            ]}
-          />
-        </Field>
-        <Field label="Tile size" layout="left" hint="Row height (justified) or tile width (grid).">
-          <div className="w-72">
-            <Slider
-              value={tile}
-              onChange={setSize}
-              min={120}
-              max={400}
-              step={10}
-              unit="px"
-              label="Tile size"
+        <SettingsSection title="Display" icon="layout-grid">
+          <Field
+            label="Layout"
+            layout="left"
+            hint="Justified rows keep every image's shape; the grid crops to squares."
+          >
+            <Segmented
+              value={settings?.layout ?? "justified"}
+              onChange={(layout) => update.mutate({ gallery: { layout } })}
+              options={[
+                { value: "justified", label: "Justified rows", icon: "layout-rows" },
+                { value: "grid", label: "Square grid", icon: "layout-grid" },
+              ]}
             />
-          </div>
-        </Field>
-        <Field
-          label="Libraries"
-          layout="left"
-          hint="The gallery shows your output folders. Add, rename or reorder them in Folders."
-        >
-          <span className="pt-1.5 text-sm text-fg-2">
-            {profile?.folders.outputs.length
-              ? profile.folders.outputs.map((l) => l.name).join(", ")
-              : "No output folder yet."}
-          </span>
-        </Field>
-        <Field
-          label="Exclude grids"
-          layout="left"
-          hint="Leaves out the grids prompt matrix and XY plot scripts make (files in a grids folder). They stay on disk."
-        >
-          <Switch
-            checked={settings?.excludeGrids ?? true}
-            onCheckedChange={(excludeGrids) => update.mutate({ gallery: { excludeGrids } })}
+          </Field>
+          <Field
+            label="Tile size"
+            layout="left"
+            hint="Row height (justified) or tile width (grid)."
+          >
+            <div className="w-72">
+              <Slider
+                value={tile}
+                onChange={setSize}
+                min={120}
+                max={400}
+                step={10}
+                unit="px"
+                label="Tile size"
+              />
+            </div>
+          </Field>
+        </SettingsSection>
+        <SettingsSection title="What the gallery shows" icon="filter">
+          <Field
+            label="Libraries"
+            layout="left"
+            hint="The gallery shows your output folders. Add, rename or reorder them in Folders."
+          >
+            <span className="pt-1.5 text-sm text-fg-2">
+              {profile?.folders.outputs.length
+                ? profile.folders.outputs.map((l) => l.name).join(", ")
+                : "No output folder yet."}
+            </span>
+          </Field>
+          <Field
             label="Exclude grids"
-          />
-        </Field>
-        <Field
-          label="Exclude interrupted images"
-          layout="left"
-          hint="Leaves out images saved by a run you stopped before it finished. They stay on disk."
-        >
-          <Switch
-            checked={settings?.excludeInterrupted ?? true}
-            onCheckedChange={(excludeInterrupted) =>
-              update.mutate({ gallery: { excludeInterrupted } })
-            }
+            layout="left"
+            hint="Leaves out the grids prompt matrix and XY plot scripts make (files in a grids folder). They stay on disk."
+          >
+            <Switch
+              checked={settings?.excludeGrids ?? true}
+              onCheckedChange={(excludeGrids) => update.mutate({ gallery: { excludeGrids } })}
+              label="Exclude grids"
+            />
+          </Field>
+          <Field
             label="Exclude interrupted images"
-          />
-        </Field>
+            layout="left"
+            hint="Leaves out images saved by a run you stopped before it finished. They stay on disk."
+          >
+            <Switch
+              checked={settings?.excludeInterrupted ?? true}
+              onCheckedChange={(excludeInterrupted) =>
+                update.mutate({ gallery: { excludeInterrupted } })
+              }
+              label="Exclude interrupted images"
+            />
+          </Field>
+        </SettingsSection>
       </div>
     </>
   );

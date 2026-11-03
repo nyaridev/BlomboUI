@@ -24,7 +24,6 @@ import {
   Field,
   IconButton,
   NumberField,
-  Panel,
   Segmented,
   Spinner,
   Switch,
@@ -33,6 +32,7 @@ import {
 import type { TagSourceInfo } from "@shared/autocomplete";
 import { type ReactNode, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
+import { SettingsSection } from "./common";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -53,90 +53,94 @@ function TagLists() {
       },
     });
   return (
-    <Panel className="flex flex-col gap-3 p-4">
-      <div className="flex items-center gap-2">
-        <span className="label-caps">Tag lists</span>
-        <span className="ml-auto flex gap-1">
-          <Button
-            size="sm"
-            variant="ghost"
-            icon="folder-open"
-            onClick={() => void api.revealTagLists().catch((e) => toast(message(e), "error"))}
-          >
-            Show folder
-          </Button>
-        </span>
-      </div>
+    <SettingsSection
+      title="Tag lists"
+      icon="tag"
+      actions={
+        <Button
+          size="sm"
+          variant="ghost"
+          icon="folder-open"
+          onClick={() => void api.revealTagLists().catch((e) => toast(message(e), "error"))}
+        >
+          Show folder
+        </Button>
+      }
+    >
       {lists.isLoading ? (
         <div className="grid h-16 place-items-center">
           <Spinner />
         </div>
       ) : (
-        <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
-          {(lists.data?.lists ?? []).map((l) => (
-            <li key={l.id} className="flex items-center gap-3 px-3 py-2">
-              <Icon name="file-text" size={16} className="text-fg-3" />
-              <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm text-fg">{l.name}</span>
-                <span className="truncate font-mono text-2xs text-fg-3">
-                  {l.error ? (
-                    <span className="text-danger">Couldn't read it: {l.error}</span>
-                  ) : (
-                    `${l.file} · ${l.tags.toLocaleString()} tags`
-                  )}
-                </span>
-              </div>
-              <Badge tone={l.source === "bundled" ? "neutral" : "accent"}>
-                {l.source === "bundled" ? "Bundled" : "This profile"}
-              </Badge>
-              {l.source === "profile" ? (
-                <IconButton
-                  icon="trash"
-                  label={`Remove ${l.name}`}
+        <div>
+          <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
+            {(lists.data?.lists ?? []).map((l) => (
+              <li key={l.id} className="flex items-center gap-3 px-3 py-2">
+                <Icon name="file-text" size={16} className="text-fg-3" />
+                <div className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-sm text-fg">{l.name}</span>
+                  <span className="truncate font-mono text-2xs text-fg-3">
+                    {l.error ? (
+                      <span className="text-danger">Couldn't read it: {l.error}</span>
+                    ) : (
+                      `${l.file} · ${l.tags.toLocaleString()} tags`
+                    )}
+                  </span>
+                </div>
+                <Badge tone={l.source === "bundled" ? "neutral" : "accent"}>
+                  {l.source === "bundled" ? "Bundled" : "This profile"}
+                </Badge>
+                {l.source === "profile" ? (
+                  <IconButton
+                    icon="trash"
+                    label={`Remove ${l.name}`}
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await api.removeTagList(l.file);
+                        invalidateLists();
+                        toast(`Moved ${l.file} to the profile's trash`, "success");
+                      } catch (e) {
+                        toast(message(e), "error");
+                      }
+                    }}
+                  />
+                ) : null}
+                <Switch
                   size="sm"
-                  onClick={async () => {
-                    try {
-                      await api.removeTagList(l.file);
-                      invalidateLists();
-                      toast(`Moved ${l.file} to the profile's trash`, "success");
-                    } catch (e) {
-                      toast(message(e), "error");
-                    }
-                  }}
+                  checked={l.enabled}
+                  disabled={Boolean(l.error)}
+                  onCheckedChange={(on) => toggle(l.id, on)}
+                  label={`Use ${l.name}`}
                 />
-              ) : null}
-              <Switch
-                size="sm"
-                checked={l.enabled}
-                disabled={Boolean(l.error)}
-                onCheckedChange={(on) => toggle(l.id, on)}
-                label={`Use ${l.name}`}
-              />
-            </li>
-          ))}
-        </ul>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
       <Downloads have={new Set((lists.data?.lists ?? []).map((l) => l.file.toLowerCase()))} />
-      <DropZone
-        compact
-        busy={adding}
-        accept=".csv,text/csv"
-        title="Add a tag list"
-        hint="A CSV with one tag per line: name, category, count, aliases (the format tag-complete lists use, such as Danbooru or e621 exports)."
-        onFile={async (file) => {
-          setAdding(true);
-          try {
-            const info = await api.addTagList(file);
-            invalidateLists();
-            toast(`Added ${info.name} (${info.tags.toLocaleString()} tags)`, "success");
-          } catch (e) {
-            toast(message(e), "error");
-          } finally {
-            setAdding(false);
-          }
-        }}
-      />
-    </Panel>
+      <div>
+        <DropZone
+          compact
+          busy={adding}
+          accept=".csv,text/csv"
+          title="Add a tag list"
+          hint="A CSV with one tag per line: name, category, count, aliases (the format tag-complete lists use, such as Danbooru or e621 exports)."
+          onFile={async (file) => {
+            setAdding(true);
+            try {
+              const info = await api.addTagList(file);
+              invalidateLists();
+              toast(`Added ${info.name} (${info.tags.toLocaleString()} tags)`, "success");
+            } catch (e) {
+              toast(message(e), "error");
+            } finally {
+              setAdding(false);
+            }
+          }}
+        />
+      </div>
+    </SettingsSection>
   );
 }
 
@@ -233,59 +237,68 @@ function FrequentTags() {
   const [confirm, setConfirm] = useState(false);
   const frequent = lists.data?.frequent ?? [];
   return (
-    <Panel className="flex flex-col gap-3 p-4">
-      <div className="flex items-center gap-2">
-        <span className="label-caps">Your frequent tags</span>
-        <Button
-          size="sm"
-          variant="ghost"
-          className="ml-auto"
-          icon="eraser"
-          disabled={!frequent.length}
-          onClick={() => setConfirm(true)}
-        >
-          Forget them
-        </Button>
-      </div>
-      <div className="flex items-center gap-3 max-lg:flex-col max-lg:items-start">
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-sm text-fg">Longest tag counted</span>
-          <span className="text-xs text-fg-3">
-            Prompt parts with more words are left out: "dark blue hair" (3 words) counts, "she has
-            blue eyes" (4) doesn't.
-          </span>
+    <>
+      <SettingsSection
+        title="Your frequent tags"
+        icon="star"
+        actions={
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="eraser"
+            disabled={!frequent.length}
+            onClick={() => setConfirm(true)}
+          >
+            Forget them
+          </Button>
+        }
+      >
+        <div className="flex items-center gap-3 max-lg:flex-col max-lg:items-start">
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="text-sm text-fg">Longest tag counted</span>
+            <span className="text-xs text-fg-3">
+              Prompt parts with more words are left out: "dark blue hair" (3 words) counts, "she has
+              blue eyes" (4) doesn't.
+            </span>
+          </div>
+          <NumberField
+            value={maxWords}
+            onChange={(frequentMaxWords) =>
+              update.mutate(
+                { autocomplete: { frequentMaxWords } },
+                { onSuccess: invalidateLists, onError: (e) => toast(message(e), "error") },
+              )
+            }
+            min={1}
+            max={10}
+            step={1}
+            unit="words"
+            label="Longest tag counted"
+            className="w-[130px]"
+          />
         </div>
-        <NumberField
-          value={maxWords}
-          onChange={(frequentMaxWords) =>
-            update.mutate(
-              { autocomplete: { frequentMaxWords } },
-              { onSuccess: invalidateLists, onError: (e) => toast(message(e), "error") },
-            )
-          }
-          min={1}
-          max={10}
-          step={1}
-          unit="words"
-          label="Longest tag counted"
-          className="w-[130px]"
-        />
-      </div>
-      {frequent.length ? (
-        <ol className="scroll-quiet flex max-h-[360px] flex-col divide-y divide-line overflow-y-auto rounded-md border border-line">
-          {frequent.map((f, i) => (
-            <li key={f.tag} className="flex items-center gap-3 px-3 py-1.5 text-sm">
-              <span className="w-6 shrink-0 text-right text-2xs text-fg-4 tabular">{i + 1}</span>
-              <span className="min-w-0 flex-1 truncate text-fg">{f.tag.replace(/_/g, " ")}</span>
-              <span className="text-xs text-fg-3 tabular">{f.uses}×</span>
-            </li>
-          ))}
-        </ol>
-      ) : (
-        <p className="text-sm text-fg-3">
-          Tags you generate with at least twice show up here, and first in suggestions.
-        </p>
-      )}
+        {frequent.length ? (
+          <div>
+            <ol className="scroll-quiet flex max-h-[360px] flex-col divide-y divide-line overflow-y-auto rounded-md border border-line">
+              {frequent.map((f, i) => (
+                <li key={f.tag} className="flex items-center gap-3 px-3 py-1.5 text-sm">
+                  <span className="w-6 shrink-0 text-right text-2xs text-fg-4 tabular">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-fg">
+                    {f.tag.replace(/_/g, " ")}
+                  </span>
+                  <span className="text-xs text-fg-3 tabular">{f.uses}×</span>
+                </li>
+              ))}
+            </ol>
+          </div>
+        ) : (
+          <p className="text-sm text-fg-3">
+            Tags you generate with at least twice show up here, and first in suggestions.
+          </p>
+        )}
+      </SettingsSection>
       <Dialog
         open={confirm}
         onOpenChange={setConfirm}
@@ -312,15 +325,15 @@ function FrequentTags() {
       >
         {null}
       </Dialog>
-    </Panel>
+    </>
   );
 }
 
 function TryIt() {
   const [text, setText] = useState("masterpiece, long ");
   return (
-    <Panel className="flex flex-col gap-2 p-4">
-      <span className="label-caps">Try it</span>
+    <div className="flex flex-col gap-2">
+      <span className="text-sm text-fg">Try it</span>
       <PromptEditor
         label="Try autocomplete"
         value={text}
@@ -336,7 +349,7 @@ function TryIt() {
         </span>
         <span>Ctrl+Space shows suggestions. Ctrl+↑/↓ changes the weight at the cursor.</span>
       </p>
-    </Panel>
+    </div>
   );
 }
 
@@ -370,20 +383,21 @@ export function AutocompletePage({ header }: { header: ReactNode }) {
     <>
       {header}
       <div className="flex flex-col gap-8">
-        <Field
-          label="Suggest as you type"
-          layout="left"
-          hint="In every prompt box on the Generate screen and in stage prompts."
-        >
-          <Switch
-            checked={ac.enabled}
-            onCheckedChange={(enabled) => set({ enabled })}
+        <SettingsSection title="Autocomplete" icon="text">
+          <Field
             label="Suggest as you type"
-          />
-        </Field>
-        <TryIt />
-        <section className="flex flex-col gap-5">
-          <h2 className="label-caps">Suggestions from</h2>
+            layout="left"
+            hint="In every prompt box on the Generate screen and in stage prompts."
+          >
+            <Switch
+              checked={ac.enabled}
+              onCheckedChange={(enabled) => set({ enabled })}
+              label="Suggest as you type"
+            />
+          </Field>
+          <TryIt />
+        </SettingsSection>
+        <SettingsSection title="Suggestions from" icon="sparkle">
           {source("tags", "Tag lists", "The lists below, most used tags first.")}
           {source("loras", "LoRAs", "After <, the LoRAs in your models folder, with thumbnails.")}
           {source(
@@ -397,10 +411,9 @@ export function AutocompletePage({ header }: { header: ReactNode }) {
             "After __, the files and keys in your wildcards folder.",
           )}
           {source("frequent", "Frequent tags", "Tags you generate with often come first.")}
-        </section>
+        </SettingsSection>
         <TagLists />
-        <section className="flex flex-col gap-5">
-          <h2 className="label-caps">How suggestions go in</h2>
+        <SettingsSection title="How suggestions go in" icon="sliders">
           <Field label="Start after" layout="left" hint="Characters to type before tags show up.">
             <Segmented
               size="sm"
@@ -447,7 +460,7 @@ export function AutocompletePage({ header }: { header: ReactNode }) {
             "Thumbnails",
             "LoRA previews in the list (NSFW ones blurred, per Models).",
           )}
-        </section>
+        </SettingsSection>
         <FrequentTags />
       </div>
     </>

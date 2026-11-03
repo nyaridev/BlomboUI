@@ -15,8 +15,6 @@ import {
   Field,
   IconButton,
   NumberField,
-  Panel,
-  SectionTitle,
   Segmented,
   Select,
   Switch,
@@ -39,6 +37,7 @@ import {
 } from "@shared/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
+import { SettingsSection } from "./common";
 
 const EXAMPLE: PlanInput = {
   fileName: "detail_tweaker_xl.safetensors",
@@ -62,8 +61,7 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
       <div className="flex flex-col gap-10">
         <Account />
 
-        <section className="flex flex-col gap-5">
-          <SectionTitle icon="search">Browsing</SectionTitle>
+        <SettingsSection title="Browsing" icon="search">
           <Field label="Sort" layout="left">
             <Select
               value={settings.browse.sort}
@@ -119,10 +117,9 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
               label="Show NSFW models"
             />
           </Field>
-        </section>
+        </SettingsSection>
 
-        <section className="flex flex-col gap-5">
-          <SectionTitle icon="download">Downloads</SectionTitle>
+        <SettingsSection title="Download folders" icon="folder">
           <Field
             label="Sort into folders by"
             layout="left"
@@ -162,6 +159,9 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
           >
             <Aliases value={dl.aliases} onChange={(aliases) => save({ downloads: { aliases } })} />
           </Field>
+        </SettingsSection>
+
+        <SettingsSection title="Downloads" icon="download">
           <Field label="At the same time" layout="left" hint="Files downloading in parallel.">
             <Segmented
               value={String(dl.parallel) as "1" | "2" | "3" | "4"}
@@ -191,10 +191,9 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
               label="Save a preview image"
             />
           </Field>
-        </section>
+        </SettingsSection>
 
-        <section className="flex flex-col gap-5">
-          <SectionTitle icon="models">Your models</SectionTitle>
+        <SettingsSection title="Your models" icon="models">
           <Field
             label="Installed marks"
             layout="left"
@@ -220,10 +219,9 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
               {settings.lookup ? <LookupNow /> : null}
             </div>
           </Field>
-        </section>
+        </SettingsSection>
 
-        <section className="flex flex-col gap-5">
-          <SectionTitle icon="history">History</SectionTitle>
+        <SettingsSection title="History" icon="history">
           <HistoryLimit
             label="Downloads to keep"
             value={settings.history.downloads}
@@ -246,7 +244,7 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
             hint="0 keeps none."
             onChange={(searches) => save({ history: { searches } })}
           />
-        </section>
+        </SettingsSection>
       </div>
     </>
   );
@@ -284,107 +282,114 @@ function Account() {
     }
   };
   return (
-    <Panel className="flex flex-col gap-4 p-5">
-      <div className="flex items-center gap-3">
-        <span className="grid h-10 w-10 place-items-center rounded-lg bg-field text-accent-ink">
-          <Icon name="globe" size={20} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="text-sm font-semibold text-fg">Civitai account</span>
-          <span className="text-xs text-fg-3">
-            {a?.keySet
-              ? a.username
-                ? `Connected as ${a.username} · key ending in ${a.keyHint}`
-                : `Key ending in ${a.keyHint} saved (not checked)`
-              : "Browsing works without a key. Early-access and some other downloads need one."}
+    <SettingsSection title="Account" icon="globe">
+      <div className="flex flex-col gap-4">
+        <div className="flex items-center gap-3">
+          <span className="grid h-10 w-10 place-items-center rounded-lg bg-field text-accent-ink">
+            <Icon name="globe" size={20} />
           </span>
-        </div>
-        {a?.keySet ? (
-          <Badge tone="success">
-            <Icon name="check" size={11} /> Key saved
-          </Badge>
-        ) : null}
-      </div>
-      {!a?.keySet || editing ? (
-        <form
-          className="flex flex-col gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void submit(true);
-          }}
-        >
-          <div className="flex gap-2">
-            <TextField
-              type="password"
-              autoComplete="off"
-              spellCheck={false}
-              mono
-              icon="lock"
-              value={key}
-              onChange={(e) => setKey(e.target.value)}
-              placeholder="Paste your Civitai API key"
-              className="flex-1"
-              invalid={Boolean(error)}
-              aria-label="Civitai API key"
-            />
-            <Button type="submit" variant="primary" loading={busy} disabled={key.trim().length < 8}>
-              Check and save
-            </Button>
-            {editing ? (
-              <Button variant="ghost" onClick={() => setEditing(false)}>
-                Cancel
-              </Button>
-            ) : null}
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="text-sm font-semibold text-fg">Civitai account</span>
+            <span className="text-xs text-fg-3">
+              {a?.keySet
+                ? a.username
+                  ? `Connected as ${a.username} · key ending in ${a.keyHint}`
+                  : `Key ending in ${a.keyHint} saved (not checked)`
+                : "Browsing works without a key. Early-access and some other downloads need one."}
+            </span>
           </div>
-          {error ? (
-            <div className="flex flex-wrap items-center gap-2 text-xs text-danger">
-              <Icon name="errors" size={13} />
-              {error}
-              {/Can't reach|took too long/.test(error) ? (
-                <Button size="sm" variant="ghost" onClick={() => void submit(false)}>
-                  Save without checking
+          {a?.keySet ? (
+            <Badge tone="success">
+              <Icon name="check" size={11} /> Key saved
+            </Badge>
+          ) : null}
+        </div>
+        {!a?.keySet || editing ? (
+          <form
+            className="flex flex-col gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void submit(true);
+            }}
+          >
+            <div className="flex gap-2">
+              <TextField
+                type="password"
+                autoComplete="off"
+                spellCheck={false}
+                mono
+                icon="lock"
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                placeholder="Paste your Civitai API key"
+                className="flex-1"
+                invalid={Boolean(error)}
+                aria-label="Civitai API key"
+              />
+              <Button
+                type="submit"
+                variant="primary"
+                loading={busy}
+                disabled={key.trim().length < 8}
+              >
+                Check and save
+              </Button>
+              {editing ? (
+                <Button variant="ghost" onClick={() => setEditing(false)}>
+                  Cancel
                 </Button>
               ) : null}
             </div>
-          ) : (
-            <span className="text-xs text-fg-3">
-              Create one on{" "}
-              <a
-                href="https://civitai.com/user/account"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="text-accent-ink hover:underline"
-              >
-                civitai.com → Account settings → API keys
-              </a>
-              . It stays on this computer, in this profile's folder.
-            </span>
-          )}
-        </form>
-      ) : (
-        <div className="flex gap-1.5">
-          <Button size="sm" icon="edit" onClick={() => setEditing(true)}>
-            Replace key
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            icon="trash"
-            onClick={() =>
-              void api
-                .removeCivitaiKey()
-                .then((next) => {
-                  done(next);
-                  toast("API key removed", "success");
-                })
-                .catch((e: Error) => toast(e.message, "error"))
-            }
-          >
-            Remove key
-          </Button>
-        </div>
-      )}
-    </Panel>
+            {error ? (
+              <div className="flex flex-wrap items-center gap-2 text-xs text-danger">
+                <Icon name="errors" size={13} />
+                {error}
+                {/Can't reach|took too long/.test(error) ? (
+                  <Button size="sm" variant="ghost" onClick={() => void submit(false)}>
+                    Save without checking
+                  </Button>
+                ) : null}
+              </div>
+            ) : (
+              <span className="text-xs text-fg-3">
+                Create one on{" "}
+                <a
+                  href="https://civitai.com/user/account"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="text-accent-ink hover:underline"
+                >
+                  civitai.com → Account settings → API keys
+                </a>
+                . It stays on this computer, in this profile's folder.
+              </span>
+            )}
+          </form>
+        ) : (
+          <div className="flex gap-1.5">
+            <Button size="sm" icon="edit" onClick={() => setEditing(true)}>
+              Replace key
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="trash"
+              onClick={() =>
+                void api
+                  .removeCivitaiKey()
+                  .then((next) => {
+                    done(next);
+                    toast("API key removed", "success");
+                  })
+                  .catch((e: Error) => toast(e.message, "error"))
+              }
+            >
+              Remove key
+            </Button>
+          </div>
+        )}
+      </div>
+    </SettingsSection>
   );
 }
 

@@ -26,6 +26,9 @@ export function autocompleteRoutes(autocomplete: AutocompleteService) {
     return c.json(await autocomplete.addList(name.data, bytes), 201);
   });
 
+  /** The downloadable lists, with the date and size of the file each would fetch now. */
+  r.get("/lists/sources", async (c) => c.json(await autocomplete.sources()));
+
   /** One of TAG_SOURCES, downloaded into the profile's tags folder. */
   r.post("/lists/download", async (c) => {
     const { source } = await readJson(c, DownloadTagListBody);

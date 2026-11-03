@@ -84,6 +84,7 @@ export const qk = {
   stageReport: (profileId: string | null, workflowId: string | null, stages: unknown) =>
     ["stage-report", profileId, workflowId, stages] as const,
   tagLists: (profileId: string | null) => ["tag-lists", profileId] as const,
+  tagSources: ["tag-sources"] as const,
   /** Is blombo-bridge loaded in the open profile's ComfyUI (follows ComfyUI's status). */
   bridgeStatus: (profileId: string | null) => ["bridge-status", profileId] as const,
   /** What a batch workflow is missing (refetched when models or custom nodes change). */
@@ -272,6 +273,11 @@ export function useTagLists() {
     queryFn: api.tagLists,
     enabled: profileId !== null,
   });
+}
+
+/** Downloadable tag lists with the date of the file each would fetch (looked up on GitHub). */
+export function useTagSources() {
+  return useQuery({ queryKey: qk.tagSources, queryFn: api.tagSources, staleTime: 60 * 60_000 });
 }
 
 /* ── models and wildcards ────────────────────────────────────────────────── */

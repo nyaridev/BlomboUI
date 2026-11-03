@@ -7,7 +7,14 @@
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { formatBytes } from "@client/lib/number";
-import { qk, queryClient, useSettings, useTagLists, useUpdateSettings } from "@client/lib/queries";
+import {
+  qk,
+  queryClient,
+  useSettings,
+  useTagLists,
+  useTagSources,
+  useUpdateSettings,
+} from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
   Badge,
@@ -24,7 +31,7 @@ import {
   Switch,
   toast,
 } from "@client/ui";
-import { TAG_SOURCE_REPO, TAG_SOURCES, type TagSource } from "@shared/autocomplete";
+import type { TagSourceInfo } from "@shared/autocomplete";
 import { WEIGHT_STEPS } from "@shared/settings";
 import { type ReactNode, useState } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
@@ -135,15 +142,28 @@ function TagLists() {
   );
 }
 
-/** Ready-made lists from the tag-complete repository, one click each. */
+/** "2026-10-01" → "Oct 2026"; "2024-12" → "Dec 2024". */
+function monthOf(date: string): string {
+  const [y, m] = date.split("-").map(Number);
+  return new Date(y ?? 0, (m ?? 1) - 1, 1).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
+  });
+}
+
+/** Ready-made lists from GitHub, one click each, with how fresh each one is. */
 function Downloads({ have }: { have: Set<string> }) {
-  const [busy, setBusy] = useState<TagSource["id"] | null>(null);
-  const download = async (s: TagSource) => {
+  const sources = useTagSources();
+  const [busy, setBusy] = useState<TagSourceInfo["id"] | null>(null);
+  const download = async (s: TagSourceInfo) => {
     setBusy(s.id);
     try {
       const info = await api.downloadTagList(s.id);
       invalidateLists();
-      toast(`Added ${s.name} (${info.tags.toLocaleString()} tags)`, "success");
+      toast(
+        `Added ${s.name}${s.date ? ` from ${monthOf(s.date)}` : ""} (${info.tags.toLocaleString()} tags)`,
+        "success",
+      );
     } catch (e) {
       toast(message(e), "error");
     } finally {
@@ -154,21 +174,37 @@ function Downloads({ have }: { have: Set<string> }) {
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline gap-2">
         <span className="text-sm font-medium text-fg">Download a list</span>
-        <span className="text-xs text-fg-3">from {TAG_SOURCE_REPO} on GitHub</span>
+        <span className="text-xs text-fg-3">from GitHub, the newest version of each</span>
       </div>
-      <ul className="flex flex-col divide-y divide-line rounded-md border border-line">
-        {TAG_SOURCES.map((s) => {
+      {sources.isLoading ? (
+        <div className="grid h-16 place-items-center">
+          <Spinner />
+        </div>
+      ) : sources.isError ? (
+        <span className="text-xs text-danger">
+          Couldn't list them ({message(sources.error)}). Check your connection.
+        </span>
+      ) : null}
+      <ul className="flex flex-col divide-y divide-line rounded-md border border-line empty:hidden">
+        {(sources.data ?? []).map((s) => {
           const added = have.has(s.file);
           return (
             <li key={s.id} className="flex items-center gap-3 px-3 py-2">
               <Icon name="download" size={16} className="text-fg-3" />
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-sm text-fg">{s.name}</span>
+                <span className="flex items-baseline gap-2">
+                  <span className="truncate text-sm text-fg">{s.name}</span>
+                  <span className="text-2xs text-fg-4" title={`github.com/${s.repo}`}>
+                    {s.date ? monthOf(s.date) : "date unknown"}
+                  </span>
+                </span>
                 <span className="text-xs text-fg-3">{s.hint}</span>
               </div>
-              <span className="font-mono text-2xs text-fg-4 tabular max-lg:hidden">
-                {formatBytes(s.bytes)}
-              </span>
+              {s.bytes ? (
+                <span className="font-mono text-2xs text-fg-4 tabular max-lg:hidden">
+                  {formatBytes(s.bytes)}
+                </span>
+              ) : null}
               {added ? (
                 <Badge tone="success">
                   <Icon name="check" size={12} /> Added

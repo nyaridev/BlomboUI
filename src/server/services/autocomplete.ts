@@ -15,16 +15,18 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import {
   type CompleteMode,
+  newestDated,
   normalizeTag,
   parseTagCsv,
   promptTags,
   type Suggestion,
   shortCount,
-  TAG_SOURCE_REPO,
   TAG_SOURCES,
   type TagListInfo,
   type TagListsResponse,
   type TagRow,
+  type TagSource,
+  type TagSourceInfo,
 } from "../../shared/autocomplete.ts";
 import type { AutocompleteSettings } from "../../shared/settings.ts";
 import type { ProfileDbs } from "../db/profileDb.ts";
@@ -60,12 +62,14 @@ export interface AutocompleteDeps {
   settings: SettingsService;
   dbs: ProfileDbs;
   models: ModelService;
-  /** Where TAG_SOURCES files are fetched from (tests point it at a fake). */
-  tagSources?: string;
+  /** GitHub's API and raw-file hosts for TAG_SOURCES (tests point them at a fake). */
+  github?: { api: string; raw: string };
   fetch?: typeof fetch;
 }
 
-const TAG_SOURCE_BASE = `https://raw.githubusercontent.com/${TAG_SOURCE_REPO}/main/tags/`;
+const GITHUB = { api: "https://api.github.com/", raw: "https://raw.githubusercontent.com/" };
+/** How long a folder listing is trusted; the archive changes monthly at most. */
+const FOLDER_TTL = 60 * 60 * 1000;
 
 function listName(file: string): string {
   const stem = file.replace(/\.csv$/i, "").replace(/[-_]+/g, " ");
@@ -76,6 +80,10 @@ export class AutocompleteService {
   private readonly deps: AutocompleteDeps;
   private readonly cache = new Map<string, ParsedList>();
   private readonly errors = new Map<string, string>();
+  private readonly folders = new Map<
+    string,
+    { at: number; items: Array<{ name: string; size: number }> }
+  >();
 
   constructor(deps: AutocompleteDeps) {
     this.deps = deps;
@@ -184,25 +192,104 @@ export class AutocompleteService {
     };
   }
 
-  /** Download one of TAG_SOURCES into the profile's tags folder. */
+  /* ── downloadable lists (TAG_SOURCES) ─────────────────────────────────── */
+
+  /** GET from GitHub (its API or raw files only), failing on anything but 200. */
+  private async github(url: URL, timeoutMs: number): Promise<Response> {
+    const gh = this.deps.github ?? GITHUB;
+    const ok = [new URL(gh.api).origin, new URL(gh.raw).origin];
+    const res = await fetchFollow(url.href, {
+      allow: (u) => ok.includes(u.origin),
+      headers: { accept: "application/vnd.github+json" },
+      fetch: this.deps.fetch,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) {
+      await res.body?.cancel().catch(() => undefined);
+      throw new Error(`GitHub answered ${res.status}`);
+    }
+    return res;
+  }
+
+  /** The files in a repository folder, from GitHub's contents API (kept for an hour). */
+  private async folder(repo: string, dir: string): Promise<Array<{ name: string; size: number }>> {
+    const key = `${repo}/${dir}`;
+    const hit = this.folders.get(key);
+    if (hit && Date.now() - hit.at < FOLDER_TTL) return hit.items;
+    const gh = this.deps.github ?? GITHUB;
+    const res = await this.github(new URL(`repos/${repo}/contents/${dir}`, gh.api), 20_000);
+    const body = (await res.json()) as Array<{ name?: unknown; size?: unknown; type?: unknown }>;
+    const items = (Array.isArray(body) ? body : [])
+      .filter((x) => x.type === "file" && typeof x.name === "string")
+      .map((x) => ({ name: x.name as string, size: typeof x.size === "number" ? x.size : 0 }));
+    this.folders.set(key, { at: Date.now(), items });
+    return items;
+  }
+
+  /** Where a source's file is right now: its URL, the date of its data and its size. */
+  private async locate(
+    s: TagSource,
+  ): Promise<{ url: URL; date: string | null; bytes: number | null }> {
+    const gh = this.deps.github ?? GITHUB;
+    const { from } = s;
+    if ("path" in from) {
+      const dir = from.path.slice(0, from.path.lastIndexOf("/"));
+      const name = from.path.slice(from.path.lastIndexOf("/") + 1);
+      // The size is only for show: a failed lookup still leaves the fixed file downloadable.
+      const items = await this.folder(from.repo, dir).catch(() => []);
+      return {
+        url: new URL(`${from.repo}/main/${from.path}`, gh.raw),
+        date: from.date,
+        bytes: items.find((i) => i.name === name)?.size ?? null,
+      };
+    }
+    const items = await this.folder(from.repo, from.dir);
+    const newest = newestDated(
+      items.map((i) => i.name),
+      from.prefix,
+    );
+    if (!newest) throw new Error("no list found in the archive");
+    return {
+      url: new URL(`${from.repo}/main/${from.dir}/${newest.name}`, gh.raw),
+      date: newest.date,
+      bytes: items.find((i) => i.name === newest.name)?.size ?? null,
+    };
+  }
+
+  /** Every source with the file it would download now; date null when GitHub didn't answer. */
+  async sources(): Promise<TagSourceInfo[]> {
+    return Promise.all(
+      TAG_SOURCES.map(async (s) => {
+        const info = { id: s.id, name: s.name, hint: s.hint, file: s.file, repo: s.from.repo };
+        try {
+          const { date, bytes } = await this.locate(s);
+          return { ...info, date, bytes };
+        } catch {
+          return { ...info, date: null, bytes: null };
+        }
+      }),
+    );
+  }
+
+  /**
+   * Download one of TAG_SOURCES into the profile's tags folder, with a comment line on top that
+   * says where it's from and how old it is (the parser skips # lines).
+   */
   async downloadList(id: string): Promise<TagListInfo> {
     const source = TAG_SOURCES.find((s) => s.id === id);
     if (!source) throw new HttpError(400, "Unknown tag list.", "bad_source");
     if (await exists(path.join(this.tagsDir(), source.file)))
       throw new HttpError(409, `${source.name} is already in your lists.`, "exists");
-    const url = new URL(source.file, this.deps.tagSources ?? TAG_SOURCE_BASE);
     let bytes: Uint8Array;
     try {
-      const res = await fetchFollow(url.href, {
-        allow: (u) => u.origin === url.origin,
-        fetch: this.deps.fetch,
-        signal: AbortSignal.timeout(120_000),
-      });
-      if (!res.ok) {
-        await res.body?.cancel().catch(() => undefined);
-        throw new Error(`GitHub answered ${res.status}`);
-      }
-      bytes = await readLimited(res, MAX_LIST_BYTES);
+      const at = await this.locate(source);
+      const body = await readLimited(await this.github(at.url, 120_000), MAX_LIST_BYTES);
+      const note = new TextEncoder().encode(
+        `# ${source.name} tags${at.date ? ` as of ${at.date}` : ""}, from github.com/${source.from.repo}\n`,
+      );
+      bytes = new Uint8Array(note.byteLength + body.byteLength);
+      bytes.set(note);
+      bytes.set(body, note.byteLength);
     } catch (e) {
       throw new HttpError(
         502,

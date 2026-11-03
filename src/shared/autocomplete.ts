@@ -67,52 +67,104 @@ export const TagListsResponse = z.object({
 export type TagListsResponse = z.infer<typeof TagListsResponse>;
 
 /**
- * Tag lists the app can download (Settings → Autocomplete), from the tag autocomplete extension
- * for A1111 (MIT). Same CSV format; they land in the profile's tags folder like a dropped file.
+ * Tag lists the app can download (Settings → Autocomplete). Same CSV format as a dropped file;
+ * they land in the profile's tags folder under `file`. A source is either one fixed file, or the
+ * newest dated file in a folder (`prefix_YYYY-MM-DD_….csv`), looked up when the page asks.
+ *
+ * - The Danbooru / e621 / Gelbooru lists come from DraconicDragon's archive (Unlicense), rebuilt
+ *   from the sites every month and committed every three.
+ * - e621 (safe) and Derpibooru are only in the tag-complete extension for A1111 (MIT, 2024-12).
  */
-export const TAG_SOURCE_REPO = "DominikDoom/a1111-sd-webui-tagcomplete";
+const ARCHIVE = "DraconicDragon/dbr-e621-lists-archive";
+const TAGCOMPLETE = "DominikDoom/a1111-sd-webui-tagcomplete";
+
+export type TagSourceFrom =
+  | { repo: string; path: string; date: string }
+  | { repo: string; dir: string; prefix: string };
+
 export const TAG_SOURCES = [
   {
     id: "danbooru",
     name: "Danbooru",
     file: "danbooru.csv",
-    bytes: 3_518_020,
     hint: "Anime tags with post counts and aliases. The usual pick for anime models.",
-  },
-  {
-    id: "danbooru-e621",
-    name: "Danbooru + e621",
-    file: "danbooru_e621_merged.csv",
-    bytes: 6_024_803,
-    hint: "Both in one list, for models trained on both (Pony, NoobAI).",
+    from: { repo: ARCHIVE, dir: "tag-lists/danbooru", prefix: "danbooru" },
   },
   {
     id: "e621",
     name: "e621",
     file: "e621.csv",
-    bytes: 2_681_621,
     hint: "Furry and creature tags, NSFW ones included.",
+    from: { repo: ARCHIVE, dir: "tag-lists/e621", prefix: "e621" },
+  },
+  {
+    id: "danbooru-e621",
+    name: "Danbooru + e621",
+    file: "danbooru_e621_merged.csv",
+    hint: "Both in one list. Adding the two separately works as well.",
+    from: { repo: ARCHIVE, dir: "tag-lists/danbooru_e621_merged", prefix: "danbooru_e621_merged" },
+  },
+  {
+    id: "gelbooru",
+    name: "Gelbooru",
+    file: "gelbooru.csv",
+    hint: "Anime tags as Gelbooru names them.",
+    from: { repo: ARCHIVE, dir: "tag-lists/gelbooru", prefix: "gelbooru" },
   },
   {
     id: "e621-sfw",
     name: "e621 (safe)",
     file: "e621_sfw.csv",
-    bytes: 711_674,
     hint: "The e621 list without NSFW tags.",
+    from: { repo: TAGCOMPLETE, path: "tags/e621_sfw.csv", date: "2024-12" },
   },
   {
     id: "derpibooru",
     name: "Derpibooru",
     file: "derpibooru.csv",
-    bytes: 2_641_417,
     hint: "Pony (My Little Pony) art tags.",
+    from: { repo: TAGCOMPLETE, path: "tags/derpibooru.csv", date: "2024-12" },
   },
-] as const;
+] as const satisfies ReadonlyArray<{
+  id: string;
+  name: string;
+  file: string;
+  hint: string;
+  from: TagSourceFrom;
+}>;
 export type TagSource = (typeof TAG_SOURCES)[number];
 export const TagSourceId = z.enum(
   TAG_SOURCES.map((s) => s.id) as [TagSource["id"], ...TagSource["id"][]],
 );
 export const DownloadTagListBody = z.object({ source: TagSourceId });
+
+/** A source as the page shows it: the file it would download now, when it's from, its size. */
+export const TagSourceInfo = z.object({
+  id: TagSourceId,
+  name: z.string(),
+  hint: z.string(),
+  file: z.string(),
+  repo: z.string(),
+  /** "2026-10-01" (or "2024-12"); null when the newest file couldn't be looked up. */
+  date: z.string().nullable(),
+  bytes: z.number().int().nullable(),
+});
+export type TagSourceInfo = z.infer<typeof TagSourceInfo>;
+
+/** The newest `prefix_YYYY-MM-DD_….csv` among `names`, with its date; null when none matches. */
+export function newestDated(
+  names: readonly string[],
+  prefix: string,
+): { name: string; date: string } | null {
+  // Prefixes are plain names (a-z, 0-9, _), so they go into the pattern as they are.
+  const re = new RegExp(`^${prefix}_(\\d{4}-\\d{2}-\\d{2})(?:_[^/]*)?\\.csv$`);
+  let best: { name: string; date: string } | null = null;
+  for (const name of names) {
+    const m = re.exec(name);
+    if (m?.[1] && (!best || m[1] > best.date)) best = { name, date: m[1] };
+  }
+  return best;
+}
 
 export const TagListName = z
   .string()

@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { newestDated } from "../../shared/autocomplete.ts";
 import { createConfig, parseFlags } from "../config.ts";
 import { ProfileDbs } from "../db/profileDb.ts";
 import { AutocompleteService } from "./autocomplete.ts";
@@ -129,6 +130,11 @@ describe("autocomplete", () => {
 
 describe("downloading tag lists", () => {
   const asked: string[] = [];
+  const listing = [
+    { name: "README.md", size: 10, type: "file" },
+    { name: "danbooru_2026-04-01_pt20-ia-dd.csv", size: 500, type: "file" },
+    { name: "danbooru_2026-10-01_pt20-ia-dd.csv", size: 600, type: "file" },
+  ];
   const online = new AutocompleteService({
     presetsDir: config.presetsDir,
     profiles,
@@ -139,23 +145,56 @@ describe("downloading tag lists", () => {
       runtimeDir: config.runtimeDir,
       onChanged: () => undefined,
     }),
-    tagSources: "https://tags.test/lists/",
+    github: { api: "https://api.gh.test/", raw: "https://raw.gh.test/" },
     fetch: (async (url: URL | string) => {
-      asked.push(String(url));
-      return String(url).endsWith("/danbooru.csv")
-        ? new Response('1girl,0,6008644,"1girls,sole_female"\nsolo,0,5000954,\n')
-        : new Response("not here", { status: 404 });
+      const u = String(url);
+      asked.push(u);
+      if (
+        u ===
+        "https://api.gh.test/repos/DraconicDragon/dbr-e621-lists-archive/contents/tag-lists/danbooru"
+      )
+        return Response.json(listing);
+      if (u.endsWith("/tag-lists/danbooru/danbooru_2026-10-01_pt20-ia-dd.csv"))
+        return new Response('1girl,0,8483124,"sole_female,1girls"\nsolo,0,7121365,\n');
+      return new Response("not here", { status: 404 });
     }) as typeof fetch,
   });
 
-  it("saves a known list into the profile's tags folder, once", async () => {
+  it("finds the newest dated file, and says how old each list is", async () => {
+    expect(
+      newestDated(
+        ["e621_2026-01-01_pt20.csv", "e621_2026-10-01_pt20-ia-ed.csv", "e621_x.csv"],
+        "e621",
+      ),
+    ).toEqual({ name: "e621_2026-10-01_pt20-ia-ed.csv", date: "2026-10-01" });
+    expect(newestDated(["gelbooru_tags_2026-06-11_pt20.csv"], "gelbooru")).toBeNull();
+    const sources = await online.sources();
+    expect(sources.find((s) => s.id === "danbooru")).toMatchObject({
+      date: "2026-10-01",
+      bytes: 600,
+    });
+    // A folder that can't be listed leaves the date unknown; a fixed file keeps its own.
+    expect(sources.find((s) => s.id === "e621")?.date).toBeNull();
+    expect(sources.find((s) => s.id === "derpibooru")).toMatchObject({
+      date: "2024-12",
+      bytes: null,
+    });
+  });
+
+  it("saves the newest list into the profile's tags folder once, with where it's from", async () => {
+    asked.length = 0;
     const info = await online.downloadList("danbooru");
     expect(info).toMatchObject({ file: "danbooru.csv", source: "profile", tags: 2 });
-    expect(asked).toEqual(["https://tags.test/lists/danbooru.csv"]);
-    await fs.access(path.join(online.tagsDir(), "danbooru.csv"));
+    // The folder listing is cached from the first test.
+    expect(asked).toEqual([
+      "https://raw.gh.test/DraconicDragon/dbr-e621-lists-archive/main/tag-lists/danbooru/danbooru_2026-10-01_pt20-ia-dd.csv",
+    ]);
+    const text = await fs.readFile(path.join(online.tagsDir(), "danbooru.csv"), "utf8");
+    expect(text.split("\n")[0]).toBe(
+      "# Danbooru tags as of 2026-10-01, from github.com/DraconicDragon/dbr-e621-lists-archive",
+    );
     expect((await online.suggest("sole_fem", "tag", 5))[0]).toMatchObject({ text: "1girl" });
     await expect(online.downloadList("danbooru")).rejects.toThrow(/already in your lists/);
-    expect(asked).toHaveLength(1);
   });
 
   it("says what went wrong and refuses unknown lists", async () => {

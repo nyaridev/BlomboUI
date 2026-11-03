@@ -15,6 +15,7 @@ import type {
   TagListInfo,
   TagListsResponse,
   TagSource,
+  TagSourceInfo,
 } from "@shared/autocomplete";
 import type {
   BatchCheck,
@@ -254,6 +255,7 @@ export const api = {
       undefined,
       file,
     ),
+  tagSources: () => request<TagSourceInfo[]>("GET", "/autocomplete/lists/sources"),
   downloadTagList: (source: TagSource["id"]) =>
     request<TagListInfo>("POST", "/autocomplete/lists/download", { source }),
   removeTagList: (file: string) =>

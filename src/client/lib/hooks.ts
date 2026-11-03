@@ -1,14 +1,21 @@
 import type { ViewId } from "@shared/constants";
 import { useNavigate } from "@tanstack/react-router";
-import { type RefObject, useEffect, useState, useSyncExternalStore } from "react";
+import { type RefObject, useEffect, useLayoutEffect, useState, useSyncExternalStore } from "react";
 import { useSession } from "./session";
 
-/** Width of an element, kept current with ResizeObserver. */
+/**
+ * Width of an element's content box, kept current with ResizeObserver. The first value is read
+ * before paint, so a grid sized from it never shows a frame at width 0 (one full-width column).
+ */
 export function useElementWidth(ref: RefObject<HTMLElement | null>): number {
   const [width, setWidth] = useState(0);
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
+    const css = getComputedStyle(el);
+    setWidth(
+      Math.floor(el.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight)),
+    );
     const ro = new ResizeObserver(([entry]) => {
       if (entry) setWidth(Math.floor(entry.contentRect.width));
     });

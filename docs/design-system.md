@@ -160,7 +160,8 @@ Presets in `src/client/lib/motion.ts`:
 - **Gallery marks:** the lightbox's details start with a `surface-2` box: Rating (`StarRating`), Tags (chips with × and an add field with suggestions), Albums (a collection picker with checkboxes and "New collection"). Tiles show `★ n` on rated images; the toolbar has Tag and Rating chips and a "Best rated" sort; the sidebar lists collections with covers and counts.
 - **Image stage timing:** a finished result's info chip adds "· 7.9 it/s" with a tooltip of time per part; while running, the progress card shows the server's it/s.
 - **Drop to reuse:** dragging a file over Generate shows a dashed accent overlay on `bg/80` ("Drop to use this image's settings"), then "Reading the image…".
-- **Model pickers:** favorites first (heart on the card), then recently used, then the rest; tiles in the models strip show the model's picture.
+- **Model pickers:** favorites first (heart on the card), then recently used, then the rest.
+- **Models strip:** portrait 2:3 picture tiles, no text beside them. "Pictures" (112 px wide) puts the name on the picture over a dark gradient; "compact" (64 px) shows the picture only. The chevron on the left switches them (`settings.generate.tiles`). Corners: a LoRA's strength top left with a warning icon when the file is missing (yellow border too), remove top right on hover; the strength slider takes the name's place on hover (always on touch). The tooltip names the role and the model. Clicking a tile opens its picker tab; a dashed + tile adds a LoRA.
 - **Empty states:** icon tile + one sentence on what will appear + the action that makes it appear.
 
 ## Narrow screens

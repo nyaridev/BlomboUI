@@ -58,7 +58,7 @@ export const SETTINGS_PAGES: Array<{
     label: "Gallery",
     icon: "gallery",
     group: "Tools",
-    keywords: "tiles justified grid libraries",
+    keywords: "tiles justified grid grids libraries exclude interrupted stopped",
   },
   {
     id: "models",

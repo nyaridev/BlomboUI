@@ -8,6 +8,8 @@
  *    gone are dropped. It runs in the background with progress on the live bus.
  *  - Finished jobs are indexed as their images land (`ingestOutput`), so new images appear
  *    without a rescan.
+ *  - Lists, counts and the showcase follow the gallery settings: script grids and images from
+ *    stopped runs (marked in `interrupted` when a run is interrupted) can be left out.
  *  - Removing an image moves the file into data/profiles/<id>/trash/gallery/ (restorable);
  *    nothing in a user folder is ever deleted.
  */
@@ -130,6 +132,19 @@ const SELECT = `
   SELECT i.id, i.library, i.path, i.name, i.folder, i.size, i.mtime, i.width, i.height, i.model,
          COALESCE(m.favorite, 0) AS favorite, COALESCE(m.rating, 0) AS rating
   FROM images i LEFT JOIN marks m ON m.library = i.library AND m.path = i.path`;
+
+/** Not a script grid: Blombo's `<day>/grids/` folders and A1111's `txt2img-grids`. */
+const NOT_GRID = `('/' || i.folder || '/') NOT LIKE '%/grids/%' AND ('/' || i.folder || '/') NOT LIKE '%-grids/%'`;
+/** Not saved by a stopped run (a mark older than the file is for an earlier file there). */
+const NOT_INTERRUPTED = `NOT EXISTS (SELECT 1 FROM interrupted x
+  WHERE x.library = i.library AND x.path = i.path AND x.marked_at >= i.mtime)`;
+
+/** Conditions appended to a WHERE clause. */
+const and = (conditions: string[]) => conditions.map((c) => ` AND ${c}`).join("");
+
+/** A ComfyUI output ref as a path inside the output folder. */
+const refPath = (ref: { filename: string; subfolder: string }) =>
+  [ref.subfolder, ref.filename].filter(Boolean).join("/").replace(/\\/g, "/");
 
 export class GalleryService {
   private readonly deps: GalleryDeps;
@@ -439,7 +454,7 @@ export class GalleryService {
     const open = this.need();
     const lib = (await this.libraries())[0];
     if (!lib?.path) return null;
-    const rel = [ref.subfolder, ref.filename].filter(Boolean).join("/").replace(/\\/g, "/");
+    const rel = refPath(ref);
     if (rel.split("/").some((p) => p === ".." || p === "")) return null;
     const abs = fromRel(lib.path, rel);
     let stat: Stats;
@@ -449,11 +464,44 @@ export class GalleryService {
       return null;
     }
     const row = await readForIndex(abs, stat);
+    const shown = and(await this.shown());
     if (this.current !== open) return null;
     const id = this.upsert(open, lib.id, rel, stat, row);
     const image = this.get(id);
-    if (image) this.deps.publish("gallery", { t: "gallery.added", image });
+    // A grid the settings leave out is indexed but not announced.
+    const visible = open.pdb.db.prepare(`SELECT 1 FROM images i WHERE i.id = ?${shown}`).get(id);
+    if (image && visible) this.deps.publish("gallery", { t: "gallery.added", image });
     return image;
+  }
+
+  /**
+   * A run was stopped: mark the images it saved in the main output folder, so the gallery can
+   * leave them out (`excludeInterrupted`). Lists refetch.
+   */
+  async markInterrupted(
+    profileId: string,
+    refs: Array<{ filename: string; subfolder: string; type: string }>,
+  ): Promise<void> {
+    const outputs = refs.filter((r) => r.type === "output");
+    const open = this.current;
+    if (!outputs.length || open?.profileId !== profileId) return;
+    const lib = (await this.libraries())[0];
+    if (!lib || this.current !== open) return;
+    const add = open.pdb.db.prepare(
+      "INSERT OR REPLACE INTO interrupted (library, path, marked_at) VALUES (?, ?, ?)",
+    );
+    const now = Date.now();
+    for (const ref of outputs) add.run(lib.id, refPath(ref), now);
+    this.deps.publish("gallery", { t: "gallery.changed" });
+  }
+
+  /** What the gallery settings let through, as conditions on `images i`. */
+  private async shown(): Promise<string[]> {
+    const { gallery } = await this.deps.settings.get(this.need().profileId);
+    return [
+      ...(gallery.excludeGrids ? [NOT_GRID] : []),
+      ...(gallery.excludeInterrupted ? [NOT_INTERRUPTED] : []),
+    ];
   }
 
   /**
@@ -469,7 +517,7 @@ export class GalleryService {
     const find = db.prepare(`${SELECT} WHERE i.library = ? AND i.path = ?`);
     for (const ref of refs) {
       if (ref.type !== "output") continue;
-      const rel = [ref.subfolder, ref.filename].filter(Boolean).join("/").replace(/\\/g, "/");
+      const rel = refPath(ref);
       const row = find.get(this.mainLibrary, rel) as ImageRow | undefined;
       if (row) out.set(rel, this.toImage(row));
     }
@@ -502,9 +550,9 @@ export class GalleryService {
     return row ? this.toImage(row) : null;
   }
 
-  query(q: GalleryQuery): GalleryPage {
+  async query(q: GalleryQuery): Promise<GalleryPage> {
+    const where = await this.shown();
     const { db, fts } = this.need().pdb;
-    const where: string[] = [];
     const params: Array<string | number> = [];
     if (q.library !== "all") {
       where.push("i.library = ?");
@@ -570,9 +618,10 @@ export class GalleryService {
     return { items: rows.map((r) => this.toImage(r)), total: Number(total.n), offset: q.offset };
   }
 
-  facets(library: string): GalleryFacets {
+  async facets(library: string): Promise<GalleryFacets> {
+    const shown = and(await this.shown());
     const { db } = this.need().pdb;
-    const lib = library === "all" ? "" : "AND i.library = ?";
+    const lib = `${library === "all" ? "" : "AND i.library = ?"}${shown}`;
     const args = library === "all" ? [] : [library];
     const models = db
       .prepare(
@@ -592,13 +641,14 @@ export class GalleryService {
   }
 
   async overview(): Promise<GalleryOverview> {
+    const shown = and(await this.shown());
     const { db } = this.need().pdb;
     const count = (sql: string, ...args: Array<string | number>) =>
       Number((db.prepare(sql).get(...args) as { n: number }).n);
     const libraries: LibraryInfo[] = [];
     for (const lib of await this.libraries()) {
       const cover = db
-        .prepare(`${SELECT} WHERE i.library = ? ORDER BY i.mtime DESC LIMIT 1`)
+        .prepare(`${SELECT} WHERE i.library = ?${shown} ORDER BY i.mtime DESC LIMIT 1`)
         .get(lib.id) as ImageRow | undefined;
       libraries.push({
         id: lib.id,
@@ -606,16 +656,16 @@ export class GalleryService {
         path: lib.path,
         builtin: lib.builtin,
         exists: Boolean(lib.path) && (await isDir(lib.path)),
-        count: count("SELECT COUNT(*) AS n FROM images WHERE library = ?", lib.id),
+        count: count(`SELECT COUNT(*) AS n FROM images i WHERE i.library = ?${shown}`, lib.id),
         cover: cover ? this.toImage(cover).thumb : null,
       });
     }
     let featured = db
-      .prepare(`${SELECT} WHERE m.favorite = 1 ORDER BY i.mtime DESC LIMIT 5`)
+      .prepare(`${SELECT} WHERE m.favorite = 1${shown} ORDER BY i.mtime DESC LIMIT 5`)
       .all() as unknown as ImageRow[];
     if (!featured.length)
       featured = db
-        .prepare(`${SELECT} ORDER BY i.mtime DESC LIMIT 1`)
+        .prepare(`${SELECT} WHERE 1 = 1${shown} ORDER BY i.mtime DESC LIMIT 1`)
         .all() as unknown as ImageRow[];
     // Images per local calendar day, last 7 days (today last).
     const today = new Date();
@@ -626,7 +676,7 @@ export class GalleryService {
       const end = new Date(start);
       end.setDate(start.getDate() + 1);
       return count(
-        "SELECT COUNT(*) AS n FROM images WHERE mtime >= ? AND mtime < ?",
+        `SELECT COUNT(*) AS n FROM images i WHERE i.mtime >= ? AND i.mtime < ?${shown}`,
         start.getTime(),
         end.getTime(),
       );
@@ -635,11 +685,14 @@ export class GalleryService {
       libraries,
       perDay,
       counts: {
-        all: count("SELECT COUNT(*) AS n FROM images"),
+        all: count(`SELECT COUNT(*) AS n FROM images i WHERE 1 = 1${shown}`),
         favorites: count(
-          "SELECT COUNT(*) AS n FROM images i JOIN marks m ON m.library = i.library AND m.path = i.path WHERE m.favorite = 1",
+          `SELECT COUNT(*) AS n FROM images i JOIN marks m ON m.library = i.library AND m.path = i.path WHERE m.favorite = 1${shown}`,
         ),
-        week: count("SELECT COUNT(*) AS n FROM images WHERE mtime >= ?", Date.now() - WEEK_MS),
+        week: count(
+          `SELECT COUNT(*) AS n FROM images i WHERE i.mtime >= ?${shown}`,
+          Date.now() - WEEK_MS,
+        ),
         trash: count("SELECT COUNT(*) AS n FROM trash"),
       },
       featured: featured.map((r) => this.toImage(r)),
@@ -1126,7 +1179,14 @@ export class GalleryService {
     if (this.current !== open) return;
     const { db } = open.pdb;
     transaction(db, () => {
-      for (const table of ["images", "marks", "trash", "image_tags", "collection_items"])
+      for (const table of [
+        "images",
+        "marks",
+        "trash",
+        "image_tags",
+        "collection_items",
+        "interrupted",
+      ])
         db.prepare(`UPDATE ${table} SET library = ? WHERE library = ?`).run(to, from);
     });
     if (this.mainLibrary === from) this.mainLibrary = to;

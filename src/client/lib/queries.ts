@@ -331,7 +331,15 @@ export function useUpdateSettings() {
     onError: (_e, _p, ctx) => {
       if (ctx?.prev) qc.setQueryData(ctx.key, ctx.prev);
     },
-    onSuccess: (saved) => qc.setQueryData(qk.settings(useSession.getState().profileId), saved),
+    onSuccess: (saved, patch) => {
+      qc.setQueryData(qk.settings(useSession.getState().profileId), saved);
+      // The server filters gallery lists and counts by these.
+      if (
+        patch.gallery?.excludeGrids !== undefined ||
+        patch.gallery?.excludeInterrupted !== undefined
+      )
+        void qc.invalidateQueries({ queryKey: ["gallery"] });
+    },
   });
 }
 

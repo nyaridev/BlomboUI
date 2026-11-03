@@ -106,7 +106,7 @@ afterAll(async () => {
 
 describe("gallery index", () => {
   it("indexes images with their metadata and skips other files", async () => {
-    const page = q();
+    const page = await q();
     expect(page.total).toBe(3);
     expect(page.items.map((i) => i.path).sort()).toEqual([
       "2026-10-15/sd15_00001_.png",
@@ -125,7 +125,7 @@ describe("gallery index", () => {
   });
 
   it("reads Blombo, ComfyUI and A1111 details", async () => {
-    const comfy = q({ q: "cabin" }).items[0];
+    const comfy = (await q({ q: "cabin" })).items[0];
     if (!comfy) throw new Error("not found");
     const d = await gallery.details(comfy.id);
     expect(d.summary).toMatchObject({
@@ -141,26 +141,26 @@ describe("gallery index", () => {
     expect(d.settings.roles["sampler.cfg"]).toBe(7);
     expect(d.hasWorkflow).toBe(true);
 
-    const a = q({ q: "silver" }).items[0];
+    const a = (await q({ q: "silver" })).items[0];
     if (!a) throw new Error("not found");
     const ad = await gallery.details(a.id);
     expect(ad.summary).toMatchObject({ source: "a1111", model: "waiIllustrious_v14", seed: 5 });
     expect(ad.summary.loras).toEqual([{ name: "Detailer", strength: 0.8 }]);
   });
 
-  it("searches, filters and sorts", () => {
-    expect(q({ q: "bad hands" }).items.map((i) => i.name)).toEqual(["a1111.png"]);
-    expect(q({ q: "zzz-nothing" }).total).toBe(0);
-    expect(q({ q: "pl" }).items.map((i) => i.name)).toEqual(["plain.png"]); // short term → LIKE
-    expect(q({ lora: "Detailer" }).items.map((i) => i.name)).toEqual(["a1111.png"]);
-    expect(q({ model: "dreamshaper_8" }).total).toBe(1);
-    expect(q({ sort: "name" }).items.map((i) => i.name)).toEqual([
+  it("searches, filters and sorts", async () => {
+    expect((await q({ q: "bad hands" })).items.map((i) => i.name)).toEqual(["a1111.png"]);
+    expect((await q({ q: "zzz-nothing" })).total).toBe(0);
+    expect((await q({ q: "pl" })).items.map((i) => i.name)).toEqual(["plain.png"]); // short term → LIKE
+    expect((await q({ lora: "Detailer" })).items.map((i) => i.name)).toEqual(["a1111.png"]);
+    expect((await q({ model: "dreamshaper_8" })).total).toBe(1);
+    expect((await q({ sort: "name" })).items.map((i) => i.name)).toEqual([
       "a1111.png",
       "plain.png",
       "sd15_00001_.png",
     ]);
-    expect(q({ limit: 2 }).items).toHaveLength(2);
-    const facets = gallery.facets("all");
+    expect((await q({ limit: 2 })).items).toHaveLength(2);
+    const facets = await gallery.facets("all");
     expect(facets.models.map((m) => m.name).sort()).toEqual([
       "dreamshaper_8",
       "waiIllustrious_v14",
@@ -173,16 +173,16 @@ describe("gallery index", () => {
     expect(ftsQuery(["ab"])).toBeNull();
   });
 
-  it("keeps favorites", () => {
-    const plain = q({ q: "plain" }).items[0];
+  it("keeps favorites", async () => {
+    const plain = (await q({ q: "plain" })).items[0];
     if (!plain) throw new Error("not found");
     gallery.setFavorite([plain.id], true);
-    expect(q({ favorites: "1" }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect((await q({ favorites: "1" })).items.map((i) => i.name)).toEqual(["plain.png"]);
     expect(messages.some((m) => m.t === "gallery.changed")).toBe(true);
   });
 
   it("makes a WebP thumbnail", async () => {
-    const plain = q({ q: "plain" }).items[0];
+    const plain = (await q({ q: "plain" })).items[0];
     if (!plain) throw new Error("not found");
     const file = await gallery.thumbFile(plain.id);
     const bytes = await fs.readFile(file);
@@ -191,17 +191,17 @@ describe("gallery index", () => {
   });
 
   it("moves images to the trash and restores them with their favorite", async () => {
-    const plain = q({ q: "plain" }).items[0];
+    const plain = (await q({ q: "plain" })).items[0];
     if (!plain) throw new Error("not found");
     expect(await gallery.trash([plain.id])).toHaveLength(1);
     await expect(fs.access(path.join(outputs, "sub", "plain.png"))).rejects.toThrow();
-    expect(q().total).toBe(2);
+    expect((await q()).total).toBe(2);
     const trash = gallery.trashList();
     expect(trash).toHaveLength(1);
     expect(trash[0]).toMatchObject({ path: "sub/plain.png", name: "plain.png" });
     expect(await gallery.restore([trash[0]?.id ?? ""])).toBe(1);
     await fs.access(path.join(outputs, "sub", "plain.png"));
-    expect(q({ favorites: "1" }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect((await q({ favorites: "1" })).items.map((i) => i.name)).toEqual(["plain.png"]);
     expect(gallery.trashList()).toHaveLength(0);
   });
 
@@ -225,12 +225,12 @@ describe("gallery index", () => {
       // job would, trash it, then let the sync's batch write.
       held.delete("racy.png");
       await gallery.ingestOutput({ filename: "racy.png", subfolder: "", type: "output" });
-      const row = q({ q: "racy" }).items[0];
+      const row = (await q({ q: "racy" })).items[0];
       if (!row) throw new Error("not indexed");
       expect(await gallery.trash([row.id])).toHaveLength(1);
       release();
       await gallery.whenSynced();
-      expect(q({ q: "racy" }).total).toBe(0);
+      expect((await q({ q: "racy" })).total).toBe(0);
     } finally {
       held.delete("racy.png");
       release();
@@ -240,8 +240,8 @@ describe("gallery index", () => {
   });
 
   it("rates, tags and collects images, and keeps it all through the trash", async () => {
-    const plain = q({ q: "plain" }).items[0];
-    const other = q({ q: "silver" }).items[0];
+    const plain = (await q({ q: "plain" })).items[0];
+    const other = (await q({ q: "silver" })).items[0];
     if (!plain || !other) throw new Error("not found");
     gallery.setRating([plain.id], 4);
     gallery.setRating([other.id], 2);
@@ -251,14 +251,14 @@ describe("gallery index", () => {
     expect(album.id).toBe("portfolio");
     expect(gallery.setCollectionItems(album.id, [plain.id], false)).toBe(1);
 
-    expect(q({ rating: 3 }).items.map((i) => i.name)).toEqual(["plain.png"]);
-    expect(q({ sort: "rating" }).items[0]).toMatchObject({ name: "plain.png", rating: 4 });
-    expect(q({ tag: "keeper" }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect((await q({ rating: 3 })).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect((await q({ sort: "rating" })).items[0]).toMatchObject({ name: "plain.png", rating: 4 });
+    expect((await q({ tag: "keeper" })).items.map((i) => i.name)).toEqual(["plain.png"]);
     expect(gallery.tags()).toEqual([
       { tag: "Best Of", count: 2 },
       { tag: "keeper", count: 1 },
     ]);
-    expect(q({ collection: album.id }).items.map((i) => i.name)).toEqual(["plain.png"]);
+    expect((await q({ collection: album.id })).items.map((i) => i.name)).toEqual(["plain.png"]);
     expect(gallery.collections()[0]).toMatchObject({ name: "Portfolio", count: 1 });
     const details = await gallery.details(plain.id);
     expect(details).toMatchObject({
@@ -270,7 +270,7 @@ describe("gallery index", () => {
     const [trashId] = await gallery.trash([plain.id]);
     expect(gallery.collections()[0]?.count).toBe(0);
     await gallery.restore([trashId as string]);
-    const back = q({ q: "plain" }).items[0];
+    const back = (await q({ q: "plain" })).items[0];
     expect(back).toMatchObject({ rating: 4, favorite: true });
     expect(await gallery.details(back?.id as number)).toMatchObject({
       tags: ["Best Of", "keeper"],
@@ -278,11 +278,11 @@ describe("gallery index", () => {
     });
     gallery.removeCollection(album.id);
     expect(gallery.collections()).toEqual([]);
-    expect(q().total).toBe(3);
+    expect((await q()).total).toBe(3);
   });
 
   it("empties only its own trash folder", async () => {
-    const plain = q({ q: "plain" }).items[0];
+    const plain = (await q({ q: "plain" })).items[0];
     if (!plain) throw new Error("not found");
     await gallery.trash([plain.id]);
     expect(await gallery.emptyTrash()).toBe(1);
@@ -314,11 +314,53 @@ describe("gallery index", () => {
     expect(lib.id).toBe("extra-stuff");
     gallery.startSync(); // context.ts does this when the profile's output folders change
     await gallery.whenSynced();
-    expect(q({ library: "outputs" }).items.map((i) => i.name)).not.toContain("a1111.png");
-    expect(q({ library: "extra-stuff" }).items.map((i) => i.name)).toEqual(["in-extra.png"]);
+    expect((await q({ library: "outputs" })).items.map((i) => i.name)).not.toContain("a1111.png");
+    expect((await q({ library: "extra-stuff" })).items.map((i) => i.name)).toEqual([
+      "in-extra.png",
+    ]);
     await expect(gallery.addLibrary("Again", extra)).rejects.toThrow(/already/);
     await gallery.removeLibrary(lib.id);
-    expect(q({ library: "extra-stuff" }).total).toBe(0);
+    expect((await q({ library: "extra-stuff" })).total).toBe(0);
     await fs.access(path.join(extra, "in-extra.png"));
+  });
+
+  it("leaves out grids and stopped runs' images while the settings say so", async () => {
+    const profileId = profiles.active ?? "";
+    const names = async () => (await q()).items.map((i) => i.name);
+    await write("2026-10-16/stopped_00001_.png", await realPng(40, 40));
+    await write("txt2img-grids/old-grid.png", await realPng(40, 40));
+    await write("2026-10-16/grids/grid-00001.png", await realPng(40, 40));
+    messages.length = 0;
+    await gallery.ingestOutput({
+      filename: "grid-00001.png",
+      subfolder: "2026-10-16/grids",
+      type: "output",
+    });
+    expect(messages.some((m) => m.t === "gallery.added")).toBe(false);
+    gallery.startSync();
+    await gallery.whenSynced();
+    await gallery.markInterrupted(profileId, [
+      { filename: "stopped_00001_.png", subfolder: "2026-10-16", type: "output" },
+    ]);
+    expect(messages.some((m) => m.t === "gallery.changed")).toBe(true);
+
+    const shown = await names();
+    for (const hidden of ["grid-00001.png", "old-grid.png", "stopped_00001_.png"])
+      expect(shown).not.toContain(hidden);
+    expect((await gallery.overview()).counts.all).toBe(shown.length);
+
+    await settings.update(profileId, { gallery: { excludeGrids: false } });
+    expect(await names()).toEqual(expect.arrayContaining(["grid-00001.png", "old-grid.png"]));
+    expect(await names()).not.toContain("stopped_00001_.png");
+    await settings.update(profileId, { gallery: { excludeInterrupted: false } });
+    expect(await names()).toContain("stopped_00001_.png");
+    await settings.update(profileId, { gallery: { excludeGrids: true, excludeInterrupted: true } });
+
+    // A newer image written at a marked path is a different image: it shows.
+    const later = new Date(Date.now() + 60_000);
+    await fs.utimes(path.join(outputs, "2026-10-16", "stopped_00001_.png"), later, later);
+    gallery.startSync();
+    await gallery.whenSynced();
+    expect(await names()).toContain("stopped_00001_.png");
   });
 });

@@ -28,14 +28,14 @@ export function galleryRoutes(gallery: GalleryService) {
 
   r.get("/overview", async (c) => c.json(await gallery.overview()));
 
-  r.get("/images", (c) => {
+  r.get("/images", async (c) => {
     const parsed = GalleryQuery.safeParse(c.req.query());
     if (!parsed.success)
       throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid query.", "bad_query");
-    return c.json(gallery.query(parsed.data));
+    return c.json(await gallery.query(parsed.data));
   });
 
-  r.get("/facets", (c) => c.json(gallery.facets(c.req.query("library") ?? "all")));
+  r.get("/facets", async (c) => c.json(await gallery.facets(c.req.query("library") ?? "all")));
 
   r.get("/images/:id", async (c) => c.json(await gallery.details(imageId(c.req.param("id")))));
 

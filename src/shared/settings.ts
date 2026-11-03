@@ -44,6 +44,10 @@ export const GallerySettings = z.object({
   layout: z.enum(GALLERY_LAYOUTS).default("justified"),
   /** Target row height (justified) or tile width (grid), in CSS pixels. */
   tileSize: z.number().int().min(120).max(400).default(220),
+  /** Leave script grids out (files in a `grids` folder, or A1111's `*-grids`). */
+  excludeGrids: z.boolean().default(true),
+  /** Leave out images saved by a run that was stopped before it finished. */
+  excludeInterrupted: z.boolean().default(true),
   // The gallery's folders are the profile's output folders (ADR-0017); version 1 files kept
   // them here as `libraries`, which profile.json's migration reads once.
 });

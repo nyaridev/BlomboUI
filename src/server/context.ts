@@ -263,6 +263,10 @@ export function createServices(config: ServerConfig): Services {
     } catch (error) {
       console.warn("Couldn't log a finished run:", error);
     }
+    if (job.state === "interrupted" && run?.profileId)
+      void gallery
+        .markInterrupted(run.profileId, job.images)
+        .catch((error) => console.warn("Couldn't mark a stopped run's images:", error));
   });
 
   jobs.holdComfy = () => installer.running || nodePacks.running;

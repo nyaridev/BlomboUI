@@ -208,6 +208,16 @@ export const MIGRATIONS: readonly string[] = [
   `
   CREATE INDEX images_name ON images (name COLLATE NOCASE, id);
   `,
+  // 6: images saved by a run that was stopped (the gallery can leave them out). A mark only
+  // covers a file older than it, so a later image at the same path shows again.
+  `
+  CREATE TABLE interrupted (
+    library TEXT NOT NULL,
+    path TEXT NOT NULL,
+    marked_at REAL NOT NULL,
+    PRIMARY KEY (library, path)
+  );
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

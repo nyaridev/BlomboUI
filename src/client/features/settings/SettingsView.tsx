@@ -420,6 +420,30 @@ function GalleryPage() {
               : "No output folder yet."}
           </span>
         </Field>
+        <Field
+          label="Exclude grids"
+          layout="left"
+          hint="Leaves out the grids prompt matrix and XY plot scripts make (files in a grids folder). They stay on disk."
+        >
+          <Switch
+            checked={settings?.excludeGrids ?? true}
+            onCheckedChange={(excludeGrids) => update.mutate({ gallery: { excludeGrids } })}
+            label="Exclude grids"
+          />
+        </Field>
+        <Field
+          label="Exclude interrupted images"
+          layout="left"
+          hint="Leaves out images saved by a run you stopped before it finished. They stay on disk."
+        >
+          <Switch
+            checked={settings?.excludeInterrupted ?? true}
+            onCheckedChange={(excludeInterrupted) =>
+              update.mutate({ gallery: { excludeInterrupted } })
+            }
+            label="Exclude interrupted images"
+          />
+        </Field>
       </div>
     </>
   );

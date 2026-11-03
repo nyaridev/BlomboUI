@@ -194,11 +194,9 @@ export function ModelGrid({
           positive.id,
           swapLoraTag(prompt, swapTag, tagName(item.id), item.local?.weight ?? swapTag.strength),
         );
-        toast(`Swapped in ${item.name}`, "success");
         return;
       }
       append(formatLoraTag(tagName(item.id), item.local?.weight ?? 1));
-      toast(`Added ${item.name} to the prompt`, "success");
     } else if (tab === "wildcards") {
       if (swapWildcard && positive && prompt.includes(swapWildcard)) {
         if (swapWildcard === `__${item.id}__`) return;
@@ -207,11 +205,9 @@ export function ModelGrid({
           prompt.replace(swapWildcard, () => `__${item.id}__`),
         );
         onTarget({ kind: "wildcard", name: item.id });
-        toast(`Swapped in __${item.id}__`, "success");
         return;
       }
       append(`__${item.id}__`);
-      toast(`Added __${item.id}__ to the prompt`, "success");
     } else if (tab === "other" && otherKind === "embeddings") {
       append(`embedding:${tagName(item.id)}`);
     } else if (setsBinding) {

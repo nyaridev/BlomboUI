@@ -1,8 +1,8 @@
 /**
  * File Info's Civitai part for a model file. It's found by hash: first the hashes a trainer wrote
  * into the header (instant), then the file's SHA256 (a local model's is stored after the first
- * time; a dropped file streams to the server, which keeps nothing). The match fills the carousel
- * (the creator's own images), the settings of the image on screen, a details panel, trigger
+ * time; a dropped file streams to the server, which keeps nothing). The match fills the filmstrip
+ * (the creator's own images, Filmstrip.tsx), the settings of the picked image, a details panel, trigger
  * words and the description.
  */
 import { Icon } from "@client/icons/Icon";
@@ -10,7 +10,7 @@ import { api } from "@client/lib/api";
 import { useGoToView } from "@client/lib/hooks";
 import { qk, useCivitaiByHash, useSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Badge, Button, Carousel, Chip, Collapsible, CopyButton, Panel, toast } from "@client/ui";
+import { Badge, Button, Chip, Collapsible, CopyButton, Panel, toast } from "@client/ui";
 import {
   CIVITAI_TYPE_LABELS,
   type CivitaiImage,
@@ -121,28 +121,9 @@ export function authorImages(match: Found): CivitaiImage[] {
   return own.length ? own : all;
 }
 
-/** The big carousel, or a slim bar while looking or when nothing was found. */
-export function CivitaiHero({
-  civitai,
-  images,
-  onIndexChange,
-}: {
-  civitai: FileCivitai;
-  images: CivitaiImage[];
-  onIndexChange: (index: number) => void;
-}) {
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
-  const { status, match } = civitai;
-  if (match && images.length)
-    return (
-      <Carousel
-        images={images}
-        label={`${match.model.name} images`}
-        blurNsfw={blurNsfw}
-        ratio={16 / 9}
-        onIndexChange={onIndexChange}
-      />
-    );
+/** A slim bar while looking, when nothing was found or on an error (a match shows the filmstrip). */
+export function CivitaiStatus({ civitai }: { civitai: FileCivitai }) {
+  const { status } = civitai;
   if (status === "found") return null;
   const busy = status === "looking" || status === "hashing";
   return (

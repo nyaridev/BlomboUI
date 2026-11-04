@@ -17,7 +17,6 @@ import { useClock } from "@client/lib/clock";
 import { formatBytes } from "@client/lib/number";
 import { useImportWorkflow, useSaveModelInfo, useSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { useVariant } from "@client/lib/variants";
 import {
   Badge,
   Button,
@@ -37,17 +36,17 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { useActiveChoice } from "../generate/workflow";
-import { Filmstrip, Grid, IMAGE_LOOKS, Split } from "./CivitaiGallery";
 import {
   authorImages,
   CivitaiAbout,
   CivitaiDetails,
-  CivitaiHero,
   CivitaiLinks,
+  CivitaiStatus,
   type FileCivitai,
   ImageSettings,
   useFileCivitai,
 } from "./CivitaiMatch";
+import { Filmstrip } from "./Filmstrip";
 import { PageDropOverlay, usePageFileDrop } from "./PageDrop";
 import { Facts, Section, TextBlock } from "./parts";
 import { SafetensorsSections } from "./Safetensors";
@@ -203,13 +202,11 @@ function Result({
     [civitai?.match],
   );
   const current = images[shown] ?? null;
-  const look = useVariant("fileinfo.images", "Civitai images", IMAGE_LOOKS);
-  const Look = { filmstrip: Filmstrip, split: Split, grid: Grid, stage: null }[look];
 
   return (
     <div className="flex flex-col gap-4">
-      {civitai?.match && Look && images.length ? (
-        <Look
+      {civitai?.match && images.length ? (
+        <Filmstrip
           images={images}
           label={`${civitai.match.model.name} images`}
           blurNsfw={blurNsfw}
@@ -217,7 +214,7 @@ function Result({
           onIndex={setShown}
         />
       ) : civitai ? (
-        <CivitaiHero civitai={civitai} images={images} onIndexChange={setShown} />
+        <CivitaiStatus civitai={civitai} />
       ) : info.kind === "image" && imageSrc ? (
         <div className="checker grid max-h-[34rem] place-items-center overflow-hidden rounded-xl border border-line">
           <img src={imageSrc} alt="" className="max-h-[34rem] w-full object-contain" />
@@ -236,7 +233,7 @@ function Result({
         ) : null}
       </div>
 
-      {current?.meta && look !== "split" ? <ImageSettings meta={current.meta} /> : null}
+      {current?.meta ? <ImageSettings meta={current.meta} /> : null}
 
       <FileFacts info={info} civitai={civitai} />
 

@@ -312,12 +312,6 @@ export function LocalModels() {
           </Chip>
           <div className="ml-auto flex items-center gap-2">
             <LookupStatus />
-            <span
-              className="font-mono text-xs whitespace-nowrap text-fg-3 tabular"
-              aria-live="polite"
-            >
-              {shown.length.toLocaleString()} {shown.length === 1 ? "model" : "models"}
-            </span>
             <Select<Sort>
               value={sort}
               onChange={(s) => {

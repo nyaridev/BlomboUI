@@ -12,8 +12,9 @@
  * (one top folder per profile models folder when files come from several); right-click a folder
  * or a card to rename it or show it in Explorer. Renames carry over to the open workflow and,
  * with the setting on, to full references in wildcard files (shared/prompt/renames.ts). The top
- * bar searches, filters by base models (several, grouped by maker) and favorites, counts what's
- * shown, keeps what the workflow uses first (the eye), sorts (each sort with its icon) and rescans.
+ * bar searches, keeps what the workflow uses first (the eye, right after the search), filters by
+ * base models (several, grouped by maker) and favorites, sorts (each sort with its icon) and
+ * rescans.
  *
  * With `picks` (an XY plot axis, `PicksDialog`), the same grid picks several models of one kind
  * instead: a click adds or removes a card from the list and nothing in the workflow changes;
@@ -623,6 +624,21 @@ export function ModelGrid({
           onClear={() => setQuery("")}
           className="min-w-0 flex-1"
         />
+        <IconButton
+          icon={showLoaded ? "eye" : "eye-off"}
+          label={
+            picks
+              ? showLoaded
+                ? "Showing the picked ones first (click to list them like the rest)"
+                : "Show the picked ones first, past the search and filters"
+              : showLoaded
+                ? "Showing what the workflow uses first (click to list it like the rest)"
+                : "Show what the workflow uses first, past the search and filters"
+          }
+          variant="secondary"
+          active={showLoaded}
+          onClick={() => updateSettings.mutate({ generate: { pickerShowLoaded: !showLoaded } })}
+        />
         {tab === "other" && !picks ? (
           <Segmented
             size="sm"
@@ -650,36 +666,6 @@ export function ModelGrid({
             Favorites
           </Chip>
         ) : null}
-        {!loading && !unavailable ? (
-          <span
-            className="font-mono text-xs whitespace-nowrap text-fg-3 tabular"
-            aria-live="polite"
-          >
-            {list.length.toLocaleString()}{" "}
-            {tab === "wildcards"
-              ? list.length === 1
-                ? "wildcard"
-                : "wildcards"
-              : list.length === 1
-                ? "model"
-                : "models"}
-          </span>
-        ) : null}
-        <IconButton
-          icon={showLoaded ? "eye" : "eye-off"}
-          label={
-            picks
-              ? showLoaded
-                ? "Showing the picked ones first (click to list them like the rest)"
-                : "Show the picked ones first, past the search and filters"
-              : showLoaded
-                ? "Showing what the workflow uses first (click to list it like the rest)"
-                : "Show what the workflow uses first, past the search and filters"
-          }
-          variant="secondary"
-          active={showLoaded}
-          onClick={() => updateSettings.mutate({ generate: { pickerShowLoaded: !showLoaded } })}
-        />
         <Select<Sort>
           value={sort}
           onChange={pickSort}

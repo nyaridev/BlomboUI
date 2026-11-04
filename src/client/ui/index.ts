@@ -57,4 +57,11 @@ export { Collapsible, Divider, InheritRow, Panel, SectionTitle } from "./surface
 export { type TabItem, Tabs } from "./Tabs";
 export { Tour, type TourStep } from "./Tour";
 export { Toaster, toast } from "./toast";
-export { Checkbox, Chip, Segmented, type SegmentOption, Switch } from "./toggles";
+export {
+  Checkbox,
+  Chip,
+  MultiSegmented,
+  Segmented,
+  type SegmentOption,
+  Switch,
+} from "./toggles";

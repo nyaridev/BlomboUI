@@ -36,6 +36,7 @@ import {
   Menu,
   Meter,
   ModelCard,
+  MultiSegmented,
   MultiSelect,
   Notice,
   NumberField,
@@ -339,6 +340,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [sw, setSw] = useState(true);
   const [cb, setCb] = useState(true);
   const [seg, setSeg] = useState("balanced");
+  const [multiSeg, setMultiSeg] = useState<string[]>(["lora"]);
   const [steps, setSteps] = useState(28);
   const [cfg, setCfg] = useState(5.5);
   const [denoise, setDenoise] = useState(0.38);
@@ -869,6 +871,30 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 { value: "balanced", icon: "layout-rows", title: "Rows" },
                 { value: "prompt", icon: "layout-grid", title: "Grid" },
                 { value: "control", icon: "maximize", title: "Single" },
+              ]}
+            />
+          </Row>
+          <Row label="Multi segmented">
+            <MultiSegmented
+              value={multiSeg}
+              onChange={setMultiSeg}
+              allLabel="All"
+              label="Model types"
+              options={[
+                { value: "checkpoint", label: "Checkpoint" },
+                { value: "lora", label: "LoRA" },
+                { value: "vae", label: "VAE" },
+              ]}
+            />
+            <MultiSegmented
+              size="sm"
+              value={multiSeg}
+              onChange={setMultiSeg}
+              label="Model types, small"
+              options={[
+                { value: "checkpoint", label: "Checkpoint" },
+                { value: "lora", label: "LoRA" },
+                { value: "vae", label: "VAE" },
               ]}
             />
           </Row>

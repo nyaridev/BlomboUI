@@ -23,6 +23,7 @@ import {
   EmptyState,
   IconButton,
   ModelCard,
+  MultiSegmented,
   Popover,
   Select,
   Skeleton,
@@ -104,10 +105,6 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
   useEffect(() => setText(filter.query), [filter.query]);
 
   const search = (query: string) => setFilter({ query: query.trim() });
-  const toggleType = (t: string) =>
-    setFilter({
-      types: filter.types.includes(t) ? filter.types.filter((x) => x !== t) : [...filter.types, t],
-    });
   const defaults = settings ? BrowseFilter.parse(settings.civitai.browse) : BrowseFilter.parse({});
   const changed =
     JSON.stringify({ ...filter, query: "", username: "" }) !== JSON.stringify(defaults) ||
@@ -117,14 +114,13 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
   return (
     <div className="flex flex-col gap-2.5 border-b border-line px-5 pt-4 pb-3">
       <form
-        className="flex gap-2"
+        className="flex items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           search(text);
         }}
       >
         <TextField
-          size="lg"
           icon="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -136,23 +132,23 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
           placeholder="Search Civitai: model names, tags, creators"
           aria-label="Search Civitai"
         />
-        <Button size="lg" variant="primary" type="submit" icon="search">
+        <Button variant="primary" type="submit" icon="search">
           Search
         </Button>
+        <NsfwBlurToggle size="md" />
       </form>
       <div className="flex flex-wrap items-center gap-1.5">
-        <Chip
+        <MultiSegmented
           size="sm"
-          selected={filter.types.length === 0}
-          onClick={() => setFilter({ types: [] })}
-        >
-          All
-        </Chip>
-        {CIVITAI_FILTER_TYPES.map((t) => (
-          <Chip key={t} size="sm" selected={filter.types.includes(t)} onClick={() => toggleType(t)}>
-            {CIVITAI_TYPE_LABELS[t] ?? t}
-          </Chip>
-        ))}
+          label="Model types"
+          allLabel="All"
+          value={filter.types}
+          onChange={(types) => setFilter({ types })}
+          options={CIVITAI_FILTER_TYPES.map((t) => ({
+            value: t,
+            label: CIVITAI_TYPE_LABELS[t] ?? t,
+          }))}
+        />
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           <Select<string>
             size="sm"
@@ -185,7 +181,6 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
               icon: "calendar",
             }))}
           />
-          <NsfwBlurToggle />
           {filter.username ? (
             <Chip size="sm" icon="user" selected onRemove={() => setFilter({ username: "" })}>
               {filter.username}
@@ -334,7 +329,7 @@ function describe(f: BrowseFilter): string {
  * The Civitai view's NSFW button: blurs every NSFW image until clicked, or shows them all.
  * Switching it re-blurs the ones clicked open before. Not saved: it's on each time the app starts.
  */
-export function NsfwBlurToggle() {
+export function NsfwBlurToggle({ size = "sm" }: { size?: "sm" | "md" }) {
   const blur = useCivitai((s) => s.blur);
   const toggle = useCivitai((s) => s.toggleBlur);
   return (
@@ -345,7 +340,7 @@ export function NsfwBlurToggle() {
           : "NSFW images are shown. Click to blur them all again."
       }
     >
-      <Chip size="sm" icon={blur ? "eye-off" : "eye"} selected={blur} onClick={toggle}>
+      <Chip size={size} icon={blur ? "eye-off" : "eye"} selected={blur} onClick={toggle}>
         NSFW
       </Chip>
     </Tooltip>

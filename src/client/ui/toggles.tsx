@@ -247,6 +247,74 @@ export function Segmented<T extends string>({
   );
 }
 
+/**
+ * Segmented's look picking several: each picked option gets the raised field look (no sliding
+ * thumb). `allLabel` adds a first segment that clears the picks and reads as picked while none is.
+ */
+export function MultiSegmented<T extends string>({
+  options,
+  value,
+  onChange,
+  allLabel,
+  size = "md",
+  label,
+  className,
+}: {
+  options: SegmentOption<T>[];
+  value: T[];
+  onChange: (value: T[]) => void;
+  allLabel?: string;
+  size?: "sm" | "md";
+  label?: string;
+  className?: string;
+}) {
+  const segment = (key: string, on: boolean, onClick: () => void, opt?: SegmentOption<T>) => (
+    <button
+      key={key}
+      type="button"
+      aria-pressed={on}
+      title={opt?.title}
+      aria-label={opt && !opt.label ? opt.title : undefined}
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center justify-center gap-1.5 rounded-sm border font-medium transition-colors focus-ring",
+        size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
+        on
+          ? "border-line-strong bg-field text-fg shadow-[var(--shadow-card)]"
+          : "border-transparent text-fg-3 hover:text-fg-2",
+      )}
+    >
+      {opt?.icon ? <Icon name={opt.icon} size={size === "sm" ? 13 : 15} /> : null}
+      {opt ? opt.label : allLabel}
+    </button>
+  );
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={cn(
+        "inline-flex w-fit flex-wrap items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5",
+        className,
+      )}
+    >
+      {allLabel ? segment(" all", value.length === 0, () => onChange([])) : null}
+      {options.map((opt) =>
+        segment(
+          opt.value,
+          value.includes(opt.value),
+          () =>
+            onChange(
+              value.includes(opt.value)
+                ? value.filter((v) => v !== opt.value)
+                : [...value, opt.value],
+            ),
+          opt,
+        ),
+      )}
+    </div>
+  );
+}
+
 /* ── Chip ────────────────────────────────────────────────────────────────── */
 
 export function Chip({

@@ -1,11 +1,11 @@
 /**
- * Header: workflow button | main views | system status · errors · avatar.
+ * Header: workflow button · search bar | main views | system status · errors · avatar.
  * Views that aren't daily tools (Settings, History, Errors, Help) live in the avatar menu.
  * Below 1024px the main views move to a bottom bar (MobileNav) and the desktop-only tools hide.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { IconButton, Tabs } from "@client/ui";
+import { Kbd, Tabs } from "@client/ui";
 import type { MainView, ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
 import { useNavigate } from "@tanstack/react-router";
@@ -49,6 +49,17 @@ export function Header({
         <div data-tour="workflow" className="contents">
           <WorkflowSwitcher />
         </div>
+        {/* Looks like a field, opens the command palette (which does the searching). */}
+        <button
+          type="button"
+          onClick={() => openPalette(true)}
+          aria-label="Search and commands"
+          className="flex h-9 w-60 min-w-0 shrink items-center gap-2 rounded-lg border border-line bg-field px-2.5 text-sm text-fg-3 transition-colors hover:border-line-strong hover:text-fg-2 focus-ring max-xl:w-9 max-xl:shrink-0 max-xl:justify-center max-xl:px-0 max-lg:hidden"
+        >
+          <Icon name="search" size={15} className="shrink-0" />
+          <span className="flex-1 truncate text-left max-xl:hidden">Search</span>
+          {keys("palette") ? <Kbd className="max-xl:hidden">{keys("palette")}</Kbd> : null}
+        </button>
       </div>
 
       <nav aria-label="Main" className="max-lg:hidden">
@@ -65,13 +76,6 @@ export function Header({
       </nav>
 
       <div className="flex items-center justify-end gap-2 max-lg:gap-1">
-        <IconButton
-          icon="search"
-          label="Search and commands"
-          shortcut={keys("palette")}
-          onClick={() => openPalette(true)}
-          className="max-lg:hidden"
-        />
         <SystemCluster />
         <span className="mx-1 h-6 w-px bg-line max-lg:hidden" />
         <AvatarMenu profile={profile} onNavigate={go} />

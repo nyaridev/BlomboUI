@@ -37,7 +37,8 @@ export function SafetensorsSections({ st }: { st: SafetensorsInfo }) {
   );
   return (
     <>
-      <div className="flex items-start gap-4 max-lg:flex-col">
+      {/* The tags panel is as tall as the facts beside it; its list scrolls inside. */}
+      <div className="flex gap-4 max-lg:flex-col">
         <Panel className="flex min-w-0 flex-1 flex-col gap-4 p-5 max-lg:w-full">
           <div className="flex items-center gap-2">
             <Icon name="models" size={16} className="text-accent-ink" />
@@ -114,19 +115,21 @@ export function SafetensorsSections({ st }: { st: SafetensorsInfo }) {
                 className="ml-auto"
               />
             </div>
-            <div className="scroll-quiet max-h-[26rem] overflow-y-auto px-2 pb-2">
-              {t.tags.map(([tag, n]) => (
-                <button
-                  key={tag}
-                  type="button"
-                  title={`Copy "${tag}"`}
-                  onClick={() => copy(tag)}
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-1 text-left text-sm text-fg-2 hover:bg-field hover:text-fg focus-ring"
-                >
-                  <span className="min-w-0 flex-1 break-all">{tag}</span>
-                  <span className="font-mono text-xs text-fg-3 tabular">{n}</span>
-                </button>
-              ))}
+            <div className="relative min-h-32 flex-1 max-lg:min-h-0">
+              <div className="scroll-quiet absolute inset-0 overflow-y-auto px-2 pb-2 max-lg:static max-lg:max-h-[26rem]">
+                {t.tags.map(([tag, n]) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    title={`Copy "${tag}"`}
+                    onClick={() => copy(tag)}
+                    className="flex w-full items-center gap-3 rounded-md px-2 py-1 text-left text-sm text-fg-2 hover:bg-field hover:text-fg focus-ring"
+                  >
+                    <span className="min-w-0 flex-1 break-all">{tag}</span>
+                    <span className="font-mono text-xs text-fg-3 tabular">{n}</span>
+                  </button>
+                ))}
+              </div>
             </div>
           </Panel>
         ) : null}

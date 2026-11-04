@@ -201,13 +201,14 @@ interface LayoutState {
   setSaved: (doc: LayoutDocument, source: "linked" | "default") => void;
   setCustomizing: (on: boolean) => void;
   select: (id: string | null) => void;
-  apply: (next: LayoutDocument) => void;
+  /** `merge` replaces the document without a new undo step (the later swaps of one drag). */
+  apply: (next: LayoutDocument, merge?: boolean) => void;
   undo: () => void;
   redo: () => void;
   updateBlock: (id: string, patch: Partial<Block>) => void;
-  moveParams: (from: number, to: number) => void;
+  moveParams: (from: number, to: number, merge?: boolean) => void;
   /** Reorder inside a group (a card or tabs), at any depth. */
-  moveIn: (groupId: string, from: number, to: number) => void;
+  moveIn: (groupId: string, from: number, to: number, merge?: boolean) => void;
 }
 
 function mapBlocks(blocks: Block[], fn: (b: Block) => Block): Block[] {
@@ -261,8 +262,14 @@ export const useLayout = create<LayoutState>((set, get) => ({
     })),
   setCustomizing: (customizing) => set({ customizing, selected: null }),
   select: (selected) => set({ selected }),
-  apply: (next) =>
-    set((s) => ({ doc: next, past: s.doc ? [...s.past.slice(-49), s.doc] : s.past, future: [] })),
+  apply: (next, merge) =>
+    set((s) => {
+      if (!merge)
+        return { doc: next, past: s.doc ? [...s.past.slice(-49), s.doc] : s.past, future: [] };
+      // A drag that ends where it started (or Escape) leaves no undo step.
+      const back = JSON.stringify(s.past.at(-1)) === JSON.stringify(next);
+      return { doc: next, past: back ? s.past.slice(0, -1) : s.past, future: [] };
+    }),
   undo: () =>
     set((s) => {
       const prev = s.past[s.past.length - 1];
@@ -288,15 +295,18 @@ export const useLayout = create<LayoutState>((set, get) => ({
       },
     });
   },
-  moveParams: (from, to) => {
+  moveParams: (from, to, merge) => {
     const s = get();
     if (!s.doc) return;
-    s.apply({
-      ...s.doc,
-      regions: { ...s.doc.regions, params: arrayMove(s.doc.regions.params, from, to) },
-    });
+    s.apply(
+      {
+        ...s.doc,
+        regions: { ...s.doc.regions, params: arrayMove(s.doc.regions.params, from, to) },
+      },
+      merge,
+    );
   },
-  moveIn: (groupId, from, to) => {
+  moveIn: (groupId, from, to, merge) => {
     const s = get();
     if (!s.doc) return;
     const params = mapBlocks(s.doc.regions.params, (b) =>
@@ -304,7 +314,7 @@ export const useLayout = create<LayoutState>((set, get) => ({
         ? ({ ...b, children: arrayMove<Block>(b.children, from, to) } as Block)
         : b,
     );
-    s.apply({ ...s.doc, regions: { ...s.doc.regions, params } });
+    s.apply({ ...s.doc, regions: { ...s.doc.regions, params } }, merge);
   },
 }));
 

@@ -1,8 +1,9 @@
 /**
  * Settings → Folders: ordered lists of models, output and wildcards folders (ADR-0017). The first
  * of each kind is the main one: downloads, generated images and batch results go there. The others
- * are only read (and edited in place). Rows are dragged to reorder; the top one is main. Changes
- * are a draft until Save, since a new models list restarts a managed ComfyUI.
+ * are only read (and edited in place). Rows are dragged by their handle (or Alt+↑ / Alt+↓ on it)
+ * to reorder; the top one is main. Changes are a draft until Save, since a new models list restarts
+ * a managed ComfyUI.
  */
 
 import { Icon, type IconName } from "@client/icons/Icon";
@@ -10,23 +11,8 @@ import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useDebounced } from "@client/lib/hooks";
 import { useUpdateProfile } from "@client/lib/queries";
+import { DRAG_LIFT, moveItem, type Sortable, useSortableRow } from "@client/lib/sortable";
 import { Button, IconButton, SectionTitle, TextField, toast } from "@client/ui";
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import {
   FOLDER_KINDS,
   type FolderKind,
@@ -187,10 +173,7 @@ function FolderList({
 }) {
   const info = KINDS[kind];
   const [focusKey, setFocusKey] = useState<string | null>(null);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  const sortable = useSortableRow(list.length, (from, to) => onChange(moveItem(list, from, to)));
 
   const add = () => {
     const row = keyed({ id: "", name: "", path: "" });
@@ -207,37 +190,25 @@ function FolderList({
         return { ...f, path, name };
       }),
     );
-  const onDragEnd = (e: DragEndEvent) => {
-    const from = list.findIndex((f) => f.key === e.active.id);
-    const to = list.findIndex((f) => f.key === e.over?.id);
-    if (from < 0 || to < 0 || from === to) return;
-    const next = [...list];
-    const [f] = next.splice(from, 1);
-    if (f) next.splice(to, 0, f);
-    onChange(next);
-  };
 
   return (
     <section className="flex flex-col gap-3">
       <SectionTitle icon={info.icon}>{info.title}</SectionTitle>
       <p className="max-w-[72ch] text-xs text-fg-3 text-pretty">{info.hint}</p>
       <ol className="flex flex-col divide-y divide-line rounded-lg border border-line bg-surface">
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={list.map((f) => f.key)} strategy={verticalListSortingStrategy}>
-            {list.map((f, i) => (
-              <FolderRow
-                key={f.key}
-                kind={kind}
-                folder={f}
-                autoFocus={f.key === focusKey}
-                error={problem(list, i)}
-                onPath={(p) => setPath(i, p)}
-                onName={(name) => onChange(list.map((o, j) => (j === i ? { ...o, name } : o)))}
-                onRemove={() => onChange(list.filter((_, j) => j !== i))}
-              />
-            ))}
-          </SortableContext>
-        </DndContext>
+        {list.map((f, i) => (
+          <FolderRow
+            key={f.key}
+            kind={kind}
+            folder={f}
+            sortable={sortable(i)}
+            autoFocus={f.key === focusKey}
+            error={problem(list, i)}
+            onPath={(p) => setPath(i, p)}
+            onName={(name) => onChange(list.map((o, j) => (j === i ? { ...o, name } : o)))}
+            onRemove={() => onChange(list.filter((_, j) => j !== i))}
+          />
+        ))}
         <li>
           <button
             type="button"
@@ -262,6 +233,7 @@ function FolderList({
 function FolderRow({
   kind,
   folder,
+  sortable,
   autoFocus,
   error,
   onPath,
@@ -270,6 +242,7 @@ function FolderRow({
 }: {
   kind: FolderKind;
   folder: Row;
+  sortable: Sortable;
   autoFocus: boolean;
   error: string | null;
   onPath: (path: string) => void;
@@ -277,9 +250,6 @@ function FolderRow({
   onRemove: () => void;
 }) {
   const info = KINDS[kind];
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: folder.key,
-  });
   const path = useDebounced(folder.path.trim(), 250);
   const check = useQuery({
     queryKey: ["check-path", path],
@@ -309,21 +279,20 @@ function FolderRow({
 
   return (
     <li
-      ref={setNodeRef}
-      // Rows only slide up and down.
-      style={{ transform: CSS.Translate.toString(transform && { ...transform, x: 0 }), transition }}
+      ref={sortable.ref}
       className={cn(
-        "relative flex flex-col gap-1 bg-surface px-2 py-1.5 first:rounded-t-lg",
-        isDragging && "z-10 rounded-lg shadow-pop",
+        "relative flex flex-col gap-1 bg-surface px-2 py-1.5 transition-[scale,box-shadow] duration-150 first:rounded-t-lg",
+        sortable.dragging && cn(DRAG_LIFT, "rounded-lg"),
       )}
     >
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
           aria-label={`Drag ${folder.name || "folder"} to reorder`}
-          className="grid h-7 w-5 shrink-0 cursor-grab place-items-center rounded-xs text-fg-4 hover:text-fg-2 focus-ring active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
+          aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+          {...sortable.handle}
+          onKeyDown={sortable.onKeyDown}
+          className="grid h-7 w-5 shrink-0 cursor-grab touch-none place-items-center rounded-xs text-fg-4 hover:text-fg-2 focus-ring active:cursor-grabbing"
         >
           <Icon name="grip" size={14} />
         </button>

@@ -42,7 +42,7 @@ flowchart LR
 ```
 
 - **Server** (`src/server`): Node 22+ running TypeScript directly (type stripping), Hono for HTTP, `ws` for WebSocket, `node:sqlite` for storage, `sharp` for thumbnails and grids. It serves the built client in production.
-- **Client** (`src/client`): React 19, Vite, Tailwind 4, TanStack Router and Query, Zustand for UI state, Motion for animation, Floating UI for anything that floats, dnd-kit for layout editing, CodeMirror 6 for YAML and prompts, TanStack Virtual for big grids.
+- **Client** (`src/client`): React 19, Vite, Tailwind 4, TanStack Router and Query, Zustand for UI state, Motion for animation, Floating UI for anything that floats, a small pointer sorter for dragging lists into order (`lib/sortable.ts`), CodeMirror 6 for YAML and prompts, TanStack Virtual for big grids.
 - **Shared** (`src/shared`): vocabulary (roles, model kinds, samplers), Zod schemas (settings, profile, workflow manifest, layout document, API bodies), and pure logic used on both sides (prompt syntax parser, wildcard grammar, resolution math).
 - **Desktop** (`src-tauri`): a thin native window that opens the local server URL. The page and the web build are the same. Small platform hooks (open a second window for ComfyUI, native notifications) go through `client/lib/platform.ts`.
 - **ComfyUI**: installed per *slot* under `runtime/comfyui/<slot>/` with its own Python (a private venv the in-app installer sets up with uv, or a portable build placed there by hand). Blombo supervises the process, writes `extra_model_paths.yaml` from the active profile, installs the custom node packs stages and batch presets need into `custom_nodes/` (ADR-0013), and keeps the **blombo-bridge** extension (ADR-0009) current there.

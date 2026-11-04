@@ -10,6 +10,14 @@
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useModels, useSettings, useUpdateSettings } from "@client/lib/queries";
+import {
+  ALT_ARROWS,
+  DRAG_LIFT,
+  moveItem,
+  NO_DRAG,
+  type Sortable,
+  useSortableRow,
+} from "@client/lib/sortable";
 import { type CardKind, FallbackFace, IconButton, ScrubField, Slider, Tooltip } from "@client/ui";
 import { INSTANT_LORAS, type InstantLora, readInstantLoras } from "@shared/prompt/instant";
 import { findLoraTags, moveLoraTag, removeLoraTag, setLoraStrength } from "@shared/prompt/loras";
@@ -19,7 +27,6 @@ import type { Binding } from "@shared/workflow/manifest";
 import { type ReactNode, useMemo } from "react";
 import { useModelThumb, useStrengthRange } from "../../models/thumbs";
 import { modelDisplayName } from "../labels";
-import { DropMarker, moveItem, NO_DRAG, type Sortable, useSortableRow } from "../sortable";
 import { useValue } from "../state";
 import { useRoleBinding } from "../workflow";
 
@@ -116,17 +123,17 @@ function Tile(props: TileProps) {
   const shown = name ? modelDisplayName(name) : "Pick a model";
   return (
     <div
-      {...sortable?.drag}
+      ref={sortable?.ref}
+      {...sortable?.handle}
       className={cn(
         TILE,
         TILE_WIDTH[size],
-        "group bg-surface-2 transition-[width,border-color,opacity] duration-200",
+        "group bg-surface-2 transition-[width,border-color,opacity,scale,box-shadow] duration-200",
         tileBorder(active, missing),
         sortable && "cursor-grab active:cursor-grabbing",
-        sortable?.dragging && "opacity-30",
+        sortable?.dragging && DRAG_LIFT,
       )}
     >
-      <DropMarker at={sortable?.marker ?? null} />
       <SelectedGlow on={active} />
       <div className="absolute inset-0 overflow-hidden rounded-[inherit]">
         <Tooltip content={missing ? `${what}: ${shown}. ${missing}` : `${what}: ${shown}`}>
@@ -136,7 +143,7 @@ function Tile(props: TileProps) {
             onKeyDown={sortable?.onKeyDown}
             aria-label={`${what}: ${shown}`}
             aria-pressed={active ?? false}
-            aria-keyshortcuts={sortable ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
+            aria-keyshortcuts={sortable ? ALT_ARROWS : undefined}
             className="absolute inset-0 block cursor-[inherit] focus-ring"
           >
             <TileFace kind={kind} name={name} />
@@ -228,15 +235,15 @@ function TextTile({
   const shown = name ? modelDisplayName(name) : "Pick a model";
   return (
     <div
-      {...sortable?.drag}
+      ref={sortable?.ref}
+      {...sortable?.handle}
       className={cn(
-        "group relative flex h-7 shrink-0 items-center rounded-md border bg-surface-2 transition-[border-color,opacity]",
+        "group relative flex h-7 shrink-0 items-center rounded-md border bg-surface-2 transition-[border-color,opacity,scale,box-shadow]",
         tileBorder(active, missing),
         sortable && "cursor-grab active:cursor-grabbing",
-        sortable?.dragging && "opacity-30",
+        sortable?.dragging && DRAG_LIFT,
       )}
     >
-      <DropMarker at={sortable?.marker ?? null} />
       <SelectedGlow on={active} />
       <Tooltip content={missing ? `${what}: ${shown}. ${missing}` : `${what}: ${shown}`}>
         <button
@@ -245,7 +252,7 @@ function TextTile({
           onKeyDown={sortable?.onKeyDown}
           aria-label={`${what}: ${shown}`}
           aria-pressed={active ?? false}
-          aria-keyshortcuts={sortable ? "Alt+ArrowLeft Alt+ArrowRight" : undefined}
+          aria-keyshortcuts={sortable ? ALT_ARROWS : undefined}
           className="flex h-full max-w-60 min-w-0 cursor-[inherit] items-center gap-1.5 rounded-md px-2 text-xs focus-ring"
         >
           <span className="label-caps shrink-0 text-[10px]">{what}</span>

@@ -79,7 +79,7 @@ src/
 │                     emitter · imagemeta (header-only PNG/WebP/JPEG) · exif · thumbs (sharp) · ansi
 │                     grid (labeled script grids, sharp)
 ├── client/       React 19 · Vite 8 · Tailwind 4 · TanStack Router/Query · Zustand · Motion ·
-│   │             Floating UI · dnd-kit · CodeMirror 6
+│   │             Floating UI · CodeMirror 6
 │   ├── app/          router · Shell (keep-alive views) · header/ · theme · commands (actions the
 │   │                 palette and shortcuts run) · Palette (Ctrl+K) · useShortcuts
 │   ├── features/     profiles · generate · gallery · fileinfo · models (local, civitai/, Manager)

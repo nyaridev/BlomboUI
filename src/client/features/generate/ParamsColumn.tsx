@@ -1,7 +1,7 @@
 /**
  * The params region, rendered from the layout document (ADR-0005) and the active workflow's
- * bindings. In Customize mode blocks get drag handles (dnd-kit, loaded with Customize from
- * `SortableParams`), a click selects one, and the Inspector edits its style. Controls are inert
+ * bindings. In Customize mode blocks get drag handles (`SortableParams`), a click selects one,
+ * and the Inspector edits its style. Controls are inert
  * while customizing so a click always means "select this block".
  */
 
@@ -25,16 +25,15 @@ import {
 import { type Binding, resolveBind } from "@shared/workflow/manifest";
 import type { StageId } from "@shared/workflow/roles";
 import { STAGE_LABELS } from "@shared/workflow/stages";
-import { type ComponentType, lazy, type ReactNode, Suspense, useState } from "react";
+import { type ComponentType, type ReactNode, useState } from "react";
 import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
 import { ScriptsBlock } from "./blocks/Scripts";
 import { Seed } from "./blocks/Seed";
 import { AdetailerStage, ControlNetStage, HiresStage, StageTabContext } from "./blocks/stages";
+import SortableParams from "./SortableParams";
 import { useLayout, useValues } from "./state";
 import { useBindings } from "./workflow";
-
-const SortableParams = lazy(() => import("./SortableParams"));
 
 /** The params' sliders: a little bigger, with the value in a number box (the old app's look). */
 const PARAMS_SLIDERS: SliderLook = { size: "lg", field: true };
@@ -343,12 +342,9 @@ export function ParamsColumn({ batch = false }: { batch?: boolean }) {
     <SliderLookContext.Provider value={PARAMS_SLIDERS}>
       <div className="min-w-0">
         {customizing ? (
-          // While dnd-kit loads (the first Customize only), the blocks show without handles.
-          <Suspense fallback={plain}>
-            <SortableParams blocks={blocks} ids={visible.map((b) => b.id)}>
-              {(arrange) => <BlockList visible={visible} ctx={{ ...ctx, arrange }} />}
-            </SortableParams>
-          </Suspense>
+          <SortableParams blocks={blocks} ids={visible.map((b) => b.id)}>
+            {(arrange) => <BlockList visible={visible} ctx={{ ...ctx, arrange }} />}
+          </SortableParams>
         ) : (
           plain
         )}

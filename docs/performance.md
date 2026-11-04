@@ -68,6 +68,5 @@ chunk) is its own chunk, preloaded when the profile screen is idle, so opening a
 for it. Total JavaScript: 1.8 MB, mostly lazy views (Wildcards with the YAML editor, Settings,
 Models, the Design Lab).
 
-dnd-kit loads only with Customize mode: the params column renders plain wrappers and swaps in
-the sortable ones from a lazy chunk (`SortableParams`, 47 kB, 16 kB gzip), which took it out of
-the chunk Generate loads (167 kB → 121 kB).
+dnd-kit is gone (2026-11): dragging into order is `lib/sortable.ts`, a few kB, so Customize's
+sortable wrappers (`SortableParams`) load with the params column instead of from a lazy chunk.

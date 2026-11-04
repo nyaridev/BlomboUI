@@ -1,63 +1,60 @@
 /**
- * Customize mode's drag and drop for the params region (dnd-kit). Loaded only when Customize
- * opens, so dnd-kit stays out of the Generate screen's first load; ParamsColumn renders the
- * same blocks through plain wrappers otherwise. Blocks get a drag handle and a label chip, and
- * a click anywhere on one selects it for the Inspector.
+ * Customize mode's drag and drop for the params region (lib/sortable.ts): ParamsColumn renders the
+ * same blocks through plain wrappers otherwise. Blocks get a drag handle and a label chip, and a
+ * click anywhere on one selects it for the Inspector. A block swaps with the others of its list
+ * (the top level, or a card's or tabs' children) as you drag it past them; one drag is one undo.
  */
 
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import {
-  rectSortingStrategy,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+import { ALT_ARROWS, DRAG_LIFT, type Sortable, useSortableRow } from "@client/lib/sortable";
 import { allBlocks, type Block, blockChildren } from "@shared/layout/schema";
-import type { ReactNode } from "react";
+import { createContext, type ReactNode, useContext } from "react";
 import { blockLabel } from "./blockLabel";
 import type { Arrange, ArrangeGroupProps, ArrangeItemProps } from "./ParamsColumn";
 import { useLayout } from "./state";
 import { useBindings } from "./workflow";
 
+type MoveBlock = (id: string, overId: string, merge: boolean) => void;
+const MoveContext = createContext<MoveBlock>(() => {});
+/** The sorter of the list a block is in (the nearest group's, else the top level's). */
+const SortContext = createContext<(id: string) => Sortable | null>(() => null);
+
+/** A sorter for one list of block ids. */
+function SortList({ ids, children }: { ids: string[]; children: ReactNode }) {
+  const moveBlock = useContext(MoveContext);
+  const row = useSortableRow(ids.length, (from, to, more) => {
+    const a = ids[from];
+    const o = ids[to];
+    if (a && o) moveBlock(a, o, more);
+  });
+  const get = (id: string) => {
+    const i = ids.indexOf(id);
+    return i < 0 ? null : row(i);
+  };
+  return <SortContext.Provider value={get}>{children}</SortContext.Provider>;
+}
+
 function SortableItem({ block, children, span, compact }: ArrangeItemProps) {
   const selected = useLayout((s) => s.selected === block.id);
   const select = useLayout((s) => s.select);
   const bindings = useBindings();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: block.id,
-  });
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    gridColumn: span ? `span ${span} / span ${span}` : undefined,
-  };
+  const sortable = useContext(SortContext)(block.id);
   const { label, icon } = blockLabel(block, bindings);
   // A group (card, tabs) is a container: it's selected through its label chip, and its
   // children stay individually selectable. Every other block is selected by clicking on it.
   const container = block.type === "card" || block.type === "tabs";
   return (
     <div
-      ref={setNodeRef}
-      style={style}
+      ref={sortable?.ref}
+      style={{ gridColumn: span ? `span ${span} / span ${span}` : undefined }}
       className={cn(
-        "group/blk relative rounded-lg outline-1 transition-[outline-color]",
+        "group/blk relative rounded-lg outline-1 transition-[outline-color,scale,box-shadow]",
         compact ? "outline-offset-2" : "outline-offset-4",
         selected
           ? "outline-2 outline-accent-ink"
           : "outline-dashed outline-line-strong hover:outline-fg-4",
-        isDragging && "z-20 opacity-80 shadow-pop",
+        sortable?.dragging && cn(DRAG_LIFT, "bg-surface"),
         block.hidden && "opacity-40",
       )}
     >
@@ -71,9 +68,10 @@ function SortableItem({ block, children, span, compact }: ArrangeItemProps) {
         <button
           type="button"
           aria-label={`Drag ${label}`}
-          className="grid h-full w-4 cursor-grab place-items-center text-fg-3 active:cursor-grabbing"
-          {...attributes}
-          {...listeners}
+          aria-keyshortcuts={ALT_ARROWS}
+          {...sortable?.handle}
+          onKeyDown={sortable?.onKeyDown}
+          className="grid h-full w-4 cursor-grab touch-none place-items-center text-fg-3 active:cursor-grabbing"
         >
           <Icon name="grip" size={11} />
         </button>
@@ -111,11 +109,7 @@ function SortableItem({ block, children, span, compact }: ArrangeItemProps) {
 
 /** A group's children sort within the group (a card's grid, the stacked tabs). */
 function SortableGroup({ ids, children }: ArrangeGroupProps) {
-  return (
-    <SortableContext items={ids} strategy={rectSortingStrategy}>
-      {children}
-    </SortableContext>
-  );
+  return <SortList ids={ids}>{children}</SortList>;
 }
 
 const SORTABLE: Arrange = { Item: SortableItem, Group: SortableGroup };
@@ -133,34 +127,25 @@ export default function SortableParams({
 }) {
   const moveParams = useLayout((s) => s.moveParams);
   const moveIn = useLayout((s) => s.moveIn);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  const onDragEnd = (e: DragEndEvent) => {
-    const a = String(e.active.id);
-    const o = e.over ? String(e.over.id) : null;
-    if (!o || a === o) return;
+  // Ids are matched in the full lists, hidden blocks included.
+  const moveBlock: MoveBlock = (a, o, merge) => {
     const top = blocks.map((b) => b.id);
     if (top.includes(a) && top.includes(o)) {
-      moveParams(top.indexOf(a), top.indexOf(o));
+      moveParams(top.indexOf(a), top.indexOf(o), merge);
       return;
     }
     for (const group of allBlocks(blocks)) {
       const childIds = blockChildren(group).map((c) => c.id);
       if (childIds.includes(a) && childIds.includes(o)) {
-        moveIn(group.id, childIds.indexOf(a), childIds.indexOf(o));
+        moveIn(group.id, childIds.indexOf(a), childIds.indexOf(o), merge);
         return;
       }
     }
   };
 
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-      <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-        {children(SORTABLE)}
-      </SortableContext>
-    </DndContext>
+    <MoveContext.Provider value={moveBlock}>
+      <SortList ids={ids}>{children(SORTABLE)}</SortList>
+    </MoveContext.Provider>
   );
 }

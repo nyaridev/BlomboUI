@@ -2,19 +2,26 @@
  * Models picked as tiles (an XY plot's checkpoint, VAE, text encoder or LoRA axis): each pick is
  * a small picture tile you can remove (its picture opens the gallery too), and the + tile opens a smaller model gallery (the pickers'
  * own grid, with its folders, search, base models and sort) where clicks pick and unpick without
- * closing it. Picks keep the order they were picked in; drag a tile (or Alt+← / Alt+→ on it) to
- * change it, which is the order across or down the grid.
+ * closing it. Picks keep the order they were picked in; drag a tile (it swaps as you pass the
+ * others) or press Alt+arrows on it to change it, which is the order across or down the grid.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useSettings } from "@client/lib/queries";
+import {
+  ALT_ARROWS,
+  DRAG_LIFT,
+  moveItem,
+  NO_DRAG,
+  type Sortable,
+  useSortableRow,
+} from "@client/lib/sortable";
 import { Button, Dialog, FallbackFace, Tooltip } from "@client/ui";
 import type { ModelKind } from "@shared/constants";
 import { useState } from "react";
 import { useModelThumb } from "../../models/thumbs";
 import { modelDisplayName } from "../labels";
 import { ModelGrid } from "../ModelGrid";
-import { DropMarker, moveItem, NO_DRAG, type Sortable, useSortableRow } from "../sortable";
 
 export function ModelPicks({
   kind,
@@ -99,23 +106,22 @@ function PickTile({
   const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   const shown = modelDisplayName(name);
   return (
-    // The drop line sits outside the clipped picture.
     <div
-      {...sortable.drag}
+      ref={sortable.ref}
+      {...sortable.handle}
       className={cn(
-        "group relative aspect-[2/3] w-16 shrink-0 cursor-grab rounded-lg border border-line bg-sunken active:cursor-grabbing",
-        sortable.dragging && "opacity-30",
+        "group relative aspect-[2/3] w-16 shrink-0 cursor-grab rounded-lg border border-line bg-sunken transition-[scale,box-shadow] duration-150",
+        sortable.dragging && DRAG_LIFT,
       )}
     >
-      <DropMarker at={sortable.marker} />
       <Tooltip content={name}>
-        {/* The picture opens the gallery; Alt+← / Alt+→ on it moves the tile. */}
+        {/* The picture opens the gallery; Alt+arrows on it move the tile. */}
         <button
           type="button"
           onClick={onOpen}
           onKeyDown={sortable.onKeyDown}
           aria-label={shown}
-          aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
+          aria-keyshortcuts={ALT_ARROWS}
           className="absolute inset-0 block cursor-[inherit] overflow-hidden rounded-[inherit] focus-ring"
         >
           {thumb && !(nsfw && blurNsfw) ? (

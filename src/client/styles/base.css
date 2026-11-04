@@ -147,3 +147,12 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* While a list is being dragged into order (lib/sortable.ts): no text selection, a grabbing hand. */
+@layer base {
+  html[data-sorting],
+  html[data-sorting] * {
+    user-select: none;
+    cursor: grabbing !important;
+  }
+}

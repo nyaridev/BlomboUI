@@ -71,7 +71,7 @@ export function Browse() {
   }, [settings, seed]);
   if (!filter)
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-3">
         {Array.from({ length: 10 }, (_, i) => (
           <Skeleton key={i} className="aspect-[3/4]" />
         ))}
@@ -116,7 +116,7 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
     filter.username !== "";
 
   return (
-    <div className="flex flex-col gap-2.5 border-b border-line px-5 pt-4 pb-3">
+    <div className="flex flex-col gap-2.5 border-b border-line p-3">
       <form
         className="flex items-center gap-2"
         onSubmit={(e) => {
@@ -389,7 +389,7 @@ function Results({ filter }: { filter: BrowseFilter }) {
 
   if (q.isLoading)
     return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-5">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-3">
         {Array.from({ length: 12 }, (_, i) => (
           <Skeleton key={i} className="aspect-[3/4]" />
         ))}
@@ -497,7 +497,7 @@ function Grid({
     <div
       ref={scrollRef}
       className={cn(
-        "scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 pt-4 pb-5 transition-opacity",
+        "scroll-quiet min-h-0 flex-1 overflow-y-auto p-3 transition-opacity",
         fetching && "opacity-60",
       )}
     >

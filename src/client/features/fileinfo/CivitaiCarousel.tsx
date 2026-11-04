@@ -38,6 +38,14 @@ const SMALL_WIDTH = 450;
 /** The viewport's height: also what the placeholder uses, so nothing moves when images arrive. */
 export const CAROUSEL_HEIGHT = "h-[440px] max-lg:h-72";
 
+/** The large picture's size: Civitai's `full` is at most FULL_WIDTH px wide (never upscaled). */
+const FULL_WIDTH = 1280;
+const largeSize = (img: CivitaiImage) => {
+  if (!img.width || !img.height) return {};
+  const width = Math.min(img.width, FULL_WIDTH);
+  return { width, height: Math.round((img.height * width) / img.width) };
+};
+
 const ratioOf = (img: CivitaiImage) => (img.width && img.height ? img.width / img.height : 2 / 3);
 const mod = (a: number, n: number) => ((a % n) + n) % n;
 
@@ -328,7 +336,14 @@ export function CivitaiCarousel({
       </span>
       {viewing ? (
         <ImageViewer
-          images={images.map((im, i) => ({ key: String(i), src: im.full, alt: "" }))}
+          images={images.map((im, i) => ({
+            key: String(i),
+            src: im.full,
+            alt: "",
+            // The carousel's small picture is already loaded: it shows until the large one is.
+            preview: im.thumb,
+            ...largeSize(im),
+          }))}
           index={picked}
           onIndex={(i) => {
             const k = aim.current - mod(aim.current, n) + i;

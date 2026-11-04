@@ -6,17 +6,33 @@
  * while zoomed in, the wheel anywhere zooms, so it only steps again once the picture is back to
  * its size. A middle click on the picture opens it in a new tab (`onOpenTab`). It sits on the
  * lightbox layer (z 250).
+ *
+ * An image with a `preview` (a small picture already loaded, such as a thumbnail) and its size
+ * shows the preview at once, in the box the large picture will have, and swaps the large one into
+ * the same element once it's downloaded and decoded: no empty wait, no jump, zoom and drag kept.
  */
 
 import { useModalFocus } from "@client/lib/hooks";
 import { clamp } from "@client/lib/number";
-import { type MouseEvent, type PointerEvent, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent,
+  type PointerEvent,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { IconButton } from "./Button";
 
 export interface ViewerImage {
   key: string;
   src: string;
   alt: string;
+  /** A small picture to show until `src` is ready (needs `width` and `height`). */
+  preview?: string;
+  /** The large picture's size in pixels, so the preview fills the box it will have. */
+  width?: number | null;
+  height?: number | null;
 }
 
 const MAX_ZOOM = 8;
@@ -57,6 +73,39 @@ export function ImageViewer({
   live.current.count = images.length;
   const drag = useRef<{ id: number; x: number; y: number; from: View } | null>(null);
   const [dragging, setDragging] = useState(false);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [ready, setReady] = useState<string | null>(null);
+  const progressive = Boolean(image?.preview && image.width && image.height);
+
+  // The stage's size, for the preview's box: read before the first paint, then on resize.
+  useLayoutEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const read = () => setStage({ w: el.clientWidth, h: el.clientHeight });
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Load and decode the large picture off the main thread, then swap it in.
+  // Keyed by the address: callers often build the image list anew on every render.
+  const large = progressive ? image?.src : undefined;
+  useEffect(() => {
+    if (!large) return;
+    let live = true;
+    const img = new Image();
+    img.decoding = "async";
+    img.src = large;
+    // A failed decode still swaps: the <img> then shows whatever the browser can.
+    const done = () => live && setReady(large);
+    img.decode().then(done, done);
+    return () => {
+      live = false;
+      if (!img.complete) img.src = "";
+    };
+  }, [large]);
 
   const step = (dir: 1 | -1) => {
     if (!many) return;
@@ -163,6 +212,7 @@ export function ImageViewer({
     >
       {/* Equal margins top and bottom; the sides leave room for the step buttons. */}
       <div
+        ref={stageRef}
         className="absolute inset-x-20 inset-y-10 flex items-center justify-center max-lg:inset-x-3"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
@@ -171,7 +221,7 @@ export function ImageViewer({
       >
         <img
           ref={imgRef}
-          src={image.src}
+          src={progressive && ready !== image.src ? image.preview : image.src}
           alt={image.alt}
           draggable={false}
           onMouseDown={(e) => {
@@ -186,6 +236,8 @@ export function ImageViewer({
           onPointerCancel={endDrag}
           className="max-h-full max-w-full touch-none object-contain select-none"
           style={{
+            // The large picture's box, so the preview fills it and the swap doesn't move.
+            ...(progressive ? boxFor(image, stage) : null),
             transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
             // The old app's feel: zoom eases over 140 ms, a drag follows the pointer exactly.
             transition: dragging ? "none" : "transform 140ms ease-out",
@@ -230,4 +282,12 @@ export function ImageViewer({
       </div>
     </div>
   );
+}
+
+/** The size the large picture shows at: fitted to the stage, never past its own pixels. */
+function boxFor(image: ViewerImage, stage: { w: number; h: number }) {
+  const w = image.width ?? 1;
+  const h = image.height ?? 1;
+  const scale = Math.min(1, stage.w / w, stage.h / h);
+  return { width: w * scale, height: h * scale };
 }

@@ -212,17 +212,44 @@ const VIEWER_SAMPLES = ["#3b82f6", "#a855f7", "#f97316"].map((color, i) => ({
   )}`,
 }));
 
-/** The full-screen viewer with three samples, for the Lab. */
+/** The full-screen viewer with three samples, and with previews (small first), for the Lab. */
 function ViewerDemo() {
   const [index, setIndex] = useState<number | null>(null);
+  const [previews, setPreviews] = useState(false);
+  const samples = useSampleImages();
+  const images = previews
+    ? samples.map((s, i) => ({
+        key: String(i),
+        src: s.full,
+        alt: `Sample ${i + 1}`,
+        preview: s.thumb,
+        width: 480,
+        height: 600,
+      }))
+    : VIEWER_SAMPLES;
   return (
     <>
-      <Button icon="maximize" onClick={() => setIndex(0)}>
+      <Button
+        icon="maximize"
+        onClick={() => {
+          setPreviews(false);
+          setIndex(0);
+        }}
+      >
         Open the viewer
+      </Button>
+      <Button
+        variant="ghost"
+        onClick={() => {
+          setPreviews(true);
+          setIndex(0);
+        }}
+      >
+        With previews
       </Button>
       {index !== null ? (
         <ImageViewer
-          images={VIEWER_SAMPLES}
+          images={images}
           index={index}
           onIndex={setIndex}
           onClose={() => setIndex(null)}

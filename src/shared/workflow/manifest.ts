@@ -123,6 +123,9 @@ export const WorkflowSummary = WorkflowManifest.pick({
   parentId: true,
   preset: true,
   updatedAt: true,
+}).extend({
+  /** The preview picture's URL (versioned), or null without one. */
+  thumb: z.string().nullable(),
 });
 export type WorkflowSummary = z.infer<typeof WorkflowSummary>;
 

@@ -9,7 +9,7 @@ data/profiles/<profile>/workflows/<id>/
 ├── workflow.json   manifest (schema: src/shared/workflow/manifest.ts)
 ├── graph.json      ComfyUI UI format (nodes + links), opened by "Edit in ComfyUI"
 ├── prompt.json     ComfyUI API format (class_type + inputs), compiled and sent to /prompt
-└── thumb.webp      picker thumbnail
+└── thumb.webp      preview picture (cards, the header button); set from the workflows window
 ```
 
 Built-in presets ship in `presets/workflows/<id>/` with the same files and are copied into a profile when installed (during profile creation, from the workflow picker, or from the empty Generate screen). Today: **SD 1.5**, **SDXL** and **Illustrious** text-to-image, and the batch tools **Remove background**, **Upscale images**, **Caption images** and **Dataset prep** (Batch workflows, below). Deleting a workflow moves its folder to `data/profiles/<profile>/trash/workflows/`.
@@ -224,4 +224,6 @@ Params blocks: `param` (one binding in a control style), `feature` (Size, Seed, 
 
 ## Export
 
-**Export** (the workflow switcher's footer) downloads `<name>.blombo`, a zip (`services/workflows/bundle.ts`): `blombo.json` (`format: "blombo.bundle/1"`), `workflow.json` (with its values, stages and run settings), `prompt.json`, `graph.json`, the linked layout (`layout.json`) and `thumb.webp`. Import it on any machine or profile by dropping it on the workflow switcher (or Import…): a name that's taken becomes "<name> copy", and a layout that's already in the profile is reused instead of added again.
+**Preview:** a workflow's right-click menu in the workflows window sets `thumb.webp` from the image Generate shows or from a file (`PUT /api/workflows/:id/thumb`: WebP, its own shape, at most 768 px) or clears it (`DELETE`); the old picture moves to the profile's trash. The list gives each workflow's versioned picture URL (`WorkflowSummary.thumb`).
+
+**Export** (a workflow's right-click menu in the workflows window) downloads `<name>.blombo`, a zip (`services/workflows/bundle.ts`): `blombo.json` (`format: "blombo.bundle/1"`), `workflow.json` (with its values, stages and run settings), `prompt.json`, `graph.json`, the linked layout (`layout.json`) and `thumb.webp`. Import it on any machine or profile by dropping it on the workflows window (or Import): a name that's taken becomes "<name> copy", and a layout that's already in the profile is reused instead of added again.

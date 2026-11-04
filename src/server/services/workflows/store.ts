@@ -4,10 +4,13 @@
  *
  * Value edits arrive on every slider move, so they're merged in memory and written after a
  * short quiet period (and on flush: profile switch, shutdown). Reads see the pending version.
- * Deleting moves the folder to the profile's trash.
+ * Deleting moves the folder to the profile's trash. thumb.webp is the workflow's preview picture
+ * (cards, the header button, .blombo bundles); replacing or clearing it moves the old one to the
+ * trash too.
  */
 import fs from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 import { slugifyProfileName } from "../../../shared/profile.ts";
 import { ApiPrompt } from "../../../shared/workflow/graph.ts";
 import {
@@ -27,6 +30,11 @@ import { HttpError } from "../../lib/http.ts";
 import type { ProfileService } from "../profiles.ts";
 
 const WRITE_DELAY_MS = 400;
+/** The preview keeps its shape and fits in this many pixels. */
+const THUMB_MAX = 768;
+
+// No file cache: on Windows it would keep files open (see lib/thumbs.ts).
+sharp.cache(false);
 
 export type NewWorkflow = Omit<
   WorkflowManifest,
@@ -89,9 +97,14 @@ export class WorkflowService {
       return [];
     }
     const out: WorkflowSummary[] = [];
+    const owner = profileId ?? this.profiles.active;
     for (const name of names) {
       try {
         const m = await this.get(name, profileId);
+        const stamp = await fs
+          .stat(path.join(this.dir(m.id, profileId), "thumb.webp"))
+          .then((s) => Math.round(s.mtimeMs).toString(36))
+          .catch(() => null);
         out.push({
           id: m.id,
           name: m.name,
@@ -101,6 +114,8 @@ export class WorkflowService {
           parentId: m.parentId,
           preset: m.preset,
           updatedAt: m.updatedAt,
+          // The profile is in the version: two profiles' "sdxl" mustn't share a cached picture.
+          thumb: stamp ? `/api/workflows/${m.id}/thumb?v=${owner}-${stamp}` : null,
         });
       } catch {
         // A folder without a readable manifest isn't a workflow; skip it.
@@ -152,6 +167,50 @@ export class WorkflowService {
     } catch {
       return null;
     }
+  }
+
+  /** Where the preview lives (served by the route), checked to exist. */
+  async thumbFile(id: string): Promise<string> {
+    const file = path.join(this.dir(id), "thumb.webp");
+    if (!(await exists(file)))
+      throw new HttpError(404, "This workflow has no preview.", "thumb_missing");
+    return file;
+  }
+
+  /**
+   * Make an image the workflow's preview: WebP, its own shape, at most THUMB_MAX px. The image is
+   * read before anything moves, so one that can't be read leaves the old preview in place.
+   */
+  async setThumb(id: string, image: Uint8Array): Promise<void> {
+    await this.get(id);
+    let webp: Buffer;
+    try {
+      webp = await sharp(Buffer.from(image), { failOn: "none" })
+        .rotate()
+        .resize({ width: THUMB_MAX, height: THUMB_MAX, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 86 })
+        .toBuffer();
+    } catch {
+      throw new HttpError(400, "That file isn't an image. Pick a PNG, JPEG or WebP.", "bad_image");
+    }
+    await this.trashThumb(id);
+    await writeFileAtomic(path.join(this.dir(id), "thumb.webp"), webp);
+  }
+
+  /** Clear the preview (it moves to the profile's trash). */
+  async removeThumb(id: string): Promise<void> {
+    await this.get(id);
+    await this.trashThumb(id);
+  }
+
+  private async trashThumb(id: string): Promise<void> {
+    const file = path.join(this.dir(id), "thumb.webp");
+    if (!(await exists(file))) return;
+    await writesSettled(file);
+    await movePath(
+      file,
+      path.join(this.root(), "..", "trash", "workflows", `${id}-preview-${Date.now()}.webp`),
+    );
   }
 
   /** A free id based on a name ("Night Portrait" → "night-portrait", "night-portrait-2"…). */

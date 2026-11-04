@@ -9,6 +9,7 @@ import {
 } from "../../shared/workflow/manifest.ts";
 import type { ServerConfig } from "../config.ts";
 import { HttpError, readBody, readJson } from "../lib/http.ts";
+import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { BridgeService } from "../services/bridge.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 import type { LayoutService } from "../services/layouts.ts";
@@ -98,6 +99,23 @@ export function workflowRoutes(
   r.post("/:id/edit-session", async (c) =>
     c.json(await bridge.createSession(c.req.param("id")), 201),
   );
+
+  /** The preview picture: GET serves it, an image in a PUT body replaces it, DELETE clears it. */
+  r.get("/:id/thumb", async (c) =>
+    sendFile(await workflows.thumbFile(c.req.param("id")), {
+      cache: c.req.query("v") ? IMMUTABLE : "no-cache",
+    }),
+  );
+  r.put("/:id/thumb", async (c) => {
+    const bytes = await readBody(c, 64 * 1024 * 1024, "Pick an image under 64 MB.");
+    if (bytes.byteLength === 0) throw new HttpError(400, "The image is empty.", "empty");
+    await workflows.setThumb(c.req.param("id"), bytes);
+    return c.json({ ok: true });
+  });
+  r.delete("/:id/thumb", async (c) => {
+    await workflows.removeThumb(c.req.param("id"));
+    return c.json({ ok: true });
+  });
 
   r.patch("/:id/values", async (c) => {
     const body = await readJson(c, PatchValuesBody);

@@ -6,13 +6,16 @@
 import { editInComfy } from "@client/features/generate/bridge";
 import { useActiveWorkflow } from "@client/features/generate/workflow";
 import { Icon } from "@client/icons/Icon";
-import { Art, IconButton } from "@client/ui";
+import { useWorkflows } from "@client/lib/queries";
+import { IconButton } from "@client/ui";
 import { useState } from "react";
-import { WorkflowBrowser } from "./WorkflowBrowser";
+import { WorkflowBrowser, WorkflowPicture } from "./WorkflowBrowser";
 
 export function WorkflowSwitcher() {
   const current = useActiveWorkflow().manifest;
   const [open, setOpen] = useState(false);
+  const listed = useWorkflows().data?.find((w) => w.id === current?.id);
+  const picture = listed ?? (current ? { id: current.id, thumb: null } : null);
   const name = current?.name ?? "No workflow";
   // "SDXL" next to a workflow called "SDXL" says nothing.
   const family = !current
@@ -31,7 +34,7 @@ export function WorkflowSwitcher() {
           aria-label={`Workflow: ${name}. Show all workflows`}
           className="group flex min-w-0 items-center gap-2 rounded-l-lg pr-2.5 pl-1.5 transition-colors hover:bg-surface-3 focus-ring"
         >
-          <Art seed={current?.id ?? "none"} className="h-6 w-6 shrink-0 rounded-md" />
+          <WorkflowPicture workflow={picture} className="h-6 w-6 shrink-0 rounded-md" />
           <span className="truncate text-sm font-medium text-fg">{name}</span>
           {family ? <span className="shrink-0 text-xs text-fg-3">{family}</span> : null}
           <Icon

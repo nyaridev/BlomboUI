@@ -211,6 +211,9 @@ export const api = {
   duplicateWorkflow: (id: string, name?: string) =>
     request<WorkflowManifest>("POST", `/workflows/${id}/duplicate`, { name }),
   deleteWorkflow: (id: string) => request<void>("DELETE", `/workflows/${id}`),
+  setWorkflowThumb: (id: string, image: Blob) =>
+    request<{ ok: true }>("PUT", `/workflows/${id}/thumb`, undefined, image),
+  removeWorkflowThumb: (id: string) => request<{ ok: true }>("DELETE", `/workflows/${id}/thumb`),
   /** Edit in ComfyUI: a single-use token and the ComfyUI address that opens it. */
   editSession: (id: string) => request<EditSession>("POST", `/workflows/${id}/edit-session`),
   bridgeStatus: () => request<BridgeStatus>("GET", "/comfy/bridge"),

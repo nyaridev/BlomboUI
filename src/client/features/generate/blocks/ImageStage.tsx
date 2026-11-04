@@ -22,7 +22,7 @@ import { averageRate, formatDuration } from "@shared/history";
 import type { Job, JobImage } from "@shared/jobs";
 import { PreviewSettings } from "@shared/settings";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
-import { previewDue, useLastRun } from "../preview";
+import { previewDue, useLastRun, useShownImage } from "../preview";
 import { RunInfo } from "./RunInfo";
 
 interface Result {
@@ -141,6 +141,8 @@ export function ImageStage() {
     results.findIndex((r) => r.key === selected),
   );
   const current = results.length ? (results[selected ? index : results.length - 1] ?? null) : null;
+  const shownUrl = current?.url ?? null;
+  useEffect(() => useShownImage.setState({ url: shownUrl }), [shownUrl]);
   const [viewing, setViewing] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
   // The arrows can pick a thumbnail that's scrolled away: bring it into view.

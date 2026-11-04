@@ -21,3 +21,6 @@ export const useLastRun = create<{ ids: string[]; set: (ids: string[]) => void }
   ids: [],
   set: (ids) => set({ ids }),
 }));
+
+/** The result the image stage shows (its URL), for "Preview from the image in Generate". */
+export const useShownImage = create<{ url: string | null }>(() => ({ url: null }));

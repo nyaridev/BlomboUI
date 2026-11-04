@@ -1,9 +1,10 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createConfig, parseFlags } from "../../config.ts";
-import { fakePng } from "../../lib/test-images.ts";
+import { fakePng, realPng } from "../../lib/test-images.ts";
 import { ProfileService } from "../profiles.ts";
 import { importWorkflow, readWorkflowFile } from "./import.ts";
 import { WorkflowService } from "./store.ts";
@@ -144,6 +145,27 @@ describe("workflow store", () => {
     await expect(workflows.get("doomed")).rejects.toThrow(/not found/);
     const trash = await fs.readdir(path.join(workflows.root(), "..", "trash", "workflows"));
     expect(trash.some((t) => t.startsWith("doomed-"))).toBe(true);
+  });
+
+  it("replaces and clears the preview, keeping the old ones in the trash", async () => {
+    await importWorkflow({ bytes: bytes(API), filename: "pictured.json" }, workflows, null);
+    const summary = async () => (await workflows.list()).find((w) => w.id === "pictured");
+    expect((await summary())?.thumb).toBeNull();
+    await expect(workflows.setThumb("pictured", bytes({ not: "an image" }))).rejects.toThrow(
+      /isn't an image/,
+    );
+    await workflows.setThumb("pictured", await realPng(1200, 800));
+    const first = (await summary())?.thumb;
+    expect(first).toMatch(/^\/api\/workflows\/pictured\/thumb\?v=/);
+    // Its own shape, made smaller, as WebP.
+    const meta = await sharp(await fs.readFile(await workflows.thumbFile("pictured"))).metadata();
+    expect([meta.format, meta.width, meta.height]).toEqual(["webp", 768, 512]);
+    await workflows.setThumb("pictured", await realPng(64, 96));
+    await workflows.removeThumb("pictured");
+    expect((await summary())?.thumb).toBeNull();
+    await expect(workflows.thumbFile("pictured")).rejects.toThrow(/no preview/);
+    const trash = await fs.readdir(path.join(workflows.root(), "..", "trash", "workflows"));
+    expect(trash.filter((t) => t.startsWith("pictured-preview-"))).toHaveLength(2);
   });
 
   it("rejects ids that could escape the folder", async () => {

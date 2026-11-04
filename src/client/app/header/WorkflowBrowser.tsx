@@ -2,12 +2,14 @@
  * The workflows window, opened from the header's workflow button: a dialog in the middle of the
  * screen (like ComfyUI's workflow browser) with sections on the left, search and Import on top
  * and the profile's workflows as cards. A click switches to one; its ⋯ button or a right-click
- * has Edit in ComfyUI, Duplicate, Export and Delete. Built-in presets the profile doesn't have
+ * has the preview (from the image Generate shows, from a file, clear), Edit in ComfyUI,
+ * Duplicate, Export and Delete. A card shows its preview filling the picture, else its art. Built-in presets the profile doesn't have
  * are cards with Add. ComfyUI workflows and .blombo files dropped anywhere on it are imported
  * (ADR-0003, ADR-0009).
  */
 import { editInComfy, exportWorkflow } from "@client/features/generate/bridge";
 import { useImportFlow } from "@client/features/generate/importFlow";
+import { useShownImage } from "@client/features/generate/preview";
 import { useActiveChoice, useActiveWorkflow } from "@client/features/generate/workflow";
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -17,6 +19,7 @@ import {
   useInstallPreset,
   usePresets,
   useWorkflows,
+  useWorkflowThumb,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Art, Button, Dialog, type MenuEntry, openContextMenu, TextField, toast } from "@client/ui";
@@ -78,6 +81,8 @@ function Browser({ close }: { close: () => void }) {
   const install = useInstallPreset();
   const duplicate = useDuplicateWorkflow();
   const remove = useDeleteWorkflow();
+  const thumb = useWorkflowThumb();
+  const shownUrl = useShownImage((s) => s.url);
   const [section, setSection] = useState<Section>("all");
   const [query, setQuery] = useState("");
   // Asked in the bottom bar: a second dialog's Escape would close this one too.
@@ -106,9 +111,65 @@ function Browser({ close }: { close: () => void }) {
     if (profileId) choose(profileId, id);
     close();
   };
+  const setPreview = (w: WorkflowSummary, image: Blob | "remove") =>
+    thumb.mutate(
+      { id: w.id, image },
+      {
+        onSuccess: () =>
+          toast(
+            image === "remove"
+              ? `Cleared the preview of "${w.name}"`
+              : `New preview for "${w.name}"`,
+            "success",
+          ),
+        onError: (err) => toast(err.message, "error"),
+      },
+    );
+  const previewFromShown = async (w: WorkflowSummary) => {
+    if (!shownUrl) return;
+    try {
+      const res = await fetch(shownUrl);
+      if (!res.ok) throw new Error(String(res.status));
+      setPreview(w, await res.blob());
+    } catch {
+      toast("Couldn't read the image Generate shows. Generate it again, or pick a file.", "error");
+    }
+  };
+  const previewFromFile = (w: WorkflowSummary) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/png,image/jpeg,image/webp";
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (file) setPreview(w, file);
+    };
+    input.click();
+  };
   const menu = (e: MouseEvent<HTMLElement>, w: WorkflowSummary) => {
     const items: MenuEntry[] = [
       { id: "use", label: "Use this workflow", icon: "check", onSelect: () => select(w.id) },
+      { type: "separator", id: "s0" },
+      {
+        id: "preview-shown",
+        label: "Set preview from Generate",
+        icon: "image",
+        hint: shownUrl ? undefined : "Generate an image first",
+        disabled: !shownUrl,
+        onSelect: () => void previewFromShown(w),
+      },
+      {
+        id: "preview-file",
+        label: "Set preview from a file…",
+        icon: "upload",
+        onSelect: () => previewFromFile(w),
+      },
+      {
+        id: "preview-clear",
+        label: "Clear preview",
+        icon: "x",
+        disabled: !w.thumb,
+        onSelect: () => setPreview(w, "remove"),
+      },
       { type: "separator", id: "s1" },
       {
         id: "comfy",
@@ -252,7 +313,7 @@ function Browser({ close }: { close: () => void }) {
                     key={p.id}
                     className="flex flex-col overflow-hidden rounded-lg border border-dashed border-line-strong bg-surface"
                   >
-                    <Art seed={p.id} ratio={16 / 9} className="grid place-items-center">
+                    <Art seed={p.id} className="grid aspect-[4/3] place-items-center">
                       <span className="grid h-9 w-9 place-items-center rounded-md bg-black/60 text-white">
                         <Icon name="plus" size={18} />
                       </span>
@@ -361,7 +422,7 @@ function WorkflowCard({
         aria-current={active ? "true" : undefined}
         className="flex flex-col text-left focus-ring"
       >
-        <Art seed={w.id} ratio={16 / 9} className="w-full" />
+        <WorkflowPicture workflow={w} className="aspect-[4/3] w-full" />
         <span className="flex min-w-0 flex-col gap-0.5 p-2.5">
           <span className="truncate text-sm font-medium text-fg">{w.name}</span>
           <span className="truncate text-2xs text-fg-3">
@@ -394,5 +455,27 @@ function WorkflowCard({
         <Icon name="more-horizontal" size={15} />
       </button>
     </div>
+  );
+}
+
+/** The workflow's preview, filling the box (its own shape, cropped to fit), else its art. */
+export function WorkflowPicture({
+  workflow,
+  className,
+}: {
+  workflow: Pick<WorkflowSummary, "id" | "thumb"> | null;
+  className?: string;
+}) {
+  return (
+    <Art seed={workflow?.id ?? "none"} className={className}>
+      {workflow?.thumb ? (
+        <img
+          src={workflow.thumb}
+          alt=""
+          draggable={false}
+          className="absolute inset-0 h-full w-full object-cover"
+        />
+      ) : null}
+    </Art>
   );
 }

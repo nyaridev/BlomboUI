@@ -225,6 +225,16 @@ export function useDeleteWorkflow() {
   });
 }
 
+/** Replace a workflow's preview with an image, or clear it ("remove"). */
+export function useWorkflowThumb() {
+  const changed = useWorkflowsChanged();
+  return useMutation({
+    mutationFn: ({ id, image }: { id: string; image: Blob | "remove" }) =>
+      image === "remove" ? api.removeWorkflowThumb(id) : api.setWorkflowThumb(id, image),
+    onSuccess: () => changed(),
+  });
+}
+
 /* ── layouts, stages, autocomplete ─────────────────────────────────────────── */
 
 export function useLayouts() {

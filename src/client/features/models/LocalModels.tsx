@@ -1,15 +1,18 @@
 /**
- * Models → Local: every file in the profile's models folder, by kind, as the one ModelCard.
- * Sidecar images become thumbnails (blurred when marked NSFW, per the profile setting), and the
- * info sheet shows the sidecar info and the safetensors header, with rename, move, reveal and
- * File Info. The grid is virtualized: a few thousand LoRAs scroll like a dozen. Models without
- * an info file are matched on Civitai by hash in the background (status in the toolbar).
+ * Models → Local: every file in the profile's models folders, as the one ModelCard. Kinds are
+ * book tabs over one panel (as Generate's workspace); in it, the toolbar (search, base models,
+ * favorites, sort and order, rescan) and the folder tree on the left (the pickers' FolderTree:
+ * the kind folders on All, one top folder per models folder when there are several). A click on
+ * a card opens its model info; right-click renames, moves and the rest. Sidecar images become
+ * thumbnails (blurred when marked NSFW, per the profile setting). The grid is virtualized: a few
+ * thousand LoRAs scroll like a dozen. Models without an info file are matched on Civitai by hash
+ * in the background (status in the toolbar).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
-import { useCompact, useElementWidth } from "@client/lib/hooks";
+import { cn } from "@client/lib/cn";
+import { useElementWidth } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
-import { glide } from "@client/lib/motion";
 import { formatBytes } from "@client/lib/number";
 import {
   qk,
@@ -23,38 +26,54 @@ import {
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
+  Badge,
   Button,
   Chip,
-  CopyButton,
   Dialog,
   EmptyState,
   Field,
   IconButton,
   KIND_STYLE,
   ModelCard,
+  MultiSelect,
   openContextMenu,
-  PropertyList,
   Select,
-  Sheet,
   Skeleton,
   Spinner,
+  Tabs,
   TextField,
   Tooltip,
   toast,
 } from "@client/ui";
+import { groupBaseModels } from "@shared/basemodels";
 import { MODEL_KINDS, type ModelKind } from "@shared/constants";
 import { comfyNameOf, type LocalModel, modelKey } from "@shared/models";
 import { useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { AnimatePresence, motion } from "motion/react";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
-import { useFileInfoTarget } from "../fileinfo/state";
+import { FolderTree } from "../generate/FolderTree";
+import { folderTree, inFolder } from "../generate/folders";
 import { openModelInfo, useModelMenu } from "./actions";
-import { openCivitaiModel } from "./civitai/state";
 import { useModelsNav } from "./nav";
 
-type Sort = "name" | "size" | "added";
+type Sort = "name" | "path" | "created" | "modified" | "size";
+type Order = "asc" | "desc";
+/** Each sort with the order it starts in (dates and size newest / largest first). */
+const SORTS: Array<{ value: Sort; label: string; icon: IconName; order: Order }> = [
+  { value: "name", label: "Name", icon: "text", order: "asc" },
+  { value: "path", label: "Path", icon: "folder", order: "asc" },
+  { value: "created", label: "Date created", icon: "calendar", order: "desc" },
+  { value: "modified", label: "Date modified", icon: "calendar", order: "desc" },
+  { value: "size", label: "Size", icon: "stack", order: "desc" },
+];
+const byText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+const COMPARE: Record<Sort, (a: LocalModel, b: LocalModel) => number> = {
+  name: (a, b) => byText(a.name, b.name),
+  path: (a, b) => byText(a.id, b.id),
+  created: (a, b) => a.ctime - b.ctime,
+  modified: (a, b) => a.mtime - b.mtime,
+  size: (a, b) => a.size - b.size,
+};
 const MIN_CARD = 176;
 const GAP = 12;
 
@@ -65,9 +84,14 @@ export function LocalModels() {
   const profileId = useSession((s) => s.profileId);
   const [kind, setKind] = useState<ModelKind | "all">("all");
   const [query, setQuery] = useState("");
+  const [folder, setFolder] = useState<string | null>(null);
+  const [baseModels, setBaseModels] = useState<string[]>([]);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [sort, setSort] = useState<Sort>("name");
+  const [order, setOrder] = useState<Order>("asc");
+  const [showTree, setShowTree] = useState(true);
+  // The last opened card (or the one "Show in Models" asked for) stays outlined.
   const [selected, setSelected] = useState<string | null>(null);
-  const compact = useCompact();
   // "Show in Models" from a download or a Civitai page selects the file here.
   const wanted = useModelsNav((s) => s.select);
   useEffect(() => {
@@ -75,10 +99,13 @@ export function LocalModels() {
     useModelsNav.getState().takeSelect();
     setKind("all");
     setQuery("");
+    setFolder(null);
+    setBaseModels([]);
+    setOnlyFavorites(false);
     setSelected(wanted);
   }, [wanted, list.data]);
   const [rescanning, setRescanning] = useState(false);
-  // Rename and Move open from the info sheet and from a card's right-click menu.
+  // Rename and Move open from a card's right-click menu.
   const [dialog, setDialog] = useState<{
     type: "rename" | "move";
     model: LocalModel;
@@ -106,27 +133,66 @@ export function LocalModels() {
   const onMoved = (oldId: string, m: LocalModel) => setSelected((s) => (s === oldId ? m.id : s));
   const closeDialog = (o: boolean) => !o && setDialog((d) => d && { ...d, open: false });
 
+  const marks = useModelMarks().data;
+  const favorites = useMemo(() => new Set(marks?.favorites ?? []), [marks]);
+  const isFavorite = (m: LocalModel) => favorites.has(modelKey(m.kind, comfyNameOf(m)));
+
   const models = list.data?.models ?? [];
+  const roots = list.data?.folders ?? [];
   const counts = useMemo(() => {
     const c = new Map<ModelKind, number>();
     for (const m of models) c.set(m.kind, (c.get(m.kind) ?? 0) + 1);
     return c;
   }, [models]);
-  const shown = useMemo(() => {
+  const ofKind = useMemo(
+    () => (kind === "all" ? models : models.filter((m) => m.kind === kind)),
+    [models, kind],
+  );
+  const bases = useMemo(
+    () => groupBaseModels(ofKind.map((m) => m.baseModel).filter((b): b is string => Boolean(b))),
+    [ofKind],
+  );
+  // Tree paths: the models folder's name first when there are several, then the kind folder
+  // on All ("B-Models/loras/style"), then the folders below it.
+  const multiRoot = new Set(ofKind.map((m) => m.root)).size > 1;
+  const lead = (multiRoot ? 1 : 0) + (kind === "all" ? 1 : 0);
+  const treeKey = (m: LocalModel) => {
+    const rel = kind === "all" ? m.id : m.id.slice(m.id.indexOf("/") + 1);
+    const root = multiRoot ? roots.find((r) => r.id === m.root) : undefined;
+    return root ? `${root.name}/${rel}` : rel;
+  };
+  // Search, base models and favorites first; the tree counts what they leave, the folder
+  // narrows further.
+  const found = useMemo(() => {
     const q = query.trim().toLowerCase();
-    const out = models.filter(
+    const wantedBases = new Set(baseModels);
+    return ofKind.filter(
       (m) =>
-        (kind === "all" || m.kind === kind) &&
+        (!wantedBases.size || wantedBases.has(m.baseModel ?? "")) &&
+        (!onlyFavorites || favorites.has(modelKey(m.kind, comfyNameOf(m)))) &&
         (!q ||
           `${m.name} ${m.file} ${m.folder} ${m.baseModel ?? ""} ${m.triggerWords.join(" ")}`
             .toLowerCase()
             .includes(q)),
     );
-    if (sort === "size") out.sort((a, b) => b.size - a.size);
-    else if (sort === "added") out.sort((a, b) => b.mtime - a.mtime);
-    else out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
-  }, [models, kind, query, sort]);
+  }, [ofKind, query, baseModels, onlyFavorites, favorites]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: treeKey follows kind, multiRoot and roots
+  const tree = useMemo(() => folderTree(found.map(treeKey)), [found, kind, multiRoot, roots]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: treeKey follows kind, multiRoot and roots
+  const shown = useMemo(() => {
+    const compare = COMPARE[sort];
+    return found
+      .filter((m) => inFolder(treeKey(m), folder))
+      .sort(order === "asc" ? compare : (a, b) => compare(b, a));
+  }, [found, folder, sort, order, kind, multiRoot, roots]);
+
+  /** Show a tree folder in Explorer: the part below the models folder's name and kind folder. */
+  const revealFolder = (path: string) => {
+    const m = found.find((x) => inFolder(treeKey(x), path));
+    if (!m) return;
+    const below = path.split("/").slice(lead).join("/");
+    void api.openModelFolder(m.kind, below, m.root).catch((e: Error) => toast(e.message, "error"));
+  };
 
   const rescan = async () => {
     setRescanning(true);
@@ -176,127 +242,162 @@ export function LocalModels() {
     );
 
   const kinds = MODEL_KINDS.filter((k) => counts.get(k));
-  const current = selected ? models.find((m) => m.id === selected) : undefined;
+  const filtered = Boolean(query.trim() || baseModels.length || onlyFavorites || folder);
+  const pickKind = (k: ModelKind | "all") => {
+    // Another kind has other folders and base models.
+    setKind(k);
+    setFolder(null);
+    setBaseModels([]);
+  };
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-5 pb-0 max-lg:p-3 max-lg:pb-0">
-        <div className="flex flex-wrap items-center gap-2">
+    <div className="flex min-h-0 flex-1 flex-col p-3 max-lg:p-2">
+      <Tabs<ModelKind | "all">
+        variant="folder"
+        value={kind}
+        onChange={pickKind}
+        label="Model kinds"
+        items={[
+          {
+            value: "all",
+            label: "All",
+            icon: "stack",
+            badge: <Badge>{models.length.toLocaleString()}</Badge>,
+          },
+          ...kinds.map((k) => ({
+            value: k,
+            label: KIND_STYLE[k].label,
+            icon: KIND_STYLE[k].icon,
+            badge: <Badge>{(counts.get(k) ?? 0).toLocaleString()}</Badge>,
+          })),
+        ]}
+      />
+      {/* One panel under the tabs (book tabs: the active one joins it). */}
+      <div
+        className={cn(
+          "flex min-h-0 flex-1 flex-col gap-3 rounded-lg border border-line bg-surface p-3",
+          kind === "all" && "rounded-tl-none",
+        )}
+      >
+        <div className="flex items-center gap-2 max-lg:flex-wrap">
+          <IconButton
+            icon="sidebar"
+            label={showTree ? "Hide folders" : "Show folders"}
+            variant="secondary"
+            active={showTree}
+            onClick={() => setShowTree((v) => !v)}
+            className="max-lg:hidden"
+          />
           <TextField
             icon="search"
             placeholder="Search name, folder, trigger word, base model…"
-            className="w-[340px] max-lg:w-full"
+            className="min-w-0 flex-1 max-lg:basis-full"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onClear={() => setQuery("")}
             aria-label="Search models"
           />
-          <div className="flex flex-wrap gap-1">
-            <Chip
-              size="sm"
-              icon="stack"
-              count={models.length}
-              selected={kind === "all"}
-              onClick={() => setKind("all")}
-            >
-              All
-            </Chip>
-            {kinds.map((k) => (
-              <Chip
-                key={k}
-                size="sm"
-                icon={KIND_STYLE[k].icon}
-                count={counts.get(k)}
-                selected={kind === k}
-                onClick={() => setKind(k)}
-              >
-                {KIND_STYLE[k].label}
-              </Chip>
-            ))}
-          </div>
-          <div className="ml-auto flex items-center gap-1.5">
+          {bases.length ? (
+            <MultiSelect
+              value={baseModels}
+              onChange={setBaseModels}
+              label="Base models"
+              clearLabel="All base models"
+              className="w-52"
+              options={bases.map((b) => ({ value: b.name, label: b.label, group: b.group }))}
+            />
+          ) : null}
+          <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
+            Favorites
+          </Chip>
+          <div className="ml-auto flex items-center gap-2">
             <LookupStatus />
+            <span
+              className="font-mono text-xs whitespace-nowrap text-fg-3 tabular"
+              aria-live="polite"
+            >
+              {shown.length.toLocaleString()} {shown.length === 1 ? "model" : "models"}
+            </span>
             <Select<Sort>
-              size="sm"
               value={sort}
-              onChange={setSort}
+              onChange={(s) => {
+                setSort(s);
+                setOrder(SORTS.find((x) => x.value === s)?.order ?? "asc");
+              }}
               label="Sort"
-              className="w-[140px]"
-              options={[
-                { value: "name", label: "Name", icon: "sort" },
-                { value: "added", label: "Newest files", icon: "calendar" },
-                { value: "size", label: "Largest first", icon: "stack" },
-              ]}
+              className="w-40"
+              options={SORTS}
+            />
+            <IconButton
+              icon={order === "asc" ? "sort-asc" : "sort-desc"}
+              label={
+                order === "asc"
+                  ? "Ascending (click for descending)"
+                  : "Descending (click for ascending)"
+              }
+              variant="secondary"
+              onClick={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
             />
             <IconButton
               icon="rescan-models"
               label="Scan the models folder again"
               variant="secondary"
-              size="sm"
               disabled={rescanning}
               onClick={() => void rescan()}
             />
           </div>
         </div>
-        {shown.length === 0 ? (
-          <EmptyState
-            icon="models"
-            title={models.length ? "No models match" : "No models yet"}
-            text={
-              models.length
-                ? "Try another search or kind."
-                : "Put model files in checkpoints/, loras/, vae/ and the other folders of your models folder, then scan again."
-            }
-          />
-        ) : (
-          <CardGrid
-            models={shown}
-            blurNsfw={blurNsfw}
-            selected={selected}
-            onSelect={(id) => setSelected((s) => (s === id ? null : id))}
-            onMenu={(e, m) => openContextMenu(e, menuFor(m))}
-          />
-        )}
-      </div>
-      {compact ? (
-        <Sheet
-          open={Boolean(current)}
-          onOpenChange={(o) => !o && setSelected(null)}
-          label="Model details"
-          side="right"
-          className="w-[min(92vw,380px)]"
-        >
-          {current ? (
-            <InfoSheet
-              model={current}
-              blurNsfw={blurNsfw}
-              onClose={() => setSelected(null)}
-              onRename={() => setDialog({ type: "rename", model: current, open: true })}
-              onMove={() => setDialog({ type: "move", model: current, open: true })}
+        <div className="flex min-h-0 flex-1 gap-3">
+          {showTree && models.length ? (
+            <FolderTree
+              nodes={tree}
+              total={found.length}
+              folder={folder}
+              onFolder={setFolder}
+              onMenu={(e, path) =>
+                // The models folder's own row (several models folders on All) has no one kind.
+                path.split("/").length < lead
+                  ? undefined
+                  : openContextMenu(e, [
+                      {
+                        id: "open",
+                        label: "Show in Explorer",
+                        icon: "folder-open",
+                        onSelect: () => revealFolder(path),
+                      },
+                    ])
+              }
             />
           ) : null}
-        </Sheet>
-      ) : null}
-      <AnimatePresence initial={false}>
-        {current && !compact ? (
-          <motion.aside
-            key="sheet"
-            initial={{ width: 0, opacity: 0 }}
-            animate={{ width: 380, opacity: 1 }}
-            exit={{ width: 0, opacity: 0 }}
-            transition={glide}
-            className="shrink-0 overflow-hidden border-l border-line bg-surface"
-          >
-            <InfoSheet
-              model={current}
-              blurNsfw={blurNsfw}
-              onClose={() => setSelected(null)}
-              onRename={() => setDialog({ type: "rename", model: current, open: true })}
-              onMove={() => setDialog({ type: "move", model: current, open: true })}
-            />
-          </motion.aside>
-        ) : null}
-      </AnimatePresence>
+          <div className="flex min-w-0 flex-1 flex-col">
+            {shown.length === 0 ? (
+              <EmptyState
+                icon={models.length ? "search" : "models"}
+                title={models.length ? "No models match" : "No models yet"}
+                text={
+                  models.length
+                    ? filtered
+                      ? "Nothing here with this search and these filters."
+                      : "Nothing of this kind yet."
+                    : "Put model files in checkpoints/, loras/, vae/ and the other folders of your models folder, then scan again."
+                }
+              />
+            ) : (
+              <CardGrid
+                models={shown}
+                blurNsfw={blurNsfw}
+                selected={selected}
+                isFavorite={isFavorite}
+                onOpen={(m) => {
+                  setSelected(m.id);
+                  openModelInfo(m.id);
+                }}
+                onMenu={(e, m) => openContextMenu(e, menuFor(m))}
+              />
+            )}
+          </div>
+        </div>
+      </div>
       {dialog?.type === "rename" ? (
         <RenameDialog
           key={dialog.model.id}
@@ -322,13 +423,15 @@ function CardGrid({
   models,
   blurNsfw,
   selected,
-  onSelect,
+  isFavorite,
+  onOpen,
   onMenu,
 }: {
   models: LocalModel[];
   blurNsfw: boolean;
   selected: string | null;
-  onSelect: (id: string) => void;
+  isFavorite: (m: LocalModel) => boolean;
+  onOpen: (m: LocalModel) => void;
   onMenu: (e: MouseEvent<HTMLElement>, m: LocalModel) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -344,15 +447,13 @@ function CardGrid({
     estimateSize: () => rowH,
     overscan: 3,
   });
-  const marks = useModelMarks().data;
   const setFavorite = useSetModelFavorite();
-  const favorites = useMemo(() => new Set(marks?.favorites ?? []), [marks]);
   // Card size follows the width; re-measure when it changes.
   useEffect(() => {
     if (rowH > 0) virtualizer.measure();
   }, [rowH, virtualizer]);
   return (
-    <div ref={scrollRef} className="scroll-quiet min-h-0 flex-1 overflow-y-auto pr-1 pb-5">
+    <div ref={scrollRef} className="scroll-quiet min-h-0 flex-1 overflow-y-auto pr-1">
       <div
         ref={innerRef}
         className="relative w-full"
@@ -377,223 +478,22 @@ function CardGrid({
                 thumb={m.thumb}
                 nsfw={m.nsfw}
                 blurNsfw={blurNsfw}
-                favorite={favorites.has(modelKey(m.kind, comfyNameOf(m)))}
+                favorite={isFavorite(m)}
                 onFavorite={() =>
                   setFavorite.mutate({
                     kind: m.kind,
                     name: comfyNameOf(m),
-                    favorite: !favorites.has(modelKey(m.kind, comfyNameOf(m))),
+                    favorite: !isFavorite(m),
                   })
                 }
                 meta={formatBytes(m.size)}
-                onInfo={() => openModelInfo(m.id)}
                 selected={selected === m.id}
-                onClick={() => onSelect(m.id)}
+                onClick={() => onOpen(m)}
                 onContextMenu={(e) => onMenu(e, m)}
               />
             ))}
           </div>
         ))}
-      </div>
-    </div>
-  );
-}
-
-/* ── info sheet ───────────────────────────────────────────────────────────── */
-
-function stripHtml(html: string): string {
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  return (doc.body.textContent ?? "").replace(/\n{3,}/g, "\n\n").trim();
-}
-
-function InfoSheet({
-  model,
-  blurNsfw,
-  onClose,
-  onRename,
-  onMove,
-}: {
-  model: LocalModel;
-  blurNsfw: boolean;
-  onClose: () => void;
-  onRename: () => void;
-  onMove: () => void;
-}) {
-  const details = useModelDetails(model.id);
-  const setTarget = useFileInfoTarget((s) => s.set);
-  const navigate = useNavigate();
-  const profileId = useSession((s) => s.profileId);
-  const d = details.data;
-  const style = KIND_STYLE[model.kind];
-  const description = useMemo(
-    () => (d?.description ? stripHtml(d.description) : null),
-    [d?.description],
-  );
-
-  return (
-    <div className="flex h-full w-[380px] flex-col max-lg:w-full">
-      <div className="flex items-center gap-2 border-b border-line px-4 py-3">
-        <Icon name={style.icon} size={15} className="text-fg-3" />
-        <span className="truncate text-sm font-semibold text-fg">{style.label}</span>
-        <IconButton icon="x" label="Close" size="sm" className="ml-auto" onClick={onClose} />
-      </div>
-      <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
-        <div className="mx-auto w-40">
-          <ModelCard
-            name={model.name}
-            kind={model.kind}
-            baseModel={model.baseModel ?? undefined}
-            thumb={model.thumb}
-            nsfw={model.nsfw}
-            blurNsfw={blurNsfw}
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold break-words text-fg">{model.name}</h2>
-          <span className="font-mono text-2xs break-all text-fg-3">{model.id}</span>
-        </div>
-        {model.triggerWords.length ? (
-          <div className="flex flex-col gap-1.5">
-            <span className="label-caps">Trigger words</span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {model.triggerWords.map((w) => (
-                <Chip
-                  key={w}
-                  size="sm"
-                  onClick={() =>
-                    void navigator.clipboard
-                      ?.writeText(w)
-                      .then(() => toast(`Copied "${w}"`, "success"))
-                  }
-                >
-                  {w}
-                </Chip>
-              ))}
-              <CopyButton text={model.triggerWords.join(", ")} label="Copy all trigger words" />
-            </div>
-          </div>
-        ) : null}
-        {details.isLoading ? (
-          <div className="flex flex-col gap-2">
-            <Skeleton className="h-4 w-2/3" />
-            <Skeleton className="h-4 w-1/2" />
-            <Skeleton className="h-16 w-full" />
-          </div>
-        ) : details.error ? (
-          <p className="text-sm text-danger">{details.error.message}</p>
-        ) : d ? (
-          <>
-            <PropertyList
-              items={[
-                { label: "File", value: d.file, copy: d.file },
-                { label: "Folder", value: d.folder || "(top level)" },
-                { label: "Size", value: formatBytes(d.size) },
-                { label: "Added", value: new Date(d.mtime).toLocaleDateString() },
-                { label: "Base model", value: d.header?.training.baseModel ?? d.baseModel },
-                { label: "Weight", value: d.weight },
-                {
-                  label: "Network",
-                  value: d.header?.training.network
-                    ? `${d.header.training.network}${d.header.training.dim ? ` · rank ${d.header.training.dim}` : ""}`
-                    : null,
-                },
-                {
-                  label: "Civitai",
-                  value: d.civitai?.modelId ? (
-                    <span className="inline-flex flex-wrap items-center gap-1.5">
-                      <button
-                        type="button"
-                        className="text-left text-accent-ink hover:underline focus-ring"
-                        onClick={() =>
-                          openCivitaiModel(
-                            d.civitai?.modelId as number,
-                            d.civitai?.name ?? model.name,
-                          )
-                        }
-                      >
-                        {[d.civitai.name, d.civitai.version].filter(Boolean).join(" · ") ||
-                          "Open its page"}
-                      </button>
-                      {model.civitai?.lookup ? (
-                        <Tooltip content="Found on Civitai by the file's hash">
-                          <span className="text-fg-3">
-                            <Icon name="hash" size={12} />
-                          </span>
-                        </Tooltip>
-                      ) : null}
-                    </span>
-                  ) : null,
-                },
-                { label: "Creator", value: d.civitai?.creator },
-              ]}
-            />
-            {d.headerError ? <p className="text-xs text-warning">{d.headerError}</p> : null}
-            {description ? (
-              <div className="flex flex-col gap-1.5">
-                <span className="label-caps">Description</span>
-                <p className="max-h-48 overflow-y-auto text-sm leading-relaxed whitespace-pre-wrap text-fg-2">
-                  {description}
-                </p>
-              </div>
-            ) : null}
-            {d.notes ? (
-              <div className="flex flex-col gap-1.5">
-                <span className="label-caps">Notes</span>
-                <p className="text-sm whitespace-pre-wrap text-fg-2">{d.notes}</p>
-              </div>
-            ) : null}
-            {d.sidecars.length ? (
-              <div className="flex flex-col gap-1.5">
-                <span className="label-caps">Files next to it</span>
-                <ul className="flex flex-col gap-0.5">
-                  {d.sidecars.map((f) => (
-                    <li key={f} className="truncate font-mono text-2xs text-fg-3">
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ) : null}
-            {!d.civitai && !d.header?.training.baseModel && !model.hasInfo ? (
-              <p className="rounded-md border border-dashed border-line px-3 py-2 text-xs text-fg-3">
-                No info file next to this model, and Civitai didn't recognize it by its hash (or
-                hasn't been asked yet: see Settings → Civitai).
-              </p>
-            ) : null}
-          </>
-        ) : null}
-      </div>
-      <div className="grid grid-cols-2 gap-1.5 border-t border-line p-3">
-        <Button icon="info" className="col-span-2" onClick={() => openModelInfo(model.id)}>
-          Model info…
-        </Button>
-        <Button icon="edit" onClick={onRename}>
-          Rename
-        </Button>
-        <Button icon="move-to-folder" onClick={onMove}>
-          Move
-        </Button>
-        <Button
-          icon="folder-open"
-          onClick={() =>
-            void api.revealModel(model.id).catch((e: Error) => toast(e.message, "error"))
-          }
-        >
-          Reveal
-        </Button>
-        <Button
-          icon="file-info"
-          onClick={() => {
-            setTarget({ type: "model", id: model.id, name: model.name });
-            if (profileId)
-              void navigate({
-                to: "/p/$profileId/$view",
-                params: { profileId, view: "file-info" },
-              });
-          }}
-        >
-          File info
-        </Button>
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
 /**
- * The pickers' left sidebar: "All", then the folders the files sit in (folders.ts). A click
- * shows that folder (its subfolders too) and opens it; a second click on the shown folder closes
- * it; right-click offers Show in Explorer. Only folders are listed: a LoRA folder can hold
- * thousands of files, and the grid shows them. Rows are the roomy `lg` TreeRows.
+ * The left sidebar of the pickers and Models → Local: "All", then the folders the files sit in
+ * (folders.ts). A click shows that folder (its subfolders too) and opens it; a second click on
+ * the shown folder closes it; right-click offers Show in Explorer. Only folders are listed: a
+ * LoRA folder can hold thousands of files, and the grid shows them. Rows are the roomy `lg`
+ * TreeRows.
  */
 import { TreeRow } from "@client/ui";
 import { type MouseEvent, useState } from "react";

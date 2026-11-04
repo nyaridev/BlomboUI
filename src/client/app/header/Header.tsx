@@ -1,10 +1,9 @@
 /**
- * Header: brand · workflow switcher | main views | system status · errors · avatar.
+ * Header: workflow button | main views | system status · errors · avatar.
  * Views that aren't daily tools (Settings, History, Errors, Help) live in the avatar menu.
  * Below 1024px the main views move to a bottom bar (MobileNav) and the desktop-only tools hide.
  */
 import { Icon } from "@client/icons/Icon";
-import { Logo } from "@client/icons/Logo";
 import { cn } from "@client/lib/cn";
 import { IconButton, Tabs } from "@client/ui";
 import type { MainView, ViewId } from "@shared/constants";
@@ -47,14 +46,6 @@ export function Header({
     // (which grows with the queue and download chips) pushes them aside instead of covering them.
     <header className="relative z-20 grid h-14 grid-cols-[minmax(max-content,1fr)_auto_minmax(max-content,1fr)] items-center gap-3 border-b border-line bg-surface px-3 max-lg:grid-cols-[minmax(0,1fr)_auto] max-lg:gap-2">
       <div className="flex min-w-0 items-center gap-2.5">
-        <button
-          type="button"
-          onClick={() => go("generate")}
-          aria-label="Generate"
-          className="shrink-0 rounded-[9px] focus-ring"
-        >
-          <Logo size={28} />
-        </button>
         <div data-tour="workflow" className="contents">
           <WorkflowSwitcher />
         </div>

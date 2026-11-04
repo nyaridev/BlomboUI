@@ -11,7 +11,7 @@ const STEPS: TourStep[] = [
   {
     target: "[data-tour=workflow]",
     title: "Your workflows",
-    text: "Pick what to run here. Drop a ComfyUI workflow (JSON, PNG or .blombo) on it to add one; its menu has Edit in ComfyUI, Duplicate and Export.",
+    text: "Click it to see all your workflows and pick what to run. Drop a ComfyUI workflow (JSON, PNG or .blombo) on that window to add one; right-click a workflow for Edit in ComfyUI, Duplicate and Export.",
   },
   {
     target: "[data-tour=models]",

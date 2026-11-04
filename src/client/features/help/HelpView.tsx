@@ -195,7 +195,7 @@ function GettingStarted() {
           },
           {
             title: "Pick a workflow",
-            text: "The switcher left in the header lists your workflows. SD 1.5, SDXL and Illustrious come built in; drop any ComfyUI workflow on it to add your own.",
+            text: "The workflow button left in the header opens all your workflows in a window. SD 1.5, SDXL and Illustrious come built in; drop any ComfyUI workflow on that window to add your own.",
           },
           {
             title: "Write a prompt and generate",
@@ -309,10 +309,10 @@ function Workflows() {
             title: "Import",
             text: (
               <>
-                Drop a ComfyUI workflow on the switcher (or use its import button): API or UI{" "}
-                <Mono>.json</Mono>, a ComfyUI <Mono>.png</Mono> / <Mono>.webp</Mono> with the graph
-                inside, or a <Mono>.blombo</Mono> export. Blombo finds the prompts, model, sampler,
-                size and LoRAs by themselves.
+                Drop a ComfyUI workflow on the workflows window (or use its Import button): API or
+                UI <Mono>.json</Mono>, a ComfyUI <Mono>.png</Mono> / <Mono>.webp</Mono> with the
+                graph inside, or a <Mono>.blombo</Mono> export. Blombo finds the prompts, model,
+                sampler, size and LoRAs by themselves.
               </>
             ),
           },
@@ -327,7 +327,7 @@ function Workflows() {
           },
           {
             title: "Edit in ComfyUI",
-            text: "In the switcher's menu, Edit in ComfyUI opens the graph in ComfyUI with your current values. The Blombo bar on top has Save to Blombo (keeps your values and reports what changed), Save as copy and Cancel.",
+            text: "The icon beside the workflow button (or a workflow's right-click menu in the workflows window), Edit in ComfyUI, opens the graph in ComfyUI with your current values. The Blombo bar on top has Save to Blombo (keeps your values and reports what changed), Save as copy and Cancel.",
           },
           {
             title: "Send any canvas to Blombo",

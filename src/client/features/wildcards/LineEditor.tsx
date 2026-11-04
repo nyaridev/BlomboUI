@@ -1,15 +1,14 @@
 /**
  * Line mode: a wildcard file as rows you can edit, add, remove and reorder. A .txt file is one
- * list; a YAML file shows its keys on the left and the chosen key's list on the right.
- * Virtualized, so a 10 000-line file stays quick.
+ * list (virtualized, so a 10 000-line file stays quick); a YAML file opens in Sections
+ * (YamlSections.tsx).
  */
-import { Icon } from "@client/icons/Icon";
-import { cn } from "@client/lib/cn";
-import { Button, IconButton, InlineInput, TextField } from "@client/ui";
+import { Button, IconButton, InlineInput } from "@client/ui";
 import type { WildcardFormat } from "@shared/wildcards";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useMemo, useRef, useState } from "react";
-import { addYamlList, fromLines, setYamlList, toLines, yamlLists } from "./lines";
+import { useRef, useState } from "react";
+import { fromLines, toLines } from "./lines";
+import { YamlSections } from "./YamlSections";
 
 export function LineEditor({
   text,
@@ -22,96 +21,10 @@ export function LineEditor({
 }) {
   if (format === "txt")
     return <LineList lines={toLines(text)} onChange={(lines) => onChange(fromLines(lines))} />;
-  return <YamlLines text={text} onChange={onChange} />;
+  return <YamlSections text={text} onChange={onChange} />;
 }
 
-function YamlLines({ text, onChange }: { text: string; onChange: (text: string) => void }) {
-  const { lists, error } = useMemo(() => yamlLists(text), [text]);
-  const [key, setKey] = useState<string | null>(null);
-  const [newKey, setNewKey] = useState("");
-  const current = lists.find((l) => l.path === key) ?? lists[0];
-  if (error)
-    return (
-      <div className="grid h-full place-items-center p-8 text-center">
-        <p className="max-w-sm text-sm text-fg-3">
-          <Icon name="errors" size={16} className="mb-2 inline text-warning" />
-          <br />
-          This YAML has an error, so it can't be shown as lists. Fix it in Raw mode first: {error}
-        </p>
-      </div>
-    );
-  return (
-    <div className="flex h-full min-h-0 max-lg:flex-col">
-      <div className="flex w-56 shrink-0 flex-col border-r border-line max-lg:h-40 max-lg:w-full max-lg:border-r-0 max-lg:border-b">
-        <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto p-1.5">
-          {lists.map((l) => (
-            <button
-              key={l.path}
-              type="button"
-              onClick={() => setKey(l.path)}
-              className={cn(
-                "flex h-7 w-full items-center gap-2 rounded-sm px-2 text-left text-xs transition-colors focus-ring",
-                current?.path === l.path ? "bg-accent/15 text-fg" : "text-fg-2 hover:bg-field",
-              )}
-            >
-              <span className="flex-1 truncate font-mono">{l.path}</span>
-              <span className="font-mono text-2xs text-fg-4 tabular">{l.items.length}</span>
-            </button>
-          ))}
-          {lists.length === 0 ? <p className="px-2 py-4 text-xs text-fg-3">No lists yet.</p> : null}
-        </div>
-        <form
-          className="flex gap-1 border-t border-line p-1.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            const k = newKey.trim().replace(/^\/+|\/+$/g, "");
-            if (!k) return;
-            onChange(addYamlList(text, k));
-            setKey(k);
-            setNewKey("");
-          }}
-        >
-          <TextField
-            size="sm"
-            mono
-            placeholder="new/key"
-            value={newKey}
-            onChange={(e) => setNewKey(e.target.value)}
-            className="flex-1"
-            aria-label="New key"
-          />
-          <IconButton
-            icon="plus"
-            label="Add key"
-            size="sm"
-            type="submit"
-            disabled={!newKey.trim()}
-          />
-        </form>
-      </div>
-      <div className="min-w-0 flex-1">
-        {current ? (
-          <LineList
-            key={current.path}
-            lines={current.items}
-            onChange={(items) => onChange(setYamlList(text, current.path, items))}
-            header={<span className="font-mono text-xs text-fg-2">__{current.path}__</span>}
-          />
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function LineList({
-  lines,
-  onChange,
-  header,
-}: {
-  lines: string[];
-  onChange: (lines: string[]) => void;
-  header?: ReactNode;
-}) {
+function LineList({ lines, onChange }: { lines: string[]; onChange: (lines: string[]) => void }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const virtualizer = useVirtualizer({
@@ -139,7 +52,6 @@ function LineList({
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex items-center gap-2 border-b border-line px-3 py-1.5 text-xs text-fg-3">
-        {header}
         <span className="tabular">
           {options.toLocaleString()} {options === 1 ? "option" : "options"}
         </span>

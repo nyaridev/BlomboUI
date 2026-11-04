@@ -1,6 +1,7 @@
 /**
  * Wildcard Manager: the profile's wildcards folder as a file tree, an editor for .txt and
- * .yaml files (raw text with YAML folding, lint and __reference__ completion, or line lists),
+ * .yaml files (line lists, YAML as sections of keys, or raw text with YAML folding, lint and
+ * __reference__ completion),
  * and a roll preview that samples what a wildcard expands to. Saving is atomic and refuses to
  * overwrite a file that changed on disk since it was opened. Narrow screens show one panel at a time:
  * the tree, then the open file with a way back.
@@ -186,7 +187,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
   return (
     <div className="flex min-w-0 flex-1 max-lg:flex-col">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-line px-4 py-2 max-lg:flex-wrap max-lg:px-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-2 max-lg:px-2">
           <IconButton
             icon="arrow-left"
             label="Back to files"
@@ -209,8 +210,10 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
               }}
               label="Editing mode"
               options={[
+                file.format === "yaml"
+                  ? { value: "lines", icon: "layers", label: "Sections" }
+                  : { value: "lines", icon: "line-mode", label: "Lines" },
                 { value: "raw", icon: "raw-mode", label: "Raw" },
-                { value: "lines", icon: "line-mode", label: "Lines" },
               ]}
             />
             <IconButton
@@ -237,7 +240,16 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
             </Button>
           </div>
         </div>
-        <div className="min-h-0 flex-1">
+        <div
+          className="min-h-0 flex-1"
+          // Ctrl+S in Lines and Sections too (the raw editor handles its own).
+          onKeyDown={(e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && !e.defaultPrevented) {
+              e.preventDefault();
+              void save();
+            }
+          }}
+        >
           {ui.mode === "raw" ? (
             <WildcardEditor
               docKey={`${file.path}:${file.mtime}:${rawKey}`}

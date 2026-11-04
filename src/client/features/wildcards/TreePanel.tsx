@@ -4,6 +4,7 @@
  * Each of the profile's wildcard folders is a top-level row (its id is the first path segment);
  * files move only within one of them, and a file a higher folder overrides is marked.
  */
+import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useWildcardsChanged } from "@client/lib/queries";
@@ -16,13 +17,14 @@ import {
   Menu,
   type MenuEntry,
   openContextMenu,
+  Segmented,
   TextField,
   TreeRow,
   toast,
 } from "@client/ui";
-import type { WildcardTree } from "@shared/wildcards";
+import { type WildcardFormat, type WildcardTree, wildcardFormat } from "@shared/wildcards";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type DragEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { useWildcardUi } from "./state";
 import { buildTree, folderOf, type TreeNode, visibleRows } from "./tree";
 
@@ -49,15 +51,33 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
   const virtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 28,
+    // Folder rows are Gallery-library sized (the ones after the first with a gap above).
+    estimateSize: (i) => (rows[i]?.depth === 0 ? (i === 0 ? 48 : 56) : 36),
     overscan: 12,
   });
+  // How many files each folder holds, subfolders included.
+  const counts = useMemo(() => {
+    const out = new Map<string, number>();
+    for (const e of tree.entries) {
+      if (e.type !== "file") continue;
+      const parts = e.path.split("/");
+      for (let i = 1; i < parts.length; i++) {
+        const p = parts.slice(0, i).join("/");
+        out.set(p, (out.get(p) ?? 0) + 1);
+      }
+    }
+    return out;
+  }, [tree.entries]);
   const selectedType = ui.open ? "file" : null;
   const hidden = useMemo(() => new Set(tree.hidden), [tree.hidden]);
   const mainId = tree.folders[0]?.id ?? "";
   // Where new files go: the selected file's folder, else the main folder.
   const target = folderOf(ui.open, selectedType) || mainId;
   const shownFolder = tree.folders.find((f) => f.id === target.split("/")[0]) ?? tree.folders[0];
+  const where = (p: string) => {
+    const [id = "", ...rest] = p.split("/");
+    return [tree.folders.find((f) => f.id === id)?.name ?? id, ...rest].join("/");
+  };
 
   // Wildcard folders start open, once each.
   const seen = useRef(new Set<string>());
@@ -110,6 +130,54 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
     }
   };
 
+  const rowMenu = (node: TreeNode, isRoot: boolean): MenuEntry[] => [
+    ...(node.type === "folder"
+      ? [
+          {
+            id: "new",
+            label: "New file here",
+            icon: "file-plus" as const,
+            onSelect: () => setAsk({ kind: "new-file", folder: node.path }),
+          },
+          {
+            id: "new-folder",
+            label: "New folder here",
+            icon: "folder-plus" as const,
+            onSelect: () => setAsk({ kind: "new-folder", folder: node.path }),
+          },
+        ]
+      : []),
+    ...(isRoot
+      ? []
+      : [
+          {
+            id: "rename",
+            label: "Rename",
+            icon: "edit" as const,
+            onSelect: () => setAsk({ kind: "rename", node }),
+          },
+        ]),
+    {
+      id: "reveal",
+      label: "Show in Explorer",
+      icon: "folder-open",
+      onSelect: () =>
+        void api.revealWildcard(node.path).catch((e: Error) => toast(e.message, "error")),
+    },
+    ...(isRoot
+      ? []
+      : [
+          { type: "separator" as const, id: "sep" },
+          {
+            id: "trash",
+            label: "Move to trash",
+            icon: "trash" as const,
+            tone: "danger" as const,
+            onSelect: () => void trash(node),
+          },
+        ]),
+  ];
+
   return (
     <aside
       className={cn(
@@ -117,7 +185,7 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
         className,
       )}
     >
-      <div className="flex items-center gap-1 border-b border-line p-2">
+      <div className="flex flex-col px-3 pt-3">
         <TextField
           size="sm"
           icon="search"
@@ -125,27 +193,31 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
-          className="flex-1"
           aria-label="Find a wildcard file"
         />
-        <IconButton
-          icon="file-plus"
-          label="New file"
-          size="sm"
-          disabled={!mainId}
-          onClick={() => setAsk({ kind: "new-file", folder: target })}
-        />
-        <IconButton
-          icon="folder-plus"
-          label="New folder"
-          size="sm"
-          disabled={!mainId}
-          onClick={() => setAsk({ kind: "new-folder", folder: target })}
-        />
+        <div className="label-caps mt-4 mb-1 flex items-center justify-between px-2 text-[10px]">
+          Files
+          <span className="flex">
+            <IconButton
+              icon="file-plus"
+              label="New file"
+              size="xs"
+              disabled={!mainId}
+              onClick={() => setAsk({ kind: "new-file", folder: target })}
+            />
+            <IconButton
+              icon="folder-plus"
+              label="New folder"
+              size="xs"
+              disabled={!mainId}
+              onClick={() => setAsk({ kind: "new-folder", folder: target })}
+            />
+          </span>
+        </div>
       </div>
       <div
         ref={scrollRef}
-        className="scroll-quiet min-h-0 flex-1 overflow-y-auto p-1.5"
+        className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-3 pb-3"
         onDragLeave={(e) => {
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropTarget(null);
         }}
@@ -166,54 +238,23 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
               const rootIndex = depth === 0 ? roots.get(node.path) : undefined;
               const isRoot = rootIndex !== undefined;
               const isHidden = hidden.has(node.path);
+              const open = folder && (Boolean(query) || ui.expanded.has(node.path));
               // The ⋯ button and a right-click on the row show the same menu.
-              const items: MenuEntry[] = [
-                ...(folder
-                  ? [
-                      {
-                        id: "new",
-                        label: "New file here",
-                        icon: "file-plus" as const,
-                        onSelect: () => setAsk({ kind: "new-file", folder: node.path }),
-                      },
-                    ]
-                  : []),
-                ...(isRoot
-                  ? []
-                  : [
-                      {
-                        id: "rename",
-                        label: "Rename",
-                        icon: "edit" as const,
-                        onSelect: () => setAsk({ kind: "rename", node }),
-                      },
-                    ]),
-                {
-                  id: "reveal",
-                  label: "Show in Explorer",
-                  icon: "folder-open",
-                  onSelect: () =>
-                    void api
-                      .revealWildcard(node.path)
-                      .catch((e: Error) => toast(e.message, "error")),
-                },
-                ...(isRoot
-                  ? []
-                  : [
-                      { type: "separator" as const, id: "sep" },
-                      {
-                        id: "trash",
-                        label: "Move to trash",
-                        icon: "trash" as const,
-                        tone: "danger" as const,
-                        onSelect: () => void trash(node),
-                      },
-                    ]),
-              ];
+              const items = rowMenu(node, isRoot);
+              const menu = (
+                <Menu
+                  width={200}
+                  trigger={
+                    <IconButton icon="more-horizontal" label={`${node.name} options`} size="xs" />
+                  }
+                  items={items}
+                />
+              );
+              const drop = dropTarget === node.path ? "bg-accent/15 ring-1 ring-accent/50" : null;
               return (
                 <div
                   key={node.path}
-                  className="absolute inset-x-0 top-0"
+                  className={cn("absolute inset-x-0 top-0", isRoot && v.index > 0 && "pt-2")}
                   onContextMenu={(e) => openContextMenu(e, items)}
                   style={{ transform: `translateY(${v.start}px)` }}
                   draggable={!isRoot}
@@ -238,46 +279,50 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
                       : undefined
                   }
                 >
-                  <TreeRow
-                    depth={depth}
-                    label={isRoot ? (tree.folders[rootIndex]?.name ?? node.name) : node.name}
-                    meta={
-                      rootIndex === 0 && tree.folders.length > 1 ? (
-                        <Badge tone="accent">Main</Badge>
-                      ) : isHidden ? (
-                        <span
-                          className="text-2xs text-fg-4"
-                          title="A file with the same name in a higher folder is used instead."
-                        >
-                          overridden
-                        </span>
-                      ) : undefined
-                    }
-                    icon={
-                      folder ? "folder" : node.entry?.format === "yaml" ? "raw-mode" : "file-text"
-                    }
-                    open={folder ? Boolean(query) || ui.expanded.has(node.path) : undefined}
-                    selected={ui.open === node.path}
-                    dirty={!folder && Boolean(ui.drafts[node.path])}
-                    className={cn(
-                      dropTarget === node.path && "bg-accent/15 ring-1 ring-accent/50",
-                      isHidden && "text-fg-4",
-                    )}
-                    onClick={() => (folder ? ui.toggle(node.path) : ui.setOpen(node.path))}
-                    actions={
-                      <Menu
-                        width={200}
-                        trigger={
-                          <IconButton
-                            icon="more-horizontal"
-                            label={`${node.name} options`}
-                            size="xs"
-                          />
-                        }
-                        items={items}
-                      />
-                    }
-                  />
+                  {isRoot ? (
+                    <RootRow
+                      name={tree.folders[rootIndex]?.name ?? node.name}
+                      files={counts.get(node.path) ?? 0}
+                      main={rootIndex === 0 && tree.folders.length > 1}
+                      missing={tree.folders[rootIndex]?.exists === false}
+                      open={open}
+                      onToggle={() => ui.toggle(node.path)}
+                      className={drop ?? undefined}
+                      menu={menu}
+                    />
+                  ) : (
+                    <TreeRow
+                      size="lg"
+                      depth={depth - 1}
+                      label={folder ? node.name : stem(node.name)}
+                      meta={
+                        isHidden ? (
+                          <span title="A file with the same name in a higher folder is used instead.">
+                            overridden
+                          </span>
+                        ) : folder ? (
+                          <span className="tabular">{counts.get(node.path) ?? 0}</span>
+                        ) : (
+                          extension(node.name)
+                        )
+                      }
+                      icon={
+                        folder
+                          ? open
+                            ? "folder-open"
+                            : "folder"
+                          : node.entry?.format === "yaml"
+                            ? "raw-mode"
+                            : "file-text"
+                      }
+                      open={folder ? open : undefined}
+                      selected={ui.open === node.path}
+                      dirty={!folder && Boolean(ui.drafts[node.path])}
+                      className={cn(drop, isHidden && "text-fg-4")}
+                      onClick={() => (folder ? ui.toggle(node.path) : ui.setOpen(node.path))}
+                      actions={menu}
+                    />
+                  )}
                 </div>
               );
             })}
@@ -290,23 +335,111 @@ export function TreePanel({ tree, className }: { tree: WildcardTree; className?:
       >
         {shownFolder?.path}
       </div>
-      <AskDialog ask={ask} onClose={() => setAsk(null)} />
+      <AskDialog ask={ask} where={where} onClose={() => setAsk(null)} />
     </aside>
   );
 }
 
-function AskDialog({ ask, onClose }: { ask: Ask; onClose: () => void }) {
+/** A wildcards folder, as the Gallery shows a library: a tile, the name, how many files. */
+function RootRow({
+  name,
+  files,
+  main,
+  missing,
+  open,
+  onToggle,
+  menu,
+  className,
+}: {
+  name: string;
+  files: number;
+  main: boolean;
+  missing: boolean;
+  open: boolean;
+  onToggle: () => void;
+  menu: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={cn("group relative rounded-md", className)}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 rounded-md p-1.5 pr-8 text-left transition-colors hover:bg-field/60 focus-ring"
+      >
+        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-sunken text-fg-3">
+          <Icon
+            name={missing ? "errors" : "wildcards"}
+            size={16}
+            className={missing ? "text-warning" : undefined}
+          />
+        </span>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className="truncate text-sm text-fg">{name}</span>
+            {main ? <Badge tone="accent">Main</Badge> : null}
+          </span>
+          <span
+            className={cn(
+              "truncate text-2xs",
+              missing ? "text-warning" : "font-mono text-fg-3 tabular",
+            )}
+          >
+            {missing
+              ? "Folder not found"
+              : `${files.toLocaleString()} ${files === 1 ? "file" : "files"}`}
+          </span>
+        </span>
+        <Icon
+          name="chevron-right"
+          size={14}
+          className={cn(
+            "shrink-0 text-fg-4 transition-[rotate,opacity] group-hover:opacity-0 group-focus-within:opacity-0 pointer-coarse:hidden",
+            open && "rotate-90",
+          )}
+        />
+      </button>
+      <div className="absolute top-1/2 right-1 -translate-y-1/2 opacity-0 transition-opacity group-hover:opacity-100 pointer-coarse:opacity-100 focus-within:opacity-100">
+        {menu}
+      </div>
+    </div>
+  );
+}
+
+const stem = (name: string) => name.replace(/\.(txt|ya?ml)$/i, "");
+const extension = (name: string) => /\.(txt|ya?ml)$/i.exec(name)?.[1]?.toLowerCase() ?? "";
+
+function AskDialog({
+  ask,
+  where,
+  onClose,
+}: {
+  ask: Ask;
+  /** A tree path as people read it: the wildcards folder by its name. */
+  where: (path: string) => string;
+  onClose: () => void;
+}) {
   const ui = useWildcardUi();
   const changed = useWildcardsChanged();
   const [value, setValue] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The last format picked stays picked (the dialog stays mounted).
+  const [format, setFormat] = useState<WildcardFormat>("txt");
   const initial =
     ask?.kind === "rename"
       ? ask.node.name
       : ask?.kind === "new-file"
-        ? "new-wildcard.txt"
+        ? "new-wildcard"
         : "new folder";
   const shown = value ?? initial;
+  // A typed extension wins over the picked format.
+  const typed = wildcardFormat(shown.trim());
+  const shownFormat = typed ?? format;
+  const pickFormat = (f: WildcardFormat) => {
+    setFormat(f);
+    if (typed) setValue(`${shown.trim().replace(/\.(txt|ya?ml)$/i, "")}.${f}`);
+  };
   const close = () => {
     setValue(null);
     onClose();
@@ -325,7 +458,7 @@ function AskDialog({ ask, onClose }: { ask: Ask; onClose: () => void }) {
         toast(`Renamed to "${shown.trim()}"`, "success");
       } else {
         let name = shown.trim();
-        if (ask.kind === "new-file" && !/\.(txt|ya?ml)$/i.test(name)) name += ".txt";
+        if (ask.kind === "new-file" && !typed) name += `.${format}`;
         const path = ask.folder ? `${ask.folder}/${name}` : name;
         await api.createWildcard(path, ask.kind === "new-file" ? "file" : "folder");
         if (ask.kind === "new-file") ui.setOpen(path);
@@ -352,9 +485,9 @@ function AskDialog({ ask, onClose }: { ask: Ask; onClose: () => void }) {
       title={title}
       description={
         ask?.kind === "new-file"
-          ? `In ${ask.folder}. End the name in .txt (one option per line) or .yaml (lists under keys).`
+          ? `In ${where(ask.folder)}.`
           : ask?.kind === "new-folder"
-            ? `In ${ask.folder}.`
+            ? `In ${where(ask.folder)}.`
             : "Prompts that use the old name need the new one."
       }
       width={460}
@@ -374,18 +507,53 @@ function AskDialog({ ask, onClose }: { ask: Ask; onClose: () => void }) {
         </>
       }
     >
-      <Field label="Name">
-        {(id) => (
-          <TextField
-            id={id}
-            value={shown}
-            mono
-            autoFocus
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && void submit()}
-          />
-        )}
-      </Field>
+      <div className="flex flex-col gap-4">
+        <Field label="Name">
+          {(id) => (
+            <TextField
+              id={id}
+              value={shown}
+              mono
+              autoFocus
+              onFocus={(e) => e.currentTarget.select()}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && void submit()}
+              trailing={
+                ask?.kind === "new-file" && !typed ? (
+                  <span className="pr-1 font-mono text-xs text-fg-4">.{format}</span>
+                ) : undefined
+              }
+            />
+          )}
+        </Field>
+        {ask?.kind === "new-file" ? (
+          <Field
+            label="Format"
+            hint={
+              shownFormat === "yaml"
+                ? "Lists under keys, edited as sections. A key inside is used as __key__, a group's as __group/key__."
+                : `One option per line. Used as __${newTxtName(ask.folder, shown)}__.`
+            }
+          >
+            <Segmented
+              full
+              label="Format"
+              value={shownFormat}
+              onChange={pickFormat}
+              options={[
+                { value: "txt", icon: "file-text", label: "Text (.txt)" },
+                { value: "yaml", icon: "raw-mode", label: "YAML (.yaml)" },
+              ]}
+            />
+          </Field>
+        ) : null}
+      </div>
     </Dialog>
   );
+}
+
+/** The reference a new .txt file gets: its path without the wildcards folder's id. */
+function newTxtName(folder: string, name: string): string {
+  const inside = folder.includes("/") ? `${folder.slice(folder.indexOf("/") + 1)}/` : "";
+  return `${inside}${name.trim().replace(/\.txt$/i, "")}`;
 }

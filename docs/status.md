@@ -29,7 +29,7 @@ Civitai**; on 2026-10-21 the parts that need a real ComfyUI were run on one too 
 | **File Info** | Drop an image to see how it was made (BlomboUI, ComfyUI or A1111 metadata, the embedded graph) and import its workflow, or a `.safetensors` file to read its training details and tags. |
 | **Models** | Local models with one consistent card (thumbnails from the files next to them, NSFW blurred until clicked, a designed face when there's none), an info sheet, rename and move. A fast **Civitai browser** (filters, saved filters, model tabs, in-app model pages) with a **download queue** that sorts files into folders, resumes and saves previews; a **ComfyUI model store**; and background matching of your files on Civitai for thumbnails and trigger words. |
 | **Help & shortcuts** | A Help view (F1) with a prompt guide and playground, a first-run tour, a command palette (Ctrl+K) and shortcuts you can rebind. |
-| **Wildcards** | File tree and a YAML editor with folding, lint and reference autocomplete, a line-by-line mode, and a roll preview. |
+| **Wildcards** | File tree, new .txt or .yaml files, a line-by-line mode, YAML as sections of keys (the old app's dashboard), a raw editor with folding, lint and reference autocomplete, and a roll preview. |
 | **Desktop or browser** | The same app in a native window (Tauri) or any browser. |
 
 The complete feature inventory, with what's kept, new, or suggested, lives in [`review/features.html`](review/features.html).

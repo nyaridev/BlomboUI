@@ -31,7 +31,8 @@ const rebase = (p: string, from: string, to: string) =>
 export const useWildcardUi = create<WildcardUi>((set) => ({
   open: null,
   expanded: new Set(),
-  mode: "raw",
+  // Lines (Sections for YAML) first, as in the old app; Raw is a click away.
+  mode: "lines",
   drafts: {},
   setOpen: (open) =>
     set((s) => {

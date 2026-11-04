@@ -1,7 +1,8 @@
 /**
  * The Civitai browser's UI state: the applied filter (seeded from Settings → Civitai's browse
  * defaults the first time), the opened model tabs, and whether NSFW images are blurred (this
- * view only, on each time the app starts). Server data stays in TanStack Query.
+ * view only, on each time the app starts). The filter and the tabs are remembered in this window
+ * (localStorage), so a reload or a restart comes back to them. Server data stays in TanStack Query.
  */
 import { BrowseFilter, type BrowseFilterInput } from "@shared/civitai";
 import type { Settings } from "@shared/settings";
@@ -31,11 +32,35 @@ interface CivitaiState {
 }
 
 const MAX_TABS = 12;
+const KEY = "blombo.civitai";
+
+type Saved = Pick<CivitaiState, "filter" | "tabs" | "active">;
+
+/** What was saved, as far as it's still valid: a bad filter is dropped, bad tabs are skipped. */
+export function readSaved(raw: unknown): Saved {
+  const o = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const filter = BrowseFilter.safeParse(o.filter);
+  const tabs = (Array.isArray(o.tabs) ? o.tabs : [])
+    .filter(
+      (t): t is OpenTab =>
+        Number.isInteger(t?.id) && t.id > 0 && typeof t.name === "string" && t.name.length > 0,
+    )
+    .map((t) => ({ id: t.id, name: t.name.slice(0, 200) }))
+    .slice(-MAX_TABS);
+  const active = tabs.some((t) => t.id === o.active) ? (o.active as number) : null;
+  return { filter: o.filter && filter.success ? filter.data : null, tabs, active };
+}
+
+function load(): Saved {
+  try {
+    return readSaved(JSON.parse(localStorage.getItem(KEY) ?? "{}"));
+  } catch {
+    return readSaved({});
+  }
+}
 
 export const useCivitai = create<CivitaiState>((set, get) => ({
-  filter: null,
-  tabs: [],
-  active: null,
+  ...load(),
   blur: true,
   toggleBlur: () => set((s) => ({ blur: !s.blur })),
   seed: (browse) => {
@@ -60,6 +85,15 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
     }),
   show: (id) => set({ active: id }),
 }));
+
+useCivitai.subscribe((s, prev) => {
+  if (s.filter === prev.filter && s.tabs === prev.tabs && s.active === prev.active) return;
+  try {
+    localStorage.setItem(KEY, JSON.stringify({ filter: s.filter, tabs: s.tabs, active: s.active }));
+  } catch {
+    // Storage can be unavailable; the state still holds for this session.
+  }
+});
 
 /** Open a Civitai model in its tab, from anywhere (switches Models to the Civitai tab). */
 export function openCivitaiModel(id: number, name: string): void {

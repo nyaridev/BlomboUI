@@ -1,12 +1,24 @@
 /**
  * Which Models tab is open, and the deep links into it from elsewhere: History's "Show in
  * Models" selects a local file, a local model's "Civitai page" and History's browse list open a
- * Civitai model tab. The opened Civitai tabs live in civitai/state.ts.
+ * Civitai model tab. The opened Civitai tabs live in civitai/state.ts. The open tab is remembered
+ * in this window (localStorage).
  */
 import type { StoreCategory } from "@shared/manager";
 import { create } from "zustand";
 
 export type ModelsTab = "local" | "civitai" | "manager";
+const TABS: ModelsTab[] = ["local", "civitai", "manager"];
+const KEY = "blombo.modelsTab";
+
+function savedTab(): ModelsTab {
+  try {
+    const t = localStorage.getItem(KEY);
+    return TABS.find((x) => x === t) ?? "local";
+  } catch {
+    return "local";
+  }
+}
 
 interface ModelsNav {
   tab: ModelsTab;
@@ -22,7 +34,7 @@ interface ModelsNav {
 }
 
 export const useModelsNav = create<ModelsNav>((set, get) => ({
-  tab: "local",
+  tab: savedTab(),
   select: null,
   manager: null,
   setTab: (tab) => set({ tab }),
@@ -39,3 +51,12 @@ export const useModelsNav = create<ModelsNav>((set, get) => ({
     return id;
   },
 }));
+
+useModelsNav.subscribe((s, prev) => {
+  if (s.tab === prev.tab) return;
+  try {
+    localStorage.setItem(KEY, s.tab);
+  } catch {
+    // Storage can be unavailable; the tab still holds for this session.
+  }
+});

@@ -9,7 +9,7 @@ import {
   isMap,
   isScalar,
   isSeq,
-  type Pair,
+  Pair,
   parseDocument,
   type Scalar,
   YAMLMap,
@@ -181,8 +181,9 @@ export const liftKey = (text: string, path: number[]) =>
   });
 
 /**
- * Add a key at the top (`parent` []) or inside a group (an empty key becomes one): a wildcard
- * with one empty line, or an empty group. Returns the new text and the new key's path.
+ * Add a key at the top (`parent` []) or inside a key: a wildcard with one empty line, or an empty
+ * group. An empty key or a wildcard becomes a group for it (a wildcard keeps its lines in a
+ * wildcard of its own name inside). Returns the new text and the new key's path.
  */
 export function addSection(
   text: string,
@@ -194,7 +195,15 @@ export function addSection(
     let map = root;
     if (parent.length) {
       const { pair } = locate(root, parent);
-      if (!isMap(pair.value)) pair.value = new YAMLMap();
+      if (!isMap(pair.value)) {
+        const group = new YAMLMap();
+        // A wildcard's lines can't sit beside keys: they move into a wildcard inside it, named
+        // like it ("colors" → "colors/colors").
+        const lines = pair.value;
+        if (isSeq(lines) && lines.items.some((i) => !isScalar(i) || String(i.value ?? "").trim()))
+          group.items.push(new Pair(doc.createNode(keyOf(pair)), lines));
+        pair.value = group;
+      }
       map = pair.value as YAMLMap;
     }
     // An empty group reads back as `{}` (inline); its first key writes it as a block.

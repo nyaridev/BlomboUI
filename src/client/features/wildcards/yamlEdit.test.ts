@@ -108,6 +108,21 @@ describe("edits", () => {
     expect(readSections(again.text).sections?.[1]?.key).toBe("wildcard_2");
   });
 
+  it("nests inside a wildcard: an empty one becomes a group, lines move into a child", () => {
+    const fresh = addSection("", [], "list");
+    const nested = addSection(fresh.text, fresh.path, "list");
+    expect(nested.path).toEqual([0, 0]);
+    expect(nested.text).toBe('wildcard:\n  wildcard:\n    - ""\n');
+    const withLines = addSection("colors: # warm ones\n  - red\n  - amber\n", [0], "group");
+    expect(withLines.path).toEqual([0, 1]);
+    expect(withLines.text).toBe(
+      // The comment goes with the lines it was on.
+      "colors:\n  colors:\n    # warm ones\n    - red\n    - amber\n  group: {}\n",
+    );
+    const r = readSections(withLines.text).sections ?? [];
+    expect(referenceOf(r, [0, 0])).toBe("colors/colors");
+  });
+
   it("writes groups and lists filled from empty as blocks, not inline", () => {
     const group = addSection("", [], "group");
     const inside = addSection(group.text, group.path, "list");

@@ -11,7 +11,7 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { DRAG_LIFT, type Sortable, useSortableRow } from "@client/lib/sortable";
 import { Button, CopyButton, Dialog, IconButton, TextField } from "@client/ui";
-import { createContext, type ReactNode, use, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, use, useEffect, useMemo, useRef, useState } from "react";
 import {
   addItem,
   addSection,
@@ -101,7 +101,9 @@ export function YamlSections({
               <Section section={s} depth={0} />
             </div>
           ))}
-          <AddButtons parent={[]} />
+          <div className="flex flex-wrap gap-1.5">
+            <AddButtons parent={[]} />
+          </div>
         </div>
       </div>
     </EditorCtx>
@@ -204,7 +206,9 @@ function Body({ section, depth }: { section: YamlSection; depth: number }) {
         {value.children.map((c) => (
           <Section key={`${c.path.at(-1)}:${c.key}`} section={c} depth={depth + 1} />
         ))}
-        <AddButtons parent={path} />
+        <div className="flex flex-wrap gap-1.5">
+          <AddButtons parent={path} />
+        </div>
       </>
     );
   if (value.kind === "empty")
@@ -220,7 +224,7 @@ function Body({ section, depth }: { section: YamlSection; depth: number }) {
         >
           Add line
         </Button>
-        <AddButtons parent={path} inline />
+        <AddButtons parent={path} look="secondary" />
       </div>
     );
   return (
@@ -243,7 +247,7 @@ function Body({ section, depth }: { section: YamlSection; depth: number }) {
 }
 
 function Lines({ path, items }: { path: number[]; items: string[] }) {
-  const { text, onChange, setFocus } = useEditor();
+  const { text, sections, onChange, setFocus } = useEditor();
   const sortable = useSortableRow(items.length, (from, to) =>
     onChange(moveListItem(text, path, from, to)),
   );
@@ -267,15 +271,16 @@ function Lines({ path, items }: { path: number[]; items: string[] }) {
           }}
         />
       ))}
-      <Button
-        size="sm"
-        variant="ghost"
-        icon="plus"
-        className="self-start"
-        onClick={() => add(items.length)}
-      >
-        Add line
-      </Button>
+      <div className="flex flex-wrap gap-1.5">
+        <Button size="sm" variant="ghost" icon="plus" onClick={() => add(items.length)}>
+          Add line
+        </Button>
+        {/* Nesting inside a wildcard turns it into a group; with lines in it, that asks first. */}
+        <AddButtons
+          parent={path}
+          moves={items.some((l) => l.trim()) ? referenceOf(sections, path) : undefined}
+        />
+      </div>
     </div>
   );
 }
@@ -348,35 +353,72 @@ function Line({
   );
 }
 
-/** Add a wildcard or a group at the top (`parent` []) or inside a key. */
-function AddButtons({ parent, inline }: { parent: number[]; inline?: boolean }) {
+/**
+ * Add a wildcard or a group at the top (`parent` []) or inside a key. Inside a wildcard that has
+ * lines (`moves`: its reference) it asks first: the key becomes a group and its lines move into
+ * a wildcard of its own name inside it, so prompts using it need the new name.
+ */
+function AddButtons({
+  parent,
+  look = "ghost",
+  moves,
+}: {
+  parent: number[];
+  look?: "ghost" | "secondary";
+  moves?: string;
+}) {
   const { text, onChange, setFocus } = useEditor();
+  const [asking, setAsking] = useState<"list" | "group" | null>(null);
   const add = (kind: "list" | "group") => {
     const r = addSection(text, parent, kind);
     onChange(r.text);
     setFocus(`key:${pathId(r.path)}`);
   };
-  const buttons: ReactNode = (
+  const ask = (kind: "list" | "group") => (moves ? setAsking(kind) : add(kind));
+  const last = moves?.split("/").pop() ?? "";
+  return (
     <>
-      <Button
-        size="sm"
-        variant={inline ? "secondary" : "ghost"}
-        icon="plus"
-        onClick={() => add("list")}
-      >
+      <Button size="sm" variant={look} icon="plus" onClick={() => ask("list")}>
         Add wildcard
       </Button>
-      <Button
-        size="sm"
-        variant={inline ? "secondary" : "ghost"}
-        icon="folder-plus"
-        onClick={() => add("group")}
-      >
+      <Button size="sm" variant={look} icon="folder-plus" onClick={() => ask("group")}>
         Add group
       </Button>
+      {moves ? (
+        <Dialog
+          open={asking !== null}
+          onOpenChange={(o) => !o && setAsking(null)}
+          title={`Make "${last}" a group?`}
+          width={480}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setAsking(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (asking) add(asking);
+                  setAsking(null);
+                }}
+              >
+                Make it a group
+              </Button>
+            </>
+          }
+        >
+          <p className="text-sm text-fg-2 text-pretty">
+            A key holds lines or more keys, not both. Its lines move into a wildcard inside it,{" "}
+            <span className="font-mono text-fg">
+              __{moves}/{last}__
+            </span>
+            , so prompts that use <span className="font-mono text-fg">__{moves}__</span> need the
+            new name. Nothing is saved until you press Save.
+          </p>
+        </Dialog>
+      ) : null}
     </>
   );
-  return inline ? buttons : <div className="flex flex-wrap gap-1.5">{buttons}</div>;
 }
 
 /** Removing a key that holds something asks first; a group can keep its keys one level up. */

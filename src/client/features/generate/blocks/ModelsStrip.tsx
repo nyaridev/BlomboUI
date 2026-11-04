@@ -16,17 +16,10 @@ import { findLoraTags, moveLoraTag, removeLoraTag, setLoraStrength } from "@shar
 import { findWildcards } from "@shared/prompt/wildcards";
 import type { Settings } from "@shared/settings";
 import type { Binding } from "@shared/workflow/manifest";
-import {
-  type DragEvent,
-  type KeyboardEvent,
-  type PointerEvent,
-  type ReactNode,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type ReactNode, useMemo } from "react";
 import { useModelThumb, useStrengthRange } from "../../models/thumbs";
 import { modelDisplayName } from "../labels";
+import { DropMarker, moveItem, NO_DRAG, type Sortable, useSortableRow } from "../sortable";
 import { useValue } from "../state";
 import { useRoleBinding } from "../workflow";
 
@@ -64,103 +57,12 @@ function SelectedGlow({ on }: { on: boolean | undefined }) {
 
 const stem = (f: string) => modelDisplayName(f).toLowerCase();
 const strengthText = (v: number) => String(Number(v.toFixed(2)));
-const moveItem = <T,>(list: T[], from: number, to: number) => {
-  const next = [...list];
-  const [item] = next.splice(from, 1);
-  if (item !== undefined) next.splice(to, 0, item);
-  return next;
-};
 
 const TILE_WIDTH: Record<TileSize, string> = { pictures: "w-28", compact: "w-16", text: "" };
 const TILE = "relative aspect-[2/3] shrink-0 rounded-lg border";
 /** Shown while the tile is hovered or holds focus (and always on touch screens). */
 const ON_HOVER =
   "opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 pointer-coarse:opacity-100";
-/** Controls inside a draggable tile carry this, so using them never starts a drag. */
-const NO_DRAG = "data-no-drag";
-
-/* ── Dragging LoRAs into another order ─────────────────────────────────── */
-
-type DragProps = {
-  draggable: boolean;
-  onPointerDownCapture: (e: PointerEvent) => void;
-  onDragStart: (e: DragEvent) => void;
-  onDragOver: (e: DragEvent) => void;
-  onDrop: (e: DragEvent) => void;
-  onDragEnd: () => void;
-};
-
-interface Sortable {
-  drag: DragProps;
-  dragging: boolean;
-  /** Where a drop would land, next to this tile. */
-  marker: "before" | "after" | null;
-  /** Alt+← / Alt+→ on the tile's button moves it (dragging for the keyboard). */
-  onKeyDown: (e: KeyboardEvent) => void;
-}
-
-/** Native drag and drop (dnd-kit stays out of Generate's first load), plus Alt+arrows. */
-function useSortableRow(count: number, move: (from: number, to: number) => void) {
-  const [drag, setDrag] = useState<{ from: number; over: number | null; after: boolean } | null>(
-    null,
-  );
-  const blocked = useRef(false);
-  return (index: number): Sortable => ({
-    dragging: drag?.from === index,
-    marker:
-      drag && drag.over === index && drag.from !== index ? (drag.after ? "after" : "before") : null,
-    onKeyDown: (e) => {
-      if (!e.altKey || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
-      e.preventDefault();
-      const to = index + (e.key === "ArrowLeft" ? -1 : 1);
-      if (to >= 0 && to < count) move(index, to);
-    },
-    drag: {
-      draggable: true,
-      onPointerDownCapture: (e) => {
-        blocked.current = Boolean((e.target as Element).closest(`[${NO_DRAG}]`));
-      },
-      onDragStart: (e) => {
-        if (blocked.current) {
-          e.preventDefault();
-          return;
-        }
-        e.dataTransfer.effectAllowed = "move";
-        e.dataTransfer.setData("text/x-blombo-lora", String(index));
-        setDrag({ from: index, over: null, after: false });
-      },
-      onDragOver: (e) => {
-        if (!drag) return;
-        e.preventDefault();
-        const r = e.currentTarget.getBoundingClientRect();
-        const after = e.clientX > r.left + r.width / 2;
-        if (drag.over !== index || drag.after !== after) setDrag({ ...drag, over: index, after });
-      },
-      onDrop: (e) => {
-        if (!drag) return;
-        e.preventDefault();
-        let to = drag.after ? index + 1 : index;
-        if (drag.from < to) to -= 1;
-        if (to !== drag.from) move(drag.from, to);
-        setDrag(null);
-      },
-      onDragEnd: () => setDrag(null),
-    },
-  });
-}
-
-function DropMarker({ at }: { at: "before" | "after" | null }) {
-  if (!at) return null;
-  return (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "pointer-events-none absolute inset-y-0.5 z-20 w-0.5 rounded-full bg-accent",
-        at === "before" ? "-left-[5px]" : "-right-[5px]",
-      )}
-    />
-  );
-}
 
 /* ── Tiles ─────────────────────────────────────────────────────────────── */
 

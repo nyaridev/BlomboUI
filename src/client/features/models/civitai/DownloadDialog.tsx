@@ -1,9 +1,11 @@
 /**
- * The download pop-up: everything about where a Civitai file lands, before it starts. Opens from
- * a model page's Download and from a double click on a Browse card. Pick the version and file,
- * then the kind folder, the subfolder and the file name, all filled in from Settings → Civitai
- * (sorting, the author's prefix); the full path underneath follows every change (the server's
- * plan, the same one the download uses). Download queues it and closes.
+ * The download pop-up: everything about where a file lands, before it starts. Civitai's opens
+ * from a model page's Download and from a double click on a Browse card: pick the version and
+ * file, then the kind folder, the subfolder and the file name, all filled in from Settings →
+ * Civitai (sorting, the author's prefix). The full path underneath follows every change (the
+ * server's plan, the same one the download uses). Download queues it and closes. The subfolder,
+ * name and "Saved as" parts (`useDestination`, `Destination`) are shared with Models → Manager's
+ * pop-up.
  */
 import { Icon } from "@client/icons/Icon";
 import { useGoToView } from "@client/lib/hooks";
@@ -27,8 +29,9 @@ import {
 } from "@client/ui";
 import type { CivitaiModel } from "@shared/civitai";
 import { MODEL_KINDS, type ModelKind } from "@shared/constants";
-import type { EnqueueBody } from "@shared/downloads";
-import { useEffect, useState } from "react";
+import type { DownloadPlan, EnqueueBody } from "@shared/downloads";
+import type { UseQueryResult } from "@tanstack/react-query";
+import { type ReactNode, useEffect, useState } from "react";
 import { useSettingsNav } from "../../settings/nav";
 import { useModelsNav } from "../nav";
 
@@ -41,6 +44,145 @@ function useDebounced<T>(value: T, ms: number): T {
     return () => clearTimeout(t);
   }, [value, ms]);
   return v;
+}
+
+/** The subfolder and file name a person typed (undefined: the automatic ones). */
+export function useDestination() {
+  const [folder, setFolder] = useState<string | undefined>(undefined);
+  const [name, setName] = useState<string | undefined>(undefined);
+  const typedFolder = useDebounced(folder, 250);
+  const typedName = useDebounced(name, 250);
+  const fields = (f: string | undefined, n: string | undefined) => ({
+    ...(f !== undefined ? { folder: f } : {}),
+    ...(n?.trim() ? { name: n.trim() } : {}),
+  });
+  return {
+    folder,
+    setFolder,
+    name,
+    setName,
+    /** For the plan: settles 250 ms after typing stops. */
+    typed: fields(typedFolder, typedName),
+    /** For the download: what's typed right now. */
+    now: fields(folder, name),
+    changed: folder !== undefined || name !== undefined,
+    reset: () => {
+      setFolder(undefined);
+      setName(undefined);
+    },
+  };
+}
+export type DestinationState = ReturnType<typeof useDestination>;
+
+/** Subfolder and File name fields over the "Saved as" box with the plan's notes. */
+export function Destination({
+  d,
+  plan,
+  nameHint,
+  onEnter,
+  onClose,
+  children,
+}: {
+  d: DestinationState;
+  plan: UseQueryResult<DownloadPlan>;
+  nameHint: string;
+  /** Enter in the name field (download). */
+  onEnter: () => void;
+  onClose: () => void;
+  /** More notes in the box (early access, safety scan). */
+  children?: ReactNode;
+}) {
+  const p = plan.data;
+  const ext = p ? p.file.slice(stemOf(p.file).length) : "";
+  return (
+    <>
+      <Field
+        label="Subfolder"
+        hint="Inside the kind folder. Use / for nested folders; empty: the kind folder itself."
+      >
+        {(id) => (
+          <TextField
+            id={id}
+            mono
+            icon="folder"
+            value={d.folder ?? p?.folder ?? ""}
+            onChange={(e) => d.setFolder(e.target.value)}
+          />
+        )}
+      </Field>
+      <Field label="File name" hint={nameHint}>
+        {(id) => (
+          <TextField
+            id={id}
+            mono
+            icon="file"
+            value={d.name ?? (p ? stemOf(p.file) : "")}
+            onChange={(e) => d.setName(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && onEnter()}
+            trailing={<span className="font-mono text-xs text-fg-3">{ext}</span>}
+          />
+        )}
+      </Field>
+      <div className="flex flex-col gap-1.5 rounded-md border border-line bg-sunken px-3 py-2.5">
+        <span className="label-caps">Saved as</span>
+        {plan.isLoading && !p ? (
+          <Skeleton className="h-4 w-3/4" />
+        ) : plan.error ? (
+          <p className="text-xs text-danger">{plan.error.message}</p>
+        ) : p ? (
+          <span className="font-mono text-xs break-all text-fg" title={p.path}>
+            {p.path}
+          </span>
+        ) : null}
+        {p?.blocked ? (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <Icon name="info" size={13} className="mt-px shrink-0" />
+            {p.blocked}
+          </p>
+        ) : null}
+        {p?.installed ? (
+          <p className="flex items-start gap-1.5 text-xs text-success">
+            <Icon name="check-circle" size={13} className="mt-px shrink-0" />
+            <span className="min-w-0">
+              Already in your models folder:{" "}
+              <button
+                type="button"
+                className="font-mono break-all underline-offset-2 hover:underline focus-ring"
+                onClick={() => {
+                  useModelsNav.getState().showLocal(p.installed ?? "");
+                  onClose();
+                }}
+              >
+                {p.installed}
+              </button>
+            </span>
+          </p>
+        ) : p?.nameTaken ? (
+          <p className="text-xs text-fg-3">
+            A different file already has that name; this one is saved next to it as "
+            {p.file.replace(/(\.[^.]+)$/, " (2)$1")}".
+          </p>
+        ) : null}
+        {children}
+      </div>
+    </>
+  );
+}
+
+/** Queue a download with what's typed right now; close and say so when it's in the queue. */
+export function useQueueDownload(onClose: () => void) {
+  const start = useStartDownload();
+  return {
+    pending: start.isPending,
+    run: (body: EnqueueBody) =>
+      start.mutate(body, {
+        onSuccess: (d) => {
+          toast(`Downloading ${d.name}`, "info");
+          onClose();
+        },
+        onError: (e) => toast(e.message, "error"),
+      }),
+  };
 }
 
 export function DownloadDialog({
@@ -93,50 +235,28 @@ function Body({
   const [fileId, setFileId] = useState<number | null>(primary?.id ?? null);
   // undefined: what Settings → Civitai would pick.
   const [kind, setKind] = useState<ModelKind | undefined>(undefined);
-  const [folder, setFolder] = useState<string | undefined>(undefined);
-  const [name, setName] = useState<string | undefined>(undefined);
+  const d = useDestination();
   const account = useCivitaiAccount().data;
   const goTo = useGoToView();
-  const start = useStartDownload();
+  const queue = useQueueDownload(onClose);
   // Another version: its primary file.
   useEffect(() => setFileId(primary?.id ?? null), [primary?.id]);
 
-  const typedFolder = useDebounced(folder, 250);
-  const typedName = useDebounced(name, 250);
-  const body: EnqueueBody | null =
+  const base =
     version && fileId
       ? {
-          source: "civitai",
+          source: "civitai" as const,
           modelId: model.id,
           versionId: version.id,
           fileId,
           ...(kind ? { kind } : {}),
-          ...(typedFolder !== undefined ? { folder: typedFolder } : {}),
-          ...(typedName?.trim() ? { name: typedName.trim() } : {}),
         }
       : null;
-  const plan = useDownloadPlan(body);
+  const plan = useDownloadPlan(base ? { ...base, ...d.typed } : null);
   const p = plan.data;
   const file = version?.files.find((f) => f.id === fileId);
-  const ext = p?.file.slice(stemOf(p.file).length) ?? "";
-  const changed = kind !== undefined || folder !== undefined || name !== undefined;
-
-  const download = () => {
-    if (!body) return;
-    // What's typed right now, even within the debounce.
-    const now: EnqueueBody = {
-      ...body,
-      ...(folder !== undefined ? { folder } : {}),
-      ...(name?.trim() ? { name: name.trim() } : {}),
-    };
-    start.mutate(now, {
-      onSuccess: (d) => {
-        toast(`Downloading ${d.name}`, "info");
-        onClose();
-      },
-      onError: (e) => toast(e.message, "error"),
-    });
-  };
+  const ready = Boolean(base && p && !p.blocked && !plan.isFetching);
+  const download = () => base && ready && queue.run({ ...base, ...d.now });
 
   if (!version) return <p className="text-sm text-fg-3">This model has no versions to download.</p>;
   return (
@@ -179,77 +299,13 @@ function Body({
           />
         </Field>
       ) : null}
-      <Field
-        label="Subfolder"
-        hint="Inside the kind folder. Use / for nested folders; empty: the kind folder itself."
+      <Destination
+        d={d}
+        plan={plan}
+        nameHint="The author's prefix and your naming setting are already applied."
+        onEnter={download}
+        onClose={onClose}
       >
-        {(id) => (
-          <TextField
-            id={id}
-            mono
-            icon="folder"
-            value={folder ?? p?.folder ?? ""}
-            onChange={(e) => setFolder(e.target.value)}
-          />
-        )}
-      </Field>
-      <Field
-        label="File name"
-        hint="The author's prefix and your naming setting are already applied."
-      >
-        {(id) => (
-          <TextField
-            id={id}
-            mono
-            icon="file"
-            value={name ?? (p ? stemOf(p.file) : "")}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && p && !p.blocked && download()}
-            trailing={<span className="font-mono text-xs text-fg-3">{ext}</span>}
-          />
-        )}
-      </Field>
-
-      <div className="flex flex-col gap-1.5 rounded-md border border-line bg-sunken px-3 py-2.5">
-        <span className="label-caps">Saved as</span>
-        {plan.isLoading && !p ? (
-          <Skeleton className="h-4 w-3/4" />
-        ) : plan.error ? (
-          <p className="text-xs text-danger">{plan.error.message}</p>
-        ) : p ? (
-          <span className="font-mono text-xs break-all text-fg" title={p.path}>
-            {p.path}
-          </span>
-        ) : null}
-        {p?.blocked ? (
-          <p className="flex items-start gap-1.5 text-xs text-warning">
-            <Icon name="info" size={13} className="mt-px shrink-0" />
-            {p.blocked}
-          </p>
-        ) : null}
-        {p?.installed ? (
-          <p className="flex items-start gap-1.5 text-xs text-success">
-            <Icon name="check-circle" size={13} className="mt-px shrink-0" />
-            <span className="min-w-0">
-              Already in your models folder:{" "}
-              <button
-                type="button"
-                className="font-mono break-all underline-offset-2 hover:underline focus-ring"
-                onClick={() => {
-                  useModelsNav.getState().showLocal(p.installed ?? "");
-                  onClose();
-                }}
-              >
-                {p.installed}
-              </button>
-            </span>
-          </p>
-        ) : p?.nameTaken ? (
-          <p className="text-xs text-fg-3">
-            A different file already has that name; this one is saved next to it as "
-            {p.file.replace(/(\.[^.]+)$/, " (2)$1")}".
-          </p>
-        ) : null}
         {version.earlyAccess && !account?.keySet ? (
           <p className="flex items-start gap-1.5 text-xs text-warning">
             <Icon name="lock" size={13} className="mt-px shrink-0" />
@@ -272,17 +328,16 @@ function Body({
         {file?.safe === false ? (
           <Badge tone="danger">This file failed Civitai's safety scan</Badge>
         ) : null}
-      </div>
+      </Destination>
 
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
           icon="undo"
-          disabled={!changed}
+          disabled={!d.changed && kind === undefined}
           onClick={() => {
             setKind(undefined);
-            setFolder(undefined);
-            setName(undefined);
+            d.reset();
           }}
         >
           Back to automatic
@@ -293,8 +348,8 @@ function Body({
         <Button
           variant="primary"
           icon="download"
-          loading={start.isPending}
-          disabled={!body || !p || Boolean(p.blocked) || plan.isFetching}
+          loading={queue.pending}
+          disabled={!ready}
           onClick={download}
         >
           {p?.installed ? "Download again" : "Download"}

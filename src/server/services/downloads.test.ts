@@ -233,6 +233,18 @@ describe("Manager installs", () => {
       kind: "ultralytics",
       installed: false,
     });
+    // The download pop-up can change the subfolder and the name; the kind folder and extension stay.
+    const moved = await q().plan({
+      source: "manager",
+      entryId: entry?.id ?? "",
+      folder: "faces",
+      name: "my: face",
+    });
+    expect([moved.kindFolder, moved.folder, moved.file]).toEqual([
+      "ultralytics",
+      "faces",
+      "my face.pt",
+    ]);
     const d = await finished(
       (await q().enqueue({ source: "manager", entryId: entry?.id ?? "" })).id,
     );

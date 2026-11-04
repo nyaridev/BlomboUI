@@ -323,17 +323,22 @@ export class DownloadQueue {
       : "This profile has no models folder yet. Choose one in Settings → Folders.";
     if (body.source === "manager") {
       const e = await this.deps.catalog.entry(body.entryId);
-      const rel = e.folder ? `${e.folder}/${e.filename}` : e.filename;
+      // The catalog's folder and name, unless the download pop-up changed them (a custom node's
+      // folder, with no kind folder of its own, stays as the catalog says).
+      const kf = e.folder?.split("/")[0] ?? "";
+      const sub = e.folder?.split("/").slice(1).join("/") ?? "";
+      const folder = e.folder && body.folder !== undefined ? cleanFolder(body.folder) : sub;
+      const file = e.folder && body.name ? renamedFile(e.filename, body.name) : e.filename;
+      const rel = e.folder ? [kf, folder, file].filter(Boolean).join("/") : e.filename;
       const abs = root && e.folder ? resolveInside(root, rel) : null;
       const installed = abs && (await exists(abs)) ? rel : null;
-      const kf = e.folder?.split("/")[0] ?? "";
       return {
         plan: {
           name: e.name,
           kind: e.kind,
           kindFolder: kf,
-          folder: e.folder?.split("/").slice(1).join("/") ?? "",
-          file: e.filename,
+          folder,
+          file,
           path: abs ?? rel,
           size: e.size,
           nameTaken: installed !== null,

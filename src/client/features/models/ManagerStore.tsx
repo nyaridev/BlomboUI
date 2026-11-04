@@ -1,18 +1,21 @@
 /**
  * Models → Manager: the ComfyUI model catalog as a store. Categories with counts, search, sizes,
- * installed state, and one-click install through the same download queue as Civitai, into the
- * ComfyUI folder the catalog names. The list is virtualized (the catalog has hundreds of files).
+ * installed state, and install through the same download queue as Civitai: Install opens a
+ * pop-up with the ComfyUI folder and file name the catalog names, both changeable (the subfolder
+ * inside the kind folder, the name keeps its extension). The list is virtualized (the catalog has
+ * hundreds of files).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
-import { qk, useCatalog, useStartDownload } from "@client/lib/queries";
+import { qk, useCatalog, useDownloadPlan } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
   Badge,
   Button,
+  Dialog,
   EmptyState,
   IconButton,
   ProgressBar,
@@ -31,6 +34,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Destination, useDestination, useQueueDownload } from "./civitai/DownloadDialog";
 import { useModelsNav } from "./nav";
 
 const CATEGORY_ICON: Record<StoreCategory, IconName> = {
@@ -299,7 +303,7 @@ function EntryRow({ entry: e, noFolder }: { entry: CatalogEntry; noFolder: boole
     s.downloads.find((d) => d.entryId === e.id && d.state !== "done" && d.state !== "cancelled"),
   );
   const progress = useLive((s) => (live ? s.downloadProgress[live.id] : undefined));
-  const start = useStartDownload();
+  const [asking, setAsking] = useState(false);
   const fraction =
     live && (progress?.size ?? live.size)
       ? (progress?.received ?? live.received) / ((progress?.size ?? live.size) as number)
@@ -394,24 +398,57 @@ function EntryRow({ entry: e, noFolder }: { entry: CatalogEntry; noFolder: boole
             </span>
           </Tooltip>
         ) : (
-          <Button
-            size="sm"
-            icon="download"
-            loading={start.isPending}
-            onClick={() =>
-              start.mutate(
-                { source: "manager", entryId: e.id },
-                {
-                  onSuccess: () => toast(`Installing ${e.name}`, "info"),
-                  onError: (x) => toast(x.message, "error"),
-                },
-              )
-            }
-          >
+          <Button size="sm" icon="download" onClick={() => setAsking(true)}>
             Install
           </Button>
         )}
       </div>
+      {asking ? <InstallDialog entry={e} onClose={() => setAsking(false)} /> : null}
     </div>
+  );
+}
+
+/** Install's pop-up: the catalog's folder and file name, both changeable before it downloads. */
+function InstallDialog({ entry: e, onClose }: { entry: CatalogEntry; onClose: () => void }) {
+  const d = useDestination();
+  const base = { source: "manager" as const, entryId: e.id };
+  const plan = useDownloadPlan({ ...base, ...d.typed });
+  const p = plan.data;
+  const queue = useQueueDownload(onClose);
+  const ready = Boolean(p && !p.blocked && !p.installed && !plan.isFetching);
+  const install = () => ready && queue.run({ ...base, ...d.now });
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()} title={`Install ${e.name}`} width={560}>
+      <div className="flex flex-col gap-4">
+        {e.description ? <p className="text-sm text-pretty text-fg-2">{e.description}</p> : null}
+        <Destination
+          d={d}
+          plan={plan}
+          nameHint="Some nodes look for this exact name; change it only if you know the node allows it."
+          onEnter={install}
+          onClose={onClose}
+        />
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" icon="undo" disabled={!d.changed} onClick={d.reset}>
+            Back to the catalog's
+          </Button>
+          <Button variant="ghost" className="ml-auto" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            icon="download"
+            loading={queue.pending}
+            disabled={!ready}
+            onClick={install}
+          >
+            Install
+            {e.size ? (
+              <span className="font-normal opacity-75">· {formatBytes(e.size)}</span>
+            ) : null}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }

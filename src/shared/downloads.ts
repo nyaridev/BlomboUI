@@ -100,7 +100,14 @@ export const EnqueueBody = z.discriminatedUnion("source", [
     /** Override the file name (without its extension, which stays the file's own). */
     name: z.string().trim().min(1).max(200).optional(),
   }),
-  z.object({ source: z.literal("manager"), entryId: z.string().min(1).max(80) }),
+  z.object({
+    source: z.literal("manager"),
+    entryId: z.string().min(1).max(80),
+    /** Override the subfolder inside the entry's kind folder ("" = the kind folder itself). */
+    folder: FolderPath.optional(),
+    /** Override the file name (without its extension, which stays the file's own). */
+    name: z.string().trim().min(1).max(200).optional(),
+  }),
 ]);
 export type EnqueueBody = z.infer<typeof EnqueueBody>;
 

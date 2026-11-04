@@ -4,7 +4,7 @@
  * recent searches and saved filters, and the results as one virtualized grid of ModelCards that
  * loads the next page as you near the end. Results come from the server's cached proxy.
  */
-import { Icon } from "@client/icons/Icon";
+import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useElementWidth } from "@client/lib/hooks";
@@ -39,6 +39,7 @@ import {
   CIVITAI_SORTS,
   CIVITAI_TYPE_LABELS,
   type CivitaiCard,
+  type CivitaiSort,
   compactCount,
   type SavedFilter,
 } from "@shared/civitai";
@@ -50,6 +51,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { cardMark } from "./marks";
 import { useCivitai } from "./state";
 
+/** Six cards a row at most; fewer when a card would get thinner than MIN_CARD. */
+const MAX_COLS = 6;
 const MIN_CARD = 188;
 const GAP = 12;
 const FOOTER = 34;
@@ -78,6 +81,17 @@ export function Browse() {
 }
 
 /* ── filter bar ─────────────────────────────────────────────────────────── */
+
+const SORT_ICONS: Record<CivitaiSort, IconName> = {
+  "Highest Rated": "star",
+  "Most Downloaded": "download",
+  "Most Liked": "heart",
+  "Most Discussed": "text",
+  "Most Collected": "pin",
+  "Most Images": "image",
+  Newest: "clock",
+  Oldest: "history",
+};
 
 function FilterBar({ filter }: { filter: BrowseFilter }) {
   const setFilter = useCivitai((s) => s.setFilter);
@@ -132,51 +146,46 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
           selected={filter.types.length === 0}
           onClick={() => setFilter({ types: [] })}
         >
-          All types
+          All
         </Chip>
         {CIVITAI_FILTER_TYPES.map((t) => (
           <Chip key={t} size="sm" selected={filter.types.includes(t)} onClick={() => toggleType(t)}>
             {CIVITAI_TYPE_LABELS[t] ?? t}
           </Chip>
         ))}
-        <span className="mx-1 h-5 w-px bg-line" />
-        <Select<string>
-          size="sm"
-          label="Base model"
-          value={filter.baseModels[0] ?? "any"}
-          onChange={(v) => setFilter({ baseModels: v === "any" ? [] : [v] })}
-          className="w-[150px]"
-          options={[
-            { value: "any", label: "Any base model" },
-            ...CIVITAI_BASE_MODELS.map((b) => ({ value: b, label: b })),
-          ]}
-        />
-        <Select
-          size="sm"
-          label="Sort"
-          value={filter.sort}
-          onChange={(sort) => setFilter({ sort })}
-          className="w-[160px]"
-          options={CIVITAI_SORTS.map((s) => ({
-            value: s,
-            label: s,
-            icon: s === "Newest" ? "clock" : s === "Most Downloaded" ? "download" : "heart",
-          }))}
-        />
-        <Select
-          size="sm"
-          label="Period"
-          value={filter.period}
-          onChange={(period) => setFilter({ period })}
-          className="w-[116px]"
-          options={CIVITAI_PERIODS.map((p) => ({
-            value: p,
-            label: CIVITAI_PERIOD_LABELS[p],
-            icon: "calendar",
-          }))}
-        />
-        <NsfwBlurToggle />
-        <div className="ml-auto flex items-center gap-1">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+          <Select<string>
+            size="sm"
+            label="Base model"
+            value={filter.baseModels[0] ?? "any"}
+            onChange={(v) => setFilter({ baseModels: v === "any" ? [] : [v] })}
+            className="w-[150px]"
+            options={[
+              { value: "any", label: "Any base model" },
+              ...CIVITAI_BASE_MODELS.map((b) => ({ value: b, label: b })),
+            ]}
+          />
+          <Select
+            size="sm"
+            label="Sort"
+            value={filter.sort}
+            onChange={(sort) => setFilter({ sort })}
+            className="w-[160px]"
+            options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
+          />
+          <Select
+            size="sm"
+            label="Period"
+            value={filter.period}
+            onChange={(period) => setFilter({ period })}
+            className="w-[116px]"
+            options={CIVITAI_PERIODS.map((p) => ({
+              value: p,
+              label: CIVITAI_PERIOD_LABELS[p],
+              icon: "calendar",
+            }))}
+          />
+          <NsfwBlurToggle />
           {filter.username ? (
             <Chip size="sm" icon="user" selected onRemove={() => setFilter({ username: "" })}>
               {filter.username}
@@ -337,7 +346,7 @@ export function NsfwBlurToggle() {
       }
     >
       <Chip size="sm" icon={blur ? "eye-off" : "eye"} selected={blur} onClick={toggle}>
-        Blur NSFW
+        NSFW
       </Chip>
     </Tooltip>
   );
@@ -443,7 +452,7 @@ function Grid({
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(innerRef);
-  const cols = Math.max(1, Math.floor((width + GAP) / (MIN_CARD + GAP)));
+  const cols = Math.min(MAX_COLS, Math.max(1, Math.floor((width + GAP) / (MIN_CARD + GAP))));
   const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : MIN_CARD;
   const rowH = Math.round((cardW * 4) / 3) + FOOTER + GAP;
   const rows = Math.ceil(items.length / cols);

@@ -68,7 +68,17 @@ export function civitaiKind(type: string): ModelKind | null {
   return TYPE_KINDS[type] ?? null;
 }
 
-export const CIVITAI_SORTS = ["Highest Rated", "Most Downloaded", "Newest"] as const;
+/** Civitai's own model sorts, as its site lists them. */
+export const CIVITAI_SORTS = [
+  "Highest Rated",
+  "Most Downloaded",
+  "Most Liked",
+  "Most Discussed",
+  "Most Collected",
+  "Most Images",
+  "Newest",
+  "Oldest",
+] as const;
 export type CivitaiSort = (typeof CIVITAI_SORTS)[number];
 
 export const CIVITAI_PERIODS = ["AllTime", "Year", "Month", "Week", "Day"] as const;

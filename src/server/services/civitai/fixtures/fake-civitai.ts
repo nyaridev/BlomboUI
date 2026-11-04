@@ -368,9 +368,11 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
           .sort((a, b) =>
             sort === "Newest"
               ? b.id - a.id
-              : sort === "Most Downloaded"
-                ? b.downloads - a.downloads
-                : b.likes - a.likes,
+              : sort === "Oldest"
+                ? a.id - b.id
+                : sort === "Most Downloaded"
+                  ? b.downloads - a.downloads
+                  : b.likes - a.likes,
           );
         const items = list.slice(offset, offset + limit).map(modelJson);
         const next = offset + limit < list.length ? String(offset + limit) : null;

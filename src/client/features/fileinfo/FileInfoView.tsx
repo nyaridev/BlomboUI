@@ -15,8 +15,9 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useClock } from "@client/lib/clock";
 import { formatBytes } from "@client/lib/number";
-import { useImportWorkflow, useSaveModelInfo } from "@client/lib/queries";
+import { useImportWorkflow, useSaveModelInfo, useSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
+import { useVariant } from "@client/lib/variants";
 import {
   Badge,
   Button,
@@ -36,6 +37,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { useActiveChoice } from "../generate/workflow";
+import { Filmstrip, Grid, IMAGE_LOOKS, Split } from "./CivitaiGallery";
 import {
   authorImages,
   CivitaiAbout,
@@ -194,16 +196,27 @@ function Result({
   dropped: File | null;
 }) {
   const civitai = useFileCivitai(info, dropped);
+  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   const [shown, setShown] = useState(0);
   const images = useMemo(
     () => (civitai?.match ? authorImages(civitai.match) : []),
     [civitai?.match],
   );
   const current = images[shown] ?? null;
+  const look = useVariant("fileinfo.images", "Civitai images", IMAGE_LOOKS);
+  const Look = { filmstrip: Filmstrip, split: Split, grid: Grid, stage: null }[look];
 
   return (
     <div className="flex flex-col gap-4">
-      {civitai ? (
+      {civitai?.match && Look && images.length ? (
+        <Look
+          images={images}
+          label={`${civitai.match.model.name} images`}
+          blurNsfw={blurNsfw}
+          index={Math.min(shown, images.length - 1)}
+          onIndex={setShown}
+        />
+      ) : civitai ? (
         <CivitaiHero civitai={civitai} images={images} onIndexChange={setShown} />
       ) : info.kind === "image" && imageSrc ? (
         <div className="checker grid max-h-[34rem] place-items-center overflow-hidden rounded-xl border border-line">
@@ -223,7 +236,7 @@ function Result({
         ) : null}
       </div>
 
-      {current?.meta ? <ImageSettings meta={current.meta} /> : null}
+      {current?.meta && look !== "split" ? <ImageSettings meta={current.meta} /> : null}
 
       <FileFacts info={info} civitai={civitai} />
 

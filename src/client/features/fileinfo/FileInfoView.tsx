@@ -233,6 +233,8 @@ function Result({
       </div>
 
       {civitai?.match ? <CivitaiDetails match={civitai.match} /> : null}
+      {current?.meta ? <ImageSettings meta={current.meta} /> : null}
+
       <FileFacts info={info} civitai={civitai} />
       {info.error ? (
         <p className="flex items-start gap-2 rounded-md border border-yellow/30 bg-yellow/10 px-3 py-2.5 text-sm text-warning">
@@ -240,8 +242,6 @@ function Result({
           {info.error}
         </p>
       ) : null}
-
-      {current?.meta ? <ImageSettings meta={current.meta} /> : null}
       {info.image ? <ImageSections image={info.image} /> : null}
       {info.safetensors ? <SafetensorsSections st={info.safetensors} /> : null}
       {civitai?.match ? <CivitaiAbout match={civitai.match} /> : null}

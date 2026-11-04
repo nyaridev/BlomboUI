@@ -10,7 +10,7 @@ import { api } from "@client/lib/api";
 import { useGoToView } from "@client/lib/hooks";
 import { qk, useCivitaiByHash, useSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Badge, Button, Chip, Collapsible, CopyButton, Panel, toast } from "@client/ui";
+import { Badge, Button, Chip, Collapsible, CopyButton, Panel } from "@client/ui";
 import {
   CIVITAI_TYPE_LABELS,
   type CivitaiImage,
@@ -21,7 +21,7 @@ import {
 import type { FileInfo } from "@shared/fileinfo";
 import { embeddedHashes } from "@shared/safetensors";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { type ReactNode, useMemo } from "react";
 import { localVersions } from "../models/civitai/marks";
 import { RichText } from "../models/civitai/RichText";
 import { openCivitaiModel, useCivitai } from "../models/civitai/state";
@@ -202,7 +202,7 @@ export function ImageSettings({ meta }: { meta: CivitaiImageMeta }) {
   );
 }
 
-/** Name, creator, type, version, base model and stats beside the trigger words. */
+/** One panel: name, creator and stats on top, then trigger words, details and tags. */
 export function CivitaiDetails({ match }: { match: Found }) {
   const { model } = match;
   const version = versionOf(match);
@@ -218,53 +218,68 @@ export function CivitaiDetails({ match }: { match: Found }) {
   };
   const words = version?.trainedWords ?? [];
   return (
-    <div className="flex gap-4 max-lg:flex-col">
-      <Panel tone="civitai" className="flex min-w-0 flex-1 flex-col gap-4 p-5">
-        <div className="flex flex-col gap-1.5">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <Badge tone="accent">{CIVITAI_TYPE_LABELS[model.type] ?? model.type}</Badge>
-            {version?.baseModel ? <Badge>{version.baseModel}</Badge> : null}
-            {model.nsfw ? <Badge tone="warning">NSFW</Badge> : null}
-            {installed ? (
-              <Badge tone="success">
-                <Icon name="check" size={11} /> In your models folder
-              </Badge>
-            ) : null}
-          </div>
-          <h2 className="text-xl font-semibold tracking-tight text-balance break-words text-fg">
-            {model.name}
-          </h2>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-3">
-            {model.creator ? (
-              <button
-                type="button"
-                className="flex items-center gap-1.5 rounded-sm text-accent-ink hover:underline focus-ring"
-                title={`More from ${model.creator}`}
-                onClick={() => browse({ username: model.creator ?? "", query: "" })}
-              >
-                {model.creatorImage ? (
-                  <img
-                    src={model.creatorImage}
-                    alt=""
-                    className="h-5 w-5 rounded-full object-cover"
-                  />
-                ) : (
-                  <Icon name="user" size={14} />
-                )}
-                {model.creator}
-              </button>
-            ) : null}
-            {version ? <span>{version.name}</span> : null}
-            <span className="flex items-center gap-1 tabular" title="Downloads">
-              <Icon name="download" size={13} />
-              {compactCount(model.downloads)}
-            </span>
-            <span className="flex items-center gap-1 tabular" title="Likes">
-              <Icon name="heart" size={13} />
-              {compactCount(model.likes)}
-            </span>
-          </div>
+    <Panel tone="civitai" className="flex min-w-0 flex-col gap-4 p-5">
+      <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <Badge tone="accent">{CIVITAI_TYPE_LABELS[model.type] ?? model.type}</Badge>
+          {version?.baseModel ? <Badge>{version.baseModel}</Badge> : null}
+          {model.nsfw ? <Badge tone="warning">NSFW</Badge> : null}
+          {installed ? (
+            <Badge tone="success">
+              <Icon name="check" size={11} /> In your models folder
+            </Badge>
+          ) : null}
         </div>
+        <h2 className="text-xl font-semibold tracking-tight text-balance break-words text-fg">
+          {model.name}
+        </h2>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-3">
+          {model.creator ? (
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-sm text-accent-ink hover:underline focus-ring"
+              title={`More from ${model.creator}`}
+              onClick={() => browse({ username: model.creator ?? "", query: "" })}
+            >
+              {model.creatorImage ? (
+                <img
+                  src={model.creatorImage}
+                  alt=""
+                  className="h-5 w-5 rounded-full object-cover"
+                />
+              ) : (
+                <Icon name="user" size={14} />
+              )}
+              {model.creator}
+            </button>
+          ) : null}
+          {version ? <span>{version.name}</span> : null}
+          <span className="flex items-center gap-1 tabular" title="Downloads">
+            <Icon name="download" size={13} />
+            {compactCount(model.downloads)}
+          </span>
+          <span className="flex items-center gap-1 tabular" title="Likes">
+            <Icon name="heart" size={13} />
+            {compactCount(model.likes)}
+          </span>
+        </div>
+      </div>
+      {words.length ? (
+        <Group title="Trigger words">
+          <div className="flex flex-wrap gap-1.5">
+            {words.map((w) => (
+              <span
+                key={w}
+                className="inline-flex h-7 max-w-full min-w-0 items-center gap-0.5 rounded-md border border-line bg-field pr-0.5 pl-2 text-fg"
+              >
+                <span className="truncate font-mono text-xs">{w}</span>
+                <CopyButton text={w} label={`Copy "${w}"`} />
+              </span>
+            ))}
+          </div>
+        </Group>
+      ) : null}
+      <Group title="Details">
         <Facts
           columns={3}
           items={[
@@ -291,7 +306,9 @@ export function CivitaiDetails({ match }: { match: Found }) {
             },
           ]}
         />
-        {model.tags.length ? (
+      </Group>
+      {model.tags.length ? (
+        <Group title="Tags">
           <div className="flex flex-wrap gap-1">
             {model.tags.slice(0, 16).map((t) => (
               <Chip key={t} size="sm" icon="tag" onClick={() => browse({ query: t, username: "" })}>
@@ -299,36 +316,19 @@ export function CivitaiDetails({ match }: { match: Found }) {
               </Chip>
             ))}
           </div>
-        ) : null}
-      </Panel>
-      {words.length ? (
-        <Panel tone="civitai" className="flex w-[38%] shrink-0 flex-col gap-2 p-5 max-lg:w-full">
-          <div className="flex items-center gap-2">
-            <span className="label-caps">Trigger words</span>
-            <CopyButton
-              text={words.join(", ")}
-              label="Copy all trigger words"
-              className="ml-auto"
-            />
-          </div>
-          <div className="flex flex-wrap gap-1.5">
-            {words.map((w) => (
-              <Chip
-                key={w}
-                size="sm"
-                onClick={() =>
-                  void navigator.clipboard
-                    ?.writeText(w)
-                    .then(() => toast(`Copied "${w}"`, "success"))
-                }
-              >
-                {w}
-              </Chip>
-            ))}
-          </div>
-        </Panel>
+        </Group>
       ) : null}
-    </div>
+    </Panel>
+  );
+}
+
+/** A titled part of the model panel, under a line. */
+function Group({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="flex flex-col gap-2.5 border-t border-line pt-4">
+      <h3 className="label-caps">{title}</h3>
+      {children}
+    </section>
   );
 }
 

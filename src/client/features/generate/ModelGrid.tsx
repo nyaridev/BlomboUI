@@ -14,9 +14,14 @@
  * with the setting on, to full references in wildcard files (shared/prompt/renames.ts). The top
  * bar searches, filters by base models (several, grouped by maker), keeps what the workflow
  * uses first (the eye), sorts and rescans.
+ *
+ * With `picks` (an XY plot axis, `PicksDialog`), the same grid picks several models of one kind
+ * instead: a click adds or removes a card from the list and nothing in the workflow changes;
+ * the eye keeps the picked ones first.
  */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
+import { cn } from "@client/lib/cn";
 import { useElementWidth } from "@client/lib/hooks";
 import {
   qk,
@@ -73,6 +78,13 @@ import { useBindings } from "./workflow";
 
 export type PickerTab = "checkpoints" | "loras" | "wildcards" | "other";
 
+/** Several models of one kind picked into a list (an XY plot axis). */
+export interface ModelPicks {
+  kind: ModelKind;
+  value: string[];
+  onChange: (value: string[]) => void;
+}
+
 const OTHER_KINDS: Array<{ value: ModelKind; label: string }> = [
   { value: "vae", label: "VAE" },
   { value: "text_encoders", label: "Text encoders" },
@@ -126,17 +138,24 @@ const tagName = (file: string) =>
   file.replace(/\\/g, "/").replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
 
 export function ModelGrid({
-  tab,
-  onDone,
-  target,
-  onTarget,
+  tab: shownTab,
+  onDone = () => {},
+  target = null,
+  onTarget = () => {},
+  picks,
+  className,
 }: {
   tab: PickerTab;
-  onDone: () => void;
+  onDone?: () => void;
   /** The strip's tile a pick changes (null: a pick adds, or sets the tab's first model). */
-  target: StripTarget | null;
-  onTarget: (target: StripTarget | null) => void;
+  target?: StripTarget | null;
+  onTarget?: (target: StripTarget | null) => void;
+  picks?: ModelPicks;
+  /** The grid's height (75svh in the Generate view). */
+  className?: string;
 }) {
+  // Picking into a list: LoRAs behave as the LoRAs tab, other kinds as Other with that kind.
+  const tab: PickerTab = picks ? (picks.kind === "loras" ? "loras" : "other") : shownTab;
   const bindings = useBindings();
   const [pickedKind, setPickedKind] = useState<ModelKind>("vae");
   const main =
@@ -146,7 +165,8 @@ export function ModelGrid({
   const targetBinding =
     target?.kind === "binding" ? bindings.find((b) => b.id === target.id) : undefined;
   // Other opens on the clicked tile's kind (a VAE, a text encoder…).
-  const otherKind: ModelKind = (tab === "other" && targetBinding?.modelKind) || pickedKind;
+  const otherKind: ModelKind =
+    picks?.kind ?? ((tab === "other" && targetBinding?.modelKind) || pickedKind);
 
   const kind: ModelKind | null =
     tab === "checkpoints"
@@ -245,6 +265,7 @@ export function ModelGrid({
     [prompt, instant],
   );
   const isSelected = (item: Item) => {
+    if (picks) return picks.value.includes(item.id);
     if (tab === "loras")
       return inPrompt.has(tagName(item.id).toLowerCase()) || inPrompt.has(item.name.toLowerCase());
     if (tab === "wildcards") return prompt.includes(`__${item.id}__`);
@@ -254,7 +275,7 @@ export function ModelGrid({
   // biome-ignore lint/correctness/useExhaustiveDependencies: isSelected reads these
   const loaded = useMemo(
     () => new Set(showLoaded ? items.filter(isSelected).map((i) => i.id) : []),
-    [showLoaded, items, inPrompt, prompt, selectedValue, tab],
+    [showLoaded, items, inPrompt, prompt, selectedValue, tab, picks?.value],
   );
 
   // Files from several profile models folders: one top folder per models folder, by its name.
@@ -412,6 +433,14 @@ export function ModelGrid({
   };
 
   const pick = (item: Item) => {
+    if (picks) {
+      picks.onChange(
+        picks.value.includes(item.id)
+          ? picks.value.filter((v) => v !== item.id)
+          : [...picks.value, item.id],
+      );
+      return;
+    }
     const swapTag =
       tab === "loras" && target?.kind === "lora" ? findLoraTags(prompt)[target.index] : undefined;
     const swapWildcard =
@@ -493,16 +522,19 @@ export function ModelGrid({
       tab === "loras" || tab === "wildcards" || (tab === "other" && otherKind === "embeddings");
     const use: MenuEntry = {
       id: "use",
-      label:
-        tab === "loras"
+      label: picks
+        ? isSelected(item)
+          ? "Remove from the plot"
+          : "Add to the plot"
+        : tab === "loras"
           ? isSelected(item)
             ? "Remove LoRA"
             : "Add LoRA"
           : adds
             ? "Add to prompt"
             : "Use this model",
-      icon: tab === "loras" && isSelected(item) ? "x" : adds ? "plus" : "check",
-      disabled: isSelected(item) && tab !== "wildcards" && tab !== "loras",
+      icon: (tab === "loras" || picks) && isSelected(item) ? "x" : adds || picks ? "plus" : "check",
+      disabled: !picks && isSelected(item) && tab !== "wildcards" && tab !== "loras",
       onSelect: () => pick(item),
     };
     const rename: MenuEntry = {
@@ -559,7 +591,7 @@ export function ModelGrid({
 
   return (
     // The Generate view scrolls as a whole, so the grid gets a height of its own.
-    <div className="flex h-[75svh] min-h-[420px] flex-col gap-3">
+    <div className={cn("flex h-[75svh] min-h-[420px] flex-col gap-3", className)}>
       <div className="flex items-center gap-2 max-lg:flex-wrap">
         <IconButton
           icon="sidebar"
@@ -571,13 +603,17 @@ export function ModelGrid({
         />
         <TextField
           icon="search"
-          placeholder={`Search ${tab === "other" ? OTHER_KINDS.find((k) => k.value === otherKind)?.label.toLowerCase() : tab}`}
+          placeholder={
+            picks
+              ? "Search"
+              : `Search ${tab === "other" ? OTHER_KINDS.find((k) => k.value === otherKind)?.label.toLowerCase() : tab}`
+          }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onClear={() => setQuery("")}
           className="min-w-0 flex-1"
         />
-        {tab === "other" ? (
+        {tab === "other" && !picks ? (
           <Segmented
             size="sm"
             value={otherKind}
@@ -602,9 +638,13 @@ export function ModelGrid({
         <IconButton
           icon={showLoaded ? "eye" : "eye-off"}
           label={
-            showLoaded
-              ? "Showing what the workflow uses first (click to list it like the rest)"
-              : "Show what the workflow uses first, past the search and filters"
+            picks
+              ? showLoaded
+                ? "Showing the picked ones first (click to list them like the rest)"
+                : "Show the picked ones first, past the search and filters"
+              : showLoaded
+                ? "Showing what the workflow uses first (click to list it like the rest)"
+                : "Show what the workflow uses first, past the search and filters"
           }
           variant="secondary"
           active={showLoaded}

@@ -10,7 +10,7 @@
  *           Prompt S/R) with their values, plus how the grid is drawn
  */
 import { Icon } from "@client/icons/Icon";
-import { useLocalModels, useModels, useSettings } from "@client/lib/queries";
+import { useLocalModels, useSettings } from "@client/lib/queries";
 import {
   Button,
   Checkbox,
@@ -367,16 +367,13 @@ function AxisModels({
   onChange: (axis: AxisDraft) => void;
 }) {
   const kind = axisKind(axis.type, bindings);
-  const b = bindings.find((x) => x.id === axis.type);
-  // A loader's own choices (what ComfyUI lists for it); LoRAs from the loras folder.
-  const listed = useModels(b?.options?.length ? null : kind).data?.names;
-  const options = b?.options?.length ? b.options : (listed ?? []);
+  const type = axis.type === "lora" ? "LoRA" : bindings.find((x) => x.id === axis.type)?.label;
   return (
     <ModelPicks
       kind={kind}
-      options={options}
       value={axis.picks}
       label={label}
+      title={`${label} · ${type ?? "Models"}`}
       onChange={(picks) => onChange({ ...axis, picks })}
     />
   );

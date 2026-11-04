@@ -1,7 +1,8 @@
 /**
  * File Info's Civitai images as an endless carousel: the picked image sits in the middle at its
- * own shape, the others run off both sides and wrap around. The wheel or a drag (with a fling)
- * moves it and it settles on the nearest image; a click on a side image brings it to the middle,
+ * own shape, the others run off both sides and wrap around. A wheel notch moves one image; a
+ * drag (with a fling) moves it freely and it settles on the nearest image; a click on a side
+ * image brings it to the middle,
  * a click on the middle one opens it full screen; ← → step, Enter opens. NSFW images stay
  * blurred until clicked.
  *
@@ -26,6 +27,8 @@ import {
 } from "react";
 
 const GAP = 8;
+/** Trackpad pixels that make one image's step (a mouse wheel notch is always one). */
+const WHEEL_STEP = 100;
 /** Pixels a press may move and still be a click. */
 const SLOP = 5;
 /** Extra width rendered past each edge, so tiles exist before they slide in. */
@@ -154,26 +157,35 @@ export function CivitaiCarousel({
     place(geo.centerOf(aim.current));
   }, [geo, place]);
 
-  // The wheel moves the row (it must cancel the page's scroll, so the listener is native).
+  // A wheel notch moves one image; a trackpad's small steps add up to one image per WHEEL_STEP
+  // pixels. The listener is native because it must cancel the page's scroll.
   useEffect(() => {
     const el = view.current;
     if (!el || !loop) return;
-    let idle: ReturnType<typeof setTimeout> | undefined;
+    let acc = 0;
+    let quiet: ReturnType<typeof setTimeout> | undefined;
     const onWheel = (e: WheelEvent) => {
       const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       if (!d) return;
       e.preventDefault();
-      anim.current?.stop();
-      place(pos.current + d * (e.deltaMode === 1 ? 16 : 1));
-      clearTimeout(idle);
-      idle = setTimeout(() => slideTo(geo.nearest(pos.current)), 140);
+      const notch = e.deltaMode !== 0 || Math.abs(d) >= WHEEL_STEP / 2;
+      acc = notch ? 0 : acc + d;
+      if (notch || Math.abs(acc) >= WHEEL_STEP) {
+        slideTo(aim.current + Math.sign(notch ? d : acc));
+        acc = 0;
+      }
+      // A pause forgets a half-made trackpad step.
+      clearTimeout(quiet);
+      quiet = setTimeout(() => {
+        acc = 0;
+      }, 200);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       el.removeEventListener("wheel", onWheel);
-      clearTimeout(idle);
+      clearTimeout(quiet);
     };
-  }, [loop, place, slideTo, geo]);
+  }, [loop, slideTo]);
 
   const veiled = (i: number) => Boolean(images[i]?.nsfw && blurNsfw && !revealed.has(i));
   const step = (d: number) => slideTo(aim.current + d);

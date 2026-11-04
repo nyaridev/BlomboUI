@@ -34,6 +34,7 @@ import {
   type PlanInput,
   planFileName,
   planFolder,
+  renamedFile,
 } from "../../shared/downloads.ts";
 import type { LiveTopic, ServerMessage } from "../../shared/live.ts";
 import { type LookupInfo, LookupInfo as LookupInfoSchema } from "../../shared/models.ts";
@@ -389,7 +390,8 @@ export class DownloadQueue {
     const folder =
       body.folder !== undefined ? cleanFolder(body.folder) : planFolder(input, settings.folderBy);
     const prefix = await this.authorPrefix(profileId, input.creator, settings, remember);
-    const file = planFileName(input, settings.naming, prefix);
+    const planned = planFileName(input, settings.naming, prefix);
+    const file = body.name ? renamedFile(planned, body.name) : planned;
     const kf = kind ? kindFolder(kind) : "";
     const rel = [kf, folder, file].filter(Boolean).join("/");
     const abs = root && kind ? resolveInside(root, rel) : null;

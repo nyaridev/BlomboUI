@@ -1,6 +1,7 @@
 /**
- * Models → Civitai → Browse: a clear filter bar (search, types, base model, sort, period, the
- * NSFW blur; what's listed follows the profile's Civitai site),
+ * Models → Civitai → Browse: a clear filter bar (saved filters, search, the NSFW blur, types,
+ * base model, sort, period; what's listed follows the profile's Civitai site). A card opens its
+ * model (a middle click opens it behind), a double click asks to download it (DownloadDialog),
  * recent searches and saved filters, and the results as one virtualized grid of ModelCards that
  * loads the next page as you near the end. Results come from the server's cached proxy.
  */
@@ -49,12 +50,15 @@ import { slugId } from "@shared/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { DownloadDialog } from "./DownloadDialog";
 import { cardMark } from "./marks";
 import { useCivitai } from "./state";
 
 /** Six cards a row at most; fewer when a card would get thinner than MIN_CARD. */
 const MAX_COLS = 6;
 const MIN_CARD = 188;
+/** How long a click waits to see if it's a double click (the download pop-up). */
+const DOUBLE_CLICK_MS = 220;
 const GAP = 12;
 const FOOTER = 34;
 
@@ -120,6 +124,7 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
           search(text);
         }}
       >
+        <SavedFilters filter={filter} onApply={replace} />
         <TextField
           icon="search"
           value={text}
@@ -186,7 +191,6 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
               {filter.username}
             </Chip>
           ) : null}
-          <SavedFilters filter={filter} onApply={replace} />
           {changed ? (
             <Button size="sm" variant="ghost" icon="undo" onClick={() => replace(defaults)}>
               Reset
@@ -242,12 +246,15 @@ function SavedFilters({
     "My filter";
   return (
     <Popover
-      placement="bottom-end"
+      placement="bottom-start"
       className="w-80 p-0"
       trigger={
-        <Button size="sm" variant="ghost" icon="star">
-          Saved filters{saved.length ? ` (${saved.length})` : ""}
-        </Button>
+        <IconButton
+          icon="star"
+          variant="secondary"
+          label={saved.length ? `Saved filters (${saved.length})` : "Saved filters"}
+          active={saved.some((f) => JSON.stringify(f.filter) === JSON.stringify(filter))}
+        />
       }
     >
       {(close) => (
@@ -352,6 +359,7 @@ export function NsfwBlurToggle({ size = "sm" }: { size?: "sm" | "md" }) {
 function Results({ filter }: { filter: BrowseFilter }) {
   const q = useCivitaiModels(filter);
   const open = useCivitai((s) => s.open);
+  const [downloading, setDownloading] = useState<number | null>(null);
   const settings = useSettings().data;
   const blurNsfw = useCivitai((s) => s.blur);
   const showMarks = settings?.civitai.marks ?? true;
@@ -413,17 +421,21 @@ function Results({ filter }: { filter: BrowseFilter }) {
       />
     );
   return (
-    <Grid
-      items={items}
-      blurNsfw={blurNsfw}
-      mark={(c) => cardMark(c, downloads, showMarks)}
-      onOpen={(c) => open(c.id, c.name)}
-      onEnd={() => {
-        if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
-      }}
-      loadingMore={q.isFetchingNextPage}
-      fetching={q.isFetching && !q.isFetchingNextPage}
-    />
+    <>
+      <Grid
+        items={items}
+        blurNsfw={blurNsfw}
+        mark={(c) => cardMark(c, downloads, showMarks)}
+        onOpen={(c, background) => open(c.id, c.name, background)}
+        onDownload={(c) => setDownloading(c.id)}
+        onEnd={() => {
+          if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
+        }}
+        loadingMore={q.isFetchingNextPage}
+        fetching={q.isFetching && !q.isFetchingNextPage}
+      />
+      <DownloadDialog modelId={downloading} onClose={() => setDownloading(null)} />
+    </>
   );
 }
 
@@ -432,6 +444,7 @@ function Grid({
   blurNsfw,
   mark,
   onOpen,
+  onDownload,
   onEnd,
   loadingMore,
   fetching,
@@ -439,13 +452,26 @@ function Grid({
   items: CivitaiCard[];
   blurNsfw: boolean;
   mark: (c: CivitaiCard) => ReturnType<typeof cardMark>;
-  onOpen: (c: CivitaiCard) => void;
+  onOpen: (c: CivitaiCard, background: boolean) => void;
+  /** A double click: the download pop-up. */
+  onDownload: (c: CivitaiCard) => void;
   onEnd: () => void;
   loadingMore: boolean;
   fetching: boolean;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
+  // A click opens the model a moment later, so a double click can ask to download instead.
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => clearTimeout(clickTimer.current ?? undefined), []);
+  const click = (c: CivitaiCard) => {
+    clearTimeout(clickTimer.current ?? undefined);
+    clickTimer.current = setTimeout(() => onOpen(c, false), DOUBLE_CLICK_MS);
+  };
+  const doubleClick = (c: CivitaiCard) => {
+    clearTimeout(clickTimer.current ?? undefined);
+    onDownload(c);
+  };
   const width = useElementWidth(innerRef);
   const cols = Math.min(MAX_COLS, Math.max(1, Math.floor((width + GAP) / (MIN_CARD + GAP))));
   const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : MIN_CARD;
@@ -501,7 +527,9 @@ function Grid({
                 blurNsfw={blurNsfw}
                 mark={mark(c)}
                 typeLabel={CIVITAI_TYPE_LABELS[c.type] ?? c.type}
-                onClick={() => onOpen(c)}
+                onClick={() => click(c)}
+                onDoubleClick={() => doubleClick(c)}
+                onMiddleClick={() => onOpen(c, true)}
                 footer={
                   <div className="flex items-center gap-3 text-2xs text-fg-3 tabular">
                     <span className="flex items-center gap-1" title="Downloads">

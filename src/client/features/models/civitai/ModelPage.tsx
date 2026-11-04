@@ -1,19 +1,13 @@
 /**
  * A Civitai model inside Blombo: image carousel, version picker, files, trigger words with copy,
  * the description (parsed on the server, rendered as plain elements), and Download with a
- * preview of exactly where the file will land. Marks show what's already in the models folder.
+ * preview of where the file lands; Download opens the download pop-up (DownloadDialog) to change
+ * the folder and file name first. Marks show what's already in the models folder.
  */
 import { Icon } from "@client/icons/Icon";
-import { useGoToView } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
-import {
-  useCivitaiAccount,
-  useCivitaiModel,
-  useDownloadPlan,
-  useSettings,
-  useStartDownload,
-} from "@client/lib/queries";
+import { useCivitaiModel, useDownloadPlan, useSettings } from "@client/lib/queries";
 import {
   Badge,
   Button,
@@ -23,12 +17,9 @@ import {
   EmptyState,
   FallbackFace,
   Field,
-  IconButton,
   KIND_STYLE,
-  Popover,
   Select,
   Skeleton,
-  TextField,
   toast,
 } from "@client/ui";
 import {
@@ -37,13 +28,12 @@ import {
   type CivitaiVersion,
   compactCount,
 } from "@shared/civitai";
-import { MODEL_KINDS, type ModelKind } from "@shared/constants";
 import type { EnqueueBody } from "@shared/downloads";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
-import { useSettingsNav } from "../../settings/nav";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
+import { DownloadDialog } from "./DownloadDialog";
 import { localVersions } from "./marks";
 import { RichText } from "./RichText";
 import { useCivitai } from "./state";
@@ -253,35 +243,17 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
 
 function DownloadPanel({ model, version }: { model: CivitaiModel; version: CivitaiVersion }) {
   const primary = version.files.find((f) => f.primary) ?? version.files[0];
-  const [fileId, setFileId] = useState<number | null>(primary?.id ?? null);
-  const [kind, setKind] = useState<ModelKind | undefined>(undefined);
-  const [folder, setFolder] = useState<string | undefined>(undefined);
-  const account = useCivitaiAccount().data;
-  const goTo = useGoToView();
-  // Another version or model: back to its primary file and the automatic folder.
-  useEffect(() => {
-    setFileId(primary?.id ?? null);
-    setKind(undefined);
-    setFolder(undefined);
-  }, [primary?.id]);
-  const body: EnqueueBody | null = fileId
-    ? {
-        source: "civitai",
-        modelId: model.id,
-        versionId: version.id,
-        fileId,
-        ...(kind ? { kind } : {}),
-        ...(folder !== undefined ? { folder } : {}),
-      }
+  const [asking, setAsking] = useState(false);
+  // Where the primary file would go with the automatic sorting; the pop-up changes it.
+  const body: EnqueueBody | null = primary
+    ? { source: "civitai", modelId: model.id, versionId: version.id, fileId: primary.id }
     : null;
   const plan = useDownloadPlan(body);
-  const start = useStartDownload();
   const live = useLive((s) =>
     s.downloads.find(
       (d) => d.versionId === version.id && d.state !== "cancelled" && d.state !== "done",
     ),
   );
-  const file = version.files.find((f) => f.id === fileId);
   const p = plan.data;
 
   return (
@@ -295,19 +267,12 @@ function DownloadPanel({ model, version }: { model: CivitaiModel; version: Civit
           variant="primary"
           size="lg"
           icon="download"
-          loading={start.isPending}
-          disabled={!body || !p || Boolean(p.blocked)}
-          onClick={() => {
-            if (!body) return;
-            start.mutate(body, {
-              onSuccess: (d) => toast(`Downloading ${d.name}`, "info"),
-              onError: (e) => toast(e.message, "error"),
-            });
-          }}
+          disabled={!primary}
+          onClick={() => setAsking(true)}
         >
           {p?.installed ? "Download again" : "Download"}
-          {file?.size ? (
-            <span className="font-normal opacity-75">· {formatBytes(file.size)}</span>
+          {primary?.size ? (
+            <span className="font-normal opacity-75">· {formatBytes(primary.size)}</span>
           ) : null}
         </Button>
       )}
@@ -322,48 +287,6 @@ function DownloadPanel({ model, version }: { model: CivitaiModel; version: Civit
             <span className="min-w-0 flex-1 font-mono text-2xs break-all text-fg-2" title={p.path}>
               {[p.kindFolder, p.folder, p.file].filter(Boolean).join("/")}
             </span>
-            <Popover
-              placement="bottom-end"
-              className="w-80 p-3"
-              trigger={<IconButton icon="edit" label="Change where it goes" size="xs" />}
-            >
-              <div className="flex flex-col gap-3">
-                <Field label="Kind folder">
-                  <Select<ModelKind>
-                    value={p.kind}
-                    onChange={setKind}
-                    options={MODEL_KINDS.map((k) => ({
-                      value: k,
-                      label: KIND_STYLE[k].label,
-                      icon: KIND_STYLE[k].icon,
-                    }))}
-                  />
-                </Field>
-                <Field label="Subfolder" hint="Use / for nested folders. Empty: the kind folder.">
-                  {(fid) => (
-                    <TextField
-                      id={fid}
-                      mono
-                      icon="folder"
-                      value={folder ?? p.folder}
-                      onChange={(e) => setFolder(e.target.value)}
-                    />
-                  )}
-                </Field>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  icon="undo"
-                  disabled={kind === undefined && folder === undefined}
-                  onClick={() => {
-                    setKind(undefined);
-                    setFolder(undefined);
-                  }}
-                >
-                  Back to automatic sorting
-                </Button>
-              </div>
-            </Popover>
           </div>
           {p.blocked ? (
             <p className="flex items-start gap-1.5 text-xs text-warning">
@@ -387,47 +310,14 @@ function DownloadPanel({ model, version }: { model: CivitaiModel; version: Civit
                 </button>
               </span>
             </p>
-          ) : p.nameTaken ? (
-            <p className="text-xs text-fg-3">
-              A different file already has that name; this one is saved next to it as "
-              {p.file.replace(/(\.[^.]+)$/, " (2)$1")}".
-            </p>
-          ) : null}
-          {version.earlyAccess && !account?.keySet ? (
-            <p className="flex items-start gap-1.5 text-xs text-warning">
-              <Icon name="lock" size={13} className="mt-px shrink-0" />
-              <span>
-                Early access: Civitai needs your API key for this version.{" "}
-                <button
-                  type="button"
-                  className="text-accent-ink hover:underline focus-ring"
-                  onClick={() => {
-                    useSettingsNav.getState().go("civitai");
-                    goTo("settings");
-                  }}
-                >
-                  Add it in Settings → Civitai
-                </button>
-              </span>
-            </p>
           ) : null}
         </div>
       ) : null}
-      {version.files.length > 1 ? (
+      {version.files.length ? (
         <div className="flex flex-col gap-1">
-          <span className="label-caps">Files</span>
+          {version.files.length > 1 ? <span className="label-caps">Files</span> : null}
           {version.files.map((f) => (
-            <label
-              key={f.id}
-              className="flex cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 hover:bg-field has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent"
-            >
-              <input
-                type="radio"
-                name={`file-${version.id}`}
-                checked={fileId === f.id}
-                onChange={() => setFileId(f.id)}
-                className="accent-[var(--accent)]"
-              />
+            <div key={f.id} className="flex items-center gap-2.5 px-0.5 py-1">
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm text-fg" title={f.name}>
                   {f.name}
@@ -443,17 +333,17 @@ function DownloadPanel({ model, version }: { model: CivitaiModel; version: Civit
               ) : f.safe === null ? (
                 <Badge tone="warning">Not scanned</Badge>
               ) : null}
-            </label>
+            </div>
           ))}
         </div>
-      ) : file ? (
-        <span className="text-2xs text-fg-3">
-          {[file.name, file.format, file.fp].filter(Boolean).join(" · ")}
-          {file.safe === false ? " · failed Civitai's safety scan" : ""}
-        </span>
       ) : (
         <span className="text-xs text-fg-3">This version has no files to download.</span>
       )}
+      <DownloadDialog
+        modelId={asking ? model.id : null}
+        versionId={version.id}
+        onClose={() => setAsking(false)}
+      />
     </div>
   );
 }

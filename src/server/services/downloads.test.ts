@@ -41,6 +41,12 @@ describe("Civitai downloads", () => {
       civitai: { downloads: { aliases: [{ from: "PixelSmith", to: "pxs" }] } },
     });
     expect((await q().plan(body)).file).toBe("pxs_Cinematic Lighting 1.safetensors");
+    // A name typed in the download dialog replaces it, made safe, the extension kept.
+    expect((await q().plan({ ...body, name: "my: light" })).file).toBe("my light.safetensors");
+    expect((await q().plan({ ...body, name: "lit.safetensors" })).file).toBe("lit.safetensors");
+    expect((await q().plan({ ...body, name: "??" })).file).toBe(
+      "pxs_Cinematic Lighting 1.safetensors",
+    );
     await o.services.settings.update(o.profileId, {
       civitai: { downloads: { prefix: false, naming: "original" } },
     });

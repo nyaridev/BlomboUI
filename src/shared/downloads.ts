@@ -97,6 +97,8 @@ export const EnqueueBody = z.discriminatedUnion("source", [
     kind: z.enum(MODEL_KINDS).optional(),
     /** Override the sorted subfolder (inside the kind folder; "" = the kind folder itself). */
     folder: FolderPath.optional(),
+    /** Override the file name (without its extension, which stays the file's own). */
+    name: z.string().trim().min(1).max(200).optional(),
   }),
   z.object({ source: z.literal("manager"), entryId: z.string().min(1).max(80) }),
 ]);
@@ -241,6 +243,16 @@ export function planFileName(
   const name = safeSegment(stem, 150) || safeSegment(original, 150) || "model";
   const lead = prefix ? safeSegment(prefix, 40) : "";
   return `${lead ? `${lead}_` : ""}${name}${ext}`;
+}
+
+/** A planned file name with its stem replaced by one a person typed (made safe; extension kept). */
+export function renamedFile(planned: string, name: string): string {
+  const dot = planned.lastIndexOf(".");
+  const ext = dot > 0 ? planned.slice(dot) : "";
+  const typed =
+    name.toLowerCase().endsWith(ext.toLowerCase()) && ext ? name.slice(0, -ext.length) : name;
+  const stem = safeSegment(typed, 150);
+  return stem ? `${stem}${ext}` : planned;
 }
 
 /** The first folder of a kind ("loras" for LoRAs, "diffusion_models" not "unet"). */

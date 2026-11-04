@@ -102,6 +102,9 @@ export interface ModelCardProps {
   /** The type as its source names it ("LyCORIS", "Workflows"), instead of the kind's label. */
   typeLabel?: string;
   onClick?: () => void;
+  /** A middle click on the picture (open in the background, as a browser does). */
+  onMiddleClick?: () => void;
+  onDoubleClick?: () => void;
   onFavorite?: () => void;
   /** Shows an info button beside the heart on hover (Model info…). */
   onInfo?: () => void;
@@ -122,6 +125,8 @@ export function ModelCard({
   selected,
   favorite,
   onClick,
+  onMiddleClick,
+  onDoubleClick,
   onFavorite,
   onInfo,
   infoLabel = "Model info",
@@ -158,6 +163,15 @@ export function ModelCard({
       <button
         type="button"
         onClick={onClick}
+        onDoubleClick={onDoubleClick}
+        // No autoscroll cursor on a middle press when the middle click does something.
+        onMouseDown={(e) => onMiddleClick && e.button === 1 && e.preventDefault()}
+        onAuxClick={(e) => {
+          if (e.button === 1 && onMiddleClick) {
+            e.preventDefault();
+            onMiddleClick();
+          }
+        }}
         aria-pressed={selected}
         aria-label={`${label}: ${name}`}
         className="relative block w-full overflow-hidden text-left focus-ring"

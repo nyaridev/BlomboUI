@@ -26,8 +26,10 @@ interface CivitaiState {
   seed: (browse: Settings["civitai"]["browse"]) => void;
   setFilter: (patch: Partial<BrowseFilterInput>) => void;
   replaceFilter: (filter: BrowseFilter) => void;
-  open: (id: number, name: string) => void;
+  /** Open a model's tab; `background` adds it without leaving what's in front (a middle click). */
+  open: (id: number, name: string, background?: boolean) => void;
   close: (id: number) => void;
+  closeAll: () => void;
   show: (id: number | null) => void;
 }
 
@@ -69,13 +71,15 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   setFilter: (patch) =>
     set((s) => ({ filter: BrowseFilter.parse({ ...(s.filter ?? {}), ...patch }) })),
   replaceFilter: (filter) => set({ filter }),
-  open: (id, name) =>
+  open: (id, name, background = false) =>
     set((s) => {
       const tabs = s.tabs.some((t) => t.id === id)
         ? s.tabs.map((t) => (t.id === id ? { id, name } : t))
         : [...s.tabs, { id, name }].slice(-MAX_TABS);
-      return { tabs, active: id };
+      const active = background ? s.active : id;
+      return { tabs, active: tabs.some((t) => t.id === active) ? active : null };
     }),
+  closeAll: () => set({ tabs: [], active: null }),
   close: (id) =>
     set((s) => {
       const at = s.tabs.findIndex((t) => t.id === id);

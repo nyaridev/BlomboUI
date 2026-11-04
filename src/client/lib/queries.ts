@@ -781,6 +781,8 @@ export function useDownloadPlan(body: EnqueueBody | null) {
     enabled: profileId !== null && body !== null,
     staleTime: 15_000,
     retry: false,
+    // Typing a folder or name keeps the last plan on screen until the new one arrives.
+    placeholderData: keepPreviousData,
   });
 }
 

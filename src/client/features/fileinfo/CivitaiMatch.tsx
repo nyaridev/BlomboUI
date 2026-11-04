@@ -2,7 +2,7 @@
  * File Info's Civitai part for a model file. It's found by hash: first the hashes a trainer wrote
  * into the header (instant), then the file's SHA256 (a local model's is stored after the first
  * time; a dropped file streams to the server, which keeps nothing). The match fills the filmstrip
- * (the creator's own images, Filmstrip.tsx), the settings of the picked image, a details panel, trigger
+ * (the creator's own images, CivitaiCarousel.tsx), the settings of the picked image, a details panel, trigger
  * words and the description.
  */
 import { Icon } from "@client/icons/Icon";
@@ -26,6 +26,7 @@ import { localVersions } from "../models/civitai/marks";
 import { RichText } from "../models/civitai/RichText";
 import { openCivitaiModel, useCivitai } from "../models/civitai/state";
 import { useModelsNav } from "../models/nav";
+import { CarouselPlaceholder } from "./CivitaiCarousel";
 import { Facts, TextBlock } from "./parts";
 
 export type Found = NonNullable<CivitaiMatch>;
@@ -121,26 +122,30 @@ export function authorImages(match: Found): CivitaiImage[] {
   return own.length ? own : all;
 }
 
-/** A slim bar while looking, when nothing was found or on an error (a match shows the filmstrip). */
+/**
+ * While searching, the carousel's placeholder (the same height, so nothing moves when it's
+ * found); when nothing was found or on an error, a slim bar. A match shows the carousel.
+ */
 export function CivitaiStatus({ civitai }: { civitai: FileCivitai }) {
   const { status } = civitai;
   if (status === "found") return null;
-  const busy = status === "looking" || status === "hashing";
+  if (status === "looking" || status === "hashing")
+    return (
+      <CarouselPlaceholder
+        message={
+          status === "hashing"
+            ? "Reading the whole file to find it on Civitai by its hash…"
+            : "Searching Civitai…"
+        }
+      />
+    );
   return (
     <Panel className="flex items-center gap-3 px-5 py-3 text-sm text-fg-3">
-      <Icon
-        name={busy ? "refresh" : status === "error" ? "errors" : "globe"}
-        size={16}
-        className={busy ? "shrink-0 animate-spin text-accent-ink" : "shrink-0"}
-      />
+      <Icon name={status === "error" ? "errors" : "globe"} size={16} className="shrink-0" />
       <span className="flex-1">
-        {status === "hashing"
-          ? "Reading the whole file to find it on Civitai by its hash…"
-          : status === "looking"
-            ? "Searching Civitai…"
-            : status === "error"
-              ? civitai.error
-              : "No Civitai match. The model may be private, taken down, changed after download or from somewhere else."}
+        {status === "error"
+          ? civitai.error
+          : "No Civitai match. The model may be private, taken down, changed after download or from somewhere else."}
       </span>
       {status === "error" ? (
         <Button size="sm" onClick={civitai.retry}>

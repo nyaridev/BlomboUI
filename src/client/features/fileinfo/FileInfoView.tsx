@@ -36,6 +36,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
 import { useActiveChoice } from "../generate/workflow";
+import { CivitaiCarousel } from "./CivitaiCarousel";
 import {
   authorImages,
   CivitaiAbout,
@@ -46,7 +47,6 @@ import {
   ImageSettings,
   useFileCivitai,
 } from "./CivitaiMatch";
-import { Filmstrip } from "./Filmstrip";
 import { PageDropOverlay, usePageFileDrop } from "./PageDrop";
 import { Facts, Section, TextBlock } from "./parts";
 import { SafetensorsSections } from "./Safetensors";
@@ -206,11 +206,10 @@ function Result({
   return (
     <div className="flex flex-col gap-4">
       {civitai?.match && images.length ? (
-        <Filmstrip
+        <CivitaiCarousel
           images={images}
           label={`${civitai.match.model.name} images`}
           blurNsfw={blurNsfw}
-          index={Math.min(shown, images.length - 1)}
           onIndex={setShown}
         />
       ) : civitai ? (

@@ -14,7 +14,14 @@ import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { parse as parseYaml } from "yaml";
+import {
+  isMap,
+  isScalar,
+  type Pair,
+  parseDocument,
+  parse as parseYaml,
+  stringify as stringifyYaml,
+} from "yaml";
 import type { ProfileFolder } from "../../shared/profile.ts";
 import { type RenameChange, renameRefs } from "../../shared/prompt/renames.ts";
 import {
@@ -106,6 +113,40 @@ async function yamlNames(file: string): Promise<Map<string, string[]> | null> {
     yamlCache.set(file, cached);
   }
   return cached.names;
+}
+
+/**
+ * Rename the key at `keys` ("outfits", "fantasy") in YAML text to `to`, changing only that key's
+ * characters, so comments and formatting stay as they were. `group` says which kind is meant: a
+ * group (keys inside) or a wildcard (anything else). null when the text has no such key; "exists"
+ * when a key beside it already has the new name.
+ */
+export function renameYamlKey(
+  text: string,
+  keys: readonly string[],
+  to: string,
+  group: boolean,
+): string | null | "exists" {
+  const bom = text.startsWith("﻿") ? "﻿" : "";
+  const body = text.slice(bom.length);
+  const doc = parseDocument(body);
+  if (doc.errors.length || !keys.length) return null;
+  const nameOf = (p: Pair) => (isScalar(p.key) ? String(p.key.value ?? "").trim() : "");
+  let node: unknown = doc.contents;
+  let siblings: Pair[] = [];
+  let pair: Pair | undefined;
+  for (const key of keys) {
+    if (!isMap(node)) return null;
+    siblings = node.items as Pair[];
+    pair = siblings.find((p) => nameOf(p) === key);
+    if (!pair) return null;
+    node = pair.value;
+  }
+  if (!pair || !isScalar(pair.key) || !pair.key.range || isMap(pair.value) !== group) return null;
+  if (siblings.some((p) => p !== pair && nameOf(p) === to)) return "exists";
+  const [start, end] = pair.key.range;
+  // stringify quotes the name only when YAML needs it.
+  return bom + body.slice(0, start) + stringifyYaml(to).trimEnd() + body.slice(end);
 }
 
 /** Every YAML-defined wildcard name under `root`. First file (by path) wins on duplicates. */
@@ -478,38 +519,55 @@ export class WildcardFolders {
   }
 
   /**
-   * Rename a picker's wildcard (its .txt file, in the first folder that has it) or folder (in
-   * every wildcards folder that has it, so the name keeps working). Returns the change made.
+   * Rename a picker's wildcard where it's defined, in lookup order (each folder: its .txt file,
+   * then the first YAML file with that key), or a picker's folder everywhere it exists (folders
+   * on disk and groups in YAML files, in every wildcards folder, so the name keeps working).
+   * Everything is checked before anything changes. Returns the change made.
    */
   async rename(name: string, to: string, folder: boolean): Promise<RenameChange> {
     const rel = name.replace(/\\/g, "/");
     const parent = rel.includes("/") ? rel.slice(0, rel.lastIndexOf("/") + 1) : "";
     const change: RenameChange = { kind: "wildcard", from: rel, to: parent + to, folder };
+    const keys = rel.split("/");
     const moves: Array<{ from: string; to: string }> = [];
-    for (const f of this.folders) {
-      if (!f.path.trim()) continue;
-      const src = resolveInside(f.path, folder ? rel : `${rel}.txt`);
-      const dest = resolveInside(f.path, folder ? change.to : `${change.to}.txt`);
+    const edits: Array<{ file: string; text: string }> = [];
+    const taken = (where: string) =>
+      new HttpError(409, `"${to}" already exists in ${where}. Pick another name.`, "exists");
+    /** Rename the key in one YAML file; false when the file doesn't have it. */
+    const editYaml = async (file: string): Promise<boolean> => {
+      const text = await fs.readFile(file, "utf8").catch(() => null);
+      const next = text === null ? null : renameYamlKey(text, keys, to, folder);
+      if (next === "exists") throw taken(path.basename(file));
+      if (next === null) return false;
+      edits.push({ file, text: next });
+      return true;
+    };
+    search: for (const f of this.folders) {
+      const root = f.path.trim();
+      if (!root) continue;
+      const src = resolveInside(root, folder ? rel : `${rel}.txt`);
+      const dest = resolveInside(root, folder ? change.to : `${change.to}.txt`);
       const stat = await fs.stat(src).catch(() => null);
-      if (!stat || stat.isDirectory() !== folder) continue;
-      if (src.toLowerCase() !== dest.toLowerCase() && (await exists(dest)))
-        throw new HttpError(
-          409,
-          `"${to}" already exists in ${f.name}. Pick another name.`,
-          "exists",
-        );
-      moves.push({ from: src, to: dest });
-      if (!folder) break;
+      if (stat && stat.isDirectory() === folder) {
+        if (src.toLowerCase() !== dest.toLowerCase() && (await exists(dest))) throw taken(f.name);
+        moves.push({ from: src, to: dest });
+        if (!folder) break;
+      }
+      for (const file of await yamlFiles(root)) {
+        if (!folder && !(await yamlNames(file))?.has(rel)) continue;
+        if ((await editYaml(file)) && !folder) break search;
+      }
     }
-    if (!moves.length)
+    if (!moves.length && !edits.length)
       throw new HttpError(
         404,
         folder
-          ? "That folder isn't on disk: it may be a group inside a .yaml file."
-          : "That wildcard isn't a .txt file: it may come from a .yaml file. Rename it in the Wildcard Manager.",
+          ? `No folder or YAML group named "${rel}" in this profile's wildcards.`
+          : `No wildcard named "${rel}" in this profile's folders.`,
         "not_found",
       );
     for (const m of moves) await movePath(m.from, m.to);
+    for (const e of edits) await writeFileAtomic(e.file, e.text);
     return change;
   }
 

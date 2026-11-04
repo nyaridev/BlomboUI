@@ -380,9 +380,9 @@ export function ModelGrid({
     if (tab === "wildcards")
       return setRenaming({
         title: "Rename wildcard",
-        description: "Its .txt file is renamed. Full __references__ to it follow.",
+        description:
+          "Its .txt file, or its key in a YAML file, is renamed. Full __references__ to it follow.",
         name: lastPart(item.id),
-        suffix: ".txt",
         run: async (to) => afterRename(await api.renameWildcard(item.id, to, false), null, true),
       });
     if (!m || !kind) return;
@@ -408,7 +408,10 @@ export function ModelGrid({
     if (!at.folder) return;
     setRenaming({
       title: "Rename folder",
-      description: "Everything inside keeps its name; only the folder's changes.",
+      description:
+        tab === "wildcards"
+          ? "Everything inside keeps its name; the folder, and YAML groups with its name, change."
+          : "Everything inside keeps its name; only the folder's changes.",
       name: lastPart(at.folder),
       run: async (to) => {
         const change: RenameChange = {

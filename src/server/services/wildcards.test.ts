@@ -3,7 +3,13 @@ import os from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { wildcardLines } from "../../shared/prompt/wildcards.ts";
-import { listWildcards, loadWildcards, WildcardFiles, WildcardFolders } from "./wildcards.ts";
+import {
+  listWildcards,
+  loadWildcards,
+  renameYamlKey,
+  WildcardFiles,
+  WildcardFolders,
+} from "./wildcards.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-wildcards-"));
 const root = path.join(tmp, "wildcards");
@@ -168,6 +174,78 @@ describe("several wildcard folders", () => {
     const dir = await folders.rename("zoo", "park", true);
     expect(dir.to).toBe("park");
     expect(await fs.readFile(path.join(second, "park", "felines.txt"), "utf8")).toBe("tabby");
-    await expect(folders.rename("outfits/fantasy", "x", false)).rejects.toThrow(/\.yaml/);
+    await expect(folders.rename("nothing/here", "x", false)).rejects.toThrow(/No wildcard/);
+  });
+});
+
+describe("renaming YAML wildcards and groups", () => {
+  const YAML =
+    "# pack\nouts: # all of them\n  fantasy: [cloak, robe] # flow kept\n  modern:\n    - hoodie\n";
+
+  it("changes only the key's characters", () => {
+    expect(renameYamlKey(YAML, ["outs", "fantasy"], "medieval", false)).toBe(
+      YAML.replace("fantasy:", "medieval:"),
+    );
+    expect(renameYamlKey(YAML, ["outs"], "outfits", true)).toBe(YAML.replace("outs:", "outfits:"));
+    expect(renameYamlKey(YAML, ["outs", "modern"], "a: b", false)).toContain('"a: b":');
+    expect(renameYamlKey("﻿a: [x]\n", ["a"], "b", false)).toBe("﻿b: [x]\n");
+  });
+
+  it("refuses a taken name, the wrong kind, a missing key and broken YAML", () => {
+    expect(renameYamlKey(YAML, ["outs", "fantasy"], "modern", false)).toBe("exists");
+    expect(renameYamlKey(YAML, ["outs"], "x", false)).toBeNull();
+    expect(renameYamlKey(YAML, ["outs", "fantasy"], "x", true)).toBeNull();
+    expect(renameYamlKey(YAML, ["outs", "space"], "x", false)).toBeNull();
+    expect(renameYamlKey("a: [b", ["a"], "x", false)).toBeNull();
+  });
+
+  it("renames where the name is defined, and a group in every file and folder", async () => {
+    const base = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-yaml-rename-"));
+    const one = path.join(base, "one");
+    const two = path.join(base, "two");
+    await fs.mkdir(path.join(two, "outs"), { recursive: true });
+    await fs.mkdir(one, { recursive: true });
+    await fs.writeFile(path.join(one, "a.yaml"), YAML);
+    // Shadowed by one/a.yaml for the wildcard; still a group named outs.
+    await fs.writeFile(path.join(two, "b.yaml"), "outs:\n  fantasy: [elf]\n");
+    await fs.writeFile(path.join(two, "outs", "retro.txt"), "disco");
+    const folders = new WildcardFolders(
+      [
+        { id: "one", name: "One", path: one },
+        { id: "two", name: "Two", path: two },
+      ],
+      path.join(base, "trash"),
+    );
+    const read = (dir: string, file: string) => fs.readFile(path.join(dir, file), "utf8");
+    try {
+      expect(await folders.rename("outs/fantasy", "medieval", false)).toEqual({
+        kind: "wildcard",
+        from: "outs/fantasy",
+        to: "outs/medieval",
+        folder: false,
+      });
+      expect(await read(one, "a.yaml")).toBe(YAML.replace("fantasy:", "medieval:"));
+      expect(await read(two, "b.yaml")).toBe("outs:\n  fantasy: [elf]\n");
+
+      await expect(folders.rename("outs/medieval", "modern", false)).rejects.toThrow(
+        /already exists in a\.yaml/,
+      );
+
+      await folders.rename("outs", "outfits", true);
+      expect(await read(one, "a.yaml")).toBe(
+        YAML.replace("fantasy:", "medieval:").replace("outs:", "outfits:"),
+      );
+      expect(await read(two, "b.yaml")).toBe("outfits:\n  fantasy: [elf]\n");
+      expect(await read(two, "outfits/retro.txt")).toBe("disco");
+      expect((await listWildcards([one, two])).sort()).toEqual([
+        "outfits/fantasy",
+        "outfits/medieval",
+        "outfits/modern",
+        "outfits/retro",
+      ]);
+      await expect(folders.rename("space", "x", true)).rejects.toThrow(/No folder or YAML group/);
+    } finally {
+      await fs.rm(base, { recursive: true, force: true });
+    }
   });
 });

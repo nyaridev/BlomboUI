@@ -271,11 +271,13 @@ export function ModelGrid({
     if (tab === "wildcards") return prompt.includes(`__${item.id}__`);
     return selectedValue === item.id;
   };
-  // What the workflow uses (the eye keeps it first and past the search and base models).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: isSelected reads these
+  // What the workflow uses (the eye keeps it first and past the search and base models). Taken
+  // when the list is filtered, sorted or opened, not on each pick, so a picked card stays where
+  // it was clicked until the search, filters, folder, sort or tab change.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: picks are left out on purpose
   const loaded = useMemo(
     () => new Set(showLoaded ? items.filter(isSelected).map((i) => i.id) : []),
-    [showLoaded, items, inPrompt, prompt, selectedValue, tab, picks?.value],
+    [showLoaded, items, tab, kind, q, baseModels, folder, sort, order],
   );
 
   // Files from several profile models folders: one top folder per models folder, by its name.

@@ -1,6 +1,8 @@
 /**
  * Surfaces: Panel (a region), Section (titled group inside a panel), Collapsible (expandable
  * card with an optional enable switch: the Hires / ADetailer / ControlNet header pattern).
+ * Both have a `civitai` tone, tinted blue, for what came from Civitai next to the local file's
+ * own panels (File Info).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -9,16 +11,24 @@ import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useId, useState } from "react";
 import { Switch } from "./toggles";
 
+/** What came from Civitai: the surface and line mixed with a little blue. */
+const CIVITAI_TONE =
+  "border-[color-mix(in_srgb,var(--blue)_32%,var(--line))] bg-[color-mix(in_srgb,var(--blue)_7%,var(--surface))]";
+
 export function Panel({
   children,
   className,
+  tone = "default",
   as: Tag = "div",
 }: {
   children: ReactNode;
   className?: string;
+  tone?: "default" | "civitai";
   as?: "div" | "section" | "aside" | "main";
 }) {
-  return <Tag className={cn("card", className)}>{children}</Tag>;
+  return (
+    <Tag className={cn("card", tone === "civitai" && CIVITAI_TONE, className)}>{children}</Tag>
+  );
 }
 
 export function SectionTitle({
@@ -66,9 +76,9 @@ export function Collapsible({
   onOpenChange?: (open: boolean) => void;
   actions?: ReactNode;
   children: ReactNode;
-  /** surface-2 (default), sunken (`inset`), or surface (`base`: the Generate params, whose
-   * fields need the darker panel to stand out). */
-  tone?: "surface" | "inset" | "base";
+  /** surface-2 (default), sunken (`inset`), surface (`base`: the Generate params, whose
+   * fields need the darker panel to stand out), or tinted blue (`civitai`). */
+  tone?: "surface" | "inset" | "base" | "civitai";
   className?: string;
 }) {
   const [inner, setInner] = useState(defaultOpen);
@@ -83,8 +93,18 @@ export function Collapsible({
     <div
       className={cn(
         "overflow-hidden rounded-lg border transition-colors",
-        tone === "surface" ? "bg-surface-2" : tone === "base" ? "bg-surface" : "bg-sunken",
-        hasSwitch && enabled ? "border-accent/40" : "border-line",
+        tone === "surface"
+          ? "bg-surface-2"
+          : tone === "base"
+            ? "bg-surface"
+            : tone === "civitai"
+              ? ""
+              : "bg-sunken",
+        hasSwitch && enabled
+          ? "border-accent/40"
+          : tone === "civitai"
+            ? CIVITAI_TONE
+            : "border-line",
         className,
       )}
     >

@@ -184,11 +184,10 @@ export function CivitaiLinks({ match }: { match: Found }) {
   );
 }
 
-/** How the image on screen was made, as its poster shared it. */
+/** The picked image's prompt and settings, as its poster shared them. */
 export function ImageSettings({ meta }: { meta: CivitaiImageMeta }) {
   return (
-    <Panel className="flex flex-col gap-4 p-5">
-      <span className="label-caps">How this image was made</span>
+    <Panel tone="civitai" className="flex flex-col gap-4 p-5">
       {meta.prompt ? <TextBlock label="Prompt" text={meta.prompt} /> : null}
       {meta.negative ? <TextBlock label="Negative prompt" text={meta.negative} /> : null}
       <Facts
@@ -220,7 +219,7 @@ export function CivitaiDetails({ match }: { match: Found }) {
   const words = version?.trainedWords ?? [];
   return (
     <div className="flex gap-4 max-lg:flex-col">
-      <Panel className="flex min-w-0 flex-1 flex-col gap-4 p-5">
+      <Panel tone="civitai" className="flex min-w-0 flex-1 flex-col gap-4 p-5">
         <div className="flex flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge tone="accent">{CIVITAI_TYPE_LABELS[model.type] ?? model.type}</Badge>
@@ -303,7 +302,7 @@ export function CivitaiDetails({ match }: { match: Found }) {
         ) : null}
       </Panel>
       {words.length ? (
-        <Panel className="flex w-[38%] shrink-0 flex-col gap-2 p-5 max-lg:w-full">
+        <Panel tone="civitai" className="flex w-[38%] shrink-0 flex-col gap-2 p-5 max-lg:w-full">
           <div className="flex items-center gap-2">
             <span className="label-caps">Trigger words</span>
             <CopyButton
@@ -340,7 +339,7 @@ export function CivitaiAbout({ match }: { match: Found }) {
   const blur = match.model.nsfw && blurNsfw;
   if (!match.model.description.length && !version?.description.length) return null;
   return (
-    <Collapsible title="About this model" icon="file-text" defaultOpen={false}>
+    <Collapsible title="About this model" icon="file-text" defaultOpen={false} tone="civitai">
       <div className="flex flex-col gap-5">
         <RichText blocks={match.model.description} blurImages={blur} />
         {version?.description.length ? (

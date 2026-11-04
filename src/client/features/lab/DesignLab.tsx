@@ -40,6 +40,7 @@ import {
   Notice,
   NumberField,
   openContextMenu,
+  Panel,
   Popover,
   ProgressBar,
   ProgressRing,
@@ -1234,6 +1235,17 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               <div className="card p-4 text-sm text-fg-2">
                 .card utility: border, hairline highlight, radius-lg
               </div>
+              <Panel tone="civitai" className="p-4 text-sm text-fg-2">
+                Panel tone="civitai": what came from Civitai (File Info)
+              </Panel>
+              <Collapsible
+                title="Civitai tone"
+                icon="globe"
+                subtitle="About this model"
+                tone="civitai"
+              >
+                <p className="text-sm text-fg-2">Body</p>
+              </Collapsible>
             </div>
           </div>
           <h3 className="label-caps mt-6 mb-3">Corners</h3>

@@ -232,7 +232,12 @@ function Result({
         ) : null}
       </div>
 
-      {civitai?.match ? <CivitaiDetails match={civitai.match} /> : null}
+      {civitai?.match ? (
+        <>
+          <CivitaiDetails match={civitai.match} />
+          <CivitaiAbout match={civitai.match} />
+        </>
+      ) : null}
       {current?.meta ? <ImageSettings meta={current.meta} /> : null}
 
       <FileFacts info={info} civitai={civitai} />
@@ -244,7 +249,6 @@ function Result({
       ) : null}
       {info.image ? <ImageSections image={info.image} /> : null}
       {info.safetensors ? <SafetensorsSections st={info.safetensors} /> : null}
-      {civitai?.match ? <CivitaiAbout match={civitai.match} /> : null}
     </div>
   );
 }

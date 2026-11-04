@@ -2,12 +2,13 @@
  * File Info's Civitai part for a model file. It's found by hash: first the hashes a trainer wrote
  * into the header (instant), then the file's SHA256 (a local model's is stored after the first
  * time; a dropped file streams to the server, which keeps nothing). The match fills the filmstrip
- * (the creator's own images, CivitaiCarousel.tsx), the settings of the picked image, a details panel, trigger
- * words and the description.
+ * (the creator's own images, CivitaiCarousel.tsx), the settings of the picked image, a details panel
+ * with the trigger words, and the description.
  */
 import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useGoToView } from "@client/lib/hooks";
+import { glide } from "@client/lib/motion";
 import { qk, useCivitaiByHash, useSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Badge, Button, Chip, Collapsible, CopyButton, Panel } from "@client/ui";
@@ -21,7 +22,8 @@ import {
 import type { FileInfo } from "@shared/fileinfo";
 import { embeddedHashes } from "@shared/safetensors";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useMemo } from "react";
+import { AnimatePresence, motion } from "motion/react";
+import { type ReactNode, useId, useMemo, useState } from "react";
 import { localVersions } from "../models/civitai/marks";
 import { RichText } from "../models/civitai/RichText";
 import { openCivitaiModel, useCivitai } from "../models/civitai/state";
@@ -202,7 +204,10 @@ export function ImageSettings({ meta }: { meta: CivitaiImageMeta }) {
   );
 }
 
-/** One panel: name, creator and stats on top, then trigger words, details and tags. */
+/**
+ * One panel: name, creator, stats and trigger words; details and tags fold under "More details"
+ * (closed by default, so the picked image's prompt below stays in view).
+ */
 export function CivitaiDetails({ match }: { match: Found }) {
   const { model } = match;
   const version = versionOf(match);
@@ -217,6 +222,8 @@ export function CivitaiDetails({ match }: { match: Found }) {
     goTo("models");
   };
   const words = version?.trainedWords ?? [];
+  const [more, setMore] = useState(false);
+  const moreId = useId();
   return (
     <Panel tone="civitai" className="flex min-w-0 flex-col gap-4 p-5">
       <div className="flex flex-col gap-1.5">
@@ -279,45 +286,80 @@ export function CivitaiDetails({ match }: { match: Found }) {
           </div>
         </Group>
       ) : null}
-      <Group title="Details">
-        <Facts
-          columns={3}
-          items={[
-            {
-              label: "Published",
-              value: version?.publishedAt
-                ? new Date(version.publishedAt).toLocaleDateString()
-                : null,
-            },
-            {
-              label: "This version",
-              value: version ? `${compactCount(version.downloads)} downloads` : null,
-            },
-            {
-              label: "Versions",
-              value: model.versions.length > 1 ? `${model.versions.length} on Civitai` : null,
-            },
-            { label: "Model id", value: String(model.id), copy: String(model.id), mono: true },
-            {
-              label: "Version id",
-              value: String(match.versionId),
-              copy: String(match.versionId),
-              mono: true,
-            },
-          ]}
-        />
-      </Group>
-      {model.tags.length ? (
-        <Group title="Tags">
-          <div className="flex flex-wrap gap-1">
-            {model.tags.slice(0, 16).map((t) => (
-              <Chip key={t} size="sm" icon="tag" onClick={() => browse({ query: t, username: "" })}>
-                {t}
-              </Chip>
-            ))}
-          </div>
-        </Group>
-      ) : null}
+      <AnimatePresence initial={false}>
+        {more ? (
+          <motion.div
+            id={moreId}
+            key="more"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={glide}
+            className="flex flex-col gap-4 overflow-hidden"
+          >
+            <Group title="Details">
+              <Facts
+                columns={3}
+                items={[
+                  {
+                    label: "Published",
+                    value: version?.publishedAt
+                      ? new Date(version.publishedAt).toLocaleDateString()
+                      : null,
+                  },
+                  {
+                    label: "This version",
+                    value: version ? `${compactCount(version.downloads)} downloads` : null,
+                  },
+                  {
+                    label: "Versions",
+                    value: model.versions.length > 1 ? `${model.versions.length} on Civitai` : null,
+                  },
+                  {
+                    label: "Model id",
+                    value: String(model.id),
+                    copy: String(model.id),
+                    mono: true,
+                  },
+                  {
+                    label: "Version id",
+                    value: String(match.versionId),
+                    copy: String(match.versionId),
+                    mono: true,
+                  },
+                ]}
+              />
+            </Group>
+            {model.tags.length ? (
+              <Group title="Tags">
+                <div className="flex flex-wrap gap-1">
+                  {model.tags.slice(0, 16).map((t) => (
+                    <Chip
+                      key={t}
+                      size="sm"
+                      icon="tag"
+                      onClick={() => browse({ query: t, username: "" })}
+                    >
+                      {t}
+                    </Chip>
+                  ))}
+                </div>
+              </Group>
+            ) : null}
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-expanded={more}
+        aria-controls={moreId}
+        onClick={() => setMore(!more)}
+        iconRight={more ? "chevron-up" : "chevron-down"}
+        className="-my-1.5 -ml-2.5 self-start"
+      >
+        {more ? "Fewer details" : "More details"}
+      </Button>
     </Panel>
   );
 }

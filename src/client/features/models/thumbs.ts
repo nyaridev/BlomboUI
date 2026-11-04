@@ -38,12 +38,8 @@ export function useLocalModel(kind: ModelKind, name: string): LocalModel | undef
 }
 
 /** A model tile's picture. */
-export function useModelThumb(
-  kind: ModelKind,
-  name: string,
-): { thumb: string | null; nsfw: boolean } {
-  const m = useLocalModel(kind, name);
-  return { thumb: m?.thumb ?? null, nsfw: Boolean(m?.nsfw) };
+export function useModelThumb(kind: ModelKind, name: string): string | null {
+  return useLocalModel(kind, name)?.thumb ?? null;
 }
 
 /** A LoRA's strength slider range (0–2 unless its model info says otherwise). */

@@ -21,7 +21,6 @@ import {
   useModelDetails,
   useModelHashes,
   useSaveModelInfo,
-  useSettings,
 } from "@client/lib/queries";
 import {
   Button,
@@ -41,7 +40,6 @@ import {
   TextArea,
   TextField,
   toast,
-  Veil,
 } from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
 import type { Job } from "@shared/jobs";
@@ -531,13 +529,10 @@ function Picture({
   /** A picture change waiting for Save: what will happen, shown over the bottom. */
   pending: string | null;
 }) {
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg border border-line bg-sunken">
       {thumb ? (
-        <Veil active={model.nsfw && blurNsfw && pending === null} className="absolute inset-0">
-          <img src={thumb} alt="" className="h-full w-full object-cover" />
-        </Veil>
+        <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
       ) : (
         <FallbackFace name={model.name} kind={model.kind} className="absolute inset-0" />
       )}

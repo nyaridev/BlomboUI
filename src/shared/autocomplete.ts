@@ -29,8 +29,6 @@ export const Suggestion = z.object({
   category: z.number().int().nullable(),
   /** A thumbnail URL (LoRAs). */
   thumb: z.string().nullable(),
-  /** Marked NSFW: the thumbnail is blurred when the profile blurs NSFW. */
-  nsfw: z.boolean(),
   /** Times this profile used it (frequent tags). */
   uses: z.number().int().nullable(),
   /** LoRA trigger words, inserted with it when the setting says so. */

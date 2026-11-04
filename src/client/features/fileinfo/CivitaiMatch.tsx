@@ -9,7 +9,7 @@ import { Icon } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useGoToView } from "@client/lib/hooks";
 import { glide } from "@client/lib/motion";
-import { qk, useCivitaiByHash, useSettings } from "@client/lib/queries";
+import { qk, useCivitaiByHash } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Badge, Button, Chip, Collapsible, CopyButton, Panel } from "@client/ui";
 import {
@@ -376,18 +376,16 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
 
 /** The model's (and the version's) description from Civitai, folded. */
 export function CivitaiAbout({ match }: { match: Found }) {
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   const version = versionOf(match);
-  const blur = match.model.nsfw && blurNsfw;
   if (!match.model.description.length && !version?.description.length) return null;
   return (
     <Collapsible title="About this model" icon="file-text" defaultOpen={false} tone="civitai">
       <div className="flex flex-col gap-5">
-        <RichText blocks={match.model.description} blurImages={blur} />
+        <RichText blocks={match.model.description} />
         {version?.description.length ? (
           <div className="flex flex-col gap-2">
             <span className="label-caps">About {version.name}</span>
-            <RichText blocks={version.description} blurImages={blur} />
+            <RichText blocks={version.description} />
           </div>
         ) : null}
       </div>

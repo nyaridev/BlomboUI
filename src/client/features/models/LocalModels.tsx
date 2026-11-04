@@ -4,7 +4,7 @@
  * favorites, sort and order, rescan) and the folder tree on the left (the pickers' FolderTree:
  * the kind folders on All, one top folder per models folder when there are several). A click on
  * a card opens its model info; right-click renames, moves and the rest. Sidecar images become
- * thumbnails (blurred when marked NSFW, per the profile setting). The grid is virtualized: a few
+ * thumbnails. The grid is virtualized: a few
  * thousand LoRAs scroll like a dozen. Models without an info file are matched on Civitai by hash
  * in the background (status in the toolbar).
  */
@@ -22,7 +22,6 @@ import {
   useMoveModel,
   useRenameModel,
   useSetModelFavorite,
-  useSettings,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
@@ -79,7 +78,6 @@ const GAP = 12;
 
 export function LocalModels() {
   const list = useLocalModels();
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);
   const [kind, setKind] = useState<ModelKind | "all">("all");
@@ -379,7 +377,6 @@ export function LocalModels() {
             ) : (
               <CardGrid
                 models={shown}
-                blurNsfw={blurNsfw}
                 selected={selected}
                 isFavorite={isFavorite}
                 onOpen={(m) => {
@@ -415,14 +412,12 @@ export function LocalModels() {
 
 function CardGrid({
   models,
-  blurNsfw,
   selected,
   isFavorite,
   onOpen,
   onMenu,
 }: {
   models: LocalModel[];
-  blurNsfw: boolean;
   selected: string | null;
   isFavorite: (m: LocalModel) => boolean;
   onOpen: (m: LocalModel) => void;
@@ -470,8 +465,6 @@ function CardGrid({
                 kind={m.kind}
                 baseModel={m.baseModel ?? undefined}
                 thumb={m.thumb}
-                nsfw={m.nsfw}
-                blurNsfw={blurNsfw}
                 favorite={isFavorite(m)}
                 onFavorite={() =>
                   setFavorite.mutate({

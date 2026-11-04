@@ -2,7 +2,7 @@
  * The one model card used everywhere (Generate pickers, Models view, Civitai results).
  * When there is no thumbnail it shows a checkerboard tinted in the kind's color with the kind's
  * icon (the old app's empty card), so a wall of un-thumbnailed LoRAs still reads by kind. Thumbnails marked NSFW
- * are blurred until clicked when `blurNsfw` is on (the profile's setting, on by default).
+ * are blurred until clicked when `blurNsfw` is on (the Civitai view's NSFW button).
  * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading").
  */
 import { Icon, type IconName } from "@client/icons/Icon";
@@ -138,6 +138,12 @@ export function ModelCard({
   const style = KIND_STYLE[kind];
   const label = typeLabel ?? style.label;
   const [revealed, setRevealed] = useState(false);
+  // Switching the blur forgets what was clicked open, so switching it back blurs everything.
+  const [blurWas, setBlurWas] = useState(blurNsfw);
+  if (blurWas !== blurNsfw) {
+    setBlurWas(blurNsfw);
+    setRevealed(false);
+  }
   const veiled = Boolean(thumb && nsfw && blurNsfw && !revealed);
   return (
     <div

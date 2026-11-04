@@ -220,7 +220,6 @@ function Downloads() {
 function Civitai() {
   const views = useCivitaiViews();
   const searches = useCivitaiSearches();
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   const goTo = useGoToView();
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);
@@ -314,8 +313,6 @@ function Civitai() {
                       name={v.name}
                       kind={civitaiKind(v.type) ?? "checkpoints"}
                       thumb={v.image?.thumb ?? null}
-                      nsfw={v.image?.nsfw}
-                      blurNsfw={blurNsfw}
                       typeLabel={CIVITAI_TYPE_LABELS[v.type] ?? v.type}
                       onClick={() => {
                         openCivitaiModel(v.modelId, v.name);

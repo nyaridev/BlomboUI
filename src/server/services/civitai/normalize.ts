@@ -116,11 +116,10 @@ export function description(
   });
 }
 
-/** The first image to show for a card: skips NSFW ones when browsing without NSFW. */
-function coverImage(model: RawModel, ctx: NormalizeContext, sfwOnly: boolean): CivitaiImage | null {
+/** The first image to show for a card. */
+function coverImage(model: RawModel, ctx: NormalizeContext): CivitaiImage | null {
   for (const v of model.modelVersions ?? [])
     for (const img of v.images ?? []) {
-      if (sfwOnly && isNsfwImage(img)) continue;
       const out = image(img, ctx);
       if (out) return out;
     }
@@ -130,7 +129,7 @@ function coverImage(model: RawModel, ctx: NormalizeContext, sfwOnly: boolean): C
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
-export function card(model: RawModel, ctx: NormalizeContext, sfwOnly = false): CivitaiCard {
+export function card(model: RawModel, ctx: NormalizeContext): CivitaiCard {
   const latest = model.modelVersions?.[0];
   return {
     id: model.id,
@@ -142,7 +141,7 @@ export function card(model: RawModel, ctx: NormalizeContext, sfwOnly = false): C
     baseModel: str(latest?.baseModel),
     downloads: num(model.stats?.downloadCount),
     likes: num(model.stats?.thumbsUpCount ?? model.stats?.favoriteCount),
-    image: coverImage(model, ctx, sfwOnly),
+    image: coverImage(model, ctx),
     versionId: latest?.id ?? null,
     local: ctx.local(model.id, latest?.id ?? null),
   };
@@ -242,10 +241,8 @@ export function lookupInfo(
     trainedWords: (v.trainedWords ?? [])
       .map((w) => (typeof w === "string" ? w.trim() : ""))
       .filter(Boolean),
-    nsfw: (full?.nsfw ?? v.model?.nsfw) === true,
     creator: str(full?.creator?.username),
     image: img?.thumb ?? null,
-    imageNsfw: img?.nsfw ?? false,
     description: desc.length ? blocksToText(desc).slice(0, 4000) : null,
   };
 }

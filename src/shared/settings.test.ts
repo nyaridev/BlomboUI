@@ -14,7 +14,6 @@ describe("settings", () => {
     expect(s.appearance.font).toBe("segoe");
     expect(s.gallery.layout).toBe("justified");
     expect(s.civitai.downloads.aliases).toEqual([]);
-    expect(s.models.blurNsfw).toBe(true);
   });
 
   it("merges a patch without resetting other fields", () => {
@@ -40,14 +39,17 @@ describe("settings", () => {
     expect(next.civitai.downloads.parallel).toBe(2);
   });
 
-  it("gives older files the Civitai defaults", () => {
-    const s = migrateSettings({ models: { blurNsfw: false } });
-    expect(s.civitai.browse.nsfw).toBe(true);
+  it("gives older files the Civitai defaults and drops the old NSFW blur", () => {
+    const s = migrateSettings({
+      models: { blurNsfw: false },
+      civitai: { browse: { nsfw: false } },
+    });
+    expect("models" in s).toBe(false);
+    expect("nsfw" in s.civitai.browse).toBe(false);
     expect(s.civitai.downloads.folderBy).toEqual(["baseModel", "category", "creator"]);
     expect(s.civitai.downloads).toMatchObject({ naming: "model", prefix: true, autoAliases: true });
     expect(s.civitai.browse.period).toBe("AllTime");
     expect(s.civitai.lookup).toBe(true);
-    expect(s.models.blurNsfw).toBe(false);
   });
 
   it("gives older files the Generate and autocomplete defaults", () => {

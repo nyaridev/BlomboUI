@@ -1,7 +1,7 @@
 /**
  * A Civitai description, from the server's parsed blocks (shared/richtext.ts). Everything is
  * rendered as React elements: no outside markup reaches the page, links open in the browser,
- * and images (already behind Blombo's proxy) are blurred on NSFW models until clicked.
+ * and images (already behind Blombo's proxy) are blurred on NSFW models until clicked while the Civitai view's blur is on.
  */
 import { Veil } from "@client/ui";
 import type { RichBlock, RichInline } from "@shared/richtext";
@@ -33,7 +33,13 @@ function Runs({ runs }: { runs: RichInline[] }) {
   );
 }
 
-export function RichText({ blocks, blurImages }: { blocks: RichBlock[]; blurImages: boolean }) {
+export function RichText({
+  blocks,
+  blurImages = false,
+}: {
+  blocks: RichBlock[];
+  blurImages?: boolean;
+}) {
   if (!blocks.length) return <p className="text-sm text-fg-3">No description.</p>;
   return (
     <div className="flex flex-col gap-3 text-sm leading-relaxed text-fg-2">

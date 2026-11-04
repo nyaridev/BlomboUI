@@ -94,7 +94,7 @@ export function Palette() {
         id: `model:${m.id}`,
         label: m.name,
         group: lora ? "LoRAs" : "Models",
-        thumb: m.nsfw ? null : m.thumb,
+        thumb: m.thumb,
         icon: lora ? "layers" : "models",
         hint: m.baseModel ?? m.folder,
         keywords: `${m.file} ${m.folder} ${m.triggerWords.join(" ")}`,

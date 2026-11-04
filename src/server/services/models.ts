@@ -87,9 +87,8 @@ interface CivitaiInfo {
   baseModel?: unknown;
   trainedWords?: unknown;
   description?: unknown;
-  model?: { name?: unknown; nsfw?: unknown; description?: unknown };
+  model?: { name?: unknown; description?: unknown };
   creator?: { username?: unknown };
-  images?: Array<{ nsfw?: unknown; nsfwLevel?: unknown }>;
 }
 
 interface A1111Info {
@@ -121,17 +120,6 @@ async function readJson<T>(file: string | null): Promise<T | null> {
   } catch {
     return null;
   }
-}
-
-function isNsfw(info: CivitaiInfo | null): boolean {
-  if (!info) return false;
-  if (info.model?.nsfw === true) return true;
-  const first = info.images?.[0];
-  if (!first) return false;
-  if (typeof first.nsfwLevel === "number") return first.nsfwLevel >= 4;
-  if (typeof first.nsfw === "string")
-    return !["none", "false", ""].includes(first.nsfw.toLowerCase());
-  return first.nsfw === true;
 }
 
 /** Stem of a model file ("foo.safetensors" → "foo"). */
@@ -365,7 +353,6 @@ export class ModelService {
           ctime: stat.birthtimeMs,
           thumb: thumb ?? found?.image ?? null,
           rawThumb,
-          nsfw: thumb ? isNsfw(civitai) : found ? found.imageNsfw || found.nsfw : isNsfw(civitai),
           baseModel: shortBaseModel(
             str(civitai?.baseModel) ?? str(a1111?.["sd version"]) ?? found?.baseModel ?? null,
           ),

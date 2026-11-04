@@ -422,8 +422,7 @@ export class DownloadQueue {
         modelId: raw.id,
         versionId: v.id,
         entryId: null,
-        // NSFW previews aren't shown in download lists (they can't be blurred there).
-        thumb: lookup && !lookup.imageNsfw && !lookup.nsfw ? lookup.image : null,
+        thumb: lookup?.image ?? null,
       },
       job: {
         url: f.downloadUrl,

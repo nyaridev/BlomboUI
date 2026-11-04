@@ -153,7 +153,7 @@ export function DropZone({
 /* ── Veil ────────────────────────────────────────────────────────────────── */
 
 /**
- * Blurs sensitive content until clicked (the owner's NSFW default). While veiled, the first
+ * Blurs sensitive content until clicked (the Civitai view's NSFW blur). While veiled, the first
  * click only reveals; it never reaches what's underneath.
  */
 export function Veil({
@@ -173,6 +173,12 @@ export function Veil({
   className?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
+  // Turning it off and on again veils it again.
+  const [activeWas, setActiveWas] = useState(active);
+  if (activeWas !== active) {
+    setActiveWas(active);
+    setRevealed(false);
+  }
   const veiled = active && !revealed;
   const reveal = (e: MouseEvent | KeyboardEvent) => {
     e.stopPropagation();

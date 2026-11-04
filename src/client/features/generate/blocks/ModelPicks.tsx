@@ -7,7 +7,6 @@
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { useSettings } from "@client/lib/queries";
 import {
   ALT_ARROWS,
   DRAG_LIFT,
@@ -102,8 +101,7 @@ function PickTile({
   onOpen: () => void;
   onRemove: () => void;
 }) {
-  const { thumb, nsfw } = useModelThumb(kind, name);
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
+  const thumb = useModelThumb(kind, name);
   const shown = modelDisplayName(name);
   return (
     <div
@@ -124,7 +122,7 @@ function PickTile({
           aria-keyshortcuts={ALT_ARROWS}
           className="absolute inset-0 block cursor-[inherit] overflow-hidden rounded-[inherit] focus-ring"
         >
-          {thumb && !(nsfw && blurNsfw) ? (
+          {thumb ? (
             <img
               src={thumb}
               alt=""

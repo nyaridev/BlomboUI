@@ -110,17 +110,6 @@ export function CivitaiPage({ header }: { header: React.ReactNode }) {
               })}
             </div>
           </Field>
-          <Field
-            label="NSFW models"
-            layout="left"
-            hint="Shown models keep NSFW images blurred until you click them (Settings → Models)."
-          >
-            <Switch
-              checked={settings.browse.nsfw}
-              onCheckedChange={(nsfw) => save({ browse: { nsfw } })}
-              label="Show NSFW models"
-            />
-          </Field>
         </SettingsSection>
 
         <SettingsSection title="Download folders" icon="folder">

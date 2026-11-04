@@ -59,11 +59,6 @@ export const GallerySettings = z.object({
   // them here as `libraries`, which profile.json's migration reads once.
 });
 
-export const ModelSettings = z.object({
-  /** Blur thumbnails marked NSFW until clicked (the owner's default). */
-  blurNsfw: z.boolean().default(true),
-});
-
 /**
  * When the image stage shows ComfyUI's preview while sampling: from step `after` (rounded up to
  * a multiple of `every`), then every `every` steps, plus the last step when `lastStep` is on.
@@ -237,7 +232,6 @@ export const Settings = z.object({
   version: z.literal(SETTINGS_VERSION).default(SETTINGS_VERSION),
   appearance: AppearanceSettings.prefault({}),
   gallery: GallerySettings.prefault({}),
-  models: ModelSettings.prefault({}),
   civitai: CivitaiSettings.prefault({}),
   generate: GenerateSettings.prefault({}),
   autocomplete: AutocompleteSettings.prefault({}),
@@ -257,7 +251,6 @@ export const SettingsPatch = z
   .object({
     appearance: Section,
     gallery: Section,
-    models: Section,
     civitai: Section,
     generate: Section,
     autocomplete: Section,

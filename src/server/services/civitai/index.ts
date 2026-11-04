@@ -140,7 +140,7 @@ export class CivitaiService {
     return {
       items: (page.items ?? [])
         .filter((m) => typeof m?.id === "number")
-        .map((m) => normalize.card(m, ctx, !filter.nsfw)),
+        .map((m) => normalize.card(m, ctx)),
       nextCursor: (page.items?.length ?? 0) > 0 ? CivitaiApi.nextCursor(page) : null,
     };
   }

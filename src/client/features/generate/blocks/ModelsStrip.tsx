@@ -75,9 +75,8 @@ const ON_HOVER =
 
 /** A tile's picture: the model's own, else the designed fallback. */
 function TileFace({ kind, name }: { kind: CardKind; name: string }) {
-  const { thumb, nsfw } = useModelThumb(kind === "wildcards" ? "loras" : kind, name);
-  const blur = useSettings().data?.models.blurNsfw ?? true;
-  if (kind !== "wildcards" && thumb && !(nsfw && blur))
+  const thumb = useModelThumb(kind === "wildcards" ? "loras" : kind, name);
+  if (kind !== "wildcards" && thumb)
     return (
       <img
         src={thumb}

@@ -120,7 +120,8 @@ export class CivitaiApi {
     for (const b of filter.baseModels) q.append("baseModels", b);
     q.set("sort", filter.sort);
     q.set("period", filter.period);
-    q.set("nsfw", String(filter.nsfw));
+    // Always asked for: the profile's site decides (civitai.com answers SFW models only).
+    q.set("nsfw", "true");
     if (filter.username) q.set("username", filter.username);
     if (cursor?.startsWith("p:")) q.set("page", cursor.slice(2));
     else if (cursor) q.set("cursor", cursor);

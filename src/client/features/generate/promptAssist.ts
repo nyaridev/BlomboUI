@@ -25,7 +25,6 @@ import type { AutocompleteSettings } from "@shared/settings";
 
 export interface AssistSettings {
   autocomplete: AutocompleteSettings;
-  blurNsfw: boolean;
 }
 
 /** How many suggestions come back (the most the server gives); the list scrolls through them. */
@@ -94,7 +93,7 @@ function source(get: () => AssistSettings | null) {
       detail: sug.uses !== null ? undefined : (sug.detail ?? undefined),
       type: sug.kind,
       // The picture shows big beside the list, for the selected entry only.
-      info: sug.thumb && ac.thumbnails ? () => picture(sug, s.blurNsfw) : undefined,
+      info: sug.thumb && ac.thumbnails ? () => picture(sug) : undefined,
       boost: -i,
       suggestion: sug,
       apply: (view, _completion, from, to) => {
@@ -112,11 +111,11 @@ function source(get: () => AssistSettings | null) {
   };
 }
 
-function picture(sug: Suggestion, blurNsfw: boolean): Node {
+function picture(sug: Suggestion): Node {
   const img = document.createElement("img");
   img.src = sug.thumb ?? "";
   img.alt = "";
-  img.className = `cm-ac-picture${sug.nsfw && blurNsfw ? " cm-ac-blur" : ""}`;
+  img.className = "cm-ac-picture";
   return img;
 }
 
@@ -252,7 +251,6 @@ export const assistTheme = EditorView.theme({
     objectFit: "cover",
     backgroundColor: "var(--sunken)",
   },
-  ".cm-ac-blur": { filter: "blur(12px)" },
 });
 
 /**

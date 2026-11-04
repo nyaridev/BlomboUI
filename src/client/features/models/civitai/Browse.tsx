@@ -1,5 +1,6 @@
 /**
- * Models → Civitai → Browse: a clear filter bar (search, types, base model, sort, period, NSFW),
+ * Models → Civitai → Browse: a clear filter bar (search, types, base model, sort, period, the
+ * NSFW blur; what's listed follows the profile's Civitai site),
  * recent searches and saved filters, and the results as one virtualized grid of ModelCards that
  * loads the next page as you near the end. Results come from the server's cached proxy.
  */
@@ -23,10 +24,10 @@ import {
   IconButton,
   ModelCard,
   Popover,
-  Segmented,
   Select,
   Skeleton,
   TextField,
+  Tooltip,
   toast,
 } from "@client/ui";
 import {
@@ -174,16 +175,7 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
             icon: "calendar",
           }))}
         />
-        <Segmented
-          size="sm"
-          label="NSFW models"
-          value={filter.nsfw ? "show" : "hide"}
-          onChange={(v) => setFilter({ nsfw: v === "show" })}
-          options={[
-            { value: "show", label: "NSFW", icon: "eye", title: "Show NSFW models (blurred)" },
-            { value: "hide", label: "SFW only", icon: "eye-off", title: "Hide NSFW models" },
-          ]}
-        />
+        <NsfwBlurToggle />
         <div className="ml-auto flex items-center gap-1">
           {filter.username ? (
             <Chip size="sm" icon="user" selected onRemove={() => setFilter({ username: "" })}>
@@ -324,10 +316,31 @@ function describe(f: BrowseFilter): string {
     f.baseModels[0] ?? null,
     f.sort,
     CIVITAI_PERIOD_LABELS[f.period],
-    f.nsfw ? null : "SFW only",
   ]
     .filter(Boolean)
     .join(" · ");
+}
+
+/**
+ * The Civitai view's NSFW button: blurs every NSFW image until clicked, or shows them all.
+ * Switching it re-blurs the ones clicked open before. Not saved: it's on each time the app starts.
+ */
+export function NsfwBlurToggle() {
+  const blur = useCivitai((s) => s.blur);
+  const toggle = useCivitai((s) => s.toggleBlur);
+  return (
+    <Tooltip
+      content={
+        blur
+          ? "NSFW images are blurred until clicked. Click to show them all."
+          : "NSFW images are shown. Click to blur them all again."
+      }
+    >
+      <Chip size="sm" icon={blur ? "eye-off" : "eye"} selected={blur} onClick={toggle}>
+        Blur NSFW
+      </Chip>
+    </Tooltip>
+  );
 }
 
 /* ── results ────────────────────────────────────────────────────────────── */
@@ -336,7 +349,7 @@ function Results({ filter }: { filter: BrowseFilter }) {
   const q = useCivitaiModels(filter);
   const open = useCivitai((s) => s.open);
   const settings = useSettings().data;
-  const blurNsfw = settings?.models.blurNsfw ?? true;
+  const blurNsfw = useCivitai((s) => s.blur);
   const showMarks = settings?.civitai.marks ?? true;
   const downloads = useLive((s) => s.downloads);
   const qc = useQueryClient();

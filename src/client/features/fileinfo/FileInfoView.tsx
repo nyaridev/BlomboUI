@@ -15,7 +15,7 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { useClock } from "@client/lib/clock";
 import { formatBytes } from "@client/lib/number";
-import { useImportWorkflow, useSaveModelInfo, useSettings } from "@client/lib/queries";
+import { useImportWorkflow, useSaveModelInfo } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
   Badge,
@@ -195,7 +195,6 @@ function Result({
   dropped: File | null;
 }) {
   const civitai = useFileCivitai(info, dropped);
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
   const [shown, setShown] = useState(0);
   const images = useMemo(
     () => (civitai?.match ? authorImages(civitai.match) : []),
@@ -209,7 +208,6 @@ function Result({
         <CivitaiCarousel
           images={images}
           label={`${civitai.match.model.name} images`}
-          blurNsfw={blurNsfw}
           onIndex={setShown}
         />
       ) : civitai ? (

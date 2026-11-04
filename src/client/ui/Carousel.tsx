@@ -41,6 +41,12 @@ export function Carousel({
 }) {
   const [index, setIndex] = useState(0);
   const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
+  // Switching the blur forgets what was clicked open, so switching it back blurs everything.
+  const [blurWas, setBlurWas] = useState(blurNsfw);
+  if (blurWas !== blurNsfw) {
+    setBlurWas(blurNsfw);
+    setRevealed(new Set());
+  }
   const strip = useRef<HTMLDivElement>(null);
   const count = images.length;
   const current = images[Math.min(index, count - 1)];

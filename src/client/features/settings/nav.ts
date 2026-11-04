@@ -8,7 +8,6 @@ export type SettingsPage =
   | "generate"
   | "files"
   | "gallery"
-  | "models"
   | "civitai"
   | "autocomplete"
   | "notifications"
@@ -59,13 +58,6 @@ export const SETTINGS_PAGES: Array<{
     icon: "gallery",
     group: "Tools",
     keywords: "tiles justified grid grids libraries exclude interrupted stopped",
-  },
-  {
-    id: "models",
-    label: "Models",
-    icon: "models",
-    group: "Tools",
-    keywords: "nsfw blur thumbnails pictures",
   },
   {
     id: "civitai",

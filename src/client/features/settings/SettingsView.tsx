@@ -147,8 +147,6 @@ function Page({ page, profile }: { page: PageId; profile: ReturnType<typeof useC
       );
     case "gallery":
       return <GalleryPage />;
-    case "models":
-      return <ModelsPage />;
     case "autocomplete":
       return <AutocompletePage header={<PageHeader title="Autocomplete" />} />;
     case "civitai":
@@ -475,31 +473,6 @@ function GalleryPage() {
                 update.mutate({ gallery: { excludeInterrupted } })
               }
               label="Exclude interrupted images"
-            />
-          </Field>
-        </SettingsSection>
-      </div>
-    </>
-  );
-}
-
-function ModelsPage() {
-  const settings = useSettings().data;
-  const update = useUpdateSettings();
-  return (
-    <>
-      <PageHeader title="Models" />
-      <div className="flex flex-col gap-8">
-        <SettingsSection title="Thumbnails" icon="image">
-          <Field
-            label="Blur NSFW thumbnails"
-            layout="left"
-            hint="Thumbnails whose info file marks them NSFW stay blurred until you click them."
-          >
-            <Switch
-              checked={settings?.models.blurNsfw ?? true}
-              onCheckedChange={(blurNsfw) => update.mutate({ models: { blurNsfw } })}
-              label="Blur NSFW thumbnails"
             />
           </Field>
         </SettingsSection>

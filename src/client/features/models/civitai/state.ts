@@ -1,6 +1,7 @@
 /**
  * The Civitai browser's UI state: the applied filter (seeded from Settings → Civitai's browse
- * defaults the first time) and the opened model tabs. Server data stays in TanStack Query.
+ * defaults the first time), the opened model tabs, and whether NSFW images are blurred (this
+ * view only, on each time the app starts). Server data stays in TanStack Query.
  */
 import { BrowseFilter, type BrowseFilterInput } from "@shared/civitai";
 import type { Settings } from "@shared/settings";
@@ -17,6 +18,9 @@ interface CivitaiState {
   tabs: OpenTab[];
   /** The model tab in front; null shows the browser. */
   active: number | null;
+  /** NSFW images stay blurred until clicked (the NSFW button switches it for every image). */
+  blur: boolean;
+  toggleBlur: () => void;
   /** Use the profile's defaults (once, before the first search). */
   seed: (browse: Settings["civitai"]["browse"]) => void;
   setFilter: (patch: Partial<BrowseFilterInput>) => void;
@@ -32,6 +36,8 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   filter: null,
   tabs: [],
   active: null,
+  blur: true,
+  toggleBlur: () => set((s) => ({ blur: !s.blur })),
   seed: (browse) => {
     if (!get().filter) set({ filter: BrowseFilter.parse(browse) });
   },

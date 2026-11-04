@@ -43,13 +43,14 @@ import { useEffect, useMemo, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
 import { useSettingsNav } from "../../settings/nav";
 import { useModelsNav } from "../nav";
+import { NsfwBlurToggle } from "./Browse";
 import { localVersions } from "./marks";
 import { RichText } from "./RichText";
 import { useCivitai } from "./state";
 
 export function ModelPage({ id }: { id: number }) {
   const q = useCivitaiModel(id);
-  const blurNsfw = useSettings().data?.models.blurNsfw ?? true;
+  const blurNsfw = useCivitai((s) => s.blur);
   if (q.isLoading)
     return (
       <div className="mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)_400px] gap-8 p-6">
@@ -119,6 +120,9 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                   <Icon name="layers" size={11} /> Other version installed
                 </Badge>
               ) : null}
+              <span className="ml-auto">
+                <NsfwBlurToggle />
+              </span>
             </div>
             <h2 className="text-2xl font-semibold tracking-tight text-balance break-words text-fg">
               {model.name}

@@ -164,9 +164,7 @@ export function PromptEditor({
   const onSubmitRef = useRef(onSubmit);
   const settings = useSettings().data;
   const assist = useRef<AssistSettings | null>(null);
-  assist.current = settings
-    ? { autocomplete: settings.autocomplete, blurNsfw: settings.models.blurNsfw }
-    : null;
+  assist.current = settings ? { autocomplete: settings.autocomplete } : null;
   /** True while the editor is being set from `value`, so that isn't reported as an edit. */
   const syncing = useRef(false);
   onChangeRef.current = onChange;

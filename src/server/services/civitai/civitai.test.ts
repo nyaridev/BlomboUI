@@ -30,11 +30,11 @@ describe("browsing", () => {
     expect(next.items[0]?.id).not.toBe(page.items[0]?.id);
   });
 
-  it("hides NSFW models when asked and caches answers", async () => {
+  it("lists NSFW models (the site decides) and caches answers", async () => {
     const before = o.fake.requests.length;
-    const sfw = await o.services.civitai.search(filter({ nsfw: false, sort: "Newest" }), null);
-    expect(sfw.items.some((c) => c.nsfw)).toBe(false);
-    await o.services.civitai.search(filter({ nsfw: false, sort: "Newest" }), null);
+    const page = await o.services.civitai.search(filter({ sort: "Newest" }), null);
+    expect(page.items.some((c) => c.nsfw)).toBe(true);
+    await o.services.civitai.search(filter({ sort: "Newest" }), null);
     expect(o.fake.requests.length).toBe(before + 1);
   });
 

@@ -120,8 +120,6 @@ export const BrowseFilter = z.object({
   baseModels: z.array(z.string().max(60)).max(12).default([]),
   sort: z.enum(CIVITAI_SORTS).default("Highest Rated"),
   period: z.enum(CIVITAI_PERIODS).default("AllTime"),
-  /** Include models marked NSFW (their images stay blurred until clicked). */
-  nsfw: z.boolean().default(true),
   /** A creator's models only. */
   username: z.string().trim().max(60).default(""),
 });
@@ -295,7 +293,6 @@ export function browseQuery(filter: BrowseFilter, cursor?: string | null): strin
   if (filter.baseModels.length) q.set("base", filter.baseModels.join(","));
   q.set("sort", filter.sort);
   q.set("period", filter.period);
-  q.set("nsfw", filter.nsfw ? "1" : "0");
   if (filter.username) q.set("user", filter.username);
   if (cursor) q.set("cursor", cursor);
   return q.toString();
@@ -317,7 +314,6 @@ export function parseBrowseQuery(params: Record<string, string | undefined>): {
     baseModels: list(params.base),
     sort: params.sort || undefined,
     period: params.period || undefined,
-    nsfw: params.nsfw === undefined ? undefined : params.nsfw === "1",
     username: params.user ?? "",
   });
   const cursor = params.cursor?.trim() ? params.cursor.trim().slice(0, 200) : null;

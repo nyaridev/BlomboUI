@@ -51,7 +51,6 @@ describe("browse query", () => {
       baseModels: ["Illustrious", "SDXL 1.0"],
       sort: "Newest",
       period: "Week",
-      nsfw: false,
       username: "someone",
     });
     const text = browseQuery(filter, "5482|195397");
@@ -60,7 +59,7 @@ describe("browse query", () => {
   });
 
   it("fills defaults and refuses unknown sorts", () => {
-    expect(parseBrowseQuery({}).filter).toMatchObject({ sort: "Highest Rated", nsfw: true });
+    expect(parseBrowseQuery({}).filter).toMatchObject({ sort: "Highest Rated", period: "AllTime" });
     expect(() => parseBrowseQuery({ sort: "Random" })).toThrow();
   });
 });

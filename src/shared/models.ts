@@ -77,8 +77,6 @@ export const LocalModel = z.object({
   thumb: z.string().nullable(),
   /** The full-size picture (`<model>_data/thumb_raw.*`, images only) for big views. */
   rawThumb: z.string().nullable().default(null),
-  /** Marked NSFW by its sidecar info (unknown counts as not NSFW). */
-  nsfw: z.boolean(),
   baseModel: z.string().nullable(),
   /** Your trigger words (the A1111 .json's activation text) or, without them, Civitai's. */
   triggerWords: z.array(z.string()),
@@ -126,11 +124,9 @@ export const LookupInfo = z.object({
   type: z.string().nullable(),
   baseModel: z.string().nullable(),
   trainedWords: z.array(z.string()),
-  nsfw: z.boolean(),
   creator: z.string().nullable(),
   /** Proxied first image. */
   image: z.string().nullable(),
-  imageNsfw: z.boolean(),
   description: z.string().nullable(),
 });
 export type LookupInfo = z.infer<typeof LookupInfo>;

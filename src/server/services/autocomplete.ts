@@ -404,7 +404,6 @@ export class AutocompleteService {
           detail: `used ${f.uses}×`,
           category: null,
           thumb: null,
-          nsfw: false,
           uses: f.uses,
         });
       }
@@ -451,7 +450,6 @@ export class AutocompleteService {
             detail: `trigger · ${m.name}`,
             category: null,
             thumb: m.thumb,
-            nsfw: m.nsfw,
             uses: null,
           });
         }
@@ -470,7 +468,6 @@ export class AutocompleteService {
       detail: alias ? `${alias} →` : row.count > 0 ? shortCount(row.count) : null,
       category: row.category,
       thumb: null,
-      nsfw: false,
       uses: used,
     };
   }
@@ -505,7 +502,6 @@ export class AutocompleteService {
         detail: m.baseModel ?? (m.folder || null),
         category: null,
         thumb: m.thumb,
-        nsfw: m.nsfw,
         uses: null,
         triggers: m.triggerWords,
       };
@@ -530,7 +526,6 @@ export class AutocompleteService {
         detail: "wildcard",
         category: null,
         thumb: null,
-        nsfw: false,
         uses: null,
       }));
   }

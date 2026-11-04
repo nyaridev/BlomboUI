@@ -95,7 +95,6 @@ describe("local models", () => {
       name: "Detailer Slider",
       folder: "style",
       baseModel: "IL",
-      nsfw: true,
       triggerWords: ["detailed", "sharp"],
       hasInfo: true,
     });
@@ -103,7 +102,6 @@ describe("local models", () => {
     expect(list.models.find((m) => m.file === "plain.safetensors")).toMatchObject({
       triggerWords: ["foo", "bar"],
       thumb: null,
-      nsfw: false,
     });
   });
 

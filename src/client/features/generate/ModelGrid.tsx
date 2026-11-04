@@ -4,7 +4,7 @@
  * workflow's model, adds a LoRA (instant: beside the prompt, its trigger words added when
  * generating; with Instant off in its model info, a <lora:…> tag and its trigger words in the
  * prompt; clicking a LoRA in use takes it off again) or adds a __wildcard__ to the prompt. The
- * grid is virtualized: LoRA folders often hold thousands of files. Thumbnails, base models and NSFW flags come from
+ * grid is virtualized: LoRA folders often hold thousands of files. Thumbnails and base models come from
  * the models folder (each model's picture and info) and the Civitai lookup (Models → Local's
  * list). Favorites come first, then what you used recently (the job log), unless another sort
  * is picked (name, path, created, modified, size; the square button beside it flips the order).
@@ -183,7 +183,6 @@ export function ModelGrid({
   const localList = useLocalModels().data;
   const settings = useSettings().data;
   const updateSettings = useUpdateSettings();
-  const blurNsfw = settings?.models.blurNsfw ?? true;
   const showLoaded = settings?.generate.pickerShowLoaded ?? true;
   // ComfyUI lists names inside each kind folder; the local list has the same files with
   // thumbnails and info. Join them on the path below the kind folder.
@@ -754,7 +753,6 @@ export function ModelGrid({
               isSelected={isSelected}
               onPick={pick}
               onMenu={(e, item) => openContextMenu(e, menuFor(item))}
-              blurNsfw={blurNsfw}
               favorites={tab === "wildcards" ? null : favorites}
               onFavorite={(item) =>
                 kind &&
@@ -788,7 +786,6 @@ function VirtualGrid({
   isSelected,
   onPick,
   onMenu,
-  blurNsfw,
   favorites,
   onFavorite,
   columns: wanted,
@@ -802,7 +799,6 @@ function VirtualGrid({
   isSelected: (i: Item) => boolean;
   onPick: (i: Item) => void;
   onMenu: (e: MouseEvent<HTMLElement>, i: Item) => void;
-  blurNsfw: boolean;
   /** Null where favorites don't apply (wildcards). */
   favorites: Set<string> | null;
   onFavorite: (i: Item) => void;
@@ -842,7 +838,6 @@ function VirtualGrid({
               <PickerCard
                 key={item.id}
                 item={item}
-                blurNsfw={blurNsfw}
                 selected={isSelected(item)}
                 onPick={onPick}
                 onMenu={onMenu}
@@ -860,7 +855,6 @@ function VirtualGrid({
 
 function PickerCard({
   item,
-  blurNsfw,
   selected,
   onPick,
   onMenu,
@@ -870,7 +864,6 @@ function PickerCard({
 }: {
   item: Item;
   onInfo?: (i: Item) => void;
-  blurNsfw: boolean;
   selected: boolean;
   onPick: (i: Item) => void;
   onMenu: (e: MouseEvent<HTMLElement>, i: Item) => void;
@@ -885,8 +878,6 @@ function PickerCard({
       kind={item.kind}
       baseModel={item.local?.baseModel ?? item.folder ?? undefined}
       thumb={item.local?.thumb ?? null}
-      nsfw={item.local?.nsfw}
-      blurNsfw={blurNsfw}
       meta={item.local?.triggerWords[0]}
       ratio={CARD_RATIO}
       selected={selected}

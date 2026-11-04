@@ -32,6 +32,31 @@ describe("composeGrid", () => {
     expect(blue).toEqual([0, 0, 255]);
   });
 
+  it("puts captions under cells, margins between them, and leaves a short last row blank", async () => {
+    const images = [await solid(255, 0, 0), await solid(0, 255, 0), await solid(0, 0, 255)];
+    const out = await composeGrid({
+      images,
+      cols: 2,
+      rows: 2,
+      colLabels: [],
+      rowLabels: [],
+      captions: ["red", "green", "blue"],
+      margin: 40,
+    });
+    const raw = await sharp(out.png).raw().toBuffer({ resolveWithObject: true });
+    const px = (x: number, y: number) => {
+      const i = (y * raw.info.width + x) * raw.info.channels;
+      return [raw.data[i], raw.data[i + 1], raw.data[i + 2]];
+    };
+    // No labels: the first cell starts at the top-left; the margin is white.
+    expect(px(2, 2)).toEqual([255, 0, 0]);
+    const cellW = (out.width - 40) / 2;
+    expect(px(Math.round(cellW + 20), 2)).toEqual([255, 255, 255]);
+    expect(px(Math.round(cellW + 42), 2)).toEqual([0, 255, 0]);
+    // The missing fourth cell is blank, not a gray "no image" cell.
+    expect(px(out.width - 4, out.height - 4)).toEqual([255, 255, 255]);
+  });
+
   it("works without row labels or a title", async () => {
     const out = await composeGrid({
       images: [await solid(10, 10, 10, 32, 32), await solid(200, 200, 200, 32, 32)],

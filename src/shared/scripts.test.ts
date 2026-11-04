@@ -38,6 +38,12 @@ const values = {
   "model.checkpoint": "sd15/dreamshaper_8.safetensors",
   "sampler.seed": 42,
 };
+const withBatch = { ...values, "latent.batch": 4 };
+bindings.push(b({ id: "latent.batch", type: "int", role: "latent.batch", label: "Batch size" }));
+const size: Binding[] = [
+  b({ id: "latent.width", type: "int", role: "latent.width", label: "Width" }),
+  b({ id: "latent.height", type: "int", role: "latent.height", label: "Height" }),
+];
 const find = (id: string) => bindings.find((x) => x.id === id) as Binding;
 
 describe("axis values", () => {
@@ -67,16 +73,110 @@ describe("axis values", () => {
 });
 
 describe("planScript", () => {
-  it("makes every combination of matrix terms, half across and half down", () => {
-    const plan = planScript({ kind: "matrix", terms: ["hat", "scarf", "night"] }, bindings, values);
-    expect(plan.cells).toHaveLength(8);
-    expect(plan.cols).toBe(4);
-    expect(plan.rows).toBe(2);
-    expect(plan.colLabels).toEqual(["(prompt only)", "hat", "scarf", "hat + scarf"]);
-    expect(plan.rowLabels).toEqual(["(prompt only)", "night"]);
-    expect(plan.cells[7]?.overrides["prompt.positive"]).toBe(
-      "a red fox in the snow, hat, scarf, night",
+  it("runs each matrix line once, at the end, start or in place of a text", () => {
+    const lines = ["hat", "scarf", "night", "rain", "fog"];
+    const end = planScript({ kind: "matrix", lines }, bindings, withBatch);
+    expect(end.cells).toHaveLength(5);
+    // A near-square grid with each line under its image; every run makes one image.
+    expect([end.cols, end.rows]).toEqual([3, 2]);
+    expect(end.captions).toEqual(lines);
+    expect(end.cells[4]).toMatchObject({ col: 1, row: 1, label: "fog" });
+    expect(end.cells[0]?.overrides).toEqual({
+      "prompt.positive": "a red fox in the snow, hat",
+      "latent.batch": 1,
+    });
+    const start = planScript(
+      { kind: "matrix", lines: ["hat,"], insert: "start" },
+      bindings,
+      values,
     );
+    expect(start.cells[0]?.overrides["prompt.positive"]).toBe("hat, a red fox in the snow");
+    const sr = planScript(
+      { kind: "matrix", lines: ["cat", "owl"], insert: "replace", search: "fox" },
+      bindings,
+      values,
+    );
+    expect(sr.cells.map((c) => c.overrides["prompt.positive"])).toEqual([
+      "a red cat in the snow",
+      "a red owl in the snow",
+    ]);
+    expect(() =>
+      planScript(
+        { kind: "matrix", lines: ["x"], insert: "replace", search: "wolf" },
+        bindings,
+        values,
+      ),
+    ).toThrow(/"wolf" isn't in the prompts/);
+  });
+
+  it("repeats each matrix line for the batch count, one row per line", () => {
+    const plan = planScript(
+      { kind: "matrix", lines: ["hat", "scarf"], useBatch: true, count: 3 },
+      bindings,
+      withBatch,
+    );
+    expect([plan.cols, plan.rows]).toEqual([3, 2]);
+    expect(plan.rowLabels).toEqual(["hat", "scarf"]);
+    expect(plan.captions).toBeUndefined();
+    expect(plan.cells.map((c) => c.repeat ?? 0)).toEqual([0, 1, 2, 0, 1, 2]);
+    // The workflow's batch size stays.
+    expect(plan.cells[0]?.overrides).toEqual({ "prompt.positive": "a red fox in the snow, hat" });
+  });
+
+  it("adds LoRAs to the instant ones and sets width and height together", () => {
+    const plan = planScript(
+      {
+        kind: "xy",
+        x: {
+          type: "lora",
+          values: [
+            { name: "styles/ink", strength: 0.7 },
+            { name: "detail", strength: 1 },
+          ],
+        },
+        y: { type: "resolution", values: ["832x1216", "1024x1024"] },
+      },
+      [...bindings, ...size],
+      {
+        ...values,
+        "loras.instant": [
+          { name: "detail", strength: 0.4 },
+          { name: "mine", strength: 1 },
+        ],
+      },
+    );
+    expect(plan.colLabels).toEqual(["ink", "detail"]);
+    expect(plan.rowLabels).toEqual(["832×1216", "1024×1024"]);
+    expect(plan.cells[0]?.overrides).toEqual({
+      "latent.width": 832,
+      "latent.height": 1216,
+      "loras.instant": [
+        { name: "detail", strength: 0.4 },
+        { name: "mine", strength: 1 },
+        { name: "styles/ink", strength: 0.7 },
+      ],
+    });
+    // The same LoRA already there takes the axis's strength.
+    expect(plan.cells[1]?.overrides["loras.instant"]).toEqual([
+      { name: "mine", strength: 1 },
+      { name: "detail", strength: 1 },
+    ]);
+    expect(() =>
+      planScript({ kind: "xy", x: { type: "resolution", values: ["512x512"] } }, bindings, values),
+    ).toThrow(/no width and height/);
+  });
+
+  it("draws labels only when asked, with or without the type, and takes one axis", () => {
+    const x = { type: "binding" as const, binding: "sampler.steps", values: [20, 30] };
+    expect(planScript({ kind: "xy", x, legendType: true }, bindings, values).colLabels).toEqual([
+      "Steps: 20",
+      "Steps: 30",
+    ]);
+    const off = planScript({ kind: "xy", x: null, y: x, legend: false }, bindings, values);
+    expect([off.cols, off.rows, off.colLabels, off.rowLabels]).toEqual([1, 2, [], []]);
+    expect(off.cells[1]?.label).toBe("Steps: 30");
+    expect(() => planScript({ kind: "xy" }, bindings, values)).toThrow(/Pick a type/);
+    expect(() => planScript({ kind: "xy", x, y: x }, bindings, values)).toThrow(/both Steps/);
   });
 
   it("crosses two axes row by row, including prompt search/replace", () => {
@@ -84,7 +184,7 @@ describe("planScript", () => {
       {
         kind: "xy",
         x: { type: "binding", binding: "sampler.cfg", values: [5, 7] },
-        y: { type: "replace", binding: "prompt.positive", values: ["fox", "cat", "owl"] },
+        y: { type: "replace", values: ["fox", "cat", "owl"] },
       },
       bindings,
       values,
@@ -103,9 +203,10 @@ describe("planScript", () => {
       "sampler.cfg": 7,
       "prompt.positive": "a red cat in the snow",
     });
-    expect(plan.colLabels).toEqual(["CFG scale: 5", "CFG scale: 7"]);
+    expect(plan.colLabels).toEqual(["5", "7"]);
     expect(plan.rowLabels).toEqual(["fox", "cat", "owl"]);
-    expect(plan.title).toBe("XY plot · CFG scale × Prompt search/replace");
+    expect(plan.cells[3]?.label).toBe("CFG scale: 7 · Prompt S/R: cat");
+    expect(plan.title).toBe("XY plot · CFG scale × Prompt S/R");
   });
 
   it("says what's wrong instead of queuing a broken plot", () => {
@@ -113,12 +214,12 @@ describe("planScript", () => {
       planScript(
         {
           kind: "xy",
-          x: { type: "replace", binding: "prompt.positive", values: ["wolf", "cat"] },
+          x: { type: "replace", values: ["wolf", "cat"] },
         },
         bindings,
         values,
       ),
-    ).toThrow(/"wolf" isn't in prompt/);
+    ).toThrow(/"wolf" isn't in the prompts/);
     expect(() =>
       planScript(
         {

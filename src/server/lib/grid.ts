@@ -1,7 +1,8 @@
 /**
  * Labeled image grids for prompt matrices and XY plots (sharp). Cells keep the first image's
  * aspect ratio, shrunk so the whole grid stays under a size image viewers handle; column labels
- * go above, row labels to the left, drawn as SVG text. A missing image (a failed or cancelled
+ * go above, row labels to the left, drawn as SVG text; a grid that isn't a table (a matrix's
+ * lines) has a caption under each cell instead. Margins put space between cells. A missing image (a failed or cancelled
  * run) leaves a gray cell that says so. The grid is a picture file, not UI, so its colors are
  * fixed here rather than coming from the app's theme.
  */
@@ -16,6 +17,10 @@ export interface GridInput {
   rows: number;
   colLabels: string[];
   rowLabels: string[];
+  /** A caption under each cell, row by row; cells past the images stay blank. */
+  captions?: string[];
+  /** Pixels between cells. */
+  margin?: number;
   title?: string;
 }
 
@@ -85,25 +90,33 @@ export async function composeGrid(input: GridInput): Promise<{
     }
   }
   const hasRows = input.rowLabels.length > 0;
+  const hasCols = input.colLabels.length > 0;
+  const captions = input.captions ?? null;
   const hasTitle = Boolean(input.title);
+  const gap = Math.max(0, Math.round(input.margin ?? 0));
   // Cell size: the images' own size (small ones at least MIN_CELL wide, to stay readable), and
   // the grid never past MAX_SIDE.
   let cellW = Math.min(
     Math.max(MIN_CELL, Math.min(MAX_CELL, natural)),
-    Math.floor(MAX_SIDE / (input.cols + (hasRows ? 0.6 : 0))),
+    Math.floor((MAX_SIDE - gap * (input.cols - 1)) / (input.cols + (hasRows ? 0.6 : 0))),
   );
   let cellH = Math.round(cellW / aspect);
-  const maxH = Math.floor(MAX_SIDE / (input.rows + 0.4));
+  const maxH = Math.floor(
+    (MAX_SIDE - gap * (input.rows - 1)) / (input.rows * (captions ? 1.15 : 1) + 0.4),
+  );
   if (cellH > maxH) {
     cellH = maxH;
     cellW = Math.round(cellH * aspect);
   }
   const font = Math.max(14, Math.round(Math.min(cellW, cellH) / 18));
-  const headH = Math.round(font * 4.2);
+  const headH = hasCols ? Math.round(font * 4.2) : 0;
+  const capH = captions ? Math.round(font * 3.2) : 0;
   const sideW = hasRows ? Math.round(Math.min(cellW * 0.6, font * 14)) : 0;
   const titleH = hasTitle ? Math.round(font * 2.4) : 0;
-  const width = sideW + cellW * input.cols;
-  const height = titleH + headH + cellH * input.rows;
+  const stepX = cellW + gap;
+  const stepY = cellH + capH + gap;
+  const width = sideW + stepX * input.cols - gap;
+  const height = titleH + headH + stepY * input.rows - gap;
   const chars = (w: number) => Math.max(6, Math.floor(w / (font * 0.56)));
 
   const layers: OverlayOptions[] = [];
@@ -123,22 +136,37 @@ export async function composeGrid(input: GridInput): Promise<{
     layers.push({
       input: textSvg(cellW, headH, wrapLabel(label, chars(cellW), 3), font, "middle"),
       top: titleH,
-      left: sideW + c * cellW,
+      left: sideW + c * stepX,
     });
   });
   if (hasRows)
     input.rowLabels.forEach((label, r) => {
       layers.push({
         input: textSvg(sideW, cellH, wrapLabel(label, chars(sideW), 6), font, "end"),
-        top: titleH + headH + r * cellH,
+        top: titleH + headH + r * stepY,
         left: 0,
       });
     });
   for (let r = 0; r < input.rows; r++)
     for (let c = 0; c < input.cols; c++) {
-      const img = input.images[r * input.cols + c] ?? null;
-      const top = titleH + headH + r * cellH;
-      const left = sideW + c * cellW;
+      const index = r * input.cols + c;
+      // A captioned grid's last row can be short.
+      if (captions && index >= input.images.length) continue;
+      const img = input.images[index] ?? null;
+      const top = titleH + headH + r * stepY;
+      const left = sideW + c * stepX;
+      if (captions)
+        layers.push({
+          input: textSvg(
+            cellW,
+            capH,
+            wrapLabel(captions[index] ?? "", chars(cellW), 2),
+            font,
+            "middle",
+          ),
+          top: top + cellH,
+          left,
+        });
       if (img) {
         const cell = await sharp(img)
           .resize(cellW, cellH, { fit: "contain", background: BG })

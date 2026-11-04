@@ -2,6 +2,10 @@
  * Generate scripts (ADR-0014, shared/scripts.ts): a click with a script queues one job per cell
  * through the normal queue, as one group with the same seed. This service follows the group:
  *
+ * Seeds: one for the whole group, except a seed axis's own values (-1: random), a matrix line's
+ * repeats (moved on like the seed mode says) and an XY plot with random seeds on. An XY plot that
+ * doesn't keep its images runs the cells as previews, so only the grid is saved.
+ *
  *   matrix / xy  when the last cell is done, the images are fetched from ComfyUI and put into one
  *                labeled grid (lib/grid.ts), saved in the outputs folder by day
  *                (<outputs>/<date>/grids/…, or the profile's grids/ without one) and shown as a
@@ -25,7 +29,7 @@ import { freePath, writeFileIfAbsent } from "../lib/fsx.ts";
 import { composeGrid } from "../lib/grid.ts";
 import { HttpError } from "../lib/http.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
-import type { JobQueue } from "./jobs.ts";
+import { type JobQueue, nextSeed } from "./jobs.ts";
 import { saveModelThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
 
@@ -91,6 +95,12 @@ export class ScriptService {
     // One seed for every cell, so only what's compared changes.
     const seed = saved.run.seedMode === "random" ? randomSeed() : this.deps.queue.baseSeed(saved);
     const seedId = bindingFor(saved.bindings, "sampler.seed")?.id;
+    const cellSeed = (cell: ScriptPlan["cells"][number]): number => {
+      const own = seedId !== undefined ? Number(cell.overrides[seedId]) : Number.NaN;
+      if (Number.isFinite(own)) return own < 0 ? randomSeed() : own;
+      if (plan.randomSeeds) return randomSeed();
+      return cell.repeat ? nextSeed(saved.run.seedMode, seed, cell.repeat) : seed;
+    };
     const group: Group = {
       id: randomUUID(),
       profileId,
@@ -105,10 +115,10 @@ export class ScriptService {
     const jobs = this.deps.queue.addRuns(
       saved,
       plan.cells.map((cell, index) => {
-        const own = seedId !== undefined ? Number(cell.overrides[seedId]) : Number.NaN;
         return {
-          seed: Number.isFinite(own) ? own : seed,
+          seed: cellSeed(cell),
           values: { ...saved.values, ...cell.overrides },
+          preview: !plan.keepImages,
           group: {
             id: group.id,
             kind: plan.kind,
@@ -211,7 +221,9 @@ export class ScriptService {
       rows: g.plan.rows,
       colLabels: g.plan.colLabels,
       rowLabels: g.plan.rowLabels,
-      title: `${g.workflow.name} · ${g.plan.title} · seed ${g.seed}`,
+      captions: g.plan.captions,
+      margin: g.plan.margin,
+      title: g.plan.legend ? `${g.workflow.name} · ${g.plan.title} · seed ${g.seed}` : undefined,
     });
 
     const now = new Date();

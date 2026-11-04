@@ -24,6 +24,7 @@ import {
   resolveLoraFile,
   resolveLoras,
 } from "./loras.ts";
+import { PREVIEW_IMAGE } from "./nodes.ts";
 import { applyStages, baseSegments, type LoadedStage } from "./stages.ts";
 
 export { CompileError, type ResolvedLora, resolveLoraFile } from "./loras.ts";
@@ -38,6 +39,8 @@ export interface CompileInput {
   loraFiles: string[] | null;
   /** Used when the graph's own prefix is ComfyUI's default. */
   filenamePrefix: string;
+  /** Preview the image instead of saving it (the save node becomes a preview). */
+  preview?: boolean;
   /** Stage settings; enabled stages are spliced in. */
   stages?: StageSettings;
   stagePackages?: LoadedStage[];
@@ -162,7 +165,14 @@ export function compile(input: CompileInput): CompileResult {
 
   // 6. Filename prefix, unless the user set one in the graph.
   const out = input.manifest.bindings.find((b) => b.role === "output.image");
-  if (out) {
+  const saver = out ? prompt[out.node] : undefined;
+  if (out && saver && input.preview && saver.inputs.images !== undefined) {
+    prompt[out.node] = {
+      ...saver,
+      class_type: PREVIEW_IMAGE,
+      inputs: { images: saver.inputs.images },
+    };
+  } else if (out) {
     const current = prompt[out.node]?.inputs[out.input];
     if (current === undefined || current === "" || current === "ComfyUI")
       set(out, input.filenamePrefix);

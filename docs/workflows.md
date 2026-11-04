@@ -187,15 +187,14 @@ The compiler (`services/workflows/compile.ts`) is pure and tested; the job queue
 
 ## Scripts
 
-The Scripts block on the Generate screen (layout feature `scripts`, `shared/scripts.ts`) makes one click queue many runs, all with the same seed (unless the seed is an axis):
+The Scripts block on the Generate screen (layout feature `scripts`, `shared/scripts.ts`) makes one click queue many runs, all with the same seed (unless the seed is an axis, a matrix line repeats, or the plot asks for a random seed each):
 
 | Script | Runs | Result |
 |---|---|---|
-| **Prompt matrix** | every combination of up to 6 terms, on and off, added to the end of a prompt (3 terms → 8 images) | one grid: the first half of the terms across, the rest down |
-| **XY plot** | one or two axes, crossed: any number, choice, model or on/off parameter (`4, 6, 8`, ranges `10-50 (+10)`, `3-9 [4]`), or a prompt **search/replace** (the first value is the text to find) | one grid with the values as labels |
-| **Thumbnails** | one run per picked checkpoint (or LoRA, run as the only instant LoRA at the script's weight, so its trigger words go in; tags in the prompt stay) | each image becomes that model's picture |
+| **Prompt matrix** | one run per line (typed or loaded from a .txt file), added at the start or end of a prompt, or replacing a text in every prompt that has it (Prompt S/R). Each line makes one image (batch size 1), or with *Use batch count and size* runs the Generate count at the workflow's batch size, the seed moving on per the seed mode | one grid: a near-square layout with each line under its image, or one row per line when lines repeat |
+| **XY plot** | an X and a Y type, either may be None. Types come from the workflow: each model loader (checkpoint, diffusion model, VAE, text encoders: picked as picture tiles), **LoRA** (each joins the instant LoRAs at its saved strength or 1, trigger words with it), **Resolution** (the profile's set sizes, width and height together), any number, choice or on/off parameter (`4, 6, 8`, ranges `10-50 (+10)`, `3-9 [4]`; choices from a list), and **Prompt S/R** (the first value is the text to find, in every prompt). Only LoRA and Prompt S/R can be on both axes | one grid; options: labels (with the type or not), a random seed for each image (a seed value of -1 is random too), keep each image or only the grid (cells then run as previews), margins between cells |
 
-A script queues at most 100 runs; the block shows the count and what's wrong before you click. Grids are put together by the server (`lib/grid.ts`, sharp) into `<outputs>/<date>/grids/`, appear on the image stage and in the gallery. Thumbnails are saved next to the model, in the folder named after it: `<model>_data/thumb.jpg` (what cards show) and `thumb_raw.png` (full size); the pictures they replace move to the profile's trash (`trash/model-pictures/`). See ADR-0016.
+A script queues at most 100 runs; the block shows the count and what's wrong before you click. Grids are put together by the server (`lib/grid.ts`, sharp) into `<outputs>/<date>/grids/`, appear on the image stage and in the gallery. The planner still has **Thumbnails** (one run per model, each image saved as that model's picture in `<model>_data/`, ADR-0016), but the block doesn't offer it for now.
 
 ## Batch workflows
 

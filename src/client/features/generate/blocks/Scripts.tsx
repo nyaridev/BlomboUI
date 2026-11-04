@@ -1,30 +1,41 @@
 /**
- * The Scripts block (layout feature "scripts"): turn Generate into a prompt matrix, an XY plot or
- * thumbnails (one picture per model, saved as that model's picture). Off by default; when a script is on, the Generate button runs it instead
- * (features/generate/actions.ts) and the block shows how many images it makes or what's wrong.
+ * The Scripts block (layout feature "scripts"): turn Generate into a prompt matrix or an XY plot,
+ * picked from a dropdown. Off by default; when a script is on, the Generate button runs it instead
+ * (features/generate/actions.ts) and the block's header shows how many images it makes, or that
+ * it needs a fix (said under the editor).
+ *
+ *   matrix  lines (typed or loaded from a .txt file) added at the start or end of a prompt, or
+ *           replacing a text in the prompts; each line runs once, or the batch count and size
+ *   xy      an X and a Y type (None, the workflow's models, LoRA, resolution, its parameters,
+ *           Prompt S/R) with their values, plus how the grid is drawn
  */
 import { Icon } from "@client/icons/Icon";
-import { cn } from "@client/lib/cn";
-import { useModels } from "@client/lib/queries";
+import { useLocalModels, useModels, useSettings } from "@client/lib/queries";
 import {
   Button,
   Checkbox,
   Collapsible,
-  NumberField,
-  Segmented,
+  Field,
+  IconButton,
+  MultiSelect,
   Select,
-  Switch,
+  Slider,
   TextArea,
   TextField,
 } from "@client/ui";
-import { MAX_MATRIX_TERMS, MAX_SCRIPT_RUNS } from "@shared/scripts";
+import type { ModelKind } from "@shared/constants";
+import { MAX_GRID_MARGIN, MAX_SCRIPT_RUNS, type MatrixInsert } from "@shared/scripts";
 import type { Binding } from "@shared/workflow/manifest";
-import { useMemo, useState } from "react";
+import { useMemo, useRef } from "react";
+import { useChoiceFilter } from "../hiddenChoices";
+import { samplerLabel } from "../labels";
 import {
   type AxisDraft,
-  axisHint,
-  axisOptions,
+  axisInput,
+  axisTypes,
   buildScript,
+  loraWeights,
+  NO_AXIS,
   SCRIPT_LABELS,
   type ScriptChoice,
   type ScriptDraft,
@@ -32,14 +43,21 @@ import {
 } from "../scripts";
 import { useValues } from "../state";
 import { useBindings } from "../workflow";
+import { ModelPicks } from "./ModelPicks";
 
 /** The current script, planned against the current values (shared by the block and the button). */
 export function useBuiltScript() {
   const draft = useScript((s) => s.draft);
   const bindings = useBindings();
   // With no script, the values don't matter: don't re-render (and re-plan) on every keystroke.
-  const values = useValues((s) => (draft.kind === "off" ? NO_VALUES : s.values));
-  return useMemo(() => buildScript(draft, bindings, values), [draft, bindings, values]);
+  const values = useValues((s) => (draft.on ? s.values : NO_VALUES));
+  const count = useValues((s) => s.run.count);
+  const local = useLocalModels().data;
+  const loraWeight = useMemo(() => loraWeights(local), [local]);
+  return useMemo(
+    () => buildScript(draft, bindings, values, { count, loraWeight }),
+    [draft, bindings, values, count, loraWeight],
+  );
 }
 const NO_VALUES: Record<string, unknown> = {};
 
@@ -48,7 +66,6 @@ export function ScriptsBlock() {
   const set = useScript((s) => s.set);
   const bindings = useBindings();
   const built = useBuiltScript();
-  const on = draft.kind !== "off";
   const count = built.plan?.cells.length ?? 0;
 
   return (
@@ -57,263 +74,350 @@ export function ScriptsBlock() {
       title="Scripts"
       icon="layout-grid"
       subtitle={
-        on
-          ? built.error
-            ? `${SCRIPT_LABELS[draft.kind as Exclude<ScriptChoice, "off">]} · needs a fix`
-            : `${SCRIPT_LABELS[draft.kind as Exclude<ScriptChoice, "off">]} · ${count} image${count === 1 ? "" : "s"}`
-          : "Prompt matrix, XY plot, thumbnails"
+        draft.on
+          ? `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} image${count === 1 ? "" : "s"}`}`
+          : undefined
       }
-      enabled={on}
-      onEnabledChange={(v) => set({ kind: v ? (draft.kind === "off" ? "xy" : draft.kind) : "off" })}
+      enabled={draft.on}
+      onEnabledChange={(on) => set({ on })}
     >
       <div className="flex flex-col gap-3">
-        <Segmented<Exclude<ScriptChoice, "off">>
-          full
+        <Select<ScriptChoice>
           size="sm"
           label="Script"
-          value={draft.kind === "off" ? "xy" : draft.kind}
-          onChange={(kind) => set({ kind })}
+          value={draft.kind}
+          onChange={(kind) => set({ kind, on: true })}
           options={[
-            { value: "matrix", label: "Matrix" },
-            { value: "xy", label: "XY plot" },
-            { value: "thumbs", label: "Thumbnails" },
+            { value: "matrix", label: SCRIPT_LABELS.matrix },
+            { value: "xy", label: SCRIPT_LABELS.xy },
           ]}
         />
-        {draft.kind === "matrix" ? <MatrixEditor draft={draft} bindings={bindings} /> : null}
-        {draft.kind === "xy" || draft.kind === "off" ? (
-          <XYEditor draft={draft} bindings={bindings} />
+        {draft.kind === "matrix" ? (
+          <MatrixEditor draft={draft.matrix} bindings={bindings} />
+        ) : (
+          <XYEditor draft={draft.xy} bindings={bindings} />
+        )}
+        {draft.on && built.error ? (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <Icon name="info" size={13} className="mt-px shrink-0" />
+            {built.error}
+          </p>
         ) : null}
-        {draft.kind === "thumbs" ? <ThumbsEditor draft={draft} bindings={bindings} /> : null}
-        {draft.kind !== "thumbs" ? (
-          <div className="flex items-center gap-2">
-            <Switch
-              size="sm"
-              checked={draft.grid}
-              onCheckedChange={(grid) => set({ grid })}
-              label="Put the results into one labeled grid"
-            />
-            <span className="text-xs text-fg-2">Put the results into one labeled grid</span>
-          </div>
-        ) : null}
-        <p
-          className={cn(
-            "flex items-start gap-1.5 text-2xs",
-            built.error ? "text-warning" : "text-fg-3",
-          )}
-        >
-          <Icon name={built.error ? "info" : "layout-grid"} size={12} className="mt-px shrink-0" />
-          {built.error
-            ? built.error
-            : on
-              ? `Generate queues ${count} image${count === 1 ? "" : "s"} with one seed${draft.kind === "thumbs" ? ", each saved as its model's picture" : draft.grid ? ", then a grid of them" : ""}.`
-              : `Turn on to queue up to ${MAX_SCRIPT_RUNS} images from one click.`}
-        </p>
       </div>
     </Collapsible>
   );
 }
 
-function MatrixEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Binding[] }) {
-  const set = useScript((s) => s.set);
+/* ── Prompt matrix ─────────────────────────────────────────────────────── */
+
+const INSERTS: Array<{ value: MatrixInsert; label: string }> = [
+  { value: "start", label: "Start" },
+  { value: "end", label: "End" },
+  { value: "replace", label: "Prompt S/R" },
+];
+
+/** A label above a control, in a two-column row (type | values). */
+const ROW = "grid grid-cols-[minmax(0,8rem)_minmax(0,1fr)] items-start gap-2";
+
+function MatrixEditor({ draft, bindings }: { draft: ScriptDraft["matrix"]; bindings: Binding[] }) {
+  const setMatrix = useScript((s) => s.setMatrix);
   const prompts = bindings.filter((b) => b.type === "prompt");
+  const file = useRef<HTMLInputElement>(null);
+  const load = async (f: File | undefined) => {
+    if (!f) return;
+    const lines = (await f.text())
+      .split(/\r?\n/)
+      .map((l) => l.trim())
+      .filter(Boolean);
+    setMatrix({ lines: lines.join("\n") });
+  };
   return (
-    <div className="flex flex-col gap-2">
-      {prompts.length > 1 ? (
-        <Select
-          size="sm"
-          label="Prompt"
-          value={draft.matrix.binding}
-          onChange={(binding) => set({ matrix: { ...draft.matrix, binding } })}
-          options={prompts.map((b) => ({ value: b.id, label: b.label }))}
+    <div className="flex flex-col gap-3">
+      <div className={ROW}>
+        <Field label="Insert">
+          <Select<MatrixInsert>
+            size="sm"
+            value={draft.insert}
+            onChange={(insert) => setMatrix({ insert })}
+            options={INSERTS}
+          />
+        </Field>
+        {draft.insert === "replace" ? (
+          <Field label="Text to replace">
+            {(id) => (
+              <TextField
+                id={id}
+                size="sm"
+                mono
+                placeholder="red hair"
+                value={draft.search}
+                onChange={(e) => setMatrix({ search: e.target.value })}
+              />
+            )}
+          </Field>
+        ) : (
+          <Field label="Apply to">
+            <Select
+              size="sm"
+              value={prompts.some((b) => b.id === draft.binding) ? draft.binding : null}
+              placeholder="Pick a prompt"
+              onChange={(binding) => setMatrix({ binding })}
+              options={prompts.map((b) => ({ value: b.id, label: b.label }))}
+            />
+          </Field>
+        )}
+      </div>
+      <Field
+        label="Lines"
+        action={
+          <>
+            <Button size="sm" variant="ghost" icon="upload" onClick={() => file.current?.click()}>
+              Load from file
+            </Button>
+            <input
+              ref={file}
+              type="file"
+              accept=".txt,text/plain"
+              hidden
+              onChange={(e) => {
+                void load(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </>
+        }
+      >
+        {(id) => (
+          <TextArea
+            id={id}
+            mono
+            placeholder={"black hair\nblonde hair\nsilver hair"}
+            value={draft.lines}
+            onChange={(e) => setMatrix({ lines: e.target.value })}
+            maxRows={12}
+          />
+        )}
+      </Field>
+      <div className="flex flex-col gap-2">
+        <Checkbox
+          checked={draft.grid}
+          onCheckedChange={(grid) => setMatrix({ grid })}
+          label="Save a grid of the results"
         />
-      ) : null}
-      <TextArea
-        mono
-        aria-label="Terms"
-        placeholder={"wearing a scarf\nat night\nwatercolor"}
-        value={draft.matrix.terms}
-        onChange={(e) => set({ matrix: { ...draft.matrix, terms: e.target.value } })}
-        maxRows={MAX_MATRIX_TERMS + 1}
-      />
-      <span className="text-2xs text-fg-3">
-        One term per line, up to {MAX_MATRIX_TERMS}. Every combination of them, on and off, is added
-        to the end of the prompt: 3 terms make 8 images.
-      </span>
+        <Checkbox
+          checked={draft.useBatch}
+          onCheckedChange={(useBatch) => setMatrix({ useBatch })}
+          label="Use batch count and size for each line"
+        />
+      </div>
     </div>
   );
 }
 
-function AxisEditor({
+/* ── XY plot ───────────────────────────────────────────────────────────── */
+
+function XYEditor({ draft, bindings }: { draft: ScriptDraft["xy"]; bindings: Binding[] }) {
+  const setXY = useScript((s) => s.setXY);
+  const lora = draft.x.type === "lora" || draft.y.type === "lora";
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          <AxisRow
+            name="X"
+            axis={draft.x}
+            other={draft.y.type}
+            bindings={bindings}
+            onChange={(x) => setXY({ x })}
+          />
+          <AxisRow
+            name="Y"
+            axis={draft.y}
+            other={draft.x.type}
+            bindings={bindings}
+            onChange={(y) => setXY({ y })}
+          />
+        </div>
+        <IconButton
+          icon="swap-vertical"
+          label="Swap X and Y"
+          variant="secondary"
+          onClick={() => setXY({ x: draft.y, y: draft.x })}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Checkbox
+          checked={draft.legend}
+          onCheckedChange={(legend) => setXY({ legend })}
+          label="Label the grid"
+        />
+        <Checkbox
+          checked={draft.legendType}
+          disabled={!draft.legend}
+          onCheckedChange={(legendType) => setXY({ legendType })}
+          label="Name the type in labels (Steps: 20)"
+        />
+        <Checkbox
+          checked={draft.randomSeeds}
+          onCheckedChange={(randomSeeds) => setXY({ randomSeeds })}
+          label="A new random seed for each image"
+        />
+        <Checkbox
+          checked={draft.keepImages}
+          onCheckedChange={(keepImages) => setXY({ keepImages })}
+          label="Keep each image, not only the grid"
+        />
+        {lora ? (
+          <Checkbox
+            checked={draft.loraStrength}
+            onCheckedChange={(loraStrength) => setXY({ loraStrength })}
+            label="LoRAs at their saved strength (otherwise 1)"
+          />
+        ) : null}
+      </div>
+      <Slider
+        label="Grid margins"
+        unit="px"
+        field
+        size="sm"
+        min={0}
+        max={MAX_GRID_MARGIN}
+        value={draft.margin}
+        defaultValue={0}
+        onChange={(margin) => setXY({ margin })}
+      />
+    </div>
+  );
+}
+
+/** The model kind a models axis picks from. */
+function axisKind(type: string, bindings: Binding[]): ModelKind {
+  if (type === "lora") return "loras";
+  return (bindings.find((b) => b.id === type)?.modelKind as ModelKind) ?? "checkpoints";
+}
+
+function AxisRow({
   name,
   axis,
+  other,
   bindings,
   onChange,
 }: {
   name: string;
   axis: AxisDraft;
+  other: string;
   bindings: Binding[];
   onChange: (axis: AxisDraft) => void;
 }) {
-  const options = axisOptions(bindings);
-  const b = bindings.find((x) => x.id === axis.source);
-  const choices = b && (b.type === "enum" || b.type === "model") ? (b.options ?? []) : [];
+  const types = axisTypes(bindings, other);
+  const input = axisInput(axis.type, bindings);
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center gap-2">
-        <span className="w-4 text-xs font-medium text-fg-2">{name}</span>
+    <div className={ROW}>
+      <Field label={`${name} type`}>
         <Select
           size="sm"
-          className="min-w-0 flex-1"
-          label={`${name} axis`}
-          value={options.some((o) => o.value === axis.source) ? axis.source : null}
-          placeholder="Pick a parameter"
-          onChange={(source) => onChange({ source, text: "" })}
-          options={options}
+          value={types.some((t) => t.value === axis.type) ? axis.type : "none"}
+          onChange={(type) => onChange({ ...NO_AXIS, type })}
+          options={types}
         />
-      </div>
-      <div className="flex items-center gap-2 pl-6">
-        <TextField
-          size="sm"
-          mono
-          className="flex-1"
-          aria-label={`${name} values`}
-          value={axis.text}
-          placeholder={axis.source.startsWith("sr:") ? "fox, cat, owl" : "4, 6, 8"}
-          onChange={(e) => onChange({ ...axis, text: e.target.value })}
-        />
-        {choices.length ? (
-          <Button
+      </Field>
+      <Field label={`${name} values`}>
+        {input === "none" ? (
+          <Select
             size="sm"
-            variant="ghost"
-            onClick={() =>
-              onChange({ ...axis, text: choices.slice(0, MAX_SCRIPT_RUNS).join(", ") })
-            }
-          >
-            All {choices.length}
-          </Button>
-        ) : null}
-      </div>
-      <span className="pl-6 text-2xs text-fg-3">{axisHint(axis.source, bindings)}</span>
-    </div>
-  );
-}
-
-function XYEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Binding[] }) {
-  const set = useScript((s) => s.set);
-  return (
-    <div className="flex flex-col gap-3">
-      <AxisEditor name="X" axis={draft.x} bindings={bindings} onChange={(x) => set({ x })} />
-      {draft.y ? (
-        <AxisEditor name="Y" axis={draft.y} bindings={bindings} onChange={(y) => set({ y })} />
-      ) : null}
-      <div>
-        <Button
-          size="sm"
-          variant="ghost"
-          icon={draft.y ? "minus" : "plus"}
-          onClick={() => set({ y: draft.y ? null : { source: "sampler.steps", text: "20, 30" } })}
-        >
-          {draft.y ? "Remove the Y axis" : "Add a Y axis"}
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-function ThumbsEditor({ draft, bindings }: { draft: ScriptDraft; bindings: Binding[] }) {
-  const set = useScript((s) => s.set);
-  const t = draft.thumbs;
-  const [filter, setFilter] = useState("");
-  const loras = useModels(t.target === "lora" ? "loras" : null);
-  const model =
-    bindings.find((b) => b.role === "model.checkpoint") ??
-    bindings.find((b) => b.role === "model.unet");
-  const all = (t.target === "lora" ? loras.data?.names : model?.options) ?? [];
-  const q = filter.trim().toLowerCase();
-  const shown = q ? all.filter((m) => m.toLowerCase().includes(q)) : all;
-  const patch = (p: Partial<ScriptDraft["thumbs"]>) => set({ thumbs: { ...t, ...p } });
-  const toggle = (m: string, on: boolean) =>
-    patch({ models: on ? [...t.models, m] : t.models.filter((x) => x !== m) });
-
-  return (
-    <div className="flex flex-col gap-2.5">
-      <Segmented<"model" | "lora">
-        size="sm"
-        label="Thumbnails for"
-        value={t.target}
-        onChange={(target) => patch({ target, models: [] })}
-        options={[
-          { value: "model", label: model?.label ?? "Checkpoints" },
-          { value: "lora", label: "LoRAs" },
-        ]}
-      />
-      <div className="flex items-center gap-2">
-        <TextField
-          size="sm"
-          icon="search"
-          className="flex-1"
-          placeholder="Filter"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          onClear={() => setFilter("")}
-        />
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!shown.length}
-          onClick={() =>
-            patch({ models: [...new Set([...t.models, ...shown])].slice(0, MAX_SCRIPT_RUNS) })
-          }
-        >
-          All
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={!t.models.length}
-          onClick={() => patch({ models: [] })}
-        >
-          None
-        </Button>
-      </div>
-      <div className="scroll-quiet flex max-h-48 flex-col gap-1 overflow-auto rounded-md border border-line bg-sunken p-2">
-        {shown.length ? (
-          shown.map((m) => (
-            <Checkbox
-              key={m}
-              checked={t.models.includes(m)}
-              onCheckedChange={(on) => toggle(m, on)}
-              label={<span className="font-mono text-[11.5px]">{m}</span>}
-            />
-          ))
-        ) : (
-          <span className="px-1 py-2 text-xs text-fg-3">
-            {all.length
-              ? "Nothing matches the filter."
-              : "No models to pick. Start ComfyUI, or add models to your folder."}
-          </span>
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        <span className="text-2xs text-fg-3">{t.models.length} picked</span>
-        {t.target === "lora" ? (
-          <NumberField
-            size="sm"
-            label="Weight"
-            value={t.loraWeight}
-            onChange={(loraWeight) => patch({ loraWeight })}
-            min={-4}
-            max={4}
-            step={0.05}
-            className="ml-auto w-24"
+            value={null}
+            placeholder="Pick a type first"
+            disabled
+            options={[]}
+            onChange={() => {}}
           />
-        ) : null}
-      </div>
-      {t.target === "lora" ? (
-        <span className="text-2xs text-fg-3">
-          Each LoRA runs on its own, with its trigger words, instead of your instant LoRAs.
-        </span>
-      ) : null}
+        ) : input === "models" ? (
+          <AxisModels
+            axis={axis}
+            bindings={bindings}
+            label={`${name} values`}
+            onChange={onChange}
+          />
+        ) : input === "list" ? (
+          <AxisList axis={axis} bindings={bindings} onChange={onChange} />
+        ) : (
+          <TextField
+            size="sm"
+            mono
+            aria-label={`${name} values`}
+            value={axis.text}
+            placeholder={axis.type === "replace" ? "fox, cat, owl" : "4, 6, 8 · 10-30 (+5)"}
+            onChange={(e) => onChange({ ...axis, text: e.target.value })}
+          />
+        )}
+      </Field>
     </div>
+  );
+}
+
+function AxisModels({
+  axis,
+  bindings,
+  label,
+  onChange,
+}: {
+  axis: AxisDraft;
+  bindings: Binding[];
+  label: string;
+  onChange: (axis: AxisDraft) => void;
+}) {
+  const kind = axisKind(axis.type, bindings);
+  const b = bindings.find((x) => x.id === axis.type);
+  // A loader's own choices (what ComfyUI lists for it); LoRAs from the loras folder.
+  const listed = useModels(b?.options?.length ? null : kind).data?.names;
+  const options = b?.options?.length ? b.options : (listed ?? []);
+  return (
+    <ModelPicks
+      kind={kind}
+      options={options}
+      value={axis.picks}
+      label={label}
+      onChange={(picks) => onChange({ ...axis, picks })}
+    />
+  );
+}
+
+function AxisList({
+  axis,
+  bindings,
+  onChange,
+}: {
+  axis: AxisDraft;
+  bindings: Binding[];
+  onChange: (axis: AxisDraft) => void;
+}) {
+  const settings = useSettings().data;
+  const b = bindings.find((x) => x.id === axis.type);
+  const filter = useChoiceFilter(
+    b?.role === "sampler.name" ? "sampler" : b?.role === "sampler.scheduler" ? "scheduler" : null,
+  );
+  const options =
+    axis.type === "resolution"
+      ? (settings?.generate.setResolutions ?? []).map((r) => ({
+          value: r,
+          label: r.replace("x", "×"),
+        }))
+      : b?.type === "bool"
+        ? [
+            { value: "1", label: "On" },
+            { value: "0", label: "Off" },
+          ]
+        : filter(b?.options ?? [], "").map((o) => ({
+            value: o,
+            label: b?.role === "sampler.name" ? samplerLabel(o) : o,
+          }));
+  return (
+    <MultiSelect
+      size="sm"
+      value={axis.picks}
+      placeholder="Pick values"
+      onChange={(picks) => onChange({ ...axis, picks: picks.slice(0, MAX_SCRIPT_RUNS) })}
+      options={options}
+    />
   );
 }

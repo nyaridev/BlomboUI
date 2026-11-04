@@ -285,10 +285,6 @@ function LoadingModels() {
             title: "Copied files yourself?",
             text: "Press Rescan in the header (R) so ComfyUI and Blombo see them. A model's picture is thumb.jpg in the folder named after it (Detailer_data/ next to Detailer.safetensors).",
           },
-          {
-            title: "Pictures for your models",
-            text: "The Scripts block's Thumbnails makes one picture per model or LoRA and saves it as the model's picture; the one it replaces goes to the profile's trash.",
-          },
         ]}
       />
       <div className="flex gap-2">
@@ -405,15 +401,11 @@ function Batch() {
         steps={[
           {
             title: "Prompt matrix",
-            text: "Every combination of a few terms added to your prompt, laid out in a labeled grid.",
+            text: "One run per line (typed, or loaded from a .txt file) added at the start or end of your prompt, or replacing a word in it; optionally the batch count and size for each line. The results go into one grid.",
           },
           {
             title: "XY plot",
-            text: "Any two settings (CFG × Steps, sampler × model, prompt search and replace) against each other, with the same seed, in one grid.",
-          },
-          {
-            title: "Thumbnails",
-            text: "One picture per model or LoRA, saved as that model's picture. Models, the pickers and the palette show it.",
+            text: "Pick an X and a Y type (checkpoint, VAE, text encoder, LoRA, resolution, steps, sampler, prompt search and replace…) and their values; every pair runs with the same seed and lands in one labeled grid.",
           },
           {
             title: "Batch tools",

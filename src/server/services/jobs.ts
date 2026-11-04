@@ -68,6 +68,8 @@ export interface RunSpec {
   values: Record<string, unknown>;
   group: JobGroup;
   inputs?: RunInput[];
+  /** Show the images without saving them (an XY plot that keeps only its grid). */
+  preview?: boolean;
 }
 
 interface Run {
@@ -78,6 +80,7 @@ interface Run {
   values: Record<string, unknown>;
   stages: WorkflowManifest["stages"];
   inputs: RunInput[];
+  preview?: boolean;
   clock?: RunClock;
   /** The prompts as they ran (compile's `shown`), once compiled. */
   shown?: Record<string, string>;
@@ -268,7 +271,12 @@ export class JobQueue extends Emitter<QueueEvents> {
    */
   addRuns(manifest: WorkflowManifest, runs: RunSpec[]): Job[] {
     const jobs = runs.map((r) =>
-      this.add(manifest, r.seed, { values: r.values, group: r.group, inputs: r.inputs ?? [] }),
+      this.add(manifest, r.seed, {
+        values: r.values,
+        group: r.group,
+        inputs: r.inputs ?? [],
+        preview: r.preview,
+      }),
     );
     this.prepareComfy();
     this.publishQueue();
@@ -367,6 +375,7 @@ export class JobQueue extends Emitter<QueueEvents> {
       group?: JobGroup;
       inputs?: RunInput[];
       stages?: WorkflowManifest["stages"];
+      preview?: boolean;
     } = {},
   ): Job {
     const values = extra.values ?? manifest.values;
@@ -410,6 +419,7 @@ export class JobQueue extends Emitter<QueueEvents> {
       values: { ...values },
       stages: structuredClone(stages),
       inputs: extra.inputs ?? [],
+      ...(extra.preview ? { preview: true } : {}),
     });
     return job;
   }
@@ -522,6 +532,7 @@ export class JobQueue extends Emitter<QueueEvents> {
         wildcards,
         loraFiles,
         filenamePrefix: `%year%-%month%-%day%/${run.job.workflowId}`,
+        preview: run.preview,
         stages,
         stagePackages: anyStage ? await this.deps.stages.packages() : [],
         stageImages: controlFiles.length ? await this.deps.stages.upload(controlFiles) : {},

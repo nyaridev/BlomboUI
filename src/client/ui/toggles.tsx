@@ -1,9 +1,13 @@
-/** Switch, Checkbox, Segmented, Chip: hand-built on native buttons with ARIA roles. */
+/**
+ * Switch, Checkbox, Segmented, Chip: hand-built on native buttons with ARIA roles. Knobs and
+ * thumbs move by an offset inside their own control (never a layout animation, which measures
+ * the page and chases the control when something above it changes height).
+ */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
-import { LayoutGroup, motion } from "motion/react";
-import { type KeyboardEvent, type ReactNode, useId, useRef } from "react";
+import { motion } from "motion/react";
+import { type KeyboardEvent, type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 /* ── Switch ──────────────────────────────────────────────────────────────── */
 
@@ -24,6 +28,8 @@ export function Switch({
 }) {
   const dims = size === "sm" ? "h-[18px] w-8" : "h-[22px] w-10";
   const thumb = size === "sm" ? "h-3.5 w-3.5" : "h-[18px] w-[18px]";
+  // How far the knob travels: the inner width less the knob (sm 28 − 14, md 36 − 18).
+  const travel = size === "sm" ? 14 : 18;
   const on = tone === "generate" ? "bg-generate border-generate" : "bg-accent border-accent";
   return (
     <button
@@ -37,11 +43,11 @@ export function Switch({
         "relative inline-flex shrink-0 items-center rounded-full border p-[1px] transition-colors focus-ring disabled:opacity-40",
         dims,
         checked ? on : "border-line-strong bg-sunken",
-        checked ? "justify-end" : "justify-start",
       )}
     >
       <motion.span
-        layout
+        initial={false}
+        animate={{ x: checked ? travel : 0 }}
         transition={snappy}
         className={cn(
           "block rounded-full shadow-[var(--shadow-knob)]",
@@ -155,8 +161,26 @@ export function Segmented<T extends string>({
   label?: string;
   className?: string;
 }) {
-  const id = useId();
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
+  const group = useRef<HTMLDivElement>(null);
+  const index = options.findIndex((o) => o.value === value);
+  // The thumb sits under the active option: its offset and width inside the group.
+  const [thumb, setThumb] = useState<{ x: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const el = refs.current[index];
+      setThumb(el ? { x: el.offsetLeft, width: el.offsetWidth } : null);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    if (group.current) observer.observe(group.current);
+    return () => observer.disconnect();
+  }, [index]);
+  // The first placement doesn't animate in from the left edge.
+  const placed = useRef(false);
+  useLayoutEffect(() => {
+    if (thumb) placed.current = true;
+  }, [thumb]);
   const onKey = (e: KeyboardEvent, i: number) => {
     const dir = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
     if (!dir) return;
@@ -168,57 +192,58 @@ export function Segmented<T extends string>({
     refs.current[next]?.focus();
   };
   return (
-    <LayoutGroup id={id}>
-      <div
-        role="radiogroup"
-        aria-label={label}
-        className={cn(
-          "inline-flex items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5",
-          // w-fit: as wide as its options, even where a column would stretch it (Field).
-          full ? "flex w-full" : "w-fit",
-          className,
-        )}
-      >
-        {options.map((opt, i) => {
-          const active = opt.value === value;
-          return (
-            <button
-              key={opt.value}
-              ref={(n) => {
-                refs.current[i] = n;
-              }}
-              type="button"
-              role="radio"
-              aria-checked={active}
-              tabIndex={active ? 0 : -1}
-              title={opt.title}
-              aria-label={opt.label ? undefined : opt.title}
-              onClick={() => onChange(opt.value)}
-              onKeyDown={(e) => onKey(e, i)}
-              className={cn(
-                "relative inline-flex items-center justify-center gap-1.5 rounded-sm font-medium transition-colors focus-ring",
-                size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
-                !opt.label && (size === "sm" ? "w-7 px-0" : "w-8 px-0"),
-                full && "flex-1",
-                active ? "text-fg" : "text-fg-3 hover:text-fg-2",
-              )}
-            >
-              {active ? (
-                <motion.span
-                  layoutId="thumb"
-                  transition={snappy}
-                  className="absolute inset-0 z-0 rounded-sm border border-line-strong bg-field shadow-[var(--shadow-card)]"
-                />
-              ) : null}
-              <span className="relative z-10 inline-flex items-center gap-1.5">
-                {opt.icon ? <Icon name={opt.icon} size={size === "sm" ? 13 : 15} /> : null}
-                {opt.label}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </LayoutGroup>
+    <div
+      ref={group}
+      role="radiogroup"
+      aria-label={label}
+      className={cn(
+        "relative inline-flex items-center gap-0.5 rounded-md border border-line bg-sunken p-0.5",
+        // w-fit: as wide as its options, even where a column would stretch it (Field).
+        full ? "flex w-full" : "w-fit",
+        className,
+      )}
+    >
+      {thumb ? (
+        <motion.span
+          aria-hidden
+          initial={false}
+          animate={{ x: thumb.x, width: thumb.width }}
+          transition={placed.current ? snappy : { duration: 0 }}
+          className="absolute top-0.5 bottom-0.5 left-0 z-0 rounded-sm border border-line-strong bg-field shadow-[var(--shadow-card)]"
+        />
+      ) : null}
+      {options.map((opt, i) => {
+        const active = opt.value === value;
+        return (
+          <button
+            key={opt.value}
+            ref={(n) => {
+              refs.current[i] = n;
+            }}
+            type="button"
+            role="radio"
+            aria-checked={active}
+            tabIndex={active ? 0 : -1}
+            title={opt.title}
+            aria-label={opt.label ? undefined : opt.title}
+            onClick={() => onChange(opt.value)}
+            onKeyDown={(e) => onKey(e, i)}
+            className={cn(
+              "relative inline-flex items-center justify-center gap-1.5 rounded-sm font-medium transition-colors focus-ring",
+              size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
+              !opt.label && (size === "sm" ? "w-7 px-0" : "w-8 px-0"),
+              full && "flex-1",
+              active ? "text-fg" : "text-fg-3 hover:text-fg-2",
+            )}
+          >
+            <span className="relative z-10 inline-flex items-center gap-1.5">
+              {opt.icon ? <Icon name={opt.icon} size={size === "sm" ? 13 : 15} /> : null}
+              {opt.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

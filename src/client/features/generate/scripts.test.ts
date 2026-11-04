@@ -1,6 +1,6 @@
 import type { Binding } from "@shared/workflow/manifest";
 import { describe, expect, it } from "vitest";
-import { axisOptions, buildScript, type ScriptDraft } from "./scripts";
+import { axisInput, axisTypes, buildScript, initialScript, type ScriptDraft } from "./scripts";
 
 const bindings: Binding[] = [
   {
@@ -37,61 +37,98 @@ const values = {
   "sampler.cfg": 7,
   "model.checkpoint": "a.safetensors",
 };
-const base: ScriptDraft = {
-  kind: "off",
-  matrix: { binding: "prompt.positive", terms: "" },
-  x: { source: "sampler.cfg", text: "4, 6" },
-  y: null,
-  grid: true,
-  thumbs: { target: "model", models: [], loraWeight: 1 },
-};
+const ctx = { count: 2, loraWeight: (f: string) => (f === "ink.safetensors" ? 0.6 : null) };
+const base: ScriptDraft = { ...initialScript, on: true };
+const xy = (patch: Partial<ScriptDraft["xy"]>): ScriptDraft => ({
+  ...base,
+  xy: { ...base.xy, ...patch },
+});
 
 describe("buildScript", () => {
   it("is nothing when the script is off", () => {
-    expect(buildScript(base, bindings, values)).toEqual({ script: null, plan: null, error: null });
+    expect(buildScript({ ...base, on: false }, bindings, values, ctx)).toEqual({
+      script: null,
+      plan: null,
+      error: null,
+    });
   });
 
   it("plans an XY plot with a prompt search/replace axis", () => {
     const r = buildScript(
-      { ...base, kind: "xy", y: { source: "sr:prompt.positive", text: "fox\ncat" } },
+      xy({ y: { type: "replace", text: "fox\ncat", picks: [] } }),
       bindings,
       values,
+      ctx,
     );
     expect(r.error).toBeNull();
-    expect(r.plan?.cells).toHaveLength(4);
+    expect(r.plan?.cells).toHaveLength(6);
     expect(r.script).toMatchObject({ kind: "xy", y: { type: "replace", values: ["fox", "cat"] } });
   });
 
-  it("explains what's missing instead of planning", () => {
-    expect(buildScript({ ...base, kind: "matrix" }, bindings, values).error).toBe(
-      "Add a term to try, one per line.",
+  it("picks models as tiles, and LoRAs at their saved strength or 1", () => {
+    const r = buildScript(
+      xy({
+        x: { type: "model.checkpoint", text: "", picks: ["b.safetensors"] },
+        y: { type: "lora", text: "", picks: ["ink.safetensors", "sub/glow.safetensors"] },
+      }),
+      bindings,
+      values,
+      ctx,
     );
-    expect(buildScript({ ...base, kind: "thumbs" }, bindings, values).error).toBe(
-      "Pick the models to make thumbnails for.",
+    expect(r.script).toMatchObject({
+      x: { type: "binding", binding: "model.checkpoint", values: ["b.safetensors"] },
+      y: {
+        type: "lora",
+        values: [
+          { name: "ink", strength: 0.6 },
+          { name: "sub/glow", strength: 1 },
+        ],
+      },
+    });
+    const plain = buildScript(
+      xy({ x: { type: "lora", text: "", picks: ["ink.safetensors"] }, loraStrength: false }),
+      bindings,
+      values,
+      ctx,
     );
+    expect(plain.script).toMatchObject({ x: { values: [{ name: "ink", strength: 1 }] } });
   });
 
-  it("thumbnails swap the checkpoint, one run per model", () => {
+  it("sends the matrix lines and the batch count", () => {
     const r = buildScript(
       {
         ...base,
-        kind: "thumbs",
-        thumbs: { ...base.thumbs, models: ["a.safetensors", "b.safetensors"] },
+        kind: "matrix",
+        matrix: { ...base.matrix, lines: "hat\n\n scarf ", useBatch: true },
       },
       bindings,
       values,
+      ctx,
     );
-    expect(r.plan?.cells.map((c) => c.overrides["model.checkpoint"])).toEqual([
-      "a.safetensors",
-      "b.safetensors",
-    ]);
+    expect(r.script).toMatchObject({ lines: ["hat", "scarf"], count: 2, useBatch: true });
+    expect(r.plan?.cells).toHaveLength(4);
   });
 
-  it("offers number, model and prompt axes", () => {
-    expect(axisOptions(bindings).map((o) => o.value)).toEqual([
-      "sr:prompt.positive",
+  it("explains what's missing instead of planning", () => {
+    expect(buildScript({ ...base, kind: "matrix" }, bindings, values, ctx).error).toBe(
+      "Add the lines to try, one per line.",
+    );
+    expect(
+      buildScript(xy({ x: { type: "lora", text: "", picks: [] } }), bindings, values, ctx).error,
+    ).toBe("Pick the values for X.");
+  });
+
+  it("offers the workflow's models, LoRA, its parameters and Prompt S/R, but not the other axis's", () => {
+    expect(axisTypes(bindings, "none").map((o) => o.value)).toEqual([
+      "none",
       "model.checkpoint",
+      "lora",
       "sampler.cfg",
+      "replace",
     ]);
+    expect(axisTypes(bindings, "sampler.cfg").map((o) => o.value)).not.toContain("sampler.cfg");
+    expect(axisTypes(bindings, "lora").map((o) => o.value)).toContain("lora");
+    expect(axisInput("model.checkpoint", bindings)).toBe("models");
+    expect(axisInput("sampler.cfg", bindings)).toBe("text");
   });
 });

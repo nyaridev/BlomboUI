@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { BatchRun } from "../../shared/batch.ts";
 import type { Job } from "../../shared/jobs.ts";
 import type { ServerMessage } from "../../shared/live.ts";
+import { Script } from "../../shared/scripts.ts";
 import { createConfig, parseFlags } from "../config.ts";
 import { realPng } from "../lib/test-images.ts";
 import { BatchService, captionText, listImages } from "./batch.ts";
@@ -139,12 +140,11 @@ describe("scripts", () => {
       count: 1,
       seedMode: "fixed",
       loop: false,
-      script: {
+      script: Script.parse({
         kind: "xy",
         x: { type: "binding", binding: "sampler.cfg", values: [4, 6, 8] },
         y: { type: "binding", binding: "sampler.steps", values: [2, 3] },
-        grid: true,
-      },
+      }),
     });
     expect(res.jobs).toHaveLength(6);
     expect(new Set(res.jobs.map((j) => j.seed))).toEqual(new Set([77]));
@@ -200,6 +200,32 @@ describe("scripts", () => {
     );
   });
 
+  it("runs the cells as previews when only the grid is kept, each with its own seed", async () => {
+    const before = fake.prompts.length;
+    const res = await scripts.run({
+      workflowId: "sd15",
+      values: { "sampler.steps": 2 },
+      count: 1,
+      seedMode: "fixed",
+      loop: false,
+      script: Script.parse({
+        kind: "xy",
+        x: { type: "binding", binding: "sampler.cfg", values: [4, 6] },
+        keepImages: false,
+        randomSeeds: true,
+      }),
+    });
+    expect(new Set(res.jobs.map((j) => j.seed)).size).toBe(2);
+    const grid = await gridJob(res.jobs[0]?.group?.id as string);
+    expect(grid.file?.path).toBeTruthy();
+    const sent = fake.prompts.slice(before).map((p) => Object.values(p.prompt));
+    expect(sent).toHaveLength(2);
+    for (const nodes of sent) {
+      expect(nodes.some((n) => n.class_type === "PreviewImage")).toBe(true);
+      expect(nodes.some((n) => n.class_type === "SaveImage")).toBe(false);
+    }
+  });
+
   it("refuses a plan that can't work, saying why", async () => {
     await expect(
       scripts.run({
@@ -207,14 +233,9 @@ describe("scripts", () => {
         values: {},
         count: 1,
         loop: false,
-        script: {
-          kind: "xy",
-          x: { type: "replace", binding: "prompt.positive", values: ["unicorn", "dragon"] },
-          y: null,
-          grid: true,
-        },
+        script: Script.parse({ kind: "xy", x: { type: "replace", values: ["unicorn", "dragon"] } }),
       }),
-    ).rejects.toThrow(/"unicorn" isn't in prompt/);
+    ).rejects.toThrow(/"unicorn" isn't in the prompts/);
   });
 });
 

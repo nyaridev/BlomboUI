@@ -1,24 +1,20 @@
 /**
  * Wildcard Manager: the profile's wildcards folder as a file tree, an editor for .txt and
  * .yaml files (line lists, YAML as sections of keys, or raw text with YAML folding, lint and
- * __reference__ completion),
- * and a roll preview that samples what a wildcard expands to. Saving is atomic and refuses to
- * overwrite a file that changed on disk since it was opened. Narrow screens show one panel at a time:
- * the tree, then the open file with a way back.
+ * __reference__ completion). Saving is atomic and refuses to overwrite a file that changed on
+ * disk since it was opened. Narrow screens show one panel at a time: the tree, then the open file
+ * with a way back.
  */
 import { ApiError, api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
-import { useCompact } from "@client/lib/hooks";
 import { qk, useWildcardFile, useWildcardsChanged, useWildcardTree } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Badge, Button, EmptyState, IconButton, Kbd, Segmented, Skeleton, toast } from "@client/ui";
-import { wildcardLines } from "@shared/prompt/wildcards";
 import { flattenYamlWildcards, txtWildcardName, type WildcardFile } from "@shared/wildcards";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parse as parseYaml } from "yaml";
 import { LineEditor } from "./LineEditor";
-import { RollPanel } from "./RollPanel";
 import { useWildcardUi } from "./state";
 import { TreePanel } from "./TreePanel";
 import { WildcardEditor } from "./WildcardEditor";
@@ -113,9 +109,6 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
   const draft = ui.drafts[file.path];
   const text = draft?.text ?? file.text;
   const [saving, setSaving] = useState(false);
-  const compact = useCompact();
-  // On a narrow screen the roll preview takes half the view, so it starts closed there.
-  const [rolling, setRolling] = useState(!compact);
   // Line-mode edits replace the text, so the raw editor reloads from it afterwards.
   const [rawKey, setRawKey] = useState(0);
 
@@ -185,21 +178,6 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
     return [...out].sort();
   }, [names, file.format, file.path, text]);
 
-  const overrides = useMemo<Record<string, string[]>>(() => {
-    if (file.format === "txt") return { [nameOf(file.path)]: wildcardLines(text) };
-    try {
-      return Object.fromEntries(flattenYamlWildcards(parseYaml(text)));
-    } catch {
-      return {};
-    }
-  }, [file.format, file.path, text]);
-
-  const rollText = useMemo(() => {
-    if (file.format === "txt") return `__${nameOf(file.path)}__`;
-    const first = Object.keys(overrides)[0];
-    return first ? `__${first}__` : "";
-  }, [file.format, file.path, overrides]);
-
   return (
     <div className="flex min-w-0 flex-1 max-lg:flex-col">
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
@@ -231,13 +209,6 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
                   : { value: "lines", icon: "line-mode", label: "Lines" },
                 { value: "raw", icon: "raw-mode", label: "Raw" },
               ]}
-            />
-            <IconButton
-              icon="dice"
-              label={rolling ? "Hide roll preview" : "Show roll preview"}
-              size="sm"
-              active={rolling}
-              onClick={() => setRolling((r) => !r)}
             />
             {draft ? (
               <Button size="sm" variant="ghost" onClick={() => ui.dropDraft(file.path)}>
@@ -272,7 +243,6 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
           )}
         </div>
       </div>
-      {rolling ? <RollPanel defaultText={rollText} overrides={overrides} /> : null}
     </div>
   );
 }

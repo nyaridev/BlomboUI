@@ -65,17 +65,6 @@ describe("wildcard files", () => {
     ]);
   });
 
-  it("rolls with the same seed the same way, using unsaved overrides", async () => {
-    const a = await files.roll("__colors__ cat", 3, 10, {});
-    const b = await files.roll("__colors__ cat", 3, 10, {});
-    expect(a).toEqual(b);
-    expect(a.rolls.map((r) => r.seed)).toEqual([10, 11, 12]);
-    for (const r of a.rolls) expect(["red cat", "blue cat"]).toContain(r.text);
-    const o = await files.roll("__colors__", 2, 1, { colors: ["green"] });
-    expect(o.rolls.map((r) => r.text)).toEqual(["green", "green"]);
-    expect((await files.roll("__missing__", 1, 1, {})).rolls[0]?.missing).toEqual(["missing"]);
-  });
-
   it("saves atomically and refuses to overwrite a newer file", async () => {
     const file = await files.read("colors.txt");
     const saved = await files.save("colors.txt", "red\nblue\ngreen\n", file.mtime);

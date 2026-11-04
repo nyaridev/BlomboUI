@@ -118,27 +118,6 @@ export const RenameWildcardBody = z.object({
     ),
 });
 
-export const RollBody = z.object({
-  text: z.string().min(1).max(20_000),
-  count: z.number().int().min(1).max(50).default(8),
-  seed: z.number().int().min(0).optional(),
-  /** Unsaved editor content, by wildcard name, used instead of the files. */
-  overrides: z.record(z.string(), z.array(z.string())).default({}),
-});
-export type RollBody = z.input<typeof RollBody>;
-
-export const RollResult = z.object({
-  rolls: z.array(
-    z.object({
-      seed: z.number(),
-      text: z.string(),
-      used: z.array(z.string()),
-      missing: z.array(z.string()),
-    }),
-  ),
-});
-export type RollResult = z.infer<typeof RollResult>;
-
 /** Flatten a parsed YAML document into reference name → options. */
 export function flattenYamlWildcards(doc: unknown): Map<string, string[]> {
   const out = new Map<string, string[]>();

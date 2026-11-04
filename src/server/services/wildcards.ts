@@ -25,15 +25,12 @@ import {
 import type { ProfileFolder } from "../../shared/profile.ts";
 import { type RenameChange, renameRefs } from "../../shared/prompt/renames.ts";
 import {
-  expandPrompt,
   findWildcards,
   type WildcardResolver,
   wildcardLines,
 } from "../../shared/prompt/wildcards.ts";
-import { rng } from "../../shared/random.ts";
 import {
   flattenYamlWildcards,
-  type RollResult,
   txtWildcardName,
   WILDCARD_SAMPLE,
   type WildcardEntry,
@@ -348,23 +345,6 @@ export class WildcardFiles {
     await movePath(src, dest);
     return dest;
   }
-
-  async roll(
-    text: string,
-    count: number,
-    seed: number | undefined,
-    overrides: Record<string, string[]>,
-  ): Promise<RollResult> {
-    const resolve = await loadWildcards([this.root], [text], overrides);
-    const base = seed ?? Math.floor(Math.random() * 2 ** 32);
-    return {
-      rolls: Array.from({ length: count }, (_, i) => {
-        const s = (base + i) >>> 0;
-        const r = expandPrompt(text, rng(s), resolve);
-        return { seed: s, text: r.text, used: r.used, missing: r.missing };
-      }),
-    };
-  }
 }
 
 /**
@@ -592,27 +572,6 @@ export class WildcardFolders {
   abs(p: string): string {
     const { folder, rel } = this.split(p);
     return rel ? resolveInside(folder.path, rel) : folder.path;
-  }
-
-  async roll(
-    text: string,
-    count: number,
-    seed: number | undefined,
-    overrides: Record<string, string[]>,
-  ): Promise<RollResult> {
-    const resolve = await loadWildcards(
-      this.folders.map((f) => f.path),
-      [text],
-      overrides,
-    );
-    const base = seed ?? Math.floor(Math.random() * 2 ** 32);
-    return {
-      rolls: Array.from({ length: count }, (_, i) => {
-        const s = (base + i) >>> 0;
-        const r = expandPrompt(text, rng(s), resolve);
-        return { seed: s, text: r.text, used: r.used, missing: r.missing };
-      }),
-    };
   }
 }
 

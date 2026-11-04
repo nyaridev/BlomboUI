@@ -100,8 +100,6 @@ import type {
 import type { RenameChange } from "@shared/prompt/renames";
 import type { Settings, SettingsPatch } from "@shared/settings";
 import type {
-  RollBody,
-  RollResult,
   WildcardEntryType,
   WildcardFile,
   WildcardInfo,
@@ -306,7 +304,6 @@ export const api = {
     request<RenameChange>("POST", "/wildcards/rename", { name, to, folder }),
   renameRefs: (changes: RenameChange[]) =>
     request<{ files: number }>("POST", "/wildcards/rename-refs", { changes }),
-  rollWildcards: (body: RollBody) => request<RollResult>("POST", "/wildcards/roll", body),
 
   settings: () => request<Settings>("GET", "/settings"),
   updateSettings: (patch: SettingsPatch) => request<Settings>("PATCH", "/settings", patch),

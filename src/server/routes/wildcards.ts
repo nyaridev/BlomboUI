@@ -5,7 +5,6 @@ import {
   CreateWildcardBody,
   MoveWildcardBody,
   RenameWildcardBody,
-  RollBody,
   SaveWildcardBody,
   WildcardFolderBody,
   type WildcardList,
@@ -75,11 +74,6 @@ export function wildcardRoutes(profiles: ProfileService) {
     const body = await readJson(c, WildcardPathBody);
     await (await files()).remove(body.path);
     return c.json({ ok: true });
-  });
-
-  r.post("/roll", async (c) => {
-    const body = await readJson(c, RollBody);
-    return c.json(await (await files()).roll(body.text, body.count, body.seed, body.overrides));
   });
 
   r.post("/reveal", async (c) => {

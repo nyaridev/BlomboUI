@@ -153,6 +153,8 @@ function Section({ section, depth }: { section: YamlSection; depth: number }) {
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
             if (e.key === "Escape") setName(section.key);
+            // Ctrl+S saves the name being typed too (the save runs after this, on the window).
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") commit();
           }}
           aria-label={`Name of ${section.key}`}
           className="w-56 min-w-0 font-medium max-lg:w-auto max-lg:flex-1"

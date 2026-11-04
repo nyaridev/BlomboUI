@@ -15,7 +15,7 @@ import { Badge, Button, EmptyState, IconButton, Kbd, Segmented, Skeleton, toast 
 import { wildcardLines } from "@shared/prompt/wildcards";
 import { flattenYamlWildcards, txtWildcardName, type WildcardFile } from "@shared/wildcards";
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parse as parseYaml } from "yaml";
 import { LineEditor } from "./LineEditor";
 import { RollPanel } from "./RollPanel";
@@ -157,6 +157,22 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
     }
   }, [changed, file.path, profileId, qc]);
 
+  // Ctrl+S saves wherever the focus is while a file is open (the raw editor handles its own
+  // first), and never opens the browser's Save page.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.key.toLowerCase() !== "s") return;
+      if (e.defaultPrevented) return;
+      if (e.target instanceof Element && e.target.closest("[role=dialog]")) return;
+      e.preventDefault();
+      void saveRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const knownNames = useMemo(() => {
     const out = new Set(names);
     if (file.format === "txt") out.add(nameOf(file.path));
@@ -240,16 +256,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
             </Button>
           </div>
         </div>
-        <div
-          className="min-h-0 flex-1"
-          // Ctrl+S in Lines and Sections too (the raw editor handles its own).
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s" && !e.defaultPrevented) {
-              e.preventDefault();
-              void save();
-            }
-          }}
-        >
+        <div className="min-h-0 flex-1">
           {ui.mode === "raw" ? (
             <WildcardEditor
               docKey={`${file.path}:${file.mtime}:${rawKey}`}

@@ -12,7 +12,7 @@
  *           either is open)
  *   downloads the download queue and its progress (the header shows it, so every window follows)
  *   batch   the batch runner's files (while a batch workflow is open)
- * Errors, profile switches and model-folder changes go to everyone.
+ * Errors, profile switches, model-folder and wildcards-folder changes go to everyone.
  */
 import { z } from "zod";
 import { BatchItem, BatchRun } from "./batch.ts";
@@ -79,6 +79,9 @@ export const ServerMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("models.changed") }),
   /** Background hashing and Civitai lookup of local models. */
   z.object({ t: z.literal("models.lookup"), lookup: LookupState }),
+  /** A file or folder in the open profile's wildcards folders changed: lists and the open file
+   * should refetch. */
+  z.object({ t: z.literal("wildcards.changed") }),
   /** The download queue changed (added, started, finished, removed). */
   z.object({ t: z.literal("downloads"), downloads: DownloadsSnapshot }),
   /** Bytes received, batched a few times a second. */

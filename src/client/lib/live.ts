@@ -292,6 +292,11 @@ function onJson(text: string): void {
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
       void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
       break;
+    case "wildcards.changed":
+      // The open file refetches too: its editor shows the new text unless it has unsaved edits.
+      for (const key of ["wildcard-tree", "wildcards", "wildcard-file", "wildcard-info"])
+        void queryClient.invalidateQueries({ queryKey: [key] });
+      break;
     case "models.lookup":
       useLive.setState({ lookup: msg.lookup });
       break;

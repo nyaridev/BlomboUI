@@ -41,6 +41,7 @@ import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
 import { SnippetService } from "./services/snippets.ts";
 import { StageService } from "./services/stages.ts";
+import { WildcardWatcher } from "./services/wildcardwatch.ts";
 import { installPreset, listPresets } from "./services/workflows/presets.ts";
 import { WorkflowService } from "./services/workflows/store.ts";
 
@@ -368,6 +369,11 @@ export function createServices(config: ServerConfig): Services {
   );
   bus.on("visible", (any) => stats.setActive(any));
 
+  // Wildcard files changed on disk (by Blombo or anything else) reach every window.
+  const wildcardWatch = new WildcardWatcher(() => bus.publish(null, { t: "wildcards.changed" }));
+  const watchWildcards = (folders: readonly { path: string }[]) =>
+    wildcardWatch.watch(folders.map((f) => f.path));
+
   profiles.on("opened", (profile, previousId) => {
     void (async () => {
       await workflows.flush();
@@ -377,6 +383,7 @@ export function createServices(config: ServerConfig): Services {
         lookup.stop();
       }
       models.invalidate();
+      watchWildcards(profile.folders.wildcards);
       await gallery.open(profile.id);
       gallery.startSync();
       downloads.restore(profile.id);
@@ -394,6 +401,7 @@ export function createServices(config: ServerConfig): Services {
     if (profiles.active === id) {
       await jobs.reset();
       lookup.stop();
+      wildcardWatch.close();
       await gallery.close();
     }
     downloads.dropProfile(id);
@@ -404,6 +412,7 @@ export function createServices(config: ServerConfig): Services {
     if (profile.id !== profiles.active) return;
     void supervisor.applyProfile(profile, "flag").catch((error) => console.error(error));
     models.invalidate();
+    watchWildcards(profile.folders.wildcards);
     // An output folder whose id changed (same path) keeps its gallery rows and marks.
     const renamed = previous.folders.outputs.flatMap((before) => {
       const after = profile.folders.outputs.find((f) => f.path === before.path);
@@ -461,6 +470,7 @@ export function createServices(config: ServerConfig): Services {
       nodePacks.cancel();
       downloads.shutdown();
       lookup.stop();
+      wildcardWatch.close();
       await workflows.flush().catch(() => undefined);
       await gallery.close().catch(() => undefined);
       await supervisor.shutdown().catch(() => undefined);

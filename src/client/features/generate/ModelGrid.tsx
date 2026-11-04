@@ -12,14 +12,14 @@
  * (one top folder per profile models folder when files come from several); right-click a folder
  * or a card to rename it or show it in Explorer. Renames carry over to the open workflow and,
  * with the setting on, to full references in wildcard files (shared/prompt/renames.ts). The top
- * bar searches, filters by base models (several, grouped by maker), keeps what the workflow
- * uses first (the eye), sorts and rescans.
+ * bar searches, filters by base models (several, grouped by maker) and favorites, counts what's
+ * shown, keeps what the workflow uses first (the eye), sorts (each sort with its icon) and rescans.
  *
  * With `picks` (an XY plot axis, `PicksDialog`), the same grid picks several models of one kind
  * instead: a click adds or removes a card from the list and nothing in the workflow changes;
  * the eye keeps the picked ones first.
  */
-import { Icon } from "@client/icons/Icon";
+import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { useElementWidth } from "@client/lib/hooks";
@@ -37,6 +37,7 @@ import {
 import { useSession } from "@client/lib/session";
 import {
   type CardKind,
+  Chip,
   IconButton,
   type MenuEntry,
   ModelCard,
@@ -105,13 +106,13 @@ const GAP = 12;
 type Sort = "suggested" | "name" | "created" | "modified" | "path" | "size";
 type Order = "asc" | "desc";
 /** Each sort with the order it starts in (dates and size newest / largest first). */
-const SORTS: Array<{ value: Sort; label: string; order: Order; files?: true }> = [
-  { value: "suggested", label: "Favorites first", order: "asc" },
-  { value: "name", label: "Name", order: "asc" },
-  { value: "path", label: "Path", order: "asc" },
-  { value: "created", label: "Date created", order: "desc", files: true },
-  { value: "modified", label: "Date modified", order: "desc", files: true },
-  { value: "size", label: "Size", order: "desc", files: true },
+const SORTS: Array<{ value: Sort; label: string; icon: IconName; order: Order; files?: true }> = [
+  { value: "suggested", label: "Favorites first", icon: "heart", order: "asc" },
+  { value: "name", label: "Name", icon: "text", order: "asc" },
+  { value: "path", label: "Path", icon: "folder", order: "asc" },
+  { value: "created", label: "Date created", icon: "calendar", order: "desc", files: true },
+  { value: "modified", label: "Date modified", icon: "clock", order: "desc", files: true },
+  { value: "size", label: "Size", icon: "stack", order: "desc", files: true },
 ];
 const byText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 const COMPARE: Record<Exclude<Sort, "suggested">, (a: Item, b: Item) => number> = {
@@ -230,6 +231,7 @@ export function ModelGrid({
   const q = query.trim().toLowerCase();
   const [folder, setFolder] = useState<string | null>(null);
   const [baseModels, setBaseModels] = useState<string[]>([]);
+  const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [pickedSort, setSort] = useState<Sort>("created");
   const [order, setOrder] = useState<Order>("desc");
   // Wildcards have no file dates or sizes: those sorts read as Name there.
@@ -277,7 +279,7 @@ export function ModelGrid({
   // biome-ignore lint/correctness/useExhaustiveDependencies: picks are left out on purpose
   const loaded = useMemo(
     () => new Set(showLoaded ? items.filter(isSelected).map((i) => i.id) : []),
-    [showLoaded, items, tab, kind, q, baseModels, folder, sort, order],
+    [showLoaded, items, tab, kind, q, baseModels, onlyFavorites, folder, sort, order],
   );
 
   // Files from several profile models folders: one top folder per models folder, by its name.
@@ -294,16 +296,19 @@ export function ModelGrid({
     return root ? { root: root.id, folder: path.slice(root.name.length + 1) } : { folder: path };
   };
 
-  // Search and base models first; the tree counts what they leave, the folder narrows further.
+  // Search, base models and favorites first; the tree counts what they leave, the folder
+  // narrows further. Wildcards have no favorites.
+  const favoritesOnly = onlyFavorites && tab !== "wildcards";
   const found = useMemo(() => {
     const wanted = new Set(baseModels);
     return items.filter(
       (i) =>
         loaded.has(i.id) ||
         ((!q || i.id.toLowerCase().includes(q)) &&
-          (!wanted.size || wanted.has(i.local?.baseModel ?? ""))),
+          (!wanted.size || wanted.has(i.local?.baseModel ?? "")) &&
+          (!favoritesOnly || favorites.has(i.id))),
     );
-  }, [items, q, baseModels, loaded]);
+  }, [items, q, baseModels, loaded, favoritesOnly, favorites]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: treeKey follows multiRoot and roots
   const tree = useMemo(() => folderTree(found.map(treeKey)), [found, multiRoot, roots]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: treeKey follows multiRoot and roots
@@ -640,6 +645,26 @@ export function ModelGrid({
             options={bases.map((b) => ({ value: b.name, label: b.label, group: b.group }))}
           />
         ) : null}
+        {tab !== "wildcards" ? (
+          <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
+            Favorites
+          </Chip>
+        ) : null}
+        {!loading && !unavailable ? (
+          <span
+            className="font-mono text-xs whitespace-nowrap text-fg-3 tabular"
+            aria-live="polite"
+          >
+            {list.length.toLocaleString()}{" "}
+            {tab === "wildcards"
+              ? list.length === 1
+                ? "wildcard"
+                : "wildcards"
+              : list.length === 1
+                ? "model"
+                : "models"}
+          </span>
+        ) : null}
         <IconButton
           icon={showLoaded ? "eye" : "eye-off"}
           label={
@@ -732,7 +757,7 @@ export function ModelGrid({
               text={
                 q
                   ? `Nothing matches "${query}" here.`
-                  : baseModels.length || folder
+                  : baseModels.length || favoritesOnly || folder
                     ? "Nothing here with these filters."
                     : "Nothing here yet. Add files to the folder, then rescan models from the header."
               }

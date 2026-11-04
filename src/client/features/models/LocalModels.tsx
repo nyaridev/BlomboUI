@@ -63,7 +63,7 @@ const SORTS: Array<{ value: Sort; label: string; icon: IconName; order: Order }>
   { value: "name", label: "Name", icon: "text", order: "asc" },
   { value: "path", label: "Path", icon: "folder", order: "asc" },
   { value: "created", label: "Date created", icon: "calendar", order: "desc" },
-  { value: "modified", label: "Date modified", icon: "calendar", order: "desc" },
+  { value: "modified", label: "Date modified", icon: "clock", order: "desc" },
   { value: "size", label: "Size", icon: "stack", order: "desc" },
 ];
 const byText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });

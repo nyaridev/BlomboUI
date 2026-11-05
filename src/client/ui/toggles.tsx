@@ -230,7 +230,8 @@ export function Segmented<T extends string>({
             onKeyDown={(e) => onKey(e, i)}
             className={cn(
               "relative inline-flex items-center justify-center gap-1.5 rounded-sm font-medium transition-colors focus-ring",
-              size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
+              // md is 32 px in all, like md buttons and fields beside it.
+              size === "sm" ? "h-6 px-2 text-xs" : "h-[26px] px-3 text-sm",
               !opt.label && (size === "sm" ? "w-7 px-0" : "w-8 px-0"),
               full && "flex-1",
               active ? "text-fg" : "text-fg-3 hover:text-fg-2",
@@ -278,7 +279,7 @@ export function MultiSegmented<T extends string>({
       onClick={onClick}
       className={cn(
         "inline-flex items-center justify-center gap-1.5 rounded-sm border font-medium transition-colors focus-ring",
-        size === "sm" ? "h-6 px-2 text-xs" : "h-7 px-3 text-sm",
+        size === "sm" ? "h-6 px-2 text-xs" : "h-[26px] px-3 text-sm",
         on
           ? "border-line-strong bg-field text-fg shadow-[var(--shadow-card)]"
           : "border-transparent text-fg-3 hover:text-fg-2",

@@ -1,9 +1,9 @@
 /**
  * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
- * filter) as a removable chip in front of the text, the NSFW blur, the types, category and base
- * model dropdowns (base models in family sections: shared/basemodels.ts), sort and a Filters
- * pop-up (the period as a segmented bar, a published-date range through Civitai's site search with the
- * API key, and Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
+ * filter) as a removable chip in front of the text, the NSFW blur, Civitai's categories as a
+ * segmented bar, the base model dropdown (family sections: shared/basemodels.ts), sort and a
+ * Filters pop-up (the period, the model types as chips, a published-date range through
+ * Civitai's site search with the API key, and Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -31,7 +31,6 @@ import {
   IconButton,
   KIND_STYLE,
   ModelCard,
-  MultiSelect,
   Popover,
   Segmented,
   Select,
@@ -110,7 +109,7 @@ export function CardSkeletons({ count }: { count: number }) {
 /* ── filter bar ─────────────────────────────────────────────────────────── */
 
 const CATEGORY_OPTIONS = [
-  { value: "", label: "All categories", icon: "tag" as IconName },
+  { value: "", label: "All categories" },
   ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
 ];
 
@@ -222,37 +221,31 @@ export function FilterBar({
         </Button>
         <NsfwBlurToggle size="lg" />
       </form>
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
-          <MultiSelect
-            label="Model types"
-            clearLabel="All types"
-            value={filter.types}
-            onChange={(types) => setFilter({ types })}
-            className="w-[160px] shrink-0"
-            options={CIVITAI_FILTER_TYPES.map((t) => {
-              const kind = civitaiKind(t);
-              return {
-                value: t,
-                label: CIVITAI_TYPE_LABELS[t] ?? t,
-                icon: kind ? KIND_STYLE[kind].icon : undefined,
-              };
-            })}
-          />
-          {/* One category at a time, as on Civitai's site; a tag from elsewhere shows as itself. */}
-          <Select<string>
-            label="Category"
-            value={filter.tag}
-            onChange={(tag) => setFilter({ tag })}
-            className="w-[160px] shrink-0"
-            options={
-              filter.tag && !CATEGORY_OPTIONS.some((o) => o.value === filter.tag)
-                ? [...CATEGORY_OPTIONS, { value: filter.tag, label: categoryLabel(filter.tag) }]
-                : CATEGORY_OPTIONS
-            }
-          />
+      <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
+        {/* One category at a time, as on Civitai's site (a tag from elsewhere shows as itself).
+            The bar takes the room the right side leaves and scrolls sideways (the wheel too),
+            without a scrollbar, so the row keeps its height. */}
+        <div
+          className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] max-lg:basis-full"
+          onWheel={(e) => {
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
+          }}
+        >
+          {/* w-max: the segments keep their width and scroll, instead of squeezing to two lines. */}
+          <div className="w-max">
+            <Segmented<string>
+              label="Category"
+              value={filter.tag}
+              onChange={(tag) => setFilter({ tag })}
+              options={
+                filter.tag && !CATEGORY_OPTIONS.some((o) => o.value === filter.tag)
+                  ? [...CATEGORY_OPTIONS, { value: filter.tag, label: categoryLabel(filter.tag) }]
+                  : CATEGORY_OPTIONS
+              }
+            />
+          </div>
         </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2 lg:shrink-0 max-lg:basis-full">
           <Select<string>
             label="Base model"
             value={filter.baseModels[0] ?? "any"}
@@ -282,7 +275,7 @@ export function FilterBar({
               options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
             />
           )}
-          <MoreFilters filter={filter} defaultPeriod={defaults.period} />
+          <MoreFilters filter={filter} defaults={defaults} />
           {changed ? (
             <Button
               variant="ghost"
@@ -435,17 +428,12 @@ function rangeLabel(f: BrowseFilter): string | null {
 }
 
 /**
- * The Filters pop-up (as on Civitai's site): the period as chips, a published-date range on top
- * of it (Civitai's own site search: 31 days at most, with the API key; setting one day fills in
- * the other), and Hide downloaded. The button counts what differs from the profile's defaults.
+ * The Filters pop-up (as on Civitai's site): the period, the model types as chips (several at
+ * once; none is all of them), a published-date range on top of the period (Civitai's own site
+ * search: 31 days at most, with the API key; setting one day fills in the other), and Hide
+ * downloaded. The button counts what differs from the profile's defaults.
  */
-function MoreFilters({
-  filter,
-  defaultPeriod,
-}: {
-  filter: BrowseFilter;
-  defaultPeriod: BrowseFilter["period"];
-}) {
+function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: BrowseFilter }) {
   const setFilter = useCivitai((s) => s.setFilter);
   const hideLocal = useCivitai((s) => s.hideLocal);
   const toggleHideLocal = useCivitai((s) => s.toggleHideLocal);
@@ -455,7 +443,16 @@ function MoreFilters({
   const setRange = (r: { from: string; to: string }) =>
     setFilter({ publishedFrom: r.from, publishedTo: r.to });
   const range = rangeLabel(filter);
-  const on = (filter.period !== defaultPeriod ? 1 : 0) + (range ? 1 : 0) + (hideLocal ? 1 : 0);
+  const sameTypes = [...filter.types].sort().join() === [...defaults.types].sort().join();
+  const on =
+    (filter.period !== defaults.period ? 1 : 0) +
+    (sameTypes ? 0 : 1) +
+    (range ? 1 : 0) +
+    (hideLocal ? 1 : 0);
+  const toggleType = (t: string) =>
+    setFilter({
+      types: filter.types.includes(t) ? filter.types.filter((x) => x !== t) : [...filter.types, t],
+    });
   return (
     <Popover
       placement="bottom-end"
@@ -487,6 +484,27 @@ function MoreFilters({
               onChange={(period) => setFilter({ period })}
               options={CIVITAI_PERIODS.map((p) => ({ value: p, label: CIVITAI_PERIOD_LABELS[p] }))}
             />
+          </section>
+          <section className="flex flex-col gap-2.5 border-t border-line p-3">
+            <h3 className="label-caps">Model types</h3>
+            <div className="flex flex-wrap gap-1.5" role="group" aria-label="Model types">
+              <Chip selected={!filter.types.length} onClick={() => setFilter({ types: [] })}>
+                All types
+              </Chip>
+              {CIVITAI_FILTER_TYPES.map((t) => {
+                const kind = civitaiKind(t);
+                return (
+                  <Chip
+                    key={t}
+                    icon={kind ? KIND_STYLE[kind].icon : undefined}
+                    selected={filter.types.includes(t)}
+                    onClick={() => toggleType(t)}
+                  >
+                    {CIVITAI_TYPE_LABELS[t] ?? t}
+                  </Chip>
+                );
+              })}
+            </div>
           </section>
           <section className="flex flex-col gap-2.5 border-t border-line p-3">
             <div className="flex items-center gap-2">
@@ -559,7 +577,12 @@ function MoreFilters({
               icon="undo"
               disabled={!on}
               onClick={() => {
-                setFilter({ period: defaultPeriod, publishedFrom: "", publishedTo: "" });
+                setFilter({
+                  period: defaults.period,
+                  types: defaults.types,
+                  publishedFrom: "",
+                  publishedTo: "",
+                });
                 if (hideLocal) toggleHideLocal();
               }}
             >

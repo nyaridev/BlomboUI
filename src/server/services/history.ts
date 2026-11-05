@@ -10,6 +10,8 @@
  * The log is written from the queue's `finished` event (wired in context.ts); nothing here
  * talks to ComfyUI.
  */
+
+import type { GalleryImage } from "../../shared/gallery.ts";
 import type {
   JobHistoryPage,
   JobHistoryQueryInput,
@@ -440,6 +442,26 @@ export class HistoryService {
       )
       .all(since, kind, limit) as Array<{ name: string; count: number; recent: number }>;
     return rows.map((r) => ({ name: r.name, count: Number(r.count), recent: Number(r.recent) }));
+  }
+
+  /** The gallery's images of the newest finished runs that used a model, LoRA or wildcard. */
+  images(kind: "model" | "lora" | "wildcard", name: string, limit: number): GalleryImage[] {
+    const rows = this.db()
+      .prepare(
+        `SELECT j.first_image AS ref FROM job_log_uses u JOIN job_log j ON j.id = u.job_id
+         WHERE u.kind = ? AND u.name = ? AND j.state = 'done' AND j.first_image IS NOT NULL
+         ORDER BY j.finished_at DESC LIMIT ?`,
+      )
+      .all(kind, name, limit * 2) as Array<{ ref: string }>;
+    const refs = rows.flatMap((r) => {
+      const ref = safeJson<{ filename: string; subfolder: string; type: string } | null>(
+        r.ref,
+        null,
+      );
+      return ref ? [ref] : [];
+    });
+    // Runs whose image was moved, trashed or left out of the gallery have none.
+    return [...this.deps.gallery.findOutputs(refs).values()].slice(0, limit);
   }
 
   /* ── picker order ─────────────────────────────────────────────────────── */

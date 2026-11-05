@@ -171,7 +171,7 @@ describe("gallery index", () => {
     expect(facets.loras).toEqual([{ name: "Detailer", count: 1 }]);
   });
 
-  it("shuffles in one order per seed, and builds Home with covers for what runs used", async () => {
+  it("shuffles in one order per seed, and builds Home with images for what runs used", async () => {
     const names = async (seed: number) =>
       (await q({ sort: "random", seed })).items.map((i) => i.name);
     expect(await names(4)).toEqual(await names(4));
@@ -185,11 +185,15 @@ describe("gallery index", () => {
           ]
         : kind === "lora"
           ? [{ name: "Detailer", count: 1, recent: 1 }]
-          : [];
+          : [{ name: "weather", count: 1, recent: 1 }];
+    const thumb = (await q({ q: "cozy cabin" })).items[0]?.thumb;
     const home = await galleryHome(
       {
         gallery,
-        history: { usage } as unknown as HistoryService,
+        history: {
+          usage,
+          images: (kind: string) => (kind === "wildcard" ? [{ thumb }] : []),
+        } as unknown as HistoryService,
         autocomplete: {
           usedTags: async () => [{ tag: "cozy_cabin", uses: 2 }],
         } as unknown as AutocompleteService,
@@ -201,15 +205,13 @@ describe("gallery index", () => {
       "plain.png",
       "sd15_00001_.png",
     ]);
-    expect(home.recent).toHaveLength(3);
-    expect(home.tags.top).toEqual([{ tag: "cozy_cabin", uses: 2 }]);
-    expect(home.models[0]).toMatchObject({
-      filter: "dreamshaper_8",
-      cover: expect.stringContaining("/api/gallery/thumbs/"),
-    });
-    // Nothing in the gallery was made with it: no cover, no filter.
-    expect(home.models[1]).toMatchObject({ cover: null, filter: null });
-    expect(home.loras[0]).toMatchObject({ filter: "Detailer" });
+    // A tag's images come from a search ("cozy_cabin" finds "a cozy cabin in the woods").
+    expect(home.tags.top).toEqual([{ tag: "cozy_cabin", uses: 2, images: [thumb] }]);
+    expect(home.models[0]).toMatchObject({ filter: "dreamshaper_8", images: [thumb] });
+    // Nothing in the gallery was made with it: no images, no filter.
+    expect(home.models[1]).toMatchObject({ images: [], filter: null });
+    expect(home.loras[0]).toMatchObject({ filter: "Detailer", images: [expect.any(String)] });
+    expect(home.wildcards[0]).toMatchObject({ name: "weather", images: [thumb], filter: null });
   });
 
   it("builds FTS queries only from terms trigram can match", () => {

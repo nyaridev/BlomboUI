@@ -664,14 +664,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <div className="flex h-16 items-stretch">
               <IconButton icon="chevron-left" label="Previous" size="tall" variant="secondary" />
             </div>
-            {/* Overlay: over a picture (profile cards, the gallery's Home). */}
+            {/* Overlay: over a picture (profile cards, the gallery's Home carousel). */}
             <div className="grid h-16 w-24 place-items-start justify-end overflow-hidden rounded-lg p-2 checker">
               <IconButton icon="more-horizontal" label="Options" size="sm" variant="overlay" />
-            </div>
-            <div className="flex h-16 items-end gap-2 overflow-hidden rounded-lg p-2 checker">
-              <Button variant="overlay" icon="generate" size="sm">
-                Use these settings
-              </Button>
             </div>
           </Row>
           <Row label="Generate">

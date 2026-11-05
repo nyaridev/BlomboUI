@@ -1,10 +1,17 @@
 /**
- * The gallery's Home: a random handful of recent images, the newest ones, and what you've been
- * prompting with. Images come from the gallery index (following its shown-images settings);
- * tags from the prompts you ran (autocomplete's counts); models, LoRAs and wildcards from the
- * job log, each with the newest image the gallery has that used it.
+ * The gallery's Home: a random handful of recent images and what you've been prompting with,
+ * each with its newest images. Models, LoRAs and wildcards come from the job log and tags from
+ * the prompts you ran (autocomplete's counts); their images come from the gallery index (its
+ * model and LoRA filters, a search for a tag) or, for a wildcard, the runs that used it. All of
+ * it follows the gallery's shown-images settings.
  */
-import { type GalleryHome, HOME_RECENT_DAYS, type HomeUse } from "../../../shared/gallery.ts";
+import {
+  type GalleryHome,
+  GalleryQuery,
+  type GalleryQueryInput,
+  HOME_RECENT_DAYS,
+  type HomeUse,
+} from "../../../shared/gallery.ts";
 import type { AutocompleteService } from "../autocomplete.ts";
 import type { HistoryService } from "../history.ts";
 import { modelLabel } from "../workflows/summary.ts";
@@ -13,9 +20,10 @@ import { type GalleryService, shuffleKey } from "./index.ts";
 /** The carousel picks from this many newest images. */
 const PICK_FROM = 400;
 const PICKS = 16;
-const RECENT = 24;
 const USES = 12;
-const TAGS = 30;
+const TAGS = 12;
+/** Images per model, LoRA, wildcard or tag (its card crossfades through them). */
+const IMAGES = 6;
 
 export async function galleryHome(
   deps: {
@@ -34,36 +42,39 @@ export async function galleryHome(
     )
     .all(PICK_FROM, PICKS)
     .map(toImage);
-  const recent = db
-    .prepare(`${select} WHERE 1 = 1${shown} ORDER BY i.mtime DESC, i.id DESC LIMIT ?`)
-    .all(RECENT)
-    .map(toImage);
 
+  const newest = async (q: GalleryQueryInput) =>
+    (await deps.gallery.query(GalleryQuery.parse({ ...q, limit: IMAGES }))).items.map(
+      (i) => i.thumb,
+    );
   // The gallery names models and LoRAs by file name without folder or extension (modelLabel).
-  const byModel = db.prepare(`${select} WHERE i.model = ?${shown} ORDER BY i.mtime DESC LIMIT 1`);
-  const byLora = db.prepare(
-    `${select} WHERE EXISTS (SELECT 1 FROM image_loras l WHERE l.image_id = i.id AND l.name = ?)${shown}
-     ORDER BY i.mtime DESC LIMIT 1`,
-  );
-  const found = (query: typeof byModel) => (name: string) => {
-    const label = modelLabel(name) ?? name;
-    const row = query.get(label);
-    return row ? { cover: toImage(row).thumb, filter: label } : { cover: null, filter: null };
+  const filtered = async (kind: "model" | "lora"): Promise<HomeUse[]> => {
+    const out: HomeUse[] = [];
+    for (const u of deps.history.usage(kind, since, USES)) {
+      const label = modelLabel(u.name) ?? u.name;
+      const images = await newest({ [kind]: label });
+      out.push({ ...u, images, filter: images.length ? label : null });
+    }
+    return out;
   };
-  const uses = (
-    kind: "model" | "lora" | "wildcard",
-    find: (name: string) => Pick<HomeUse, "cover" | "filter">,
-  ): HomeUse[] => deps.history.usage(kind, since, USES).map((u) => ({ ...u, ...find(u.name) }));
+  const tags = async (list: Array<{ tag: string; uses: number }>) => {
+    const out: GalleryHome["tags"]["top"] = [];
+    for (const t of list) out.push({ ...t, images: await newest({ q: t.tag.replace(/_/g, " ") }) });
+    return out;
+  };
 
   return {
     picks,
-    recent,
     tags: {
-      top: await deps.autocomplete.usedTags(TAGS),
-      lately: await deps.autocomplete.usedTags(TAGS, since),
+      top: await tags(await deps.autocomplete.usedTags(TAGS)),
+      lately: await tags(await deps.autocomplete.usedTags(TAGS, since)),
     },
-    models: uses("model", found(byModel)),
-    loras: uses("lora", found(byLora)),
-    wildcards: uses("wildcard", () => ({ cover: null, filter: null })),
+    models: await filtered("model"),
+    loras: await filtered("lora"),
+    wildcards: deps.history.usage("wildcard", since, USES).map((u) => ({
+      ...u,
+      images: deps.history.images("wildcard", u.name, IMAGES).map((i) => i.thumb),
+      filter: null,
+    })),
   };
 }

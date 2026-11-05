@@ -136,8 +136,8 @@ export const HomeUse = z.object({
   /** Finished runs that used it, ever and in the last `HOME_RECENT_DAYS`. */
   count: z.number().int(),
   recent: z.number().int(),
-  /** The newest image in the gallery made with it, when the gallery can tell. */
-  cover: z.string().nullable(),
+  /** Thumbnail URLs of the newest images made with it, newest first (may be empty). */
+  images: z.array(z.string()),
   /** Its name for the image list's model or LoRA filter, when the gallery has images with it. */
   filter: z.string().nullable(),
 });
@@ -150,18 +150,22 @@ export const GalleryHomeQuery = z.object({
   seed: GalleryQuery.shape.seed,
 });
 
+/** A tag you prompt with, and thumbnails of the newest images whose prompt has it. */
+export const HomeTag = z.object({
+  tag: z.string(),
+  uses: z.number().int(),
+  images: z.array(z.string()),
+});
+export type HomeTag = z.infer<typeof HomeTag>;
+
 /**
- * The gallery's Home: a random handful of recent images, the newest ones, and what you've been
- * prompting with (tags from the prompts you ran, models, LoRAs and wildcards from the job log),
- * what you used lately first.
+ * The gallery's Home: a random handful of recent images and what you've been prompting with
+ * (tags from the prompts you ran, models, LoRAs and wildcards from the job log, what you used
+ * lately first), each with its newest images.
  */
 export const GalleryHome = z.object({
   picks: z.array(GalleryImage),
-  recent: z.array(GalleryImage),
-  tags: z.object({
-    top: z.array(z.object({ tag: z.string(), uses: z.number().int() })),
-    lately: z.array(z.object({ tag: z.string(), uses: z.number().int() })),
-  }),
+  tags: z.object({ top: z.array(HomeTag), lately: z.array(HomeTag) }),
   models: z.array(HomeUse),
   loras: z.array(HomeUse),
   wildcards: z.array(HomeUse),

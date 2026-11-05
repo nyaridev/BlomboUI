@@ -4,7 +4,8 @@
  *
  *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me, /enums,
  *   /images?modelVersionId=&limit=&cursor=&sort=&period= (120 community posts per version over
- *   all time, fewer for shorter periods, Newest in reverse; none for versions ending in 3)
+ *   all time, fewer for shorter periods, Newest in reverse; how they were made only with
+ *   withMeta=true; none for versions ending in 3)
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
@@ -541,7 +542,8 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
                 nsfwLevel: n % 9 === 3 ? "X" : "None",
                 username: `fan_${(n % 7) + 1}`,
                 meta:
-                  n % 2 === 0
+                  // Like Civitai, only with withMeta=true.
+                  url.searchParams.get("withMeta") === "true" && n % 2 === 0
                     ? {
                         prompt: `${owner?.name}, community post ${n + 1}`,
                         negativePrompt: "lowres",

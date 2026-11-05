@@ -293,6 +293,8 @@ export class CivitaiApi {
       limit: String(COMMUNITY_PAGE),
       sort: query.sort,
       period: query.period,
+      // Without it Civitai leaves out how every image was made (prompt, settings).
+      withMeta: "true",
     });
     if (query.cursor) q.set("cursor", query.cursor);
     return this.get(`/api/v1/images?${q}`, key, SEARCH_TTL);

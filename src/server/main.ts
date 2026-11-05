@@ -3,6 +3,7 @@
  *
  *   node src/server/main.ts [--dev] [--port 4380] [--open web|app|none] [--data <dir>]
  *                           [--runtime <dir>] [--civitai <url>] [--catalog <url>]
+ *                           [--huggingface <url>]
  *
  *   --dev    dev mode (Vite serves the client on :4382 and proxies /api here)
  *   --open   web → default browser, app → Tauri window, none → nothing
@@ -10,6 +11,7 @@
  *   --runtime  ComfyUI slots, tools and caches (default ./runtime)
  *   --civitai  a fixed Civitai address (the fake one for checks; default: the profile's site)
  *   --catalog  the ComfyUI model catalog URL (default ComfyUI-Manager's model-list.json)
+ *   --huggingface  the Hugging Face API origin for download counts (the fake one for checks)
  */
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";

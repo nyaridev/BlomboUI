@@ -1,71 +1,62 @@
 /**
- * Models → Manager: the ComfyUI model catalog as a store. Categories with counts, search, sizes,
- * installed state, and install through the same download queue as Civitai: Install opens a
- * pop-up with the ComfyUI folder and file name the catalog names, both changeable (the subfolder
- * inside the kind folder, the name keeps its extension). The list is virtualized (the catalog has
- * hundreds of files).
+ * Models → Manager: the ComfyUI model catalog as a store. Categories with counts, search, sort
+ * (by category, most downloaded, name, size), installed state, and the entries in the layout on
+ * trial (ManagerEntries.tsx). Download counts load separately: Hugging Face is asked once per
+ * repo, so the list shows before they arrive.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
-import { useLive } from "@client/lib/live";
-import { formatBytes } from "@client/lib/number";
-import { qk, useCatalog, useDownloadPlan } from "@client/lib/queries";
+import { qk, useCatalog, useCatalogDownloads } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
+import { useVariant } from "@client/lib/variants";
 import {
-  Badge,
   Button,
-  Dialog,
   EmptyState,
   IconButton,
-  ProgressBar,
   Select,
   Skeleton,
+  Spinner,
   TextField,
-  Tooltip,
   toast,
 } from "@client/ui";
 import {
   type CatalogEntry,
   STORE_CATEGORIES,
   STORE_CATEGORY_LABELS,
+  STORE_SORT_LABELS,
+  STORE_SORTS,
   type StoreCategory,
+  type StoreSort,
 } from "@shared/manager";
 import { useQueryClient } from "@tanstack/react-query";
-import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Destination, useDestination, useQueueDownload } from "./civitai/DownloadDialog";
+import { useEffect, useMemo, useState } from "react";
+import {
+  CATEGORY_ICON,
+  CardsLayout,
+  type EntryContext,
+  ListLayout,
+  MANAGER_LAYOUTS,
+  type Row,
+  TableLayout,
+} from "./ManagerEntries";
 import { useModelsNav } from "./nav";
 
-const CATEGORY_ICON: Record<StoreCategory, IconName> = {
-  checkpoints: "models",
-  diffusion: "models",
-  loras: "layers",
-  vae: "wave",
-  "text-encoders": "text",
-  upscalers: "upscale",
-  controlnet: "pose",
-  detectors: "face-scan",
-  face: "face-scan",
-  "ip-adapter": "image",
-  video: "play",
-  other: "stack",
-};
-
 type Filter = StoreCategory | "all" | "installed";
-type Row =
-  | { type: "header"; category: StoreCategory; count: number }
-  | { type: "entry"; entry: CatalogEntry };
 
-const ROW_H = 68;
-const HEADER_H = 40;
+const SORT_OPTIONS = STORE_SORTS.map((s) => ({ value: s, label: STORE_SORT_LABELS[s] }));
+const byName = (a: CatalogEntry, b: CatalogEntry) => a.name.localeCompare(b.name);
+const NO_SIZE = Number.MAX_SAFE_INTEGER;
 
 export function ManagerStore() {
   const catalog = useCatalog();
+  const stats = useCatalogDownloads(Boolean(catalog.data));
+  const layout = useVariant("manager.layout", "Manager layout", MANAGER_LAYOUTS);
   // A deep link ("Find in Manager" from a stage) picks the category and search once.
   const [link] = useState(() => useModelsNav.getState().takeManager());
   const [filter, setFilter] = useState<Filter>(link?.category ?? "all");
   const [query, setQuery] = useState(link?.query ?? "");
+  const [sort, setSort] = useState<StoreSort>("category");
   const pending = useModelsNav((s) => s.manager);
   useEffect(() => {
     if (!pending) return;
@@ -79,6 +70,7 @@ export function ManagerStore() {
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);
   const entries = catalog.data?.entries ?? [];
+  const downloads = stats.data?.downloads;
 
   const counts = useMemo(() => {
     const c = new Map<Filter, number>([
@@ -89,17 +81,30 @@ export function ManagerStore() {
     return c;
   }, [entries]);
 
-  const rows = useMemo(() => {
+  const { rows, shown } = useMemo(() => {
     const q = query.trim().toLowerCase();
     const shown = entries.filter(
       (e) =>
         (filter === "all" || (filter === "installed" ? e.installed : e.category === filter)) &&
         (!q ||
-          `${e.name} ${e.filename} ${e.type} ${e.base ?? ""} ${e.description}`
+          `${e.name} ${e.filename} ${e.type} ${e.base ?? ""} ${e.repo ?? ""} ${e.description}`
             .toLowerCase()
             .includes(q)),
     );
     const out: Row[] = [];
+    if (sort !== "category") {
+      const dl = (e: CatalogEntry) => (e.repo ? downloads?.[e.repo] : undefined) ?? 0;
+      const order = {
+        downloads: (a: CatalogEntry, b: CatalogEntry) => dl(b) - dl(a) || byName(a, b),
+        name: byName,
+        largest: (a: CatalogEntry, b: CatalogEntry) =>
+          (b.size ?? -1) - (a.size ?? -1) || byName(a, b),
+        smallest: (a: CatalogEntry, b: CatalogEntry) =>
+          (a.size ?? NO_SIZE) - (b.size ?? NO_SIZE) || byName(a, b),
+      }[sort];
+      for (const entry of [...shown].sort(order)) out.push({ type: "entry", entry });
+      return { rows: out, shown: shown.length };
+    }
     for (const category of STORE_CATEGORIES) {
       const group = shown.filter((e) => e.category === category);
       if (!group.length) continue;
@@ -107,8 +112,8 @@ export function ManagerStore() {
         out.push({ type: "header", category, count: group.length });
       for (const entry of group) out.push({ type: "entry", entry });
     }
-    return out;
-  }, [entries, filter, query]);
+    return { rows: out, shown: shown.length };
+  }, [entries, filter, query, sort, downloads]);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -143,20 +148,25 @@ export function ManagerStore() {
   const filters = (["all", "installed", ...STORE_CATEGORIES] as Filter[]).filter(
     (c) => c === "all" || c === "installed" || counts.get(c),
   );
+  const ctx: EntryContext = { noFolder: catalog.data.noModelsFolder, downloads };
+  const Layout = { list: ListLayout, table: TableLayout, cards: CardsLayout }[layout];
+  const search = (className: string) => (
+    <TextField
+      size="sm"
+      icon="search"
+      placeholder="Search the catalog"
+      value={query}
+      onChange={(e) => setQuery(e.target.value)}
+      onClear={() => setQuery("")}
+      className={className}
+      aria-label="Search the catalog"
+    />
+  );
 
   return (
     <div className="flex min-h-0 flex-1">
       <aside className="flex w-[232px] shrink-0 flex-col gap-0.5 border-r border-line p-3 max-lg:hidden">
-        <TextField
-          size="sm"
-          icon="search"
-          placeholder="Search the catalog"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onClear={() => setQuery("")}
-          className="mb-2"
-          aria-label="Search the catalog"
-        />
+        {search("mb-2")}
         {filters.map((c) => (
           <button
             key={c}
@@ -196,18 +206,9 @@ export function ManagerStore() {
         </div>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Narrow screens: search and category above the list instead of the sidebar. */}
-        <div className="flex gap-2 border-b border-line p-3 lg:hidden">
-          <TextField
-            size="sm"
-            icon="search"
-            placeholder="Search the catalog"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onClear={() => setQuery("")}
-            className="min-w-0 flex-1"
-            aria-label="Search the catalog"
-          />
+        <div className="flex flex-wrap items-center gap-2 px-5 py-3 max-lg:border-b max-lg:border-line max-lg:px-3">
+          {/* Narrow screens: search and category here instead of the sidebar. */}
+          {search("min-w-0 basis-full lg:hidden")}
           <Select<Filter>
             size="sm"
             label="Category"
@@ -219,7 +220,23 @@ export function ManagerStore() {
               icon: filterIcon(c),
               hint: String(counts.get(c) ?? 0),
             }))}
-            className="w-40"
+            className="min-w-0 flex-1 lg:hidden"
+          />
+          <span className="text-xs text-fg-3 tabular max-lg:hidden">
+            {shown.toLocaleString()} {shown === 1 ? "file" : "files"}
+          </span>
+          {stats.isFetching && !downloads ? (
+            <span className="flex items-center gap-1.5 text-2xs text-fg-3 max-lg:hidden">
+              <Spinner size={11} /> Getting download counts from Hugging Face
+            </span>
+          ) : null}
+          <Select<StoreSort>
+            size="sm"
+            label="Sort"
+            value={sort}
+            onChange={setSort}
+            options={SORT_OPTIONS}
+            className="w-44 max-lg:min-w-0 max-lg:flex-1 lg:ml-auto"
           />
         </div>
         {catalog.data.noModelsFolder ? (
@@ -230,7 +247,7 @@ export function ManagerStore() {
           </p>
         ) : null}
         {rows.length ? (
-          <List rows={rows} noFolder={catalog.data.noModelsFolder} />
+          <Layout rows={rows} ctx={ctx} />
         ) : (
           <EmptyState
             icon="search"
@@ -257,198 +274,4 @@ function filterLabel(c: Filter): string {
 
 function filterIcon(c: Filter): IconName {
   return c === "all" ? "stack" : c === "installed" ? "check-circle" : CATEGORY_ICON[c];
-}
-
-function List({ rows, noFolder }: { rows: Row[]; noFolder: boolean }) {
-  const scroller = useRef<HTMLDivElement>(null);
-  const virtual = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => scroller.current,
-    estimateSize: (i) => (rows[i]?.type === "header" ? HEADER_H : ROW_H),
-    overscan: 8,
-  });
-  return (
-    <div
-      ref={scroller}
-      className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 pb-5 max-lg:px-3"
-    >
-      <div className="relative w-full" style={{ height: virtual.getTotalSize() }}>
-        {virtual.getVirtualItems().map((v) => {
-          const row = rows[v.index];
-          if (!row) return null;
-          return (
-            <div
-              key={v.key}
-              className="absolute inset-x-0 top-0"
-              style={{ transform: `translateY(${v.start}px)`, height: v.size }}
-            >
-              {row.type === "header" ? (
-                <h3 className="label-caps flex h-full items-end gap-2 pb-2">
-                  {STORE_CATEGORY_LABELS[row.category]}
-                  <span className="font-mono text-fg-4">{row.count}</span>
-                </h3>
-              ) : (
-                <EntryRow entry={row.entry} noFolder={noFolder} />
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function EntryRow({ entry: e, noFolder }: { entry: CatalogEntry; noFolder: boolean }) {
-  const live = useLive((s) =>
-    s.downloads.find((d) => d.entryId === e.id && d.state !== "done" && d.state !== "cancelled"),
-  );
-  const progress = useLive((s) => (live ? s.downloadProgress[live.id] : undefined));
-  const [asking, setAsking] = useState(false);
-  const fraction =
-    live && (progress?.size ?? live.size)
-      ? (progress?.received ?? live.received) / ((progress?.size ?? live.size) as number)
-      : null;
-  return (
-    <div className="flex h-[60px] items-center gap-3 rounded-lg border border-line bg-surface px-3">
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-field text-fg-2 max-lg:hidden">
-        <Icon name={CATEGORY_ICON[e.category]} size={17} />
-      </span>
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-fg" title={e.name}>
-            {e.name}
-          </span>
-          {e.base ? <Badge className="shrink-0">{e.base}</Badge> : null}
-          {e.folder && !e.standard ? (
-            <Tooltip
-              content={`ComfyUI finds files in ${e.folder}/ only through a custom node that reads it.`}
-            >
-              <span>
-                <Badge className="shrink-0">Custom node folder</Badge>
-              </span>
-            </Tooltip>
-          ) : null}
-        </div>
-        <span className="truncate text-2xs text-fg-3" title={e.description}>
-          {[
-            e.size ? formatBytes(e.size) : null,
-            e.folder ? `${e.folder}/${e.filename}` : e.filename,
-            e.host,
-          ]
-            .filter(Boolean)
-            .join(" · ")}
-        </span>
-      </div>
-      <div className="flex w-44 shrink-0 items-center justify-end gap-1.5 max-lg:w-auto">
-        {e.installed ? (
-          <Badge tone="success">
-            <Icon name="check" size={11} /> Installed
-          </Badge>
-        ) : live &&
-          (live.state === "running" || live.state === "queued" || live.state === "paused") ? (
-          <>
-            <div className="flex w-28 flex-col gap-1">
-              <ProgressBar
-                size="sm"
-                value={live.state === "queued" ? 0 : fraction}
-                label={`Installing ${e.name}`}
-              />
-              <span className="text-2xs text-fg-3 tabular">
-                {live.state === "queued"
-                  ? "Waiting"
-                  : live.state === "paused"
-                    ? "Paused"
-                    : `${Math.round((fraction ?? 0) * 100)}%`}
-              </span>
-            </div>
-            <IconButton
-              icon="x"
-              label="Cancel"
-              size="xs"
-              onClick={() =>
-                void api.cancelDownload(live.id).catch((x: Error) => toast(x.message, "error"))
-              }
-            />
-          </>
-        ) : live?.state === "error" ? (
-          <Tooltip content={live.error ?? "The download failed."}>
-            <Button
-              size="sm"
-              icon="refresh"
-              variant="outline"
-              onClick={() =>
-                void api.resumeDownload(live.id).catch((x: Error) => toast(x.message, "error"))
-              }
-            >
-              Retry
-            </Button>
-          </Tooltip>
-        ) : !e.folder || noFolder ? (
-          <Tooltip
-            content={
-              noFolder
-                ? "Choose a models folder in Settings → Folders first."
-                : "This file goes into a custom node's folder. Install it with ComfyUI Manager."
-            }
-          >
-            <span>
-              <Button size="sm" icon="download" disabled>
-                Install
-              </Button>
-            </span>
-          </Tooltip>
-        ) : (
-          <Button size="sm" icon="download" onClick={() => setAsking(true)}>
-            Install
-          </Button>
-        )}
-      </div>
-      {asking ? <InstallDialog entry={e} onClose={() => setAsking(false)} /> : null}
-    </div>
-  );
-}
-
-/** Install's pop-up: the catalog's folder and file name, both changeable before it downloads. */
-function InstallDialog({ entry: e, onClose }: { entry: CatalogEntry; onClose: () => void }) {
-  const d = useDestination();
-  const base = { source: "manager" as const, entryId: e.id };
-  const plan = useDownloadPlan({ ...base, ...d.typed });
-  const p = plan.data;
-  const queue = useQueueDownload(onClose);
-  const ready = Boolean(p && !p.blocked && !p.installed && !plan.isFetching);
-  const install = () => ready && queue.run({ ...base, ...d.now });
-  return (
-    <Dialog open onOpenChange={(o) => !o && onClose()} title={`Install ${e.name}`} width={560}>
-      <div className="flex flex-col gap-4">
-        {e.description ? <p className="text-sm text-pretty text-fg-2">{e.description}</p> : null}
-        <Destination
-          d={d}
-          plan={plan}
-          nameHint="Some nodes look for this exact name; change it only if you know the node allows it."
-          onEnter={install}
-          onClose={onClose}
-        />
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" icon="undo" disabled={!d.changed} onClick={d.reset}>
-            Back to the catalog's
-          </Button>
-          <Button variant="ghost" className="ml-auto" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            icon="download"
-            loading={queue.pending}
-            disabled={!ready}
-            onClick={install}
-          >
-            Install
-            {e.size ? (
-              <span className="font-normal opacity-75">· {formatBytes(e.size)}</span>
-            ) : null}
-          </Button>
-        </div>
-      </div>
-    </Dialog>
-  );
 }

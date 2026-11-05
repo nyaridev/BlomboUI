@@ -17,6 +17,7 @@ export interface Flags {
   runtimeDir?: string;
   civitaiUrl?: string;
   catalogUrl?: string;
+  huggingfaceUrl?: string;
   fakeComfy?: boolean;
 }
 
@@ -39,6 +40,8 @@ export interface ServerConfig {
   civitaiUrl: string | null;
   /** The ComfyUI model catalog (ComfyUI-Manager's model-list.json). */
   catalogUrl: string;
+  /** The Hugging Face API's origin, for the catalog's download counts. */
+  huggingfaceUrl: string | null;
   /**
    * Dev checks only: managed slots run the fake ComfyUI and custom node installs use fake
    * downloads and a fake uv (services/comfy/fixtures/).
@@ -62,6 +65,7 @@ export function parseFlags(argv: string[]): Flags {
     else if (arg === "--runtime") flags.runtimeDir = argv[++i];
     else if (arg === "--civitai") flags.civitaiUrl = argv[++i];
     else if (arg === "--catalog") flags.catalogUrl = argv[++i];
+    else if (arg === "--huggingface") flags.huggingfaceUrl = argv[++i];
     else if (arg === "--fake-comfy") flags.fakeComfy = true;
   }
   return flags;
@@ -87,6 +91,7 @@ export function createConfig(flags: Flags): ServerConfig {
     tauriExe: path.join(root, "src-tauri", "target", "release", exe),
     civitaiUrl: flags.civitaiUrl?.replace(/\/+$/, "") ?? null,
     catalogUrl: flags.catalogUrl ?? CATALOG_URL,
+    huggingfaceUrl: flags.huggingfaceUrl ?? null,
     fakeComfy: flags.dev && flags.fakeComfy === true,
   };
 }

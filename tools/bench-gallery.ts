@@ -198,6 +198,7 @@ async function main() {
     runtimeDir: path.join(dir, "runtime"),
     civitaiUrl: DEAD,
     catalogUrl: `${DEAD}/model-list.json`,
+    huggingfaceUrl: DEAD,
   });
   const services = createServices(config);
   const app = createApp(services);

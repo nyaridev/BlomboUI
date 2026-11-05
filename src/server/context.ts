@@ -184,6 +184,7 @@ export function createServices(config: ServerConfig): Services {
     url: config.catalogUrl,
     cacheDir: cache("manager"),
     profiles,
+    hfApi: config.huggingfaceUrl ?? undefined,
   });
   const downloads = new DownloadQueue({
     profiles,

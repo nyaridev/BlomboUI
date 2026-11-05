@@ -86,7 +86,7 @@ import type { InstallBody, InstallState, NodeInstallState, SlotsResponse } from 
 import type { GenerateBody, GenerateResponse, Job, QueueSnapshot } from "@shared/jobs";
 import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layout/schema";
 import type { AppError } from "@shared/live";
-import type { Catalog } from "@shared/manager";
+import type { Catalog, CatalogStats } from "@shared/manager";
 import type {
   LocalModel,
   LookupState,
@@ -460,6 +460,7 @@ export const api = {
 
   catalog: (refresh = false) =>
     request<Catalog>("GET", `/manager/catalog${refresh ? "?refresh=1" : ""}`),
+  catalogDownloads: () => request<CatalogStats>("GET", "/manager/downloads"),
 
   comfySlots: () => request<SlotsResponse>("GET", "/comfy/slots"),
   installComfy: (body: InstallBody) => request<InstallState>("POST", "/comfy/install", body),

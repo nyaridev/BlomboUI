@@ -6,11 +6,12 @@
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
+ *   /api/models/:owner/:repo         → Hugging Face's model API (downloadsAllTime) for its repos
  *
  * Files are made of deterministic bytes, so their SHA256 is known. Import startFakeCivitai()
  * in-process, or run `node fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` and
  * start Blombo with `--civitai http://127.0.0.1:8298 --catalog
- * http://127.0.0.1:8298/catalog/model-list.json`. The API key it accepts is FAKE_KEY.
+ * http://127.0.0.1:8298/catalog/model-list.json --huggingface http://127.0.0.1:8298`. The API key it accepts is FAKE_KEY.
  */
 import { createHash } from "node:crypto";
 import http from "node:http";
@@ -344,6 +345,14 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
     if (auth && !authed && p.startsWith("/api/")) return json(res, 401, { error: "Unauthorized" });
     void (async () => {
       let m: RegExpExecArray | null;
+      m = /^\/api\/models\/([\w.-]+)\/([\w.-]+)$/.exec(p);
+      if (m) {
+        const id = `${m[1]}/${m[2]}`;
+        if (m[2] === "private") return json(res, 401, { error: "Unauthorized" });
+        let n = 0;
+        for (const ch of id) n = (n * 31 + ch.charCodeAt(0)) % 9_973;
+        return json(res, 200, { _id: "fake", id, downloadsAllTime: n * 517 });
+      }
       if (p === "/api/v1/me") {
         if (!authed) return json(res, 401, { error: "Unauthorized" });
         return json(res, 200, { id: 7, username: "tester", tier: "free" });
@@ -467,7 +476,8 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
           base: family,
           save_path: savePath,
           description: `${name}, a fake catalog entry for checks.`,
-          reference: "https://example.com/fake",
+          // Each file's page is a (made-up) Hugging Face repo, so download counts and links show.
+          reference: `https://huggingface.co/fake-org/${file.replace(/\.[^.]+$/, "")}`,
           filename: file,
           url: `${base}/files/${file}`,
           size: `${((catalogFiles.get(file) ?? 1000) / 1024).toFixed(1)}KB`,
@@ -584,5 +594,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     fileKb: Number(arg("--file-kb") ?? 48),
   });
   console.log(`Fake Civitai on ${fake.url} (API key: ${FAKE_KEY})`);
-  console.log(`  Blombo: --civitai ${fake.url} --catalog ${fake.url}/catalog/model-list.json`);
+  console.log(
+    `  Blombo: --civitai ${fake.url} --catalog ${fake.url}/catalog/model-list.json --huggingface ${fake.url}`,
+  );
 }

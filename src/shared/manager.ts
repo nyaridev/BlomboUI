@@ -122,6 +122,40 @@ export function kindOfFolder(folder: string): ModelKind | null {
   return null;
 }
 
+/** How the store's list can be sorted. */
+export const STORE_SORTS = ["category", "downloads", "name", "largest", "smallest"] as const;
+export type StoreSort = (typeof STORE_SORTS)[number];
+
+export const STORE_SORT_LABELS: Record<StoreSort, string> = {
+  category: "By category",
+  downloads: "Most downloaded",
+  name: "Name",
+  largest: "Largest first",
+  smallest: "Smallest first",
+};
+
+/** Hugging Face pages under these aren't model repos. */
+const HF_NOT_REPOS = new Set(["datasets", "spaces", "api", "docs", "models", "blog", "papers"]);
+
+/** The Hugging Face model repo ("owner/name") a download or page URL points into, or null. */
+export function hfRepo(url: string | null): string | null {
+  if (!url) return null;
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  if (u.protocol !== "https:" || !/^(www\.)?huggingface\.co$/.test(u.hostname)) return null;
+  const [owner, name] = u.pathname.split("/").filter(Boolean);
+  if (!owner || !name || HF_NOT_REPOS.has(owner)) return null;
+  return /^[\w.-]+$/.test(owner) && /^[\w.-]+$/.test(name) ? `${owner}/${name}` : null;
+}
+
+/** The page an entry links to: its Hugging Face repo, else the catalog's project page. */
+export const entryPage = (e: { repo: string | null; reference: string | null }) =>
+  e.repo ? `https://huggingface.co/${e.repo}` : e.reference;
+
 export const CatalogEntry = z.object({
   /** Stable id from the folder and file name. */
   id: z.string(),
@@ -132,6 +166,8 @@ export const CatalogEntry = z.object({
   description: z.string(),
   /** Project page (opened in the system browser). */
   reference: z.string().nullable(),
+  /** The Hugging Face repo it comes from ("owner/name"): its download URL's, else its page's. */
+  repo: z.string().nullable(),
   filename: z.string(),
   /** Folder inside the models root; null when Blombo can't place it. */
   folder: z.string().nullable(),
@@ -155,3 +191,10 @@ export const Catalog = z.object({
   noModelsFolder: z.boolean(),
 });
 export type Catalog = z.infer<typeof Catalog>;
+
+export const CatalogStats = z.object({
+  /** All-time downloads per Hugging Face repo; repos that couldn't be read are missing. */
+  downloads: z.record(z.string(), z.number()),
+  fetchedAt: z.number(),
+});
+export type CatalogStats = z.infer<typeof CatalogStats>;

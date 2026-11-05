@@ -1,5 +1,10 @@
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseCatalog } from "./manager.ts";
+import { hfRepo } from "../../shared/manager.ts";
+import { ManagerCatalog, parseCatalog } from "./manager.ts";
+import type { ProfileService } from "./profiles.ts";
 
 const catalog = {
   models: [
@@ -84,5 +89,68 @@ describe("parseCatalog", () => {
   it("accepts plain http only from the catalog's own origin", () => {
     expect(parseCatalog(catalog, "http://h").some((e) => e.name === "plain http")).toBe(true);
     expect(parseCatalog({ nope: true })).toEqual([]);
+  });
+});
+
+describe("Hugging Face repos and downloads", () => {
+  it("finds the repo in download and page URLs", () => {
+    expect(hfRepo("https://huggingface.co/x/y/resolve/main/a.pth")).toBe("x/y");
+    expect(hfRepo("https://huggingface.co/x/y")).toBe("x/y");
+    expect(hfRepo("https://huggingface.co/datasets/x/y/resolve/main/a")).toBeNull();
+    expect(hfRepo("https://huggingface.co/x")).toBeNull();
+    expect(hfRepo("http://huggingface.co/x/y")).toBeNull();
+    expect(hfRepo("https://github.com/x/y")).toBeNull();
+    const entries = parseCatalog(catalog);
+    expect(entries[0]?.repo).toBe("x/4x-UltraSharp.pth");
+    expect(entries[2]?.repo).toBeNull();
+  });
+
+  it("counts each repo once, caches a day and keeps old counts when rate-limited", async () => {
+    const cacheDir = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-hf-"));
+    const repos = ["a/one", "a/two", "a/three"];
+    const list = {
+      models: repos.flatMap((r) =>
+        [1, 2].map((i) => ({
+          name: `${r} ${i}`,
+          type: "upscale",
+          save_path: "default",
+          filename: `${r.split("/")[1]}-${i}.pth`,
+          url: `https://huggingface.co/${r}/resolve/main/${i}.pth`,
+        })),
+      ),
+    };
+    const asked: string[] = [];
+    let limit = false;
+    const fake = (async (input: URL | string) => {
+      const u = new URL(String(input));
+      if (u.pathname === "/list.json") return Response.json(list);
+      asked.push(u.pathname);
+      if (limit) return new Response("slow down", { status: 429 });
+      if (u.pathname.endsWith("/two")) return new Response("gone", { status: 404 });
+      return Response.json({ downloadsAllTime: u.pathname.length });
+    }) as typeof fetch;
+    const make = () =>
+      new ManagerCatalog({
+        url: "https://catalog.test/list.json",
+        cacheDir,
+        profiles: {} as ProfileService,
+        fetch: fake,
+        hfApi: "https://hf.test",
+      });
+    const stats = await make().downloads();
+    expect(asked.sort()).toEqual(["/api/models/a/one", "/api/models/a/three", "/api/models/a/two"]);
+    expect(stats.downloads).toEqual({ "a/one": 17, "a/three": 19 });
+    // A new instance reads the day-old cache instead of asking again.
+    asked.length = 0;
+    expect((await make().downloads()).downloads).toEqual(stats.downloads);
+    expect(asked).toEqual([]);
+    // Past a day, a rate limit keeps the old counts.
+    const file = path.join(cacheDir, "hf-downloads.json");
+    const old = JSON.parse(await fs.readFile(file, "utf8"));
+    await fs.writeFile(file, JSON.stringify({ ...old, at: 0 }));
+    limit = true;
+    expect((await make().downloads()).downloads).toEqual(stats.downloads);
+    expect(asked.length).toBeLessThanOrEqual(6);
+    await fs.rm(cacheDir, { recursive: true, force: true });
   });
 });

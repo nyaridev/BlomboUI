@@ -94,6 +94,7 @@ export const qk = {
     ["download-plan", profileId, body] as const,
   downloadHistory: (profileId: string | null) => ["download-history", profileId] as const,
   catalog: (profileId: string | null) => ["catalog", profileId] as const,
+  catalogDownloads: ["catalog-downloads"] as const,
   layouts: (profileId: string | null) => ["layouts", profileId] as const,
   /** Stage checks follow the settings being checked (and refetch when models or nodes change). */
   stageReport: (profileId: string | null, workflowId: string | null, stages: unknown) =>
@@ -898,6 +899,17 @@ export function useCatalog() {
     queryFn: () => api.catalog(),
     enabled: profileId !== null,
     staleTime: 10 * 60_000,
+    retry: false,
+  });
+}
+
+/** The catalog's Hugging Face download counts (the same for every profile; a day old at most). */
+export function useCatalogDownloads(enabled: boolean) {
+  return useQuery({
+    queryKey: qk.catalogDownloads,
+    queryFn: () => api.catalogDownloads(),
+    enabled,
+    staleTime: 60 * 60_000,
     retry: false,
   });
 }

@@ -15,7 +15,7 @@
         "-k",
         "-n",
         "server,web,civitai",
-        "node src/server/main.ts --dev --port 4391 --open none --data runtime/throwaway/data --runtime runtime/throwaway/runtime --fake-comfy --civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json",
+        "node src/server/main.ts --dev --port 4391 --open none --data runtime/throwaway/data --runtime runtime/throwaway/runtime --fake-comfy --civitai http://127.0.0.1:8298 --catalog http://127.0.0.1:8298/catalog/model-list.json --huggingface http://127.0.0.1:8298",
         "vite",
         "node src/server/services/civitai/fixtures/fake-civitai.ts --port 8298"
       ],

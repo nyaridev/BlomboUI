@@ -5,5 +5,6 @@ import type { ManagerCatalog } from "../services/manager.ts";
 export function managerRoutes(catalog: ManagerCatalog) {
   const r = new Hono();
   r.get("/catalog", async (c) => c.json(await catalog.catalog(c.req.query("refresh") === "1")));
+  r.get("/downloads", async (c) => c.json(await catalog.downloads()));
   return r;
 }

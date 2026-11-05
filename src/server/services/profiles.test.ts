@@ -28,6 +28,7 @@ beforeAll(async () => {
     runtimeDir: path.join(dir, "runtime"),
     civitaiUrl: DEAD,
     catalogUrl: `${DEAD}/x.json`,
+    huggingfaceUrl: DEAD,
   });
   services = createServices(config);
   app = createApp(services);

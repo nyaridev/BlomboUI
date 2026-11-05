@@ -187,15 +187,7 @@ export function CardsLayout(props: LayoutProps) {
         <Wordmark />
         <VersionLink version={props.version} />
       </header>
-      <main className="flex flex-1 flex-col items-center justify-center gap-8 p-8">
-        <div className="flex flex-col items-center gap-1.5 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance text-fg">
-            {profiles.length ? "Pick a profile" : "Make your first profile"}
-          </h1>
-          <p className="max-w-md text-sm text-balance text-fg-3">
-            Each profile has its own workflows, folders, gallery and look.
-          </p>
-        </div>
+      <main className="flex flex-1 flex-col items-center justify-center p-8">
         <ul className="flex max-w-6xl flex-wrap justify-center gap-5">
           {profiles.map((p) => (
             <li key={p.id}>
@@ -266,7 +258,7 @@ export function ContinueLayout(props: LayoutProps) {
       <main className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-10 px-8 py-10">
         {last ? (
           <Item p={last} props={props}>
-            <span className="mb-3 block label-caps">Continue where you left off</span>
+            <span className="mb-3 block label-caps">Last opened</span>
             <div className="flex gap-7 rounded-xl border border-line bg-surface p-5 max-sm:flex-col">
               <button
                 type="button"
@@ -315,11 +307,7 @@ export function ContinueLayout(props: LayoutProps) {
             </div>
           </Item>
         ) : (
-          <div className="flex flex-col items-center gap-4 text-center">
-            <h1 className="text-3xl font-semibold tracking-tight text-fg">Welcome to BlomboUI</h1>
-            <p className="max-w-md text-sm text-fg-3">
-              A profile keeps its own workflows, folders, gallery and look. Make one to start.
-            </p>
+          <div className="flex justify-center">
             <Button variant="primary" size="lg" icon="plus" onClick={props.onNew}>
               New profile
             </Button>
@@ -327,7 +315,7 @@ export function ContinueLayout(props: LayoutProps) {
         )}
         {last ? (
           <section className="flex flex-col gap-3">
-            <span className="label-caps">{rest.length ? "Other profiles" : "More profiles"}</span>
+            {rest.length ? <span className="label-caps">Other profiles</span> : null}
             <ul className="grid grid-cols-3 gap-3 max-lg:grid-cols-2 max-sm:grid-cols-1">
               {rest.map((p) => (
                 <li key={p.id}>
@@ -387,14 +375,9 @@ export function ListLayout(props: LayoutProps) {
       <main className="mx-auto flex w-full max-w-[600px] flex-1 flex-col justify-center gap-6 px-6 py-10">
         <div className="flex flex-col items-center gap-3 text-center">
           <Logo size={44} />
-          <div className="flex flex-col gap-1">
-            <h1 className="text-xl font-semibold tracking-tight text-fg">
-              Blombo<span className="text-fg-3">UI</span>
-            </h1>
-            <p className="text-sm text-fg-3">
-              {profiles.length ? "Choose a profile to open" : "Make a profile to start"}
-            </p>
-          </div>
+          <h1 className="text-xl font-semibold tracking-tight text-fg">
+            Blombo<span className="text-fg-3">UI</span>
+          </h1>
         </div>
         <ul className="flex flex-col overflow-hidden rounded-xl border border-line bg-surface">
           {profiles.map((p) => (
@@ -462,16 +445,9 @@ export function SplitLayout(props: LayoutProps) {
   return (
     <div className="grid h-full grid-cols-[380px_minmax(0,1fr)] bg-bg max-lg:grid-cols-1 max-lg:grid-rows-[auto_minmax(0,1fr)]">
       <aside className="flex flex-col justify-between gap-8 border-r border-line bg-surface p-10 max-lg:border-r-0 max-lg:border-b max-lg:p-6">
-        <Wordmark />
-        <div className="flex flex-col gap-4">
-          <h1 className="text-3xl font-semibold tracking-tight text-balance text-fg">
-            {profiles.length ? "Welcome back" : "Welcome"}
-          </h1>
-          <p className="text-sm leading-relaxed text-fg-2">
-            A local studio for ComfyUI. Each profile keeps its own workflows, folders, gallery and
-            look; pick one to start, or make one for another set of models.
-          </p>
-          <div className="flex flex-wrap gap-2 pt-1">
+        <div className="flex flex-col gap-8">
+          <Wordmark />
+          <div className="flex flex-wrap gap-2">
             <Button variant="primary" icon="plus" onClick={props.onNew}>
               New profile
             </Button>
@@ -484,10 +460,9 @@ export function SplitLayout(props: LayoutProps) {
             </Button>
           </div>
         </div>
-        <div className="flex flex-col gap-1 text-xs text-fg-3 max-lg:hidden">
-          {props.version ? <span className="font-mono">v{props.version}</span> : null}
-          <span>Runs on this PC. Nothing leaves it unless you download from Civitai.</span>
-        </div>
+        {props.version ? (
+          <span className="font-mono text-xs text-fg-3 max-lg:hidden">v{props.version}</span>
+        ) : null}
       </aside>
       <main className="scroll-quiet overflow-y-auto p-10 max-lg:p-6">
         <div className="mb-4 flex items-baseline gap-2">

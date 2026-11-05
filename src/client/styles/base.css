@@ -74,12 +74,12 @@
   box-shadow: var(--shadow-card);
 }
 
-/* A card's status outline (installed, update, downloading): 2 px inside its 1 px border, with an
+/* A card's status outline (installed, update, downloading): 1 px inside its 1 px border, with an
    inner glow. Set --mark to the tone's color; it goes on an overlay so the glow shows over the
    thumbnail. */
 @utility mark-glow {
   box-shadow:
-    inset 0 0 0 2px var(--mark),
+    inset 0 0 0 1px var(--mark),
     inset 0 0 26px color-mix(in srgb, var(--mark) 70%, transparent);
 }
 

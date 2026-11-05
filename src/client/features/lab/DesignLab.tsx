@@ -437,10 +437,11 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
         <Section
           id="brand"
           title="Brand"
-          text="Nodey follows the profile accent. Its output socket is generate orange (white on the orange accent)."
+          text="Nodey follows the profile accent. Its output socket is generate orange (white on the orange accent). Muted (the profile screen): the accent mixed into the strong line color, the face in the text color."
         >
           <div className="flex items-center gap-8">
             <Wordmark />
+            <Wordmark muted />
             <div className="flex items-end gap-4">
               {[16, 24, 32, 48, 64].map((s) => (
                 <Logo key={s} size={s} />

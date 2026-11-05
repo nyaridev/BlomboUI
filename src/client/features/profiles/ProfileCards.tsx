@@ -61,7 +61,7 @@ export function ProfileGrid(props: ProfileGridProps) {
   return (
     <div className="flex h-full flex-col overflow-auto bg-bg">
       <header className="flex shrink-0 items-center justify-between px-6 pt-5">
-        <Wordmark />
+        <Wordmark muted />
         {props.version ? (
           <Button
             variant="ghost"

@@ -911,12 +911,13 @@ function Grid({
                         className="ml-auto min-w-0 truncate rounded-sm hover:text-fg hover:underline focus-ring"
                         title={`${c.creator}'s models (in Following)`}
                         onClick={() => c.creator && visit(c.creator)}
-                        // A middle click opens the creator too, not the card's model in a tab.
+                        // A middle click adds the creator to Following's Looking at, staying
+                        // here (not the card's model in a tab).
                         onAuxClick={(e) => {
                           if (e.button !== 1) return;
                           e.preventDefault();
                           e.stopPropagation();
-                          if (c.creator) visit(c.creator);
+                          if (c.creator) visit(c.creator, true);
                         }}
                       >
                         {c.creator}

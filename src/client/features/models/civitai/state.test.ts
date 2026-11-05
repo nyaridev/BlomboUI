@@ -52,6 +52,11 @@ describe("looking at", () => {
     s().endVisit("ana");
     expect(s().visiting).toEqual(["Bo"]);
     expect(s().creator).toBeNull();
+    s().showHome("browse");
+    s().visit("Cy", true);
+    expect(s().visiting).toEqual(["Cy", "Bo"]);
+    expect(s().home).toBe("browse");
+    expect(s().creator).toBeNull();
     s().pickCreator("Bo");
     s().clearVisits();
     expect(s().visiting).toEqual([]);

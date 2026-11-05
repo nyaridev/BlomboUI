@@ -59,8 +59,11 @@ interface CivitaiState {
   show: (id: number | null) => void;
   showHome: (home: CivitaiHome) => void;
   pickCreator: (creator: string | null) => void;
-  /** Show a creator's models in Following, pinned at the top whether followed or not. */
-  visit: (creator: string) => void;
+  /**
+   * Show a creator's models in Following, pinned at the top whether followed or not;
+   * `background` (a middle click) only adds them to Looking at, staying where you are.
+   */
+  visit: (creator: string, background?: boolean) => void;
   /** Close one creator you were looking at (back to everyone if they were picked). */
   endVisit: (creator: string) => void;
   /** Close every creator you were looking at. */
@@ -147,13 +150,11 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   show: (id) => set({ active: id }),
   showHome: (home) => set({ home, active: null }),
   pickCreator: (creator) => set({ creator }),
-  visit: (creator) =>
-    set((s) => ({
-      visiting: [creator, ...s.visiting.filter((v) => !same(v, creator))],
-      creator,
-      home: "following",
-      active: null,
-    })),
+  visit: (creator, background = false) =>
+    set((s) => {
+      const visiting = [creator, ...s.visiting.filter((v) => !same(v, creator))];
+      return background ? { visiting } : { visiting, creator, home: "following", active: null };
+    }),
   endVisit: (creator) =>
     set((s) => ({
       visiting: s.visiting.filter((v) => !same(v, creator)),

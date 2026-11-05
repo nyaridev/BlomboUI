@@ -217,7 +217,15 @@ function Result({
         <CivitaiStatus civitai={civitai} />
       ) : info.kind === "image" && imageSrc ? (
         <div className="checker grid max-h-[34rem] place-items-center overflow-hidden rounded-xl border border-line">
-          <img src={imageSrc} alt="" className="max-h-[34rem] w-full object-contain" />
+          {/* The picture's own box, so Add to gallery sits on its corner, not the frame's. */}
+          <div className="relative">
+            <img src={imageSrc} alt="" className="block max-h-[34rem] max-w-full object-contain" />
+            {dropped ? (
+              <span className="absolute top-2 right-2">
+                <AddImageFile file={dropped} />
+              </span>
+            ) : null}
+          </div>
         </div>
       ) : null}
 
@@ -388,7 +396,6 @@ function ImageActions({
 
   return (
     <>
-      {dropped ? <AddImageFile file={dropped} /> : null}
       {image.hasWorkflow ? (
         <Button icon="import" loading={importWorkflow.isPending} onClick={() => void importIt()}>
           Import as workflow

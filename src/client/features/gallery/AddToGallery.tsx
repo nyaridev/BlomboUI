@@ -8,7 +8,7 @@
 import { router } from "@client/app/router";
 import { useAddCivitaiImage, useAddImageFile } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, IconButton, toast } from "@client/ui";
+import { IconButton, toast } from "@client/ui";
 import type { CivitaiImage } from "@shared/civitai";
 import { type AddedImage, GALLERY_EXTENSIONS, type ImageOrigin } from "@shared/gallery";
 import { create } from "zustand";
@@ -79,22 +79,24 @@ export function AddCivitaiImage({
   );
 }
 
-/** A dropped image file's button (File info). */
+/** A dropped file's button (File info): on the picture's corner, like a Civitai image's. */
 export function AddImageFile({ file }: { file: File }) {
   const add = useAddImageFile();
   return (
-    <Button
+    <IconButton
       icon="download"
+      label="Add to gallery"
+      size="sm"
+      variant="secondary"
       loading={add.isPending}
+      className="rounded-md shadow-pop"
       onClick={() =>
         add
           .mutateAsync(file)
           .then((r) => announce(r, "From your PC"))
           .catch((err: Error) => toast(err.message, "error"))
       }
-    >
-      Add to gallery
-    </Button>
+    />
   );
 }
 

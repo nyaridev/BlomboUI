@@ -12,7 +12,8 @@
  * been decoded off the main thread (big images used to freeze the page as they landed).
  * With `blurNsfw`, NSFW images stay blurred until the middle one is clicked (a click on it then
  * reveals instead of opening); they blur again when the setting or the images change.
- * `action` puts a button for the picked image in the top right corner and in the viewer.
+ * `action` puts a button in the picked image's top right corner (it slides with it) and beside the
+ * viewer's close button.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -308,6 +309,7 @@ export function CivitaiCarousel({
                 picked={k === settled}
                 veiled={veiled(i)}
                 view={view}
+                action={k === settled && action ? action(img) : null}
               />
             );
           })}
@@ -340,9 +342,6 @@ export function CivitaiCarousel({
             />
           </span>
         </>
-      ) : null}
-      {action && images[picked] ? (
-        <span className="absolute top-2 right-2 z-10">{action(images[picked])}</span>
       ) : null}
       <span className="sr-only" aria-live="polite">
         Image {picked + 1} of {n}
@@ -383,6 +382,7 @@ function Tile({
   picked,
   veiled,
   view,
+  action,
 }: {
   k: number;
   img: CivitaiImage;
@@ -391,6 +391,7 @@ function Tile({
   picked: boolean;
   veiled: boolean;
   view: RefObject<HTMLDivElement | null>;
+  action: ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
@@ -428,6 +429,16 @@ function Tile({
             <Icon name="eye-off" size={13} />
             NSFW · click to show
           </span>
+        </span>
+      ) : null}
+      {action ? (
+        // Its own press: not a drag of the row, nor a click that opens or reveals the image.
+        <span
+          className="absolute top-2 right-2 z-10"
+          onPointerDown={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+        >
+          {action}
         </span>
       ) : null}
       {img.video ? (

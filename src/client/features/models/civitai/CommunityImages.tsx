@@ -1,6 +1,6 @@
 /**
  * The images people posted with a version (Civitai's images endpoint), under the model page
- * across its whole width, five a row at most. Filters: Civitai's order (most reactions, most
+ * wider than the columns above (1760 px at most), five a row at most. Filters: Civitai's order (most reactions, most
  * comments, newest) and period, and With prompt (only images whose poster shared how they were
  * made; filtered here, so it keeps loading pages until there's enough to show). The grid is
  * virtualized against the page's own scroll and asks for the next page near its end. A tile shows who posted it and, when they shared how
@@ -79,7 +79,8 @@ export function CommunityImages({
   }, [withPrompt, items.length, q.hasNextPage, q.isFetchingNextPage]);
 
   return (
-    <section className="mx-auto flex max-w-[1360px] flex-col gap-4 px-6 pb-14 max-lg:px-3">
+    // Wider than the columns above (1360 px), so the pictures get the room on big screens.
+    <section className="mx-auto flex max-w-[1760px] flex-col gap-4 px-6 pb-14 max-lg:px-3">
       <div className="flex items-center gap-3">
         <Icon name="gallery" size={15} className="shrink-0 text-fg-3" />
         <h3 className="shrink-0 text-base font-semibold text-fg">Made with this model</h3>

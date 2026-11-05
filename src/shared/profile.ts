@@ -149,7 +149,7 @@ export type Profile = z.infer<typeof Profile>;
 
 /**
  * A profile's numbers for the profile screen (`GET /api/profiles/stats`), read from its database
- * and folders without changing them; a profile that was never opened has zeros.
+ * without changing it; a profile that was never opened has zeros.
  */
 export const ProfileStats = z.object({
   /** Images in the gallery index. */
@@ -157,11 +157,6 @@ export const ProfileStats = z.object({
   favorites: z.number().int().nonnegative(),
   /** Runs in the job log (finished, stopped or failed). */
   runs: z.number().int().nonnegative(),
-  /** Time those runs took, in ms. */
-  generatingMs: z.number().nonnegative(),
-  workflows: z.number().int().nonnegative(),
-  /** When the last run finished (ms since 1970), or null. */
-  lastRunAt: z.number().nullable(),
 });
 export type ProfileStats = z.infer<typeof ProfileStats>;
 

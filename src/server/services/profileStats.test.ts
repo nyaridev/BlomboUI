@@ -11,15 +11,8 @@ afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
 describe("readProfileStats", () => {
   it("counts zeros for a profile that was never opened, without making its database", async () => {
     const dir = path.join(tmp, "fresh");
-    await fs.mkdir(path.join(dir, "workflows", "sdxl"), { recursive: true });
-    expect(await readProfileStats(dir)).toEqual({
-      images: 0,
-      favorites: 0,
-      runs: 0,
-      generatingMs: 0,
-      workflows: 1,
-      lastRunAt: null,
-    });
+    await fs.mkdir(dir, { recursive: true });
+    expect(await readProfileStats(dir)).toEqual({ images: 0, favorites: 0, runs: 0 });
     await expect(fs.stat(path.join(dir, "blombo.sqlite"))).rejects.toThrow();
   });
 
@@ -41,14 +34,7 @@ describe("readProfileStats", () => {
     run.run("j1", 1000, 1500);
     run.run("j2", 5000, null);
     try {
-      expect(await readProfileStats(dir)).toEqual({
-        images: 3,
-        favorites: 1,
-        runs: 2,
-        generatingMs: 1500,
-        workflows: 0,
-        lastRunAt: 5000,
-      });
+      expect(await readProfileStats(dir)).toEqual({ images: 3, favorites: 1, runs: 2 });
     } finally {
       pdb.close();
     }

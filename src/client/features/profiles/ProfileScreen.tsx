@@ -1,29 +1,19 @@
 /**
- * The launch screen: pick a profile or create one. The cards are on trial: four styles in
- * `ProfileLayouts.tsx` (how many numbers a card shows), switched with the dev Layouts panel
- * (`useVariant`).
+ * The launch screen: pick a profile or create one (the cards are `ProfileCards.tsx`).
  */
 import { preloadShell } from "@client/app/loadShell";
 import { useTheme } from "@client/app/theme";
 import { ApiError, api } from "@client/lib/api";
 import { useDeleteProfile, useProfileStats, useProfiles, useSystem } from "@client/lib/queries";
 import { leaveProfile, openProfileOnce } from "@client/lib/session";
-import { useVariant } from "@client/lib/variants";
 import { Button, Dialog, toast } from "@client/ui";
 import type { Profile } from "@shared/profile";
 import { DEFAULT_UI_FONT } from "@shared/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CardsLayout } from "./ProfileLayouts";
+import { ProfileGrid } from "./ProfileCards";
 import { ProfileWizard } from "./ProfileWizard";
-
-const CARD_STYLES = [
-  { id: "plain", label: "Plain" },
-  { id: "row", label: "Stat row" },
-  { id: "strip", label: "Strip" },
-  { id: "hover", label: "Hover" },
-] as const;
 
 export function ProfileScreen() {
   const { data, isLoading } = useProfiles();
@@ -71,14 +61,11 @@ export function ProfileScreen() {
     await qc.invalidateQueries({ queryKey: ["profiles"] });
   };
 
-  const style = useVariant("profiles.cards", "Profile cards", CARD_STYLES);
-
   return (
     <div className="h-full">
       {/* The local list answers in milliseconds: placeholders would only flash. */}
       {isLoading ? null : (
-        <CardsLayout
-          style={style}
+        <ProfileGrid
           profiles={profiles}
           stats={stats}
           launchId={data?.registry.openOnLaunch ?? null}

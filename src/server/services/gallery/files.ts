@@ -16,7 +16,7 @@ import {
   mediaOf,
   originOf,
 } from "../../../shared/gallery.ts";
-import { civitaiSummary } from "../../../shared/imageinfo.ts";
+import { civitaiSummary, hasAirs, nameAirs } from "../../../shared/imageinfo.ts";
 import { salvage } from "../../../shared/salvage.ts";
 import { movePath } from "../../lib/fsx.ts";
 import { readImageHead } from "../../lib/imagemeta.ts";
@@ -80,7 +80,15 @@ export async function moveSidecar(from: string, to: string): Promise<void> {
  * image adds its sidecar: the versions that made it and, when the file itself says nothing, how
  * the poster says it was made.
  */
-export async function readForIndex(abs: string, rel: string) {
+/**
+ * What the index keeps about a file. `local` gives local model names by Civitai version id, read
+ * only when the file names models by AIR.
+ */
+export async function readForIndex(
+  abs: string,
+  rel: string,
+  local?: () => Promise<Map<number, string>>,
+) {
   let media: MediaKind = mediaOf(abs);
   let duration: number | null = null;
   let width: number | null;
@@ -117,6 +125,12 @@ export async function readForIndex(abs: string, rel: string) {
     const shared = civitaiSummary(sidecar.meta);
     meta.summary = shared.summary;
     meta.settings = { workflowId: null, values: null, roles: shared.roles };
+  }
+  // Models named by Civitai AIR get a name: the local model's, else the one saved when it was added.
+  if (hasAirs(meta.summary)) {
+    const here = (await local?.().catch(() => null)) ?? new Map<number, string>();
+    const names = sidecar?.names ?? {};
+    meta.summary = nameAirs(meta.summary, (v) => here.get(v) ?? names[String(v)]);
   }
   return { width, height, ...meta, versions: sidecar?.versions ?? [], media, duration };
 }

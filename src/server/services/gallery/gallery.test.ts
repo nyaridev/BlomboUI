@@ -458,6 +458,10 @@ describe("added images", () => {
         site: "https://civitai.com",
         imageToAdd: async () => civitaiRaw,
         images: { original: async () => ({ bytes: civitaiBytes, type: "image/png" }) },
+        rawVersion: async (id: number) => {
+          if (id === 200) throw new Error("not on Civitai");
+          return { id, model: { name: `Civitai name ${id}` } };
+        },
       } as unknown as CivitaiService,
     });
   const civitaiRaw = {
@@ -541,6 +545,54 @@ describe("added images", () => {
     localModels = [];
   });
 
+  it("names the models a Civitai generator graph gives only as AIRs", async () => {
+    // What Civitai's generator writes: models as urn:air ids, its own record beside the nodes.
+    const graph = {
+      "1": {
+        class_type: "CheckpointLoaderSimple",
+        inputs: { ckpt_name: "urn:air:sdxl:checkpoint:civitai:10@100" },
+      },
+      "2": {
+        class_type: "LoraLoader",
+        inputs: {
+          lora_name: "urn:air:sdxl:lora:civitai:20@200",
+          strength_model: 0.7,
+          model: ["1", 0],
+          clip: ["1", 1],
+        },
+      },
+      "3": {
+        class_type: "KSampler",
+        inputs: { seed: 1, steps: 20, cfg: 5, model: ["2", 0], positive: ["4", 0] },
+      },
+      "4": { class_type: "CLIPTextEncode", inputs: { text: "a fox", clip: ["2", 1] } },
+      extraMetadata: JSON.stringify({ prompt: "a fox", negativePrompt: "lowres" }),
+    };
+    civitaiBytes = await realPng(40, 60, { prompt: JSON.stringify(graph) });
+    const body = { versionId: 300, key: "gen-1", id: 555 };
+    const added = await imports().addCivitai(body);
+    const sidecar = JSON.parse(
+      await fs.readFile(path.join(outputs, "civitai", "gen-1.png.civitai.json"), "utf8"),
+    );
+    expect(sidecar.names).toEqual({ "100": "Civitai name 100", "300": "Civitai name 300" });
+    let d = await gallery.details(added.image.id);
+    expect(d.summary).toMatchObject({
+      source: "civitai",
+      prompt: "a fox",
+      model: "Civitai name 100",
+    });
+    expect(d.summary.loras).toEqual([{ name: "Civitai model 20", strength: 0.7 }]);
+
+    // A local model that is the version names it (adding it again reads the image again).
+    localModels = [
+      { id: "loras/style/my_lora.safetensors", kind: "loras", civitai: { versionId: 200 } },
+    ] as unknown as LocalModel[];
+    await imports().addCivitai(body);
+    d = await gallery.details(added.image.id);
+    expect(d.summary.loras).toEqual([{ name: "my_lora", strength: 0.7 }]);
+    localModels = [];
+  });
+
   it("shows or hides each origin", async () => {
     const origins = async (o: string) =>
       new Set((await q({ origins: o, limit: 1000 })).items.map((i) => i.origin));
@@ -556,14 +608,14 @@ describe("added images", () => {
   });
 
   it("takes a Civitai image's sidecar along to the trash and back", async () => {
-    const image = (await q({ origins: "civitai" })).items[0];
+    const image = (await q({ origins: "civitai" })).items.find((i) => i.name === "abc-123.png");
     if (!image) throw new Error("not found");
     const [trashId] = await gallery.trash([image.id]);
     const sidecar = path.join(outputs, "civitai", "abc-123.png.civitai.json");
     await expect(fs.access(sidecar)).rejects.toThrow();
     await gallery.restore([trashId as string]);
     await fs.access(sidecar);
-    const back = (await q({ origins: "civitai" })).items[0];
+    const back = (await q({ origins: "civitai" })).items.find((i) => i.name === "abc-123.png");
     expect((await gallery.details(back?.id ?? 0)).summary.source).toBe("civitai");
   });
 

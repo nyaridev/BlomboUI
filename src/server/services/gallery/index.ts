@@ -364,6 +364,7 @@ export class GalleryService {
     this.setSync({ total: this.syncState.total + files.length }, true);
     let added = 0;
     const seen = new Set<string>();
+    const local = this.localNames();
 
     // A batch at a time: stats and header reads run in parallel (indexing is I/O-bound) and
     // each batch is written in one transaction.
@@ -384,7 +385,7 @@ export class GalleryService {
       if (changed.length) {
         const parsed = await Promise.all(
           changed.map((f) =>
-            readForIndex(f.abs, f.rel).then(
+            readForIndex(f.abs, f.rel, local).then(
               (row) => ({ ...f, row }),
               // Unreadable or not really an image: leave it out of the index.
               () => null,
@@ -528,7 +529,7 @@ export class GalleryService {
     } catch {
       return null;
     }
-    const row = await readForIndex(abs, rel);
+    const row = await readForIndex(abs, rel, this.localNames());
     const shown = and(await this.shown());
     if (this.current !== open) return null;
     const id = this.upsert(open, lib.id, rel, stat, row);
@@ -638,9 +639,24 @@ export class GalleryService {
    * stand for here. Empty when the models folder can't be read.
    */
   private async localVersions(): Promise<Map<number, LocalVersion>> {
-    const out = new Map<number, LocalVersion>();
     // No Civitai images: no need to read the models folder.
-    if (!this.need().pdb.db.prepare("SELECT 1 FROM image_versions LIMIT 1").get()) return out;
+    if (!this.need().pdb.db.prepare("SELECT 1 FROM image_versions LIMIT 1").get()) return new Map();
+    return this.readLocalVersions();
+  }
+
+  /** Local model names by Civitai version id, read at most once per pass (`readForIndex`). */
+  private localNames(): () => Promise<Map<number, string>> {
+    let names: Promise<Map<number, string>> | null = null;
+    return () => {
+      names ??= this.readLocalVersions().then(
+        (all) => new Map([...all].map(([id, v]) => [id, v.label])),
+      );
+      return names;
+    };
+  }
+
+  private async readLocalVersions(): Promise<Map<number, LocalVersion>> {
+    const out = new Map<number, LocalVersion>();
     let models: LocalModel[];
     try {
       models = await this.deps.localModels();

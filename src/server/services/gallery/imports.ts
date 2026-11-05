@@ -32,6 +32,7 @@ import {
 import { HttpError } from "../../lib/http.ts";
 import { sniffImage } from "../../lib/remote.ts";
 import type { CivitaiService } from "../civitai/index.ts";
+import { readSidecar } from "./files.ts";
 import type { GalleryService } from "./index.ts";
 
 export interface ImportDeps {
@@ -143,7 +144,15 @@ export class ImportService {
     const folder = resolveInside(root, IMPORT_FOLDERS.civitai);
     for (const ext of Object.values(EXTENSION)) {
       const there = path.join(folder, `${body.key}${ext}`);
-      if (await exists(there)) return { image: await this.index(root, there), already: true };
+      if (!(await exists(there))) continue;
+      // Added before sidecars kept model names: adding it again fills them in.
+      const sidecar = await readSidecar(there);
+      if (sidecar?.versions.length && !Object.keys(sidecar.names).length) {
+        const names = await this.versionNames(sidecar.versions);
+        if (Object.keys(names).length)
+          await writeJsonAtomic(`${there}${CIVITAI_SIDECAR}`, { ...sidecar, names });
+      }
+      return { image: await this.index(root, there), already: true };
     }
     const { civitai } = this.deps;
     const raw = await civitai.imageToAdd(body);
@@ -152,6 +161,7 @@ export class ImportService {
     const ext = EXTENSION[type];
     if (!ext) throw new HttpError(415, TAKES, "not_image");
     const file = path.join(folder, `${body.key}${ext}`);
+    const versions = imageVersions(body.versionId, raw);
     const sidecar: CivitaiSidecar = {
       format: "blombo.civitai-image/1",
       imageId: typeof raw.id === "number" ? raw.id : body.id,
@@ -161,14 +171,31 @@ export class ImportService {
       postId: typeof raw.postId === "number" ? raw.postId : null,
       by: typeof raw.username === "string" && raw.username ? raw.username : null,
       versionId: body.versionId,
-      versions: imageVersions(body.versionId, raw),
+      versions,
       meta: raw.meta && typeof raw.meta === "object" ? raw.meta : null,
+      names: await this.versionNames(versions),
       addedAt: Date.now(),
     };
     // First, so indexing the image finds it.
     await writeJsonAtomic(`${file}${CIVITAI_SIDECAR}`, sidecar);
     const wrote = await writeFileIfAbsent(file, bytes);
     return { image: await this.index(root, file), already: !wrote };
+  }
+
+  /** Each version's model name, as Civitai has it (cached answers; one it can't give is left out). */
+  private async versionNames(ids: number[]): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    await Promise.all(
+      ids.map((id) =>
+        this.deps.civitai.rawVersion(id).then(
+          (v) => {
+            if (v.model?.name) out[String(id)] = v.model.name;
+          },
+          () => undefined,
+        ),
+      ),
+    );
+    return out;
   }
 
   private async index(root: string, file: string): Promise<GalleryImage> {

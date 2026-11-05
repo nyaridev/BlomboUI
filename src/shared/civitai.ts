@@ -577,3 +577,12 @@ export function compactCount(n: number): string {
   if (n >= 1000) return `${(n / 1000).toFixed(n >= 100_000 ? 0 : 1)}k`;
   return String(n);
 }
+
+/**
+ * The ids in a Civitai AIR (`urn:air:sdxl:lora:civitai:1773874@2175773`), the name Civitai's
+ * generator gives models in its graphs. Null for any other name.
+ */
+export function parseAir(name: string): { modelId: number; versionId: number } | null {
+  const m = /^urn:air:[^:]+:[^:]+:civitai:(\d+)@(\d+)$/i.exec(name.trim());
+  return m ? { modelId: Number(m[1]), versionId: Number(m[2]) } : null;
+}

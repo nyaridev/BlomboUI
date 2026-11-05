@@ -112,6 +112,8 @@ export const CivitaiSidecar = z.object({
   versions: z.array(z.number().int()).default([]),
   /** How it was made, as the poster shared it (Civitai's own keys). */
   meta: z.record(z.string(), z.unknown()).nullable().default(null),
+  /** Model names by version id, for `versions` (a graph from Civitai's generator names only ids). */
+  names: z.record(z.string(), z.string()).default({}),
   addedAt: z.number().default(0),
 });
 export type CivitaiSidecar = z.infer<typeof CivitaiSidecar>;

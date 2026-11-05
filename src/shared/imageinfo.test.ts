@@ -4,7 +4,10 @@ import {
   a1111ScheduleToComfy,
   a1111Summary,
   civitaiSummary,
+  EMPTY_SUMMARY,
+  hasAirs,
   modelKey,
+  nameAirs,
   parseA1111,
   usedModels,
 } from "./imageinfo.ts";
@@ -130,5 +133,24 @@ describe("civitaiSummary", () => {
     expect(civitaiSummary({ prompt: "<lora:own:0.5> cat", resources: [] }).summary.loras).toEqual([
       { name: "own", strength: 0.5 },
     ]);
+  });
+});
+
+describe("nameAirs", () => {
+  const s = {
+    ...EMPTY_SUMMARY,
+    model: "urn:air:sdxl:checkpoint:civitai:827184@1761560",
+    loras: [
+      { name: "urn:air:sdxl:lora:civitai:1773874@2175773", strength: 1 },
+      { name: "detail_tweaker", strength: 0.5 },
+    ],
+  };
+
+  it("names AIRs by version, Civitai's model id when nothing knows it", () => {
+    expect(hasAirs(s)).toBe(true);
+    const named = nameAirs(s, (v) => (v === 1761560 ? "WAI Illustrious" : null));
+    expect(named.model).toBe("WAI Illustrious");
+    expect(named.loras.map((l) => l.name)).toEqual(["Civitai model 1773874", "detail_tweaker"]);
+    expect(hasAirs(named)).toBe(false);
   });
 });

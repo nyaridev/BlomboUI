@@ -9,6 +9,7 @@
  * The parsers here are pure so the server (gallery index, File Info) and tests share them.
  */
 import { z } from "zod";
+import { parseAir } from "./civitai.ts";
 import { findLoraTags } from "./prompt/loras.ts";
 
 export const IMAGE_SOURCES = ["blombo", "comfy", "a1111", "civitai", "none"] as const;
@@ -171,6 +172,30 @@ export function a1111Summary(p: A1111Parameters): { summary: ImageSummary; roles
   const clipSkip = numberOrNull(get("clip skip"));
   if (clipSkip !== null) roles["clip.skip"] = -Math.abs(clipSkip);
   return { summary, roles };
+}
+
+/** Whether a summary names a model or LoRA by Civitai AIR (`parseAir`). */
+export function hasAirs(s: ImageSummary): boolean {
+  return [s.model, ...s.loras.map((l) => l.name)].some((n) => n !== null && parseAir(n));
+}
+
+/**
+ * The summary with each model or LoRA named by AIR given its name by version id (`nameOf`), or
+ * "Civitai model <id>" when nothing knows it.
+ */
+export function nameAirs(
+  s: ImageSummary,
+  nameOf: (versionId: number) => string | null | undefined,
+): ImageSummary {
+  const name = (n: string) => {
+    const air = parseAir(n);
+    return air ? nameOf(air.versionId) || `Civitai model ${air.modelId}` : n;
+  };
+  return {
+    ...s,
+    model: s.model === null ? null : name(s.model),
+    loras: s.loras.map((l) => ({ ...l, name: name(l.name) })),
+  };
 }
 
 /** Civitai's keys for how an image was made, as A1111 names them. */

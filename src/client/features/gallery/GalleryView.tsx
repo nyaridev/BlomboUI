@@ -1,7 +1,8 @@
 /**
- * Gallery: the profile's outputs and library folders, indexed on the server. Sidebar (views,
- * libraries, trash, scan status) + toolbar (search, model and LoRA filters, size, layout, sort)
- * + a virtualized grid in day sections, with a showcase hero on the home view and a lightbox.
+ * Gallery: the profile's outputs and library folders, indexed on the server. Sidebar (Home,
+ * views, libraries, trash, scan status) + Home (home/HomeView.tsx) or an image list: toolbar
+ * (search, model and LoRA filters, size, layout, sort) + a virtualized grid in day sections (one
+ * continuous grid for Recent and Shuffle), with a showcase hero on All images and a lightbox.
  * New images arrive over the live bus while generating.
  */
 
@@ -21,6 +22,7 @@ import { AnimatePresence } from "motion/react";
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { viewFromPath } from "../../app/router";
 import { Grid } from "./Grid";
+import { HomeView } from "./home/HomeView";
 import { useImageMenu } from "./imageMenu";
 import { Lightbox } from "./Lightbox";
 import { Sidebar } from "./Sidebar";
@@ -36,6 +38,15 @@ export function GalleryView() {
   const set = useGalleryUi((s) => s.set);
   const compact = useCompact();
   const sidebar = <Sidebar overview={overview.data} />;
+  // The gallery stays mounted behind other views: its lightbox (and its keys: Delete, arrows,
+  // ratings) mustn't stay open there.
+  const visible = useRouterState({
+    select: (s) => viewFromPath(s.location.pathname) === "gallery",
+  });
+  useEffect(() => {
+    if (!visible && useGalleryUi.getState().open !== null)
+      useGalleryUi.getState().set({ open: null });
+  }, [visible]);
   return (
     <div className="flex h-full">
       {compact ? (
@@ -46,7 +57,13 @@ export function GalleryView() {
         sidebar
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        {view === "trash" ? <TrashView /> : <Images featured={overview.data?.featured ?? []} />}
+        {view === "trash" ? (
+          <TrashView />
+        ) : view === "home" ? (
+          <HomeView visible={visible} />
+        ) : (
+          <Images featured={overview.data?.featured ?? []} visible={visible} />
+        )}
       </div>
     </div>
   );
@@ -61,14 +78,30 @@ function useDebounced<T>(value: T, ms: number): T {
   return v;
 }
 
-function Images({ featured }: { featured: GalleryImage[] }) {
+/** Leave the gallery for Generate (Use these settings) or File info, closing the lightbox. */
+export function useGalleryGo() {
+  const navigate = useNavigate();
+  const profileId = useSession((s) => s.profileId);
+  return useCallback(
+    (v: "generate" | "file-info") => {
+      useGalleryUi.getState().set({ open: null });
+      if (profileId) void navigate({ to: "/p/$profileId/$view", params: { profileId, view: v } });
+    },
+    [navigate, profileId],
+  );
+}
+
+function Images({ featured, visible }: { featured: GalleryImage[]; visible: boolean }) {
   const ui = useGalleryUi();
   const q = useDebounced(ui.q, 250);
-  const { library, favorites, since, model, lora, sort, rating, tag, collection } = ui;
+  const { library, favorites, since, model, lora, sort, seed, rating, tag, collection } = ui;
   const query = useMemo(
     () =>
-      galleryQuery({ library, favorites, since, model, lora, sort, rating, tag, collection }, q),
-    [library, favorites, since, model, lora, sort, rating, tag, collection, q],
+      galleryQuery(
+        { library, favorites, since, model, lora, sort, seed, rating, tag, collection },
+        q,
+      ),
+    [library, favorites, since, model, lora, sort, seed, rating, tag, collection, q],
   );
   const images = useGalleryImages(query);
   // Offset pages can overlap when images arrive or leave between them: show each image once.
@@ -94,30 +127,13 @@ function Images({ featured }: { featured: GalleryImage[] }) {
     saveTimer.current = setTimeout(() => update.mutate({ gallery: { tileSize: v } }), 500);
   };
 
-  const navigate = useNavigate();
-  const profileId = useSession((s) => s.profileId);
-  const go = useCallback(
-    (v: "generate" | "file-info") => {
-      useGalleryUi.getState().set({ open: null });
-      if (profileId) void navigate({ to: "/p/$profileId/$view", params: { profileId, view: v } });
-    },
-    [navigate, profileId],
-  );
+  const go = useGalleryGo();
 
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = images;
   const loadMore = useCallback(() => {
     if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  // The gallery stays mounted behind other views: its lightbox (and its keys: Delete, arrows,
-  // ratings) mustn't stay open there.
-  const visible = useRouterState({
-    select: (s) => viewFromPath(s.location.pathname) === "gallery",
-  });
-  useEffect(() => {
-    if (!visible && useGalleryUi.getState().open !== null)
-      useGalleryUi.getState().set({ open: null });
-  }, [visible]);
   // "N new images since this list loaded" counts from the list on screen.
   useEffect(() => {
     void query;
@@ -183,7 +199,7 @@ function Images({ featured }: { featured: GalleryImage[] }) {
           total={total}
           layout={layout}
           size={tileSize}
-          byDay={ui.sort !== "name"}
+          byDay={!ui.flat && ui.sort !== "name" && ui.sort !== "random"}
           featured={home ? featured : []}
           hasMore={Boolean(hasNextPage)}
           loadingMore={isFetchingNextPage}

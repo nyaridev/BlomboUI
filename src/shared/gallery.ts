@@ -47,7 +47,8 @@ export const ImageDetails = GalleryImage.extend({
 });
 export type ImageDetails = z.infer<typeof ImageDetails>;
 
-export const GALLERY_SORTS = ["newest", "oldest", "name", "rating"] as const;
+/** `random`: a shuffle, the same order for the same `seed` (so pages don't repeat images). */
+export const GALLERY_SORTS = ["newest", "oldest", "name", "rating", "random"] as const;
 
 export const GalleryQuery = z.object({
   /** "all" or a library id. */
@@ -68,6 +69,8 @@ export const GalleryQuery = z.object({
   /** Only images in this collection. */
   collection: z.string().max(60).optional(),
   sort: z.enum(GALLERY_SORTS).default("newest"),
+  /** The shuffle's order (sort `random`). */
+  seed: z.coerce.number().int().min(0).max(2_000_000_000).default(0),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(1000).default(300),
 });
@@ -126,6 +129,44 @@ export type GalleryOverview = z.infer<typeof GalleryOverview>;
 export const Facet = z.object({ name: z.string(), count: z.number().int() });
 export const GalleryFacets = z.object({ models: z.array(Facet), loras: z.array(Facet) });
 export type GalleryFacets = z.infer<typeof GalleryFacets>;
+
+/** Something the job log says you used, for the gallery's Home. */
+export const HomeUse = z.object({
+  name: z.string(),
+  /** Finished runs that used it, ever and in the last `HOME_RECENT_DAYS`. */
+  count: z.number().int(),
+  recent: z.number().int(),
+  /** The newest image in the gallery made with it, when the gallery can tell. */
+  cover: z.string().nullable(),
+  /** Its name for the image list's model or LoRA filter, when the gallery has images with it. */
+  filter: z.string().nullable(),
+});
+export type HomeUse = z.infer<typeof HomeUse>;
+
+export const HOME_RECENT_DAYS = 14;
+
+/** The carousel's order comes from `seed`, so a refetch (a new image, a heart) keeps it. */
+export const GalleryHomeQuery = z.object({
+  seed: GalleryQuery.shape.seed,
+});
+
+/**
+ * The gallery's Home: a random handful of recent images, the newest ones, and what you've been
+ * prompting with (tags from the prompts you ran, models, LoRAs and wildcards from the job log),
+ * what you used lately first.
+ */
+export const GalleryHome = z.object({
+  picks: z.array(GalleryImage),
+  recent: z.array(GalleryImage),
+  tags: z.object({
+    top: z.array(z.object({ tag: z.string(), uses: z.number().int() })),
+    lately: z.array(z.object({ tag: z.string(), uses: z.number().int() })),
+  }),
+  models: z.array(HomeUse),
+  loras: z.array(HomeUse),
+  wildcards: z.array(HomeUse),
+});
+export type GalleryHome = z.infer<typeof GalleryHome>;
 
 export const TrashEntry = z.object({
   id: z.string(),

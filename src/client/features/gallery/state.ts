@@ -1,6 +1,7 @@
 /**
- * Gallery UI state: which list is shown (library, favorites, this week, trash), the search and
- * filters, and the open lightbox image. Layout and tile size live in the profile's settings.
+ * Gallery UI state: which page is shown (Home, an image list, the trash), which list (library,
+ * favorites, this week, recent, shuffled), the search and filters, and the open lightbox image.
+ * Layout and tile size live in the profile's settings.
  */
 import type { GALLERY_SORTS, GalleryQueryInput } from "@shared/gallery";
 import { create } from "zustand";
@@ -10,7 +11,7 @@ export type GallerySort = (typeof GALLERY_SORTS)[number];
 export interface GalleryUi {
   /** "all" or a library id. */
   library: string;
-  view: "images" | "trash";
+  view: "home" | "images" | "trash";
   favorites: boolean;
   /** Only images since this time (ms), for "This week". */
   since: number | null;
@@ -24,18 +25,26 @@ export interface GalleryUi {
   /** A collection id (shown instead of a library). */
   collection: string | null;
   sort: GallerySort;
+  /** The shuffle's order (sort `random`); a new one shuffles again. */
+  seed: number;
+  /** One continuous grid, without day sections (Recent). */
+  flat: boolean;
   /** Lightbox image id. */
   open: number | null;
   /** Narrow screens: the sidebar is open as a Sheet. */
   drawer: boolean;
-  set: (patch: Partial<Omit<GalleryUi, "set" | "reset">>) => void;
+  set: (patch: Partial<Omit<GalleryUi, "set" | "reset" | "show">>) => void;
   /** Back to everything, newest first. */
   reset: () => void;
+  /** An image list: everything newest first, then `patch` (closes the narrow-screen drawer). */
+  show: (patch?: Partial<Omit<GalleryUi, "set" | "reset" | "show">>) => void;
 }
+
+export const newSeed = () => Math.floor(Math.random() * 2_000_000_000);
 
 const DEFAULTS = {
   library: "all",
-  view: "images" as const,
+  view: "images" as "home" | "images" | "trash",
   favorites: false,
   since: null,
   q: "",
@@ -44,26 +53,40 @@ const DEFAULTS = {
   rating: 0,
   tag: null,
   collection: null,
-  sort: "newest" as const,
+  sort: "newest" as GallerySort,
+  flat: false,
 };
 
 export const useGalleryUi = create<GalleryUi>((set) => ({
   ...DEFAULTS,
+  view: "home",
+  seed: newSeed(),
   open: null,
   drawer: false,
   set: (patch) => set(patch),
   reset: () => set({ ...DEFAULTS }),
+  show: (patch) => set({ ...DEFAULTS, drawer: false, ...patch }),
 }));
 
 /** The server query for the current UI state (the search text is passed in debounced). */
 export function galleryQuery(
   s: Pick<
     GalleryUi,
-    "library" | "favorites" | "since" | "model" | "lora" | "sort" | "rating" | "tag" | "collection"
+    | "library"
+    | "favorites"
+    | "since"
+    | "model"
+    | "lora"
+    | "sort"
+    | "seed"
+    | "rating"
+    | "tag"
+    | "collection"
   >,
   q: string,
 ): GalleryQueryInput {
   const out: GalleryQueryInput = { library: s.library, sort: s.sort };
+  if (s.sort === "random") out.seed = s.seed;
   if (s.rating) out.rating = s.rating;
   if (s.tag) out.tag = s.tag;
   if (s.collection) out.collection = s.collection;
@@ -75,7 +98,7 @@ export function galleryQuery(
   return out;
 }
 
-/** True when the list shows everything newest first (the showcase view). */
+/** True when the list shows everything newest first in day sections (the showcase view). */
 export function isHomeView(
   s: Pick<
     GalleryUi,
@@ -89,10 +112,12 @@ export function isHomeView(
     | "rating"
     | "tag"
     | "collection"
+    | "flat"
   >,
 ): boolean {
   return (
     s.library === "all" &&
+    !s.flat &&
     !s.rating &&
     !s.tag &&
     !s.collection &&

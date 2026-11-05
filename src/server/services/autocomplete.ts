@@ -354,16 +354,30 @@ export class AutocompleteService {
    * The most used tags of at most `maxWords` words. Tags are stored with underscores, so a tag
    * has one word more than underscores; ones counted before the limit was lowered stay hidden.
    */
-  frequent(limit: number, maxWords: number, prefix = ""): Array<{ tag: string; uses: number }> {
+  frequent(
+    limit: number,
+    maxWords: number,
+    prefix = "",
+    since = 0,
+  ): Array<{ tag: string; uses: number }> {
     const profileId = this.deps.profiles.active;
     if (!profileId) return [];
     const like = `${prefix.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
     return this.deps.dbs
       .get(profileId)
       .db.prepare(
-        "SELECT tag, uses FROM tag_usage WHERE uses >= ? AND tag LIKE ? ESCAPE '\\' AND LENGTH(tag) - LENGTH(REPLACE(tag, '_', '')) < ? ORDER BY uses DESC, last_used DESC LIMIT ?",
+        "SELECT tag, uses FROM tag_usage WHERE uses >= ? AND tag LIKE ? ESCAPE '\\' AND LENGTH(tag) - LENGTH(REPLACE(tag, '_', '')) < ? AND last_used >= ? ORDER BY uses DESC, last_used DESC LIMIT ?",
       )
-      .all(FREQUENT_MIN_USES, like, maxWords, limit) as Array<{ tag: string; uses: number }>;
+      .all(FREQUENT_MIN_USES, like, maxWords, since, limit) as Array<{
+      tag: string;
+      uses: number;
+    }>;
+  }
+
+  /** The most used tags (the gallery's Home), ever or among the ones used since `since`. */
+  async usedTags(limit: number, since = 0): Promise<Array<{ tag: string; uses: number }>> {
+    const max = (await this.deps.settings.get(this.profileId())).autocomplete.frequentMaxWords;
+    return this.frequent(limit, max, "", since);
   }
 
   clearFrequent(): void {

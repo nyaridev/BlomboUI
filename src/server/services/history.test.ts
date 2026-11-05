@@ -181,6 +181,11 @@ describe("job log", () => {
     expect(stats.wildcards).toEqual([{ name: "animal", count: 1 }]);
     expect(stats.perDay).toHaveLength(14);
     expect(stats.gallery).toEqual({ images: 3, favorites: 1 });
+    // The gallery's Home: finished runs only, counted ever and since a time.
+    expect(history.usage("lora", 0, 5)).toEqual([{ name: "detail", count: 1, recent: 1 }]);
+    expect(history.usage("model", Date.now() + 1000, 5)).toEqual([
+      { name: "dream.safetensors", count: 1, recent: 0 },
+    ]);
   });
 
   it("keeps favorite models for the pickers", () => {

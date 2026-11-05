@@ -24,7 +24,7 @@ import type { Collection, GalleryOverview, LibraryInfo } from "@shared/gallery";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { FolderField } from "../profiles/FolderField";
-import { useGalleryUi } from "./state";
+import { newSeed, useGalleryUi } from "./state";
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 
@@ -36,62 +36,47 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
   const collections = useCollections();
   const [naming, setNaming] = useState<Collection | "new" | null>(null);
   const counts = overview?.counts;
-  const isView = (v: "all" | "favorites" | "week") =>
-    ui.view === "images" &&
-    ui.library === "all" &&
-    !ui.collection &&
-    (v === "favorites"
-      ? ui.favorites
-      : v === "week"
-        ? Boolean(ui.since) && !ui.favorites
-        : !ui.favorites && !ui.since);
+  const list = ui.view === "images" && ui.library === "all" && !ui.collection;
+  const plain = list && !ui.favorites && !ui.since;
+  const shuffled = ui.sort === "random";
 
   return (
     <aside className="scroll-quiet flex w-[248px] shrink-0 flex-col gap-1 overflow-y-auto border-r border-line bg-surface p-3 max-lg:w-full max-lg:flex-1 max-lg:border-r-0">
       <SideItem
-        active={isView("all")}
-        onClick={() =>
-          ui.set({
-            drawer: false,
-            view: "images",
-            library: "all",
-            favorites: false,
-            since: null,
-            collection: null,
-          })
-        }
+        active={ui.view === "home"}
+        onClick={() => ui.set({ drawer: false, view: "home" })}
+        icon="home"
+        label="Home"
+      />
+      <SideItem
+        active={plain && !ui.flat && !shuffled}
+        onClick={() => ui.show()}
         icon="gallery"
         label="All images"
         count={counts?.all}
       />
       <SideItem
-        active={isView("favorites")}
-        onClick={() =>
-          ui.set({
-            drawer: false,
-            view: "images",
-            library: "all",
-            favorites: true,
-            since: null,
-            collection: null,
-          })
-        }
+        active={plain && ui.flat && !shuffled}
+        onClick={() => ui.show({ flat: true })}
+        icon="clock"
+        label="Recent"
+      />
+      <SideItem
+        active={plain && shuffled}
+        onClick={() => ui.show({ sort: "random", seed: newSeed() })}
+        icon="shuffle"
+        label="Shuffle"
+      />
+      <SideItem
+        active={list && ui.favorites}
+        onClick={() => ui.show({ favorites: true })}
         icon="heart"
         label="Favorites"
         count={counts?.favorites}
       />
       <SideItem
-        active={isView("week")}
-        onClick={() =>
-          ui.set({
-            drawer: false,
-            view: "images",
-            library: "all",
-            favorites: false,
-            since: Date.now() - WEEK_MS,
-            collection: null,
-          })
-        }
+        active={list && Boolean(ui.since) && !ui.favorites}
+        onClick={() => ui.show({ since: Date.now() - WEEK_MS })}
         icon="calendar"
         label="This week"
         count={counts?.week}
@@ -136,16 +121,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
           >
             <button
               type="button"
-              onClick={() =>
-                ui.set({
-                  drawer: false,
-                  view: "images",
-                  library: lib.id,
-                  favorites: false,
-                  since: null,
-                  collection: null,
-                })
-              }
+              onClick={() => ui.show({ library: lib.id })}
               title={lib.path || "Set an outputs folder in Settings → Folders"}
               className={cn(
                 "flex w-full items-center gap-2.5 rounded-md p-1.5 pr-8 text-left transition-colors focus-ring",
@@ -241,16 +217,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
             >
               <button
                 type="button"
-                onClick={() =>
-                  ui.set({
-                    drawer: false,
-                    view: "images",
-                    library: "all",
-                    favorites: false,
-                    since: null,
-                    collection: c.id,
-                  })
-                }
+                onClick={() => ui.show({ collection: c.id })}
                 className={cn(
                   "flex w-full items-center gap-2.5 rounded-md p-1.5 pr-8 text-left transition-colors focus-ring",
                   ui.view === "images" && ui.collection === c.id ? "bg-field" : "hover:bg-field/60",

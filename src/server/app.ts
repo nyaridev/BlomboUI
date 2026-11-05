@@ -69,7 +69,10 @@ export function createApp(services: Services) {
   api.route("/jobs", jobRoutes(queue, services.scripts));
   api.route("/wildcards", wildcardRoutes(profiles));
   api.route("/settings", settingsRoutes(profiles, settings));
-  api.route("/gallery", galleryRoutes(gallery));
+  api.route(
+    "/gallery",
+    galleryRoutes(gallery, { history: services.history, autocomplete: services.autocomplete }),
+  );
   api.route(
     "/history",
     historyRoutes({

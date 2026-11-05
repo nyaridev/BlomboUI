@@ -59,6 +59,7 @@ import type { FileInfo } from "@shared/fileinfo";
 import type {
   Collection,
   GalleryFacets,
+  GalleryHome,
   GalleryOverview,
   GalleryPage,
   GalleryQueryInput,
@@ -313,6 +314,7 @@ export const api = {
   updateSettings: (patch: SettingsPatch) => request<Settings>("PATCH", "/settings", patch),
 
   galleryOverview: () => request<GalleryOverview>("GET", "/gallery/overview"),
+  galleryHome: (seed: number) => request<GalleryHome>("GET", `/gallery/home?seed=${seed}`),
   galleryImages: (q: GalleryQueryInput) =>
     request<GalleryPage>("GET", `/gallery/images?${query(q)}`),
   galleryFacets: (library: string) =>

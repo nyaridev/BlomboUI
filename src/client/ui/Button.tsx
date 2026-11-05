@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode, Ref } from "react";
 import { Kbd, Spinner } from "./feedback";
 import { Tooltip } from "./floating";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "outline";
+export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "outline" | "overlay";
 export type ButtonSize = "sm" | "md" | "lg";
 
 const base =
@@ -21,6 +21,8 @@ const variants: Record<ButtonVariant, string> = {
   secondary: `border border-line bg-field text-fg hover:border-line-strong hover:bg-field-hover ${solidOff}`,
   outline: `border border-line-strong text-fg-2 hover:border-fg-4 hover:text-fg ${bareOff}`,
   ghost: `text-fg-2 hover:bg-field hover:text-fg ${bareOff}`,
+  /** Over a picture: the same in every theme. */
+  overlay: `bg-black/55 text-white backdrop-blur-[2px] hover:bg-black/75 ${bareOff}`,
   danger:
     "border border-red/35 bg-red/12 text-red-ink hover:bg-red/22 " +
     "disabled:border-transparent disabled:bg-disabled-danger disabled:text-on-disabled",

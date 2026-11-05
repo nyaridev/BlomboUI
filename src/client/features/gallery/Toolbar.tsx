@@ -5,12 +5,21 @@
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useGalleryFacets, useGalleryTags } from "@client/lib/queries";
-import { Chip, Popover, Segmented, Select, Slider, StarRating, TextField } from "@client/ui";
+import {
+  Chip,
+  IconButton,
+  Popover,
+  Segmented,
+  Select,
+  Slider,
+  StarRating,
+  TextField,
+} from "@client/ui";
 import type { GalleryFacets } from "@shared/gallery";
 import type { GalleryLayout } from "@shared/settings";
 import { useState } from "react";
 import { SidebarButton } from "./Sidebar";
-import { type GallerySort, useGalleryUi } from "./state";
+import { type GallerySort, newSeed, useGalleryUi } from "./state";
 
 export function Toolbar({
   size,
@@ -103,6 +112,14 @@ export function Toolbar({
             { value: "grid", icon: "layout-grid", title: "Square grid" },
           ]}
         />
+        {ui.sort === "random" ? (
+          <IconButton
+            icon="shuffle"
+            label="Shuffle again"
+            size="sm"
+            onClick={() => ui.set({ seed: newSeed() })}
+          />
+        ) : null}
         <Select<GallerySort>
           size="sm"
           value={ui.sort}
@@ -114,6 +131,7 @@ export function Toolbar({
             { value: "oldest", label: "Oldest first", icon: "sort" },
             { value: "name", label: "File name", icon: "text" },
             { value: "rating", label: "Best rated", icon: "star" },
+            { value: "random", label: "Shuffled", icon: "shuffle" },
           ]}
         />
       </div>

@@ -44,6 +44,7 @@ export const qk = {
   /** Everything under ["gallery", profileId] refetches when the index changes. */
   gallery: (profileId: string | null) => ["gallery", profileId] as const,
   galleryOverview: (profileId: string | null) => ["gallery", profileId, "overview"] as const,
+  galleryHome: (profileId: string | null) => ["gallery", profileId, "home"] as const,
   galleryImages: (profileId: string | null, q: GalleryQueryInput) =>
     ["gallery", profileId, "images", q] as const,
   galleryFacets: (profileId: string | null, library: string) =>
@@ -385,6 +386,17 @@ export function useGalleryOverview() {
     queryKey: qk.galleryOverview(profileId),
     queryFn: api.galleryOverview,
     enabled: profileId !== null,
+  });
+}
+
+/** Home: the carousel keeps its order for `seed` through refetches (a new image, a heart). */
+export function useGalleryHome(seed: number) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: [...qk.galleryHome(profileId), seed],
+    queryFn: () => api.galleryHome(seed),
+    enabled: profileId !== null,
+    placeholderData: keepPreviousData,
   });
 }
 

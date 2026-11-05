@@ -5,6 +5,7 @@ import {
   CollectionName,
   EmptyTrashBody,
   FavoriteBody,
+  GalleryHomeQuery,
   GalleryQuery,
   ImageIdsBody,
   RatingBody,
@@ -14,7 +15,10 @@ import {
 } from "../../shared/gallery.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
+import type { AutocompleteService } from "../services/autocomplete.ts";
+import { galleryHome } from "../services/gallery/home.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
+import type { HistoryService } from "../services/history.ts";
 import { revealInFileManager } from "../services/system.ts";
 
 const imageId = (raw: string) => {
@@ -23,10 +27,20 @@ const imageId = (raw: string) => {
   return n;
 };
 
-export function galleryRoutes(gallery: GalleryService) {
+export function galleryRoutes(
+  gallery: GalleryService,
+  others: { history: HistoryService; autocomplete: AutocompleteService },
+) {
   const r = new Hono();
 
   r.get("/overview", async (c) => c.json(await gallery.overview()));
+
+  r.get("/home", async (c) => {
+    const parsed = GalleryHomeQuery.safeParse(c.req.query());
+    if (!parsed.success)
+      throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid query.", "bad_query");
+    return c.json(await galleryHome({ gallery, ...others }, parsed.data.seed));
+  });
 
   r.get("/images", async (c) => {
     const parsed = GalleryQuery.safeParse(c.req.query());

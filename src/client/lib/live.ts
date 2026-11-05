@@ -402,6 +402,7 @@ function onGalleryAdded(image: GalleryImage): void {
   }
   if (!shown) useLive.setState((st) => ({ galleryNew: st.galleryNew + 1 }));
   void queryClient.invalidateQueries({ queryKey: qk.galleryOverview(profileId) });
+  void queryClient.invalidateQueries({ queryKey: qk.galleryHome(profileId) });
 }
 
 async function onBinary(data: ArrayBuffer): Promise<void> {

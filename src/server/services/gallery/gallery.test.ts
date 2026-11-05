@@ -7,8 +7,11 @@ import type { ServerMessage } from "../../../shared/live.ts";
 import { createConfig, parseFlags } from "../../config.ts";
 import { ProfileDbs } from "../../db/profileDb.ts";
 import { realPng } from "../../lib/test-images.ts";
+import type { AutocompleteService } from "../autocomplete.ts";
+import type { HistoryService } from "../history.ts";
 import { ProfileService } from "../profiles.ts";
 import { SettingsService } from "../settings.ts";
+import { galleryHome } from "./home.ts";
 import { ftsQuery, GalleryService } from "./index.ts";
 
 /** A header read of a file named in `held` finishes, then waits until the test lets it go. */
@@ -166,6 +169,47 @@ describe("gallery index", () => {
       "waiIllustrious_v14",
     ]);
     expect(facets.loras).toEqual([{ name: "Detailer", count: 1 }]);
+  });
+
+  it("shuffles in one order per seed, and builds Home with covers for what runs used", async () => {
+    const names = async (seed: number) =>
+      (await q({ sort: "random", seed })).items.map((i) => i.name);
+    expect(await names(4)).toEqual(await names(4));
+    expect((await names(4)).sort()).toEqual(["a1111.png", "plain.png", "sd15_00001_.png"]);
+
+    const usage = (kind: string) =>
+      kind === "model"
+        ? [
+            { name: "sd15/dreamshaper_8.safetensors", count: 3, recent: 1 },
+            { name: "gone.safetensors", count: 1, recent: 0 },
+          ]
+        : kind === "lora"
+          ? [{ name: "Detailer", count: 1, recent: 1 }]
+          : [];
+    const home = await galleryHome(
+      {
+        gallery,
+        history: { usage } as unknown as HistoryService,
+        autocomplete: {
+          usedTags: async () => [{ tag: "cozy_cabin", uses: 2 }],
+        } as unknown as AutocompleteService,
+      },
+      4,
+    );
+    expect(home.picks.map((i) => i.name).sort()).toEqual([
+      "a1111.png",
+      "plain.png",
+      "sd15_00001_.png",
+    ]);
+    expect(home.recent).toHaveLength(3);
+    expect(home.tags.top).toEqual([{ tag: "cozy_cabin", uses: 2 }]);
+    expect(home.models[0]).toMatchObject({
+      filter: "dreamshaper_8",
+      cover: expect.stringContaining("/api/gallery/thumbs/"),
+    });
+    // Nothing in the gallery was made with it: no cover, no filter.
+    expect(home.models[1]).toMatchObject({ cover: null, filter: null });
+    expect(home.loras[0]).toMatchObject({ filter: "Detailer" });
   });
 
   it("builds FTS queries only from terms trigram can match", () => {

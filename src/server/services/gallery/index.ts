@@ -139,6 +139,15 @@ const NOT_GRID = `('/' || i.folder || '/') NOT LIKE '%/grids/%' AND ('/' || i.fo
 const NOT_INTERRUPTED = `NOT EXISTS (SELECT 1 FROM interrupted x
   WHERE x.library = i.library AND x.path = i.path AND x.marked_at >= i.mtime)`;
 
+/**
+ * A shuffled order that stays the same for one seed: the id through a hash in integer math
+ * (squaring mod 2^31 - 1 stays under 2^62, so SQLite never falls back to floats).
+ */
+export function shuffleKey(seed: number): string {
+  const h = `((i.id * 2654435761 + ${Math.trunc(seed)}) % 2147483647)`;
+  return `((${h} * ${h} + ${Math.trunc(seed)}) % 2147483647)`;
+}
+
 /** Conditions appended to a WHERE clause. */
 const and = (conditions: string[]) => conditions.map((c) => ` AND ${c}`).join("");
 
@@ -606,7 +615,9 @@ export class GalleryService {
           ? "i.name COLLATE NOCASE ASC, i.id ASC"
           : q.sort === "rating"
             ? "COALESCE(m.rating, 0) DESC, i.mtime DESC, i.id DESC"
-            : "i.mtime DESC, i.id DESC";
+            : q.sort === "random"
+              ? `${shuffleKey(q.seed)}, i.id`
+              : "i.mtime DESC, i.id DESC";
     const rows = db
       .prepare(`${SELECT} ${clause} ORDER BY ${order} LIMIT ? OFFSET ?`)
       .all(...params, q.limit, q.offset) as unknown as ImageRow[];
@@ -616,6 +627,23 @@ export class GalleryService {
       )
       .get(...params) as { n: number };
     return { items: rows.map((r) => this.toImage(r)), total: Number(total.n), offset: q.offset };
+  }
+
+  /** What other gallery modules (home.ts) read with: the shown-images condition and the rows. */
+  async reader(): Promise<{
+    db: ProfileDb["db"];
+    /** ` AND …` conditions for the images the lists show. */
+    shown: string;
+    select: string;
+    toImage: (row: unknown) => GalleryImage;
+  }> {
+    const shown = and(await this.shown());
+    return {
+      db: this.need().pdb.db,
+      shown,
+      select: SELECT,
+      toImage: (row) => this.toImage(row as ImageRow),
+    };
   }
 
   async facets(library: string): Promise<GalleryFacets> {

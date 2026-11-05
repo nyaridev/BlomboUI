@@ -3,7 +3,8 @@
  * views, libraries, trash, scan status) + Home (home/HomeView.tsx) or an image list: toolbar
  * (search, model and LoRA filters, size, layout, sort) + a virtualized grid in day sections (one
  * continuous grid for Recent and Shuffle), with a showcase hero on All images and a lightbox.
- * New images arrive over the live bus while generating.
+ * New images arrive over the live bus while generating. Images dropped on it are added (From your
+ * PC).
  */
 
 import { useCompact } from "@client/lib/hooks";
@@ -21,6 +22,8 @@ import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { AnimatePresence } from "motion/react";
 import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { viewFromPath } from "../../app/router";
+import { PageDropOverlay } from "../fileinfo/PageDrop";
+import { useGalleryDrop } from "./AddToGallery";
 import { Grid } from "./Grid";
 import { HomeView } from "./home/HomeView";
 import { UsesView } from "./home/UsesView";
@@ -49,8 +52,15 @@ export function GalleryView() {
     if (!visible && useGalleryUi.getState().open !== null)
       useGalleryUi.getState().set({ open: null });
   }, [visible]);
+  const dragging = useGalleryDrop(visible);
   return (
     <div className="flex h-full">
+      <PageDropOverlay
+        show={dragging}
+        icon="gallery"
+        title="Drop to add to your gallery"
+        text="PNG, WebP and JPEG images are copied into your outputs folder's imported/ folder"
+      />
       {compact ? (
         <Sheet open={drawer} onOpenChange={(o) => set({ drawer: o })} label="Libraries">
           {sidebar}

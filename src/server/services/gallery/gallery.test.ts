@@ -428,6 +428,27 @@ describe("gallery index", () => {
   });
 });
 
+describe("stopped runs", () => {
+  it("moves a stopped run's images into its workflow's interrupted folder", async () => {
+    const day = "illustrious/images/2026-11-01";
+    await write(`${day}/blombo_00001_.png`, await realPng(20, 20));
+    await gallery.ingest(`${day}/blombo_00001_.png`);
+    const refs = [{ filename: "blombo_00001_.png", subfolder: day, type: "output" }];
+    await gallery.markInterrupted(profiles.active ?? "", refs);
+    // The refs follow the file, so the job and its log point where it is now.
+    expect(refs[0]).toMatchObject({ subfolder: "illustrious/interrupted/2026-11-01" });
+    await fs.access(
+      path.join(outputs, "illustrious", "interrupted", "2026-11-01", "blombo_00001_.png"),
+    );
+    const paths = async () => (await q({ limit: 1000 })).items.map((i) => i.path);
+    expect((await paths()).some((p) => p.includes("blombo_00001_"))).toBe(false);
+    const profileId = profiles.active ?? "";
+    await settings.update(profileId, { gallery: { excludeInterrupted: false } });
+    expect(await paths()).toContain("illustrious/interrupted/2026-11-01/blombo_00001_.png");
+    await settings.update(profileId, { gallery: { excludeInterrupted: true } });
+  });
+});
+
 describe("added images", () => {
   const imports = () =>
     new ImportService({

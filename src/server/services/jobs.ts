@@ -8,6 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ComfyStatus } from "../../shared/comfy.ts";
+import { outputPrefix, workflowFolder } from "../../shared/gallery.ts";
 import {
   type GenerateBody,
   type GenerateResponse,
@@ -531,7 +532,11 @@ export class JobQueue extends Emitter<QueueEvents> {
         seed: run.job.seed ?? randomSeed(),
         wildcards,
         loraFiles,
-        filenamePrefix: `%year%-%month%-%day%/${run.job.workflowId}`,
+        // <workflow>/images/<day>/blombo_00001_.png (a stopped run's move to interrupted/).
+        filenamePrefix: outputPrefix(
+          workflowFolder(run.job.workflowName, run.job.workflowId),
+          "images",
+        ),
         preview: run.preview,
         stages,
         stagePackages: anyStage ? await this.deps.stages.packages() : [],

@@ -153,7 +153,9 @@ describe("scripts", () => {
     expect(grid.file?.url).toBe(`/api/scripts/grids/${grid.id}`);
     const file = grid.file?.path as string;
     expect(path.dirname(file).startsWith(outputs)).toBe(true);
-    expect(path.basename(path.dirname(file))).toBe("grids");
+    // <workflow>/grids/<day>/
+    expect(path.basename(path.dirname(path.dirname(file)))).toBe("grids");
+    expect(path.basename(path.dirname(file))).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     const meta = await sharp(await fs.readFile(file)).metadata();
     expect(meta.width).toBe(grid.width);
     expect(scripts.gridFile(grid.id)).toBe(file);

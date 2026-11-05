@@ -275,15 +275,21 @@ export function createServices(config: ServerConfig): Services {
   });
   const jobs = queue;
   jobs.on("finished", (job, run) => {
-    try {
-      history.record(job, run);
-    } catch (error) {
-      console.warn("Couldn't log a finished run:", error);
-    }
+    const record = () => {
+      try {
+        history.record(job, run);
+      } catch (error) {
+        console.warn("Couldn't log a finished run:", error);
+      }
+    };
+    // A stopped run's images move to its workflow's interrupted/ folder first, so the log
+    // records where they are.
     if (job.state === "interrupted" && run?.profileId)
       void gallery
         .markInterrupted(run.profileId, job.images)
-        .catch((error) => console.warn("Couldn't mark a stopped run's images:", error));
+        .catch((error) => console.warn("Couldn't move a stopped run's images:", error))
+        .finally(record);
+    else record();
   });
 
   jobs.holdComfy = () => installer.running || nodePacks.running;

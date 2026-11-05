@@ -8,7 +8,7 @@
  *
  *   matrix / xy  when the last cell is done, the images are fetched from ComfyUI and put into one
  *                labeled grid (lib/grid.ts), saved in the outputs folder by day
- *                (<outputs>/<date>/grids/…, or the profile's grids/ without one) and shown as a
+ *                (<outputs>/<workflow>/grids/<date>/…, or the profile's grids/ without one) and shown as a
  *                finished "grid" job, so it lands on the image stage like any result
  *   thumbs       each finished image becomes that model's picture (<model>_data/thumb.jpg,
  *                modelthumbs.ts); the pictures it replaces go to the profile's trash
@@ -19,6 +19,7 @@
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { ModelKind } from "../../shared/constants.ts";
+import { workflowFolder } from "../../shared/gallery.ts";
 import type { GenerateBody, GenerateResponse, Job, JobImage } from "../../shared/jobs.ts";
 import type { ServerMessage } from "../../shared/live.ts";
 import { mainFolder } from "../../shared/profile.ts";
@@ -231,14 +232,16 @@ export class ScriptService {
     const stamp = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
     const profile = await this.deps.profiles.find(g.profileId);
     const outputs = profile ? mainFolder(profile, "outputs").trim() : "";
+    // <workflow>/grids/<day>/, beside the run's images (OUTPUT_TYPES).
+    const subfolder = `${workflowFolder(g.workflow.name, g.workflow.id)}/grids/${day}`;
     const dir = outputs
-      ? path.join(outputs, day, "grids")
+      ? path.join(outputs, ...subfolder.split("/"))
       : path.join(this.deps.profiles.dir(g.profileId), "grids", day);
-    const file = await freePath(path.join(dir, `${g.workflow.id}-${g.plan.kind}-${stamp}.png`));
+    const file = await freePath(path.join(dir, `${g.plan.kind}-${stamp}.png`));
     await writeFileIfAbsent(file, grid.png);
     if (outputs)
       void this.deps
-        .ingest?.({ filename: path.basename(file), subfolder: `${day}/grids`, type: "output" })
+        .ingest?.({ filename: path.basename(file), subfolder, type: "output" })
         .catch(() => undefined);
 
     const id = randomUUID();

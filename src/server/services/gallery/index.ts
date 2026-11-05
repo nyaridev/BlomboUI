@@ -38,6 +38,7 @@ import {
   IMAGE_ORIGINS,
   type ImageDetails,
   type ImageOrigin,
+  interruptedFolder,
   type LibraryInfo,
   OUTPUTS_LIBRARY,
   originOf,
@@ -149,11 +150,14 @@ const SELECT = `
          COALESCE(m.favorite, 0) AS favorite, COALESCE(m.rating, 0) AS rating
   FROM images i LEFT JOIN marks m ON m.library = i.library AND m.path = i.path`;
 
-/** Not a script grid: Blombo's `<day>/grids/` folders and A1111's `txt2img-grids`. */
+/** Not a script grid: Blombo's `grids` folders (`<workflow>/grids/<day>`, `<day>/grids` before) and A1111's `txt2img-grids`. */
 const NOT_GRID = `('/' || i.folder || '/') NOT LIKE '%/grids/%' AND ('/' || i.folder || '/') NOT LIKE '%-grids/%'`;
-/** Not saved by a stopped run (a mark older than the file is for an earlier file there). */
-const NOT_INTERRUPTED = `NOT EXISTS (SELECT 1 FROM interrupted x
-  WHERE x.library = i.library AND x.path = i.path AND x.marked_at >= i.mtime)`;
+/**
+ * Not saved by a stopped run: not in an `interrupted` folder (where they're moved), and not marked
+ * (a mark older than the file is for an earlier file there).
+ */
+const NOT_INTERRUPTED = `('/' || i.folder || '/') NOT LIKE '%/interrupted/%' AND NOT EXISTS (
+  SELECT 1 FROM interrupted x WHERE x.library = i.library AND x.path = i.path AND x.marked_at >= i.mtime)`;
 
 /**
  * A shuffled order that stays the same for one seed: the id through a hash in integer math
@@ -534,8 +538,11 @@ export class GalleryService {
   }
 
   /**
-   * A run was stopped: mark the images it saved in the main output folder, so the gallery can
-   * leave them out (`excludeInterrupted`). Lists refetch.
+   * A run was stopped: the images it saved in the main output folder move into their workflow's
+   * `interrupted/` folder (`interruptedFolder`), and `refs` are updated in place so the job and
+   * its log point where they are now. An image in another layout (older days, a prefix set in
+   * the graph), or one that can't be moved, is marked where it is instead (the `interrupted`
+   * table). Either way the gallery can leave them out (`excludeInterrupted`). Lists refetch.
    */
   async markInterrupted(
     profileId: string,
@@ -546,11 +553,30 @@ export class GalleryService {
     if (!outputs.length || open?.profileId !== profileId) return;
     const lib = (await this.libraries())[0];
     if (!lib || this.current !== open) return;
-    const add = open.pdb.db.prepare(
+    const { db } = open.pdb;
+    const mark = db.prepare(
       "INSERT OR REPLACE INTO interrupted (library, path, marked_at) VALUES (?, ?, ?)",
     );
-    const now = Date.now();
-    for (const ref of outputs) add.run(lib.id, refPath(ref), now);
+    const find = db.prepare("SELECT id FROM images WHERE library = ? AND path = ?");
+    for (const ref of outputs) {
+      const rel = refPath(ref);
+      const to = lib.path ? interruptedFolder(ref.subfolder) : null;
+      if (to && !rel.split("/").includes("..") && !ref.filename.includes("/")) {
+        try {
+          const dest = await freePath(fromRel(lib.path, `${to}/${ref.filename}`));
+          await movePath(fromRel(lib.path, rel), dest);
+          const old = find.get(lib.id, rel) as { id: number } | undefined;
+          if (old) this.deleteRow(open, Number(old.id));
+          ref.subfolder = to;
+          ref.filename = path.basename(dest);
+          await this.ingest(refPath(ref)).catch(() => null);
+          continue;
+        } catch {
+          // Locked or gone: mark it where it is.
+        }
+      }
+      mark.run(lib.id, rel, Date.now());
+    }
     this.deps.publish("gallery", { t: "gallery.changed" });
   }
 

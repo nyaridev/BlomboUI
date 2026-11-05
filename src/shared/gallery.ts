@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 import { ImageSettings, ImageSummary } from "./imageinfo.ts";
+import { slugId } from "./settings.ts";
 
 export const IMAGE_EXTENSIONS = [".png", ".webp", ".jpg", ".jpeg"] as const;
 
@@ -19,6 +20,43 @@ export const OUTPUTS_LIBRARY = "outputs";
 export const IMAGE_ORIGINS = ["generated", "imported", "civitai"] as const;
 export type ImageOrigin = (typeof IMAGE_ORIGINS)[number];
 export const IMPORT_FOLDERS = { imported: "imported", civitai: "civitai" } as const;
+
+/**
+ * Where Blombo saves what it makes, inside the main output folder:
+ * `<workflow>/<type>/<yyyy-mm-dd>/<file>`, e.g. `illustrious/images/2026-11-01/blombo_00001_.png`.
+ * Types: a run's images, a script's grids, and the images of a run that was stopped (moved there
+ * once it stops).
+ */
+export const OUTPUT_TYPES = ["images", "grids", "interrupted"] as const;
+export type OutputType = (typeof OUTPUT_TYPES)[number];
+/** The file name ComfyUI numbers (`blombo_00001_.png`). */
+export const OUTPUT_STEM = "blombo";
+
+/**
+ * A workflow's folder in the outputs: its name as a slug ("Illustrious XL" → "illustrious-xl").
+ * Names the import and type folders use get "-workflow", so the gallery never mistakes them.
+ */
+export function workflowFolder(name: string, id: string): string {
+  const slug = slugId(name, slugId(id, "workflow"));
+  const taken = [...Object.values(IMPORT_FOLDERS), ...OUTPUT_TYPES] as string[];
+  return taken.includes(slug) ? `${slug}-workflow` : slug;
+}
+
+/** ComfyUI's `filename_prefix` for a type of output (its date tokens make the day folder). */
+export function outputPrefix(folder: string, type: OutputType): string {
+  return `${folder}/${type}/%year%-%month%-%day%/${OUTPUT_STEM}`;
+}
+
+/**
+ * Where a stopped run's image moves: `<workflow>/images/<day>` becomes `<workflow>/interrupted/
+ * <day>`. Null for a folder in another layout (older days, a prefix set in the graph).
+ */
+export function interruptedFolder(subfolder: string): string | null {
+  const parts = subfolder.replace(/\\/g, "/").split("/");
+  return parts.length === 3 && parts[1] === "images" && parts[0] && parts[2]
+    ? [parts[0], "interrupted", parts[2]].join("/")
+    : null;
+}
 
 /** An image's origin from its path inside its library ("civitai/abc.jpeg"). */
 export function originOf(rel: string): ImageOrigin {

@@ -121,7 +121,7 @@ export function FileInfoView() {
     setTarget(null);
     setDropped(null);
   };
-  const dragging = usePageFileDrop(pick);
+  const dragging = usePageFileDrop((files) => files[0] && pick(files[0]));
   const open = Boolean(dropped || target);
   const imageSrc =
     preview ??

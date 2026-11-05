@@ -268,6 +268,16 @@ export class CivitaiService {
     return normalize.version(await this.rawVersion(id), await this.context()).images;
   }
 
+  /** Images people posted with a version (the model page's Community images), most liked first. */
+  async communityImages(versionId: number): Promise<CivitaiImage[]> {
+    const page = await this.api.images(versionId, await this.key(this.active()));
+    const ctx = await this.context();
+    return (page.items ?? []).flatMap((img) => {
+      const out = normalize.image(img, ctx);
+      return out ? [out] : [];
+    });
+  }
+
   /** A model page; opening one adds it to the browse history. */
   async model(id: number): Promise<CivitaiModel> {
     const profileId = this.active();

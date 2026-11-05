@@ -33,8 +33,13 @@ export interface NormalizeContext {
   local: (modelId: number, latestVersionId: number | null) => LocalMark | null;
 }
 
+/** The images endpoint's words for the browsing levels (PG 1, PG-13 2, R 4, X 8). */
+const LEVEL_WORDS: Record<string, number> = { None: 1, Soft: 2, Mature: 4, X: 8 };
+
 export function isNsfwImage(img: RawImage): boolean {
   if (typeof img.nsfwLevel === "number") return img.nsfwLevel >= NSFW_LEVEL;
+  const word = typeof img.nsfwLevel === "string" ? LEVEL_WORDS[img.nsfwLevel] : undefined;
+  if (word !== undefined) return word >= NSFW_LEVEL;
   if (typeof img.nsfw === "string")
     return !["none", "false", "", "soft"].includes(img.nsfw.toLowerCase());
   return img.nsfw === true;

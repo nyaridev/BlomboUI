@@ -1,8 +1,9 @@
 /**
- * A Civitai model inside Blombo. Left: the version's images as File Info's endless carousel (the
- * wheel or a drag moves through them, a click on the middle one opens it full screen; NSFW ones
- * blurred until clicked), under it how the picked image was made as its poster shared it (a
- * fold, closed at first), then the model's description under a separator. Right, top to bottom: the header (badges, name, creator with
+ * A Civitai model inside Blombo. Left: the version's images, the creator's or the community's
+ * (images people posted with it, most liked first), as File Info's endless carousel (the wheel or
+ * a drag moves through them, a click on the middle one opens it full screen; NSFW ones blurred
+ * until clicked), under it how the picked image was made as its poster shared it (a fold, closed
+ * at first), then the model's description (a fold, open at first). Right, top to bottom: the header (badges, name, creator with
  * Follow, the Civitai link), the model's numbers, one card for the picked version (the picker,
  * its facts, Download with a preview of where the file lands, its files), trigger words, tags
  * and the version's notes (a fold). Descriptions are parsed on the server and rendered as plain
@@ -14,6 +15,7 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import {
+  useCivitaiCommunityImages,
   useCivitaiModel,
   useCivitaiVersionImages,
   useDownloadPlan,
@@ -28,6 +30,7 @@ import {
   EmptyState,
   FallbackFace,
   KIND_STYLE,
+  Segmented,
   Select,
   Skeleton,
 } from "@client/ui";
@@ -52,6 +55,12 @@ import { RichText } from "./RichText";
 import { useCivitai } from "./state";
 
 /** The two columns: the images take what the 400 px info column leaves; one column when narrow. */
+/**
+ * The carousel's height (and its placeholders'): shorter than the window, so the page still
+ * scrolls beside it (the wheel over it changes the image) and the settings fold shows under it.
+ */
+const STAGE = "h-[min(64vh,680px)] max-lg:h-[52vh]";
+
 const COLUMNS =
   "mx-auto grid max-w-[1360px] grid-cols-[minmax(0,1fr)_400px] gap-8 px-6 max-[1000px]:grid-cols-1 max-lg:px-3";
 
@@ -113,7 +122,11 @@ function Page({
   // own answer does. Matched by picture, so the carousel keeps its place when it arrives.
   const detailed = useCivitaiVersionImages(version?.id ?? null).data;
   const details = useMemo(() => new Map((detailed ?? []).map((i) => [i.thumb, i])), [detailed]);
-  const shownImage = images[shown] ?? null;
+  // The community's images already say who posted them and how; asked once they're shown.
+  const [source, setSource] = useState<"creator" | "community">("creator");
+  const community = useCivitaiCommunityImages(version?.id ?? null, source === "community");
+  const list = source === "community" ? (community.data ?? []) : images;
+  const shownImage = list[shown] ?? null;
   const current = shownImage ? (details.get(shownImage.thumb) ?? shownImage) : null;
 
   return (
@@ -121,18 +134,60 @@ function Page({
       <div className={`${COLUMNS} pt-6 pb-14 max-lg:pt-3`}>
         {/* One column (narrow): its pieces join the grid, so the description can go last. */}
         <div className="flex min-w-0 flex-col gap-4 max-[1000px]:contents">
-          {images.length ? (
+          <div className="flex items-center gap-3">
+            <Segmented
+              size="sm"
+              label="Whose images"
+              value={source}
+              onChange={setSource}
+              options={[
+                { value: "creator", label: "Creator" },
+                {
+                  value: "community",
+                  label: community.data ? `Community · ${community.data.length}` : "Community",
+                },
+              ]}
+            />
+            {source === "community" && community.data?.length ? (
+              <span className="text-2xs text-fg-3">
+                Posted with {version?.name}, most liked first
+              </span>
+            ) : null}
+          </div>
+          {source === "community" && community.isLoading ? (
+            <Skeleton className={STAGE} />
+          ) : source === "community" && community.error ? (
+            <div
+              className={`${STAGE} grid place-items-center rounded-xl border border-line bg-sunken`}
+            >
+              <EmptyState
+                icon="globe"
+                tone="warning"
+                title="Couldn't load the community's images"
+                text={community.error.message}
+                action={<Button onClick={() => void community.refetch()}>Try again</Button>}
+              />
+            </div>
+          ) : list.length ? (
             <CivitaiCarousel
-              images={images}
+              images={list}
               label={`${model.name} images`}
               onIndex={setShown}
               blurNsfw={blurNsfw}
-              // Shorter than the window, so the page still scrolls beside it (the wheel over it
-              // changes the image) and the picked image's settings show under it.
-              height="h-[min(64vh,680px)] max-lg:h-[52vh]"
+              height={STAGE}
             />
+          ) : source === "community" ? (
+            <div
+              className={`${STAGE} grid place-items-center rounded-xl border border-line bg-sunken`}
+            >
+              <EmptyState
+                icon="image"
+                title="No community images yet"
+                text={`Images people post with ${version?.name ?? "this version"} on Civitai show up here.`}
+              />
+            </div>
           ) : (
-            <div className="h-[min(64vh,680px)] overflow-hidden rounded-xl border border-line bg-sunken max-lg:h-[52vh]">
+            <div className={`${STAGE} overflow-hidden rounded-xl border border-line bg-sunken`}>
               <FallbackFace name={model.name} kind={model.kind ?? "checkpoints"} />
             </div>
           )}
@@ -155,16 +210,17 @@ function Page({
             </Collapsible>
           ) : null}
           {model.description.length ? (
-            <section className="mt-4 flex min-w-0 flex-col gap-4 max-[1000px]:order-last max-[1000px]:mt-0">
-              <div className="flex items-center gap-3">
-                <Icon name="file-text" size={15} className="shrink-0 text-fg-3" />
-                <h3 className="text-base font-semibold text-fg">About this model</h3>
-                <span className="h-px flex-1 bg-line" />
-              </div>
-              <div className="max-w-[72ch]">
+            <Collapsible
+              title="About this model"
+              icon="file-text"
+              subtitle={model.creator ? `By ${model.creator}` : undefined}
+              defaultOpen
+              className="max-[1000px]:order-last"
+            >
+              <div className="max-w-[72ch] px-1 py-1">
                 <RichText blocks={model.description} blurImages={model.nsfw && blurNsfw} />
               </div>
-            </section>
+            </Collapsible>
           ) : null}
         </div>
         <aside className="flex min-w-0 flex-col gap-5">

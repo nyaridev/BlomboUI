@@ -174,6 +174,18 @@ describe("browsing", () => {
     expect(images[2]?.by).toBe("a_fan");
   });
 
+  it("lists the images people posted with a version, NSFW read from the endpoint's words", async () => {
+    const m = await o.services.civitai.model(1001);
+    const version = m.versions[0];
+    const images = await o.services.civitai.communityImages(version?.id ?? 0);
+    expect(images.map((i) => i.by)).toEqual(["fan_1", "fan_2", "fan_3", "fan_4", "fan_5"]);
+    expect(images[0]?.meta?.prompt).toContain("community post 1");
+    expect(images[1]?.meta).toBeNull();
+    expect(images.map((i) => i.nsfw)).toEqual([false, false, false, true, false]);
+    // The fake has no posts for versions ending in 3.
+    expect(await o.services.civitai.communityImages(10013)).toEqual([]);
+  });
+
   it("marks models already in the models folder", async () => {
     const dir = path.join(o.models, "loras");
     await fs.writeFile(path.join(dir, "mine.safetensors"), "x");

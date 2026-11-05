@@ -2,7 +2,8 @@
  * A fake Civitai (and model catalog) for tests and dev checks, so neither ever calls the real
  * site or downloads a real model. It serves:
  *
- *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me, /enums
+ *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me, /enums,
+ *   /images?modelVersionId= (five community posts per version; none for versions ending in 3)
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
@@ -514,6 +515,36 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
           if (sha.length >= 8 && sha256(id).startsWith(sha))
             return json(res, 200, versionJson(entry.model, entry.version, true));
         return json(res, 404, { error: "Model not found" });
+      }
+      if (p === "/api/v1/images") {
+        const vid = Number(url.searchParams.get("modelVersionId"));
+        const owner = models.find((x) => x.versions.some((v) => v.id === vid));
+        // Versions ending in 3 have no posts, so the empty state can be checked.
+        const items =
+          owner && vid % 10 !== 3
+            ? [0, 1, 2, 3, 4].map((n) => ({
+                id: vid * 1000 + n,
+                url: `${base}/img/community-${vid}-${n}/original=true/${vid * 1000 + n}.jpeg`,
+                width: 832,
+                height: 1216,
+                type: "image",
+                nsfw: n === 3,
+                nsfwLevel: n === 3 ? "X" : "None",
+                username: `fan_${n + 1}`,
+                meta:
+                  n % 2 === 0
+                    ? {
+                        prompt: `${owner.name}, community post ${n + 1}`,
+                        negativePrompt: "lowres",
+                        steps: 20 + n,
+                        cfgScale: 5,
+                        sampler: "DPM++ 2M",
+                        seed: 4242 + n,
+                      }
+                    : null,
+              }))
+            : [];
+        return json(res, 200, { items, metadata: {} });
       }
       m = /^\/api\/v1\/model-versions\/(\d+)$/.exec(p);
       if (m) {

@@ -435,6 +435,8 @@ export const api = {
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
   civitaiVersionImages: (id: number) =>
     request<CivitaiImage[]>("GET", `/civitai/versions/${id}/images`),
+  civitaiCommunityImages: (id: number) =>
+    request<CivitaiImage[]>("GET", `/civitai/versions/${id}/community`),
   civitaiByHash: (sha256: string) =>
     request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),
   civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),

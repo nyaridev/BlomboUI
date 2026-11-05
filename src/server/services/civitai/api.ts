@@ -16,7 +16,8 @@ import { fetchFollow, USER_AGENT } from "../../lib/remote.ts";
 
 export interface RawImage {
   url?: string;
-  nsfwLevel?: number;
+  /** A number on model answers; a word ("None", "Soft", "Mature", "X") on the images endpoint. */
+  nsfwLevel?: number | string;
   nsfw?: boolean | string;
   width?: number;
   height?: number;
@@ -156,6 +157,8 @@ export const MODEL_TTL = 30 * 60_000;
 const MEMORY_ENTRIES = 300;
 const TIMEOUT_MS = 20_000;
 export const PAGE_SIZE = 40;
+/** Community images shown for a version (one page, the most liked). */
+export const COMMUNITY_PAGE = 50;
 
 export interface CivitaiApiOptions {
   /** "https://civitai.com" to start with, or the fake server's address. */
@@ -277,6 +280,15 @@ export class CivitaiApi {
 
   version(id: number, key: string | null): Promise<RawVersion> {
     return this.get<RawVersion>(`/api/v1/model-versions/${id}`, key, MODEL_TTL);
+  }
+
+  /** The first page of images people posted with a version, most reactions first. */
+  images(versionId: number, key: string | null): Promise<{ items?: RawImage[] }> {
+    return this.get(
+      `/api/v1/images?modelVersionId=${versionId}&limit=${COMMUNITY_PAGE}&sort=Most%20Reactions`,
+      key,
+      SEARCH_TTL,
+    );
   }
 
   /** The version a file belongs to, by its SHA256; null when Civitai doesn't know it. */

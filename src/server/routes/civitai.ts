@@ -72,6 +72,12 @@ export function civitaiRoutes(civitai: CivitaiService) {
     return c.json(await civitai.versionImages(id));
   });
 
+  r.get("/versions/:id/community", async (c) => {
+    const id = Number(c.req.param("id"));
+    if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Invalid version id.", "bad_id");
+    return c.json(await civitai.communityImages(id));
+  });
+
   /** SHA256, AutoV2 (10), AutoV3 (12) or AutoV1 (8 hex characters). */
   r.get("/by-hash/:hash", async (c) => {
     const hash = c.req.param("hash");

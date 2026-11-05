@@ -424,24 +424,36 @@ export class HistoryService {
   }
 
   /**
-   * The models, LoRAs or wildcards finished runs used, the ones used since `since` first (by how
-   * often), then the rest by how often ever.
+   * The models, LoRAs or wildcards finished runs used, with how often ever and since `since`:
+   * the ones used since then first (`recent`), or the most used first (`count`).
    */
   usage(
     kind: "model" | "lora" | "wildcard",
     since: number,
     limit: number,
-  ): Array<{ name: string; count: number; recent: number }> {
+    by: "recent" | "count" = "recent",
+  ): Array<{ name: string; count: number; recent: number; images: number }> {
+    const order = by === "count" ? "count DESC, recent DESC" : "recent DESC, count DESC";
     const rows = this.db()
       .prepare(
-        `SELECT u.name AS name, COUNT(*) AS count,
+        `SELECT u.name AS name, COUNT(*) AS count, SUM(j.images) AS images,
                 SUM(CASE WHEN j.finished_at >= ? THEN 1 ELSE 0 END) AS recent
          FROM job_log_uses u JOIN job_log j ON j.id = u.job_id
          WHERE u.kind = ? AND j.state = 'done'
-         GROUP BY u.name ORDER BY recent DESC, count DESC, u.name LIMIT ?`,
+         GROUP BY u.name ORDER BY ${order}, u.name LIMIT ?`,
       )
-      .all(since, kind, limit) as Array<{ name: string; count: number; recent: number }>;
-    return rows.map((r) => ({ name: r.name, count: Number(r.count), recent: Number(r.recent) }));
+      .all(since, kind, limit) as Array<{
+      name: string;
+      count: number;
+      recent: number;
+      images: number | null;
+    }>;
+    return rows.map((r) => ({
+      name: r.name,
+      count: Number(r.count),
+      recent: Number(r.recent),
+      images: Number(r.images ?? 0),
+    }));
   }
 
   /** The gallery's images of the newest finished runs that used a model, LoRA or wildcard. */

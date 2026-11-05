@@ -2,7 +2,7 @@
 import type { BrowseFilter, CivitaiPage } from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
-import type { GalleryPage, GalleryQueryInput, ImageDetails } from "@shared/gallery";
+import type { GalleryPage, GalleryQueryInput, ImageDetails, UseKind } from "@shared/gallery";
 import type { JobHistoryPage, JobHistoryQueryInput, SaveSnippetBody } from "@shared/history";
 import type { LocalModel, ModelList, SaveModelInfoBody } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
@@ -397,6 +397,16 @@ export function useGalleryHome(seed: number) {
     queryFn: () => api.galleryHome(seed),
     enabled: profileId !== null,
     placeholderData: keepPreviousData,
+  });
+}
+
+/** A Most used view's list. */
+export function useGalleryUses(kind: UseKind) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: [...qk.gallery(profileId), "uses", kind],
+    queryFn: () => api.galleryUses(kind),
+    enabled: profileId !== null,
   });
 }
 

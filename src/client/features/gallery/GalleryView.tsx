@@ -23,6 +23,7 @@ import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } fr
 import { viewFromPath } from "../../app/router";
 import { Grid } from "./Grid";
 import { HomeView } from "./home/HomeView";
+import { UsesView } from "./home/UsesView";
 import { useImageMenu } from "./imageMenu";
 import { Lightbox } from "./Lightbox";
 import { Sidebar } from "./Sidebar";
@@ -34,6 +35,7 @@ export function GalleryView() {
   useEffect(() => followTopic("gallery"), []);
   const overview = useGalleryOverview();
   const view = useGalleryUi((s) => s.view);
+  const uses = useGalleryUi((s) => s.uses);
   const drawer = useGalleryUi((s) => s.drawer);
   const set = useGalleryUi((s) => s.set);
   const compact = useCompact();
@@ -61,6 +63,8 @@ export function GalleryView() {
           <TrashView />
         ) : view === "home" ? (
           <HomeView visible={visible} />
+        ) : view === "uses" ? (
+          <UsesView key={uses} kind={uses} visible={visible} />
         ) : (
           <Images featured={overview.data?.featured ?? []} visible={visible} />
         )}

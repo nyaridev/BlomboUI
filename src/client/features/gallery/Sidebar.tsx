@@ -20,10 +20,16 @@ import {
   TextField,
   toast,
 } from "@client/ui";
-import type { Collection, GalleryOverview, LibraryInfo } from "@shared/gallery";
+import {
+  type Collection,
+  type GalleryOverview,
+  type LibraryInfo,
+  USE_KINDS,
+} from "@shared/gallery";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { FolderField } from "../profiles/FolderField";
+import { USE_ICON, USE_LABEL } from "./home/sections";
 import { newSeed, useGalleryUi } from "./state";
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
@@ -81,6 +87,17 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
         label="This week"
         count={counts?.week}
       />
+
+      <div className="label-caps mt-4 mb-1 px-2 text-[10px]">Most used</div>
+      {USE_KINDS.map((kind) => (
+        <SideItem
+          key={kind}
+          active={ui.view === "uses" && ui.uses === kind}
+          onClick={() => ui.set({ drawer: false, view: "uses", uses: kind })}
+          icon={USE_ICON[kind]}
+          label={USE_LABEL[kind]}
+        />
+      ))}
 
       <div className="label-caps mt-4 mb-1 flex items-center justify-between px-2 text-[10px]">
         Libraries

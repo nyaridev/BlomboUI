@@ -11,7 +11,7 @@ import type { AutocompleteService } from "../autocomplete.ts";
 import type { HistoryService } from "../history.ts";
 import { ProfileService } from "../profiles.ts";
 import { SettingsService } from "../settings.ts";
-import { galleryHome } from "./home.ts";
+import { galleryHome, mostUsed } from "./home.ts";
 import { ftsQuery, GalleryService } from "./index.ts";
 
 /** A header read of a file named in `held` finishes, then waits until the test lets it go. */
@@ -180,38 +180,46 @@ describe("gallery index", () => {
     const usage = (kind: string) =>
       kind === "model"
         ? [
-            { name: "sd15/dreamshaper_8.safetensors", count: 3, recent: 1 },
-            { name: "gone.safetensors", count: 1, recent: 0 },
+            { name: "sd15/dreamshaper_8.safetensors", count: 3, recent: 1, images: 2 },
+            { name: "gone.safetensors", count: 1, recent: 0, images: 2 },
           ]
         : kind === "lora"
-          ? [{ name: "Detailer", count: 1, recent: 1 }]
-          : [{ name: "weather", count: 1, recent: 1 }];
+          ? [{ name: "Detailer", count: 1, recent: 1, images: 3 }]
+          : [{ name: "weather", count: 1, recent: 1, images: 3 }];
     const thumb = (await q({ q: "cozy cabin" })).items[0]?.thumb;
-    const home = await galleryHome(
-      {
-        gallery,
-        history: {
-          usage,
-          images: (kind: string) => (kind === "wildcard" ? [{ thumb }] : []),
-        } as unknown as HistoryService,
-        autocomplete: {
-          usedTags: async () => [{ tag: "cozy_cabin", uses: 2 }],
-        } as unknown as AutocompleteService,
-      },
-      4,
-    );
+    const deps = {
+      gallery,
+      history: {
+        usage,
+        images: (kind: string) => (kind === "wildcard" ? [{ thumb }] : []),
+      } as unknown as HistoryService,
+      autocomplete: {
+        usedTags: async () => [{ tag: "cozy_cabin", uses: 2 }],
+      } as unknown as AutocompleteService,
+    };
+    const home = await galleryHome(deps, 4);
     expect(home.picks.map((i) => i.name).sort()).toEqual([
       "a1111.png",
       "plain.png",
       "sd15_00001_.png",
     ]);
     // A tag's images come from a search ("cozy_cabin" finds "a cozy cabin in the woods").
-    expect(home.tags.top).toEqual([{ tag: "cozy_cabin", uses: 2, images: [thumb] }]);
+    expect(home.tags.top).toEqual([
+      { name: "cozy_cabin", count: 2, recent: 0, total: 1, images: [thumb], filter: "cozy cabin" },
+    ]);
     expect(home.models[0]).toMatchObject({ filter: "dreamshaper_8", images: [thumb] });
     // Nothing in the gallery was made with it: no images, no filter.
     expect(home.models[1]).toMatchObject({ images: [], filter: null });
     expect(home.loras[0]).toMatchObject({ filter: "Detailer", images: [expect.any(String)] });
-    expect(home.wildcards[0]).toMatchObject({ name: "weather", images: [thumb], filter: null });
+    expect(home.wildcards[0]).toMatchObject({
+      name: "weather",
+      total: 3,
+      images: [thumb],
+      filter: null,
+    });
+    // Models and LoRAs count their images in the gallery.
+    expect(home.models[0]).toMatchObject({ total: 1 });
+    expect((await mostUsed(deps, "models")).map((u) => u.filter)).toEqual(["dreamshaper_8", null]);
   });
 
   it("builds FTS queries only from terms trigram can match", () => {

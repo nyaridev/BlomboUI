@@ -7,6 +7,7 @@ import {
   FavoriteBody,
   GalleryHomeQuery,
   GalleryQuery,
+  GalleryUsesQuery,
   ImageIdsBody,
   RatingBody,
   RenameLibraryBody,
@@ -16,7 +17,7 @@ import {
 import { HttpError, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { AutocompleteService } from "../services/autocomplete.ts";
-import { galleryHome } from "../services/gallery/home.ts";
+import { galleryHome, mostUsed } from "../services/gallery/home.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
 import type { HistoryService } from "../services/history.ts";
 import { revealInFileManager } from "../services/system.ts";
@@ -40,6 +41,13 @@ export function galleryRoutes(
     if (!parsed.success)
       throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid query.", "bad_query");
     return c.json(await galleryHome({ gallery, ...others }, parsed.data.seed));
+  });
+
+  r.get("/uses", async (c) => {
+    const parsed = GalleryUsesQuery.safeParse(c.req.query());
+    if (!parsed.success)
+      throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid query.", "bad_query");
+    return c.json(await mostUsed({ gallery, ...others }, parsed.data.kind));
   });
 
   r.get("/images", async (c) => {

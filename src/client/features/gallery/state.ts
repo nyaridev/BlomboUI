@@ -1,9 +1,9 @@
 /**
- * Gallery UI state: which page is shown (Home, an image list, the trash), which list (library,
+ * Gallery UI state: which page is shown (Home, a Most used view, an image list, the trash), which list (library,
  * favorites, this week, recent, shuffled), the search and filters, and the open lightbox image.
  * Layout and tile size live in the profile's settings.
  */
-import type { GALLERY_SORTS, GalleryQueryInput } from "@shared/gallery";
+import type { GALLERY_SORTS, GalleryQueryInput, UseKind } from "@shared/gallery";
 import { create } from "zustand";
 
 export type GallerySort = (typeof GALLERY_SORTS)[number];
@@ -11,7 +11,9 @@ export type GallerySort = (typeof GALLERY_SORTS)[number];
 export interface GalleryUi {
   /** "all" or a library id. */
   library: string;
-  view: "home" | "images" | "trash";
+  view: GalleryScreen;
+  /** The Most used view's kind. */
+  uses: UseKind;
   favorites: boolean;
   /** Only images since this time (ms), for "This week". */
   since: number | null;
@@ -40,11 +42,13 @@ export interface GalleryUi {
   show: (patch?: Partial<Omit<GalleryUi, "set" | "reset" | "show">>) => void;
 }
 
+export type GalleryScreen = "home" | "uses" | "images" | "trash";
+
 export const newSeed = () => Math.floor(Math.random() * 2_000_000_000);
 
 const DEFAULTS = {
   library: "all",
-  view: "images" as "home" | "images" | "trash",
+  view: "images" as GalleryScreen,
   favorites: false,
   since: null,
   q: "",
@@ -60,6 +64,7 @@ const DEFAULTS = {
 export const useGalleryUi = create<GalleryUi>((set) => ({
   ...DEFAULTS,
   view: "home",
+  uses: "models",
   seed: newSeed(),
   open: null,
   drawer: false,

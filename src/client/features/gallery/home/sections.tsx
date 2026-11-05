@@ -1,34 +1,36 @@
 /**
- * Home's sections under the carousel: the models, LoRAs and wildcards you run and the tags you
- * prompt with, as picture cards that crossfade through their newest images. A model or LoRA
- * filters the image list, a tag searches it, a wildcard opens Wildcards.
+ * The models, LoRAs and wildcards you run and the tags you prompt with, as picture cards that
+ * crossfade through their newest images: rows on Home, grids in the Most used views. A model or
+ * LoRA filters the image list, a tag searches it, a wildcard opens Wildcards.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useSession } from "@client/lib/session";
-import { Segmented } from "@client/ui";
-import type { GalleryHome, HomeTag, HomeUse } from "@shared/gallery";
+import { Button, Segmented } from "@client/ui";
+import type { GalleryHome, HomeUse, UseKind } from "@shared/gallery";
 import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useState } from "react";
 import { useModelThumb } from "../../models/thumbs";
 import { useGalleryUi } from "../state";
 
-type Kind = "models" | "loras" | "wildcards";
-
-const ICON: Record<Kind | "tags", IconName> = {
+export const USE_ICON: Record<UseKind, IconName> = {
   models: "models",
   loras: "layers",
   wildcards: "wildcards",
   tags: "tag",
 };
 
+export const USE_LABEL: Record<UseKind, string> = {
+  models: "Models",
+  loras: "LoRAs",
+  wildcards: "Wildcards",
+  tags: "Tags",
+};
+
 /** How long a card shows an image; each card adds a little so they don't all change at once. */
 const SHOW_MS = 3800;
 const fade = { duration: 0.6, ease: "easeInOut" } as const;
-
-const show = (patch: Parameters<ReturnType<typeof useGalleryUi.getState>["show"]>[0]) =>
-  useGalleryUi.getState().show(patch);
 
 const label = (name: string) =>
   name
@@ -37,7 +39,7 @@ const label = (name: string) =>
     .pop()
     ?.replace(/\.(safetensors|ckpt|pt|pth|bin|gguf|sft)$/i, "") ?? name;
 
-function SectionHead({
+export function SectionHead({
   title,
   icon,
   action,
@@ -50,7 +52,7 @@ function SectionHead({
     <div className="mb-3 flex items-center gap-2">
       <Icon name={icon} size={15} className="text-fg-3" />
       <h2 className="text-sm font-semibold text-fg">{title}</h2>
-      <div className="ml-auto">{action}</div>
+      <div className="ml-auto flex items-center gap-2">{action}</div>
     </div>
   );
 }
@@ -101,198 +103,184 @@ function Slideshow({
   );
 }
 
-function Card({
-  images,
+/** Home's rows use fixed widths; a grid's cards fill their cell. */
+const SIZES = {
+  row: "aspect-[4/5] w-[168px] shrink-0",
+  rowSmall: "aspect-square w-[132px] shrink-0",
+  fill: "aspect-[4/5] w-full",
+} as const;
+
+const meta = (u: HomeUse) => `${u.total.toLocaleString()} ${u.total === 1 ? "image" : "images"}`;
+
+/** One model, LoRA, wildcard or tag: its images, name and how often, and where a click goes. */
+export function UseCard({
+  kind,
+  use,
   active,
   index,
-  icon,
-  title,
-  meta,
-  onOpen,
-  disabled,
-  hint,
-  small,
+  size,
 }: {
-  images: string[];
+  kind: UseKind;
+  use: HomeUse;
   active: boolean;
   index: number;
-  icon: IconName;
-  title: string;
-  meta: string;
-  onOpen: () => void;
-  disabled?: boolean;
-  hint: string;
-  small?: boolean;
+  size: keyof typeof SIZES;
 }) {
+  const navigate = useNavigate();
+  const profileId = useSession((s) => s.profileId);
+  // A model or LoRA without images in the gallery shows its own picture.
+  const thumb = useModelThumb(
+    kind === "loras" ? "loras" : "checkpoints",
+    kind === "models" || kind === "loras" ? use.name : "",
+  );
+  const images = use.images.length ? use.images : thumb ? [thumb] : [];
+  const title =
+    kind === "wildcards"
+      ? `__${use.name}__`
+      : kind === "tags"
+        ? use.name.replace(/_/g, " ")
+        : label(use.name);
+  const show = useGalleryUi.getState().show;
+  const open = () => {
+    if (kind === "wildcards") {
+      if (profileId)
+        void navigate({ to: "/p/$profileId/$view", params: { profileId, view: "wildcards" } });
+    } else if (use.filter)
+      show(
+        kind === "models"
+          ? { model: use.filter }
+          : kind === "loras"
+            ? { lora: use.filter }
+            : { q: use.filter },
+      );
+  };
+  const disabled = (kind === "models" || kind === "loras") && !use.filter;
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={open}
       disabled={disabled}
-      title={hint}
+      title={
+        kind === "wildcards"
+          ? "Open Wildcards"
+          : kind === "tags"
+            ? "Search for it"
+            : disabled
+              ? "No images with it in the gallery"
+              : `Show images made with ${title}`
+      }
       className={cn(
-        "group relative shrink-0 overflow-hidden rounded-lg border border-line bg-sunken text-left transition-colors hover:border-accent/70 focus-ring disabled:hover:border-line",
-        small ? "aspect-square w-[180px]" : "aspect-[4/5] w-[240px]",
+        "group relative overflow-hidden rounded-lg border border-line bg-sunken text-left transition-colors hover:border-accent/70 focus-ring disabled:hover:border-line",
+        SIZES[size],
       )}
     >
       <Slideshow
         images={images}
         active={active}
         index={index}
-        fallback={<Icon name={icon} size={32} strokeWidth={1.25} />}
+        fallback={<Icon name={USE_ICON[kind]} size={28} strokeWidth={1.25} />}
       />
       <span className="pointer-events-none absolute inset-x-0 bottom-0 h-1/2 bg-linear-to-t from-black/85 via-black/40 to-transparent" />
-      <span className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-3">
-        <span className="line-clamp-2 text-sm font-medium break-words text-white">{title}</span>
-        <span className="font-mono text-2xs text-white/70 tabular">{meta}</span>
+      <span className="absolute inset-x-0 bottom-0 flex flex-col gap-0.5 p-2.5">
+        <span className="line-clamp-2 text-xs font-medium break-words text-white">{title}</span>
+        <span className="font-mono text-2xs text-white/70 tabular">{meta(use)}</span>
       </span>
     </button>
   );
-}
-
-function Row({ children }: { children: ReactNode }) {
-  return <div className="scroll-quiet -mx-1 flex gap-3 overflow-x-auto px-1 pb-2">{children}</div>;
 }
 
 function Hint({ children }: { children: ReactNode }) {
   return <p className="text-xs text-fg-3">{children}</p>;
 }
 
-const runs = (u: HomeUse) =>
-  `${u.count.toLocaleString()} ${u.count === 1 ? "run" : "runs"}${
-    u.recent && u.recent < u.count ? ` · ${u.recent.toLocaleString()} lately` : ""
-  }`;
-
-const TITLES: Record<Kind, string> = {
-  models: "Models you use",
-  loras: "LoRAs you use",
-  wildcards: "Wildcards you use",
+const EMPTY: Record<UseKind, string> = {
+  models: "The models you generate with show up here.",
+  loras: "The LoRAs you generate with show up here.",
+  wildcards: "The wildcards you prompt with show up here.",
+  tags: "Tags you prompt with show up here once you've used them a few times.",
 };
+export const emptyText = (kind: UseKind) => EMPTY[kind];
 
-/** Models, LoRAs or wildcards as large picture cards. */
-export function UseCards({ what, uses, active }: { what: Kind; uses: HomeUse[]; active: boolean }) {
-  const navigate = useNavigate();
-  const profileId = useSession((s) => s.profileId);
-  const open = (u: HomeUse) => {
-    if (what === "wildcards") {
-      if (profileId)
-        void navigate({ to: "/p/$profileId/$view", params: { profileId, view: "wildcards" } });
-    } else if (u.filter) show(what === "models" ? { model: u.filter } : { lora: u.filter });
-  };
+/** "See all" opens the kind's Most used view. */
+function SeeAll({ kind }: { kind: UseKind }) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      iconRight="arrow-right"
+      onClick={() => useGalleryUi.getState().set({ view: "uses", uses: kind, drawer: false })}
+    >
+      See all
+    </Button>
+  );
+}
+
+/** One of Home's rows: models, LoRAs or wildcards, used lately first. */
+export function UseRow({
+  kind,
+  uses,
+  active,
+}: {
+  kind: Exclude<UseKind, "tags">;
+  uses: HomeUse[];
+  active: boolean;
+}) {
   return (
     <section>
-      <SectionHead title={TITLES[what]} icon={ICON[what]} />
+      <SectionHead
+        title={`${USE_LABEL[kind]} you use`}
+        icon={USE_ICON[kind]}
+        action={uses.length ? <SeeAll kind={kind} /> : null}
+      />
       {uses.length ? (
-        <Row>
-          {uses.map((u, i) =>
-            what === "wildcards" ? (
-              <Card
-                key={u.name}
-                images={u.images}
-                active={active}
-                index={i}
-                icon={ICON.wildcards}
-                title={`__${u.name}__`}
-                meta={runs(u)}
-                onOpen={() => open(u)}
-                hint="Open Wildcards"
-              />
-            ) : (
-              <ModelCard
-                key={u.name}
-                what={what}
-                use={u}
-                active={active}
-                index={i}
-                onOpen={() => open(u)}
-              />
-            ),
-          )}
-        </Row>
+        <div className="scroll-quiet -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
+          {uses.map((u, i) => (
+            <UseCard key={u.name} kind={kind} use={u} active={active} index={i} size="row" />
+          ))}
+        </div>
       ) : (
-        <Hint>{`The ${what === "loras" ? "LoRAs" : what} you generate with show up here.`}</Hint>
+        <Hint>{EMPTY[kind]}</Hint>
       )}
     </section>
   );
 }
 
-/** A model or LoRA: your images with it, or its own picture when the gallery has none. */
-function ModelCard({
-  what,
-  use,
-  active,
-  index,
-  onOpen,
-}: {
-  what: "models" | "loras";
-  use: HomeUse;
-  active: boolean;
-  index: number;
-  onOpen: () => void;
-}) {
-  const thumb = useModelThumb(what === "models" ? "checkpoints" : "loras", use.name);
-  return (
-    <Card
-      images={use.images.length ? use.images : thumb ? [thumb] : []}
-      active={active}
-      index={index}
-      icon={ICON[what]}
-      title={label(use.name)}
-      meta={runs(use)}
-      onOpen={onOpen}
-      disabled={!use.filter}
-      hint={
-        use.filter ? `Show images made with ${label(use.name)}` : "No images with it in the gallery"
-      }
-    />
-  );
-}
-
-/** The tags you prompt with, lately (the last two weeks) or ever, as smaller picture cards. */
-export function TagCards({ tags, active }: { tags: GalleryHome["tags"]; active: boolean }) {
+/** Home's tags: lately (the last two weeks) or ever. */
+export function TagRow({ tags, active }: { tags: GalleryHome["tags"]; active: boolean }) {
   const [when, setWhen] = useState<"lately" | "top">(tags.lately.length ? "lately" : "top");
-  const list: HomeTag[] = tags[when];
+  const list = tags[when];
   return (
     <section>
       <SectionHead
         title="Tags you use"
-        icon={ICON.tags}
+        icon={USE_ICON.tags}
         action={
-          <Segmented
-            size="sm"
-            label="Tags from"
-            value={when}
-            onChange={setWhen}
-            options={[
-              { value: "lately", label: "Lately" },
-              { value: "top", label: "All time" },
-            ]}
-          />
+          <>
+            <Segmented
+              size="sm"
+              label="Tags from"
+              value={when}
+              onChange={setWhen}
+              options={[
+                { value: "lately", label: "Lately" },
+                { value: "top", label: "All time" },
+              ]}
+            />
+            {tags.top.length ? <SeeAll kind="tags" /> : null}
+          </>
         }
       />
       {list.length ? (
-        <Row>
+        <div className="scroll-quiet -mx-1 flex gap-2.5 overflow-x-auto px-1 pb-2">
           {list.map((t, i) => (
-            <Card
-              key={t.tag}
-              small
-              images={t.images}
-              active={active}
-              index={i}
-              icon={ICON.tags}
-              title={t.tag.replace(/_/g, " ")}
-              meta={`${t.uses.toLocaleString()} ${t.uses === 1 ? "use" : "uses"}`}
-              // Tags are counted with underscores; prompts often use spaces.
-              onOpen={() => show({ q: t.tag.replace(/_/g, " ") })}
-              hint="Search for it"
-            />
+            <UseCard key={t.name} kind="tags" use={t} active={active} index={i} size="rowSmall" />
           ))}
-        </Row>
+        </div>
       ) : (
         <Hint>
           {when === "lately"
             ? "Nothing in the last two weeks. Tags you prompt with show up here."
-            : "Tags you prompt with show up here once you've used them a few times."}
+            : EMPTY.tags}
         </Hint>
       )}
     </section>

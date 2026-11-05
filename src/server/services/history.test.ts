@@ -182,11 +182,16 @@ describe("job log", () => {
     expect(stats.perDay).toHaveLength(14);
     expect(stats.gallery).toEqual({ images: 3, favorites: 1 });
     // The gallery's Home: finished runs only, counted ever and since a time.
-    expect(history.usage("lora", 0, 5)).toEqual([{ name: "detail", count: 1, recent: 1 }]);
+    expect(history.usage("lora", 0, 5)).toEqual([
+      { name: "detail", count: 1, recent: 1, images: 1 },
+    ]);
+    expect(history.usage("lora", 0, 5, "count")).toEqual([
+      { name: "detail", count: 1, recent: 1, images: 1 },
+    ]);
     expect(history.images("wildcard", "animal", 6)).toEqual([indexed]);
     expect(history.images("wildcard", "nothing", 6)).toEqual([]);
     expect(history.usage("model", Date.now() + 1000, 5)).toEqual([
-      { name: "dream.safetensors", count: 1, recent: 0 },
+      { name: "dream.safetensors", count: 1, recent: 0, images: 1 },
     ]);
   });
 

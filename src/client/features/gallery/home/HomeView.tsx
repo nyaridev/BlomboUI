@@ -14,7 +14,7 @@ import { Lightbox } from "../Lightbox";
 import { SidebarButton } from "../Sidebar";
 import { newSeed, useGalleryUi } from "../state";
 import { Coverflow } from "./Coverflow";
-import { TagCards, UseCards } from "./sections";
+import { TagRow, UseRow } from "./sections";
 
 export function HomeView({ visible }: { visible: boolean }) {
   const [seed, setSeed] = useState(newSeed);
@@ -73,10 +73,10 @@ export function HomeView({ visible }: { visible: boolean }) {
               onOpen={onOpen}
               onUseSettings={onUseSettings}
             />
-            <UseCards what="models" uses={data.models} active={active} />
-            <UseCards what="loras" uses={data.loras} active={active} />
-            <UseCards what="wildcards" uses={data.wildcards} active={active} />
-            <TagCards tags={data.tags} active={active} />
+            <UseRow kind="models" uses={data.models} active={active} />
+            <UseRow kind="loras" uses={data.loras} active={active} />
+            <UseRow kind="wildcards" uses={data.wildcards} active={active} />
+            <TagRow tags={data.tags} active={active} />
           </div>
         )}
       </div>

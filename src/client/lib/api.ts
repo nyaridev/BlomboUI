@@ -63,10 +63,12 @@ import type {
   GalleryOverview,
   GalleryPage,
   GalleryQueryInput,
+  HomeUse,
   ImageDetails,
   SyncState,
   TagCount,
   TrashEntry,
+  UseKind,
 } from "@shared/gallery";
 import type {
   JobHistoryPage,
@@ -315,6 +317,7 @@ export const api = {
 
   galleryOverview: () => request<GalleryOverview>("GET", "/gallery/overview"),
   galleryHome: (seed: number) => request<GalleryHome>("GET", `/gallery/home?seed=${seed}`),
+  galleryUses: (kind: UseKind) => request<HomeUse[]>("GET", `/gallery/uses?kind=${kind}`),
   galleryImages: (q: GalleryQueryInput) =>
     request<GalleryPage>("GET", `/gallery/images?${query(q)}`),
   galleryFacets: (library: string) =>

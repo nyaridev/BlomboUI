@@ -3,7 +3,8 @@
  * When there is no thumbnail it shows a checkerboard tinted in the kind's color with the kind's
  * icon (the old app's empty card), so a wall of un-thumbnailed LoRAs still reads by kind. Thumbnails marked NSFW
  * are blurred until clicked when `blurNsfw` is on (the Civitai view's NSFW button).
- * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading").
+ * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading"); an
+ * installed card also gets a green outline, an update a yellow one.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -153,10 +154,25 @@ export function ModelCard({
   return (
     <div
       onContextMenu={onContextMenu}
+      // On the whole card, so it works over the NSFW veil too. No autoscroll cursor on a middle
+      // press when the middle click does something.
+      onMouseDown={(e) => onMiddleClick && e.button === 1 && e.preventDefault()}
+      onAuxClick={(e) => {
+        if (e.button === 1 && onMiddleClick) {
+          e.preventDefault();
+          onMiddleClick();
+        }
+      }}
       className={cn(
         "group relative flex flex-col overflow-hidden rounded-lg border bg-surface-2 transition-[border-color,box-shadow]",
         // Selected: the light outline and inner glow of a selected strip tile (`shadow-selected`).
-        selected ? "border-transparent shadow-selected" : "border-line hover:border-line-strong",
+        selected
+          ? "border-transparent shadow-selected"
+          : mark?.tone === "success"
+            ? "border-green ring-1 ring-green"
+            : mark?.tone === "warning"
+              ? "border-yellow/80"
+              : "border-line hover:border-line-strong",
         className,
       )}
     >
@@ -164,14 +180,6 @@ export function ModelCard({
         type="button"
         onClick={onClick}
         onDoubleClick={onDoubleClick}
-        // No autoscroll cursor on a middle press when the middle click does something.
-        onMouseDown={(e) => onMiddleClick && e.button === 1 && e.preventDefault()}
-        onAuxClick={(e) => {
-          if (e.button === 1 && onMiddleClick) {
-            e.preventDefault();
-            onMiddleClick();
-          }
-        }}
         aria-pressed={selected}
         aria-label={`${label}: ${name}`}
         className="relative block w-full overflow-hidden text-left focus-ring"

@@ -1,6 +1,11 @@
 import { Hono } from "hono";
 import { ZodError } from "zod";
-import { fromBase64Url, parseBrowseQuery, SetCivitaiKeyBody } from "../../shared/civitai.ts";
+import {
+  fromBase64Url,
+  parseBrowseQuery,
+  parseFeedUsers,
+  SetCivitaiKeyBody,
+} from "../../shared/civitai.ts";
 import { HttpError, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { CivitaiService } from "../services/civitai/index.ts";
@@ -21,10 +26,9 @@ export function civitaiRoutes(civitai: CivitaiService) {
 
   r.delete("/account/key", async (c) => c.json(await civitai.removeKey()));
 
-  r.get("/models", async (c) => {
-    let parsed: ReturnType<typeof parseBrowseQuery>;
+  const browse = (query: Record<string, string | undefined>) => {
     try {
-      parsed = parseBrowseQuery(c.req.query());
+      return parseBrowseQuery(query);
     } catch (error) {
       const issue = error instanceof ZodError ? error.issues[0] : undefined;
       throw new HttpError(
@@ -33,7 +37,19 @@ export function civitaiRoutes(civitai: CivitaiService) {
         "bad_filter",
       );
     }
+  };
+
+  r.get("/models", async (c) => {
+    const parsed = browse(c.req.query());
     return c.json(await civitai.search(parsed.filter, parsed.cursor));
+  });
+
+  /** The Following feed: ?users=a,b plus the browse filter. */
+  r.get("/feed", async (c) => {
+    const users = parseFeedUsers(c.req.query("users"));
+    if (!users.length)
+      throw new HttpError(400, "Whose models? Pass ?users= with Civitai usernames.", "no_users");
+    return c.json(await civitai.feed(users, browse(c.req.query()).filter));
   });
 
   r.get("/models/:id", async (c) => {

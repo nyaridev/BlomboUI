@@ -353,6 +353,7 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         const types = url.searchParams.getAll("types");
         const bases = url.searchParams.getAll("baseModels");
         const user = url.searchParams.get("username");
+        const tag = url.searchParams.get("tag");
         const nsfw = url.searchParams.get("nsfw") !== "false";
         const sort = url.searchParams.get("sort") ?? "Highest Rated";
         const limit = Math.min(100, Number(url.searchParams.get("limit") ?? 20));
@@ -364,6 +365,7 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
           .filter((x) => !types.length || types.includes(x.type))
           .filter((x) => !bases.length || x.versions.some((v) => bases.includes(v.baseModel)))
           .filter((x) => !user || x.creator === user)
+          .filter((x) => !tag || x.tags.includes(tag))
           .filter((x) => nsfw || !x.nsfw)
           .sort((a, b) =>
             sort === "Newest"

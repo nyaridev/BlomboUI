@@ -38,6 +38,18 @@ describe("browsing", () => {
     expect(o.fake.requests.length).toBe(before + 1);
   });
 
+  it("filters by category and merges followed creators' newest models", async () => {
+    const styles = await o.services.civitai.search(filter({ tag: "style" }), null);
+    expect(styles.items.length).toBeGreaterThan(0);
+    expect(o.fake.requests.at(-1)?.path).toContain("tag=style");
+    const feed = await o.services.civitai.feed(["pixelsmith", "nightowl", "nobody"], filter());
+    const creators = new Set(feed.items.map((c) => c.creator));
+    expect([...creators].sort()).toEqual(["nightowl", "pixelsmith"]);
+    const dates = feed.items.map((c) => c.publishedAt ?? "");
+    expect(dates).toEqual([...dates].sort().reverse());
+    expect(feed.nextCursor).toBeNull();
+  });
+
   it("records searches with a query", async () => {
     await o.services.civitai.search(filter({ query: "neon" }), null);
     await new Promise((r) => setTimeout(r, 20));

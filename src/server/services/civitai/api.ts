@@ -123,6 +123,7 @@ export class CivitaiApi {
     // Always asked for: the profile's site decides (civitai.com answers SFW models only).
     q.set("nsfw", "true");
     if (filter.username) q.set("username", filter.username);
+    if (filter.tag) q.set("tag", filter.tag);
     if (cursor?.startsWith("p:")) q.set("page", cursor.slice(2));
     else if (cursor) q.set("cursor", cursor);
     return this.get<RawPage>(`/api/v1/models?${q}`, key, SEARCH_TTL);

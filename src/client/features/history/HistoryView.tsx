@@ -224,11 +224,11 @@ function Civitai() {
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);
   const setFilter = useCivitai((s) => s.setFilter);
-  const show = useCivitai((s) => s.show);
+  const showHome = useCivitai((s) => s.showHome);
 
   const searchFor = (query: string) => {
     setFilter({ query, username: "" });
-    show(null);
+    showHome("browse");
     openModels();
   };
   const openModels = () => {

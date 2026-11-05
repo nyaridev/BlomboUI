@@ -3,11 +3,15 @@ import {
   BrowseFilter,
   base64Url,
   browseQuery,
+  type CivitaiCard,
   civitaiImageVariant,
   civitaiKind,
   compactCount,
+  feedQuery,
   fromBase64Url,
+  mergeFeed,
   parseBrowseQuery,
+  parseFeedUsers,
 } from "./civitai.ts";
 
 describe("civitai helpers", () => {
@@ -52,6 +56,7 @@ describe("browse query", () => {
       sort: "Newest",
       period: "Week",
       username: "someone",
+      tag: "base model",
     });
     const text = browseQuery(filter, "5482|195397");
     const params = Object.fromEntries(new URLSearchParams(text));
@@ -61,5 +66,30 @@ describe("browse query", () => {
   it("fills defaults and refuses unknown sorts", () => {
     expect(parseBrowseQuery({}).filter).toMatchObject({ sort: "Highest Rated", period: "AllTime" });
     expect(() => parseBrowseQuery({ sort: "Random" })).toThrow();
+  });
+});
+
+describe("following feed", () => {
+  it("keeps valid, unique usernames and asks for the newest without a creator", () => {
+    expect(parseFeedUsers("a_b, x.y,,a_b,bad name,<x>")).toEqual(["a_b", "x.y"]);
+    const params = new URLSearchParams(
+      feedQuery(
+        ["a", "b"],
+        BrowseFilter.parse({ username: "c", sort: "Most Liked", tag: "style" }),
+      ),
+    );
+    expect(params.get("users")).toBe("a,b");
+    expect(params.get("user")).toBeNull();
+    expect(params.get("sort")).toBe("Newest");
+    expect(params.get("tag")).toBe("style");
+  });
+
+  it("merges pages newest first, one card per model", () => {
+    const card = (id: number, publishedAt: string | null) => ({ id, publishedAt }) as CivitaiCard;
+    const merged = mergeFeed([
+      [card(1, "2026-01-02"), card(2, null)],
+      [card(3, "2026-03-01"), card(1, "2026-01-02")],
+    ]);
+    expect(merged.map((c) => c.id)).toEqual([3, 1, 2]);
   });
 });

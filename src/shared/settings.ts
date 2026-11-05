@@ -7,7 +7,7 @@
  * `.default()` would return the literal object without filling it.
  */
 import { z } from "zod";
-import { BrowseFilter, CIVITAI_SITES, SavedFilter } from "./civitai.ts";
+import { BrowseFilter, CIVITAI_SITES, CivitaiUsername, SavedFilter } from "./civitai.ts";
 import { salvage } from "./salvage.ts";
 import { SET_RESOLUTIONS, SIZE_MODES } from "./sizes.ts";
 
@@ -196,6 +196,8 @@ export const CivitaiSettings = z.object({
     })
     .prefault({}),
   savedFilters: z.array(SavedFilter).max(50).default([]),
+  /** Creators you follow (Models → Civitai → Following), in the order you followed them. */
+  following: z.array(CivitaiUsername).max(500).default([]),
 });
 export type CivitaiSettings = z.infer<typeof CivitaiSettings>;
 

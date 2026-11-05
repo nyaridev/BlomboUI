@@ -213,11 +213,11 @@ export function CivitaiDetails({ match }: { match: Found }) {
   const version = versionOf(match);
   const goTo = useGoToView();
   const setFilter = useCivitai((s) => s.setFilter);
-  const show = useCivitai((s) => s.show);
+  const showHome = useCivitai((s) => s.showHome);
   const installed = localVersions(model.id, model.local, []).has(match.versionId);
   const browse = (filter: { query: string; username: string }) => {
     setFilter(filter);
-    show(null);
+    showHome("browse");
     useModelsNav.getState().setTab("civitai");
     goTo("models");
   };

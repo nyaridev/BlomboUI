@@ -108,6 +108,30 @@ export const CIVITAI_BASE_MODELS = [
   "Other",
 ] as const;
 
+/**
+ * Civitai's model categories, as its site's filter row lists them (the API's `tag`; one at a time).
+ */
+export const CIVITAI_CATEGORIES = [
+  "character",
+  "style",
+  "celebrity",
+  "concept",
+  "clothing",
+  "base model",
+  "poses",
+  "background",
+  "tool",
+  "buildings",
+  "vehicle",
+  "objects",
+  "animal",
+  "action",
+  "assets",
+] as const;
+
+/** "base model" → "Base model". */
+export const categoryLabel = (tag: string) => tag.charAt(0).toUpperCase() + tag.slice(1);
+
 /** Images at this Civitai NSFW level and above are blurred (1 PG, 2 PG-13, 4 R, 8 X, 16 XXX). */
 export const NSFW_LEVEL = 4;
 
@@ -132,6 +156,8 @@ export const BrowseFilter = z.object({
   period: z.enum(CIVITAI_PERIODS).default("AllTime"),
   /** A creator's models only. */
   username: z.string().trim().max(60).default(""),
+  /** One of Civitai's categories (or any tag); "" for all. */
+  tag: z.string().trim().max(40).default(""),
 });
 export type BrowseFilter = z.infer<typeof BrowseFilter>;
 export type BrowseFilterInput = z.input<typeof BrowseFilter>;
@@ -191,6 +217,8 @@ export const CivitaiCard = z.object({
   image: CivitaiImage.nullable(),
   /** Newest version id. */
   versionId: z.number().nullable(),
+  /** When the newest version came out (ISO), for the Following feed's order. */
+  publishedAt: z.string().nullable().default(null),
   local: LocalMark.nullable(),
 });
 export type CivitaiCard = z.infer<typeof CivitaiCard>;
@@ -304,6 +332,7 @@ export function browseQuery(filter: BrowseFilter, cursor?: string | null): strin
   q.set("sort", filter.sort);
   q.set("period", filter.period);
   if (filter.username) q.set("user", filter.username);
+  if (filter.tag) q.set("tag", filter.tag);
   if (cursor) q.set("cursor", cursor);
   return q.toString();
 }
@@ -325,9 +354,47 @@ export function parseBrowseQuery(params: Record<string, string | undefined>): {
     sort: params.sort || undefined,
     period: params.period || undefined,
     username: params.user ?? "",
+    tag: params.tag ?? "",
   });
   const cursor = params.cursor?.trim() ? params.cursor.trim().slice(0, 200) : null;
   return { filter, cursor };
+}
+
+/** A Civitai username as Blombo keeps it (Following; Civitai's names are letters, digits, _ - .). */
+export const CivitaiUsername = z
+  .string()
+  .trim()
+  .min(1)
+  .max(60)
+  .regex(/^[\w.-]+$/, "A Civitai username has only letters, digits, _, - and dots.");
+
+/** Most creators the Following feed asks about at once. */
+export const FEED_MAX_USERS = 100;
+
+/** The Following feed's request: whose models, with the filter (sort and creator are ignored). */
+export function feedQuery(users: string[], filter: BrowseFilter): string {
+  const q = new URLSearchParams(browseQuery({ ...filter, username: "", sort: "Newest" }));
+  q.set("users", users.join(","));
+  return q.toString();
+}
+
+/** The feed's creators from its query text (bad names are skipped). */
+export function parseFeedUsers(text: string | undefined): string[] {
+  const out: string[] = [];
+  for (const u of (text ?? "").split(",")) {
+    const ok = CivitaiUsername.safeParse(u);
+    if (ok.success && !out.includes(ok.data)) out.push(ok.data);
+  }
+  return out.slice(0, FEED_MAX_USERS);
+}
+
+/** Feed cards from several creators' pages: one of each model, newest first. */
+export function mergeFeed(pages: CivitaiCard[][]): CivitaiCard[] {
+  const seen = new Map<number, CivitaiCard>();
+  for (const page of pages) for (const c of page) if (!seen.has(c.id)) seen.set(c.id, c);
+  return [...seen.values()].sort((a, b) =>
+    (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""),
+  );
 }
 
 /* ── helpers ─────────────────────────────────────────────────────────────── */

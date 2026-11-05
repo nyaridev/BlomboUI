@@ -143,6 +143,7 @@ export function card(model: RawModel, ctx: NormalizeContext): CivitaiCard {
     likes: num(model.stats?.thumbsUpCount ?? model.stats?.favoriteCount),
     image: coverImage(model, ctx),
     versionId: latest?.id ?? null,
+    publishedAt: str(latest?.publishedAt) ?? str(latest?.createdAt),
     local: ctx.local(model.id, latest?.id ?? null),
   };
 }

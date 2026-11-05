@@ -1,8 +1,9 @@
 /**
  * The Civitai browser's UI state: the applied filter (seeded from Settings → Civitai's browse
- * defaults the first time), the opened model tabs, and whether NSFW images are blurred (this
- * view only, on each time the app starts). The filter and the tabs are remembered in this window
- * (localStorage), so a reload or a restart comes back to them. Server data stays in TanStack Query.
+ * defaults the first time), which home tab shows (Browse or Following) and the creator picked
+ * there, the opened model tabs, the last tab opened (its tab flashes), and whether NSFW images are
+ * blurred (this view only, on each time the app starts). The filter, home and tabs are remembered
+ * in this window (localStorage), so a reload or a restart comes back to them. Server data stays in TanStack Query.
  */
 import { BrowseFilter, type BrowseFilterInput } from "@shared/civitai";
 import type { Settings } from "@shared/settings";
@@ -14,11 +15,18 @@ export interface OpenTab {
   name: string;
 }
 
+export type CivitaiHome = "browse" | "following";
+
 interface CivitaiState {
   filter: BrowseFilter | null;
   tabs: OpenTab[];
-  /** The model tab in front; null shows the browser. */
+  /** The model tab in front; null shows the home tab (`home`). */
   active: number | null;
+  home: CivitaiHome;
+  /** Following: one creator's models; null for everyone you follow. */
+  creator: string | null;
+  /** The tab opened last; `n` changes on every open, so its tab flashes again. */
+  flash: { id: number; n: number } | null;
   /** NSFW images stay blurred until clicked (the NSFW button switches it for every image). */
   blur: boolean;
   toggleBlur: () => void;
@@ -31,12 +39,14 @@ interface CivitaiState {
   close: (id: number) => void;
   closeAll: () => void;
   show: (id: number | null) => void;
+  showHome: (home: CivitaiHome) => void;
+  pickCreator: (creator: string | null) => void;
 }
 
 const MAX_TABS = 12;
 const KEY = "blombo.civitai";
 
-type Saved = Pick<CivitaiState, "filter" | "tabs" | "active">;
+type Saved = Pick<CivitaiState, "filter" | "tabs" | "active" | "home">;
 
 /** What was saved, as far as it's still valid: a bad filter is dropped, bad tabs are skipped. */
 export function readSaved(raw: unknown): Saved {
@@ -50,7 +60,8 @@ export function readSaved(raw: unknown): Saved {
     .map((t) => ({ id: t.id, name: t.name.slice(0, 200) }))
     .slice(-MAX_TABS);
   const active = tabs.some((t) => t.id === o.active) ? (o.active as number) : null;
-  return { filter: o.filter && filter.success ? filter.data : null, tabs, active };
+  const home = o.home === "following" ? "following" : "browse";
+  return { filter: o.filter && filter.success ? filter.data : null, tabs, active, home };
 }
 
 function load(): Saved {
@@ -63,6 +74,8 @@ function load(): Saved {
 
 export const useCivitai = create<CivitaiState>((set, get) => ({
   ...load(),
+  creator: null,
+  flash: null,
   blur: true,
   toggleBlur: () => set((s) => ({ blur: !s.blur })),
   seed: (browse) => {
@@ -77,7 +90,11 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
         ? s.tabs.map((t) => (t.id === id ? { id, name } : t))
         : [...s.tabs, { id, name }].slice(-MAX_TABS);
       const active = background ? s.active : id;
-      return { tabs, active: tabs.some((t) => t.id === active) ? active : null };
+      return {
+        tabs,
+        active: tabs.some((t) => t.id === active) ? active : null,
+        flash: { id, n: (s.flash?.n ?? 0) + 1 },
+      };
     }),
   closeAll: () => set({ tabs: [], active: null }),
   close: (id) =>
@@ -88,12 +105,21 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
       return { tabs, active };
     }),
   show: (id) => set({ active: id }),
+  showHome: (home) => set({ home, active: null }),
+  pickCreator: (creator) => set({ creator }),
 }));
 
 useCivitai.subscribe((s, prev) => {
-  if (s.filter === prev.filter && s.tabs === prev.tabs && s.active === prev.active) return;
+  if (
+    s.filter === prev.filter &&
+    s.tabs === prev.tabs &&
+    s.active === prev.active &&
+    s.home === prev.home
+  )
+    return;
   try {
-    localStorage.setItem(KEY, JSON.stringify({ filter: s.filter, tabs: s.tabs, active: s.active }));
+    const saved: Saved = { filter: s.filter, tabs: s.tabs, active: s.active, home: s.home };
+    localStorage.setItem(KEY, JSON.stringify(saved));
   } catch {
     // Storage can be unavailable; the state still holds for this session.
   }

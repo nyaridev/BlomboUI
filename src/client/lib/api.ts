@@ -34,6 +34,7 @@ import {
   type CivitaiPage,
   type CivitaiSearch,
   type CivitaiView,
+  feedQuery,
 } from "@shared/civitai";
 import type {
   ComfyFileRef,
@@ -412,6 +413,8 @@ export const api = {
   removeCivitaiKey: () => request<CivitaiAccount>("DELETE", "/civitai/account/key"),
   civitaiModels: (filter: BrowseFilter, cursor: string | null) =>
     request<CivitaiPage>("GET", `/civitai/models?${browseQuery(filter, cursor)}`),
+  civitaiFeed: (users: string[], filter: BrowseFilter) =>
+    request<CivitaiPage>("GET", `/civitai/feed?${feedQuery(users, filter)}`),
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
   civitaiByHash: (sha256: string) =>
     request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),

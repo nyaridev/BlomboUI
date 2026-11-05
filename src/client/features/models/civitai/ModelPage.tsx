@@ -34,6 +34,7 @@ import { DownloadRow } from "../../downloads/DownloadRow";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
 import { DownloadDialog } from "./DownloadDialog";
+import { FollowButton } from "./follow";
 import { localVersions } from "./marks";
 import { RichText } from "./RichText";
 import { useCivitai } from "./state";
@@ -76,7 +77,7 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
     [model.id, model.local, downloads],
   );
   const setFilter = useCivitai((s) => s.setFilter);
-  const show = useCivitai((s) => s.show);
+  const showHome = useCivitai((s) => s.showHome);
   const style = model.kind ? KIND_STYLE[model.kind] : null;
   const images = useMemo(() => version?.images ?? [], [version]);
 
@@ -125,7 +126,7 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                   title={`More from ${model.creator}`}
                   onClick={() => {
                     setFilter({ username: model.creator ?? "", query: "" });
-                    show(null);
+                    showHome("browse");
                   }}
                 >
                   {model.creatorImage ? (
@@ -140,6 +141,7 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                   {model.creator}
                 </button>
               ) : null}
+              {model.creator ? <FollowButton name={model.creator} /> : null}
               <span className="flex items-center gap-1 tabular" title="Downloads">
                 <Icon name="download" size={13} />
                 {compactCount(model.downloads)}
@@ -212,7 +214,7 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                     icon="tag"
                     onClick={() => {
                       setFilter({ query: t, username: "" });
-                      show(null);
+                      showHome("browse");
                     }}
                   >
                     {t}

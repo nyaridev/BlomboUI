@@ -1,9 +1,11 @@
 /**
- * Models → Civitai → Browse: a clear filter bar (saved filters, search, the NSFW blur, types,
- * base model, sort, period; what's listed follows the profile's Civitai site). A card opens its
- * model (a middle click opens it behind), a double click asks to download it (DownloadDialog),
- * recent searches and saved filters, and the results as one virtualized grid of ModelCards that
- * loads the next page as you near the end. Results come from the server's cached proxy.
+ * Models → Civitai → Browse: a clear filter bar (saved filters, search with the creator as a
+ * removable chip in front of the text, the NSFW blur, types, base model, sort, period, Civitai's
+ * categories; what's listed follows the profile's Civitai site), recent searches, and the results
+ * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
+ * its model (a middle click opens it behind), a double click asks to download it
+ * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
+ * the server's cached proxy.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
@@ -12,6 +14,7 @@ import { useElementWidth } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
 import {
   qk,
+  type useCivitaiFeed,
   useCivitaiModels,
   useCivitaiSearches,
   useSettings,
@@ -26,6 +29,7 @@ import {
   ModelCard,
   MultiSegmented,
   Popover,
+  Segmented,
   Select,
   Skeleton,
   TextField,
@@ -35,6 +39,7 @@ import {
 import {
   BrowseFilter,
   CIVITAI_BASE_MODELS,
+  CIVITAI_CATEGORIES,
   CIVITAI_FILTER_TYPES,
   CIVITAI_PERIOD_LABELS,
   CIVITAI_PERIODS,
@@ -42,6 +47,7 @@ import {
   CIVITAI_TYPE_LABELS,
   type CivitaiCard,
   type CivitaiSort,
+  categoryLabel,
   compactCount,
   type SavedFilter,
 } from "@shared/civitai";
@@ -49,8 +55,9 @@ import { shortBaseModel } from "@shared/models";
 import { slugId } from "@shared/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { DownloadDialog } from "./DownloadDialog";
+import { FollowButton } from "./follow";
 import { cardMark } from "./marks";
 import { useCivitai } from "./state";
 
@@ -64,23 +71,30 @@ const FOOTER = 34;
 
 export function Browse() {
   const filter = useCivitai((s) => s.filter);
+  if (!filter) return <CardSkeletons count={10} />;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <FilterBar filter={filter} />
+      <BrowseResults filter={filter} />
+    </div>
+  );
+}
+
+/** Seed the filter from Settings → Civitai's browse defaults (once, before the first search). */
+export function useSeedFilter() {
   const seed = useCivitai((s) => s.seed);
   const settings = useSettings().data;
   useEffect(() => {
     if (settings) seed(settings.civitai.browse);
   }, [settings, seed]);
-  if (!filter)
-    return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-3">
-        {Array.from({ length: 10 }, (_, i) => (
-          <Skeleton key={i} className="aspect-[3/4]" />
-        ))}
-      </div>
-    );
+}
+
+export function CardSkeletons({ count }: { count: number }) {
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <FilterBar filter={filter} />
-      <Results filter={filter} />
+    <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-3">
+      {Array.from({ length: count }, (_, i) => (
+        <Skeleton key={i} className="aspect-[3/4]" />
+      ))}
     </div>
   );
 }
@@ -98,7 +112,11 @@ const SORT_ICONS: Record<CivitaiSort, IconName> = {
   Oldest: "history",
 };
 
-function FilterBar({ filter }: { filter: BrowseFilter }) {
+/**
+ * The filter bar. On Following (`following`) the creator comes from the tab's list and the order
+ * is newest first, so the creator chip, the sort and recent searches are left out.
+ */
+export function FilterBar({ filter, following }: { filter: BrowseFilter; following?: boolean }) {
   const setFilter = useCivitai((s) => s.setFilter);
   const replace = useCivitai((s) => s.replaceFilter);
   const settings = useSettings().data;
@@ -110,10 +128,12 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
 
   const search = (query: string) => setFilter({ query: query.trim() });
   const defaults = settings ? BrowseFilter.parse(settings.civitai.browse) : BrowseFilter.parse({});
+  const creator = following ? "" : filter.username;
   const changed =
-    JSON.stringify({ ...filter, query: "", username: "" }) !== JSON.stringify(defaults) ||
+    JSON.stringify({ ...filter, query: "", username: "", tag: "" }) !== JSON.stringify(defaults) ||
     filter.query !== "" ||
-    filter.username !== "";
+    filter.tag !== "" ||
+    creator !== "";
 
   return (
     <div className="flex flex-col gap-2.5 border-b border-line p-3">
@@ -129,12 +149,45 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
           icon="search"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            // Backspace at the very start takes the creator out, as in a mail "To" field.
+            const t = e.currentTarget;
+            if (
+              e.key === "Backspace" &&
+              creator &&
+              t.selectionStart === 0 &&
+              t.selectionEnd === 0
+            ) {
+              e.preventDefault();
+              setFilter({ username: "" });
+            }
+          }}
           onClear={() => {
             setText("");
             search("");
           }}
+          leading={
+            creator ? (
+              <Chip
+                size="sm"
+                icon="user"
+                selected
+                onRemove={() => setFilter({ username: "" })}
+                className="shrink-0"
+              >
+                {creator}
+              </Chip>
+            ) : null
+          }
+          trailing={creator ? <FollowButton name={creator} /> : null}
           className="flex-1"
-          placeholder="Search Civitai: model names, tags, creators"
+          placeholder={
+            creator
+              ? `Search ${creator}'s models`
+              : following
+                ? "Search the models of creators you follow"
+                : "Search Civitai: model names, tags, creators"
+          }
           aria-label="Search Civitai"
         />
         <Button variant="primary" type="submit" icon="search">
@@ -166,14 +219,21 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
               ...CIVITAI_BASE_MODELS.map((b) => ({ value: b, label: b })),
             ]}
           />
-          <Select
-            size="sm"
-            label="Sort"
-            value={filter.sort}
-            onChange={(sort) => setFilter({ sort })}
-            className="w-[160px]"
-            options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
-          />
+          {following ? (
+            <span className="flex h-7 items-center gap-1.5 px-1 text-xs text-fg-3">
+              <Icon name="clock" size={13} />
+              Newest first
+            </span>
+          ) : (
+            <Select
+              size="sm"
+              label="Sort"
+              value={filter.sort}
+              onChange={(sort) => setFilter({ sort })}
+              className="w-[160px]"
+              options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
+            />
+          )}
           <Select
             size="sm"
             label="Period"
@@ -186,19 +246,35 @@ function FilterBar({ filter }: { filter: BrowseFilter }) {
               icon: "calendar",
             }))}
           />
-          {filter.username ? (
-            <Chip size="sm" icon="user" selected onRemove={() => setFilter({ username: "" })}>
-              {filter.username}
-            </Chip>
-          ) : null}
           {changed ? (
-            <Button size="sm" variant="ghost" icon="undo" onClick={() => replace(defaults)}>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon="undo"
+              // Following keeps Browse's creator: it isn't shown there.
+              onClick={() =>
+                replace(following ? { ...defaults, username: filter.username } : defaults)
+              }
+            >
               Reset
             </Button>
           ) : null}
         </div>
       </div>
-      {searches.length ? (
+      {/* Civitai's categories: one at a time, as on its site. Scrolls sideways when narrow. */}
+      <div className="scroll-quiet -mb-1 overflow-x-auto pb-1 [scrollbar-gutter:auto]">
+        <Segmented<string>
+          size="sm"
+          label="Category"
+          value={filter.tag}
+          onChange={(tag) => setFilter({ tag })}
+          options={[
+            { value: "", label: "All categories" },
+            ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
+          ]}
+        />
+      </div>
+      {searches.length && !following ? (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-fg-3">Recent:</span>
           {searches.slice(0, 8).map((s) => (
@@ -322,9 +398,11 @@ function SavedFilters({
 
 function describe(f: BrowseFilter): string {
   return [
+    f.username ? `by ${f.username}` : null,
     f.query ? `"${f.query}"` : null,
     f.types.length ? f.types.map((t) => CIVITAI_TYPE_LABELS[t] ?? t).join(", ") : "All types",
     f.baseModels[0] ?? null,
+    f.tag ? categoryLabel(f.tag) : null,
     f.sort,
     CIVITAI_PERIOD_LABELS[f.period],
   ]
@@ -356,17 +434,51 @@ export function NsfwBlurToggle({ size = "sm" }: { size?: "sm" | "md" }) {
 
 /* ── results ────────────────────────────────────────────────────────────── */
 
-function Results({ filter }: { filter: BrowseFilter }) {
+function BrowseResults({ filter }: { filter: BrowseFilter }) {
   const q = useCivitaiModels(filter);
+  const setFilter = useCivitai((s) => s.setFilter);
+  const qc = useQueryClient();
+  const profileId = useSession((s) => s.profileId);
+  // The server remembers searches; show the new one in "Recent".
+  const fresh = q.isSuccess && !q.isPlaceholderData;
+  useEffect(() => {
+    if (filter.query && fresh)
+      void qc.invalidateQueries({ queryKey: qk.civitaiSearches(profileId) });
+  }, [filter.query, fresh, qc, profileId]);
+  return (
+    <Results
+      q={q}
+      empty={
+        <EmptyState
+          icon="search"
+          title="No models match"
+          text="Try other words, fewer types, another category or another period."
+          action={
+            <Button
+              onClick={() =>
+                setFilter({ query: "", types: [], baseModels: [], tag: "", period: "AllTime" })
+              }
+            >
+              Search everything
+            </Button>
+          }
+        />
+      }
+    />
+  );
+}
+
+/** A page list from Civitai: the browser's search or the Following feed. */
+type ModelsQuery = ReturnType<typeof useCivitaiModels> | ReturnType<typeof useCivitaiFeed>;
+
+/** The results grid with its loading, error and empty states (Browse and Following). */
+export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
   const open = useCivitai((s) => s.open);
   const [downloading, setDownloading] = useState<number | null>(null);
   const settings = useSettings().data;
   const blurNsfw = useCivitai((s) => s.blur);
   const showMarks = settings?.civitai.marks ?? true;
   const downloads = useLive((s) => s.downloads);
-  const qc = useQueryClient();
-  const profileId = useSession((s) => s.profileId);
-  const setFilter = useCivitai((s) => s.setFilter);
 
   const items = useMemo(() => {
     const seen = new Set<number>();
@@ -380,21 +492,7 @@ function Results({ filter }: { filter: BrowseFilter }) {
     return out;
   }, [q.data]);
 
-  // The server remembers searches; show the new one in "Recent".
-  const fresh = q.isSuccess && !q.isPlaceholderData;
-  useEffect(() => {
-    if (filter.query && fresh)
-      void qc.invalidateQueries({ queryKey: qk.civitaiSearches(profileId) });
-  }, [filter.query, fresh, qc, profileId]);
-
-  if (q.isLoading)
-    return (
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(188px,1fr))] gap-3 p-3">
-        {Array.from({ length: 12 }, (_, i) => (
-          <Skeleton key={i} className="aspect-[3/4]" />
-        ))}
-      </div>
-    );
+  if (q.isLoading) return <CardSkeletons count={12} />;
   if (q.error && !items.length)
     return (
       <EmptyState
@@ -405,21 +503,7 @@ function Results({ filter }: { filter: BrowseFilter }) {
         action={<Button onClick={() => void q.refetch()}>Try again</Button>}
       />
     );
-  if (!items.length)
-    return (
-      <EmptyState
-        icon="search"
-        title="No models match"
-        text="Try other words, fewer types or another period."
-        action={
-          <Button
-            onClick={() => setFilter({ query: "", types: [], baseModels: [], period: "AllTime" })}
-          >
-            Search everything
-          </Button>
-        }
-      />
-    );
+  if (!items.length) return empty;
   return (
     <>
       <Grid

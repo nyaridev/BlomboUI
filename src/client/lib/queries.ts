@@ -77,6 +77,8 @@ export const qk = {
   civitai: (profileId: string | null) => ["civitai", profileId] as const,
   civitaiModels: (profileId: string | null, filter: BrowseFilter) =>
     ["civitai", profileId, "models", filter] as const,
+  civitaiFeed: (profileId: string | null, users: string[], filter: BrowseFilter) =>
+    ["civitai", profileId, "feed", users, filter] as const,
   civitaiModel: (profileId: string | null, id: number | null) =>
     ["civitai", profileId, "model", id] as const,
   civitaiByHash: (profileId: string | null, sha256: string | null) =>
@@ -725,6 +727,23 @@ export function useCivitaiModels(filter: BrowseFilter | null) {
     getNextPageParam: (last: CivitaiPage) => last.nextCursor,
     enabled: profileId !== null && filter !== null,
     // The server caches Civitai's answers; browsing back to a filter is instant.
+    staleTime: 5 * 60_000,
+    placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * The Following feed: the creators' newest models with the filter (one page; same shape as
+ * `useCivitaiModels`, so the browser's grid shows either).
+ */
+export function useCivitaiFeed(users: string[], filter: BrowseFilter | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useInfiniteQuery({
+    queryKey: qk.civitaiFeed(profileId, users, filter as BrowseFilter),
+    queryFn: () => api.civitaiFeed(users, filter as BrowseFilter),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: CivitaiPage) => last.nextCursor,
+    enabled: profileId !== null && filter !== null && users.length > 0,
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
   });

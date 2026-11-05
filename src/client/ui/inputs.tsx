@@ -20,6 +20,8 @@ const neutralBorder = "border-line hover:border-line-strong";
 
 export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "size"> {
   icon?: IconName;
+  /** Before the text, after the icon: a token the text goes with (a creator chip). */
+  leading?: ReactNode;
   trailing?: ReactNode;
   size?: "sm" | "md" | "lg";
   invalid?: boolean;
@@ -32,6 +34,7 @@ export interface TextFieldProps extends Omit<InputHTMLAttributes<HTMLInputElemen
 
 export function TextField({
   icon,
+  leading,
   trailing,
   size = "md",
   invalid,
@@ -58,6 +61,7 @@ export function TextField({
       )}
     >
       {icon ? <Icon name={icon} size={15} className="text-fg-3" /> : null}
+      {leading}
       <input
         value={value}
         size={1}

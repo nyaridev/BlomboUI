@@ -689,6 +689,23 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 <TextField id={id} value="B:\Models" valid mono onChange={() => undefined} />
               )}
             </Field>
+            <Field
+              label="With a token"
+              hint="Backspace at the start removes it (Civitai's creator)."
+            >
+              {(id) => (
+                <TextField
+                  id={id}
+                  icon="search"
+                  placeholder="Search pixelsmith's models"
+                  leading={
+                    <Chip size="sm" icon="user" selected onRemove={() => undefined}>
+                      pixelsmith
+                    </Chip>
+                  }
+                />
+              )}
+            </Field>
             <Field label="Select (grouped)">
               <Select
                 value={sel}

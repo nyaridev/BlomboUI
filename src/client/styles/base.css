@@ -130,6 +130,21 @@
   }
 }
 
+/* A tab that was just opened (Models → Civitai): an accent fill that fades, so a tab opened
+   behind with a middle click is noticed. */
+@utility tab-flash {
+  animation: tab-flash 1100ms ease-out both;
+}
+@keyframes tab-flash {
+  0%,
+  25% {
+    background: color-mix(in oklab, var(--accent) 38%, transparent);
+  }
+  to {
+    background: transparent;
+  }
+}
+
 /* Settings → Appearance → Motion: "system" follows Windows, "reduced" always, "full" never. */
 @layer base {
   @media (prefers-reduced-motion: reduce) {

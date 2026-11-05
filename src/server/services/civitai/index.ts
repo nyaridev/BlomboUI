@@ -13,6 +13,7 @@ import {
   type CivitaiSearch,
   type CivitaiView,
   type LocalMark,
+  mergeFeed,
 } from "../../../shared/civitai.ts";
 import type { LocalModel } from "../../../shared/models.ts";
 import type { ProfileDbs } from "../../db/profileDb.ts";
@@ -143,6 +144,36 @@ export class CivitaiService {
         .map((m) => normalize.card(m, ctx)),
       nextCursor: (page.items?.length ?? 0) > 0 ? CivitaiApi.nextCursor(page) : null,
     };
+  }
+
+  /**
+   * The Following feed: each creator's newest models with the filter, merged newest first.
+   * shortcut: one page (40) per creator, no "load more"; picking a creator lists all of theirs.
+   * Asks Civitai four creators at a time; a creator Civitai can't answer for is left out, unless
+   * none answer.
+   */
+  async feed(users: string[], filter: BrowseFilter): Promise<CivitaiPage> {
+    const key = await this.key(this.active());
+    const ctx = await this.context();
+    const pages: CivitaiPage["items"][] = [];
+    let failure: unknown = null;
+    for (let i = 0; i < users.length; i += 4)
+      await Promise.all(
+        users.slice(i, i + 4).map(async (username) => {
+          try {
+            const page = await this.api.models({ ...filter, username, sort: "Newest" }, null, key);
+            pages.push(
+              (page.items ?? [])
+                .filter((m) => typeof m?.id === "number")
+                .map((m) => normalize.card(m, ctx)),
+            );
+          } catch (error) {
+            failure ??= error;
+          }
+        }),
+      );
+    if (!pages.length && failure) throw failure;
+    return { items: mergeFeed(pages), nextCursor: null };
   }
 
   async rawModel(id: number): Promise<RawModel> {

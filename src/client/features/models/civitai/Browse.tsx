@@ -170,7 +170,8 @@ export function FilterBar({
   return (
     <div className="flex flex-col gap-2.5 border-b border-line p-3">
       <form
-        className="flex items-center gap-2"
+        // Narrow screens give the field its own line, the buttons under it.
+        className="flex items-center gap-2 max-lg:flex-wrap"
         onSubmit={(e) => {
           e.preventDefault();
           search(text);
@@ -213,7 +214,7 @@ export function FilterBar({
             ) : null
           }
           trailing={creator ? <FollowButton name={creator} /> : null}
-          className="flex-1"
+          className="flex-1 max-lg:order-first max-lg:basis-full"
           placeholder={
             creator || typeof following === "string"
               ? `Search ${creator || following}'s models`
@@ -223,9 +224,10 @@ export function FilterBar({
           }
           aria-label="Search Civitai"
         />
-        <Button variant="primary" type="submit" icon="search">
+        <Button variant="primary" type="submit" icon="search" className="max-lg:flex-1">
           Search
         </Button>
+        <MoreFilters filter={filter} defaults={defaults} />
         <NsfwBlurToggle size="lg" />
       </form>
       <div className="flex flex-wrap items-center gap-2">
@@ -264,7 +266,6 @@ export function FilterBar({
             className="w-[172px]"
             options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
           />
-          <MoreFilters filter={filter} defaults={defaults} />
           {changed ? (
             <Button
               variant="ghost"
@@ -471,7 +472,8 @@ function rangeLabel(f: BrowseFilter): string | null {
 /**
  * The Filters pop-up (as on Civitai's site): the period, the model types as chips (several at
  * once; none is all of them), a published-date range on top of the period (Civitai's own site
- * search: 31 days at most, with the API key; quick picks or two clicks on a calendar), and Hide
+ * search: 31 days at most, with the API key; behind a Custom dates switch: quick picks or two
+ * clicks on a calendar), and Hide
  * downloaded. The button counts what differs from the profile's defaults.
  */
 function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: BrowseFilter }) {
@@ -484,6 +486,9 @@ function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: Bro
   const setRange = (r: { from: string; to: string }) =>
     setFilter({ publishedFrom: r.from, publishedTo: r.to });
   const range = rangeLabel(filter);
+  /** The calendar shows once Custom dates is on, and whenever a range is set. */
+  const [custom, setCustom] = useState(false);
+  const showDates = custom || Boolean(from);
   const sameTypes = [...filter.types].sort().join() === [...defaults.types].sort().join();
   const on =
     (filter.period !== defaults.period ? 1 : 0) +
@@ -499,18 +504,19 @@ function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: Bro
       placement="bottom-end"
       className="w-[352px] p-0"
       trigger={
-        <Button
-          variant="outline"
+        <IconButton
           icon="filter"
-          className={cn(on > 0 && "border-accent-ink/60 text-fg")}
-        >
-          Filters
-          {on ? (
-            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-on-accent tabular">
-              {on}
-            </span>
-          ) : null}
-        </Button>
+          variant="secondary"
+          label={on ? `Filters (${on} on)` : "Filters"}
+          active={on > 0}
+          badge={
+            on ? (
+              <span className="absolute -top-1 -right-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] leading-none font-semibold text-on-accent tabular ring-2 ring-surface">
+                {on}
+              </span>
+            ) : null
+          }
+        />
       }
     >
       {(close) => (
@@ -551,37 +557,48 @@ function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: Bro
             <div className="flex items-center gap-2">
               <h3 className="label-caps">Published</h3>
               {range ? <span className="text-2xs text-fg-2">{range}</span> : null}
-              {from || to ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="-my-1 ml-auto h-6 px-1.5 text-2xs"
-                  onClick={() => setRange({ from: "", to: "" })}
-                >
-                  Any date
-                </Button>
-              ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-1.5">
-              {quickRanges(today()).map((q) => (
-                <Chip
-                  key={q.label}
-                  className="w-full"
-                  selected={q.range.from === from && q.range.to === to}
-                  onClick={() => setRange(q.range)}
-                >
-                  {q.label}
-                </Chip>
-              ))}
+            <div className="flex items-start gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-sm text-fg">Custom dates</span>
+                <span className="text-2xs text-pretty text-fg-3">
+                  Only models published between two days, on top of the time period.
+                </span>
+              </div>
+              <Switch
+                size="sm"
+                label="Custom dates"
+                checked={showDates}
+                onCheckedChange={(on) => {
+                  setCustom(on);
+                  if (!on) setRange({ from: "", to: "" });
+                }}
+              />
             </div>
-            <RangeCalendar from={from} to={to} maxDays={DATE_RANGE_DAYS} onChange={setRange} />
-            {keySet ? null : (
-              <p className="flex gap-1.5 text-2xs text-pretty text-warning">
-                <Icon name="info" size={12} className="mt-px shrink-0" />
-                Searching by date uses Civitai's own search, which needs your API key. Add it in
-                Settings → Civitai.
-              </p>
-            )}
+            {showDates ? (
+              <>
+                <div className="grid grid-cols-2 gap-1.5">
+                  {quickRanges(today()).map((q) => (
+                    <Chip
+                      key={q.label}
+                      className="w-full"
+                      selected={q.range.from === from && q.range.to === to}
+                      onClick={() => setRange(q.range)}
+                    >
+                      {q.label}
+                    </Chip>
+                  ))}
+                </div>
+                <RangeCalendar from={from} to={to} maxDays={DATE_RANGE_DAYS} onChange={setRange} />
+                {keySet ? null : (
+                  <p className="flex gap-1.5 text-2xs text-pretty text-warning">
+                    <Icon name="info" size={12} className="mt-px shrink-0" />
+                    Searching by date uses Civitai's own search, which needs your API key. Add it in
+                    Settings → Civitai.
+                  </p>
+                )}
+              </>
+            ) : null}
           </section>
           <section className="flex flex-col gap-2.5 border-t border-line p-3">
             <h3 className="label-caps">Your models</h3>
@@ -613,6 +630,7 @@ function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: Bro
                   publishedFrom: "",
                   publishedTo: "",
                 });
+                setCustom(false);
                 if (hideLocal) toggleHideLocal();
               }}
             >

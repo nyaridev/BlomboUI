@@ -1,8 +1,9 @@
 /**
  * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
  * filter) as a removable chip in front of the text, the NSFW blur, the types, category and base
- * model dropdowns (base models in family sections: shared/basemodels.ts), Hide downloaded, sort,
- * period and a published-date range (Civitai's site search, with the API key); what's listed follows the profile's Civitai site), recent searches, and the results
+ * model dropdowns (base models in family sections: shared/basemodels.ts), sort, period and a
+ * Filters pop-up (a published-date range through Civitai's site search with the API key, and
+ * Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -34,6 +35,7 @@ import {
   Popover,
   Select,
   Skeleton,
+  Switch,
   TextField,
   Tooltip,
   toast,
@@ -143,8 +145,6 @@ export function FilterBar({
 }) {
   const setFilter = useCivitai((s) => s.setFilter);
   const replace = useCivitai((s) => s.replaceFilter);
-  const hideLocal = useCivitai((s) => s.hideLocal);
-  const toggleHideLocal = useCivitai((s) => s.toggleHideLocal);
   const settings = useSettings().data;
   const searches = useCivitaiSearches().data ?? [];
   const qc = useQueryClient();
@@ -252,9 +252,6 @@ export function FilterBar({
                 : CATEGORY_OPTIONS
             }
           />
-          <Chip size="sm" icon="check-circle" selected={hideLocal} onClick={toggleHideLocal}>
-            Hide downloaded
-          </Chip>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           <Select<string>
@@ -300,7 +297,7 @@ export function FilterBar({
               icon: "calendar",
             }))}
           />
-          <DateRange filter={filter} />
+          <MoreFilters filter={filter} />
           {changed ? (
             <Button
               size="sm"
@@ -454,75 +451,126 @@ function rangeLabel(f: BrowseFilter): string | null {
 }
 
 /**
- * Published between two days, on top of the period: Civitai's own site search, which takes a
- * range of up to 31 days and needs the API key. Setting one end fills in the other.
+ * The Filters pop-up (as on Civitai's site): a published-date range, on top of the period
+ * (Civitai's own site search: 31 days at most, with the API key; setting one day fills in the
+ * other), and Hide downloaded. The button counts what's on.
  */
-function DateRange({ filter }: { filter: BrowseFilter }) {
+function MoreFilters({ filter }: { filter: BrowseFilter }) {
   const setFilter = useCivitai((s) => s.setFilter);
+  const hideLocal = useCivitai((s) => s.hideLocal);
+  const toggleHideLocal = useCivitai((s) => s.toggleHideLocal);
   const keySet = useCivitaiAccount().data?.keySet ?? true;
   const from = filter.publishedFrom;
   const to = filter.publishedTo;
-  const set = (r: { from: string; to: string }) =>
+  const setRange = (r: { from: string; to: string }) =>
     setFilter({ publishedFrom: r.from, publishedTo: r.to });
-  const label = rangeLabel(filter);
+  const range = rangeLabel(filter);
+  const on = (range ? 1 : 0) + (hideLocal ? 1 : 0);
   return (
     <Popover
       placement="bottom-end"
-      className="w-[288px] p-3"
+      className="w-[320px] p-0"
       trigger={
         <Button
           size="sm"
           variant="outline"
-          icon="calendar"
-          className={cn(label && "border-accent-ink/60 text-fg")}
+          icon="filter"
+          className={cn(on > 0 && "border-accent-ink/60 text-fg")}
         >
-          {label ?? "Any date"}
+          Filters
+          {on ? (
+            <span className="grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-on-accent tabular">
+              {on}
+            </span>
+          ) : null}
         </Button>
       }
     >
-      <div className="flex flex-col gap-3">
-        <div className="grid grid-cols-2 gap-2">
-          <label className="flex flex-col gap-1 text-2xs text-fg-3">
-            Published from
-            <TextField
+      {(close) => (
+        <div className="flex flex-col">
+          <section className="flex flex-col gap-2.5 p-3">
+            <div className="flex items-center gap-2">
+              <h3 className="label-caps">Published</h3>
+              {range ? <span className="text-2xs text-fg-2">{range}</span> : null}
+              {from || to ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="-my-1 ml-auto h-6 px-1.5 text-2xs"
+                  onClick={() => setRange({ from: "", to: "" })}
+                >
+                  Any date
+                </Button>
+              ) : null}
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1 text-2xs text-fg-3">
+                From
+                <TextField
+                  size="sm"
+                  type="date"
+                  value={from}
+                  onChange={(e) => setRange(completeDateRange(e.target.value, to, "from"))}
+                />
+              </label>
+              <label className="flex flex-col gap-1 text-2xs text-fg-3">
+                To
+                <TextField
+                  size="sm"
+                  type="date"
+                  value={to}
+                  onChange={(e) => setRange(completeDateRange(from, e.target.value, "to"))}
+                />
+              </label>
+            </div>
+            <p className="text-2xs text-pretty text-fg-3">
+              {DATE_RANGE_DAYS} days at most, both days counted (UTC), as Civitai allows. Picking
+              one day fills in the other.
+            </p>
+            {keySet ? null : (
+              <p className="flex gap-1.5 text-2xs text-pretty text-warning">
+                <Icon name="info" size={12} className="mt-px shrink-0" />
+                Searching by date uses Civitai's own search, which needs your API key. Add it in
+                Settings → Civitai.
+              </p>
+            )}
+          </section>
+          <section className="flex flex-col gap-2.5 border-t border-line p-3">
+            <h3 className="label-caps">Your models</h3>
+            <div className="flex items-start gap-3">
+              <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-sm text-fg">Hide downloaded</span>
+                <span className="text-2xs text-pretty text-fg-3">
+                  Leave out models with a version in your models folder.
+                </span>
+              </div>
+              <Switch
+                size="sm"
+                label="Hide downloaded"
+                checked={hideLocal}
+                onCheckedChange={toggleHideLocal}
+              />
+            </div>
+          </section>
+          <footer className="flex items-center gap-2 border-t border-line px-3 py-2">
+            <Button
               size="sm"
-              type="date"
-              value={from}
-              onChange={(e) => set(completeDateRange(e.target.value, to, "from"))}
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-2xs text-fg-3">
-            To
-            <TextField
-              size="sm"
-              type="date"
-              value={to}
-              onChange={(e) => set(completeDateRange(from, e.target.value, "to"))}
-            />
-          </label>
+              variant="ghost"
+              icon="undo"
+              disabled={!on}
+              onClick={() => {
+                setRange({ from: "", to: "" });
+                if (hideLocal) toggleHideLocal();
+              }}
+            >
+              Clear filters
+            </Button>
+            <Button size="sm" variant="secondary" className="ml-auto" onClick={close}>
+              Done
+            </Button>
+          </footer>
         </div>
-        <p className="text-2xs text-pretty text-fg-3">
-          {DATE_RANGE_DAYS} days at most, both days counted (UTC), as Civitai allows. Picking one
-          day fills in the other.
-        </p>
-        {keySet ? null : (
-          <p className="flex gap-1.5 text-2xs text-pretty text-warning">
-            <Icon name="info" size={12} className="mt-px shrink-0" />
-            Searching by date uses Civitai's own search, which needs your API key. Add it in
-            Settings → Civitai.
-          </p>
-        )}
-        <Button
-          size="sm"
-          variant="ghost"
-          icon="x"
-          disabled={!from && !to}
-          onClick={() => set({ from: "", to: "" })}
-          className="self-end"
-        >
-          Any date
-        </Button>
-      </div>
+      )}
     </Popover>
   );
 }

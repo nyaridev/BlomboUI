@@ -120,7 +120,7 @@ function useBaseModelOptions() {
   const names = useCivitaiBaseModels().data?.names ?? KNOWN_BASE_MODELS;
   return useMemo(
     () => [
-      { value: "any", label: "Any base model" },
+      { value: "any", label: "All base models", icon: "models" as IconName },
       ...groupBaseModels(names).map((b) => ({ value: b.name, label: b.label, group: b.group })),
     ],
     [names],

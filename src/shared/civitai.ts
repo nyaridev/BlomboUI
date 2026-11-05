@@ -92,22 +92,6 @@ export const CIVITAI_PERIOD_LABELS: Record<CivitaiPeriod, string> = {
   Day: "Today",
 };
 
-/** Base models offered in the filter bar (Civitai's own names). */
-export const CIVITAI_BASE_MODELS = [
-  "Illustrious",
-  "NoobAI",
-  "Pony",
-  "SDXL 1.0",
-  "SD 1.5",
-  "Flux.1 D",
-  "Flux.1 S",
-  "SD 3.5",
-  "Anima",
-  "Qwen",
-  "Wan Video 2.2 T2V-A14B",
-  "Other",
-] as const;
-
 /**
  * Civitai's model categories, as its site's filter row lists them (the API's `tag`; one at a time).
  */

@@ -3,8 +3,9 @@
  * When there is no thumbnail it shows a checkerboard tinted in the kind's color with the kind's
  * icon (the old app's empty card), so a wall of un-thumbnailed LoRAs still reads by kind. Thumbnails marked NSFW
  * are blurred until clicked when `blurNsfw` is on (the Civitai view's NSFW button).
- * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading"); an
- * installed card also gets a green outline, an update a yellow one.
+ * A `mark` pins a small status pill to the corner ("Installed", "Update", "Downloading") and
+ * outlines the card in its color with an inner glow (green, yellow, or the accent, pulsing while
+ * it downloads).
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -77,6 +78,13 @@ export interface CardMark {
   icon: IconName;
   tone: "success" | "accent" | "warning";
 }
+
+/** The outline color (`--mark`, read by the `mark-glow` utility) per tone. */
+const MARK_COLOR: Record<CardMark["tone"], string> = {
+  success: "[--mark:var(--green)]",
+  accent: "[--mark:var(--accent)]",
+  warning: "[--mark:var(--yellow)]",
+};
 
 const MARK_ICON: Record<CardMark["tone"], string> = {
   success: "text-green",
@@ -168,11 +176,9 @@ export function ModelCard({
         // Selected: the light outline and inner glow of a selected strip tile (`shadow-selected`).
         selected
           ? "border-transparent shadow-selected"
-          : mark?.tone === "success"
-            ? "border-green ring-1 ring-green"
-            : mark?.tone === "warning"
-              ? "border-yellow/80"
-              : "border-line hover:border-line-strong",
+          : mark
+            ? cn(MARK_COLOR[mark.tone], "border-(--mark)")
+            : "border-line hover:border-line-strong",
         className,
       )}
     >
@@ -232,6 +238,13 @@ export function ModelCard({
       </button>
       {selected ? (
         <span className="pointer-events-none absolute inset-0 z-[5] rounded-[inherit] shadow-selected" />
+      ) : mark ? (
+        <span
+          className={cn(
+            "pointer-events-none absolute inset-0 z-[5] rounded-[inherit] mark-glow",
+            mark.tone === "accent" && "motion-safe:animate-pulse",
+          )}
+        />
       ) : null}
       {veiled ? (
         <button

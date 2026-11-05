@@ -2,7 +2,7 @@
  * Select: a dropdown you can type in (a combobox; Floating UI behavior, our visuals). Groups,
  * icons, hints. Closed, the field shows the picked option; a click opens the list and clears the
  * field (the pick stays as its placeholder); typing narrows the list to the labels that contain
- * the text and marks the first match, so Enter picks it at once. ↑ ↓ move, Esc closes. The list
+ * every word of the text and marks the first match, so Enter picks it at once. ↑ ↓ move, Esc closes. The list
  * reserves no scrollbar space when it doesn't scroll. `MultiSelect` is the same list picking
  * several: it stays open, picked rows are green with a check, the field reads "SDXL 1.0,
  * Illustrious", and an optional first row clears them all.
@@ -99,14 +99,20 @@ export function MultiSelect<T extends string>({
   );
 }
 
-/** The options whose label contains the text, case-insensitively (all of them without text). */
+/**
+ * The options whose label contains every word of the text, case-insensitively ("wan 2.2" finds
+ * "Wan Video 2.2 T2V-A14B"); all of them without text.
+ */
 export function matchOptions<T extends string>(
   options: SelectOption<T>[],
   text: string,
 ): SelectOption<T>[] {
-  const q = text.trim().toLowerCase();
-  if (!q) return options;
-  return options.filter((o) => o.label.toLowerCase().includes(q));
+  const words = text.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return options;
+  return options.filter((o) => {
+    const label = o.label.toLowerCase();
+    return words.every((w) => label.includes(w));
+  });
 }
 
 function Listbox<T extends string>({

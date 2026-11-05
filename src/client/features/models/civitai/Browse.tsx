@@ -1,7 +1,7 @@
 /**
  * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
- * filter) as a removable chip in front of the text, the NSFW blur, the types dropdown before
- * Civitai's categories, base model, sort, period; what's listed follows the profile's Civitai site), recent searches, and the results
+ * filter) as a removable chip in front of the text, the NSFW blur, the types, category and base
+ * model dropdowns (base models in family sections: shared/basemodels.ts), sort, period; what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -30,16 +30,15 @@ import {
   ModelCard,
   MultiSelect,
   Popover,
-  Segmented,
   Select,
   Skeleton,
   TextField,
   Tooltip,
   toast,
 } from "@client/ui";
+import { BASE_MODEL_GROUPS } from "@shared/basemodels";
 import {
   BrowseFilter,
-  CIVITAI_BASE_MODELS,
   CIVITAI_CATEGORIES,
   CIVITAI_FILTER_TYPES,
   CIVITAI_PERIOD_LABELS,
@@ -102,6 +101,18 @@ export function CardSkeletons({ count }: { count: number }) {
 }
 
 /* ── filter bar ─────────────────────────────────────────────────────────── */
+
+const CATEGORY_OPTIONS = [
+  { value: "", label: "All categories", icon: "tag" as IconName },
+  ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
+];
+
+/** Every base model Civitai knows, in family sections, then its own "Other". */
+const BASE_MODEL_OPTIONS = [
+  { value: "any", label: "Any base model" },
+  ...BASE_MODEL_GROUPS.flatMap((g) => g.names.map((n) => ({ value: n, label: n, group: g.title }))),
+  { value: "Other", label: "Other", group: "Other" },
+];
 
 const SORT_ICONS: Record<CivitaiSort, IconName> = {
   "Highest Rated": "star",
@@ -205,9 +216,7 @@ export function FilterBar({
         <NsfwBlurToggle size="md" />
       </form>
       <div className="flex flex-wrap items-center gap-1.5">
-        {/* Types in a dropdown, then Civitai's categories (one at a time, as on its site); the
-            categories scroll sideways when the row is narrow. */}
-        <div className="flex max-w-full min-w-0 items-center gap-1.5">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5">
           <MultiSelect
             size="sm"
             label="Model types"
@@ -224,21 +233,19 @@ export function FilterBar({
               };
             })}
           />
-          <div className="scroll-quiet -mb-1 min-w-0 overflow-x-auto pb-1 [scrollbar-gutter:auto]">
-            {/* w-max: the segments keep their width and scroll, instead of squeezing to two lines. */}
-            <div className="w-max">
-              <Segmented<string>
-                size="sm"
-                label="Category"
-                value={filter.tag}
-                onChange={(tag) => setFilter({ tag })}
-                options={[
-                  { value: "", label: "All categories" },
-                  ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
-                ]}
-              />
-            </div>
-          </div>
+          {/* One category at a time, as on Civitai's site; a tag from elsewhere shows as itself. */}
+          <Select<string>
+            size="sm"
+            label="Category"
+            value={filter.tag}
+            onChange={(tag) => setFilter({ tag })}
+            className="w-[150px] shrink-0"
+            options={
+              filter.tag && !CATEGORY_OPTIONS.some((o) => o.value === filter.tag)
+                ? [...CATEGORY_OPTIONS, { value: filter.tag, label: categoryLabel(filter.tag) }]
+                : CATEGORY_OPTIONS
+            }
+          />
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           <Select<string>
@@ -246,11 +253,16 @@ export function FilterBar({
             label="Base model"
             value={filter.baseModels[0] ?? "any"}
             onChange={(v) => setFilter({ baseModels: v === "any" ? [] : [v] })}
-            className="w-[150px]"
-            options={[
-              { value: "any", label: "Any base model" },
-              ...CIVITAI_BASE_MODELS.map((b) => ({ value: b, label: b })),
-            ]}
+            className="w-[190px]"
+            options={
+              filter.baseModels[0] &&
+              !BASE_MODEL_OPTIONS.some((o) => o.value === filter.baseModels[0])
+                ? [
+                    ...BASE_MODEL_OPTIONS,
+                    { value: filter.baseModels[0], label: filter.baseModels[0] },
+                  ]
+                : BASE_MODEL_OPTIONS
+            }
           />
           {following ? (
             <span className="flex h-7 items-center gap-1.5 px-1 text-xs text-fg-3">

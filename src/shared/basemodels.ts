@@ -1,17 +1,21 @@
 /**
- * Base models grouped by who makes them (the old app's model types), for the pickers' base
- * model filter. Names are Civitai's; local models carry shortBaseModel()'s labels ("IL",
- * "SD1.5", or a name cut to 10 characters), which are matched too. Anything else is "Other".
+ * Base models grouped by family (Wan, Qwen, Flux, SDXL…), the most used first, for the pickers'
+ * base model filter and the Civitai browser's. Names are Civitai's; local models carry
+ * shortBaseModel()'s labels ("IL", "SD1.5", or a name cut to 10 characters), which are matched
+ * too. Anything else is "Other".
  */
 
 export const BASE_MODEL_GROUPS: ReadonlyArray<{ title: string; names: readonly string[] }> = [
-  { title: "Anima", names: ["Anima"] },
-  { title: "AuraFlow", names: ["AuraFlow"] },
-  { title: "Chroma", names: ["Chroma"] },
-  { title: "CogVideoX", names: ["CogVideoX"] },
-  { title: "Baidu", names: ["Ernie"] },
+  { title: "Illustrious and NoobAI", names: ["Illustrious", "NoobAI"] },
+  { title: "Pony", names: ["Pony", "Pony V7"] },
+  { title: "SDXL", names: ["SDXL 1.0", "SDXL Lightning", "SDXL Hyper"] },
   {
-    title: "Black Forest Labs",
+    title: "SD 1 and 2",
+    names: ["SD 1.4", "SD 1.5", "SD 1.5 LCM", "SD 1.5 Hyper", "SD 2.0", "SD 2.1"],
+  },
+  { title: "SD 3", names: ["SD 3", "SD 3.5"] },
+  {
+    title: "Flux",
     names: [
       "Flux.1 S",
       "Flux.1 D",
@@ -25,28 +29,10 @@ export const BASE_MODEL_GROUPS: ReadonlyArray<{ title: string; names: readonly s
       "Flux 3 Video",
     ],
   },
-  { title: "xAI", names: ["Grok"] },
-  { title: "Alibaba - Taotian", names: ["HappyHorse"] },
-  { title: "HiDream", names: ["HiDream", "HiDream-O1"] },
-  { title: "Tencent", names: ["Hunyuan 1", "Hunyuan Video"] },
-  { title: "Ideogram", names: ["Ideogram 4.0"] },
-  { title: "Boogu", names: ["Boogu"] },
-  { title: "SDXL Community", names: ["Illustrious", "NoobAI"] },
-  { title: "Kolors", names: ["Kolors"] },
-  { title: "Krea AI", names: ["Krea 2"] },
-  { title: "Lightricks", names: ["LTXV", "LTXV2", "LTXV 2.3", "LTXV 2.5"] },
-  { title: "Lens", names: ["Lens"] },
-  { title: "Lumina", names: ["Lumina"] },
-  { title: "Microsoft", names: ["MageFlow", "MAI"] },
-  { title: "Mochi", names: ["Mochi"] },
-  { title: "PixArt", names: ["PixArt a", "PixArt E"] },
-  { title: "Pony Diffusion", names: ["Pony", "Pony V7"] },
+  { title: "Qwen", names: ["Qwen", "Qwen 2", "Qwen 3"] },
   {
-    title: "Alibaba",
+    title: "Wan",
     names: [
-      "Qwen",
-      "Qwen 2",
-      "Qwen 3",
       "Wan Video 1.3B t2v",
       "Wan Video 14B t2v",
       "Wan Video 14B i2v 480p",
@@ -60,26 +46,34 @@ export const BASE_MODEL_GROUPS: ReadonlyArray<{ title: string; names: readonly s
       "Wan Video 2.7",
     ],
   },
+  { title: "Z-Image", names: ["ZImageTurbo", "ZImageBase"] },
+  { title: "Chroma", names: ["Chroma"] },
+  { title: "HiDream", names: ["HiDream", "HiDream-O1"] },
+  { title: "Hunyuan", names: ["Hunyuan 1", "Hunyuan Video"] },
+  { title: "LTX Video", names: ["LTXV", "LTXV2", "LTXV 2.3", "LTXV 2.5"] },
   {
-    title: "Stability AI",
+    title: "More image models",
     names: [
-      "SD 1.4",
-      "SD 1.5",
-      "SD 1.5 LCM",
-      "SD 1.5 Hyper",
-      "SD 2.0",
-      "SD 2.1",
-      "SD 3",
-      "SD 3.5",
-      "SDXL 1.0",
-      "SDXL Lightning",
-      "SDXL Hyper",
+      "Anima",
+      "AuraFlow",
+      "Boogu",
+      "Ernie",
+      "Grok",
+      "HappyHorse",
+      "Ideogram 4.0",
+      "Kolors",
+      "Krea 2",
+      "Lens",
+      "Lumina",
+      "MageFlow",
+      "MAI",
+      "PixArt a",
+      "PixArt E",
+      "Reve",
     ],
   },
-  { title: "Reve AI", names: ["Reve"] },
-  { title: "Alibaba - Tongyi Lab", names: ["ZImageTurbo", "ZImageBase"] },
-  { title: "Hailuo H3 by MiniMax", names: ["MiniMax H3"] },
-  { title: "ACE Audio", names: ["ACE Audio"] },
+  { title: "More video models", names: ["CogVideoX", "Mochi", "MiniMax H3"] },
+  { title: "Audio", names: ["ACE Audio"] },
 ];
 
 /** shortBaseModel()'s labels: the listed name they sort with, and how they read. */

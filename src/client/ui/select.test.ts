@@ -8,10 +8,14 @@ const OPTIONS = [
 ];
 
 describe("matchOptions", () => {
-  it("keeps labels that contain the text, ignoring case and group names", () => {
+  it("keeps labels that contain every word, ignoring case and group names", () => {
     expect(matchOptions(OPTIONS, "  ")).toHaveLength(3);
     expect(matchOptions(OPTIONS, "COLL").map((o) => o.value)).toEqual(["b"]);
     expect(matchOptions(OPTIONS, "sd").map((o) => o.value)).toEqual(["c"]);
     expect(matchOptions(OPTIONS, "zzz")).toEqual([]);
+    // Each word on its own, in any order.
+    expect(matchOptions(OPTIONS, "sdxl 1.0").map((o) => o.value)).toEqual(["c"]);
+    expect(matchOptions(OPTIONS, "rated high").map((o) => o.value)).toEqual(["a"]);
+    expect(matchOptions(OPTIONS, "sdxl 2")).toEqual([]);
   });
 });

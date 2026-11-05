@@ -240,6 +240,11 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE images ADD COLUMN duration REAL;
   UPDATE images SET size = -1 WHERE lower(path) LIKE '%.webp';
   `,
+  // 10: a JPEG's or WebP's comment can be a ComfyUI graph (Civitai's generator): read them again.
+  `
+  UPDATE images SET size = -1
+  WHERE lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg' OR lower(path) LIKE '%.webp';
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

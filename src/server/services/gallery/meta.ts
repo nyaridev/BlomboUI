@@ -1,9 +1,12 @@
 /**
  * Turns an image's text metadata into the gallery's summary and "use these settings" data.
  * Sources, best first: Blombo's own chunk, ComfyUI's prompt graph, A1111 parameters.
+ * Civitai's generator saves its graph with an `extraMetadata` entry beside the nodes: the
+ * prompt and settings as Civitai keeps them, which read better than the graph's.
  */
 import {
   a1111Summary,
+  civitaiSummary,
   EMPTY_SUMMARY,
   type ImageSettings,
   type ImageSummary,
@@ -39,14 +42,33 @@ function parseJson(text: string | undefined): unknown {
 
 const str = (v: unknown) => (typeof v === "string" && v ? v : null);
 
-/** The prompt graph from a chunk, or null when it isn't one. */
-export function promptGraph(text: Record<string, string>): ApiPrompt | null {
-  const parsed = ApiPrompt.safeParse(parseJson(text.prompt));
+const isObject = (v: unknown): v is Record<string, unknown> =>
+  Boolean(v) && typeof v === "object" && !Array.isArray(v);
+
+/** The nodes of a parsed prompt chunk, without other entries (Civitai's extra, extraMetadata). */
+function graphOf(value: unknown): ApiPrompt | null {
+  if (!isObject(value)) return null;
+  const nodes = Object.entries(value).filter(([, v]) => isObject(v) && "class_type" in v);
+  const parsed = ApiPrompt.safeParse(Object.fromEntries(nodes));
   return parsed.success && Object.keys(parsed.data).length ? parsed.data : null;
 }
 
+/** The prompt graph from a chunk, or null when it isn't one. */
+export function promptGraph(text: Record<string, string>): ApiPrompt | null {
+  return graphOf(parseJson(text.prompt));
+}
+
+/** Civitai's generator's own record in its graph (a JSON string, or an object). */
+function civitaiExtra(value: unknown): Record<string, unknown> | null {
+  if (!isObject(value)) return null;
+  const extra =
+    typeof value.extraMetadata === "string" ? parseJson(value.extraMetadata) : value.extraMetadata;
+  return isObject(extra) ? extra : null;
+}
+
 export function parseMeta(text: Record<string, string>): ParsedMeta {
-  const graph = promptGraph(text);
+  const chunk = parseJson(text.prompt);
+  const graph = graphOf(chunk);
   const workflowUi = parseJson(text.workflow);
   const hasWorkflow =
     graph !== null ||
@@ -69,6 +91,26 @@ export function parseMeta(text: Record<string, string>): ParsedMeta {
       hasWorkflow,
       blombo,
     };
+    const extra = blombo ? null : civitaiExtra(chunk);
+    if (extra) {
+      const shared = civitaiSummary(extra);
+      const s = result.summary;
+      // Civitai's texts win; the graph's settings stay, with Civitai's filling any it lacks.
+      result.summary = {
+        ...s,
+        source: "civitai",
+        prompt: shared.summary.prompt ?? s.prompt,
+        negative: shared.summary.negative ?? s.negative,
+        seed: s.seed ?? shared.summary.seed,
+        steps: s.steps ?? shared.summary.steps,
+        cfg: s.cfg ?? shared.summary.cfg,
+        sampler: s.sampler ?? shared.summary.sampler,
+      };
+      const texts = Object.fromEntries(
+        Object.entries(shared.roles).filter(([k]) => k.startsWith("prompt.")),
+      );
+      result.settings.roles = { ...shared.roles, ...roles, ...texts };
+    }
     if (blombo && raw) {
       const prompts = (raw.prompts ?? {}) as Record<string, unknown>;
       // The final texts (wildcards expanded) read better than the graph's, which match anyway.

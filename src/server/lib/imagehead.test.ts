@@ -54,6 +54,17 @@ describe("readImageHead", () => {
     expect(head.text.parameters).toBe("Steps: 20, Seed: 5");
   });
 
+  it("takes a JSON user comment as the prompt graph (Civitai's generator)", async () => {
+    const graph = '{"1":{"class_type":"X","inputs":{}}}';
+    const jpg = await base()
+      .jpeg()
+      .withExif({ IFD2: { UserComment: graph } })
+      .toBuffer();
+    const head = await readImageHeadBytes(new Uint8Array(jpg));
+    expect(head.text.prompt).toBe(graph);
+    expect(head.text.parameters).toBeUndefined();
+  });
+
   it("says other files are other", async () => {
     expect((await readImageHeadBytes(new TextEncoder().encode("hello"))).format).toBe("other");
   });

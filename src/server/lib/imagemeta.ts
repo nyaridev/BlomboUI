@@ -133,10 +133,17 @@ type ReadAt = (pos: number, length: number) => Promise<Uint8Array>;
 /** Text chunks larger than this are skipped (nobody stores 64 MB of metadata). */
 const MAX_TEXT_CHUNK = 64 * 1024 * 1024;
 
+/** A comment is A1111 text, or a ComfyUI graph as JSON (what Civitai's generator writes). */
+function commentInto(comment: string, out: Record<string, string>): void {
+  const text = comment.trim();
+  const key = text.startsWith("{") ? "prompt" : "parameters";
+  if (text && !out[key]) out[key] = text;
+}
+
 function exifInto(tiff: Uint8Array, out: Record<string, string>): void {
   const exif = readExifStrings(tiff);
   Object.assign(out, keyedJsonStrings(exif.strings));
-  if (exif.userComment?.trim() && !out.parameters) out.parameters = exif.userComment;
+  if (exif.userComment) commentInto(exif.userComment, out);
   // Blocks that aren't valid TIFF still often carry ComfyUI's strings.
   if (!out.prompt && !out.workflow) {
     const raw = new TextDecoder("utf-8").decode(tiff);
@@ -238,8 +245,7 @@ async function readJpeg(readAt: ReadAt, size: number): Promise<ImageHead> {
       if (latin1.decode(d.subarray(0, 4)) === "Exif") exifInto(d.subarray(6), head.text);
     } else if (marker === 0xfe && len > 2) {
       const d = await readAt(pos + 4, len - 2);
-      const comment = new TextDecoder("utf-8").decode(d).trim();
-      if (comment && !head.text.parameters) head.text.parameters = comment;
+      commentInto(new TextDecoder("utf-8").decode(d), head.text);
     }
     pos += 2 + len;
   }

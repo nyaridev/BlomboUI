@@ -5,7 +5,9 @@
  * of Following until you follow them or close it, so Browse's search stays as it was), the
  * opened model tabs, the last tab opened (its tab flashes), whether NSFW images are
  * blurred (this view only, on each time the app starts) and whether models you have are hidden. The filter, home and tabs are remembered
- * in this window (localStorage), so a reload or a restart comes back to them. Server data stays in TanStack Query.
+ * in this window (localStorage), so a reload or a restart comes back to them, except the time
+ * period, which starts at the profile's default (All time unless Settings → Civitai says otherwise)
+ * on Browse and Following alike. Server data stays in TanStack Query.
  */
 import { BrowseFilter, type BrowseFilterInput } from "@shared/civitai";
 import type { Settings } from "@shared/settings";
@@ -37,7 +39,10 @@ interface CivitaiState {
   /** Leave out models with a version in the models folder (this session only). */
   hideLocal: boolean;
   toggleHideLocal: () => void;
-  /** Use the profile's defaults (once, before the first search). */
+  /**
+   * Once per window, before the first search: the profile's defaults, or the saved filter with the
+   * default period.
+   */
   seed: (browse: Settings["civitai"]["browse"]) => void;
   setFilter: (patch: Partial<BrowseFilterInput>) => void;
   replaceFilter: (filter: BrowseFilter) => void;
@@ -55,6 +60,7 @@ interface CivitaiState {
 }
 
 const MAX_TABS = 12;
+let seeded = false;
 const KEY = "blombo.civitai";
 
 type Saved = Pick<CivitaiState, "filter" | "tabs" | "active" | "home">;
@@ -93,7 +99,10 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   hideLocal: false,
   toggleHideLocal: () => set((s) => ({ hideLocal: !s.hideLocal })),
   seed: (browse) => {
-    if (!get().filter) set({ filter: BrowseFilter.parse(browse) });
+    if (seeded) return;
+    seeded = true;
+    const filter = get().filter;
+    set({ filter: filter ? { ...filter, period: browse.period } : BrowseFilter.parse(browse) });
   },
   setFilter: (patch) =>
     set((s) => ({ filter: BrowseFilter.parse({ ...(s.filter ?? {}), ...patch }) })),

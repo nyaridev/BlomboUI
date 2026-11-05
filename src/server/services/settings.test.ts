@@ -60,7 +60,7 @@ describe("SettingsService", () => {
   });
 
   it("never writes over a file from a newer version", async () => {
-    const newer = JSON.stringify({ version: 2, appearance: { font: "inter" }, future: { x: 1 } });
+    const newer = JSON.stringify({ version: 99, appearance: { font: "inter" }, future: { x: 1 } });
     await fs.writeFile(file(), newer);
     expect((await service.get("p")).appearance.font).toBe("inter");
     await expect(service.update("p", { gallery: { tileSize: 300 } })).rejects.toMatchObject({

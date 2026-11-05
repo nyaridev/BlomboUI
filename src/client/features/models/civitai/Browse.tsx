@@ -91,7 +91,7 @@ export function Browse() {
   );
 }
 
-/** Seed the filter from Settings → Civitai's browse defaults (once, before the first search). */
+/** Seed the filter from Settings → Civitai's browse defaults (once a window, before the first search). */
 export function useSeedFilter() {
   const seed = useCivitai((s) => s.seed);
   const settings = useSettings().data;

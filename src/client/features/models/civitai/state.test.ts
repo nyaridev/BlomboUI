@@ -1,5 +1,7 @@
+import { BrowseFilter } from "@shared/civitai";
+import { CivitaiSettings } from "@shared/settings";
 import { describe, expect, it } from "vitest";
-import { readSaved } from "./state";
+import { readSaved, useCivitai } from "./state";
 
 describe("readSaved", () => {
   it("keeps a valid filter and tabs, and the active tab when it's open", () => {
@@ -23,5 +25,17 @@ describe("readSaved", () => {
       home: "browse",
     });
     expect(readSaved(null)).toEqual({ filter: null, tabs: [], active: null, home: "browse" });
+  });
+});
+
+describe("seed", () => {
+  it("starts a saved filter at the default period, once a window", () => {
+    const browse = CivitaiSettings.parse({}).browse;
+    useCivitai.getState().replaceFilter(BrowseFilter.parse({ query: "neon", period: "Month" }));
+    useCivitai.getState().seed(browse);
+    expect(useCivitai.getState().filter).toMatchObject({ query: "neon", period: "AllTime" });
+    useCivitai.getState().setFilter({ period: "Week" });
+    useCivitai.getState().seed(browse);
+    expect(useCivitai.getState().filter?.period).toBe("Week");
   });
 });

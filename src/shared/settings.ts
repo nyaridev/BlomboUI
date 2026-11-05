@@ -11,7 +11,7 @@ import { BrowseFilter, CIVITAI_SITES, FollowedCreator, SavedFilter } from "./civ
 import { salvage } from "./salvage.ts";
 import { SET_RESOLUTIONS, SIZE_MODES } from "./sizes.ts";
 
-export const SETTINGS_VERSION = 1;
+export const SETTINGS_VERSION = 2;
 
 /** UI fonts. Geist and Inter are bundled; the others come from the computer. */
 export const UI_FONTS = ["geist", "inter", "segoe", "system", "custom"] as const;
@@ -272,8 +272,21 @@ export type SettingsPatch = z.infer<typeof SettingsPatch>;
 /** Bring a settings.json of any known version up to the current one. */
 export function migrateSettings(raw: unknown): Settings {
   const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
-  // Version 1 is the first format; later versions add steps here, oldest first.
-  return Settings.parse({ ...input, version: SETTINGS_VERSION });
+  return Settings.parse(upgrade(input));
+}
+
+/** The steps from an older file to the current version, oldest first. */
+function upgrade(input: Record<string, unknown>): Record<string, unknown> {
+  const version = Number(input.version) || 1;
+  let out = input;
+  // 2: the Civitai browser started on Month until All time became the default; files written
+  // then kept Month whether or not it was picked.
+  if (version < 2 && isPlain(out.civitai) && isPlain(out.civitai.browse)) {
+    const browse = out.civitai.browse;
+    if (browse.period === "Month")
+      out = { ...out, civitai: { ...out.civitai, browse: { ...browse, period: "AllTime" } } };
+  }
+  return { ...out, version: SETTINGS_VERSION };
 }
 
 export interface ReadSettings {
@@ -293,7 +306,7 @@ export function readSettings(raw: unknown): ReadSettings {
   const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   const version = Number(input.version);
   const newer = Number.isFinite(version) && version > SETTINGS_VERSION;
-  const { data, fixed } = salvage(Settings, { ...input, version: SETTINGS_VERSION });
+  const { data, fixed } = salvage(Settings, upgrade(input));
   return { settings: data, dropped: fixed, newer };
 }
 

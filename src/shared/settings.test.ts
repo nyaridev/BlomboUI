@@ -52,6 +52,21 @@ describe("settings", () => {
     expect(s.civitai.lookup).toBe(true);
   });
 
+  it("moves version 1's Month default to All time, and keeps a later pick", () => {
+    const old = { version: 1, civitai: { browse: { period: "Month", sort: "Newest" } } };
+    expect(migrateSettings(old).civitai.browse).toMatchObject({
+      period: "AllTime",
+      sort: "Newest",
+    });
+    expect(readSettings(old).settings.civitai.browse.period).toBe("AllTime");
+    expect(
+      readSettings({ version: 1, civitai: { browse: { period: "Week" } } }).settings.civitai.browse
+        .period,
+    ).toBe("Week");
+    const picked = { version: 2, civitai: { browse: { period: "Month" } } };
+    expect(readSettings(picked).settings.civitai.browse.period).toBe("Month");
+  });
+
   it("gives older files the Generate and autocomplete defaults", () => {
     const s = migrateSettings({ appearance: { font: "inter" } });
     expect(s.generate.layout).toBe("default");

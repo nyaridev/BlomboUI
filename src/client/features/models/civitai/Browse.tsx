@@ -825,6 +825,7 @@ function Grid({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
+  const visit = useCivitai((s) => s.visit);
   // A click opens the model a moment later, so a double click can ask to download instead.
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => clearTimeout(clickTimer.current ?? undefined), []);
@@ -905,9 +906,14 @@ function Grid({
                       {compactCount(c.likes)}
                     </span>
                     {c.creator ? (
-                      <span className="ml-auto truncate" title={c.creator}>
+                      <button
+                        type="button"
+                        className="ml-auto min-w-0 truncate rounded-sm hover:text-fg hover:underline focus-ring"
+                        title={`${c.creator}'s models (in Following)`}
+                        onClick={() => c.creator && visit(c.creator)}
+                      >
                         {c.creator}
-                      </span>
+                      </button>
                     ) : null}
                   </div>
                 }

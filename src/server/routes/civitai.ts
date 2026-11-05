@@ -96,6 +96,7 @@ export function civitaiRoutes(civitai: CivitaiService) {
   });
 
   r.get("/history/searches", (c) => c.json(civitai.searches()));
+  r.get("/base-models", async (c) => c.json(await civitai.baseModels()));
   r.delete("/history/searches", (c) => {
     const q = c.req.query("q");
     civitai.forgetSearch(q === undefined ? null : q);

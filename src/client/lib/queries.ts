@@ -90,6 +90,7 @@ export const qk = {
     ["civitai", profileId, "by-hash", sha256] as const,
   civitaiViews: (profileId: string | null) => ["civitai", profileId, "views"] as const,
   civitaiSearches: (profileId: string | null) => ["civitai", profileId, "searches"] as const,
+  civitaiBaseModels: (profileId: string | null) => ["civitai", profileId, "base-models"] as const,
   downloadPlan: (profileId: string | null, body: EnqueueBody | null) =>
     ["download-plan", profileId, body] as const,
   downloadHistory: (profileId: string | null) => ["download-history", profileId] as const,
@@ -841,6 +842,17 @@ export function useCivitaiSearches() {
     queryKey: qk.civitaiSearches(profileId),
     queryFn: api.civitaiSearches,
     enabled: profileId !== null,
+  });
+}
+
+/** The base models Civitai's filter offers (the server asks once a day). */
+export function useCivitaiBaseModels() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiBaseModels(profileId),
+    queryFn: api.civitaiBaseModels,
+    enabled: profileId !== null,
+    staleTime: 60 * 60_000,
   });
 }
 

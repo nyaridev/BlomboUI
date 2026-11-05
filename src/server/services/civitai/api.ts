@@ -142,6 +142,8 @@ export interface RawPage {
 /* ── client ────────────────────────────────────────────────────────────── */
 
 export const SEARCH_TTL = 10 * 60_000;
+/** Civitai's lists of names (base models, types) change rarely. */
+export const ENUMS_TTL = 24 * 3600_000;
 export const MODEL_TTL = 30 * 60_000;
 const MEMORY_ENTRIES = 300;
 const TIMEOUT_MS = 20_000;
@@ -254,6 +256,11 @@ export class CivitaiApi {
     return /^civitai\.(com|red)$/.test(host)
       ? `https://image.${host}/${IMAGE_ACCOUNT}`
       : `${this.origin}/img`;
+  }
+
+  /** Civitai's lists of names: base models (all, and the ones its filter offers), types. */
+  enums(): Promise<{ ActiveBaseModel?: unknown; BaseModel?: unknown }> {
+    return this.get("/api/v1/enums", null, ENUMS_TTL);
   }
 
   model(id: number, key: string | null): Promise<RawModel> {

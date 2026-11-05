@@ -2,7 +2,7 @@
  * A fake Civitai (and model catalog) for tests and dev checks, so neither ever calls the real
  * site or downloads a real model. It serves:
  *
- *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me
+ *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me, /enums
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
@@ -408,6 +408,18 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         let n = 0;
         for (const ch of id) n = (n * 31 + ch.charCodeAt(0)) % 9_973;
         return json(res, 200, { _id: "fake", id, downloadsAllTime: n * 517 });
+      }
+      if (p === "/api/v1/enums") {
+        // Its own bases plus a few the built-in list doesn't have (a new family member, a stranger).
+        const active = [
+          ...new Set([...BASES, "Flux.3", "Wan Video 3.1", "Brand New Model", "Other"]),
+        ];
+        return json(res, 200, {
+          ModelType: ["Checkpoint", "LORA", "TextualInversion"],
+          ActiveBaseModel: active,
+          BaseModel: [...active, "SD 2.0 768"],
+          BaseModelType: ["Standard", "Inpainting"],
+        });
       }
       if (p === "/api/v1/me") {
         if (!authed) return json(res, 401, { error: "Unauthorized" });

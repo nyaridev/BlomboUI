@@ -30,6 +30,7 @@ import {
   type BrowseFilter,
   browseQuery,
   type CivitaiAccount,
+  type CivitaiBaseModels,
   type CivitaiCreator,
   type CivitaiMatch,
   type CivitaiModel,
@@ -438,6 +439,7 @@ export const api = {
   forgetCivitaiView: (modelId: number) =>
     request<{ ok: true }>("DELETE", `/civitai/history/views/${modelId}`),
   civitaiSearches: () => request<CivitaiSearch[]>("GET", "/civitai/history/searches"),
+  civitaiBaseModels: () => request<CivitaiBaseModels>("GET", "/civitai/base-models"),
   forgetCivitaiSearch: (q?: string) =>
     request<{ ok: true }>(
       "DELETE",

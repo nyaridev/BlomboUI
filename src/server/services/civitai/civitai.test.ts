@@ -91,6 +91,22 @@ describe("browsing", () => {
     }
   });
 
+  it("lists the base models Civitai offers, or the built-in ones when it can't answer", async () => {
+    const live = await o.services.civitai.baseModels();
+    expect(live.fromCivitai).toBe(true);
+    expect(live.names).toContain("Wan Video 3.1");
+    expect(live.names).not.toContain("SD 2.0 768");
+    o.services.civitai.api.setSite("http://127.0.0.1:9");
+    o.services.civitai.api.clearMemory();
+    try {
+      const offline = await o.services.civitai.baseModels();
+      expect(offline.fromCivitai).toBe(false);
+      expect(offline.names).toContain("Wan Video 2.2 T2V-A14B");
+    } finally {
+      o.services.civitai.api.setSite(o.fake.url);
+    }
+  });
+
   it("filters by category and merges followed creators' newest models", async () => {
     const styles = await o.services.civitai.search(filter({ tag: "style" }), null);
     expect(styles.items.length).toBeGreaterThan(0);

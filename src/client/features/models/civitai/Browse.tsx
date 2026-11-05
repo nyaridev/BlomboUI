@@ -18,6 +18,7 @@ import { useLive } from "@client/lib/live";
 import {
   qk,
   useCivitaiAccount,
+  useCivitaiBaseModels,
   type useCivitaiFeed,
   useCivitaiModels,
   useCivitaiSearches,
@@ -41,7 +42,7 @@ import {
   Tooltip,
   toast,
 } from "@client/ui";
-import { BASE_MODEL_GROUPS } from "@shared/basemodels";
+import { groupBaseModels, KNOWN_BASE_MODELS } from "@shared/basemodels";
 import {
   BrowseFilter,
   CIVITAI_CATEGORIES,
@@ -114,12 +115,17 @@ const CATEGORY_OPTIONS = [
   ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
 ];
 
-/** Every base model Civitai knows, in family sections, then its own "Other". */
-const BASE_MODEL_OPTIONS = [
-  { value: "any", label: "Any base model" },
-  ...BASE_MODEL_GROUPS.flatMap((g) => g.names.map((n) => ({ value: n, label: n, group: g.title }))),
-  { value: "Other", label: "Other", group: "Other" },
-];
+/** The base models Civitai offers now (the built-in list until it answers), in family sections. */
+function useBaseModelOptions() {
+  const names = useCivitaiBaseModels().data?.names ?? KNOWN_BASE_MODELS;
+  return useMemo(
+    () => [
+      { value: "any", label: "Any base model" },
+      ...groupBaseModels(names).map((b) => ({ value: b.name, label: b.label, group: b.group })),
+    ],
+    [names],
+  );
+}
 
 const SORT_ICONS: Record<CivitaiSort, IconName> = {
   "Highest Rated": "star",
@@ -147,6 +153,7 @@ export function FilterBar({
   const setFilter = useCivitai((s) => s.setFilter);
   const replace = useCivitai((s) => s.replaceFilter);
   const settings = useSettings().data;
+  const baseModelOptions = useBaseModelOptions();
   const [text, setText] = useState(filter.query);
   useEffect(() => setText(filter.query), [filter.query]);
 
@@ -241,12 +248,12 @@ export function FilterBar({
             className="w-[200px]"
             options={
               filter.baseModels[0] &&
-              !BASE_MODEL_OPTIONS.some((o) => o.value === filter.baseModels[0])
+              !baseModelOptions.some((o) => o.value === filter.baseModels[0])
                 ? [
-                    ...BASE_MODEL_OPTIONS,
+                    ...baseModelOptions,
                     { value: filter.baseModels[0], label: filter.baseModels[0] },
                   ]
-                : BASE_MODEL_OPTIONS
+                : baseModelOptions
             }
           />
           {following ? (

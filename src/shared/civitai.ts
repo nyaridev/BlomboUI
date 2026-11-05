@@ -349,6 +349,14 @@ export const CivitaiView = z.object({
 export type CivitaiView = z.infer<typeof CivitaiView>;
 
 export const CivitaiSearch = z.object({ query: z.string(), at: z.number() });
+
+/** The base models Civitai's filter offers now (its ActiveBaseModel list). */
+export const CivitaiBaseModels = z.object({
+  names: z.array(z.string()),
+  /** False: Civitai couldn't be asked, so this is Blombo's built-in list. */
+  fromCivitai: z.boolean(),
+});
+export type CivitaiBaseModels = z.infer<typeof CivitaiBaseModels>;
 export type CivitaiSearch = z.infer<typeof CivitaiSearch>;
 
 /* ── the browse request ──────────────────────────────────────────────────── */

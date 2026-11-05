@@ -13,6 +13,17 @@ describe("groupBaseModels", () => {
     );
   });
 
+  it("puts names it doesn't list into the family they belong to, after its own", () => {
+    expect(groupBaseModels(["Wan Video 3.1", "Wan Video 1.3B t2v", "Flux.4", "Brand new"])).toEqual(
+      [
+        { name: "Flux.4", label: "Flux.4", group: "Flux" },
+        { name: "Wan Video 1.3B t2v", label: "Wan Video 1.3B t2v", group: "Wan" },
+        { name: "Wan Video 3.1", label: "Wan Video 3.1", group: "Wan" },
+        { name: "Brand new", label: "Brand new", group: "Other" },
+      ],
+    );
+  });
+
   it("reads the short labels local models carry", () => {
     expect(groupBaseModels(["SD1.5", "IL", "Wan Video ", "Flux"])).toEqual([
       { name: "IL", label: "Illustrious", group: "Illustrious and NoobAI" },

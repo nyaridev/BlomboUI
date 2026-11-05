@@ -3,9 +3,12 @@
  * browsing through the cached API client, model pages with "installed" marks from the models
  * folder, and the browse and search history in the profile's database.
  */
+
+import { KNOWN_BASE_MODELS } from "../../../shared/basemodels.ts";
 import {
   BrowseFilter,
   type CivitaiAccount,
+  type CivitaiBaseModels,
   CivitaiCreator,
   CivitaiImage,
   type CivitaiMatch,
@@ -355,6 +358,26 @@ export class CivitaiService {
       .db.prepare("SELECT query, at FROM civitai_searches ORDER BY at DESC LIMIT 100")
       .all() as Array<{ query: string; at: number }>;
     return rows.map((r) => ({ query: r.query, at: r.at }));
+  }
+
+  /**
+   * The base models Civitai's filter offers now (ActiveBaseModel, else every BaseModel), a day
+   * old at most; Blombo's built-in list when Civitai can't answer.
+   */
+  async baseModels(): Promise<CivitaiBaseModels> {
+    try {
+      const enums = await this.api.enums();
+      const list = Array.isArray(enums.ActiveBaseModel) ? enums.ActiveBaseModel : enums.BaseModel;
+      const names = Array.isArray(list)
+        ? list.filter(
+            (n): n is string => typeof n === "string" && n.trim() !== "" && n.length <= 60,
+          )
+        : [];
+      if (names.length) return { names, fromCivitai: true };
+    } catch {
+      // Offline or a changed answer: the built-in list below.
+    }
+    return { names: [...KNOWN_BASE_MODELS], fromCivitai: false };
   }
 
   forgetSearch(query: string | null): void {

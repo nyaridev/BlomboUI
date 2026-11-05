@@ -555,7 +555,7 @@ export class JobQueue extends Emitter<QueueEvents> {
             name: run.job.workflowName,
             seed: run.job.seed,
             values: run.values,
-            // What the gallery and File info show: the prompt as it ran, LoRA tags included.
+            // What the gallery and File info show: the prompt as it ran (the LoRAs are in the graph).
             prompts: compiled.shown,
           },
         },

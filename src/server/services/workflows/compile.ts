@@ -11,7 +11,7 @@
  */
 import type { InstantLora, TriggerAt } from "../../../shared/prompt/instant.ts";
 import { withTriggers } from "../../../shared/prompt/instant.ts";
-import { findLoraTags, formatLoraTag, stripLoraTags } from "../../../shared/prompt/loras.ts";
+import { findLoraTags, stripLoraTags } from "../../../shared/prompt/loras.ts";
 import { expandPrompt, type WildcardResolver } from "../../../shared/prompt/wildcards.ts";
 import { rng } from "../../../shared/random.ts";
 import type { ApiPrompt, ObjectInfo } from "../../../shared/workflow/graph.ts";
@@ -59,8 +59,8 @@ export interface CompileResult {
   /** Final texts after wildcards, with LoRA tags removed (stage prompts as "hires.prompt"). */
   texts: Record<string, string>;
   /**
-   * The prompts as they ran, to show and keep: wildcards resolved, LoRA tags kept, and each
-   * instant LoRA's tag with its trigger words where they went (by binding id).
+   * The prompts as they ran, to show and keep (by binding id): wildcards resolved, trigger words
+   * where they went, and no <lora:…> tags (the graph's loaders say which LoRAs ran).
    */
   shown: Record<string, string>;
   loras: ResolvedLora[];
@@ -123,17 +123,18 @@ export function compile(input: CompileInput): CompileResult {
     tags.push(...findLoraTags(expanded.text));
     const clean = stripLoraTags(expanded.text);
     texts[b.id] = clean;
-    shown[b.id] = expanded.text.trim();
+    shown[b.id] = clean;
     set(b, clean);
   }
 
   const loras = resolveLoras(tags, input.loraFiles);
-  addInstant(input, loras, (start, end, shownStart, shownEnd) => {
+  addInstant(input, loras, (start, end) => {
     const positive = input.manifest.bindings.find((b) => b.role === "prompt.positive");
     if (!positive || !(positive.id in texts)) return;
-    texts[positive.id] = withTriggers(texts[positive.id] ?? "", start, end);
-    shown[positive.id] = withTriggers(shown[positive.id] ?? "", shownStart, shownEnd);
-    set(positive, texts[positive.id]);
+    const text = withTriggers(texts[positive.id] ?? "", start, end);
+    texts[positive.id] = text;
+    shown[positive.id] = text;
+    set(positive, text);
   });
   if (loras.length) applyLoras(prompt, loras);
 
@@ -181,20 +182,17 @@ export function compile(input: CompileInput): CompileResult {
   return { prompt, texts, shown, loras, segments, stages };
 }
 
-/** Instant LoRAs join after the tags' (a tag of the same file wins) and hand back their words. */
 /**
- * Instant LoRAs join the stack; `triggers` gets their trigger words for the prompt ComfyUI reads
- * and, for the prompt shown and kept, each one's <lora:…> tag with its words, at the start or end.
+ * Instant LoRAs join the stack after the tags' (a tag of the same file wins); `triggers` gets
+ * their trigger words, for the start and the end of the positive prompt.
  */
 function addInstant(
   input: CompileInput,
   loras: ResolvedLora[],
-  triggers: (start: string[], end: string[], shownStart: string[], shownEnd: string[]) => void,
+  triggers: (start: string[], end: string[]) => void,
 ): void {
   const start: string[] = [];
   const end: string[] = [];
-  const shownStart: string[] = [];
-  const shownEnd: string[] = [];
   for (const l of input.instant ?? []) {
     const file = resolveLoraFile(l.name, input.loraFiles);
     if (!file)
@@ -206,9 +204,6 @@ function addInstant(
     const info = input.triggersFor?.(file);
     const words = info?.words.length ? info.words.join(", ") : "";
     if (words) (info?.at === "end" ? end : start).push(words);
-    const tag = formatLoraTag(l.name, l.strength);
-    (info?.at === "end" ? shownEnd : shownStart).push(words ? `${tag}, ${words}` : tag);
   }
-  if (start.length || end.length || shownStart.length || shownEnd.length)
-    triggers(start, end, shownStart, shownEnd);
+  if (start.length || end.length) triggers(start, end);
 }

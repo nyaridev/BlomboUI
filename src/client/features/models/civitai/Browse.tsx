@@ -3,7 +3,8 @@
  * filter) as a removable chip in front of the text, the NSFW blur, the category dropdown, the
  * base model dropdown (family sections: shared/basemodels.ts), sort and a
  * Filters pop-up (the period, the model types as chips, a published-date range through
- * Civitai's site search with the API key, and Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
+ * Civitai's site search with the API key, and Hide downloaded); what's listed follows the profile's Civitai site), recent searches in a dropdown beside the
+ * saved filters, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -146,9 +147,6 @@ export function FilterBar({
   const setFilter = useCivitai((s) => s.setFilter);
   const replace = useCivitai((s) => s.replaceFilter);
   const settings = useSettings().data;
-  const searches = useCivitaiSearches().data ?? [];
-  const qc = useQueryClient();
-  const profileId = useSession((s) => s.profileId);
   const [text, setText] = useState(filter.query);
   useEffect(() => setText(filter.query), [filter.query]);
 
@@ -171,6 +169,7 @@ export function FilterBar({
         }}
       >
         <SavedFilters filter={filter} onApply={replace} />
+        {following ? null : <RecentSearches current={filter.query} onSearch={search} />}
         <TextField
           icon="search"
           value={text}
@@ -279,28 +278,80 @@ export function FilterBar({
           ) : null}
         </div>
       </div>
-      {searches.length && !following ? (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-fg-3">Recent:</span>
-          {searches.slice(0, 8).map((s) => (
-            <Chip
-              key={s.query}
-              size="sm"
-              icon="history"
-              selected={s.query === filter.query}
-              onClick={() => search(s.query)}
-              onRemove={() =>
-                void api
-                  .forgetCivitaiSearch(s.query)
-                  .then(() => qc.invalidateQueries({ queryKey: qk.civitaiSearches(profileId) }))
-              }
-            >
-              {s.query}
-            </Chip>
-          ))}
-        </div>
-      ) : null}
     </div>
+  );
+}
+
+/** Recent searches as a dropdown beside Saved filters: search one again, forget one or all. */
+function RecentSearches({ current, onSearch }: { current: string; onSearch: (q: string) => void }) {
+  const searches = useCivitaiSearches().data ?? [];
+  const qc = useQueryClient();
+  const profileId = useSession((s) => s.profileId);
+  const forget = (query?: string) =>
+    void api
+      .forgetCivitaiSearch(query)
+      .then(() => qc.invalidateQueries({ queryKey: qk.civitaiSearches(profileId) }))
+      .catch((e: Error) => toast(e.message, "error"));
+  return (
+    <Popover
+      placement="bottom-start"
+      className="w-80 p-0"
+      trigger={
+        <IconButton
+          icon="history"
+          variant="secondary"
+          label={searches.length ? `Recent searches (${searches.length})` : "Recent searches"}
+        />
+      }
+    >
+      {(close) => (
+        <div className="flex flex-col">
+          <div className="flex max-h-80 flex-col overflow-y-auto p-1.5">
+            {searches.length === 0 ? (
+              <p className="px-2.5 py-3 text-xs text-fg-3">
+                Your searches show up here, so you can run one again with a click.
+              </p>
+            ) : (
+              searches.slice(0, 20).map((s) => (
+                <div
+                  key={s.query}
+                  className={cn(
+                    "group flex items-center gap-1 rounded-md hover:bg-field",
+                    s.query === current && "bg-field",
+                  )}
+                >
+                  <button
+                    type="button"
+                    className="flex min-w-0 flex-1 items-center gap-2 px-2.5 py-1.5 text-left focus-ring"
+                    onClick={() => {
+                      onSearch(s.query);
+                      close();
+                    }}
+                  >
+                    <Icon name="history" size={13} className="shrink-0 text-fg-3" />
+                    <span className="truncate text-sm text-fg">{s.query}</span>
+                  </button>
+                  <IconButton
+                    icon="x"
+                    label={`Forget "${s.query}"`}
+                    size="xs"
+                    className="opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100 focus-visible:opacity-100"
+                    onClick={() => forget(s.query)}
+                  />
+                </div>
+              ))
+            )}
+          </div>
+          {searches.length ? (
+            <div className="flex border-t border-line p-1.5">
+              <Button size="sm" variant="ghost" icon="trash" onClick={() => forget()}>
+                Clear recent searches
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </Popover>
   );
 }
 

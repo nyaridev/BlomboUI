@@ -317,7 +317,8 @@ export const api = {
 
   galleryOverview: () => request<GalleryOverview>("GET", "/gallery/overview"),
   galleryHome: (seed: number) => request<GalleryHome>("GET", `/gallery/home?seed=${seed}`),
-  galleryUses: (kind: UseKind) => request<HomeUse[]>("GET", `/gallery/uses?kind=${kind}`),
+  galleryUses: (kind: UseKind, seed: number) =>
+    request<HomeUse[]>("GET", `/gallery/uses?kind=${kind}&seed=${seed}`),
   galleryImages: (q: GalleryQueryInput) =>
     request<GalleryPage>("GET", `/gallery/images?${query(q)}`),
   galleryFacets: (library: string) =>

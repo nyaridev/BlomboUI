@@ -47,7 +47,7 @@ export function galleryRoutes(
     const parsed = GalleryUsesQuery.safeParse(c.req.query());
     if (!parsed.success)
       throw new HttpError(400, parsed.error.issues[0]?.message ?? "Invalid query.", "bad_query");
-    return c.json(await mostUsed({ gallery, ...others }, parsed.data.kind));
+    return c.json(await mostUsed({ gallery, ...others }, parsed.data.kind, parsed.data.seed));
   });
 
   r.get("/images", async (c) => {

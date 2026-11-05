@@ -164,7 +164,11 @@ export type HomeUse = z.infer<typeof HomeUse>;
 export const HOME_RECENT_DAYS = 14;
 
 /** A Most used view: the kind's most used first. */
-export const GalleryUsesQuery = z.object({ kind: z.enum(USE_KINDS) });
+export const GalleryUsesQuery = z.object({
+  kind: z.enum(USE_KINDS),
+  /** Which random images the cards show; a refetch with the same seed keeps them. */
+  seed: GalleryQuery.shape.seed,
+});
 
 /** The carousel's order comes from `seed`, so a refetch (a new image, a heart) keeps it. */
 export const GalleryHomeQuery = z.object({

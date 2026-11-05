@@ -219,7 +219,10 @@ describe("gallery index", () => {
     });
     // Models and LoRAs count their images in the gallery.
     expect(home.models[0]).toMatchObject({ total: 1 });
-    expect((await mostUsed(deps, "models")).map((u) => u.filter)).toEqual(["dreamshaper_8", null]);
+    expect((await mostUsed(deps, "models", 4)).map((u) => u.filter)).toEqual([
+      "dreamshaper_8",
+      null,
+    ]);
   });
 
   it("builds FTS queries only from terms trigram can match", () => {

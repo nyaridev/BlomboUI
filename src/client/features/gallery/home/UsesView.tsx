@@ -5,13 +5,16 @@
 import { useGalleryUses } from "@client/lib/queries";
 import { Button, EmptyState, Skeleton } from "@client/ui";
 import type { UseKind } from "@shared/gallery";
+import { useState } from "react";
 import { SidebarButton } from "../Sidebar";
+import { newSeed } from "../state";
 import { emptyText, USE_ICON, USE_LABEL, UseCard } from "./sections";
 
 const GRID = "grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-3";
 
 export function UsesView({ kind, visible }: { kind: UseKind; visible: boolean }) {
-  const uses = useGalleryUses(kind);
+  const [seed] = useState(newSeed);
+  const uses = useGalleryUses(kind, seed);
   return (
     <>
       <div className="flex h-[52px] shrink-0 items-center gap-2 border-b border-line px-5 max-lg:px-3">

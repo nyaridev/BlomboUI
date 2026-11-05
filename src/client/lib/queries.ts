@@ -400,12 +400,12 @@ export function useGalleryHome(seed: number) {
   });
 }
 
-/** A Most used view's list. */
-export function useGalleryUses(kind: UseKind) {
+/** A Most used view's list; its cards keep their random images for `seed` through refetches. */
+export function useGalleryUses(kind: UseKind, seed: number) {
   const profileId = useSession((s) => s.profileId);
   return useQuery({
-    queryKey: [...qk.gallery(profileId), "uses", kind],
-    queryFn: () => api.galleryUses(kind),
+    queryKey: [...qk.gallery(profileId), "uses", kind, seed],
+    queryFn: () => api.galleryUses(kind, seed),
     enabled: profileId !== null,
   });
 }

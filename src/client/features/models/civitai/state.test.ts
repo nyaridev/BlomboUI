@@ -39,3 +39,22 @@ describe("seed", () => {
     expect(useCivitai.getState().filter?.period).toBe("Week");
   });
 });
+
+describe("looking at", () => {
+  it("keeps every creator opened, newest first, and closes one or all", () => {
+    const s = () => useCivitai.getState();
+    s().clearVisits();
+    s().visit("ana");
+    s().visit("Bo");
+    s().visit("ANA");
+    expect(s().visiting).toEqual(["ANA", "Bo"]);
+    expect(s().creator).toBe("ANA");
+    s().endVisit("ana");
+    expect(s().visiting).toEqual(["Bo"]);
+    expect(s().creator).toBeNull();
+    s().pickCreator("Bo");
+    s().clearVisits();
+    expect(s().visiting).toEqual([]);
+    expect(s().creator).toBeNull();
+  });
+});

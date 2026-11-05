@@ -1,8 +1,9 @@
 /**
  * The Civitai browser's UI state: the applied filter (seeded from Settings → Civitai's browse
  * defaults the first time), which home tab shows (Browse or Following), the creator picked
- * there and the one you're only looking at (a creator's name clicked anywhere: pinned at the top
- * of Following until you follow them or close it, so Browse's search stays as it was), the
+ * there and the ones you're only looking at (each creator's name clicked anywhere: pinned at the
+ * top of Following, newest first, until you follow, close or clear them, so Browse's search stays
+ * as it was), the
  * opened model tabs, the last tab opened (its tab flashes), whether NSFW images are
  * blurred (this view only, on each time the app starts) and whether models you have are hidden. The filter, home and tabs are remembered
  * in this window (localStorage), so a reload or a restart comes back to them, except the time
@@ -29,8 +30,8 @@ interface CivitaiState {
   home: CivitaiHome;
   /** Following: one creator's models; null for everyone you follow. */
   creator: string | null;
-  /** A creator you're looking at without following them (this session only). */
-  visiting: string | null;
+  /** Creators you're looking at without following them, newest first (this session only). */
+  visiting: string[];
   /** The tab opened last; `n` changes on every open, so its tab flashes again. */
   flash: { id: number; n: number } | null;
   /** NSFW images stay blurred until clicked (the NSFW button switches it for every image). */
@@ -55,11 +56,15 @@ interface CivitaiState {
   pickCreator: (creator: string | null) => void;
   /** Show a creator's models in Following, pinned at the top whether followed or not. */
   visit: (creator: string) => void;
-  /** Close the creator you were looking at (back to everyone if they were picked). */
-  endVisit: () => void;
+  /** Close one creator you were looking at (back to everyone if they were picked). */
+  endVisit: (creator: string) => void;
+  /** Close every creator you were looking at. */
+  clearVisits: () => void;
 }
 
 const MAX_TABS = 12;
+/** Civitai usernames don't care about case. */
+const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 let seeded = false;
 const KEY = "blombo.civitai";
 
@@ -92,7 +97,7 @@ function load(): Saved {
 export const useCivitai = create<CivitaiState>((set, get) => ({
   ...load(),
   creator: null,
-  visiting: null,
+  visiting: [],
   flash: null,
   blur: true,
   toggleBlur: () => set((s) => ({ blur: !s.blur })),
@@ -130,9 +135,23 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   show: (id) => set({ active: id }),
   showHome: (home) => set({ home, active: null }),
   pickCreator: (creator) => set({ creator }),
-  visit: (creator) => set({ visiting: creator, creator, home: "following", active: null }),
-  endVisit: () =>
-    set((s) => ({ visiting: null, creator: s.creator === s.visiting ? null : s.creator })),
+  visit: (creator) =>
+    set((s) => ({
+      visiting: [creator, ...s.visiting.filter((v) => !same(v, creator))],
+      creator,
+      home: "following",
+      active: null,
+    })),
+  endVisit: (creator) =>
+    set((s) => ({
+      visiting: s.visiting.filter((v) => !same(v, creator)),
+      creator: s.creator && same(s.creator, creator) ? null : s.creator,
+    })),
+  clearVisits: () =>
+    set((s) => ({
+      visiting: [],
+      creator: s.visiting.some((v) => same(v, s.creator ?? "")) ? null : s.creator,
+    })),
 }));
 
 useCivitai.subscribe((s, prev) => {

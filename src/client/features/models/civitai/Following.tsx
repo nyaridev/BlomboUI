@@ -4,18 +4,19 @@
  * types, base model, sort, period, category, search, recent searches). "Everyone" merges each
  * creator's first page in the filter's order (the server's feed); one creator lists all of
  * theirs in that order.
- * A creator's name clicked anywhere opens them here, pinned at the top with Follow and ×, without
- * following them (`visit` in state.ts). Avatars are the saved pictures, or looked up once.
+ * A creator's name clicked anywhere opens them here under Looking at (as many as you like, newest
+ * first, each with + to follow and × to close, Clear for all), without following them (`visit`
+ * in state.ts). Avatars are the saved pictures, or looked up once.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useCivitaiCreator, useCivitaiFeed, useCivitaiModels } from "@client/lib/queries";
 import { DRAG_LIFT, moveItem, NO_DRAG, type Sortable, useSortableRow } from "@client/lib/sortable";
-import { Avatar, Button, EmptyState, IconButton, TextField } from "@client/ui";
+import { Avatar, Button, EmptyState, IconButton, TextField, toast } from "@client/ui";
 import type { BrowseFilter, CivitaiCreator } from "@shared/civitai";
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CardSkeletons, FilterBar, Results } from "./Browse";
-import { FollowButton, useFollowing } from "./follow";
+import { useFollowing } from "./follow";
 import { useCivitai } from "./state";
 
 export function Following() {
@@ -25,7 +26,9 @@ export function Following() {
   const { following, has } = useFollowing();
   const users = useMemo(() => following.map((f) => f.username), [following]);
   const creator =
-    picked && (has(picked) || picked.toLowerCase() === visiting?.toLowerCase()) ? picked : null;
+    picked && (has(picked) || visiting.some((v) => v.toLowerCase() === picked.toLowerCase()))
+      ? picked
+      : null;
   return (
     <div className="flex min-h-0 flex-1">
       <Creators creator={creator} />
@@ -93,7 +96,9 @@ function Creators({ creator }: { creator: string | null }) {
   const pick = useCivitai((s) => s.pickCreator);
   const visiting = useCivitai((s) => s.visiting);
   const endVisit = useCivitai((s) => s.endVisit);
+  const clearVisits = useCivitai((s) => s.clearVisits);
   const { following, has, follow, unfollow, reorder } = useFollowing();
+  const looking = visiting.filter((v) => !has(v));
   const [name, setName] = useState("");
   const is = (a: string | null, b: string) => a?.toLowerCase() === b.toLowerCase();
   // While a drag runs, the new order stays here and is saved once on drop: a save per swap
@@ -134,16 +139,31 @@ function Creators({ creator }: { creator: string | null }) {
         />
       </form>
       <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1.5">
-        {visiting && !has(visiting) ? (
-          <div className="mb-1 flex flex-col gap-1 border-b border-line pb-2">
-            <span className="px-2 pt-1 label-caps">Looking at</span>
-            <CreatorRow
-              creator={{ username: visiting, image: null }}
-              active={is(creator, visiting)}
-              onPick={() => pick(visiting)}
-              end={<IconButton icon="x" size="xs" label={`Close ${visiting}`} onClick={endVisit} />}
-              follow
-            />
+        {looking.length ? (
+          <div className="mb-1 flex flex-col gap-px border-b border-line pb-2">
+            <div className="flex items-center gap-2 pt-1 pr-1 pl-2">
+              <span className="flex-1 label-caps">Looking at</span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="-my-1 h-6 px-1.5 text-2xs"
+                onClick={clearVisits}
+              >
+                Clear
+              </Button>
+            </div>
+            {looking.map((v) => (
+              <CreatorRow
+                key={v}
+                creator={{ username: v, image: null }}
+                active={is(creator, v)}
+                onPick={() => pick(v)}
+                end={
+                  <IconButton icon="x" size="xs" label={`Close ${v}`} onClick={() => endVisit(v)} />
+                }
+                follow
+              />
+            ))}
           </div>
         ) : null}
         <div className="flex">
@@ -182,7 +202,8 @@ function Creators({ creator }: { creator: string | null }) {
 
 /**
  * One creator: their avatar (saved, or looked up once while none is saved) and name; dimmed when
- * Civitai has no models by that name. `follow` adds a Follow chip (the creator you're looking at).
+ * Civitai has no models by that name. `follow` adds a + that follows them (a creator you're
+ * looking at), before `end`.
  */
 function CreatorRow({
   creator,
@@ -203,6 +224,8 @@ function CreatorRow({
   const looked = useCivitaiCreator(creator.image ? null : creator.username);
   const missing = looked.data === null;
   const image = creator.image ?? looked.data?.image ?? null;
+  const name = looked.data?.username ?? creator.username;
+  const follows = useFollowing();
   return (
     <div
       ref={sortable?.ref}
@@ -222,18 +245,24 @@ function CreatorRow({
           title={missing ? `Civitai has no models by ${creator.username}` : creator.username}
         >
           <Avatar name={creator.username} src={image} size={18} ring={false} />
-          <span className="flex-1 truncate">{looked.data?.username ?? creator.username}</span>
+          <span className="flex-1 truncate">{name}</span>
           {missing ? <Icon name="info" size={13} className="shrink-0 text-fg-4" /> : null}
         </button>
         <span {...{ [NO_DRAG]: "" }} className="flex">
+          {follow ? (
+            <IconButton
+              icon="plus"
+              size="xs"
+              label={`Follow ${name}`}
+              className="text-accent-ink"
+              onClick={() => {
+                if (follows.follow(name, image)) toast(`Following ${name}`, "success");
+              }}
+            />
+          ) : null}
           {end}
         </span>
       </div>
-      {follow ? (
-        <div className="pl-8">
-          <FollowButton name={looked.data?.username ?? creator.username} image={image} />
-        </div>
-      ) : null}
     </div>
   );
 }

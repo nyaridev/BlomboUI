@@ -1,11 +1,12 @@
 /**
- * The launch screen: pick a profile or create one. The look is on trial: four layouts in
- * `ProfileLayouts.tsx`, switched with the dev Layouts panel (`useVariant`).
+ * The launch screen: pick a profile or create one. The cards are on trial: four styles in
+ * `ProfileLayouts.tsx` (how many numbers a card shows), switched with the dev Layouts panel
+ * (`useVariant`).
  */
 import { preloadShell } from "@client/app/loadShell";
 import { useTheme } from "@client/app/theme";
 import { ApiError, api } from "@client/lib/api";
-import { useDeleteProfile, useProfiles, useSystem } from "@client/lib/queries";
+import { useDeleteProfile, useProfileStats, useProfiles, useSystem } from "@client/lib/queries";
 import { leaveProfile, openProfileOnce } from "@client/lib/session";
 import { useVariant } from "@client/lib/variants";
 import { Button, Dialog, toast } from "@client/ui";
@@ -13,29 +14,16 @@ import type { Profile } from "@shared/profile";
 import { DEFAULT_UI_FONT } from "@shared/settings";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { type ReactNode, useEffect, useState } from "react";
-import {
-  CardsLayout,
-  ContinueLayout,
-  type LayoutProps,
-  ListLayout,
-  SplitLayout,
-} from "./ProfileLayouts";
+import { useEffect, useState } from "react";
+import { CardsLayout } from "./ProfileLayouts";
 import { ProfileWizard } from "./ProfileWizard";
 
-const LAYOUTS = [
-  { id: "cards", label: "Cards" },
-  { id: "continue", label: "Resume" },
-  { id: "list", label: "List" },
-  { id: "split", label: "Split" },
+const CARD_STYLES = [
+  { id: "plain", label: "Plain" },
+  { id: "row", label: "Stat row" },
+  { id: "strip", label: "Strip" },
+  { id: "hover", label: "Hover" },
 ] as const;
-
-const LAYOUT_VIEWS: Record<(typeof LAYOUTS)[number]["id"], (props: LayoutProps) => ReactNode> = {
-  cards: CardsLayout,
-  continue: ContinueLayout,
-  list: ListLayout,
-  split: SplitLayout,
-};
 
 export function ProfileScreen() {
   const { data, isLoading } = useProfiles();
@@ -47,6 +35,7 @@ export function ProfileScreen() {
   const [opening, setOpening] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Profile | null>(null);
   const remove = useDeleteProfile();
+  const stats = useProfileStats().data;
   const profiles = data?.profiles ?? [];
 
   useEffect(() => preloadShell(), []);
@@ -82,15 +71,16 @@ export function ProfileScreen() {
     await qc.invalidateQueries({ queryKey: ["profiles"] });
   };
 
-  const layout = useVariant("profiles.layout", "Profile screen", LAYOUTS);
-  const View = LAYOUT_VIEWS[layout];
+  const style = useVariant("profiles.cards", "Profile cards", CARD_STYLES);
 
   return (
     <div className="h-full">
       {/* The local list answers in milliseconds: placeholders would only flash. */}
       {isLoading ? null : (
-        <View
+        <CardsLayout
+          style={style}
           profiles={profiles}
+          stats={stats}
           launchId={data?.registry.openOnLaunch ?? null}
           opening={opening}
           version={system.data?.version ?? null}

@@ -1,6 +1,10 @@
 import fs from "node:fs/promises";
 import { Hono } from "hono";
-import type { OpenProfileResponse, ProfilesResponse } from "../../shared/api.ts";
+import type {
+  OpenProfileResponse,
+  ProfileStatsResponse,
+  ProfilesResponse,
+} from "../../shared/api.ts";
 import {
   CreateProfileBody,
   OpenOnLaunchBody,
@@ -11,6 +15,7 @@ import {
 import { HttpError, readBody, readBodyToFile, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { ProfileBackup } from "../services/backup.ts";
+import { readProfileStats } from "../services/profileStats.ts";
 import type { ProfileService } from "../services/profiles.ts";
 
 const MAX_AVATAR_BYTES = 12 * 1024 * 1024;
@@ -35,6 +40,13 @@ export function profileRoutes(
       profiles: await profiles.list(),
       activeId: profiles.active,
     };
+    return c.json(body);
+  });
+
+  /** Every profile's numbers for the profile screen (read-only; separate so the list stays fast). */
+  r.get("/stats", async (c) => {
+    const body: ProfileStatsResponse = {};
+    for (const p of await profiles.list()) body[p.id] = await readProfileStats(profiles.dir(p.id));
     return c.json(body);
   });
 

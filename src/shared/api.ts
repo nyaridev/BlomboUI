@@ -3,7 +3,7 @@
  * Request bodies live next to their domain (profile.ts, workflow/…) as Zod schemas.
  */
 import type { ClockFormat } from "./clock.ts";
-import type { CheckPathResult, Profile, ProfileRegistry } from "./profile.ts";
+import type { CheckPathResult, Profile, ProfileRegistry, ProfileStats } from "./profile.ts";
 
 export interface SystemInfo {
   app: string;
@@ -21,6 +21,9 @@ export interface ProfilesResponse {
   profiles: Profile[];
   activeId: string | null;
 }
+
+/** Profile id → its numbers (`GET /api/profiles/stats`). */
+export type ProfileStatsResponse = Record<string, ProfileStats>;
 
 export interface OpenProfileResponse {
   profile: Profile;

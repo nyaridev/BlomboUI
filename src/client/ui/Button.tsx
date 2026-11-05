@@ -86,7 +86,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   label: string;
   shortcut?: string;
   size?: "xs" | "sm" | "md" | "lg" | "tall";
-  variant?: "ghost" | "secondary" | "primary" | "danger";
+  variant?: "ghost" | "secondary" | "primary" | "danger" | "overlay";
   active?: boolean;
   tooltip?: boolean;
   badge?: ReactNode;
@@ -107,6 +107,8 @@ const iconVariants = {
   secondary: `border border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg ${solidOff}`,
   primary: `bg-accent text-on-accent hover:brightness-110 ${solidOff}`,
   danger: `text-fg-3 hover:bg-red/15 hover:text-red-ink ${bareOff}`,
+  /** Over a picture (cards): dark and white whatever the theme, like ModelCard's corner buttons. */
+  overlay: `bg-black/60 text-white/85 backdrop-blur-[2px] hover:bg-black/80 hover:text-white aria-expanded:bg-black/80 aria-expanded:text-white ${bareOff}`,
 };
 
 export function IconButton({
@@ -132,7 +134,7 @@ export function IconButton({
         base,
         box,
         iconVariants[variant],
-        active && "bg-field text-accent-ink",
+        active && variant !== "overlay" && "bg-field text-accent-ink",
         className,
       )}
       {...rest}

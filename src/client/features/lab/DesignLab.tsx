@@ -663,6 +663,10 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <div className="flex h-16 items-stretch">
               <IconButton icon="chevron-left" label="Previous" size="tall" variant="secondary" />
             </div>
+            {/* Overlay: over a picture (profile cards). */}
+            <div className="grid h-16 w-24 place-items-start justify-end overflow-hidden rounded-lg p-2 checker">
+              <IconButton icon="more-horizontal" label="Options" size="sm" variant="overlay" />
+            </div>
           </Row>
           <Row label="Generate">
             <button

@@ -23,6 +23,8 @@ import { useSession } from "./session";
 export const qk = {
   system: ["system"] as const,
   profiles: ["profiles"] as const,
+  /** Under "profiles", so whatever refreshes the list refreshes the numbers too. */
+  profileStats: ["profiles", "stats"] as const,
   /** Built-in presets, with "installed" flags for the open profile (none open → all false). */
   presets: (profileId: string | null) => ["presets", profileId] as const,
   /** Workflow data belongs to the open profile; the id keeps profiles from sharing a cache. */
@@ -114,6 +116,10 @@ export const queryClient = new QueryClient({
 export const useSystem = () => useQuery({ queryKey: qk.system, queryFn: api.system });
 
 export const useProfiles = () => useQuery({ queryKey: qk.profiles, queryFn: api.profiles });
+
+/** Every profile's numbers for the profile screen (they come after the list). */
+export const useProfileStats = () =>
+  useQuery({ queryKey: qk.profileStats, queryFn: api.profileStats });
 
 export function useProfile(id: string | undefined): Profile | undefined {
   const { data } = useProfiles();

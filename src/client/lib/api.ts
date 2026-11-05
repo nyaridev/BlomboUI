@@ -6,6 +6,7 @@ import type {
   ApiErrorBody,
   CheckPathResult,
   OpenProfileResponse,
+  ProfileStatsResponse,
   ProfilesResponse,
   SystemInfo,
 } from "@shared/api";
@@ -170,6 +171,7 @@ export const api = {
     request<{ paths: string[] }>("POST", "/system/pick-images", { title } satisfies PickImagesBody),
 
   profiles: () => request<ProfilesResponse>("GET", "/profiles"),
+  profileStats: () => request<ProfileStatsResponse>("GET", "/profiles/stats"),
   createProfile: (body: CreateProfileBody) => request<Profile>("POST", "/profiles", body),
   updateProfile: (id: string, body: UpdateProfileBody) =>
     request<Profile>("PATCH", `/profiles/${id}`, body),

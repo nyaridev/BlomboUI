@@ -3,6 +3,7 @@ import {
   a1111SamplerToComfy,
   a1111ScheduleToComfy,
   a1111Summary,
+  civitaiSummary,
   modelKey,
   parseA1111,
   usedModels,
@@ -94,5 +95,40 @@ Steps: 20, Model hash: 0123abcd45, Model: waiIllustrious_v14, Lora hashes: "Deta
   it("compares model names by file name", () => {
     expect(modelKey("sdxl\\Juggernaut XL.safetensors")).toBe("juggernaut xl");
     expect(modelKey("Juggernaut XL")).toBe("juggernaut xl");
+  });
+});
+
+describe("civitaiSummary", () => {
+  it("reads what a poster shared, with LoRAs from the prompt or Civitai's resources", () => {
+    const { summary, roles } = civitaiSummary({
+      prompt: "a fox",
+      negativePrompt: "blurry",
+      steps: 30,
+      cfgScale: 5.5,
+      sampler: "Euler a",
+      seed: 9,
+      Size: "832x1216",
+      Model: "someCheckpoint",
+      resources: [
+        { name: "fox_style", type: "lora", weight: 0.6 },
+        { name: "x", type: "model" },
+      ],
+    });
+    expect(summary).toMatchObject({
+      source: "civitai",
+      prompt: "a fox",
+      negative: "blurry",
+      steps: 30,
+      cfg: 5.5,
+      seed: 9,
+      width: 832,
+      height: 1216,
+      model: "someCheckpoint",
+      loras: [{ name: "fox_style", strength: 0.6 }],
+    });
+    expect(roles["sampler.steps"]).toBe(30);
+    expect(civitaiSummary({ prompt: "<lora:own:0.5> cat", resources: [] }).summary.loras).toEqual([
+      { name: "own", strength: 0.5 },
+    ]);
   });
 });

@@ -4,14 +4,17 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { GalleryQuery } from "../../../shared/gallery.ts";
 import type { ServerMessage } from "../../../shared/live.ts";
+import type { LocalModel } from "../../../shared/models.ts";
 import { createConfig, parseFlags } from "../../config.ts";
 import { ProfileDbs } from "../../db/profileDb.ts";
 import { realPng } from "../../lib/test-images.ts";
 import type { AutocompleteService } from "../autocomplete.ts";
+import type { CivitaiService } from "../civitai/index.ts";
 import type { HistoryService } from "../history.ts";
 import { ProfileService } from "../profiles.ts";
 import { SettingsService } from "../settings.ts";
 import { galleryHome, mostUsed } from "./home.ts";
+import { ImportService, imageVersions, importName } from "./imports.ts";
 import { ftsQuery, GalleryService } from "./index.ts";
 
 /** A header read of a file named in `held` finishes, then waits until the test lets it go. */
@@ -53,7 +56,10 @@ const gallery = new GalleryService({
   runtimeDir: config.runtimeDir,
   publish: (_topic, msg) => messages.push(msg),
   workflowExists: async (id) => id === "sd15",
+  localModels: async () => localModels,
 });
+/** The models folder, as the Civitai image checks need it. */
+let localModels: LocalModel[] = [];
 
 const q = (input: Record<string, unknown> = {}) => gallery.query(GalleryQuery.parse(input));
 
@@ -419,5 +425,136 @@ describe("gallery index", () => {
     gallery.startSync();
     await gallery.whenSynced();
     expect(await names()).toContain("stopped_00001_.png");
+  });
+});
+
+describe("added images", () => {
+  const imports = () =>
+    new ImportService({
+      gallery,
+      civitai: {
+        site: "https://civitai.com",
+        imageToAdd: async () => civitaiRaw,
+        images: { original: async () => ({ bytes: civitaiBytes, type: "image/png" }) },
+      } as unknown as CivitaiService,
+    });
+  const civitaiRaw = {
+    id: 555,
+    url: "https://image.civitai.com/acct/abc-123/original=true/555.png",
+    username: "poster",
+    postId: 9,
+    modelVersionIds: [100],
+    meta: {
+      prompt: "a lighthouse at dusk",
+      negativePrompt: "lowres",
+      steps: 24,
+      cfgScale: 6,
+      seed: 31,
+      Model: "someone's checkpoint",
+      resources: [{ name: "their_lora_name", type: "lora", weight: 0.7 }],
+      civitaiResources: [
+        { type: "checkpoint", modelVersionId: 100 },
+        { type: "lora", modelVersionId: 200, weight: 0.7 },
+      ],
+    },
+  };
+  let civitaiBytes: Uint8Array = new Uint8Array();
+
+  it("adds a file from your PC once, into imported/", async () => {
+    const bytes = await realPng(30, 20);
+    const first = await imports().addFile(bytes, "C:\\pics\\my pic?.png");
+    expect(first).toMatchObject({ already: false, image: { path: "imported/my pic_.png" } });
+    expect(first.image.origin).toBe("imported");
+    expect((await imports().addFile(bytes, "my pic?.png")).already).toBe(true);
+    // Another file with the same name gets a free one.
+    const other = await imports().addFile(await realPng(31, 20), "my pic?.png");
+    expect(other.image.path).toBe("imported/my pic_ (2).png");
+    await expect(
+      imports().addFile(new TextEncoder().encode("hello"), "x.png"),
+    ).rejects.toMatchObject({ status: 415 });
+  });
+
+  it("adds a Civitai image with its sidecar, found through the models you have", async () => {
+    civitaiBytes = await realPng(40, 60);
+    const body = { versionId: 300, key: "abc-123", id: 555 };
+    const added = await imports().addCivitai(body);
+    expect(added).toMatchObject({ already: false, image: { path: "civitai/abc-123.png" } });
+    expect(added.image.origin).toBe("civitai");
+    const sidecar = JSON.parse(
+      await fs.readFile(path.join(outputs, "civitai", "abc-123.png.civitai.json"), "utf8"),
+    );
+    expect(sidecar).toMatchObject({ imageId: 555, by: "poster", versionId: 300 });
+    expect(sidecar.versions).toEqual([300, 100, 200]);
+    expect((await imports().addCivitai(body)).already).toBe(true);
+
+    // How it was made comes from the sidecar (the file has nothing).
+    const d = await gallery.details(added.image.id);
+    expect(d.summary).toMatchObject({
+      source: "civitai",
+      prompt: "a lighthouse at dusk",
+      seed: 31,
+    });
+    expect(d.civitai).toEqual({
+      by: "poster",
+      page: "https://civitai.com/images/555",
+      versionId: 300,
+    });
+
+    // The poster's names never show; the LoRA shows once a local model is that version.
+    let facets = await gallery.facets("all");
+    expect(facets.loras.map((l) => l.name)).not.toContain("their_lora_name");
+    expect(facets.models.map((m) => m.name)).not.toContain("someone's checkpoint");
+    expect((await q({ lora: "my_lora" })).total).toBe(0);
+    localModels = [
+      { id: "loras/style/my_lora.safetensors", kind: "loras", civitai: { versionId: 200 } },
+      { id: "checkpoints/mine.safetensors", kind: "checkpoints", civitai: { versionId: 100 } },
+    ] as unknown as LocalModel[];
+    facets = await gallery.facets("all");
+    expect(facets.loras).toContainEqual({ name: "my_lora", count: 1 });
+    expect(facets.models).toContainEqual({ name: "mine", count: 1 });
+    expect((await q({ lora: "my_lora" })).items.map((i) => i.path)).toEqual([
+      "civitai/abc-123.png",
+    ]);
+    expect((await q({ model: "mine" })).total).toBe(1);
+    localModels = [];
+  });
+
+  it("shows or hides each origin", async () => {
+    const origins = async (o: string) =>
+      new Set((await q({ origins: o, limit: 1000 })).items.map((i) => i.origin));
+    expect(await origins("civitai")).toEqual(new Set(["civitai"]));
+    expect(await origins("generated,imported")).toEqual(new Set(["generated", "imported"]));
+    expect((await q({ origins: "" })).total).toBe(0);
+    const all = (await q({ limit: 1000 })).total;
+    expect(all).toBe(
+      (await q({ origins: "generated" })).total +
+        (await q({ origins: "imported" })).total +
+        (await q({ origins: "civitai" })).total,
+    );
+  });
+
+  it("takes a Civitai image's sidecar along to the trash and back", async () => {
+    const image = (await q({ origins: "civitai" })).items[0];
+    if (!image) throw new Error("not found");
+    const [trashId] = await gallery.trash([image.id]);
+    const sidecar = path.join(outputs, "civitai", "abc-123.png.civitai.json");
+    await expect(fs.access(sidecar)).rejects.toThrow();
+    await gallery.restore([trashId as string]);
+    await fs.access(sidecar);
+    const back = (await q({ origins: "civitai" })).items[0];
+    expect((await gallery.details(back?.id ?? 0)).summary.source).toBe("civitai");
+  });
+
+  it("names files safely and lists an image's versions", () => {
+    expect(importName("a/b\\c:d.JPG", "image/jpeg")).toBe("c_d.jpg");
+    expect(importName("photo.png", "image/webp")).toBe("photo.png.webp");
+    expect(importName("CON.png", "image/png")).toBe("CON_.png");
+    expect(importName("...", "image/png")).toBe("image.png");
+    expect(
+      imageVersions(5, {
+        modelVersionIds: [5, 6],
+        meta: { civitaiResources: [{ modelVersionId: 7 }, {}] },
+      }),
+    ).toEqual([5, 6, 7]);
   });
 });

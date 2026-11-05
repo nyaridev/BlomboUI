@@ -256,6 +256,14 @@ function ViewerDemo() {
           index={index}
           onIndex={setIndex}
           onClose={() => setIndex(null)}
+          actions={() => (
+            <IconButton
+              icon="download"
+              label="An action (Add to gallery)"
+              size="sm"
+              variant="overlay"
+            />
+          )}
         />
       ) : null}
     </>
@@ -663,6 +671,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <IconButton icon="settings" label="Settings" variant="secondary" />
             <IconButton icon="plus" label="Add" variant="primary" />
             <IconButton icon="trash" label="Delete" variant="danger" />
+            <IconButton icon="download" label="Adding (loading)" variant="secondary" loading />
             <IconButton icon="x" label="Close" size="xs" />
             <div className="flex h-16 items-stretch">
               <IconButton icon="chevron-left" label="Previous" size="tall" variant="secondary" />

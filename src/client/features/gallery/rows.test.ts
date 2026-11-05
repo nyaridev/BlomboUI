@@ -5,6 +5,7 @@ import { buildRows, dayLabel, GAP, HEADER_H } from "./rows";
 const img = (id: number, day: string, w = 100, h = 100): GalleryImage => ({
   id,
   library: "outputs",
+  origin: "generated",
   path: `${id}.png`,
   name: `${id}.png`,
   width: w,

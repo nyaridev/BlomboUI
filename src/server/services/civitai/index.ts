@@ -19,17 +19,19 @@ import {
   type CivitaiSort,
   type CivitaiView,
   type CommunityQuery,
+  civitaiImageKey,
   dateRangeProblem,
   type LocalMark,
   mergeFeed,
 } from "../../../shared/civitai.ts";
+import type { AddCivitaiImageBody } from "../../../shared/gallery.ts";
 import type { LocalModel } from "../../../shared/models.ts";
 import type { ProfileDbs } from "../../db/profileDb.ts";
 import { HttpError } from "../../lib/http.ts";
 import type { ModelService } from "../models.ts";
 import type { ProfileService } from "../profiles.ts";
 import type { SettingsService } from "../settings.ts";
-import { CivitaiApi, type RawModel, type RawPage, type RawVersion } from "./api.ts";
+import { CivitaiApi, type RawImage, type RawModel, type RawPage, type RawVersion } from "./api.ts";
 import type { ImageProxy } from "./images.ts";
 import * as normalize from "./normalize.ts";
 
@@ -260,6 +262,27 @@ export class CivitaiService {
 
   async rawVersion(id: number): Promise<RawVersion> {
     return this.api.version(id, await this.key(this.active()));
+  }
+
+  /**
+   * What Civitai says about an image to add to the gallery: found by its id (the images
+   * endpoint's) or, without one or when that misses, among the version's own images by the key
+   * in its address.
+   */
+  async imageToAdd(body: AddCivitaiImageBody & { id: number | null }): Promise<RawImage> {
+    const key = await this.key(this.active());
+    const same = (img: RawImage | null | undefined) =>
+      Boolean(img?.url && civitaiImageKey(img.url) === body.key);
+    // By id first (that answer says who posted it); else, or when it doesn't match, the version's.
+    const byId = body.id !== null ? await this.api.image(body.id, key).catch(() => null) : null;
+    const raw = same(byId)
+      ? byId
+      : ((await this.rawVersion(body.versionId)).images ?? []).find(same);
+    if (!raw?.url || !this.allowedImage(raw.url) || civitaiImageKey(raw.url) !== body.key)
+      throw new HttpError(404, "Couldn't find that image on Civitai anymore.", "no_image");
+    if (raw.type === "video" || /\.(mp4|webm|mov)(\?|$)/i.test(raw.url))
+      throw new HttpError(415, "Videos can't be added to the gallery.", "video");
+    return raw;
   }
 
   /**

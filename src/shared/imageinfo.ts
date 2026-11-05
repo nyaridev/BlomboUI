@@ -4,13 +4,14 @@
  *   blombo   our own chunk: workflow id and name, seed, values, final prompt texts
  *   comfy    ComfyUI's "prompt" chunk (API graph); the server reads roles out of it
  *   a1111    the "parameters" text that A1111, Forge and many tools write
+ *   civitai  what a poster shared on Civitai, saved next to an image added from there
  *
  * The parsers here are pure so the server (gallery index, File Info) and tests share them.
  */
 import { z } from "zod";
 import { findLoraTags } from "./prompt/loras.ts";
 
-export const IMAGE_SOURCES = ["blombo", "comfy", "a1111", "none"] as const;
+export const IMAGE_SOURCES = ["blombo", "comfy", "a1111", "civitai", "none"] as const;
 export type ImageSource = (typeof IMAGE_SOURCES)[number];
 
 export const LoraUse = z.object({ name: z.string(), strength: z.number().nullable() });
@@ -170,6 +171,48 @@ export function a1111Summary(p: A1111Parameters): { summary: ImageSummary; roles
   const clipSkip = numberOrNull(get("clip skip"));
   if (clipSkip !== null) roles["clip.skip"] = -Math.abs(clipSkip);
   return { summary, roles };
+}
+
+/** Civitai's keys for how an image was made, as A1111 names them. */
+const CIVITAI_KEYS: Array<[string, string[]]> = [
+  ["Steps", ["steps", "Steps"]],
+  ["Sampler", ["sampler", "Sampler"]],
+  ["Schedule type", ["scheduler", "Schedule type"]],
+  ["CFG scale", ["cfgScale", "CFG scale"]],
+  ["Seed", ["seed", "Seed"]],
+  ["Size", ["Size", "size"]],
+  ["Model", ["Model", "model"]],
+  ["Clip skip", ["clipSkip", "Clip skip"]],
+  ["Denoising strength", ["denoise", "Denoising strength"]],
+];
+
+/**
+ * The summary of what a poster shared on Civitai (its `meta`, Civitai's own keys). LoRAs come
+ * from the prompt's tags or, without any, Civitai's list of resources.
+ */
+export function civitaiSummary(meta: Record<string, unknown>): {
+  summary: ImageSummary;
+  roles: RoleValues;
+} {
+  const text = (v: unknown) =>
+    typeof v === "string" ? v.trim() : typeof v === "number" && Number.isFinite(v) ? String(v) : "";
+  const settings = CIVITAI_KEYS.flatMap(([label, keys]): Array<[string, string]> => {
+    const v = keys.map((k) => text(meta[k])).find(Boolean);
+    return v ? [[label, v]] : [];
+  });
+  const { summary, roles } = a1111Summary({
+    positive: text(meta.prompt),
+    negative: text(meta.negativePrompt),
+    settings,
+  });
+  if (!summary.loras.length && Array.isArray(meta.resources))
+    for (const r of meta.resources as Array<Record<string, unknown>>)
+      if (r && String(r.type).toLowerCase() === "lora" && text(r.name))
+        summary.loras.push({
+          name: text(r.name),
+          strength: typeof r.weight === "number" ? r.weight : null,
+        });
+  return { summary: { ...summary, source: "civitai" }, roles };
 }
 
 /** A1111 / Forge "Schedule type" names to ComfyUI schedulers ("Automatic" picks none). */

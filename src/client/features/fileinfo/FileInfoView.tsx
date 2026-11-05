@@ -34,6 +34,7 @@ import { headerLength, MAX_HEADER_BYTES } from "@shared/safetensors";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AddCivitaiImage, AddImageFile } from "../gallery/AddToGallery";
 import { applyImageSettings } from "../generate/applySettings";
 import { useActiveChoice } from "../generate/workflow";
 import { CivitaiCarousel } from "./CivitaiCarousel";
@@ -201,6 +202,7 @@ function Result({
     [civitai?.match],
   );
   const current = images[shown] ?? null;
+  const matchVersion = civitai?.match?.versionId ?? 0;
 
   return (
     <div className="flex flex-col gap-4">
@@ -209,6 +211,7 @@ function Result({
           images={images}
           label={`${civitai.match.model.name} images`}
           onIndex={setShown}
+          action={(img) => <AddCivitaiImage image={img} versionId={matchVersion} />}
         />
       ) : civitai ? (
         <CivitaiStatus civitai={civitai} />
@@ -385,6 +388,7 @@ function ImageActions({
 
   return (
     <>
+      {dropped ? <AddImageFile file={dropped} /> : null}
       {image.hasWorkflow ? (
         <Button icon="import" loading={importWorkflow.isPending} onClick={() => void importIt()}>
           Import as workflow

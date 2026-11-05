@@ -6,7 +6,8 @@
  * comments, newest) and period, and With prompt (only images whose poster shared how they were
  * made; filtered here, so it keeps loading pages until there's enough to show). The grid is
  * virtualized against the page's own scroll and asks for the next page near its end. A tile shows who posted it and, when they shared how
- * it was made, a mark and Copy prompt (on hover); a click opens the full-screen viewer over
+ * it was made, a mark and Copy prompt (on hover), and Add to gallery in its top right corner (on
+ * hover; in the viewer, beside Close); a click opens the full-screen viewer over
  * everything loaded so far. NSFW tiles are veiled while the blur is on.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
@@ -36,6 +37,7 @@ import {
 } from "@shared/civitai";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { AddCivitaiImage } from "../../gallery/AddToGallery";
 
 const GAP = 8;
 const MIN_TILE = 180;
@@ -145,6 +147,7 @@ export function CommunityImages({
         ) : items.length ? (
           <Grid
             items={items}
+            versionId={version.id}
             scrollRef={scrollRef}
             blurNsfw={blurNsfw}
             onOpen={setViewing}
@@ -179,6 +182,9 @@ export function CommunityImages({
           index={Math.min(viewing, items.length - 1)}
           onIndex={setViewing}
           onClose={() => setViewing(null)}
+          actions={(i) =>
+            items[i] ? <AddCivitaiImage image={items[i]} versionId={version.id} onDark /> : null
+          }
         />
       ) : null}
     </section>
@@ -187,12 +193,14 @@ export function CommunityImages({
 
 function Grid({
   items,
+  versionId,
   scrollRef,
   blurNsfw,
   onOpen,
   onEnd,
 }: {
   items: CivitaiImage[];
+  versionId: number;
   scrollRef: RefObject<HTMLDivElement | null>;
   blurNsfw: boolean;
   onOpen: (index: number) => void;
@@ -257,6 +265,7 @@ function Grid({
             <Tile
               key={img.thumb}
               img={img}
+              versionId={versionId}
               height={tileH}
               blurNsfw={blurNsfw}
               onOpen={() => onOpen(v.index * cols + k)}
@@ -270,11 +279,13 @@ function Grid({
 
 function Tile({
   img,
+  versionId,
   height,
   blurNsfw,
   onOpen,
 }: {
   img: CivitaiImage;
+  versionId: number;
   height: number;
   blurNsfw: boolean;
   onOpen: () => void;
@@ -313,11 +324,16 @@ function Tile({
       {img.meta ? (
         <span
           title="Its poster shared how it was made"
-          className="pointer-events-none absolute top-1.5 right-1.5 z-20 grid h-5 w-5 place-items-center rounded-xs bg-black/60 text-white"
+          className="pointer-events-none absolute top-1.5 left-1.5 z-20 grid h-5 w-5 place-items-center rounded-xs bg-black/60 text-white"
         >
           <Icon name="sparkle" size={11} />
         </span>
       ) : null}
+      {veiled ? null : (
+        <div className="absolute top-1.5 right-1.5 z-20 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
+          <AddCivitaiImage image={img} versionId={versionId} onDark size="xs" />
+        </div>
+      )}
       {veiled ? null : (
         <div className="absolute inset-x-1.5 bottom-1.5 z-20 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100 focus-within:opacity-100 pointer-coarse:opacity-100">
           {img.by ? (

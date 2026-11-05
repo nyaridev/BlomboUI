@@ -15,7 +15,12 @@ import { fetchFollow, USER_AGENT } from "../../lib/remote.ts";
 /* ── Civitai's shapes (only the fields Blombo reads; everything optional) ─── */
 
 export interface RawImage {
+  /** On the images endpoint (model and version answers leave it out). */
+  id?: number;
   url?: string;
+  postId?: number | null;
+  /** The images endpoint: the versions the image was posted with. */
+  modelVersionIds?: number[];
   /** A number on model answers; a word ("None", "Soft", "Mature", "X") on the images endpoint. */
   nsfwLevel?: number | string;
   nsfw?: boolean | string;
@@ -298,6 +303,16 @@ export class CivitaiApi {
     });
     if (query.cursor) q.set("cursor", query.cursor);
     return this.get(`/api/v1/images?${q}`, key, SEARCH_TTL);
+  }
+
+  /** One image by its id, with how it was made; null when Civitai has no such image. */
+  async image(id: number, key: string | null): Promise<RawImage | null> {
+    const page = await this.get<{ items?: RawImage[] }>(
+      `/api/v1/images?imageId=${id}&withMeta=true`,
+      key,
+      SEARCH_TTL,
+    );
+    return page.items?.find((i) => i.id === id) ?? null;
   }
 
   /** The version a file belongs to, by its SHA256; null when Civitai doesn't know it. */

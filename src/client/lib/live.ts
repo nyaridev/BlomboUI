@@ -287,6 +287,11 @@ function onJson(text: string): void {
     }
     case "models.changed":
       void queryClient.invalidateQueries({ queryKey: ["local-models"] });
+      // A model you now have can make Civitai images show in the model and LoRA filters.
+      void queryClient.invalidateQueries({
+        queryKey: ["gallery"],
+        predicate: (q) => q.queryKey[2] === "facets",
+      });
       void queryClient.invalidateQueries({ queryKey: qk.modelsAll });
       // A downloaded detector or ControlNet model can fix a stage.
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
@@ -382,6 +387,7 @@ function onGalleryAdded(image: GalleryImage): void {
       !q.tag &&
       !q.collection &&
       q.favorites !== "1" &&
+      (typeof q.origins !== "string" || q.origins.split(",").includes(image.origin)) &&
       (q.sort ?? "newest") === "newest";
     if (!plain || !data?.pages[0]) continue;
     // A file written again (same path) moves to the top with its new thumbnail.

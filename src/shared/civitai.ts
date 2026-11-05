@@ -203,6 +203,10 @@ export const CivitaiImage = z.object({
   /** Who posted it, when Civitai says (images saved before this have none). */
   by: z.string().nullable().default(null),
   meta: CivitaiImageMeta.nullable().default(null),
+  /** The id in its address (`civitaiImageKey`), to add it to the gallery. */
+  key: z.string().nullable().default(null),
+  /** Civitai's image id, when the answer has one (the images endpoint does). */
+  id: z.number().nullable().default(null),
 });
 export type CivitaiImage = z.infer<typeof CivitaiImage>;
 
@@ -501,6 +505,38 @@ export function civitaiImageVariant(url: string, width: number, video: boolean):
   else parts.push(transform);
   const name = video ? file.replace(/\.[a-z0-9]+$/i, ".jpeg") : file;
   parsed.pathname = [...parts, name].join("/");
+  return parsed.href;
+}
+
+/**
+ * The id in a Civitai image address, the folder before its size ("…/<key>/width=450/name.jpeg"),
+ * the same on every size of the image. Null when the address has none.
+ */
+export function civitaiImageKey(url: string): string | null {
+  let parts: string[];
+  try {
+    parts = new URL(url).pathname.split("/").filter(Boolean);
+  } catch {
+    return null;
+  }
+  const at = parts.findIndex((p) => p.includes("="));
+  const key = at > 0 ? parts[at - 1] : null;
+  return key && /^[\w-]{1,80}$/.test(key) ? key : null;
+}
+
+/** The address of an image's original file (as the poster uploaded it). */
+export function civitaiOriginal(url: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return url;
+  }
+  const parts = parsed.pathname.split("/");
+  const at = parts.findIndex((p) => p.includes("="));
+  if (at > 0) parts[at] = "original=true";
+  else parts.splice(parts.length - 1, 0, "original=true");
+  parsed.pathname = parts.join("/");
   return parsed.href;
 }
 

@@ -14,6 +14,8 @@ import { fetchFollow, RemoteError, readLimited, sniffImage } from "../../lib/rem
 
 const PARALLEL = 6;
 const MAX_BYTES = 20 * 1024 * 1024;
+/** An original file added to the gallery (big PNGs). */
+const MAX_ORIGINAL = 80 * 1024 * 1024;
 const MISS_MS = 5 * 60_000;
 const TIMEOUT_MS = 30_000;
 
@@ -65,6 +67,36 @@ export class ImageProxy {
     const job = this.load(url, file).finally(() => this.inflight.delete(file));
     this.inflight.set(file, job);
     return job;
+  }
+
+  /**
+   * An image's original file, fetched once and not cached (it's saved in the gallery). Asked for
+   * as is, so the CDN doesn't hand back a WebP of a PNG (that would lose its metadata).
+   */
+  async original(url: string): Promise<{ bytes: Uint8Array; type: string }> {
+    if (!this.allowed(url)) throw new HttpError(400, "That image isn't from Civitai.", "bad_image");
+    try {
+      const res = await fetchFollow(url, {
+        allow: (u) => imageHostAllowed(u, this.civitaiOrigin),
+        signal: AbortSignal.timeout(120_000),
+        fetch: this.doFetch,
+      });
+      if (!res.ok) {
+        await res.body?.cancel().catch(() => undefined);
+        throw new HttpError(404, "Civitai doesn't have that image anymore.", "no_image");
+      }
+      const bytes = await readLimited(res, MAX_ORIGINAL);
+      const type = sniffImage(bytes);
+      if (!type) throw new HttpError(415, "That isn't an image the gallery can show.", "not_image");
+      return { bytes, type };
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      throw new HttpError(
+        502,
+        error instanceof RemoteError ? error.message : "Couldn't download the image from Civitai.",
+        "image_failed",
+      );
+    }
   }
 
   /** The image's bytes (downloads use it for a model's preview sidecar). */

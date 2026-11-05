@@ -10,6 +10,7 @@ import {
   type CivitaiImageMeta,
   type CivitaiModel,
   type CivitaiVersion,
+  civitaiImageKey,
   civitaiImageVariant,
   civitaiKind,
   type LocalMark,
@@ -94,6 +95,8 @@ export function image(
     video,
     by: str(img.username),
     meta: imageMeta(img.meta),
+    key: civitaiImageKey(img.url),
+    id: typeof img.id === "number" ? img.id : null,
   };
 }
 

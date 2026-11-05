@@ -4,8 +4,10 @@ import {
   base64Url,
   browseQuery,
   type CivitaiCard,
+  civitaiImageKey,
   civitaiImageVariant,
   civitaiKind,
+  civitaiOriginal,
   compactCount,
   dateRangeProblem,
   feedQuery,
@@ -117,5 +119,20 @@ describe("following feed", () => {
     expect(mergeFeed(pages, "Most Downloaded", (c) => c.downloads).map((c) => c.id)).toEqual([
       2, 3, 1,
     ]);
+  });
+});
+
+describe("image keys and originals", () => {
+  const url = "https://image.civitai.com/acct/dd9b038c-bd15/width=450/1777041.jpeg";
+  it("reads the key from any size of an image", () => {
+    expect(civitaiImageKey(url)).toBe("dd9b038c-bd15");
+    expect(civitaiImageKey(civitaiImageVariant(url, 1280, false))).toBe("dd9b038c-bd15");
+    expect(civitaiImageKey("https://image.civitai.com/acct/x/1.jpeg")).toBeNull();
+    expect(civitaiImageKey("not a url")).toBeNull();
+  });
+  it("points at the original file", () => {
+    expect(civitaiOriginal(url)).toBe(
+      "https://image.civitai.com/acct/dd9b038c-bd15/original=true/1777041.jpeg",
+    );
   });
 });

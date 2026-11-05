@@ -3,7 +3,7 @@
  * site or downloads a real model. It serves:
  *
  *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me, /enums,
- *   /images?modelVersionId=&limit=&cursor=&sort=&period= (120 community posts per version over
+ *   /images?imageId= (one of them) or ?modelVersionId=&limit=&cursor=&sort=&period= (120 community posts per version over
  *   all time, fewer for shorter periods, Newest in reverse; how they were made only with
  *   withMeta=true; none for versions ending in 3)
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
@@ -519,7 +519,11 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         return json(res, 404, { error: "Model not found" });
       }
       if (p === "/api/v1/images") {
-        const vid = Number(url.searchParams.get("modelVersionId"));
+        // One image by its id (vid * 1000 + n, like the list's).
+        const imageId = Number(url.searchParams.get("imageId"));
+        const vid = imageId
+          ? Math.floor(imageId / 1000)
+          : Number(url.searchParams.get("modelVersionId"));
         const owner = models.find((x) => x.versions.some((v) => v.id === vid));
         // Versions ending in 3 have no posts, so the empty state can be checked.
         const span: Record<string, number> = { Year: 80, Month: 40, Week: 15, Day: 3 };
@@ -528,34 +532,41 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         const newest = url.searchParams.get("sort") === "Newest";
         const limit = Math.max(1, Number(url.searchParams.get("limit") ?? 50));
         const offset = Number(url.searchParams.get("cursor") ?? 0) || 0;
-        const items =
-          total > offset
+        const picked = imageId
+          ? imageId % 1000 < all
+            ? [imageId % 1000]
+            : []
+          : total > offset
             ? Array.from({ length: Math.min(limit, total - offset) }, (_, k) =>
                 newest ? total - 1 - (offset + k) : offset + k,
-              ).map((n) => ({
-                id: vid * 1000 + n,
-                url: `${base}/img/community-${vid}-${n}/original=true/${vid * 1000 + n}.jpeg`,
-                width: 832,
-                height: 1216,
-                type: "image",
-                nsfw: n % 9 === 3,
-                nsfwLevel: n % 9 === 3 ? "X" : "None",
-                username: `fan_${(n % 7) + 1}`,
-                meta:
-                  // Like Civitai, only with withMeta=true.
-                  url.searchParams.get("withMeta") === "true" && n % 2 === 0
-                    ? {
-                        prompt: `${owner?.name}, community post ${n + 1}`,
-                        negativePrompt: "lowres",
-                        steps: 20 + n,
-                        cfgScale: 5,
-                        sampler: "DPM++ 2M",
-                        seed: 4242 + n,
-                      }
-                    : null,
-              }))
+              )
             : [];
-        const next = offset + limit < total ? String(offset + limit) : undefined;
+        const items = picked.map((n) => ({
+          id: vid * 1000 + n,
+          url: `${base}/img/community-${vid}-${n}/original=true/${vid * 1000 + n}.jpeg`,
+          width: 832,
+          height: 1216,
+          type: "image",
+          nsfw: n % 9 === 3,
+          nsfwLevel: n % 9 === 3 ? "X" : "None",
+          username: `fan_${(n % 7) + 1}`,
+          postId: vid * 100 + n,
+          modelVersionIds: [vid],
+          meta:
+            // Like Civitai, only with withMeta=true.
+            url.searchParams.get("withMeta") === "true" && n % 2 === 0
+              ? {
+                  prompt: `${owner?.name}, community post ${n + 1}`,
+                  negativePrompt: "lowres",
+                  steps: 20 + n,
+                  cfgScale: 5,
+                  sampler: "DPM++ 2M",
+                  seed: 4242 + n,
+                  civitaiResources: [{ type: "lora", modelVersionId: vid, weight: 0.8 }],
+                }
+              : null,
+        }));
+        const next = !imageId && offset + limit < total ? String(offset + limit) : undefined;
         return json(res, 200, { items, metadata: next ? { nextCursor: next } : {} });
       }
       m = /^\/api\/v1\/model-versions\/(\d+)$/.exec(p);

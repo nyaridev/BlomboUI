@@ -417,6 +417,28 @@ function Details({
         <PropertyList
           className="border-t border-line pt-3"
           items={[
+            {
+              label: "Added from",
+              value:
+                image.origin === "civitai" ? (
+                  details?.civitai?.page ? (
+                    <a
+                      href={details.civitai.page}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="inline-flex items-center gap-1 text-accent-ink hover:underline focus-ring"
+                    >
+                      Civitai
+                      <Icon name="external" size={12} />
+                    </a>
+                  ) : (
+                    "Civitai"
+                  )
+                ) : image.origin === "imported" ? (
+                  "Your PC"
+                ) : null,
+            },
+            { label: "Posted by", value: details?.civitai?.by },
             { label: "File", value: image.name, copy: image.name },
             {
               label: "Folder",
@@ -496,6 +518,8 @@ const SOURCE_LABEL = {
   blombo: "BlomboUI",
   comfy: "ComfyUI",
   a1111: "A1111 / Forge",
+  // Said by "Added from" instead: Civitai only shows what its poster shared.
+  civitai: null,
   none: null,
 } as const;
 

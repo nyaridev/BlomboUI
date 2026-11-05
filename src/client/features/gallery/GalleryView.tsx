@@ -98,14 +98,15 @@ export function useGalleryGo() {
 function Images({ featured, visible }: { featured: GalleryImage[]; visible: boolean }) {
   const ui = useGalleryUi();
   const q = useDebounced(ui.q, 250);
-  const { library, favorites, since, model, lora, sort, seed, rating, tag, collection } = ui;
+  const { library, favorites, since, model, lora, sort, seed, rating, tag, collection, origins } =
+    ui;
   const query = useMemo(
     () =>
       galleryQuery(
-        { library, favorites, since, model, lora, sort, seed, rating, tag, collection },
+        { library, favorites, since, model, lora, sort, seed, rating, tag, collection, origins },
         q,
       ),
-    [library, favorites, since, model, lora, sort, seed, rating, tag, collection, q],
+    [library, favorites, since, model, lora, sort, seed, rating, tag, collection, origins, q],
   );
   const images = useGalleryImages(query);
   // Offset pages can overlap when images arrive or leave between them: show each image once.

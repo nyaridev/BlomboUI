@@ -12,6 +12,11 @@
  *    stopped runs (marked in `interrupted` when a run is interrupted) can be left out.
  *  - Removing an image moves the file into data/profiles/<id>/trash/gallery/ (restorable);
  *    nothing in a user folder is ever deleted.
+ *  - Images added from your PC or Civitai (imports.ts) sit in `imported/` and `civitai/` at the
+ *    top of an output folder; lists can show or hide each origin. A Civitai image's sidecar
+ *    names the model versions that made it (`image_versions`): the model and LoRA filters list
+ *    and find it through the local models that are those versions, never by Civitai's names, so
+ *    a LoRA you don't have never shows up there.
  */
 import { randomUUID } from "node:crypto";
 import type { Dirent, Stats } from "node:fs";
@@ -20,6 +25,8 @@ import path from "node:path";
 import type { StatementSync } from "node:sqlite";
 import sharp from "sharp";
 import {
+  CIVITAI_SIDECAR,
+  CivitaiSidecar,
   type Collection,
   fileUrl,
   type GalleryFacets,
@@ -28,22 +35,28 @@ import {
   type GalleryPage,
   type GalleryQuery,
   IMAGE_EXTENSIONS,
+  IMAGE_ORIGINS,
   type ImageDetails,
+  type ImageOrigin,
   type LibraryInfo,
   OUTPUTS_LIBRARY,
+  originOf,
   type SyncState,
   type TagCount,
   type TrashEntry,
   thumbUrl,
 } from "../../../shared/gallery.ts";
 import {
+  civitaiSummary,
   EMPTY_SUMMARY,
   ImageSettings,
   ImageSummary,
   searchText,
 } from "../../../shared/imageinfo.ts";
 import type { LiveTopic, ServerMessage } from "../../../shared/live.ts";
+import type { LocalModel } from "../../../shared/models.ts";
 import { folderIdFrom, type ProfileFolder } from "../../../shared/profile.ts";
+import { salvage } from "../../../shared/salvage.ts";
 import { slugId } from "../../../shared/settings.ts";
 import { type ProfileDb, type ProfileDbs, transaction } from "../../db/profileDb.ts";
 import { freePath, movePath, resolveInside } from "../../lib/fsx.ts";
@@ -52,6 +65,7 @@ import { readImageHead } from "../../lib/imagemeta.ts";
 import { ThumbCache } from "../../lib/thumbs.ts";
 import type { ProfileService } from "../profiles.ts";
 import type { SettingsService } from "../settings.ts";
+import { modelLabel } from "../workflows/summary.ts";
 import { parseMeta } from "./meta.ts";
 
 export const THUMB_MAX = 640;
@@ -68,6 +82,8 @@ export interface GalleryDeps {
   publish: (topic: LiveTopic | null, msg: ServerMessage) => void;
   /** Whether a workflow id still exists in the open profile. */
   workflowExists: (id: string) => Promise<boolean>;
+  /** The models folder's models (a Civitai image's versions are matched against them). */
+  localModels: () => Promise<LocalModel[]>;
 }
 
 export interface LibraryRoot {
@@ -147,6 +163,17 @@ export function shuffleKey(seed: number): string {
   const h = `((i.id * 2654435761 + ${Math.trunc(seed)}) % 2147483647)`;
   return `((${h} * ${h} + ${Math.trunc(seed)}) % 2147483647)`;
 }
+
+/** Each origin as a condition on `images i` (the import folders, as `originOf` reads them). */
+const CIVITAI_ROWS = "(i.path LIKE 'civitai/%')";
+const ORIGIN_SQL: Record<ImageOrigin, string> = {
+  civitai: CIVITAI_ROWS,
+  imported: "(i.path LIKE 'imported/%')",
+  generated: "(i.path NOT LIKE 'civitai/%' AND i.path NOT LIKE 'imported/%')",
+};
+
+/** How a local model is named in the gallery's filters, and which filter it's in. */
+type LocalVersion = { label: string; kind: "model" | "lora" };
 
 /** Conditions appended to a WHERE clause. */
 const and = (conditions: string[]) => conditions.map((c) => ` AND ${c}`).join("");
@@ -354,7 +381,7 @@ export class GalleryService {
       if (changed.length) {
         const parsed = await Promise.all(
           changed.map((f) =>
-            readForIndex(f.abs, f.stat).then(
+            readForIndex(f.abs, f.rel).then(
               (row) => ({ ...f, row }),
               // Unreadable or not really an image: leave it out of the index.
               () => null,
@@ -437,7 +464,15 @@ export class GalleryService {
       open,
       "INSERT INTO image_loras (image_id, name, strength) VALUES (?, ?, ?)",
     );
-    for (const l of row.summary.loras) lora.run(id, l.name, l.strength);
+    // A Civitai image's LoRAs are found through its versions (the poster's names aren't yours).
+    if (originOf(rel) !== "civitai")
+      for (const l of row.summary.loras) lora.run(id, l.name, l.strength);
+    this.stmt(open, "DELETE FROM image_versions WHERE image_id = ?").run(id);
+    const version = this.stmt(
+      open,
+      "INSERT INTO image_versions (image_id, version_id) VALUES (?, ?)",
+    );
+    for (const v of row.versions) version.run(id, v);
     if (fts) {
       this.stmt(open, "DELETE FROM images_fts WHERE rowid = ?").run(id);
       this.stmt(open, "INSERT INTO images_fts (rowid, search) VALUES (?, ?)").run(id, search);
@@ -460,10 +495,25 @@ export class GalleryService {
     type: string;
   }): Promise<GalleryImage | null> {
     if (ref.type !== "output" || !this.deps.profiles.active) return null;
+    return this.ingest(refPath(ref));
+  }
+
+  /** The main output folder, where generated and added images land. */
+  async mainFolder(): Promise<string> {
+    const lib = (await this.libraries())[0];
+    if (!lib?.path)
+      throw new HttpError(409, "Set an outputs folder in Settings → Folders first.", "no_outputs");
+    return lib.path;
+  }
+
+  /**
+   * Index a file in the main output folder now (`rel` inside it) and announce it. Null when the
+   * file isn't there.
+   */
+  async ingest(rel: string): Promise<GalleryImage | null> {
     const open = this.need();
     const lib = (await this.libraries())[0];
     if (!lib?.path) return null;
-    const rel = refPath(ref);
     if (rel.split("/").some((p) => p === ".." || p === "")) return null;
     const abs = fromRel(lib.path, rel);
     let stat: Stats;
@@ -472,7 +522,7 @@ export class GalleryService {
     } catch {
       return null;
     }
-    const row = await readForIndex(abs, stat);
+    const row = await readForIndex(abs, rel);
     const shown = and(await this.shown());
     if (this.current !== open) return null;
     const id = this.upsert(open, lib.id, rel, stat, row);
@@ -549,7 +599,45 @@ export class GalleryService {
       rating: Number(r.rating ?? 0),
       model: r.model,
       thumb: thumbUrl(Number(r.id), Number(r.size), Number(r.mtime)),
+      origin: originOf(r.path),
     };
+  }
+
+  /**
+   * Local models that are Civitai versions, by version id: what a Civitai image's versions
+   * stand for here. Empty when the models folder can't be read.
+   */
+  private async localVersions(): Promise<Map<number, LocalVersion>> {
+    const out = new Map<number, LocalVersion>();
+    // No Civitai images: no need to read the models folder.
+    if (!this.need().pdb.db.prepare("SELECT 1 FROM image_versions LIMIT 1").get()) return out;
+    let models: LocalModel[];
+    try {
+      models = await this.deps.localModels();
+    } catch {
+      return out;
+    }
+    for (const m of models) {
+      const kind =
+        m.kind === "loras"
+          ? "lora"
+          : m.kind === "checkpoints" || m.kind === "diffusion_models"
+            ? "model"
+            : null;
+      if (m.civitai && kind)
+        out.set(m.civitai.versionId, { label: modelLabel(m.id) ?? m.id, kind });
+    }
+    return out;
+  }
+
+  /** A model or LoRA filter's condition on Civitai images: the versions that are it here. */
+  private async versionMatch(kind: LocalVersion["kind"], label: string): Promise<string> {
+    const ids = [...(await this.localVersions())]
+      .filter(([, v]) => v.kind === kind && v.label === label)
+      .map(([id]) => Math.trunc(id));
+    return ids.length
+      ? ` OR EXISTS (SELECT 1 FROM image_versions v WHERE v.image_id = i.id AND v.version_id IN (${ids.join(",")}))`
+      : "";
   }
 
   get(id: number): GalleryImage | null {
@@ -568,12 +656,18 @@ export class GalleryService {
       params.push(q.library);
     }
     if (q.favorites) where.push("m.favorite = 1");
+    if (q.origins.length < IMAGE_ORIGINS.length)
+      where.push(q.origins.length ? `(${q.origins.map((o) => ORIGIN_SQL[o]).join(" OR ")})` : "0");
     if (q.model) {
-      where.push("i.model = ?");
+      where.push(
+        `((i.model = ? AND NOT ${CIVITAI_ROWS})${await this.versionMatch("model", q.model)})`,
+      );
       params.push(q.model);
     }
     if (q.lora) {
-      where.push("EXISTS (SELECT 1 FROM image_loras l WHERE l.image_id = i.id AND l.name = ?)");
+      where.push(
+        `(EXISTS (SELECT 1 FROM image_loras l WHERE l.image_id = i.id AND l.name = ?)${await this.versionMatch("lora", q.lora)})`,
+      );
       params.push(q.lora);
     }
     if (q.since !== undefined) {
@@ -653,19 +747,40 @@ export class GalleryService {
     const args = library === "all" ? [] : [library];
     const models = db
       .prepare(
-        `SELECT model AS name, COUNT(*) AS count FROM images i WHERE model IS NOT NULL ${lib}
-         GROUP BY model ORDER BY count DESC, name LIMIT 60`,
+        `SELECT model AS name, COUNT(*) AS count FROM images i
+         WHERE model IS NOT NULL AND NOT ${CIVITAI_ROWS} ${lib} GROUP BY model`,
       )
       .all(...args) as Array<{ name: string; count: number }>;
     const loras = db
       .prepare(
         `SELECT l.name AS name, COUNT(DISTINCT l.image_id) AS count
          FROM image_loras l JOIN images i ON i.id = l.image_id WHERE 1 = 1 ${lib}
-         GROUP BY l.name ORDER BY count DESC, l.name LIMIT 60`,
+         GROUP BY l.name`,
       )
       .all(...args) as Array<{ name: string; count: number }>;
-    const num = (r: { name: string; count: number }) => ({ name: r.name, count: Number(r.count) });
-    return { models: models.map(num), loras: loras.map(num) };
+    const counts = {
+      model: new Map(models.map((r) => [r.name, Number(r.count)])),
+      lora: new Map(loras.map((r) => [r.name, Number(r.count)])),
+    };
+    // Civitai images count for the models and LoRAs here that made them.
+    const local = await this.localVersions();
+    if (local.size)
+      for (const r of db
+        .prepare(
+          `SELECT v.version_id AS id, COUNT(DISTINCT v.image_id) AS count
+           FROM image_versions v JOIN images i ON i.id = v.image_id WHERE 1 = 1 ${lib}
+           GROUP BY v.version_id`,
+        )
+        .all(...args) as Array<{ id: number; count: number }>) {
+        const m = local.get(Number(r.id));
+        if (m) counts[m.kind].set(m.label, (counts[m.kind].get(m.label) ?? 0) + Number(r.count));
+      }
+    const top = (map: Map<string, number>) =>
+      [...map]
+        .map(([name, count]) => ({ name, count }))
+        .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+        .slice(0, 60);
+    return { models: top(counts.model), loras: top(counts.lora) };
   }
 
   async overview(): Promise<GalleryOverview> {
@@ -722,6 +837,8 @@ export class GalleryService {
           Date.now() - WEEK_MS,
         ),
         trash: count("SELECT COUNT(*) AS n FROM trash"),
+        imported: count(`SELECT COUNT(*) AS n FROM images i WHERE ${ORIGIN_SQL.imported}${shown}`),
+        civitai: count(`SELECT COUNT(*) AS n FROM images i WHERE ${ORIGIN_SQL.civitai}${shown}`),
       },
       featured: featured.map((r) => this.toImage(r)),
       sync: this.syncState,
@@ -748,6 +865,7 @@ export class GalleryService {
     const collections = db
       .prepare("SELECT collection_id AS id FROM collection_items WHERE library = ? AND path = ?")
       .all(image.library, image.path) as Array<{ id: string }>;
+    const sidecar = image.origin === "civitai" ? await readSidecar(await this.filePath(id)) : null;
     return {
       ...image,
       tags: tags.map((t) => t.tag),
@@ -756,6 +874,14 @@ export class GalleryService {
       settings: s,
       hasWorkflow: Boolean(raw.has_workflow),
       file: fileUrl(image),
+      civitai: sidecar
+        ? {
+            by: sidecar.by,
+            page:
+              sidecar.imageId && sidecar.site ? `${sidecar.site}/images/${sidecar.imageId}` : null,
+            versionId: sidecar.versionId,
+          }
+        : null,
     };
   }
 
@@ -955,6 +1081,7 @@ export class GalleryService {
       const dest = path.join(this.trashDir(), trashId, row.name);
       try {
         await movePath(abs, dest);
+        await moveSidecar(abs, dest);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === "ENOENT") {
           this.deleteRow(open, row.id);
@@ -1080,10 +1207,11 @@ export class GalleryService {
       const from = this.trashFile(row);
       const to = await freePath(fromRel(lib.path, row.path));
       await movePath(from, to);
+      await moveSidecar(from, to);
       await fs.rm(path.dirname(from), { recursive: true, force: true }).catch(() => undefined);
       const rel = toRel(path.relative(lib.path, to));
       const stat = await fs.stat(to);
-      this.upsert(open, lib.id, rel, stat, await readForIndex(to, stat));
+      this.upsert(open, lib.id, rel, stat, await readForIndex(to, rel));
       const extra = parseExtra(row.extra);
       transaction(db, () => {
         if (row.favorite || extra.rating)
@@ -1280,8 +1408,35 @@ async function walk(dir: string, out: string[], signal: AbortSignal): Promise<vo
 
 type IndexRow = Awaited<ReturnType<typeof readForIndex>>;
 
-/** Read what the index needs from one file (headers only; sharp only for odd formats). */
-async function readForIndex(abs: string, _stat: Stats) {
+/** A Civitai image's sidecar, or null when it has none (or it's unreadable). */
+async function readSidecar(abs: string): Promise<CivitaiSidecar | null> {
+  try {
+    // Value by value, so a hand-edited or older file keeps what's still good in it.
+    const read = salvage(
+      CivitaiSidecar,
+      JSON.parse(await fs.readFile(`${abs}${CIVITAI_SIDECAR}`, "utf8")),
+    );
+    return read.fixed.includes("*") ? null : read.data;
+  } catch {
+    return null;
+  }
+}
+
+/** Move a Civitai image's sidecar along with it (trash, restore), when it has one. */
+async function moveSidecar(from: string, to: string): Promise<void> {
+  try {
+    await movePath(`${from}${CIVITAI_SIDECAR}`, `${to}${CIVITAI_SIDECAR}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+}
+
+/**
+ * Read what the index needs from one file (headers only; sharp only for odd formats). A Civitai
+ * image adds its sidecar: the versions that made it and, when the file itself says nothing, how
+ * the poster says it was made.
+ */
+async function readForIndex(abs: string, rel: string) {
   const head = await readImageHead(abs);
   let width = head.width;
   let height = head.height;
@@ -1292,5 +1447,11 @@ async function readForIndex(abs: string, _stat: Stats) {
   }
   if (!width || !height) throw new Error("No image size");
   const meta = parseMeta(head.text);
-  return { width, height, ...meta };
+  const sidecar = originOf(rel) === "civitai" ? await readSidecar(abs) : null;
+  if (sidecar?.meta && meta.summary.source === "none") {
+    const shared = civitaiSummary(sidecar.meta);
+    meta.summary = shared.summary;
+    meta.settings = { workflowId: null, values: null, roles: shared.roles };
+  }
+  return { width, height, ...meta, versions: sidecar?.versions ?? [] };
 }

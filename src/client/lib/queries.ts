@@ -8,7 +8,13 @@ import type {
 } from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
-import type { GalleryPage, GalleryQueryInput, ImageDetails, UseKind } from "@shared/gallery";
+import type {
+  AddCivitaiImageBody,
+  GalleryPage,
+  GalleryQueryInput,
+  ImageDetails,
+  UseKind,
+} from "@shared/gallery";
 import type { JobHistoryPage, JobHistoryQueryInput, SaveSnippetBody } from "@shared/history";
 import type { LocalModel, ModelList, SaveModelInfoBody } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
@@ -929,6 +935,16 @@ export function useStartDownload() {
       void qc.invalidateQueries({ queryKey: qk.settings(useSession.getState().profileId) });
     },
   });
+}
+
+/** Add a Civitai image to the gallery (the live bus brings the new image to the lists). */
+export function useAddCivitaiImage() {
+  return useMutation({ mutationFn: (body: AddCivitaiImageBody) => api.addCivitaiImage(body) });
+}
+
+/** Add an image file from your PC to the gallery. */
+export function useAddImageFile() {
+  return useMutation({ mutationFn: (file: File) => api.addImageFile(file, file.name) });
 }
 
 export const HISTORY_PAGE = 100;

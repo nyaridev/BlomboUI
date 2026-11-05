@@ -223,6 +223,16 @@ export const MIGRATIONS: readonly string[] = [
   ALTER TABLE job_log ADD COLUMN final_prompt TEXT;
   ALTER TABLE job_log ADD COLUMN final_negative TEXT;
   `,
+  // 8: the Civitai model versions that made an image added from Civitai (its sidecar's list),
+  // so the model and LoRA filters find it through the local models that are those versions
+  `
+  CREATE TABLE image_versions (
+    image_id INTEGER NOT NULL REFERENCES images (id) ON DELETE CASCADE,
+    version_id INTEGER NOT NULL
+  );
+  CREATE INDEX image_versions_version ON image_versions (version_id);
+  CREATE INDEX image_versions_image ON image_versions (image_id);
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

@@ -11,6 +11,7 @@
  * the download pop-up (DownloadDialog) to change the folder and file name first. Marks show
  * what's already in the models folder.
  */
+
 import { Icon, type IconName } from "@client/icons/Icon";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
@@ -44,6 +45,7 @@ import { type ReactNode, useMemo, useRef, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
 import { CivitaiCarousel } from "../../fileinfo/CivitaiCarousel";
 import { ImageSettingsBody } from "../../fileinfo/CivitaiMatch";
+import { AddCivitaiImage } from "../../gallery/AddToGallery";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
 import { CommunityImages } from "./CommunityImages";
@@ -137,6 +139,7 @@ function Page({
               onIndex={setShown}
               blurNsfw={blurNsfw}
               height={STAGE}
+              action={(img) => <AddCivitaiImage image={img} versionId={version?.id ?? 0} />}
             />
           ) : (
             <div className={`${STAGE} overflow-hidden rounded-xl border border-line bg-sunken`}>

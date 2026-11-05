@@ -12,6 +12,7 @@
  * been decoded off the main thread (big images used to freeze the page as they landed).
  * With `blurNsfw`, NSFW images stay blurred until the middle one is clicked (a click on it then
  * reveals instead of opening); they blur again when the setting or the images change.
+ * `action` puts a button for the picked image in the top right corner and in the viewer.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -19,6 +20,7 @@ import { IconButton, ImageViewer, Skeleton, useSharp } from "@client/ui";
 import { type CivitaiImage, civitaiFullSize } from "@shared/civitai";
 import { type AnimationPlaybackControls, animate } from "motion/react";
 import {
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
   type RefObject,
   useCallback,
@@ -47,6 +49,7 @@ export function CivitaiCarousel({
   onIndex,
   blurNsfw = false,
   height = CAROUSEL_HEIGHT,
+  action,
 }: {
   images: CivitaiImage[];
   label: string;
@@ -56,6 +59,8 @@ export function CivitaiCarousel({
   blurNsfw?: boolean;
   /** The viewport's height classes. */
   height?: string;
+  /** A button for the picked image, in the top right corner (and beside the viewer's Close). */
+  action?: (image: CivitaiImage) => ReactNode;
 }) {
   const view = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
@@ -336,6 +341,9 @@ export function CivitaiCarousel({
           </span>
         </>
       ) : null}
+      {action && images[picked] ? (
+        <span className="absolute top-2 right-2 z-10">{action(images[picked])}</span>
+      ) : null}
       <span className="sr-only" aria-live="polite">
         Image {picked + 1} of {n}
       </span>
@@ -357,6 +365,7 @@ export function CivitaiCarousel({
             settle();
           }}
           onClose={() => setViewing(false)}
+          actions={action ? (i) => (images[i] ? action(images[i]) : null) : undefined}
         />
       ) : null}
     </section>

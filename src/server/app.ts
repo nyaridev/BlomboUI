@@ -71,7 +71,11 @@ export function createApp(services: Services) {
   api.route("/settings", settingsRoutes(profiles, settings));
   api.route(
     "/gallery",
-    galleryRoutes(gallery, { history: services.history, autocomplete: services.autocomplete }),
+    galleryRoutes(gallery, {
+      history: services.history,
+      autocomplete: services.autocomplete,
+      imports: services.imports,
+    }),
   );
   api.route(
     "/history",

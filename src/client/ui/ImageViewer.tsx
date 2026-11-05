@@ -4,7 +4,7 @@
  * the picture closes it; ← →, the side buttons or the wheel beside the picture step through the
  * images (a wheel notch is one image). The wheel on the picture zooms around the pointer (easing) and a drag moves it;
  * while zoomed in, the wheel anywhere zooms, so it only steps again once the picture is back to
- * its size. A middle click on the picture opens it in a new tab (`onOpenTab`). It sits on the
+ * its size. A middle click on the picture opens it in a new tab (`onOpenTab`); `actions` puts buttons for the image on screen beside Close. It sits on the
  * lightbox layer (z 250).
  *
  * An image with a `preview` (a small picture already loaded, such as a thumbnail) and its size
@@ -17,6 +17,7 @@ import { clamp } from "@client/lib/number";
 import {
   type MouseEvent,
   type PointerEvent,
+  type ReactNode,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -53,12 +54,15 @@ export function ImageViewer({
   onIndex,
   onClose,
   onOpenTab,
+  actions,
 }: {
   images: ViewerImage[];
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
   onOpenTab?: (image: ViewerImage) => void;
+  /** Buttons for the image on screen, in the top right beside Close (Add to gallery). */
+  actions?: (index: number) => ReactNode;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
@@ -271,7 +275,8 @@ export function ImageViewer({
           </div>
         </>
       ) : null}
-      <div className="absolute top-1.5 right-1.5">
+      <div className="absolute top-1.5 right-1.5 flex items-center gap-1">
+        {actions?.(images[index] ? index : 0)}
         <IconButton
           icon="x"
           label="Close"

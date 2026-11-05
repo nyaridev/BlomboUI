@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import {
+  AddCivitaiImageBody,
   AddLibraryBody,
   CollectionItemsBody,
   CollectionName,
@@ -14,10 +15,11 @@ import {
   TagsBody,
   TrashIdsBody,
 } from "../../shared/gallery.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { AutocompleteService } from "../services/autocomplete.ts";
 import { galleryHome, mostUsed } from "../services/gallery/home.ts";
+import type { ImportService } from "../services/gallery/imports.ts";
 import type { GalleryService } from "../services/gallery/index.ts";
 import type { HistoryService } from "../services/history.ts";
 import { revealInFileManager } from "../services/system.ts";
@@ -28,11 +30,26 @@ const imageId = (raw: string) => {
   return n;
 };
 
+/** An image file added from your PC. */
+const MAX_IMPORT = 80 * 1024 * 1024;
+
 export function galleryRoutes(
   gallery: GalleryService,
-  others: { history: HistoryService; autocomplete: AutocompleteService },
+  others: { history: HistoryService; autocomplete: AutocompleteService; imports: ImportService },
 ) {
   const r = new Hono();
+
+  /** Add an image from your PC (the file's bytes, its name in ?filename=). */
+  r.post("/import", async (c) => {
+    const data = await readBody(c, MAX_IMPORT, "That image is too large to add (80 MB max).");
+    if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
+    return c.json(await others.imports.addFile(data, c.req.query("filename") ?? "image"));
+  });
+
+  /** Add an image from Civitai (its original file and what Civitai says about it). */
+  r.post("/import/civitai", async (c) =>
+    c.json(await others.imports.addCivitai(await readJson(c, AddCivitaiImageBody))),
+  );
 
   r.get("/overview", async (c) => c.json(await gallery.overview()));
 

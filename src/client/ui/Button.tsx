@@ -88,6 +88,8 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   size?: "xs" | "sm" | "md" | "lg" | "tall";
   variant?: "ghost" | "secondary" | "primary" | "danger" | "overlay";
   active?: boolean;
+  /** Working: a spinner in place of the icon, and no clicks until it's done. */
+  loading?: boolean;
   tooltip?: boolean;
   badge?: ReactNode;
   ref?: Ref<HTMLButtonElement>;
@@ -118,10 +120,12 @@ export function IconButton({
   size = "md",
   variant = "ghost",
   active,
+  loading,
   tooltip = true,
   badge,
   className,
   type = "button",
+  disabled,
   ...rest
 }: IconButtonProps) {
   const [box, px] = iconSizes[size];
@@ -130,6 +134,8 @@ export function IconButton({
       type={type}
       aria-label={label}
       aria-pressed={active}
+      aria-busy={loading || undefined}
+      disabled={disabled || loading}
       className={cn(
         base,
         box,
@@ -139,7 +145,7 @@ export function IconButton({
       )}
       {...rest}
     >
-      <Icon name={icon} size={px} />
+      {loading ? <Spinner size={px} /> : <Icon name={icon} size={px} />}
       {badge}
     </button>
   );

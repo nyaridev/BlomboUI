@@ -61,6 +61,8 @@ import type {
 } from "@shared/downloads";
 import type { FileInfo } from "@shared/fileinfo";
 import type {
+  AddCivitaiImageBody,
+  AddedImage,
   Collection,
   GalleryFacets,
   GalleryHome,
@@ -411,6 +413,17 @@ export const api = {
       undefined,
       file,
     ),
+  /** Add an image from your PC to the gallery (copied into the outputs folder's imported/). */
+  addImageFile: (file: Blob, filename: string) =>
+    request<AddedImage>(
+      "POST",
+      `/gallery/import?filename=${encodeURIComponent(filename)}`,
+      undefined,
+      file,
+    ),
+  /** Add a Civitai image to the gallery (its original file, into the outputs folder's civitai/). */
+  addCivitaiImage: (body: AddCivitaiImageBody) =>
+    request<AddedImage>("POST", "/gallery/import/civitai", body),
   /** A dropped model's SHA256: the file streams to the server, which keeps nothing. */
   fileHash: (file: Blob) => request<ModelHashes>("POST", "/fileinfo/hash", undefined, file),
   galleryFileInfo: (id: number) => request<FileInfo>("GET", `/fileinfo/gallery/${id}`),

@@ -1,11 +1,12 @@
 /**
- * Gallery toolbar: search, model / LoRA / tag / rating / favorite filters, tile size, layout and
- * sort.
+ * Gallery toolbar: search, model / LoRA / tag / rating / origin / favorite filters, tile size,
+ * layout and sort.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useGalleryFacets, useGalleryTags } from "@client/lib/queries";
 import {
+  Checkbox,
   Chip,
   IconButton,
   Popover,
@@ -15,11 +16,18 @@ import {
   StarRating,
   TextField,
 } from "@client/ui";
-import type { GalleryFacets } from "@shared/gallery";
+import { type GalleryFacets, IMAGE_ORIGINS, type ImageOrigin } from "@shared/gallery";
 import type { GalleryLayout } from "@shared/settings";
 import { useState } from "react";
 import { SidebarButton } from "./Sidebar";
-import { type GallerySort, newSeed, useGalleryUi } from "./state";
+import {
+  allOrigins,
+  type GallerySort,
+  newSeed,
+  ORIGIN_ICON,
+  ORIGIN_LABEL,
+  useGalleryUi,
+} from "./state";
 
 export function Toolbar({
   size,
@@ -73,6 +81,7 @@ export function Toolbar({
           emptyText="Tag images in the lightbox to filter by them."
         />
         <RatingChip value={ui.rating} onChange={(rating) => ui.set({ rating })} />
+        <OriginChip value={ui.origins} onChange={(origins) => ui.set({ origins })} />
         <Chip
           size="sm"
           icon="heart"
@@ -140,6 +149,69 @@ export function Toolbar({
 }
 
 /** "★3+" filter: images with at least this many stars. */
+/** Which origins show: made here, added from your PC, added from Civitai. */
+function OriginChip({
+  value,
+  onChange,
+}: {
+  value: ImageOrigin[];
+  onChange: (v: ImageOrigin[]) => void;
+}) {
+  const all = allOrigins(value);
+  const only = value.length === 1 ? value[0] : undefined;
+  return (
+    <Popover
+      className="p-3"
+      trigger={
+        <button
+          type="button"
+          className={cn(
+            "inline-flex h-6 items-center gap-1.5 rounded-sm border px-2.5 text-xs transition-colors focus-ring",
+            !all
+              ? "border-accent/60 bg-accent/12 text-fg"
+              : "border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg",
+          )}
+        >
+          <Icon name={only ? ORIGIN_ICON[only] : "stack"} size={12} />
+          {all
+            ? "Origin"
+            : only
+              ? ORIGIN_LABEL[only]
+              : value.length
+                ? `${value.length} origins`
+                : "No origin"}
+          <Icon name="chevron-down" size={11} className="text-fg-3" />
+        </button>
+      }
+    >
+      {() => (
+        <div className="flex flex-col gap-2.5">
+          <span className="text-xs text-fg-3">Show images</span>
+          {IMAGE_ORIGINS.map((o) => (
+            <Checkbox
+              key={o}
+              checked={value.includes(o)}
+              label={ORIGIN_LABEL[o]}
+              onCheckedChange={(on) =>
+                onChange(IMAGE_ORIGINS.filter((x) => (x === o ? on : value.includes(x))))
+              }
+            />
+          ))}
+          {!all ? (
+            <button
+              type="button"
+              onClick={() => onChange([...IMAGE_ORIGINS])}
+              className="self-start text-xs text-accent-ink hover:underline focus-ring"
+            >
+              Show all
+            </button>
+          ) : null}
+        </div>
+      )}
+    </Popover>
+  );
+}
+
 function RatingChip({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const [open, setOpen] = useState(false);
   return (

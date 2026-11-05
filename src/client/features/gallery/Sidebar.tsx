@@ -30,7 +30,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { FolderField } from "../profiles/FolderField";
 import { USE_ICON, USE_LABEL } from "./home/sections";
-import { newSeed, useGalleryUi } from "./state";
+import { allOrigins, newSeed, ORIGIN_ICON, ORIGIN_LABEL, useGalleryUi } from "./state";
 
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 
@@ -43,7 +43,7 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
   const [naming, setNaming] = useState<Collection | "new" | null>(null);
   const counts = overview?.counts;
   const list = ui.view === "images" && ui.library === "all" && !ui.collection;
-  const plain = list && !ui.favorites && !ui.since;
+  const plain = list && !ui.favorites && !ui.since && allOrigins(ui.origins);
   const shuffled = ui.sort === "random";
 
   return (
@@ -87,6 +87,24 @@ export function Sidebar({ overview }: { overview: GalleryOverview | undefined })
         label="This week"
         count={counts?.week}
       />
+
+      <div className="label-caps mt-4 mb-1 px-2 text-[10px]">Added</div>
+      {(["imported", "civitai"] as const).map((origin) => (
+        <SideItem
+          key={origin}
+          active={
+            list &&
+            !ui.favorites &&
+            !ui.since &&
+            ui.origins.length === 1 &&
+            ui.origins[0] === origin
+          }
+          onClick={() => ui.show({ origins: [origin] })}
+          icon={ORIGIN_ICON[origin]}
+          label={ORIGIN_LABEL[origin]}
+          count={counts?.[origin]}
+        />
+      ))}
 
       <div className="label-caps mt-4 mb-1 px-2 text-[10px]">Most used</div>
       {USE_KINDS.map((kind) => (

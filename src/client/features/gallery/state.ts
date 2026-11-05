@@ -1,9 +1,17 @@
 /**
  * Gallery UI state: which page is shown (Home, a Most used view, an image list, the trash), which list (library,
- * favorites, this week, recent, shuffled), the search and filters, and the open lightbox image.
+ * favorites, this week, recent, shuffled), the search and filters (origins: made here, added from
+ * your PC, added from Civitai, each shown or hidden), and the open lightbox image.
  * Layout and tile size live in the profile's settings.
  */
-import type { GALLERY_SORTS, GalleryQueryInput, UseKind } from "@shared/gallery";
+import type { IconName } from "@client/icons/Icon";
+import {
+  type GALLERY_SORTS,
+  type GalleryQueryInput,
+  IMAGE_ORIGINS,
+  type ImageOrigin,
+  type UseKind,
+} from "@shared/gallery";
 import { create } from "zustand";
 
 export type GallerySort = (typeof GALLERY_SORTS)[number];
@@ -26,6 +34,8 @@ export interface GalleryUi {
   tag: string | null;
   /** A collection id (shown instead of a library). */
   collection: string | null;
+  /** The origins shown (all of them: no filter). */
+  origins: ImageOrigin[];
   sort: GallerySort;
   /** The shuffle's order (sort `random`); a new one shuffles again. */
   seed: number;
@@ -57,6 +67,7 @@ const DEFAULTS = {
   rating: 0,
   tag: null,
   collection: null,
+  origins: [...IMAGE_ORIGINS] as ImageOrigin[],
   sort: "newest" as GallerySort,
   flat: false,
 };
@@ -87,6 +98,7 @@ export function galleryQuery(
     | "rating"
     | "tag"
     | "collection"
+    | "origins"
   >,
   q: string,
 ): GalleryQueryInput {
@@ -100,6 +112,7 @@ export function galleryQuery(
   if (q.trim()) out.q = q.trim();
   if (s.model) out.model = s.model;
   if (s.lora) out.lora = s.lora;
+  if (!allOrigins(s.origins)) out.origins = s.origins.join(",");
   return out;
 }
 
@@ -117,6 +130,7 @@ export function isHomeView(
     | "rating"
     | "tag"
     | "collection"
+    | "origins"
     | "flat"
   >,
 ): boolean {
@@ -131,6 +145,22 @@ export function isHomeView(
     !s.q.trim() &&
     !s.model &&
     !s.lora &&
+    allOrigins(s.origins) &&
     s.sort === "newest"
   );
 }
+
+export const ORIGIN_LABEL: Record<ImageOrigin, string> = {
+  generated: "Generated",
+  imported: "From your PC",
+  civitai: "From Civitai",
+};
+export const ORIGIN_ICON: Record<ImageOrigin, IconName> = {
+  generated: "sparkle",
+  imported: "upload",
+  civitai: "globe",
+};
+
+/** Every origin is shown (no origin filter). */
+export const allOrigins = (origins: ImageOrigin[]) =>
+  IMAGE_ORIGINS.every((o) => origins.includes(o));

@@ -11,6 +11,58 @@ export const IMAGE_EXTENSIONS = [".png", ".webp", ".jpg", ".jpeg"] as const;
 /** The outputs folder is always the first library. */
 export const OUTPUTS_LIBRARY = "outputs";
 
+/**
+ * Where an image came from: made here (or by any tool) and saved in an output folder, added from
+ * your PC, or added from Civitai. Imports land in these folders at the top of the main output
+ * folder, so the origin is read from the path.
+ */
+export const IMAGE_ORIGINS = ["generated", "imported", "civitai"] as const;
+export type ImageOrigin = (typeof IMAGE_ORIGINS)[number];
+export const IMPORT_FOLDERS = { imported: "imported", civitai: "civitai" } as const;
+
+/** An image's origin from its path inside its library ("civitai/abc.jpeg"). */
+export function originOf(rel: string): ImageOrigin {
+  const top = rel.split("/")[0]?.toLowerCase();
+  return rel.includes("/") && top === IMPORT_FOLDERS.civitai
+    ? "civitai"
+    : rel.includes("/") && top === IMPORT_FOLDERS.imported
+      ? "imported"
+      : "generated";
+}
+
+/** Saved next to an image added from Civitai (`<image>.civitai.json`): what Civitai says about it. */
+export const CIVITAI_SIDECAR = ".civitai.json";
+export const CivitaiSidecar = z.object({
+  format: z.literal("blombo.civitai-image/1").default("blombo.civitai-image/1"),
+  /** Civitai's image id, when the answer had one. */
+  imageId: z.number().int().nullable().default(null),
+  /** The id in the image's address (the same on every size of it). */
+  key: z.string().default(""),
+  /** Where the original file was downloaded from. */
+  url: z.string().default(""),
+  /** The site it was added from (civitai.com or civitai.red). */
+  site: z.string().default(""),
+  postId: z.number().int().nullable().default(null),
+  /** Who posted it. */
+  by: z.string().nullable().default(null),
+  /** The model version whose page it was added from (0: not known). */
+  versionId: z.number().int().default(0),
+  /** Every model version Civitai says made it (checkpoint, LoRAs, embeddings), that one included. */
+  versions: z.array(z.number().int()).default([]),
+  /** How it was made, as the poster shared it (Civitai's own keys). */
+  meta: z.record(z.string(), z.unknown()).nullable().default(null),
+  addedAt: z.number().default(0),
+});
+export type CivitaiSidecar = z.infer<typeof CivitaiSidecar>;
+
+/** Add a Civitai image to the gallery: the version it's shown for and the image's ids. */
+export const AddCivitaiImageBody = z.object({
+  versionId: z.number().int().positive(),
+  key: z.string().regex(/^[\w-]{1,80}$/),
+  id: z.number().int().positive().nullable().default(null),
+});
+export type AddCivitaiImageBody = z.input<typeof AddCivitaiImageBody>;
+
 /** One image in a gallery list: just enough to lay out and label a tile. */
 export const GalleryImage = z.object({
   id: z.number().int(),
@@ -29,8 +81,13 @@ export const GalleryImage = z.object({
   model: z.string().nullable(),
   /** Thumbnail URL; immutable (it changes when the file changes). */
   thumb: z.string(),
+  origin: z.enum(IMAGE_ORIGINS).default("generated"),
 });
 export type GalleryImage = z.infer<typeof GalleryImage>;
+
+/** An image added to the gallery; `already` when it was there before. */
+export const AddedImage = z.object({ image: GalleryImage, already: z.boolean() });
+export type AddedImage = z.infer<typeof AddedImage>;
 
 /** The lightbox's details: the tile plus the parsed metadata and "use these settings" data. */
 export const ImageDetails = GalleryImage.extend({
@@ -44,6 +101,11 @@ export const ImageDetails = GalleryImage.extend({
   tags: z.array(z.string()).default([]),
   /** Ids of the collections it's in. */
   collections: z.array(z.string()).default([]),
+  /** Added from Civitai: who posted it and where it's on the site. */
+  civitai: z
+    .object({ by: z.string().nullable(), page: z.string().nullable(), versionId: z.number() })
+    .nullable()
+    .default(null),
 });
 export type ImageDetails = z.infer<typeof ImageDetails>;
 
@@ -68,6 +130,12 @@ export const GalleryQuery = z.object({
   tag: z.string().max(60).optional(),
   /** Only images in this collection. */
   collection: z.string().max(60).optional(),
+  /** Which origins to show, comma-separated ("generated,civitai"); all of them by default. */
+  origins: z
+    .string()
+    .max(80)
+    .default(IMAGE_ORIGINS.join(","))
+    .transform((v) => IMAGE_ORIGINS.filter((o) => v.split(",").includes(o))),
   sort: z.enum(GALLERY_SORTS).default("newest"),
   /** The shuffle's order (sort `random`). */
   seed: z.coerce.number().int().min(0).max(2_000_000_000).default(0),
@@ -115,6 +183,9 @@ export const GalleryOverview = z.object({
     favorites: z.number().int(),
     week: z.number().int(),
     trash: z.number().int(),
+    /** Added from your PC, and from Civitai. */
+    imported: z.number().int().default(0),
+    civitai: z.number().int().default(0),
   }),
   /** A favorite for the showcase (or the newest image when there are no favorites). */
   featured: z.array(GalleryImage),

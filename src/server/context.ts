@@ -28,6 +28,7 @@ import { OWN_SLOT } from "./services/comfy/slots.ts";
 import { StatsSampler } from "./services/comfy/stats.ts";
 import { ComfySupervisor } from "./services/comfy/supervisor.ts";
 import { DownloadQueue } from "./services/downloads.ts";
+import { ImportService } from "./services/gallery/imports.ts";
 import { GalleryService } from "./services/gallery/index.ts";
 import { HistoryService } from "./services/history.ts";
 import { JobQueue } from "./services/jobs.ts";
@@ -54,6 +55,7 @@ export interface Services {
   bus: LiveBus;
   settings: SettingsService;
   gallery: GalleryService;
+  imports: ImportService;
   models: ModelService;
   installer: ComfyInstaller;
   nodePacks: NodePackInstaller;
@@ -136,6 +138,7 @@ export function createServices(config: ServerConfig): Services {
         () => true,
         () => false,
       ),
+    localModels: () => models.list().then((l) => l.models),
   });
   // The lookup fills in models without info files; it's created after the model service.
   let lookupRef: ModelLookup | null = null;
@@ -163,6 +166,7 @@ export function createServices(config: ServerConfig): Services {
     civitaiOrigin: civitaiApi.origin,
   });
   const civitai = new CivitaiService({ profiles, settings, models, dbs, api: civitaiApi, images });
+  const imports = new ImportService({ gallery, civitai });
   const lookup = new ModelLookup({
     profiles,
     settings,
@@ -437,6 +441,7 @@ export function createServices(config: ServerConfig): Services {
     bus,
     settings,
     gallery,
+    imports,
     models,
     installer,
     nodePacks,

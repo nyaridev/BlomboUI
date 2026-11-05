@@ -21,6 +21,7 @@ export function CivitaiView() {
   useSeedFilter();
   const tabs = useCivitai((s) => s.tabs);
   const active = useCivitai((s) => s.active);
+  const activeVersion = useCivitai((s) => s.tabs.find((t) => t.id === s.active)?.versionId);
   const home = useCivitai((s) => s.home);
   const flash = useCivitai((s) => s.flash);
   const show = useCivitai((s) => s.show);
@@ -86,7 +87,12 @@ export function CivitaiView() {
         ) : null}
         {active !== null ? (
           <div className="absolute inset-0">
-            <ModelPage key={active} id={active} />
+            {/* Opening it again from another card's version shows that version. */}
+            <ModelPage
+              key={`${active}:${activeVersion ?? ""}`}
+              id={active}
+              versionId={activeVersion}
+            />
           </div>
         ) : null}
       </div>

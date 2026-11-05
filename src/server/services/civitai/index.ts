@@ -173,7 +173,7 @@ export class CivitaiService {
     return {
       items: (page.items ?? [])
         .filter((m) => typeof m?.id === "number")
-        .map((m) => normalize.card(m, ctx)),
+        .map((m) => normalize.card(m, ctx, filter.baseModels)),
       nextCursor: (page.items?.length ?? 0) > 0 ? CivitaiApi.nextCursor(page) : null,
     };
   }
@@ -199,7 +199,7 @@ export class CivitaiService {
             const page = await this.page({ ...filter, username }, null, key);
             const models = (page.items ?? []).filter((m) => typeof m?.id === "number");
             if (stat) for (const m of models) scores.set(m.id, stat(m.stats ?? {}) ?? 0);
-            pages.push(models.map((m) => normalize.card(m, ctx)));
+            pages.push(models.map((m) => normalize.card(m, ctx, filter.baseModels)));
           } catch (error) {
             failure ??= error;
           }

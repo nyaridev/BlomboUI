@@ -18,6 +18,8 @@ import { useModelsNav } from "../nav";
 export interface OpenTab {
   id: number;
   name: string;
+  /** The version it opens on (the card's); the newest without one. */
+  versionId?: number;
 }
 
 export type CivitaiHome = "browse" | "following";
@@ -47,8 +49,11 @@ interface CivitaiState {
   seed: (browse: Settings["civitai"]["browse"]) => void;
   setFilter: (patch: Partial<BrowseFilterInput>) => void;
   replaceFilter: (filter: BrowseFilter) => void;
-  /** Open a model's tab; `background` adds it without leaving what's in front (a middle click). */
-  open: (id: number, name: string, background?: boolean) => void;
+  /**
+   * Open a model's tab on a version (the card's; the newest without one); `background` adds it
+   * without leaving what's in front (a middle click).
+   */
+  open: (id: number, name: string, background?: boolean, versionId?: number | null) => void;
   close: (id: number) => void;
   closeAll: () => void;
   show: (id: number | null) => void;
@@ -79,7 +84,13 @@ export function readSaved(raw: unknown): Saved {
       (t): t is OpenTab =>
         Number.isInteger(t?.id) && t.id > 0 && typeof t.name === "string" && t.name.length > 0,
     )
-    .map((t) => ({ id: t.id, name: t.name.slice(0, 200) }))
+    .map((t) => ({
+      id: t.id,
+      name: t.name.slice(0, 200),
+      ...(Number.isInteger(t.versionId) && (t.versionId as number) > 0
+        ? { versionId: t.versionId }
+        : {}),
+    }))
     .slice(-MAX_TABS);
   const active = tabs.some((t) => t.id === o.active) ? (o.active as number) : null;
   const home = o.home === "following" ? "following" : "browse";
@@ -112,11 +123,12 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   setFilter: (patch) =>
     set((s) => ({ filter: BrowseFilter.parse({ ...(s.filter ?? {}), ...patch }) })),
   replaceFilter: (filter) => set({ filter }),
-  open: (id, name, background = false) =>
+  open: (id, name, background = false, versionId = null) =>
     set((s) => {
+      const tab: OpenTab = versionId ? { id, name, versionId } : { id, name };
       const tabs = s.tabs.some((t) => t.id === id)
-        ? s.tabs.map((t) => (t.id === id ? { id, name } : t))
-        : [...s.tabs, { id, name }].slice(-MAX_TABS);
+        ? s.tabs.map((t) => (t.id === id ? tab : t))
+        : [...s.tabs, tab].slice(-MAX_TABS);
       const active = background ? s.active : id;
       return {
         tabs,

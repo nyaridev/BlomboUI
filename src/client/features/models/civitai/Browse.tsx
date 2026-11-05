@@ -790,7 +790,7 @@ export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
         items={items}
         blurNsfw={blurNsfw}
         mark={(c) => cardMark(c, downloads, showMarks)}
-        onOpen={(c, background) => open(c.id, c.name, background)}
+        onOpen={(c, background) => open(c.id, c.name, background, c.versionId)}
         onDownload={(c) => setDownloading(c.id)}
         onEnd={() => {
           if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();

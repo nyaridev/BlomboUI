@@ -39,7 +39,7 @@ import { localVersions } from "./marks";
 import { RichText } from "./RichText";
 import { useCivitai } from "./state";
 
-export function ModelPage({ id }: { id: number }) {
+export function ModelPage({ id, versionId }: { id: number; versionId?: number }) {
   const q = useCivitaiModel(id);
   const blurNsfw = useCivitai((s) => s.blur);
   if (q.isLoading)
@@ -64,11 +64,22 @@ export function ModelPage({ id }: { id: number }) {
         action={<Button onClick={() => void q.refetch()}>Try again</Button>}
       />
     );
-  return <Page model={q.data} blurNsfw={blurNsfw} />;
+  return <Page model={q.data} blurNsfw={blurNsfw} openOn={versionId} />;
 }
 
-function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
-  const [versionId, setVersionId] = useState(model.versions[0]?.id ?? 0);
+function Page({
+  model,
+  blurNsfw,
+  openOn,
+}: {
+  model: CivitaiModel;
+  blurNsfw: boolean;
+  /** The version to show first (the card's); the newest when it isn't there. */
+  openOn?: number;
+}) {
+  const [versionId, setVersionId] = useState(
+    model.versions.some((v) => v.id === openOn) ? (openOn as number) : (model.versions[0]?.id ?? 0),
+  );
   const version = model.versions.find((v) => v.id === versionId) ?? model.versions[0];
   const downloads = useLive((s) => s.downloads);
   const showMarks = useSettings().data?.civitai.marks ?? true;

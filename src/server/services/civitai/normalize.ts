@@ -116,9 +116,14 @@ export function description(
   });
 }
 
-/** The first image to show for a card. */
-function coverImage(model: RawModel, ctx: NormalizeContext): CivitaiImage | null {
-  for (const v of model.modelVersions ?? [])
+/** The first image to show for a card: the shown version's first, then the others'. */
+function coverImage(
+  model: RawModel,
+  shown: RawVersion | undefined,
+  ctx: NormalizeContext,
+): CivitaiImage | null {
+  const versions = model.modelVersions ?? [];
+  for (const v of shown ? [shown, ...versions.filter((x) => x !== shown)] : versions)
     for (const img of v.images ?? []) {
       const out = image(img, ctx);
       if (out) return out;
@@ -129,8 +134,21 @@ function coverImage(model: RawModel, ctx: NormalizeContext): CivitaiImage | null
 const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 const str = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
 
-export function card(model: RawModel, ctx: NormalizeContext): CivitaiCard {
-  const latest = model.modelVersions?.[0];
+/**
+ * A model as a card, showing its newest version, or with a base model filter its newest version
+ * on one of those base models (the one the search matched), so the badge, picture and the tab
+ * it opens agree with the filter.
+ */
+export function card(
+  model: RawModel,
+  ctx: NormalizeContext,
+  baseModels: readonly string[] = [],
+): CivitaiCard {
+  const versions = model.modelVersions ?? [];
+  const latest =
+    (baseModels.length
+      ? versions.find((v) => v.baseModel && baseModels.includes(v.baseModel))
+      : undefined) ?? versions[0];
   return {
     id: model.id,
     name: str(model.name) ?? `Model ${model.id}`,
@@ -141,7 +159,7 @@ export function card(model: RawModel, ctx: NormalizeContext): CivitaiCard {
     baseModel: str(latest?.baseModel),
     downloads: num(model.stats?.downloadCount),
     likes: num(model.stats?.thumbsUpCount ?? model.stats?.favoriteCount),
-    image: coverImage(model, ctx),
+    image: coverImage(model, latest, ctx),
     versionId: latest?.id ?? null,
     publishedAt: str(latest?.publishedAt) ?? str(latest?.createdAt),
     local: ctx.local(model.id, latest?.id ?? null),

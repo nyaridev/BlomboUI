@@ -12,7 +12,12 @@
 import { Icon, type IconName } from "@client/icons/Icon";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
-import { useCivitaiModel, useDownloadPlan, useSettings } from "@client/lib/queries";
+import {
+  useCivitaiModel,
+  useCivitaiVersionImages,
+  useDownloadPlan,
+  useSettings,
+} from "@client/lib/queries";
 import {
   Badge,
   Button,
@@ -101,7 +106,12 @@ function Page({
   const style = model.kind ? KIND_STYLE[model.kind] : null;
   const images = useMemo(() => version?.images ?? [], [version]);
   const [shown, setShown] = useState(0);
-  const current = images[shown] ?? null;
+  // The model answer's images don't say who posted them or how they were made; the version's
+  // own answer does. Matched by picture, so the carousel keeps its place when it arrives.
+  const detailed = useCivitaiVersionImages(version?.id ?? null).data;
+  const details = useMemo(() => new Map((detailed ?? []).map((i) => [i.thumb, i])), [detailed]);
+  const shownImage = images[shown] ?? null;
+  const current = shownImage ? (details.get(shownImage.thumb) ?? shownImage) : null;
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">

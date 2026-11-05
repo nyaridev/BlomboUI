@@ -164,6 +164,16 @@ describe("browsing", () => {
     expect(images[1]?.meta).toBeNull();
   });
 
+  it("gets how a version's images were made from the version, as the model answer lacks it", async () => {
+    const m = await o.services.civitai.model(1001);
+    const version = m.versions[0];
+    expect(version?.images[0]?.meta).toBeNull();
+    const images = await o.services.civitai.versionImages(version?.id ?? 0);
+    expect(images[0]?.thumb).toBe(version?.images[0]?.thumb);
+    expect(images[0]?.meta?.prompt).toContain("masterpiece");
+    expect(images[2]?.by).toBe("a_fan");
+  });
+
   it("marks models already in the models folder", async () => {
     const dir = path.join(o.models, "loras");
     await fs.writeFile(path.join(dir, "mine.safetensors"), "x");

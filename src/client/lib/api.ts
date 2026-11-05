@@ -32,6 +32,7 @@ import {
   type CivitaiAccount,
   type CivitaiBaseModels,
   type CivitaiCreator,
+  type CivitaiImage,
   type CivitaiMatch,
   type CivitaiModel,
   type CivitaiPage,
@@ -432,6 +433,8 @@ export const api = {
       `/civitai/creators/${encodeURIComponent(username)}/lookup`,
     ),
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
+  civitaiVersionImages: (id: number) =>
+    request<CivitaiImage[]>("GET", `/civitai/versions/${id}/images`),
   civitaiByHash: (sha256: string) =>
     request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),
   civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),

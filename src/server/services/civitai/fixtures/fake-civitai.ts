@@ -259,9 +259,11 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
       height: 1216,
       type: img.video ? "video" : "image",
       // The third image is someone else's post; the first carries its settings.
-      username: img.id % 100 === 2 ? "a_fan" : m.creator,
+      // Like Civitai, only a version's own answer (and by-hash) says who posted each image and
+      // how it was made; the model answer leaves both out.
+      username: withModel ? (img.id % 100 === 2 ? "a_fan" : m.creator) : undefined,
       meta:
-        img.id % 100 === 0
+        withModel && img.id % 100 === 0
           ? {
               prompt: `${m.name}, masterpiece, soft light`,
               negativePrompt: "blurry, lowres",

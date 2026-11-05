@@ -260,6 +260,14 @@ export class CivitaiService {
     return this.api.version(id, await this.key(this.active()));
   }
 
+  /**
+   * A version's images from its own answer: unlike the model answer's, they say who posted each
+   * one and how it was made (the model page's image settings).
+   */
+  async versionImages(id: number): Promise<CivitaiImage[]> {
+    return normalize.version(await this.rawVersion(id), await this.context()).images;
+  }
+
   /** A model page; opening one adds it to the browse history. */
   async model(id: number): Promise<CivitaiModel> {
     const profileId = this.active();

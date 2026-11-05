@@ -86,6 +86,8 @@ export const qk = {
     ["civitai", profileId, "feed", users, filter] as const,
   civitaiModel: (profileId: string | null, id: number | null) =>
     ["civitai", profileId, "model", id] as const,
+  civitaiVersionImages: (profileId: string | null, id: number | null) =>
+    ["civitai", profileId, "version-images", id] as const,
   civitaiByHash: (profileId: string | null, sha256: string | null) =>
     ["civitai", profileId, "by-hash", sha256] as const,
   civitaiViews: (profileId: string | null) => ["civitai", profileId, "views"] as const,
@@ -822,6 +824,17 @@ export function useCivitaiModel(id: number | null) {
   return useQuery({
     queryKey: qk.civitaiModel(profileId, id),
     queryFn: () => api.civitaiModel(id as number),
+    enabled: profileId !== null && id !== null,
+    staleTime: 5 * 60_000,
+  });
+}
+
+/** A version's images with who posted them and how they were made (the model answer's lack it). */
+export function useCivitaiVersionImages(id: number | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.civitaiVersionImages(profileId, id),
+    queryFn: () => api.civitaiVersionImages(id as number),
     enabled: profileId !== null && id !== null,
     staleTime: 5 * 60_000,
   });

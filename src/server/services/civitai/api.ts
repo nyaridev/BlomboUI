@@ -255,14 +255,14 @@ export class CivitaiApi {
   }
 
   /**
-   * Where the site search's image ids are served: Civitai's image host for its sites, the server
-   * itself for the fake one.
-   * shortcut: civitai.red's images are taken to be on image.civitai.red; check if they don't load.
+   * Where the site search's image ids are served: image.civitai.com for both Civitai sites
+   * (civitai.red's own API links there too; image.civitai.red doesn't exist), the server itself
+   * for the fake one.
    */
   imageEdge(): string {
     const host = new URL(this.baseUrl).hostname.replace(/^www\./, "");
     return /^civitai\.(com|red)$/.test(host)
-      ? `https://image.${host}/${IMAGE_ACCOUNT}`
+      ? `https://image.civitai.com/${IMAGE_ACCOUNT}`
       : `${this.origin}/img`;
   }
 

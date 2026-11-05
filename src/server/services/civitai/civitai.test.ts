@@ -248,5 +248,9 @@ describe("site", () => {
     await api.models(filter(), null, "KEY");
     expect(calls.map((c) => new URL(c.url).host)).toEqual(["civitai.com", "civitai.red"]);
     expect(calls.every((c) => c.auth === "Bearer KEY")).toBe(true);
+    // Both sites' images are on image.civitai.com.
+    expect(api.imageEdge()).toMatch(/^https:\/\/image\.civitai\.com\//);
+    api.setSite(CIVITAI_SITE_URLS.com);
+    expect(api.imageEdge()).toMatch(/^https:\/\/image\.civitai\.com\//);
   });
 });

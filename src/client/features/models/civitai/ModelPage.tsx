@@ -1,7 +1,8 @@
 /**
- * A Civitai model inside Blombo. Left: the version's images (thumbnails beside the picture when
- * there's room, the picture as tall as the window allows; a click opens it full screen), sticky
- * while the right side scrolls. Right, top to bottom: the header (badges, name, creator with
+ * A Civitai model inside Blombo. Left: the version's images as File Info's endless carousel (the
+ * wheel or a drag moves through them, a click on the middle one opens it full screen; NSFW ones
+ * blurred until clicked) and under it how the picked image was made, as its poster shared it
+ * (prompt, negative, settings). Right, top to bottom: the header (badges, name, creator with
  * Follow, the Civitai link), the model's numbers, one card for the picked version (the picker,
  * its facts, Download with a preview of where the file lands, its files), trigger words and tags.
  * Below both: the descriptions (parsed on the server, rendered as plain elements). Download opens
@@ -15,12 +16,10 @@ import { useCivitaiModel, useDownloadPlan, useSettings } from "@client/lib/queri
 import {
   Badge,
   Button,
-  Carousel,
   Chip,
   CopyButton,
   EmptyState,
   FallbackFace,
-  ImageViewer,
   KIND_STYLE,
   Select,
   Skeleton,
@@ -29,12 +28,13 @@ import {
   CIVITAI_TYPE_LABELS,
   type CivitaiModel,
   type CivitaiVersion,
-  civitaiFullSize,
   compactCount,
 } from "@shared/civitai";
 import type { EnqueueBody } from "@shared/downloads";
 import { type ReactNode, useMemo, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
+import { CivitaiCarousel } from "../../fileinfo/CivitaiCarousel";
+import { ImageSettings } from "../../fileinfo/CivitaiMatch";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
 import { DownloadDialog } from "./DownloadDialog";
@@ -100,23 +100,37 @@ function Page({
   const visit = useCivitai((s) => s.visit);
   const style = model.kind ? KIND_STYLE[model.kind] : null;
   const images = useMemo(() => version?.images ?? [], [version]);
-  const [viewing, setViewing] = useState<number | null>(null);
+  const [shown, setShown] = useState(0);
+  const current = images[shown] ?? null;
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
       <div className={`${COLUMNS} pt-6 max-lg:pt-3`}>
-        <div className="min-w-0">
-          <Carousel
-            images={images}
-            label={`${model.name} images`}
-            blurNsfw={blurNsfw}
-            side
-            // The headers and tab strips above take about 180 px; the rest leaves a margin under it.
-            maxHeight="calc(100vh - 212px)"
-            onOpen={setViewing}
-            className="sticky top-4 max-[1000px]:static"
-            empty={<FallbackFace name={model.name} kind={model.kind ?? "checkpoints"} />}
-          />
+        <div className="flex min-w-0 flex-col gap-4">
+          {images.length ? (
+            <CivitaiCarousel
+              images={images}
+              label={`${model.name} images`}
+              onIndex={setShown}
+              blurNsfw={blurNsfw}
+              // Shorter than the window, so the page still scrolls beside it (the wheel over it
+              // changes the image) and the picked image's settings show under it.
+              height="h-[min(64vh,680px)] max-lg:h-[52vh]"
+            />
+          ) : (
+            <div className="h-[min(64vh,680px)] overflow-hidden rounded-xl border border-line bg-sunken max-lg:h-[52vh]">
+              <FallbackFace name={model.name} kind={model.kind ?? "checkpoints"} />
+            </div>
+          )}
+          {current?.meta ? (
+            <ImageSettings meta={current.meta} />
+          ) : current ? (
+            <p className="flex items-center gap-1.5 text-xs text-fg-3">
+              <Icon name="info" size={13} className="shrink-0" />
+              {current.by ? `${current.by} didn't` : "The poster didn't"} share how this image was
+              made.
+            </p>
+          ) : null}
         </div>
         <aside className="flex min-w-0 flex-col gap-5">
           <header className="flex flex-col gap-2.5">
@@ -288,21 +302,6 @@ function Page({
           </section>
         ) : null}
       </div>
-      {viewing !== null && images.length ? (
-        <ImageViewer
-          images={images.map((im, i) => ({
-            key: String(i),
-            src: im.full,
-            alt: "",
-            // The carousel's small picture is already loaded: it shows until the large one is.
-            preview: im.thumb,
-            ...civitaiFullSize(im),
-          }))}
-          index={Math.min(viewing, images.length - 1)}
-          onIndex={setViewing}
-          onClose={() => setViewing(null)}
-        />
-      ) : null}
     </div>
   );
 }

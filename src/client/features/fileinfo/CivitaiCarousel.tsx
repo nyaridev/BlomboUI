@@ -1,6 +1,6 @@
 /**
- * File Info's Civitai images as an endless carousel: the picked image sits in the middle at its
- * own shape, the others run off both sides and wrap around. A wheel notch moves one image; a
+ * Civitai images as an endless carousel (File Info, the Civitai model page): the picked image
+ * sits in the middle at its own shape, the others run off both sides and wrap around. A wheel notch moves one image; a
  * drag (with a fling) moves it freely and it settles on the nearest image; a click on a side
  * image brings it to the middle,
  * a click on the middle one opens it full screen; ← → step, Enter opens.
@@ -9,6 +9,8 @@
  * moving writes the track's transform directly, so React renders only when tiles come or go.
  * Each tile shows the small picture first and swaps in the large one when it's needed and has
  * been decoded off the main thread (big images used to freeze the page as they landed).
+ * With `blurNsfw`, NSFW images stay blurred until the middle one is clicked (a click on it then
+ * reveals instead of opening); they blur again when the setting or the images change.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -42,11 +44,17 @@ export function CivitaiCarousel({
   images,
   label,
   onIndex,
+  blurNsfw = false,
+  height = CAROUSEL_HEIGHT,
 }: {
   images: CivitaiImage[];
   label: string;
   /** The image in the middle changed (once it settles). */
   onIndex: (index: number) => void;
+  /** Blur NSFW images until clicked. */
+  blurNsfw?: boolean;
+  /** The viewport's height classes. */
+  height?: string;
 }) {
   const view = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
@@ -136,11 +144,21 @@ export function CivitaiCarousel({
     return () => ro.disconnect();
   }, []);
 
-  // New images start on the first one.
+  // Image indexes clicked open (with `blurNsfw`); switching the blur forgets them.
+  const [revealed, setRevealed] = useState<Set<number>>(() => new Set());
+  const [blurWas, setBlurWas] = useState(blurNsfw);
+  if (blurWas !== blurNsfw) {
+    setBlurWas(blurNsfw);
+    setRevealed(new Set());
+  }
+  const veiled = (i: number) => Boolean(blurNsfw && images[i]?.nsfw && !revealed.has(i));
+
+  // New images start on the first one, blurred again.
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when the images change
   useEffect(() => {
     aim.current = 0;
     setSettled(0);
+    setRevealed(new Set());
     onIndex(0);
   }, [images]);
 
@@ -182,8 +200,9 @@ export function CivitaiCarousel({
 
   const step = (d: number) => slideTo(aim.current + d);
   const open = (k: number) => {
-    if (k === settled || !loop) setViewing(true);
-    else slideTo(k);
+    if (k !== settled && loop) slideTo(k);
+    else if (veiled(mod(k, n))) setRevealed((r) => new Set(r).add(mod(k, n)));
+    else setViewing(true);
   };
 
   // A press: a drag moves the row (a fling carries on), a click opens or centers a tile.
@@ -262,7 +281,7 @@ export function CivitaiCarousel({
         className={cn(
           "relative touch-pan-y overflow-hidden rounded-xl select-none focus-ring",
           loop && "cursor-grab active:cursor-grabbing",
-          CAROUSEL_HEIGHT,
+          height,
         )}
       >
         <div ref={track} className="absolute inset-y-0 left-0 will-change-transform">
@@ -278,6 +297,7 @@ export function CivitaiCarousel({
                 left={geo.leftOf(k)}
                 width={geo.widthOf(k)}
                 picked={k === settled}
+                veiled={veiled(i)}
                 view={view}
               />
             );
@@ -348,6 +368,7 @@ function Tile({
   left,
   width,
   picked,
+  veiled,
   view,
 }: {
   k: number;
@@ -355,11 +376,16 @@ function Tile({
   left: number;
   width: number;
   picked: boolean;
+  veiled: boolean;
   view: RefObject<HTMLDivElement | null>;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [loaded, setLoaded] = useState(false);
   const sharp = useSharp(img.full, ref, view);
+  const pic = cn(
+    "absolute inset-0 h-full w-full object-cover transition-[filter,scale] duration-200",
+    veiled && "scale-110 blur-xl saturate-50",
+  );
   return (
     <div
       ref={ref}
@@ -377,16 +403,19 @@ function Tile({
         decoding="async"
         draggable={false}
         onLoad={() => setLoaded(true)}
-        className="absolute inset-0 h-full w-full object-cover"
+        className={pic}
       />
       {sharp ? (
         // Already decoded: showing it costs nothing.
-        <img
-          src={img.full}
-          alt=""
-          draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
+        <img src={img.full} alt="" draggable={false} className={pic} />
+      ) : null}
+      {veiled && picked ? (
+        <span className="pointer-events-none absolute inset-0 grid place-items-center">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 text-xs font-medium text-white">
+            <Icon name="eye-off" size={13} />
+            NSFW · click to show
+          </span>
+        </span>
       ) : null}
       {img.video ? (
         <span className="absolute bottom-2 left-2 inline-flex h-5 items-center gap-1 rounded-xs bg-black/60 px-1.5 text-[10px] font-semibold text-white">

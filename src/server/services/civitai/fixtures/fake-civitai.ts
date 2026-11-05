@@ -7,6 +7,8 @@
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
  *   /api/models/:owner/:repo         → Hugging Face's model API (downloadsAllTime) for its repos
+ *   /api/trpc/model.getAll           → Civitai's site search (the key, a published-date range of
+ *                                      31 days at most, a bigint cursor), in its own shape
  *
  * Files are made of deterministic bytes, so their SHA256 is known. Import startFakeCivitai()
  * in-process, or run `node fake-civitai.ts --port 8298 [--slow <bytes/s>] [--file-kb N]` and
@@ -291,6 +293,60 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
     modelVersions: m.versions.map((v) => versionJson(m, v, false)),
   });
 
+  /** The search both APIs share: the filters, then the order. */
+  const searchModels = (o: {
+    q: string;
+    types: string[];
+    bases: string[];
+    user: string | null;
+    tag: string | null;
+    nsfw: boolean;
+    sort: string;
+  }) =>
+    models
+      .filter(
+        (x) => !o.q || `${x.name} ${x.tags.join(" ")} ${x.creator}`.toLowerCase().includes(o.q),
+      )
+      .filter((x) => !o.types.length || o.types.includes(x.type))
+      .filter((x) => !o.bases.length || x.versions.some((v) => o.bases.includes(v.baseModel)))
+      .filter((x) => !o.user || x.creator.toLowerCase() === o.user.toLowerCase())
+      .filter((x) => !o.tag || x.tags.includes(o.tag))
+      .filter((x) => o.nsfw || !x.nsfw)
+      .sort((a, b) =>
+        o.sort === "Newest"
+          ? b.id - a.id
+          : o.sort === "Oldest"
+            ? a.id - b.id
+            : o.sort === "Most Downloaded"
+              ? b.downloads - a.downloads
+              : b.likes - a.likes,
+      );
+  const published = (m: FakeModel) =>
+    Date.parse(m.versions[m.versions.length - 1]?.publishedAt ?? "");
+  /** A model as the site search answers: its newest version, image ids, rank and user. */
+  const siteJson = (m: FakeModel) => {
+    const v = m.versions[0] as FakeVersion;
+    return {
+      id: m.id,
+      name: m.name,
+      type: m.type,
+      nsfw: m.nsfw,
+      nsfwLevel: m.nsfw ? 28 : 1,
+      publishedAt: new Date(published(m)).toISOString(),
+      user: { id: 1, username: m.creator, image: null },
+      rank: { downloadCount: m.downloads, thumbsUpCount: m.likes, commentCount: 3 },
+      version: { id: v.id, name: v.name, baseModel: v.baseModel },
+      images: v.images.map((img) => ({
+        id: img.id,
+        url: img.uuid,
+        type: img.video ? "video" : "image",
+        nsfwLevel: img.nsfwLevel,
+        width: 832,
+        height: 1216,
+      })),
+    };
+  };
+
   const sendBytes = async (
     req: http.IncomingMessage,
     res: http.ServerResponse,
@@ -357,34 +413,69 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         if (!authed) return json(res, 401, { error: "Unauthorized" });
         return json(res, 200, { id: 7, username: "tester", tier: "free" });
       }
+      if (p === "/api/trpc/model.getAll") {
+        const fail = (status: number, code: string, message: string) =>
+          json(res, status, {
+            error: { json: { message, code: -32600, data: { code, httpStatus: status } } },
+          });
+        if (!authed) return fail(401, "UNAUTHORIZED", "UNAUTHORIZED");
+        let input: Record<string, unknown>;
+        let meta: unknown;
+        try {
+          const parsed = JSON.parse(url.searchParams.get("input") ?? "{}") as {
+            json?: Record<string, unknown>;
+            meta?: unknown;
+          };
+          input = parsed.json ?? {};
+          meta = parsed.meta;
+        } catch {
+          return fail(400, "BAD_REQUEST", "Invalid input");
+        }
+        const from = String(input.publishedFrom ?? "");
+        const to = String(input.publishedTo ?? "");
+        const day = (d: string) => Date.parse(`${d}T00:00:00Z`);
+        if (!from || !to || !(day(from) <= day(to)) || day(to) - day(from) > 30 * 86_400_000)
+          return fail(400, "BAD_REQUEST", "Published date range: both ends, 31 days at most");
+        // Civitai's cursor is a bigint, so it has to come back typed as one.
+        if (
+          input.cursor !== undefined &&
+          JSON.stringify(meta) !== JSON.stringify({ values: { cursor: ["bigint"] } })
+        )
+          return fail(400, "BAD_REQUEST", "cursor: expected bigint");
+        const list = searchModels({
+          q: String(input.query ?? "").toLowerCase(),
+          types: (input.types as string[] | undefined) ?? [],
+          bases: (input.baseModels as string[] | undefined) ?? [],
+          user: (input.username as string | undefined) ?? null,
+          tag: (input.tag as string | undefined) ?? null,
+          nsfw: true,
+          sort: String(input.sort ?? "Highest Rated"),
+        }).filter((x) => published(x) >= day(from) && published(x) < day(to) + 86_400_000);
+        const limit = Math.min(100, Number(input.limit ?? 20));
+        const offset = Number(input.cursor ?? 0) || 0;
+        const items = list.slice(offset, offset + limit).map(siteJson);
+        const next = offset + limit < list.length ? String(offset + limit) : null;
+        return json(res, 200, {
+          result: {
+            data: next
+              ? { json: { items, nextCursor: next }, meta: { values: { nextCursor: ["bigint"] } } }
+              : { json: { items } },
+          },
+        });
+      }
       if (p === "/api/v1/models") {
-        const q = (url.searchParams.get("query") ?? "").toLowerCase();
-        const types = url.searchParams.getAll("types");
-        const bases = url.searchParams.getAll("baseModels");
-        const user = url.searchParams.get("username");
-        const tag = url.searchParams.get("tag");
-        const nsfw = url.searchParams.get("nsfw") !== "false";
         const sort = url.searchParams.get("sort") ?? "Highest Rated";
         const limit = Math.min(100, Number(url.searchParams.get("limit") ?? 20));
         const offset = Number(url.searchParams.get("cursor") ?? 0) || 0;
-        const list = models
-          .filter(
-            (x) => !q || `${x.name} ${x.tags.join(" ")} ${x.creator}`.toLowerCase().includes(q),
-          )
-          .filter((x) => !types.length || types.includes(x.type))
-          .filter((x) => !bases.length || x.versions.some((v) => bases.includes(v.baseModel)))
-          .filter((x) => !user || x.creator.toLowerCase() === user.toLowerCase())
-          .filter((x) => !tag || x.tags.includes(tag))
-          .filter((x) => nsfw || !x.nsfw)
-          .sort((a, b) =>
-            sort === "Newest"
-              ? b.id - a.id
-              : sort === "Oldest"
-                ? a.id - b.id
-                : sort === "Most Downloaded"
-                  ? b.downloads - a.downloads
-                  : b.likes - a.likes,
-          );
+        const list = searchModels({
+          q: (url.searchParams.get("query") ?? "").toLowerCase(),
+          types: url.searchParams.getAll("types"),
+          bases: url.searchParams.getAll("baseModels"),
+          user: url.searchParams.get("username"),
+          tag: url.searchParams.get("tag"),
+          nsfw: url.searchParams.get("nsfw") !== "false",
+          sort,
+        });
         const items = list.slice(offset, offset + limit).map(modelJson);
         const next = offset + limit < list.length ? String(offset + limit) : null;
         return json(res, 200, {

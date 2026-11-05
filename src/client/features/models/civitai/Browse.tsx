@@ -1,7 +1,8 @@
 /**
  * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
  * filter) as a removable chip in front of the text, the NSFW blur, the types, category and base
- * model dropdowns (base models in family sections: shared/basemodels.ts), sort, period; what's listed follows the profile's Civitai site), recent searches, and the results
+ * model dropdowns (base models in family sections: shared/basemodels.ts), Hide downloaded, sort,
+ * period and a published-date range (Civitai's site search, with the API key); what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -14,6 +15,7 @@ import { useElementWidth } from "@client/lib/hooks";
 import { useLive } from "@client/lib/live";
 import {
   qk,
+  useCivitaiAccount,
   type useCivitaiFeed,
   useCivitaiModels,
   useCivitaiSearches,
@@ -50,6 +52,8 @@ import {
   categoryLabel,
   civitaiKind,
   compactCount,
+  completeDateRange,
+  DATE_RANGE_DAYS,
   type SavedFilter,
 } from "@shared/civitai";
 import { shortBaseModel } from "@shared/models";
@@ -59,7 +63,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { DownloadDialog } from "./DownloadDialog";
 import { FollowButton } from "./follow";
-import { cardMark } from "./marks";
+import { cardMark, localVersions } from "./marks";
 import { useCivitai } from "./state";
 
 /** Six cards a row at most; fewer when a card would get thinner than MIN_CARD. */
@@ -139,6 +143,8 @@ export function FilterBar({
 }) {
   const setFilter = useCivitai((s) => s.setFilter);
   const replace = useCivitai((s) => s.replaceFilter);
+  const hideLocal = useCivitai((s) => s.hideLocal);
+  const toggleHideLocal = useCivitai((s) => s.toggleHideLocal);
   const settings = useSettings().data;
   const searches = useCivitaiSearches().data ?? [];
   const qc = useQueryClient();
@@ -246,6 +252,9 @@ export function FilterBar({
                 : CATEGORY_OPTIONS
             }
           />
+          <Chip size="sm" icon="check-circle" selected={hideLocal} onClick={toggleHideLocal}>
+            Hide downloaded
+          </Chip>
         </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           <Select<string>
@@ -291,6 +300,7 @@ export function FilterBar({
               icon: "calendar",
             }))}
           />
+          <DateRange filter={filter} />
           {changed ? (
             <Button
               size="sm"
@@ -428,6 +438,95 @@ function SavedFilters({
   );
 }
 
+const UTC_DAY = (day: string, year: boolean) =>
+  new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: year ? "numeric" : undefined,
+    timeZone: "UTC",
+  });
+
+/** "Sep 1 – Sep 30" (with the year when it isn't this one), or null without a range. */
+function rangeLabel(f: BrowseFilter): string | null {
+  if (!f.publishedFrom || !f.publishedTo) return null;
+  const year = !f.publishedTo.startsWith(String(new Date().getUTCFullYear()));
+  return `${UTC_DAY(f.publishedFrom, year)} – ${UTC_DAY(f.publishedTo, year)}`;
+}
+
+/**
+ * Published between two days, on top of the period: Civitai's own site search, which takes a
+ * range of up to 31 days and needs the API key. Setting one end fills in the other.
+ */
+function DateRange({ filter }: { filter: BrowseFilter }) {
+  const setFilter = useCivitai((s) => s.setFilter);
+  const keySet = useCivitaiAccount().data?.keySet ?? true;
+  const from = filter.publishedFrom;
+  const to = filter.publishedTo;
+  const set = (r: { from: string; to: string }) =>
+    setFilter({ publishedFrom: r.from, publishedTo: r.to });
+  const label = rangeLabel(filter);
+  return (
+    <Popover
+      placement="bottom-end"
+      className="w-[288px] p-3"
+      trigger={
+        <Button
+          size="sm"
+          variant="outline"
+          icon="calendar"
+          className={cn(label && "border-accent-ink/60 text-fg")}
+        >
+          {label ?? "Any date"}
+        </Button>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        <div className="grid grid-cols-2 gap-2">
+          <label className="flex flex-col gap-1 text-2xs text-fg-3">
+            Published from
+            <TextField
+              size="sm"
+              type="date"
+              value={from}
+              onChange={(e) => set(completeDateRange(e.target.value, to, "from"))}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-2xs text-fg-3">
+            To
+            <TextField
+              size="sm"
+              type="date"
+              value={to}
+              onChange={(e) => set(completeDateRange(from, e.target.value, "to"))}
+            />
+          </label>
+        </div>
+        <p className="text-2xs text-pretty text-fg-3">
+          {DATE_RANGE_DAYS} days at most, both days counted (UTC), as Civitai allows. Picking one
+          day fills in the other.
+        </p>
+        {keySet ? null : (
+          <p className="flex gap-1.5 text-2xs text-pretty text-warning">
+            <Icon name="info" size={12} className="mt-px shrink-0" />
+            Searching by date uses Civitai's own search, which needs your API key. Add it in
+            Settings → Civitai.
+          </p>
+        )}
+        <Button
+          size="sm"
+          variant="ghost"
+          icon="x"
+          disabled={!from && !to}
+          onClick={() => set({ from: "", to: "" })}
+          className="self-end"
+        >
+          Any date
+        </Button>
+      </div>
+    </Popover>
+  );
+}
+
 function describe(f: BrowseFilter): string {
   return [
     f.username ? `by ${f.username}` : null,
@@ -437,6 +536,7 @@ function describe(f: BrowseFilter): string {
     f.tag ? categoryLabel(f.tag) : null,
     f.sort,
     CIVITAI_PERIOD_LABELS[f.period],
+    rangeLabel(f),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -488,7 +588,15 @@ function BrowseResults({ filter }: { filter: BrowseFilter }) {
           action={
             <Button
               onClick={() =>
-                setFilter({ query: "", types: [], baseModels: [], tag: "", period: "AllTime" })
+                setFilter({
+                  query: "",
+                  types: [],
+                  baseModels: [],
+                  tag: "",
+                  period: "AllTime",
+                  publishedFrom: "",
+                  publishedTo: "",
+                })
               }
             >
               Search everything
@@ -511,8 +619,10 @@ export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
   const blurNsfw = useCivitai((s) => s.blur);
   const showMarks = settings?.civitai.marks ?? true;
   const downloads = useLive((s) => s.downloads);
+  const hideLocal = useCivitai((s) => s.hideLocal);
+  const toggleHideLocal = useCivitai((s) => s.toggleHideLocal);
 
-  const items = useMemo(() => {
+  const all = useMemo(() => {
     const seen = new Set<number>();
     const out: CivitaiCard[] = [];
     for (const page of q.data?.pages ?? [])
@@ -523,8 +633,18 @@ export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
         }
     return out;
   }, [q.data]);
+  const items = useMemo(
+    () => (hideLocal ? all.filter((c) => localVersions(c.id, c.local, downloads).size === 0) : all),
+    [all, hideLocal, downloads],
+  );
+  // Every model on the pages so far is downloaded: look further instead of showing nothing.
+  const lookFurther =
+    hideLocal && all.length > 0 && !items.length && q.hasNextPage && !q.isFetchNextPageError;
+  useEffect(() => {
+    if (lookFurther && !q.isFetchingNextPage) void q.fetchNextPage();
+  }, [lookFurther, q]);
 
-  if (q.isLoading) return <CardSkeletons count={12} />;
+  if (q.isLoading || lookFurther) return <CardSkeletons count={12} />;
   if (q.error && !items.length)
     return (
       <EmptyState
@@ -533,6 +653,15 @@ export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
         title="Couldn't load Civitai"
         text={q.error.message}
         action={<Button onClick={() => void q.refetch()}>Try again</Button>}
+      />
+    );
+  if (!items.length && all.length)
+    return (
+      <EmptyState
+        icon="check-circle"
+        title="You have all of these"
+        text="Every model that matches is in your models folder already."
+        action={<Button onClick={toggleHideLocal}>Show downloaded</Button>}
       />
     );
   if (!items.length) return empty;

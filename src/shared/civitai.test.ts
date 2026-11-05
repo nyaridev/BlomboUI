@@ -7,6 +7,8 @@ import {
   civitaiImageVariant,
   civitaiKind,
   compactCount,
+  completeDateRange,
+  dateRangeProblem,
   feedQuery,
   fromBase64Url,
   mergeFeed,
@@ -57,6 +59,8 @@ describe("browse query", () => {
       period: "Week",
       username: "someone",
       tag: "base model",
+      publishedFrom: "2026-09-01",
+      publishedTo: "2026-09-30",
     });
     const text = browseQuery(filter, "5482|195397");
     const params = Object.fromEntries(new URLSearchParams(text));
@@ -66,6 +70,36 @@ describe("browse query", () => {
   it("fills defaults and refuses unknown sorts", () => {
     expect(parseBrowseQuery({}).filter).toMatchObject({ sort: "Highest Rated", period: "AllTime" });
     expect(() => parseBrowseQuery({ sort: "Random" })).toThrow();
+  });
+});
+
+describe("published-date range", () => {
+  it("needs both days, in order, 31 days at most", () => {
+    expect(dateRangeProblem("", "")).toBeNull();
+    expect(dateRangeProblem("2026-09-01", "2026-10-01")).toBeNull();
+    expect(dateRangeProblem("2026-09-01", "")).toMatch(/both dates/);
+    expect(dateRangeProblem("2026-09-10", "2026-09-01")).toMatch(/after the end/);
+    expect(dateRangeProblem("2026-09-01", "2026-10-02")).toMatch(/31 days/);
+  });
+
+  it("moves the other end to fit, as Civitai's menu does", () => {
+    expect(completeDateRange("2026-09-01", "", "from")).toEqual({
+      from: "2026-09-01",
+      to: "2026-10-01",
+    });
+    expect(completeDateRange("", "2026-03-01", "to")).toEqual({
+      from: "2026-01-30",
+      to: "2026-03-01",
+    });
+    expect(completeDateRange("2026-09-20", "2026-09-10", "from")).toEqual({
+      from: "2026-09-20",
+      to: "2026-10-20",
+    });
+    expect(completeDateRange("2026-09-01", "2026-09-05", "to")).toEqual({
+      from: "2026-09-01",
+      to: "2026-09-05",
+    });
+    expect(completeDateRange("2026-09-01", "", "to")).toEqual({ from: "", to: "" });
   });
 });
 

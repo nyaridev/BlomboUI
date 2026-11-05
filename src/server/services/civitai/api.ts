@@ -69,6 +69,71 @@ export interface RawModel {
   modelVersions?: RawVersion[];
 }
 
+/** A model as Civitai's own site search (`model.getAll`) answers: its newest version only. */
+export interface SiteModel {
+  id: number;
+  name?: string;
+  type?: string;
+  nsfw?: boolean;
+  nsfwLevel?: number;
+  publishedAt?: string | null;
+  user?: { username?: string | null } | null;
+  rank?: { downloadCount?: number | null; thumbsUpCount?: number | null } | null;
+  version?: { id: number; name?: string; baseModel?: string | null } | null;
+  /** `url` is an image id on Civitai's image host, or a full address. */
+  images?: Array<{ id?: number; url?: string; type?: string; nsfwLevel?: number }>;
+}
+
+/** A tRPC answer (superjson): the value in `json`, the types of special values in `meta`. */
+interface SiteAnswer {
+  result?: {
+    data?: {
+      json?: { items?: SiteModel[]; nextCursor?: unknown };
+      meta?: { values?: { nextCursor?: unknown } };
+    };
+  };
+}
+
+/** Civitai's image host account, the path every image id sits under. */
+const IMAGE_ACCOUNT = "xG1nkqKTMzGDvpLrqFT7WA";
+/** Every browsing level (PG to XXX); the profile's site decides what it answers with. */
+const ALL_LEVELS = 31;
+
+/** A site-search model in the public API's shape, so the same cards come out of it. */
+export function fromSite(m: SiteModel, imageEdge: string): RawModel {
+  const v = m.version;
+  return {
+    id: m.id,
+    name: m.name,
+    type: m.type,
+    nsfw: m.nsfw,
+    nsfwLevel: m.nsfwLevel,
+    creator: { username: m.user?.username ?? null },
+    stats: {
+      downloadCount: m.rank?.downloadCount ?? undefined,
+      thumbsUpCount: m.rank?.thumbsUpCount ?? undefined,
+    },
+    modelVersions: v
+      ? [
+          {
+            id: v.id,
+            name: v.name,
+            baseModel: v.baseModel,
+            publishedAt: m.publishedAt,
+            images: (m.images ?? []).flatMap((img) => {
+              if (!img.url) return [];
+              const video = img.type === "video";
+              const url = /^https?:\/\//i.test(img.url)
+                ? img.url
+                : `${imageEdge}/${encodeURIComponent(img.url)}/original=true/${img.id ?? "image"}.${video ? "mp4" : "jpeg"}`;
+              return [{ url, type: img.type, nsfwLevel: img.nsfwLevel }];
+            }),
+          },
+        ]
+      : [],
+  };
+}
+
 export interface RawPage {
   items?: RawModel[];
   metadata?: { nextCursor?: string | number | null; nextPage?: string | null };
@@ -127,6 +192,68 @@ export class CivitaiApi {
     if (cursor?.startsWith("p:")) q.set("page", cursor.slice(2));
     else if (cursor) q.set("cursor", cursor);
     return this.get<RawPage>(`/api/v1/models?${q}`, key, SEARCH_TTL);
+  }
+
+  /**
+   * One page of models published in a date range, from Civitai's own site search (`model.getAll`
+   * over tRPC): the public API has no date filter. It needs the API key and isn't documented, so
+   * it can change without notice; its answer is turned into the public API's shape here. Its
+   * cursor comes back typed (a bigint, say), so Blombo's cursor carries the value and its type.
+   */
+  async modelsByDate(filter: BrowseFilter, cursor: string | null, key: string): Promise<RawPage> {
+    const input: Record<string, unknown> = {
+      limit: PAGE_SIZE,
+      sort: filter.sort,
+      period: filter.period,
+      publishedFrom: filter.publishedFrom,
+      publishedTo: filter.publishedTo,
+      browsingLevel: ALL_LEVELS,
+    };
+    if (filter.query) input.query = filter.query;
+    if (filter.types.length) input.types = filter.types;
+    if (filter.baseModels.length) input.baseModels = filter.baseModels;
+    if (filter.username) input.username = filter.username;
+    if (filter.tag) input.tag = filter.tag;
+    let meta: unknown;
+    if (cursor?.startsWith("t:")) {
+      try {
+        const token = JSON.parse(Buffer.from(cursor.slice(2), "base64url").toString("utf8")) as {
+          c?: unknown;
+          m?: unknown;
+        };
+        input.cursor = token.c;
+        if (token.m !== undefined) meta = { values: { cursor: token.m } };
+      } catch {
+        // A cursor from somewhere else: start from the first page.
+      }
+    }
+    const q = encodeURIComponent(JSON.stringify(meta ? { json: input, meta } : { json: input }));
+    const body = await this.get<SiteAnswer>(`/api/trpc/model.getAll?input=${q}`, key, SEARCH_TTL);
+    const data = body.result?.data;
+    const next = data?.json?.nextCursor;
+    const items = (data?.json?.items ?? []).filter((m) => typeof m?.id === "number");
+    const edge = this.imageEdge();
+    return {
+      items: items.map((m) => fromSite(m, edge)),
+      metadata: {
+        nextCursor:
+          next === undefined || next === null || next === ""
+            ? null
+            : `t:${Buffer.from(JSON.stringify({ c: next, m: data?.meta?.values?.nextCursor })).toString("base64url")}`,
+      },
+    };
+  }
+
+  /**
+   * Where the site search's image ids are served: Civitai's image host for its sites, the server
+   * itself for the fake one.
+   * shortcut: civitai.red's images are taken to be on image.civitai.red; check if they don't load.
+   */
+  imageEdge(): string {
+    const host = new URL(this.baseUrl).hostname.replace(/^www\./, "");
+    return /^civitai\.(com|red)$/.test(host)
+      ? `https://image.${host}/${IMAGE_ACCOUNT}`
+      : `${this.origin}/img`;
   }
 
   model(id: number, key: string | null): Promise<RawModel> {
@@ -274,7 +401,14 @@ export class CivitaiApi {
     let detail = "";
     try {
       const body = JSON.parse(text) as { error?: unknown; message?: unknown };
-      detail = typeof body.error === "string" ? body.error : String(body.message ?? "");
+      // The site search (tRPC) puts its message in error.json.message.
+      const trpc = (body.error as { json?: { message?: unknown } } | undefined)?.json?.message;
+      detail =
+        typeof body.error === "string"
+          ? body.error
+          : typeof trpc === "string"
+            ? trpc
+            : String(body.message ?? "");
     } catch {
       detail = "";
     }

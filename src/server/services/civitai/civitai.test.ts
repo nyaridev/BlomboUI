@@ -54,6 +54,43 @@ describe("browsing", () => {
     await settings.update(o.profileId, { civitai: { following: [] } });
   });
 
+  it("searches a published-date range through the site search, with the key", async () => {
+    const range = { publishedFrom: "2026-09-01", publishedTo: "2026-09-10", sort: "Newest" };
+    await expect(o.services.civitai.search(filter(range), null)).rejects.toThrow(/API key/);
+    await o.services.civitai.setKey(FAKE_KEY, false);
+    try {
+      await expect(
+        o.services.civitai.search(filter({ ...range, publishedTo: "" }), null),
+      ).rejects.toThrow(/both dates/);
+      await expect(
+        o.services.civitai.search(filter({ ...range, publishedTo: "2026-10-30" }), null),
+      ).rejects.toThrow(/31 days/);
+      const page = await o.services.civitai.search(filter(range), null);
+      expect(o.fake.requests.at(-1)?.path).toContain("/api/trpc/model.getAll");
+      expect(page.items.length).toBeGreaterThan(0);
+      for (const c of page.items) {
+        expect(c.publishedAt && c.publishedAt < "2026-09-11").toBe(true);
+        expect(c.publishedAt && c.publishedAt >= "2026-09-01").toBe(true);
+      }
+      const first = page.items[0];
+      expect(first?.versionId).not.toBeNull();
+      expect(first?.creator).toBeTruthy();
+      expect(fromBase64Url(first?.image?.thumb.split("u=")[1] ?? "")).toMatch(
+        /\/img\/[0-9a-f-]{36}\/width=450\//,
+      );
+      // The cursor comes back typed (a bigint): the next page asks with it and gets new models.
+      expect(page.nextCursor).toBeNull();
+      const month = filter({ ...range, publishedTo: "2026-09-28" });
+      const wide = await o.services.civitai.search(month, null);
+      expect(wide.nextCursor).toMatch(/^t:/);
+      const next = await o.services.civitai.search(month, wide.nextCursor);
+      expect(next.items.length).toBeGreaterThan(0);
+      expect(next.items.some((c) => wide.items.some((x) => x.id === c.id))).toBe(false);
+    } finally {
+      await o.services.civitai.removeKey();
+    }
+  });
+
   it("filters by category and merges followed creators' newest models", async () => {
     const styles = await o.services.civitai.search(filter({ tag: "style" }), null);
     expect(styles.items.length).toBeGreaterThan(0);

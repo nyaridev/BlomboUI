@@ -161,7 +161,12 @@ export const CivitaiSettings = z.object({
   /** Which Civitai site searches, downloads and links use (`CIVITAI_SITE_URLS`). */
   site: z.enum(CIVITAI_SITES).default("com"),
   /** What the Civitai browser starts with. */
-  browse: BrowseFilter.omit({ query: true, username: true }).prefault({}),
+  browse: BrowseFilter.omit({
+    query: true,
+    username: true,
+    publishedFrom: true,
+    publishedTo: true,
+  }).prefault({}),
   downloads: z
     .object({
       /** Files downloading at the same time. */

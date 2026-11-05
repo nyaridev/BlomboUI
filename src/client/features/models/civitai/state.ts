@@ -3,8 +3,8 @@
  * defaults the first time), which home tab shows (Browse or Following), the creator picked
  * there and the one you're only looking at (a creator's name clicked anywhere: pinned at the top
  * of Following until you follow them or close it, so Browse's search stays as it was), the
- * opened model tabs, the last tab opened (its tab flashes), and whether NSFW images are
- * blurred (this view only, on each time the app starts). The filter, home and tabs are remembered
+ * opened model tabs, the last tab opened (its tab flashes), whether NSFW images are
+ * blurred (this view only, on each time the app starts) and whether models you have are hidden. The filter, home and tabs are remembered
  * in this window (localStorage), so a reload or a restart comes back to them. Server data stays in TanStack Query.
  */
 import { BrowseFilter, type BrowseFilterInput } from "@shared/civitai";
@@ -34,6 +34,9 @@ interface CivitaiState {
   /** NSFW images stay blurred until clicked (the NSFW button switches it for every image). */
   blur: boolean;
   toggleBlur: () => void;
+  /** Leave out models with a version in the models folder (this session only). */
+  hideLocal: boolean;
+  toggleHideLocal: () => void;
   /** Use the profile's defaults (once, before the first search). */
   seed: (browse: Settings["civitai"]["browse"]) => void;
   setFilter: (patch: Partial<BrowseFilterInput>) => void;
@@ -87,6 +90,8 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   flash: null,
   blur: true,
   toggleBlur: () => set((s) => ({ blur: !s.blur })),
+  hideLocal: false,
+  toggleHideLocal: () => set((s) => ({ hideLocal: !s.hideLocal })),
   seed: (browse) => {
     if (!get().filter) set({ filter: BrowseFilter.parse(browse) });
   },

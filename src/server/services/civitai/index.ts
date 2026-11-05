@@ -13,6 +13,7 @@ import {
   type CivitaiPage,
   type CivitaiSearch,
   type CivitaiView,
+  dateRangeProblem,
   type LocalMark,
   mergeFeed,
 } from "../../../shared/civitai.ts";
@@ -133,10 +134,24 @@ export class CivitaiService {
     return byModel;
   }
 
+  /** One page from Civitai: the public API, or its site search for a published-date range. */
+  private page(filter: BrowseFilter, cursor: string | null, key: string | null): Promise<RawPage> {
+    if (!filter.publishedFrom && !filter.publishedTo) return this.api.models(filter, cursor, key);
+    const problem = dateRangeProblem(filter.publishedFrom, filter.publishedTo);
+    if (problem) throw new HttpError(400, problem, "bad_dates");
+    if (!key)
+      throw new HttpError(
+        400,
+        "Searching by date needs your Civitai API key. Add it in Settings → Civitai.",
+        "civitai_needs_key",
+      );
+    return this.api.modelsByDate(filter, cursor, key);
+  }
+
   async search(filter: BrowseFilter, cursor: string | null): Promise<CivitaiPage> {
     const profileId = this.active();
     const key = await this.key(profileId);
-    const page = await this.api.models(filter, cursor, key);
+    const page = await this.page(filter, cursor, key);
     const ctx = await this.context();
     if (filter.query && !cursor) await this.recordSearch(profileId, filter.query);
     return {
@@ -162,7 +177,7 @@ export class CivitaiService {
       await Promise.all(
         users.slice(i, i + 4).map(async (username) => {
           try {
-            const page = await this.api.models({ ...filter, username, sort: "Newest" }, null, key);
+            const page = await this.page({ ...filter, username, sort: "Newest" }, null, key);
             pages.push(
               (page.items ?? [])
                 .filter((m) => typeof m?.id === "number")

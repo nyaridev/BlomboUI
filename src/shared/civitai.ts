@@ -132,6 +132,45 @@ export const CIVITAI_SITE_URLS: Record<CivitaiSite, string> = {
 
 /* ── browsing ────────────────────────────────────────────────────────────── */
 
+/** A day as Civitai's date filter takes it (UTC). */
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const DayOrNone = z.string().regex(ISO_DAY).or(z.literal("")).default("");
+
+/** The longest published-date range Civitai searches, counting both days. */
+export const DATE_RANGE_DAYS = 31;
+const DAY_MS = 24 * 3600_000;
+const dayMs = (day: string) => Date.parse(`${day}T00:00:00Z`);
+const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/** What's wrong with a published-date range, or null when it's fine (or not set). */
+export function dateRangeProblem(from: string, to: string): string | null {
+  if (!from && !to) return null;
+  if (!from || !to) return "Pick both dates: Civitai searches a range with a start and an end.";
+  if (Number.isNaN(dayMs(from)) || Number.isNaN(dayMs(to))) return "That isn't a date.";
+  if (dayMs(from) > dayMs(to)) return "The start date is after the end date.";
+  if (dayMs(to) - dayMs(from) > (DATE_RANGE_DAYS - 1) * DAY_MS)
+    return `Civitai searches ${DATE_RANGE_DAYS} days at most. Pick a shorter range.`;
+  return null;
+}
+
+/**
+ * A range after one end was edited, as Civitai's own menu does it: when the other end is empty
+ * or no longer fits, it moves to make the longest range that does. Clearing one end clears both.
+ */
+export function completeDateRange(
+  from: string,
+  to: string,
+  edited: "from" | "to",
+): { from: string; to: string } {
+  const span = (DATE_RANGE_DAYS - 1) * DAY_MS;
+  const set = edited === "from" ? from : to;
+  if (!set || Number.isNaN(dayMs(set))) return { from: "", to: "" };
+  if (!dateRangeProblem(from, to)) return { from, to };
+  return edited === "from"
+    ? { from, to: dayOf(dayMs(from) + span) }
+    : { from: dayOf(dayMs(to) - span), to };
+}
+
 export const BrowseFilter = z.object({
   query: z.string().trim().max(200).default(""),
   types: z.array(z.string().max(40)).max(12).default([]),
@@ -142,6 +181,13 @@ export const BrowseFilter = z.object({
   username: z.string().trim().max(60).default(""),
   /** One of Civitai's categories (or any tag); "" for all. */
   tag: z.string().trim().max(40).default(""),
+  /**
+   * Published between these days (both counted; both or neither, DATE_RANGE_DAYS at most). Set,
+   * the search goes through Civitai's own site search with the API key: the public API has no
+   * date filter.
+   */
+  publishedFrom: DayOrNone,
+  publishedTo: DayOrNone,
 });
 export type BrowseFilter = z.infer<typeof BrowseFilter>;
 export type BrowseFilterInput = z.input<typeof BrowseFilter>;
@@ -317,6 +363,8 @@ export function browseQuery(filter: BrowseFilter, cursor?: string | null): strin
   q.set("period", filter.period);
   if (filter.username) q.set("user", filter.username);
   if (filter.tag) q.set("tag", filter.tag);
+  if (filter.publishedFrom) q.set("from", filter.publishedFrom);
+  if (filter.publishedTo) q.set("to", filter.publishedTo);
   if (cursor) q.set("cursor", cursor);
   return q.toString();
 }
@@ -339,8 +387,11 @@ export function parseBrowseQuery(params: Record<string, string | undefined>): {
     period: params.period || undefined,
     username: params.user ?? "",
     tag: params.tag ?? "",
+    publishedFrom: params.from ?? "",
+    publishedTo: params.to ?? "",
   });
-  const cursor = params.cursor?.trim() ? params.cursor.trim().slice(0, 200) : null;
+  // The site search's cursors are longer (an encoded value and its type).
+  const cursor = params.cursor?.trim() ? params.cursor.trim().slice(0, 1000) : null;
   return { filter, cursor };
 }
 

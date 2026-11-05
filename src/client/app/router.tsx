@@ -52,11 +52,9 @@ const labRoute = createRoute({
     if (!import.meta.env.DEV) throw redirect({ to: "/" });
   },
   component: () => (
-    <div className="h-full overflow-auto">
-      <Suspense fallback={null}>
-        <DesignLab standalone />
-      </Suspense>
-    </div>
+    <Suspense fallback={null}>
+      <DesignLab standalone />
+    </Suspense>
   ),
 });
 

@@ -377,7 +377,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const errors = useLive((s) => s.errors.length);
 
   return (
-    <div className="min-h-full bg-bg">
+    // Its own scroll area: inside a profile the view gets a fixed-height box, and the page
+    // (body) never scrolls.
+    <div className="h-full overflow-y-auto bg-bg">
       {/* sticky theme bar */}
       <div className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-[6px]">
         <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-3 px-8 py-2.5">

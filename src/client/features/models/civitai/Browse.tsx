@@ -140,8 +140,7 @@ const SORT_ICONS: Record<CivitaiSort, IconName> = {
 
 /**
  * The filter bar. On Following (`following`: true, or the one creator shown there) the creator
- * comes from the tab's list and the order is newest first, so the creator chip, the sort and
- * recent searches are left out.
+ * comes from the tab's list, so the creator chip is left out.
  */
 export function FilterBar({
   filter,
@@ -176,7 +175,7 @@ export function FilterBar({
         }}
       >
         <SavedFilters filter={filter} onApply={replace} />
-        {following ? null : <RecentSearches current={filter.query} onSearch={search} />}
+        <RecentSearches current={filter.query} onSearch={search} />
         <TextField
           icon="search"
           value={text}
@@ -256,20 +255,13 @@ export function FilterBar({
                 : baseModelOptions
             }
           />
-          {following ? (
-            <span className="flex h-8 items-center gap-1.5 px-1 text-sm text-fg-3">
-              <Icon name="clock" size={14} />
-              Newest first
-            </span>
-          ) : (
-            <Select
-              label="Sort"
-              value={filter.sort}
-              onChange={(sort) => setFilter({ sort })}
-              className="w-[172px]"
-              options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
-            />
-          )}
+          <Select
+            label="Sort"
+            value={filter.sort}
+            onChange={(sort) => setFilter({ sort })}
+            className="w-[172px]"
+            options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
+          />
           <MoreFilters filter={filter} defaults={defaults} />
           {changed ? (
             <Button

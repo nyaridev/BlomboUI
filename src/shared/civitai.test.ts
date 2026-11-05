@@ -104,7 +104,7 @@ describe("published-date range", () => {
 });
 
 describe("following feed", () => {
-  it("keeps valid, unique usernames and asks for the newest without a creator", () => {
+  it("keeps valid, unique usernames and asks with the filter's sort, without a creator", () => {
     expect(parseFeedUsers("a_b, x.y,,a_b,bad name,<x>")).toEqual(["a_b", "x.y"]);
     const params = new URLSearchParams(
       feedQuery(
@@ -114,7 +114,7 @@ describe("following feed", () => {
     );
     expect(params.get("users")).toBe("a,b");
     expect(params.get("user")).toBeNull();
-    expect(params.get("sort")).toBe("Newest");
+    expect(params.get("sort")).toBe("Most Liked");
     expect(params.get("tag")).toBe("style");
   });
 
@@ -125,5 +125,18 @@ describe("following feed", () => {
       [card(3, "2026-03-01"), card(1, "2026-01-02")],
     ]);
     expect(merged.map((c) => c.id)).toEqual([3, 1, 2]);
+  });
+
+  it("merges by the sort: oldest first, or by a number with the newest breaking ties", () => {
+    const card = (id: number, publishedAt: string, downloads: number) =>
+      ({ id, publishedAt, downloads }) as CivitaiCard;
+    const pages = [
+      [card(1, "2026-01-02", 50), card(2, "2026-02-01", 900)],
+      [card(3, "2026-03-01", 50)],
+    ];
+    expect(mergeFeed(pages, "Oldest").map((c) => c.id)).toEqual([1, 2, 3]);
+    expect(mergeFeed(pages, "Most Downloaded", (c) => c.downloads).map((c) => c.id)).toEqual([
+      2, 3, 1,
+    ]);
   });
 });

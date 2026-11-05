@@ -65,7 +65,15 @@ export interface RawModel {
   nsfwLevel?: number;
   tags?: string[];
   creator?: { username?: string | null; image?: string | null } | null;
-  stats?: { downloadCount?: number; thumbsUpCount?: number; favoriteCount?: number };
+  stats?: {
+    downloadCount?: number;
+    thumbsUpCount?: number;
+    favoriteCount?: number;
+    commentCount?: number;
+    collectedCount?: number;
+    imageCount?: number;
+    rating?: number;
+  };
   modelVersions?: RawVersion[];
 }
 

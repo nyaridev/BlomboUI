@@ -435,9 +435,9 @@ export const FollowedCreator = z.union([
 /** Most creators the Following feed asks about at once. */
 export const FEED_MAX_USERS = 100;
 
-/** The Following feed's request: whose models, with the filter (sort and creator are ignored). */
+/** The Following feed's request: whose models, with the filter (its creator is ignored). */
 export function feedQuery(users: string[], filter: BrowseFilter): string {
-  const q = new URLSearchParams(browseQuery({ ...filter, username: "", sort: "Newest" }));
+  const q = new URLSearchParams(browseQuery({ ...filter, username: "" }));
   q.set("users", users.join(","));
   return q.toString();
 }
@@ -453,11 +453,22 @@ export function parseFeedUsers(text: string | undefined): string[] {
 }
 
 /** Feed cards from several creators' pages: one of each model, newest first. */
-export function mergeFeed(pages: CivitaiCard[][]): CivitaiCard[] {
+export function mergeFeed(
+  pages: CivitaiCard[][],
+  sort: CivitaiSort = "Newest",
+  /** For the sorts by a number (downloads, likes, comments…): the model's, higher first. */
+  score: (c: CivitaiCard) => number = () => 0,
+): CivitaiCard[] {
   const seen = new Map<number, CivitaiCard>();
   for (const page of pages) for (const c of page) if (!seen.has(c.id)) seen.set(c.id, c);
-  return [...seen.values()].sort((a, b) =>
-    (b.publishedAt ?? "").localeCompare(a.publishedAt ?? ""),
+  const newest = (a: CivitaiCard, b: CivitaiCard) =>
+    (b.publishedAt ?? "").localeCompare(a.publishedAt ?? "");
+  return [...seen.values()].sort(
+    sort === "Newest"
+      ? newest
+      : sort === "Oldest"
+        ? (a, b) => newest(b, a)
+        : (a, b) => score(b) - score(a) || newest(a, b),
   );
 }
 

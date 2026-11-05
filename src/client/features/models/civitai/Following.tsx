@@ -1,8 +1,9 @@
 /**
  * Models → Civitai → Following: the creators you follow down the left (add one by name, remove
  * one with ×, drag one or press Alt+↑/↓ to reorder), and their models on the right with the browser's filter (shared with Browse:
- * types, base model, period, category, search). "Everyone" merges each creator's newest models
- * (the server's feed, one page per creator); one creator lists all of theirs, newest first.
+ * types, base model, sort, period, category, search, recent searches). "Everyone" merges each
+ * creator's first page in the filter's order (the server's feed); one creator lists all of
+ * theirs in that order.
  * A creator's name clicked anywhere opens them here, pinned at the top with Follow and ×, without
  * following them (`visit` in state.ts). Avatars are the saved pictures, or looked up once.
  */
@@ -58,7 +59,7 @@ function FeedResults({ users, filter }: { users: string[]; filter: BrowseFilter 
 }
 
 function CreatorResults({ creator, filter }: { creator: string; filter: BrowseFilter }) {
-  const q = useCivitaiModels({ ...filter, username: creator, sort: "Newest" });
+  const q = useCivitaiModels({ ...filter, username: creator });
   return <Results q={q} empty={<NothingNew creator={creator} />} />;
 }
 

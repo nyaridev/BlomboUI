@@ -111,12 +111,18 @@ describe("browsing", () => {
     const styles = await o.services.civitai.search(filter({ tag: "style" }), null);
     expect(styles.items.length).toBeGreaterThan(0);
     expect(o.fake.requests.at(-1)?.path).toContain("tag=style");
-    const feed = await o.services.civitai.feed(["pixelsmith", "nightowl", "nobody"], filter());
+    const users = ["pixelsmith", "nightowl", "nobody"];
+    const feed = await o.services.civitai.feed(users, filter({ sort: "Newest" }));
     const creators = new Set(feed.items.map((c) => c.creator));
     expect([...creators].sort()).toEqual(["nightowl", "pixelsmith"]);
     const dates = feed.items.map((c) => c.publishedAt ?? "");
     expect(dates).toEqual([...dates].sort().reverse());
     expect(feed.nextCursor).toBeNull();
+    // Another sort: each creator is asked in that order, and the merge follows it.
+    const top = await o.services.civitai.feed(users, filter({ sort: "Most Downloaded" }));
+    expect(o.fake.requests.at(-1)?.path).toContain("sort=Most+Downloaded");
+    const downloads = top.items.map((c) => c.downloads);
+    expect(downloads).toEqual([...downloads].sort((a, b) => b - a));
   });
 
   it("records searches with a query", async () => {

@@ -15,6 +15,7 @@ import {
   type CivitaiModel,
   type CivitaiPage,
   type CivitaiSearch,
+  type CivitaiSort,
   type CivitaiView,
   dateRangeProblem,
   type LocalMark,
@@ -38,6 +39,18 @@ export interface CivitaiDeps {
   api: CivitaiApi;
   images: ImageProxy;
 }
+
+/** The number each sort orders by, from a model's stats (Newest and Oldest go by date). */
+const SORT_STAT: Partial<
+  Record<CivitaiSort, (s: NonNullable<RawModel["stats"]>) => number | undefined>
+> = {
+  "Highest Rated": (s) => s.thumbsUpCount ?? s.rating,
+  "Most Downloaded": (s) => s.downloadCount,
+  "Most Liked": (s) => s.thumbsUpCount ?? s.favoriteCount,
+  "Most Discussed": (s) => s.commentCount,
+  "Most Collected": (s) => s.collectedCount ?? s.favoriteCount,
+  "Most Images": (s) => s.imageCount,
+};
 
 export class CivitaiService {
   readonly api: CivitaiApi;
@@ -166,7 +179,8 @@ export class CivitaiService {
   }
 
   /**
-   * The Following feed: each creator's newest models with the filter, merged newest first.
+   * The Following feed: each creator's first page in the filter's order, merged by that order
+   * (the sorts by a number compare the models' stats: downloads, likes, comments…).
    * shortcut: one page (40) per creator, no "load more"; picking a creator lists all of theirs.
    * Asks Civitai four creators at a time; a creator Civitai can't answer for is left out, unless
    * none answer.
@@ -175,24 +189,27 @@ export class CivitaiService {
     const key = await this.key(this.active());
     const ctx = await this.context();
     const pages: CivitaiPage["items"][] = [];
+    const scores = new Map<number, number>();
+    const stat = SORT_STAT[filter.sort];
     let failure: unknown = null;
     for (let i = 0; i < users.length; i += 4)
       await Promise.all(
         users.slice(i, i + 4).map(async (username) => {
           try {
-            const page = await this.page({ ...filter, username, sort: "Newest" }, null, key);
-            pages.push(
-              (page.items ?? [])
-                .filter((m) => typeof m?.id === "number")
-                .map((m) => normalize.card(m, ctx)),
-            );
+            const page = await this.page({ ...filter, username }, null, key);
+            const models = (page.items ?? []).filter((m) => typeof m?.id === "number");
+            if (stat) for (const m of models) scores.set(m.id, stat(m.stats ?? {}) ?? 0);
+            pages.push(models.map((m) => normalize.card(m, ctx)));
           } catch (error) {
             failure ??= error;
           }
         }),
       );
     if (!pages.length && failure) throw failure;
-    return { items: mergeFeed(pages), nextCursor: null };
+    return {
+      items: mergeFeed(pages, filter.sort, (c) => scores.get(c.id) ?? 0),
+      nextCursor: null,
+    };
   }
 
   /**

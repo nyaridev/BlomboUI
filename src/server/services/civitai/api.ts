@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { BrowseFilter } from "../../../shared/civitai.ts";
+import type { BrowseFilter, CommunityQuery } from "../../../shared/civitai.ts";
 import { writeJsonAtomic } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
 import { fetchFollow, USER_AGENT } from "../../lib/remote.ts";
@@ -282,18 +282,20 @@ export class CivitaiApi {
     return this.get<RawVersion>(`/api/v1/model-versions/${id}`, key, MODEL_TTL);
   }
 
-  /** A page of images people posted with a version, most reactions first. */
+  /** A page of images people posted with a version, in the query's order and period. */
   images(
     versionId: number,
-    cursor: string | null,
+    query: CommunityQuery,
     key: string | null,
   ): Promise<{ items?: RawImage[]; metadata?: { nextCursor?: string | number | null } }> {
-    const after = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
-    return this.get(
-      `/api/v1/images?modelVersionId=${versionId}&limit=${COMMUNITY_PAGE}&sort=Most%20Reactions${after}`,
-      key,
-      SEARCH_TTL,
-    );
+    const q = new URLSearchParams({
+      modelVersionId: String(versionId),
+      limit: String(COMMUNITY_PAGE),
+      sort: query.sort,
+      period: query.period,
+    });
+    if (query.cursor) q.set("cursor", query.cursor);
+    return this.get(`/api/v1/images?${q}`, key, SEARCH_TTL);
   }
 
   /** The version a file belongs to, by its SHA256; null when Civitai doesn't know it. */

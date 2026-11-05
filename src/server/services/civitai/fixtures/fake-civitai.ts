@@ -3,8 +3,8 @@
  * site or downloads a real model. It serves:
  *
  *   /api/v1/models, /models/:id, /model-versions/:id, /model-versions/by-hash/:sha, /me, /enums,
- *   /images?modelVersionId=&limit=&cursor= (120 community posts per version, paged; none for
- *   versions ending in 3)
+ *   /images?modelVersionId=&limit=&cursor=&sort=&period= (120 community posts per version over
+ *   all time, fewer for shorter periods, Newest in reverse; none for versions ending in 3)
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
@@ -521,34 +521,37 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         const vid = Number(url.searchParams.get("modelVersionId"));
         const owner = models.find((x) => x.versions.some((v) => v.id === vid));
         // Versions ending in 3 have no posts, so the empty state can be checked.
-        const total = owner && vid % 10 !== 3 ? 120 : 0;
+        const span: Record<string, number> = { Year: 80, Month: 40, Week: 15, Day: 3 };
+        const all = owner && vid % 10 !== 3 ? 120 : 0;
+        const total = Math.min(all, span[url.searchParams.get("period") ?? ""] ?? all);
+        const newest = url.searchParams.get("sort") === "Newest";
         const limit = Math.max(1, Number(url.searchParams.get("limit") ?? 50));
         const offset = Number(url.searchParams.get("cursor") ?? 0) || 0;
         const items =
           total > offset
-            ? Array.from({ length: Math.min(limit, total - offset) }, (_, k) => offset + k).map(
-                (n) => ({
-                  id: vid * 1000 + n,
-                  url: `${base}/img/community-${vid}-${n}/original=true/${vid * 1000 + n}.jpeg`,
-                  width: 832,
-                  height: 1216,
-                  type: "image",
-                  nsfw: n % 9 === 3,
-                  nsfwLevel: n % 9 === 3 ? "X" : "None",
-                  username: `fan_${(n % 7) + 1}`,
-                  meta:
-                    n % 2 === 0
-                      ? {
-                          prompt: `${owner?.name}, community post ${n + 1}`,
-                          negativePrompt: "lowres",
-                          steps: 20 + n,
-                          cfgScale: 5,
-                          sampler: "DPM++ 2M",
-                          seed: 4242 + n,
-                        }
-                      : null,
-                }),
-              )
+            ? Array.from({ length: Math.min(limit, total - offset) }, (_, k) =>
+                newest ? total - 1 - (offset + k) : offset + k,
+              ).map((n) => ({
+                id: vid * 1000 + n,
+                url: `${base}/img/community-${vid}-${n}/original=true/${vid * 1000 + n}.jpeg`,
+                width: 832,
+                height: 1216,
+                type: "image",
+                nsfw: n % 9 === 3,
+                nsfwLevel: n % 9 === 3 ? "X" : "None",
+                username: `fan_${(n % 7) + 1}`,
+                meta:
+                  n % 2 === 0
+                    ? {
+                        prompt: `${owner?.name}, community post ${n + 1}`,
+                        negativePrompt: "lowres",
+                        steps: 20 + n,
+                        cfgScale: 5,
+                        sampler: "DPM++ 2M",
+                        seed: 4242 + n,
+                      }
+                    : null,
+              }))
             : [];
         const next = offset + limit < total ? String(offset + limit) : undefined;
         return json(res, 200, { items, metadata: next ? { nextCursor: next } : {} });

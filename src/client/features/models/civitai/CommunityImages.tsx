@@ -1,22 +1,53 @@
 /**
- * The images people posted with a version (Civitai's images endpoint, most liked first), under
- * the model page across its whole width. The grid is virtualized against the page's own scroll
- * and asks for the next page near its end. A tile shows who posted it and, when they shared how
+ * The images people posted with a version (Civitai's images endpoint), under the model page
+ * across its whole width, six a row at most. Filters: Civitai's order (most reactions, most
+ * comments, newest) and period, and With prompt (only images whose poster shared how they were
+ * made; filtered here, so it keeps loading pages until there's enough to show). The grid is
+ * virtualized against the page's own scroll and asks for the next page near its end. A tile shows who posted it and, when they shared how
  * it was made, a mark and Copy prompt (on hover); a click opens the full-screen viewer over
  * everything loaded so far. NSFW tiles are veiled while the blur is on.
  */
-import { Icon } from "@client/icons/Icon";
+import { Icon, type IconName } from "@client/icons/Icon";
 import { useElementWidth } from "@client/lib/hooks";
 import { clamp } from "@client/lib/number";
 import { useCivitaiCommunityImages } from "@client/lib/queries";
-import { Button, CopyButton, EmptyState, ImageViewer, Skeleton, Veil } from "@client/ui";
-import { type CivitaiImage, type CivitaiVersion, civitaiFullSize } from "@shared/civitai";
+import {
+  Button,
+  Chip,
+  CopyButton,
+  EmptyState,
+  ImageViewer,
+  Select,
+  Skeleton,
+  Veil,
+} from "@client/ui";
+import {
+  CIVITAI_PERIOD_LABELS,
+  CIVITAI_PERIODS,
+  type CivitaiImage,
+  type CivitaiPeriod,
+  type CivitaiVersion,
+  civitaiFullSize,
+  IMAGE_SORTS,
+  type ImageSort,
+} from "@shared/civitai";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const GAP = 8;
 const MIN_TILE = 180;
-const MAX_COLS = 8;
+const MAX_COLS = 6;
+
+const SORT_LABELS: Record<ImageSort, string> = {
+  "Most Reactions": "Most reactions",
+  "Most Comments": "Most comments",
+  Newest: "Newest",
+};
+const SORT_ICONS: Record<ImageSort, IconName> = {
+  "Most Reactions": "heart",
+  "Most Comments": "text",
+  Newest: "clock",
+};
 
 export function CommunityImages({
   version,
@@ -28,22 +59,73 @@ export function CommunityImages({
   scrollRef: RefObject<HTMLDivElement | null>;
   blurNsfw: boolean;
 }) {
-  const q = useCivitaiCommunityImages(version.id);
-  const items = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
+  const [sort, setSort] = useState<ImageSort>("Most Reactions");
+  const [period, setPeriod] = useState<CivitaiPeriod>("AllTime");
+  const [withPrompt, setWithPrompt] = useState(false);
+  const q = useCivitaiCommunityImages(version.id, sort, period);
+  const loaded = useMemo(() => q.data?.pages.flatMap((p) => p.items) ?? [], [q.data]);
+  const items = useMemo(
+    () => (withPrompt ? loaded.filter((i) => i.meta?.prompt) : loaded),
+    [loaded, withPrompt],
+  );
   const [viewing, setViewing] = useState<number | null>(null);
+  const more = () => {
+    if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
+  };
+  // With prompt can leave a page or two with little to show: load on until there's a screenful.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `more` reads the latest query
+  useEffect(() => {
+    if (withPrompt && items.length < 24 && q.hasNextPage && !q.isFetchingNextPage) more();
+  }, [withPrompt, items.length, q.hasNextPage, q.isFetchingNextPage]);
 
   return (
     <section className="mx-auto flex max-w-[1360px] flex-col gap-4 px-6 pb-14 max-lg:px-3">
       <div className="flex items-center gap-3">
         <Icon name="gallery" size={15} className="shrink-0 text-fg-3" />
         <h3 className="shrink-0 text-base font-semibold text-fg">Made with this model</h3>
-        <span className="truncate text-2xs text-fg-3">
-          Posted with {version.name}, most liked first
-        </span>
+        <span className="truncate text-2xs text-fg-3">Posted with {version.name}</span>
         <span className="h-px min-w-6 flex-1 bg-line" />
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Select
+          label="Order"
+          value={sort}
+          onChange={setSort}
+          className="w-[168px]"
+          options={IMAGE_SORTS.map((s) => ({
+            value: s,
+            label: SORT_LABELS[s],
+            icon: SORT_ICONS[s],
+          }))}
+        />
+        <Select
+          label="Period"
+          value={period}
+          onChange={setPeriod}
+          className="w-[132px]"
+          options={CIVITAI_PERIODS.map((p) => ({
+            value: p,
+            label: CIVITAI_PERIOD_LABELS[p],
+            icon: "calendar" as const,
+          }))}
+        />
+        <Chip
+          size="lg"
+          icon="sparkle"
+          selected={withPrompt}
+          onClick={() => setWithPrompt((v) => !v)}
+        >
+          With prompt
+        </Chip>
+        {loaded.length ? (
+          <span className="ml-auto text-2xs text-fg-3 tabular">
+            {withPrompt ? `${items.length} of ${loaded.length} loaded` : `${loaded.length} loaded`}
+            {q.hasNextPage ? ", more as you scroll" : ""}
+          </span>
+        ) : null}
+      </div>
       {q.isLoading ? (
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+        <div className="grid grid-cols-6 gap-2 max-lg:grid-cols-3 max-sm:grid-cols-2">
           {Array.from({ length: 12 }, (_, i) => (
             <Skeleton key={i} className="aspect-[3/4]" />
           ))}
@@ -62,13 +144,15 @@ export function CommunityImages({
           scrollRef={scrollRef}
           blurNsfw={blurNsfw}
           onOpen={setViewing}
-          onEnd={() => {
-            if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
-          }}
+          onEnd={more}
         />
-      ) : (
+      ) : q.hasNextPage || q.isFetchingNextPage ? null : (
         <p className="py-6 text-center text-sm text-fg-3">
-          No one has posted images with {version.name} yet. They show up here when they do.
+          {loaded.length
+            ? "None of these images has its prompt shared. Turn off With prompt to see them all."
+            : period !== "AllTime"
+              ? `Nothing posted with ${version.name} in this period. Try a longer one.`
+              : `No one has posted images with ${version.name} yet. They show up here when they do.`}
         </p>
       )}
       {q.isFetchingNextPage ? (

@@ -214,8 +214,21 @@ export const CivitaiImagePage = z.object({
 });
 export type CivitaiImagePage = z.infer<typeof CivitaiImagePage>;
 
-/** What a community page cursor may look like ("feed:1231:86032226"). */
-export const IMAGE_CURSOR = /^[\w:.-]{1,200}$/;
+/** Civitai's orders for the images people post. */
+export const IMAGE_SORTS = ["Most Reactions", "Most Comments", "Newest"] as const;
+export type ImageSort = (typeof IMAGE_SORTS)[number];
+
+/** A request for a page of community images: the order, the period, and where to go on. */
+export const CommunityQuery = z.object({
+  sort: z.enum(IMAGE_SORTS).default("Most Reactions"),
+  period: z.enum(CIVITAI_PERIODS).default("AllTime"),
+  /** Civitai's cursor ("feed:1231:86032226"); none for the first page. */
+  cursor: z
+    .string()
+    .regex(/^[\w:.-]{1,200}$/)
+    .optional(),
+});
+export type CommunityQuery = z.infer<typeof CommunityQuery>;
 
 /** What's already in the models folder from this Civitai model. */
 export const LocalMark = z.object({

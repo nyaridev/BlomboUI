@@ -39,6 +39,7 @@ import {
   type CivitaiPage,
   type CivitaiSearch,
   type CivitaiView,
+  type CommunityQuery,
   feedQuery,
 } from "@shared/civitai";
 import type {
@@ -436,11 +437,11 @@ export const api = {
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
   civitaiVersionImages: (id: number) =>
     request<CivitaiImage[]>("GET", `/civitai/versions/${id}/images`),
-  civitaiCommunityImages: (id: number, cursor: string | null) =>
-    request<CivitaiImagePage>(
-      "GET",
-      `/civitai/versions/${id}/community${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
-    ),
+  civitaiCommunityImages: (id: number, query: CommunityQuery) => {
+    const q = new URLSearchParams({ sort: query.sort, period: query.period });
+    if (query.cursor) q.set("cursor", query.cursor);
+    return request<CivitaiImagePage>("GET", `/civitai/versions/${id}/community?${q}`);
+  },
   civitaiByHash: (sha256: string) =>
     request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),
   civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),

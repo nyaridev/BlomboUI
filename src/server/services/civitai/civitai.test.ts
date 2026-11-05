@@ -177,7 +177,8 @@ describe("browsing", () => {
   it("lists the images people posted with a version, NSFW read from the endpoint's words", async () => {
     const m = await o.services.civitai.model(1001);
     const version = m.versions[0];
-    const first = await o.services.civitai.communityImages(version?.id ?? 0, null);
+    const top = { sort: "Most Reactions", period: "AllTime" } as const;
+    const first = await o.services.civitai.communityImages(version?.id ?? 0, top);
     const images = first.items;
     expect(images).toHaveLength(50);
     expect(images.slice(0, 5).map((i) => i.by)).toEqual([
@@ -191,13 +192,26 @@ describe("browsing", () => {
     expect(images[1]?.meta).toBeNull();
     expect(images.slice(0, 5).map((i) => i.nsfw)).toEqual([false, false, false, true, false]);
     // Pages follow Civitai's cursor to the end (120 posts in the fake).
-    const second = await o.services.civitai.communityImages(version?.id ?? 0, first.nextCursor);
+    const second = await o.services.civitai.communityImages(version?.id ?? 0, {
+      ...top,
+      cursor: first.nextCursor ?? undefined,
+    });
     expect(second.items[0]?.meta?.prompt).toContain("community post 51");
-    const last = await o.services.civitai.communityImages(version?.id ?? 0, second.nextCursor);
+    const last = await o.services.civitai.communityImages(version?.id ?? 0, {
+      ...top,
+      cursor: second.nextCursor ?? undefined,
+    });
     expect(last.items).toHaveLength(20);
     expect(last.nextCursor).toBeNull();
+    // The order and the period reach Civitai.
+    const week = await o.services.civitai.communityImages(version?.id ?? 0, {
+      sort: "Newest",
+      period: "Week",
+    });
+    expect(week.items).toHaveLength(15);
+    expect(week.items[0]?.meta?.prompt).toContain("community post 15");
     // No posts: an empty page.
-    expect(await o.services.civitai.communityImages(10013, null)).toEqual({
+    expect(await o.services.civitai.communityImages(10013, top)).toEqual({
       items: [],
       nextCursor: null,
     });

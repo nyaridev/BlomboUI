@@ -18,6 +18,7 @@ import {
   type CivitaiSearch,
   type CivitaiSort,
   type CivitaiView,
+  type CommunityQuery,
   dateRangeProblem,
   type LocalMark,
   mergeFeed,
@@ -269,9 +270,9 @@ export class CivitaiService {
     return normalize.version(await this.rawVersion(id), await this.context()).images;
   }
 
-  /** A page of images people posted with a version (the model page's grid), most liked first. */
-  async communityImages(versionId: number, cursor: string | null): Promise<CivitaiImagePage> {
-    const page = await this.api.images(versionId, cursor, await this.key(this.active()));
+  /** A page of images people posted with a version (the model page's grid). */
+  async communityImages(versionId: number, query: CommunityQuery): Promise<CivitaiImagePage> {
+    const page = await this.api.images(versionId, query, await this.key(this.active()));
     const ctx = await this.context();
     const raw = page.items ?? [];
     const next = page.metadata?.nextCursor;

@@ -1,5 +1,11 @@
 /** TanStack Query keys and hooks. Server state lives here, never in Zustand. */
-import type { BrowseFilter, CivitaiImagePage, CivitaiPage } from "@shared/civitai";
+import type {
+  BrowseFilter,
+  CivitaiImagePage,
+  CivitaiPage,
+  CivitaiPeriod,
+  ImageSort,
+} from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
 import type { GalleryPage, GalleryQueryInput, ImageDetails, UseKind } from "@shared/gallery";
@@ -88,8 +94,12 @@ export const qk = {
     ["civitai", profileId, "model", id] as const,
   civitaiVersionImages: (profileId: string | null, id: number | null) =>
     ["civitai", profileId, "version-images", id] as const,
-  civitaiCommunityImages: (profileId: string | null, id: number | null) =>
-    ["civitai", profileId, "community-images", id] as const,
+  civitaiCommunityImages: (
+    profileId: string | null,
+    id: number | null,
+    sort: ImageSort,
+    period: CivitaiPeriod,
+  ) => ["civitai", profileId, "community-images", id, sort, period] as const,
   civitaiByHash: (profileId: string | null, sha256: string | null) =>
     ["civitai", profileId, "by-hash", sha256] as const,
   civitaiViews: (profileId: string | null) => ["civitai", profileId, "views"] as const,
@@ -842,12 +852,17 @@ export function useCivitaiVersionImages(id: number | null) {
   });
 }
 
-/** Images people posted with a version, most liked first, a page at a time. */
-export function useCivitaiCommunityImages(id: number | null) {
+/** Images people posted with a version, in an order and period, a page at a time. */
+export function useCivitaiCommunityImages(
+  id: number | null,
+  sort: ImageSort,
+  period: CivitaiPeriod,
+) {
   const profileId = useSession((s) => s.profileId);
   return useInfiniteQuery({
-    queryKey: qk.civitaiCommunityImages(profileId, id),
-    queryFn: ({ pageParam }) => api.civitaiCommunityImages(id as number, pageParam),
+    queryKey: qk.civitaiCommunityImages(profileId, id, sort, period),
+    queryFn: ({ pageParam }) =>
+      api.civitaiCommunityImages(id as number, { sort, period, cursor: pageParam ?? undefined }),
     initialPageParam: null as string | null,
     getNextPageParam: (last: CivitaiImagePage) => last.nextCursor,
     enabled: profileId !== null && id !== null,

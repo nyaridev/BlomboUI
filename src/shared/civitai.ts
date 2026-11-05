@@ -480,6 +480,16 @@ export function civitaiImageVariant(url: string, width: number, video: boolean):
   return parsed.href;
 }
 
+/** The size of an image's `full` picture: Civitai's is at most 1280 px wide (never upscaled). */
+export function civitaiFullSize(img: { width: number | null; height: number | null }): {
+  width?: number;
+  height?: number;
+} {
+  if (!img.width || !img.height) return {};
+  const width = Math.min(img.width, 1280);
+  return { width, height: Math.round((img.height * width) / img.width) };
+}
+
 /** Blombo's image proxy URL for an (allowed) remote image. */
 export function proxiedImage(url: string): string {
   return `/api/civitai/image?u=${base64Url(url)}`;

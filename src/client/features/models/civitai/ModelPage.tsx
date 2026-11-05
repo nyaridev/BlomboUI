@@ -1,10 +1,14 @@
 /**
- * A Civitai model inside Blombo: image carousel, version picker, files, trigger words with copy,
- * the description (parsed on the server, rendered as plain elements), and Download with a
- * preview of where the file lands; Download opens the download pop-up (DownloadDialog) to change
- * the folder and file name first. Marks show what's already in the models folder.
+ * A Civitai model inside Blombo. Left: the version's images (thumbnails beside the picture when
+ * there's room, the picture as tall as the window allows; a click opens it full screen), sticky
+ * while the right side scrolls. Right, top to bottom: the header (badges, name, creator with
+ * Follow, the Civitai link), the model's numbers, one card for the picked version (the picker,
+ * its facts, Download with a preview of where the file lands, its files), trigger words and tags.
+ * Below both: the descriptions (parsed on the server, rendered as plain elements). Download opens
+ * the download pop-up (DownloadDialog) to change the folder and file name first. Marks show
+ * what's already in the models folder.
  */
-import { Icon } from "@client/icons/Icon";
+import { Icon, type IconName } from "@client/icons/Icon";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import { useCivitaiModel, useDownloadPlan, useSettings } from "@client/lib/queries";
@@ -16,20 +20,20 @@ import {
   CopyButton,
   EmptyState,
   FallbackFace,
-  Field,
+  ImageViewer,
   KIND_STYLE,
   Select,
   Skeleton,
-  toast,
 } from "@client/ui";
 import {
   CIVITAI_TYPE_LABELS,
   type CivitaiModel,
   type CivitaiVersion,
+  civitaiFullSize,
   compactCount,
 } from "@shared/civitai";
 import type { EnqueueBody } from "@shared/downloads";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
@@ -39,18 +43,22 @@ import { localVersions } from "./marks";
 import { RichText } from "./RichText";
 import { useCivitai } from "./state";
 
+/** The two columns: the images take what the 400 px info column leaves; one column when narrow. */
+const COLUMNS =
+  "mx-auto grid max-w-[1360px] grid-cols-[minmax(0,1fr)_400px] gap-8 px-6 max-[1000px]:grid-cols-1 max-lg:px-3";
+
 export function ModelPage({ id, versionId }: { id: number; versionId?: number }) {
   const q = useCivitaiModel(id);
   const blurNsfw = useCivitai((s) => s.blur);
   if (q.isLoading)
     return (
-      <div className="mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)_400px] gap-8 p-6">
-        <Skeleton className="aspect-[4/5]" />
+      <div className={`${COLUMNS} pt-6`}>
+        <Skeleton className="aspect-[4/5] max-h-[calc(100vh-212px)] w-full" />
         <div className="flex flex-col gap-3">
           <Skeleton className="h-6 w-2/3" />
           <Skeleton className="h-4 w-1/3" />
-          <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-24 w-full" />
+          <Skeleton className="h-16 w-full" />
+          <Skeleton className="h-48 w-full" />
         </div>
       </div>
     );
@@ -92,21 +100,26 @@ function Page({
   const visit = useCivitai((s) => s.visit);
   const style = model.kind ? KIND_STYLE[model.kind] : null;
   const images = useMemo(() => version?.images ?? [], [version]);
+  const [viewing, setViewing] = useState<number | null>(null);
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className="mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)_400px] gap-8 px-6 pt-6 max-[1000px]:grid-cols-1">
+      <div className={`${COLUMNS} pt-6 max-lg:pt-3`}>
         <div className="min-w-0">
           <Carousel
             images={images}
             label={`${model.name} images`}
             blurNsfw={blurNsfw}
-            className="sticky top-0"
+            side
+            // The headers and tab strips above take about 180 px; the rest leaves a margin under it.
+            maxHeight="calc(100vh - 212px)"
+            onOpen={setViewing}
+            className="sticky top-4 max-[1000px]:static"
             empty={<FallbackFace name={model.name} kind={model.kind ?? "checkpoints"} />}
           />
         </div>
         <aside className="flex min-w-0 flex-col gap-5">
-          <div className="flex flex-col gap-2">
+          <header className="flex flex-col gap-2.5">
             <div className="flex flex-wrap items-center gap-1.5">
               <Badge tone="accent">
                 {style ? <Icon name={style.icon} size={11} /> : null}
@@ -130,95 +143,120 @@ function Page({
             <h2 className="text-2xl font-semibold tracking-tight text-balance break-words text-fg">
               {model.name}
             </h2>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-fg-3">
+            <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-sm text-fg-2">
               {model.creator ? (
-                <button
-                  type="button"
-                  className="flex items-center gap-1.5 rounded-sm hover:text-fg focus-ring"
-                  title={`${model.creator}'s models (in Following)`}
-                  onClick={() => {
-                    if (model.creator) visit(model.creator);
-                  }}
-                >
-                  {model.creatorImage ? (
-                    <img
-                      src={model.creatorImage}
-                      alt=""
-                      className="h-5 w-5 rounded-full object-cover"
-                    />
-                  ) : (
-                    <Icon name="user" size={14} />
-                  )}
-                  {model.creator}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="flex min-w-0 items-center gap-1.5 rounded-sm hover:text-fg focus-ring"
+                    title={`${model.creator}'s models (in Following)`}
+                    onClick={() => {
+                      if (model.creator) visit(model.creator);
+                    }}
+                  >
+                    {model.creatorImage ? (
+                      <img
+                        src={model.creatorImage}
+                        alt=""
+                        className="h-6 w-6 shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <Icon name="user" size={15} className="shrink-0" />
+                    )}
+                    <span className="truncate">{model.creator}</span>
+                  </button>
+                  <FollowButton name={model.creator} image={model.creatorImage} />
+                </>
               ) : null}
-              {model.creator ? (
-                <FollowButton name={model.creator} image={model.creatorImage} />
-              ) : null}
-              <span className="flex items-center gap-1 tabular" title="Downloads">
-                <Icon name="download" size={13} />
-                {compactCount(model.downloads)}
-              </span>
-              <span className="flex items-center gap-1 tabular" title="Likes">
-                <Icon name="heart" size={13} />
-                {compactCount(model.likes)}
-              </span>
               <a
                 href={model.url}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="ml-auto inline-flex items-center gap-1 text-accent-ink hover:underline"
+                className="ml-auto inline-flex items-center gap-1 rounded-sm text-xs text-accent-ink hover:underline focus-ring"
               >
-                {new URL(model.url).host}
+                Open on {new URL(model.url).host}
                 <Icon name="external" size={12} />
               </a>
             </div>
-          </div>
+          </header>
 
-          {model.versions.length > 1 ? (
-            <Field label="Version">
-              <Select
-                value={String(versionId)}
-                onChange={(v) => setVersionId(Number(v))}
-                options={model.versions.map((v) => ({
-                  value: String(v.id),
-                  label: v.name,
-                  icon: local.has(v.id) ? "check-circle" : undefined,
-                  hint: [v.baseModel, local.has(v.id) ? "installed" : null]
-                    .filter(Boolean)
-                    .join(" · "),
-                }))}
-              />
-            </Field>
+          <dl className="grid grid-cols-3 divide-x divide-line rounded-lg border border-line bg-surface-2">
+            <Stat icon="download" label="Downloads" value={compactCount(model.downloads)} />
+            <Stat icon="heart" label="Likes" value={compactCount(model.likes)} />
+            <Stat
+              icon="layers"
+              label={model.versions.length === 1 ? "Version" : "Versions"}
+              value={String(model.versions.length)}
+            />
+          </dl>
+
+          {version ? (
+            <section className="flex flex-col rounded-lg border border-line bg-surface-2">
+              <div className="flex flex-col gap-3 p-3.5">
+                <div className="flex items-center gap-2">
+                  <h3 className="label-caps">Version</h3>
+                  {version.earlyAccess ? <Badge tone="warning">Early access</Badge> : null}
+                </div>
+                {model.versions.length > 1 ? (
+                  <Select
+                    label="Version"
+                    value={String(versionId)}
+                    onChange={(v) => setVersionId(Number(v))}
+                    options={model.versions.map((v) => ({
+                      value: String(v.id),
+                      label: v.name,
+                      icon: local.has(v.id) ? "check-circle" : undefined,
+                      hint: [v.baseModel, local.has(v.id) ? "installed" : null]
+                        .filter(Boolean)
+                        .join(" · "),
+                    }))}
+                  />
+                ) : (
+                  <span className="text-sm font-medium text-fg">{version.name}</span>
+                )}
+                <dl className="grid grid-cols-3 gap-x-4 gap-y-2">
+                  <Fact label="Base model">{version.baseModel ?? "—"}</Fact>
+                  <Fact label="Published">
+                    {version.publishedAt
+                      ? new Date(version.publishedAt).toLocaleDateString(undefined, {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })
+                      : "—"}
+                  </Fact>
+                  <Fact label="Downloads">{compactCount(version.downloads)}</Fact>
+                </dl>
+              </div>
+              <div className="border-t border-line p-3.5">
+                <DownloadPanel model={model} version={version} />
+              </div>
+            </section>
           ) : null}
 
-          {version ? <DownloadPanel model={model} version={version} /> : null}
-
           {version?.trainedWords.length ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="label-caps">Trigger words</span>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {version.trainedWords.map((w) => (
-                  <Chip
-                    key={w}
-                    size="sm"
-                    onClick={() =>
-                      void navigator.clipboard
-                        ?.writeText(w)
-                        .then(() => toast(`Copied "${w}"`, "success"))
-                    }
-                  >
-                    {w}
-                  </Chip>
-                ))}
+            <section className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <h3 className="flex-1 label-caps">Trigger words</h3>
                 <CopyButton text={version.trainedWords.join(", ")} label="Copy all trigger words" />
               </div>
-            </div>
+              <div className="flex flex-wrap gap-1.5">
+                {version.trainedWords.map((w) => (
+                  <span
+                    key={w}
+                    className="inline-flex h-7 max-w-full min-w-0 items-center gap-0.5 rounded-md border border-line bg-field pr-0.5 pl-2 text-fg"
+                  >
+                    <span className="truncate font-mono text-xs">{w}</span>
+                    <CopyButton text={w} label={`Copy "${w}"`} />
+                  </span>
+                ))}
+              </div>
+            </section>
           ) : null}
 
           {model.tags.length ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="label-caps">Tags</span>
+            <section className="flex flex-col gap-2">
+              <h3 className="label-caps">Tags</h3>
               <div className="flex flex-wrap gap-1">
                 {model.tags.slice(0, 16).map((t) => (
                   <Chip
@@ -234,11 +272,11 @@ function Page({
                   </Chip>
                 ))}
               </div>
-            </div>
+            </section>
           ) : null}
         </aside>
       </div>
-      <div className="mx-auto grid max-w-[1180px] grid-cols-[minmax(0,1fr)_400px] gap-8 px-6 pt-8 pb-14 max-[1000px]:grid-cols-1">
+      <div className={`${COLUMNS} pt-8 pb-14`}>
         <section className="flex min-w-0 flex-col gap-3">
           <h3 className="label-caps">About this model</h3>
           <RichText blocks={model.description} blurImages={model.nsfw && blurNsfw} />
@@ -250,6 +288,44 @@ function Page({
           </section>
         ) : null}
       </div>
+      {viewing !== null && images.length ? (
+        <ImageViewer
+          images={images.map((im, i) => ({
+            key: String(i),
+            src: im.full,
+            alt: "",
+            // The carousel's small picture is already loaded: it shows until the large one is.
+            preview: im.thumb,
+            ...civitaiFullSize(im),
+          }))}
+          index={Math.min(viewing, images.length - 1)}
+          onIndex={setViewing}
+          onClose={() => setViewing(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** One of the model's numbers: a tile in the stats row. */
+function Stat({ icon, label, value }: { icon: IconName; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 px-3 py-2.5">
+      <dt className="flex items-center gap-1 text-2xs text-fg-3">
+        <Icon name={icon} size={11} />
+        {label}
+      </dt>
+      <dd className="truncate text-base font-semibold text-fg tabular">{value}</dd>
+    </div>
+  );
+}
+
+/** A fact about the picked version. */
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-2xs text-fg-3">{label}</dt>
+      <dd className="truncate text-sm text-fg tabular">{children}</dd>
     </div>
   );
 }
@@ -272,7 +348,7 @@ function DownloadPanel({ model, version }: { model: CivitaiModel; version: Civit
   const p = plan.data;
 
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface-2 p-3.5">
+    <div className="flex flex-col gap-3">
       {live ? (
         <div className="-mx-3.5 -my-1">
           <DownloadRow d={live} dense />
@@ -330,9 +406,10 @@ function DownloadPanel({ model, version }: { model: CivitaiModel; version: Civit
       ) : null}
       {version.files.length ? (
         <div className="flex flex-col gap-1">
-          {version.files.length > 1 ? <span className="label-caps">Files</span> : null}
+          <span className="label-caps">{version.files.length > 1 ? "Files" : "File"}</span>
           {version.files.map((f) => (
             <div key={f.id} className="flex items-center gap-2.5 px-0.5 py-1">
+              <Icon name="file" size={14} className="shrink-0 text-fg-3" />
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-sm text-fg" title={f.name}>
                   {f.name}

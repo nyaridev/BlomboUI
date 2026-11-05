@@ -1711,6 +1711,13 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               <Row label="Carousel">
                 <Carousel images={samples} label="Sample images" className="w-56" />
                 <Carousel
+                  images={samples}
+                  label="Side thumbnails"
+                  side
+                  maxHeight="300px"
+                  className="w-[700px] max-lg:w-full"
+                />
+                <Carousel
                   images={[]}
                   label="No images"
                   className="w-28"

@@ -122,6 +122,8 @@ export interface ImageHead {
   format: ImageFormat;
   width: number | null;
   height: number | null;
+  /** A WebP with more than one frame (its VP8X animation flag). */
+  animated?: boolean;
   /** Text metadata by key: prompt, workflow, blombo, parameters… */
   text: Record<string, string>;
 }
@@ -184,6 +186,7 @@ async function readWebp(readAt: ReadAt, size: number): Promise<ImageHead> {
     const len = new DataView(h.buffer, h.byteOffset, 8).getUint32(4, true);
     if (fourcc === "VP8X" && len >= 10) {
       const d = await readAt(pos + 8, 10);
+      head.animated = ((d[0] ?? 0) & 0x02) !== 0;
       head.width = 1 + ((d[4] ?? 0) | ((d[5] ?? 0) << 8) | ((d[6] ?? 0) << 16));
       head.height = 1 + ((d[7] ?? 0) | ((d[8] ?? 0) << 8) | ((d[9] ?? 0) << 16));
     } else if (fourcc === "VP8 " && head.width === null && len >= 10) {

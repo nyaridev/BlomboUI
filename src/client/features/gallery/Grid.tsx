@@ -9,12 +9,18 @@ import { useElementWidth } from "@client/lib/hooks";
 import { glide } from "@client/lib/motion";
 import { useFavorite, useGalleryImage } from "@client/lib/queries";
 import { Button, Skeleton } from "@client/ui";
-import { fileUrl, type GalleryImage } from "@shared/gallery";
+import { fileUrl, type GalleryImage, playTime } from "@shared/gallery";
 import type { GalleryLayout } from "@shared/settings";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { motion } from "motion/react";
 import { type MouseEvent, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { applyImageSettings } from "../generate/applySettings";
+import { MediaBadge, stillOrAnimated, TileMotion, usePlaying } from "./media";
+import { useSelection } from "./selection";
+
+/** The keys held on a tile's click (Ctrl / ⌘ picks one, Shift a range). */
+export type ClickKeys = Pick<MouseEvent, "shiftKey" | "ctrlKey" | "metaKey">;
+
 import { buildRows, dayLabel, GAP, type GalleryRow } from "./rows";
 
 export const Grid = memo(function Grid({
@@ -41,7 +47,7 @@ export const Grid = memo(function Grid({
   hasMore: boolean;
   loadingMore: boolean;
   onLoadMore: () => void;
-  onOpen: (id: number) => void;
+  onOpen: (id: number, e?: ClickKeys) => void;
   /** Right-click on a tile. */
   onMenu: (e: MouseEvent<HTMLElement>, image: GalleryImage) => void;
   onUseSettings: () => void;
@@ -123,7 +129,7 @@ function Row({
   row: GalleryRow;
   featured: GalleryImage[];
   total: number;
-  onOpen: (id: number) => void;
+  onOpen: (id: number, e?: ClickKeys) => void;
   onMenu: (e: MouseEvent<HTMLElement>, image: GalleryImage) => void;
   onUseSettings: () => void;
 }) {
@@ -159,20 +165,30 @@ export const Tile = memo(function Tile({
   onMenu,
 }: {
   image: GalleryImage;
-  onOpen: (id: number) => void;
+  onOpen: (id: number, e?: ClickKeys) => void;
   onMenu?: (e: MouseEvent<HTMLElement>, image: GalleryImage) => void;
 }) {
   const favorite = useFavorite();
   const [loaded, setLoaded] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const selected = useSelection((s) => s.ids.has(image.id));
+  // A picked tile stops, so its file isn't held open when it's moved to the trash.
+  const playing = usePlaying(image, hovered) && !selected;
   return (
     <div
-      className="group relative h-full w-full overflow-hidden rounded-md bg-sunken"
+      className={cn(
+        "group relative h-full w-full overflow-hidden rounded-md bg-sunken",
+        selected && "ring-2 ring-accent ring-offset-2 ring-offset-bg",
+      )}
       onContextMenu={onMenu ? (e) => onMenu(e, image) : undefined}
+      onPointerEnter={image.media === "image" ? undefined : () => setHovered(true)}
+      onPointerLeave={image.media === "image" ? undefined : () => setHovered(false)}
     >
       <button
         type="button"
-        onClick={() => onOpen(image.id)}
+        onClick={(e) => onOpen(image.id, e)}
         aria-label={`Open ${image.name}`}
+        aria-pressed={selected || undefined}
         className="absolute inset-0 focus-ring"
       >
         <img
@@ -187,13 +203,20 @@ export const Tile = memo(function Tile({
             loaded ? "opacity-100" : "opacity-0",
           )}
         />
+        <TileMotion image={image} playing={playing} />
       </button>
+      <MediaBadge image={image} />
       <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/20 opacity-0 transition-opacity duration-200 group-hover:opacity-100" />
       {image.model ? (
         <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center gap-1.5 text-2xs text-white/90 opacity-0 transition-opacity group-hover:opacity-100">
           <Icon name="models" size={11} />
           <span className="truncate">{image.model}</span>
         </div>
+      ) : null}
+      {selected ? (
+        <span className="pointer-events-none absolute bottom-1.5 left-1.5 z-10 grid h-6 w-6 place-items-center rounded-full bg-accent text-on-accent shadow-pop">
+          <Icon name="check" size={14} />
+        </span>
       ) : null}
       {image.rating ? (
         <div
@@ -237,7 +260,7 @@ function Hero({
 }: {
   images: GalleryImage[];
   total: number;
-  onOpen: (id: number) => void;
+  onOpen: (id: number, e?: ClickKeys) => void;
   onUseSettings: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -249,7 +272,8 @@ function Hero({
   const line = [
     s?.model,
     ...(s?.loras.slice(0, 2).map((l) => l.name) ?? []),
-    `${image.width}×${image.height}`,
+    image.media === "audio" ? null : `${image.width}×${image.height}`,
+    image.duration !== null ? playTime(image.duration) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -258,7 +282,8 @@ function Hero({
       <div className="relative h-full overflow-hidden rounded-2xl border border-line bg-sunken">
         <motion.img
           key={image.id}
-          src={fileUrl(image)}
+          // A video's or audio's own file isn't a picture: its thumbnail is.
+          src={stillOrAnimated(image) ? fileUrl(image) : image.thumb}
           alt=""
           initial={{ opacity: 0, scale: 1.04 }}
           animate={{ opacity: 1, scale: 1 }}

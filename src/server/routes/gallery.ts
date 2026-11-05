@@ -30,8 +30,8 @@ const imageId = (raw: string) => {
   return n;
 };
 
-/** An image file added from your PC. */
-const MAX_IMPORT = 80 * 1024 * 1024;
+/** A file added from your PC (videos can be big). */
+const MAX_IMPORT = 512 * 1024 * 1024;
 
 export function galleryRoutes(
   gallery: GalleryService,
@@ -41,7 +41,7 @@ export function galleryRoutes(
 
   /** Add an image from your PC (the file's bytes, its name in ?filename=). */
   r.post("/import", async (c) => {
-    const data = await readBody(c, MAX_IMPORT, "That image is too large to add (80 MB max).");
+    const data = await readBody(c, MAX_IMPORT, "That file is too large to add (512 MB max).");
     if (data.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
     return c.json(await others.imports.addFile(data, c.req.query("filename") ?? "image"));
   });
@@ -83,11 +83,15 @@ export function galleryRoutes(
     const file = await gallery.filePath(id);
     const download =
       c.req.query("download") === "1" ? (gallery.get(id)?.name ?? undefined) : undefined;
-    return sendFile(file, { cache: c.req.query("v") ? IMMUTABLE : "no-cache", download });
+    return sendFile(file, {
+      cache: c.req.query("v") ? IMMUTABLE : "no-cache",
+      download,
+      range: c.req.header("range"),
+    });
   });
 
   r.get("/thumbs/:id", async (c) =>
-    sendFile(await gallery.thumbFile(imageId(c.req.param("id"))), {
+    sendFile(await gallery.thumbFile(imageId(c.req.param("id")), c.req.query("anim") === "1"), {
       cache: c.req.query("v") ? IMMUTABLE : "no-cache",
       type: "image/webp",
     }),

@@ -8,6 +8,29 @@ import { ImageSettings, ImageSummary } from "./imageinfo.ts";
 import { slugId } from "./settings.ts";
 
 export const IMAGE_EXTENSIONS = [".png", ".webp", ".jpg", ".jpeg"] as const;
+export const VIDEO_EXTENSIONS = [".mp4"] as const;
+export const AUDIO_EXTENSIONS = [".mp3", ".wav", ".flac", ".ogg"] as const;
+/** Everything the gallery indexes: images (GIFs too), videos and audio. */
+export const GALLERY_EXTENSIONS = [
+  ...IMAGE_EXTENSIONS,
+  ".gif",
+  ...VIDEO_EXTENSIONS,
+  ...AUDIO_EXTENSIONS,
+] as const;
+
+/** What a gallery file is: a still image, an animated WebP or GIF, a video or audio. */
+export const MEDIA_KINDS = ["image", "animated", "video", "audio"] as const;
+export type MediaKind = (typeof MEDIA_KINDS)[number];
+
+/** A file's kind by its extension (a GIF or WebP is "image" until its frames are counted). */
+export function mediaOf(name: string): MediaKind {
+  const ext = name.slice(name.lastIndexOf(".")).toLowerCase();
+  return (VIDEO_EXTENSIONS as readonly string[]).includes(ext)
+    ? "video"
+    : (AUDIO_EXTENSIONS as readonly string[]).includes(ext)
+      ? "audio"
+      : "image";
+}
 
 /** The outputs folder is always the first library. */
 export const OUTPUTS_LIBRARY = "outputs";
@@ -120,6 +143,9 @@ export const GalleryImage = z.object({
   /** Thumbnail URL; immutable (it changes when the file changes). */
   thumb: z.string(),
   origin: z.enum(IMAGE_ORIGINS).default("generated"),
+  media: z.enum(MEDIA_KINDS).default("image"),
+  /** Length in seconds (videos, audio, animations), when the file says. */
+  duration: z.number().nullable().default(null),
 });
 export type GalleryImage = z.infer<typeof GalleryImage>;
 
@@ -374,6 +400,20 @@ function version(size: number, mtime: number): string {
 /** Thumbnail URL of an indexed image; immutable, since it changes with the file. */
 export function thumbUrl(id: number, size: number, mtime: number): string {
   return `/api/gallery/thumbs/${id}?v=${version(size, mtime)}`;
+}
+
+/** An animated image's moving thumbnail (the plain one is its first frame). */
+export function animatedThumbUrl(image: Pick<GalleryImage, "thumb">): string {
+  return `${image.thumb}&anim=1`;
+}
+
+/** A length as a player shows it: "0:03", "1:24", "1:02:05". */
+export function playTime(seconds: number): string {
+  const s = Math.max(0, Math.round(seconds));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return h ? `${h}:${pad(m)}:${pad(s % 60)}` : `${m}:${pad(s % 60)}`;
 }
 
 /** Full-size file URL of an indexed image. */

@@ -19,14 +19,11 @@
  *    a LoRA you don't have never shows up there.
  */
 import { randomUUID } from "node:crypto";
-import type { Dirent, Stats } from "node:fs";
+import type { Stats } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { StatementSync } from "node:sqlite";
-import sharp from "sharp";
 import {
-  CIVITAI_SIDECAR,
-  CivitaiSidecar,
   type Collection,
   fileUrl,
   type GalleryFacets,
@@ -34,12 +31,13 @@ import {
   type GalleryOverview,
   type GalleryPage,
   type GalleryQuery,
-  IMAGE_EXTENSIONS,
   IMAGE_ORIGINS,
   type ImageDetails,
   type ImageOrigin,
   interruptedFolder,
   type LibraryInfo,
+  type MediaKind,
+  mediaOf,
   OUTPUTS_LIBRARY,
   originOf,
   type SyncState,
@@ -48,7 +46,6 @@ import {
   thumbUrl,
 } from "../../../shared/gallery.ts";
 import {
-  civitaiSummary,
   EMPTY_SUMMARY,
   ImageSettings,
   ImageSummary,
@@ -57,22 +54,19 @@ import {
 import type { LiveTopic, ServerMessage } from "../../../shared/live.ts";
 import type { LocalModel } from "../../../shared/models.ts";
 import { folderIdFrom, type ProfileFolder } from "../../../shared/profile.ts";
-import { salvage } from "../../../shared/salvage.ts";
 import { slugId } from "../../../shared/settings.ts";
 import { type ProfileDb, type ProfileDbs, transaction } from "../../db/profileDb.ts";
 import { freePath, movePath, resolveInside } from "../../lib/fsx.ts";
 import { HttpError } from "../../lib/http.ts";
-import { readImageHead } from "../../lib/imagemeta.ts";
 import { ThumbCache } from "../../lib/thumbs.ts";
 import type { ProfileService } from "../profiles.ts";
 import type { SettingsService } from "../settings.ts";
 import { modelLabel } from "../workflows/summary.ts";
-import { parseMeta } from "./meta.ts";
+import { type IndexRow, isDir, moveSidecar, readForIndex, readSidecar, walk } from "./files.ts";
 
 export const THUMB_MAX = 640;
 const WEEK_MS = 7 * 24 * 3600 * 1000;
 const BATCH = 100;
-const EXTENSIONS = new Set<string>(IMAGE_EXTENSIONS);
 
 export interface GalleryDeps {
   profiles: ProfileService;
@@ -105,6 +99,8 @@ interface ImageRow {
   width: number;
   height: number;
   model: string | null;
+  media: string;
+  duration: number | null;
   favorite: number;
   rating: number;
 }
@@ -147,6 +143,7 @@ export function ftsQuery(terms: string[]): string | null {
 
 const SELECT = `
   SELECT i.id, i.library, i.path, i.name, i.folder, i.size, i.mtime, i.width, i.height, i.model,
+         i.media, i.duration,
          COALESCE(m.favorite, 0) AS favorite, COALESCE(m.rating, 0) AS rating
   FROM images i LEFT JOIN marks m ON m.library = i.library AND m.path = i.path`;
 
@@ -167,6 +164,8 @@ export function shuffleKey(seed: number): string {
   const h = `((i.id * 2654435761 + ${Math.trunc(seed)}) % 2147483647)`;
   return `((${h} * ${h} + ${Math.trunc(seed)}) % 2147483647)`;
 }
+
+const MEDIA = ["image", "animated", "video", "audio"] as const;
 
 /** Each origin as a condition on `images i` (the import folders, as `originOf` reads them). */
 const CIVITAI_ROWS = "(i.path LIKE 'civitai/%')";
@@ -436,14 +435,15 @@ export class GalleryService {
     const result = this.stmt(
       open,
       `INSERT INTO images (library, path, name, folder, size, mtime, width, height, source, model,
-                           summary, settings, has_workflow, search, indexed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                           summary, settings, has_workflow, search, indexed_at, media, duration)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (library, path) DO UPDATE SET
          name = excluded.name, folder = excluded.folder, size = excluded.size,
          mtime = excluded.mtime, width = excluded.width, height = excluded.height,
          source = excluded.source, model = excluded.model, summary = excluded.summary,
          settings = excluded.settings, has_workflow = excluded.has_workflow,
-         search = excluded.search, indexed_at = excluded.indexed_at
+         search = excluded.search, indexed_at = excluded.indexed_at,
+         media = excluded.media, duration = excluded.duration
        RETURNING id`,
     ).get(
       library,
@@ -461,6 +461,8 @@ export class GalleryService {
       row.hasWorkflow ? 1 : 0,
       search,
       Date.now(),
+      row.media,
+      row.duration,
     ) as { id: number };
     const id = Number(result.id);
     this.stmt(open, "DELETE FROM image_loras WHERE image_id = ?").run(id);
@@ -626,6 +628,8 @@ export class GalleryService {
       model: r.model,
       thumb: thumbUrl(Number(r.id), Number(r.size), Number(r.mtime)),
       origin: originOf(r.path),
+      media: (MEDIA as readonly string[]).includes(r.media) ? (r.media as MediaKind) : "image",
+      duration: r.duration === null || r.duration === undefined ? null : Number(r.duration),
     };
   }
 
@@ -921,12 +925,19 @@ export class GalleryService {
     return fromRel(lib.path, row.path);
   }
 
-  async thumbFile(id: number): Promise<string> {
+  /** An image's thumbnail; `animated` asks for an animation's moving one. */
+  async thumbFile(id: number, animated = false): Promise<string> {
     const open = this.need();
     const image = this.get(id);
     if (!image) throw new HttpError(404, "That image isn't in the gallery anymore.", "no_image");
     const abs = await this.filePath(id);
-    return open.thumbs.get(abs, `${image.size}-${image.mtime}`, THUMB_MAX);
+    const mode =
+      image.media === "video" || image.media === "audio"
+        ? image.media
+        : animated && image.media === "animated"
+          ? "animated"
+          : "still";
+    return open.thumbs.get(abs, `${image.size}-${image.mtime}`, THUMB_MAX, mode);
   }
 
   /* ── favorites ───────────────────────────────────────────────────────── */
@@ -1212,7 +1223,13 @@ export class GalleryService {
   async trashThumbFile(id: string): Promise<string> {
     const row = this.trashRow(id);
     const abs = this.trashFile(row);
-    return this.need().thumbs.get(abs, `trash-${row.size}-${row.mtime}`, THUMB_MAX);
+    const media = mediaOf(abs);
+    return this.need().thumbs.get(
+      abs,
+      `trash-${row.size}-${row.mtime}`,
+      THUMB_MAX,
+      media === "video" || media === "audio" ? media : "still",
+    );
   }
 
   /** Put trashed images back where they were (a free name if the spot is taken). */
@@ -1405,79 +1422,4 @@ function safeJson(text: string): unknown {
   } catch {
     return undefined;
   }
-}
-
-async function isDir(p: string): Promise<boolean> {
-  try {
-    return (await fs.stat(p)).isDirectory();
-  } catch {
-    return false;
-  }
-}
-
-/** Every image file under `dir` (hidden folders skipped). */
-async function walk(dir: string, out: string[], signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return;
-  let entries: Dirent[];
-  try {
-    entries = await fs.readdir(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const e of entries) {
-    if (e.name.startsWith(".")) continue;
-    const full = path.join(dir, e.name);
-    if (e.isDirectory()) await walk(full, out, signal);
-    else if (e.isFile() && EXTENSIONS.has(path.extname(e.name).toLowerCase())) out.push(full);
-  }
-}
-
-type IndexRow = Awaited<ReturnType<typeof readForIndex>>;
-
-/** A Civitai image's sidecar, or null when it has none (or it's unreadable). */
-async function readSidecar(abs: string): Promise<CivitaiSidecar | null> {
-  try {
-    // Value by value, so a hand-edited or older file keeps what's still good in it.
-    const read = salvage(
-      CivitaiSidecar,
-      JSON.parse(await fs.readFile(`${abs}${CIVITAI_SIDECAR}`, "utf8")),
-    );
-    return read.fixed.includes("*") ? null : read.data;
-  } catch {
-    return null;
-  }
-}
-
-/** Move a Civitai image's sidecar along with it (trash, restore), when it has one. */
-async function moveSidecar(from: string, to: string): Promise<void> {
-  try {
-    await movePath(`${from}${CIVITAI_SIDECAR}`, `${to}${CIVITAI_SIDECAR}`);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-  }
-}
-
-/**
- * Read what the index needs from one file (headers only; sharp only for odd formats). A Civitai
- * image adds its sidecar: the versions that made it and, when the file itself says nothing, how
- * the poster says it was made.
- */
-async function readForIndex(abs: string, rel: string) {
-  const head = await readImageHead(abs);
-  let width = head.width;
-  let height = head.height;
-  if (!width || !height) {
-    const meta = await sharp(abs, { failOn: "none" }).metadata();
-    width = meta.width ?? 0;
-    height = meta.height ?? 0;
-  }
-  if (!width || !height) throw new Error("No image size");
-  const meta = parseMeta(head.text);
-  const sidecar = originOf(rel) === "civitai" ? await readSidecar(abs) : null;
-  if (sidecar?.meta && meta.summary.source === "none") {
-    const shared = civitaiSummary(sidecar.meta);
-    meta.summary = shared.summary;
-    meta.settings = { workflowId: null, values: null, roles: shared.roles };
-  }
-  return { width, height, ...meta, versions: sidecar?.versions ?? [] };
 }

@@ -10,7 +10,7 @@ import { useAddCivitaiImage, useAddImageFile } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Button, IconButton, toast } from "@client/ui";
 import type { CivitaiImage } from "@shared/civitai";
-import { type AddedImage, IMAGE_EXTENSIONS, type ImageOrigin } from "@shared/gallery";
+import { type AddedImage, GALLERY_EXTENSIONS, type ImageOrigin } from "@shared/gallery";
 import { create } from "zustand";
 import { usePageFileDrop } from "../fileinfo/PageDrop";
 import { useGalleryUi } from "./state";
@@ -98,8 +98,9 @@ export function AddImageFile({ file }: { file: File }) {
   );
 }
 
-const isImage = (f: File) =>
-  f.type.startsWith("image/") || IMAGE_EXTENSIONS.some((ext) => f.name.toLowerCase().endsWith(ext));
+const isMedia = (f: File) =>
+  /^(image|video|audio)\//.test(f.type) ||
+  GALLERY_EXTENSIONS.some((ext) => f.name.toLowerCase().endsWith(ext));
 
 /**
  * Images dropped or pasted anywhere on the gallery while it's on screen are added (From your PC),
@@ -108,9 +109,9 @@ const isImage = (f: File) =>
 export function useGalleryDrop(enabled: boolean): boolean {
   const add = useAddImageFile();
   return usePageFileDrop((files) => {
-    const images = files.filter(isImage);
+    const images = files.filter(isMedia);
     if (!images.length) {
-      toast("Drop PNG, JPEG or WebP images to add them to the gallery.", "warning");
+      toast("Drop images, GIFs, MP4s or audio files to add them to the gallery.", "warning");
       return;
     }
     void (async () => {
@@ -133,7 +134,7 @@ export function useGalleryDrop(enabled: boolean): boolean {
       if (images.length === 1) return announce(last, "From your PC");
       const there = images.length - failed.length - added;
       toast(
-        `Added ${added} image${added === 1 ? "" : "s"} to your gallery (From your PC)${there ? `; ${there} ${there === 1 ? "was" : "were"} already there` : ""}.`,
+        `Added ${added} file${added === 1 ? "" : "s"} to your gallery (From your PC)${there ? `; ${there} ${there === 1 ? "was" : "were"} already there` : ""}.`,
         "success",
         { label: "Show", run: () => showInGallery("imported", (last as AddedImage).image.id) },
       );

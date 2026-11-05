@@ -10,6 +10,7 @@ import { fileUrl, type GalleryImage } from "@shared/gallery";
 import { motion, useReducedMotion } from "motion/react";
 import { type KeyboardEvent, useEffect, useState } from "react";
 import { applyImageSettings } from "../../generate/applySettings";
+import { stillOrAnimated } from "../media";
 
 const INTERVAL = 7000;
 
@@ -163,7 +164,7 @@ export function Coverflow({
             >
               {/* The front card shows the full picture over its thumbnail, so it never blinks. */}
               <img src={im.thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
-              {far === 0 ? (
+              {far === 0 && stillOrAnimated(im) ? (
                 <img
                   src={fileUrl(im)}
                   alt=""

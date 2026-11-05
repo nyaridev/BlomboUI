@@ -24,12 +24,14 @@ import { type MouseEvent, useCallback, useEffect, useMemo, useRef, useState } fr
 import { viewFromPath } from "../../app/router";
 import { PageDropOverlay } from "../fileinfo/PageDrop";
 import { useGalleryDrop } from "./AddToGallery";
-import { Grid } from "./Grid";
+import { type ClickKeys, Grid } from "./Grid";
 import { HomeView } from "./home/HomeView";
 import { UsesView } from "./home/UsesView";
 import { useImageMenu } from "./imageMenu";
 import { Lightbox } from "./Lightbox";
+import { SelectionBar } from "./SelectionBar";
 import { Sidebar } from "./Sidebar";
+import { useSelection } from "./selection";
 import { galleryQuery, isHomeView, useGalleryUi } from "./state";
 import { Toolbar } from "./Toolbar";
 import { TrashView } from "./TrashView";
@@ -59,7 +61,7 @@ export function GalleryView() {
         show={dragging}
         icon="gallery"
         title="Drop to add to your gallery"
-        text="PNG, WebP and JPEG images are copied into your outputs folder's imported/ folder"
+        text="Images, GIFs, MP4s and audio are copied into your outputs folder's imported/ folder"
       />
       {compact ? (
         <Sheet open={drawer} onOpenChange={(o) => set({ drawer: o })} label="Libraries">
@@ -154,10 +156,26 @@ function Images({ featured, visible }: { featured: GalleryImage[]; visible: bool
     void query;
     useLive.setState({ galleryNew: 0 });
   }, [query]);
-  const onOpen = useCallback((id: number) => useGalleryUi.getState().set({ open: id }), []);
+  const openImage = useCallback((id: number) => useGalleryUi.getState().set({ open: id }), []);
+  // Ctrl / ⌘ or Shift + click picks images (and any click does while some are picked).
+  const order = useMemo(() => items.map((i) => i.id), [items]);
+  const orderRef = useRef(order);
+  orderRef.current = order;
+  const onOpen = useCallback((id: number, e?: ClickKeys) => {
+    const sel = useSelection.getState();
+    const toggle = Boolean(e?.ctrlKey || e?.metaKey);
+    const shift = Boolean(e?.shiftKey);
+    if (toggle || shift || sel.ids.size) sel.click(id, { shift, toggle }, orderRef.current);
+    else useGalleryUi.getState().set({ open: id });
+  }, []);
+  // Another list starts with nothing picked.
+  useEffect(() => {
+    void query;
+    useSelection.getState().clear();
+  }, [query]);
   const onUseSettings = useCallback(() => go("generate"), [go]);
   // The menu reads the latest hooks through a ref, so the grid's tiles keep one callback.
-  const imageMenu = useImageMenu(onOpen, go);
+  const imageMenu = useImageMenu(openImage, go);
   const menuRef = useRef(imageMenu);
   menuRef.current = imageMenu;
   const onMenu = useCallback(
@@ -177,6 +195,7 @@ function Images({ featured, visible }: { featured: GalleryImage[]; visible: bool
         onLayout={(l) => update.mutate({ gallery: { layout: l } })}
         total={images.data ? total : null}
       />
+      <SelectionBar order={order} active={visible && !open} />
       {galleryNew > 0 && !home ? (
         <div className="flex items-center justify-center gap-2 border-b border-line bg-accent/10 py-1.5 text-xs text-fg-2">
           {galleryNew} new {galleryNew === 1 ? "image" : "images"} since this list loaded.

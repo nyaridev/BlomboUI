@@ -22,7 +22,7 @@ import {
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Badge, Button, CopyButton, IconButton, PropertyList, Skeleton, toast } from "@client/ui";
-import { fileUrl, type GalleryImage, type ImageDetails } from "@shared/gallery";
+import { fileUrl, type GalleryImage, type ImageDetails, playTime } from "@shared/gallery";
 import { motion } from "motion/react";
 import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useFileInfoTarget } from "../fileinfo/state";
@@ -31,6 +31,7 @@ import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
 import { copyImage } from "./imageMenu";
 import { Marks } from "./Marks";
+import { StagePlayer, stillOrAnimated } from "./media";
 
 export function Lightbox({
   images,
@@ -213,6 +214,7 @@ function Stage({
     el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
   }, [zoom]);
 
+  const player = image.media === "video" || image.media === "audio";
   const onDown = (e: PointerEvent) => {
     if (!zoom || !box.current) return;
     drag.current = {
@@ -248,7 +250,11 @@ function Stage({
       onPointerMove={onMove}
       onPointerUp={onUp}
     >
-      {zoom ? (
+      {player ? (
+        <div className="flex h-full items-center justify-center p-8 max-lg:p-3">
+          <StagePlayer image={image} />
+        </div>
+      ) : zoom ? (
         <div
           className="grid min-h-full min-w-full place-items-center p-8"
           style={{ width: "max-content" }}
@@ -323,10 +329,13 @@ function Details({
   const clock = useClock();
   const setFileInfo = useFileInfoTarget((s) => s.set);
   const s = details?.summary;
+  // Audio has no picture, so no size; anything that plays has a length.
   const sizeLine =
-    s?.width && s.height && (s.width !== image.width || s.height !== image.height)
-      ? `${image.width}×${image.height} (made at ${s.width}×${s.height})`
-      : `${image.width}×${image.height}`;
+    image.media === "audio"
+      ? null
+      : s?.width && s.height && (s.width !== image.width || s.height !== image.height)
+        ? `${image.width}×${image.height} (made at ${s.width}×${s.height})`
+        : `${image.width}×${image.height}`;
 
   const importIt = async () => {
     const blob = await (await fetch(fileUrl(image))).blob();
@@ -374,7 +383,9 @@ function Details({
           <>
             {s.source === "none" ? (
               <p className="rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-fg-3">
-                This image has no generation settings in it.
+                This{" "}
+                {image.media === "video" ? "video" : image.media === "audio" ? "file" : "image"} has
+                no generation settings in it.
               </p>
             ) : null}
             {s.prompt ? <TextBlock label="Prompt" text={s.prompt} /> : null}
@@ -408,6 +419,10 @@ function Details({
                   mono: true,
                 },
                 { label: "Size", value: sizeLine },
+                {
+                  label: "Length",
+                  value: image.duration !== null ? playTime(image.duration) : null,
+                },
                 { label: "Workflow", value: s.workflow },
                 { label: "Made with", value: SOURCE_LABEL[s.source] },
               ]}
@@ -488,11 +503,16 @@ function Details({
         >
           Reveal
         </Button>
-        <Button icon="copy" onClick={() => void copyImage(image)}>
+        <Button
+          icon="copy"
+          disabled={!stillOrAnimated(image)}
+          onClick={() => void copyImage(image)}
+        >
           Copy
         </Button>
         <Button
           icon="pose"
+          disabled={!stillOrAnimated(image)}
           title="Use this image in a ControlNet unit on the Generate screen"
           onClick={() =>
             void controlImageFromGallery(image.id).then((ok) => ok && onGo("generate"))

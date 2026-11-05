@@ -55,6 +55,10 @@ export const GallerySettings = z.object({
   excludeGrids: z.boolean().default(true),
   /** Leave out images saved by a run that was stopped before it finished. */
   excludeInterrupted: z.boolean().default(true),
+  /** Animated WebPs and GIFs play in their tiles; off, they play on hover or when opened. */
+  autoplayAnimated: z.boolean().default(true),
+  /** Videos play (muted) in their tiles; off, they play on hover or when opened. */
+  autoplayVideo: z.boolean().default(false),
   // The gallery's folders are the profile's output folders (ADR-0017); version 1 files kept
   // them here as `libraries`, which profile.json's migration reads once.
 });

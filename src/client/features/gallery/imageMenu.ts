@@ -9,6 +9,7 @@ import { fileUrl, type GalleryImage } from "@shared/gallery";
 import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
 import { controlImageFromGallery } from "../generate/blocks/stages";
+import { stillOrAnimated } from "./media";
 
 /** Put the image on the clipboard as PNG (the only image type browsers accept there). */
 export async function copyImage(image: GalleryImage): Promise<void> {
@@ -64,6 +65,7 @@ export function useImageMenu(
       id: "controlnet",
       label: "Use for ControlNet",
       icon: "pose",
+      disabled: !stillOrAnimated(image),
       onSelect: () => void controlImageFromGallery(image.id).then((ok) => ok && onGo("generate")),
     },
     { type: "separator", id: "s2" },
@@ -82,7 +84,13 @@ export function useImageMenu(
       icon: "folder-open",
       onSelect: () => void api.revealImage(image.id).catch((e: Error) => toast(e.message, "error")),
     },
-    { id: "copy", label: "Copy image", icon: "copy", onSelect: () => void copyImage(image) },
+    {
+      id: "copy",
+      label: "Copy image",
+      icon: "copy",
+      disabled: !stillOrAnimated(image),
+      onSelect: () => void copyImage(image),
+    },
     { type: "separator", id: "s3" },
     {
       id: "trash",

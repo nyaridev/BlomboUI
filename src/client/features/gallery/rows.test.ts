@@ -6,6 +6,8 @@ const img = (id: number, day: string, w = 100, h = 100): GalleryImage => ({
   id,
   library: "outputs",
   origin: "generated",
+  media: "image",
+  duration: null,
   path: `${id}.png`,
   name: `${id}.png`,
   width: w,

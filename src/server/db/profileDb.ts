@@ -233,6 +233,13 @@ export const MIGRATIONS: readonly string[] = [
   CREATE INDEX image_versions_version ON image_versions (version_id);
   CREATE INDEX image_versions_image ON image_versions (image_id);
   `,
+  // 9: videos, audio and animations in the gallery: what each file is and how long it runs.
+  // WebPs are read again on the next sync (a size that can't match), to find the animated ones.
+  `
+  ALTER TABLE images ADD COLUMN media TEXT NOT NULL DEFAULT 'image';
+  ALTER TABLE images ADD COLUMN duration REAL;
+  UPDATE images SET size = -1 WHERE lower(path) LIKE '%.webp';
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

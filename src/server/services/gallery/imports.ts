@@ -1,5 +1,6 @@
 /**
- * Adding images to the gallery from outside. A file from your PC is copied into the main output
+ * Adding images to the gallery from outside. A file from your PC (an image, a GIF, an MP4 or
+ * audio) is copied into the main output
  * folder's `imported/`; an image from Civitai is downloaded (its original file) into `civitai/`
  * with what Civitai says about it beside it (`<image>.civitai.json`: the prompt and settings as
  * the poster shared them, who posted it, and every model version that made it).
@@ -43,12 +44,40 @@ const EXTENSION: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpeg",
   "image/webp": ".webp",
+  "image/gif": ".gif",
+  "video/mp4": ".mp4",
+  "audio/mpeg": ".mp3",
+  "audio/wav": ".wav",
+  "audio/flac": ".flac",
+  "audio/ogg": ".ogg",
 };
 const SAME_TYPE: Record<string, string[]> = {
   "image/png": [".png"],
   "image/jpeg": [".jpg", ".jpeg"],
   "image/webp": [".webp"],
+  "image/gif": [".gif"],
+  "video/mp4": [".mp4"],
+  "audio/mpeg": [".mp3"],
+  "audio/wav": [".wav"],
+  "audio/flac": [".flac"],
+  "audio/ogg": [".ogg"],
 };
+const TAKES =
+  "The gallery takes PNG, JPEG, WebP and GIF images, MP4 videos and MP3, WAV, FLAC and OGG audio.";
+
+/** A file's type from its first bytes: an image the gallery shows, an MP4, or audio. */
+export function sniffMedia(bytes: Uint8Array): string | null {
+  const image = sniffImage(bytes);
+  if (image && image !== "image/avif") return image;
+  const tag = (o: number) => String.fromCharCode(...bytes.subarray(o, o + 4));
+  if (tag(4) === "ftyp" && !image) return "video/mp4";
+  if (tag(0) === "fLaC") return "audio/flac";
+  if (tag(0) === "RIFF" && tag(8) === "WAVE") return "audio/wav";
+  if (tag(0) === "OggS") return "audio/ogg";
+  if (tag(0).startsWith("ID3") || (bytes[0] === 0xff && ((bytes[1] ?? 0) & 0xe0) === 0xe0))
+    return "audio/mpeg";
+  return null;
+}
 
 /**
  * A file name that's safe on Windows and has the extension its bytes call for: no folders,
@@ -93,11 +122,10 @@ export class ImportService {
     this.deps = deps;
   }
 
-  /** Copy an image file from your PC into `imported/`. */
+  /** Copy an image, video or audio file from your PC into `imported/`. */
   async addFile(bytes: Uint8Array, name: string): Promise<AddedImage> {
-    const type = sniffImage(bytes);
-    if (!type || !EXTENSION[type])
-      throw new HttpError(415, "The gallery takes PNG, JPEG and WebP images.", "not_image");
+    const type = sniffMedia(bytes);
+    if (!type || !EXTENSION[type]) throw new HttpError(415, TAKES, "not_image");
     const root = await this.deps.gallery.mainFolder();
     const target = resolveInside(root, `${IMPORT_FOLDERS.imported}/${importName(name, type)}`);
     // The same file added again is the copy that's there.
@@ -122,7 +150,7 @@ export class ImportService {
     const url = civitaiOriginal(raw.url as string);
     const { bytes, type } = await civitai.images.original(url);
     const ext = EXTENSION[type];
-    if (!ext) throw new HttpError(415, "The gallery takes PNG, JPEG and WebP images.", "not_image");
+    if (!ext) throw new HttpError(415, TAKES, "not_image");
     const file = path.join(folder, `${body.key}${ext}`);
     const sidecar: CivitaiSidecar = {
       format: "blombo.civitai-image/1",

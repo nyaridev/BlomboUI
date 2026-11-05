@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import sharp from "sharp";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { GalleryQuery } from "../../../shared/gallery.ts";
 import type { ServerMessage } from "../../../shared/live.ts";
@@ -577,5 +578,77 @@ describe("added images", () => {
         meta: { civitaiResources: [{ modelVersionId: 7 }, {}] },
       }),
     ).toEqual([5, 6, 7]);
+  });
+});
+
+describe("animations, videos and audio", () => {
+  const u32 = (n: number, little = false) => {
+    const b = Buffer.alloc(4);
+    if (little) b.writeUInt32LE(n);
+    else b.writeUInt32BE(n);
+    return b;
+  };
+  const box = (type: string, ...body: Buffer[]) => {
+    const inner = Buffer.concat(body);
+    return Buffer.concat([u32(8 + inner.length), Buffer.from(type, "latin1"), inner]);
+  };
+
+  it("indexes each kind with its length, and makes their thumbnails", async () => {
+    const frame = (c: string) =>
+      sharp({ create: { width: 30, height: 20, channels: 3, background: c } })
+        .png()
+        .toBuffer();
+    const gif = await sharp([await frame("#f00"), await frame("#00f")], {
+      join: { animated: true },
+    })
+      .gif({ delay: [500, 700] })
+      .toBuffer();
+    await write("anims/loop.gif", new Uint8Array(gif));
+    const mp4 = Buffer.concat([
+      box("ftyp", Buffer.from("isom"), u32(0)),
+      box(
+        "moov",
+        box("mvhd", Buffer.alloc(4), u32(0), u32(0), u32(600), u32(1800)),
+        box("trak", box("tkhd", Buffer.alloc(76), u32(640 * 65536), u32(360 * 65536))),
+      ),
+    ]);
+    await write("anims/clip.mp4", new Uint8Array(mp4));
+    const wav = Buffer.concat([
+      Buffer.from("RIFF"),
+      u32(0, true),
+      Buffer.from("WAVE"),
+      Buffer.from("fmt "),
+      u32(16, true),
+      Buffer.alloc(8),
+      u32(1000, true),
+      Buffer.alloc(4),
+      Buffer.from("data"),
+      u32(4000, true),
+      Buffer.alloc(4000),
+    ]);
+    await write("anims/sound.wav", new Uint8Array(wav));
+    gallery.startSync();
+    await gallery.whenSynced();
+
+    const items = (await q({ q: "anims", limit: 1000 })).items;
+    const by = (name: string) => items.find((i) => i.name === name);
+    expect(by("loop.gif")).toMatchObject({
+      media: "animated",
+      width: 30,
+      height: 20,
+      duration: 1.2,
+    });
+    expect(by("clip.mp4")).toMatchObject({ media: "video", width: 640, height: 360, duration: 3 });
+    expect(by("sound.wav")).toMatchObject({ media: "audio", duration: 4 });
+
+    // Thumbnails: the animation moves (two frames), the others get a picture either way.
+    const moving = await gallery.thumbFile(by("loop.gif")?.id ?? 0, true);
+    expect((await sharp(moving, { animated: true }).metadata()).pages).toBe(2);
+    const still = await gallery.thumbFile(by("loop.gif")?.id ?? 0);
+    expect((await sharp(still).metadata()).pages ?? 1).toBe(1);
+    for (const name of ["clip.mp4", "sound.wav"]) {
+      const thumb = await gallery.thumbFile(by(name)?.id ?? 0);
+      expect((await sharp(thumb).metadata()).format).toBe("webp");
+    }
   });
 });

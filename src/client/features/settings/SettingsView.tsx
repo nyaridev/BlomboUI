@@ -475,6 +475,30 @@ function GalleryPage() {
               label="Exclude interrupted images"
             />
           </Field>
+          <Field
+            label="Play animations"
+            layout="left"
+            hint="Animated WebPs and GIFs move in their tiles. Off, they play when you point at them or open them."
+          >
+            <Switch
+              checked={settings?.autoplayAnimated ?? true}
+              onCheckedChange={(autoplayAnimated) =>
+                update.mutate({ gallery: { autoplayAnimated } })
+              }
+              label="Play animations"
+            />
+          </Field>
+          <Field
+            label="Play videos"
+            layout="left"
+            hint="Videos play, muted, in their tiles. Off, they play when you point at them or open them."
+          >
+            <Switch
+              checked={settings?.autoplayVideo ?? false}
+              onCheckedChange={(autoplayVideo) => update.mutate({ gallery: { autoplayVideo } })}
+              label="Play videos"
+            />
+          </Field>
         </SettingsSection>
       </div>
     </>

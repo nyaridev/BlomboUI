@@ -20,6 +20,8 @@ const indexed: GalleryImage = {
   id: 7,
   library: "outputs",
   origin: "generated",
+  media: "image",
+  duration: null,
   path: "2026-10-20/sd15_00001_.png",
   name: "sd15_00001_.png",
   width: 512,

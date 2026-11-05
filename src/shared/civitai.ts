@@ -206,6 +206,17 @@ export const CivitaiImage = z.object({
 });
 export type CivitaiImage = z.infer<typeof CivitaiImage>;
 
+/** A page of images people posted with a version (the model page's community grid). */
+export const CivitaiImagePage = z.object({
+  items: z.array(CivitaiImage),
+  /** Civitai's cursor for the next page; null at the end. */
+  nextCursor: z.string().nullable(),
+});
+export type CivitaiImagePage = z.infer<typeof CivitaiImagePage>;
+
+/** What a community page cursor may look like ("feed:1231:86032226"). */
+export const IMAGE_CURSOR = /^[\w:.-]{1,200}$/;
+
 /** What's already in the models folder from this Civitai model. */
 export const LocalMark = z.object({
   /** Version ids found locally (by their info files or by hash). */

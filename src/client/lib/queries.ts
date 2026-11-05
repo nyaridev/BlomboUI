@@ -1,5 +1,5 @@
 /** TanStack Query keys and hooks. Server state lives here, never in Zustand. */
-import type { BrowseFilter, CivitaiPage } from "@shared/civitai";
+import type { BrowseFilter, CivitaiImagePage, CivitaiPage } from "@shared/civitai";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
 import type { GalleryPage, GalleryQueryInput, ImageDetails, UseKind } from "@shared/gallery";
@@ -842,13 +842,15 @@ export function useCivitaiVersionImages(id: number | null) {
   });
 }
 
-/** Images people posted with a version, most liked first (asked only once they're shown). */
-export function useCivitaiCommunityImages(id: number | null, enabled: boolean) {
+/** Images people posted with a version, most liked first, a page at a time. */
+export function useCivitaiCommunityImages(id: number | null) {
   const profileId = useSession((s) => s.profileId);
-  return useQuery({
+  return useInfiniteQuery({
     queryKey: qk.civitaiCommunityImages(profileId, id),
-    queryFn: () => api.civitaiCommunityImages(id as number),
-    enabled: enabled && profileId !== null && id !== null,
+    queryFn: ({ pageParam }) => api.civitaiCommunityImages(id as number, pageParam),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last: CivitaiImagePage) => last.nextCursor,
+    enabled: profileId !== null && id !== null,
     staleTime: 5 * 60_000,
   });
 }

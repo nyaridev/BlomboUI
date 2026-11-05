@@ -157,7 +157,7 @@ export const MODEL_TTL = 30 * 60_000;
 const MEMORY_ENTRIES = 300;
 const TIMEOUT_MS = 20_000;
 export const PAGE_SIZE = 40;
-/** Community images shown for a version (one page, the most liked). */
+/** Community images asked for at a time (the grid loads the next page as you scroll). */
 export const COMMUNITY_PAGE = 50;
 
 export interface CivitaiApiOptions {
@@ -282,10 +282,15 @@ export class CivitaiApi {
     return this.get<RawVersion>(`/api/v1/model-versions/${id}`, key, MODEL_TTL);
   }
 
-  /** The first page of images people posted with a version, most reactions first. */
-  images(versionId: number, key: string | null): Promise<{ items?: RawImage[] }> {
+  /** A page of images people posted with a version, most reactions first. */
+  images(
+    versionId: number,
+    cursor: string | null,
+    key: string | null,
+  ): Promise<{ items?: RawImage[]; metadata?: { nextCursor?: string | number | null } }> {
+    const after = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
     return this.get(
-      `/api/v1/images?modelVersionId=${versionId}&limit=${COMMUNITY_PAGE}&sort=Most%20Reactions`,
+      `/api/v1/images?modelVersionId=${versionId}&limit=${COMMUNITY_PAGE}&sort=Most%20Reactions${after}`,
       key,
       SEARCH_TTL,
     );

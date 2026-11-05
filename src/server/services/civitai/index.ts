@@ -11,6 +11,7 @@ import {
   type CivitaiBaseModels,
   CivitaiCreator,
   CivitaiImage,
+  type CivitaiImagePage,
   type CivitaiMatch,
   type CivitaiModel,
   type CivitaiPage,
@@ -268,14 +269,20 @@ export class CivitaiService {
     return normalize.version(await this.rawVersion(id), await this.context()).images;
   }
 
-  /** Images people posted with a version (the model page's Community images), most liked first. */
-  async communityImages(versionId: number): Promise<CivitaiImage[]> {
-    const page = await this.api.images(versionId, await this.key(this.active()));
+  /** A page of images people posted with a version (the model page's grid), most liked first. */
+  async communityImages(versionId: number, cursor: string | null): Promise<CivitaiImagePage> {
+    const page = await this.api.images(versionId, cursor, await this.key(this.active()));
     const ctx = await this.context();
-    return (page.items ?? []).flatMap((img) => {
-      const out = normalize.image(img, ctx);
-      return out ? [out] : [];
-    });
+    const raw = page.items ?? [];
+    const next = page.metadata?.nextCursor;
+    return {
+      items: raw.flatMap((img) => {
+        const out = normalize.image(img, ctx);
+        return out ? [out] : [];
+      }),
+      nextCursor:
+        raw.length && next !== undefined && next !== null && next !== "" ? String(next) : null,
+    };
   }
 
   /** A model page; opening one adds it to the browse history. */

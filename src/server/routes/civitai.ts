@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import {
   CivitaiUsername,
   fromBase64Url,
+  IMAGE_CURSOR,
   parseBrowseQuery,
   parseFeedUsers,
   SetCivitaiKeyBody,
@@ -75,7 +76,10 @@ export function civitaiRoutes(civitai: CivitaiService) {
   r.get("/versions/:id/community", async (c) => {
     const id = Number(c.req.param("id"));
     if (!Number.isInteger(id) || id <= 0) throw new HttpError(400, "Invalid version id.", "bad_id");
-    return c.json(await civitai.communityImages(id));
+    const cursor = c.req.query("cursor") ?? null;
+    if (cursor !== null && !IMAGE_CURSOR.test(cursor))
+      throw new HttpError(400, "That page cursor isn't one Civitai gave.", "bad_cursor");
+    return c.json(await civitai.communityImages(id, cursor));
   });
 
   /** SHA256, AutoV2 (10), AutoV3 (12) or AutoV1 (8 hex characters). */

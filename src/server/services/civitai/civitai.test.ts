@@ -177,13 +177,30 @@ describe("browsing", () => {
   it("lists the images people posted with a version, NSFW read from the endpoint's words", async () => {
     const m = await o.services.civitai.model(1001);
     const version = m.versions[0];
-    const images = await o.services.civitai.communityImages(version?.id ?? 0);
-    expect(images.map((i) => i.by)).toEqual(["fan_1", "fan_2", "fan_3", "fan_4", "fan_5"]);
+    const first = await o.services.civitai.communityImages(version?.id ?? 0, null);
+    const images = first.items;
+    expect(images).toHaveLength(50);
+    expect(images.slice(0, 5).map((i) => i.by)).toEqual([
+      "fan_1",
+      "fan_2",
+      "fan_3",
+      "fan_4",
+      "fan_5",
+    ]);
     expect(images[0]?.meta?.prompt).toContain("community post 1");
     expect(images[1]?.meta).toBeNull();
-    expect(images.map((i) => i.nsfw)).toEqual([false, false, false, true, false]);
-    // The fake has no posts for versions ending in 3.
-    expect(await o.services.civitai.communityImages(10013)).toEqual([]);
+    expect(images.slice(0, 5).map((i) => i.nsfw)).toEqual([false, false, false, true, false]);
+    // Pages follow Civitai's cursor to the end (120 posts in the fake).
+    const second = await o.services.civitai.communityImages(version?.id ?? 0, first.nextCursor);
+    expect(second.items[0]?.meta?.prompt).toContain("community post 51");
+    const last = await o.services.civitai.communityImages(version?.id ?? 0, second.nextCursor);
+    expect(last.items).toHaveLength(20);
+    expect(last.nextCursor).toBeNull();
+    // No posts: an empty page.
+    expect(await o.services.civitai.communityImages(10013, null)).toEqual({
+      items: [],
+      nextCursor: null,
+    });
   });
 
   it("marks models already in the models folder", async () => {

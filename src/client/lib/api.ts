@@ -33,6 +33,7 @@ import {
   type CivitaiBaseModels,
   type CivitaiCreator,
   type CivitaiImage,
+  type CivitaiImagePage,
   type CivitaiMatch,
   type CivitaiModel,
   type CivitaiPage,
@@ -435,8 +436,11 @@ export const api = {
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
   civitaiVersionImages: (id: number) =>
     request<CivitaiImage[]>("GET", `/civitai/versions/${id}/images`),
-  civitaiCommunityImages: (id: number) =>
-    request<CivitaiImage[]>("GET", `/civitai/versions/${id}/community`),
+  civitaiCommunityImages: (id: number, cursor: string | null) =>
+    request<CivitaiImagePage>(
+      "GET",
+      `/civitai/versions/${id}/community${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`,
+    ),
   civitaiByHash: (sha256: string) =>
     request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),
   civitaiViews: () => request<CivitaiView[]>("GET", "/civitai/history/views"),

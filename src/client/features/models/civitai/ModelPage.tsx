@@ -1,9 +1,9 @@
 /**
- * A Civitai model inside Blombo. Left: the version's images, the creator's or the community's
- * (images people posted with it, most liked first), as File Info's endless carousel (the wheel or
- * a drag moves through them, a click on the middle one opens it full screen; NSFW ones blurred
- * until clicked), under it how the picked image was made as its poster shared it (a fold, closed
- * at first), then the model's description (a fold, open at first). Right, top to bottom: the header (badges, name, creator with
+ * A Civitai model inside Blombo. Left: the version's images as File Info's endless carousel (the
+ * wheel or a drag moves through them, a click on the middle one opens it full screen; NSFW ones
+ * blurred until clicked), under it how the picked image was made as its poster shared it and the
+ * model's description (folds, closed at first). Under both columns, across the page: the images
+ * people posted with the version (CommunityImages.tsx), loading more as you scroll. Right, top to bottom: the header (badges, name, creator with
  * Follow, the Civitai link), the model's numbers, one card for the picked version (the picker,
  * its facts, Download with a preview of where the file lands, its files), trigger words, tags
  * and the version's notes (a fold). Descriptions are parsed on the server and rendered as plain
@@ -15,7 +15,6 @@ import { Icon, type IconName } from "@client/icons/Icon";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import {
-  useCivitaiCommunityImages,
   useCivitaiModel,
   useCivitaiVersionImages,
   useDownloadPlan,
@@ -30,7 +29,6 @@ import {
   EmptyState,
   FallbackFace,
   KIND_STYLE,
-  Segmented,
   Select,
   Skeleton,
 } from "@client/ui";
@@ -42,12 +40,13 @@ import {
   compactCount,
 } from "@shared/civitai";
 import type { EnqueueBody } from "@shared/downloads";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useMemo, useRef, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
 import { CivitaiCarousel } from "../../fileinfo/CivitaiCarousel";
 import { ImageSettingsBody } from "../../fileinfo/CivitaiMatch";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
+import { CommunityImages } from "./CommunityImages";
 import { DownloadDialog } from "./DownloadDialog";
 import { FollowButton } from "./follow";
 import { localVersions } from "./marks";
@@ -122,70 +121,23 @@ function Page({
   // own answer does. Matched by picture, so the carousel keeps its place when it arrives.
   const detailed = useCivitaiVersionImages(version?.id ?? null).data;
   const details = useMemo(() => new Map((detailed ?? []).map((i) => [i.thumb, i])), [detailed]);
-  // The community's images already say who posted them and how; asked once they're shown.
-  const [source, setSource] = useState<"creator" | "community">("creator");
-  const community = useCivitaiCommunityImages(version?.id ?? null, source === "community");
-  const list = source === "community" ? (community.data ?? []) : images;
-  const shownImage = list[shown] ?? null;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const shownImage = images[shown] ?? null;
   const current = shownImage ? (details.get(shownImage.thumb) ?? shownImage) : null;
 
   return (
-    <div className="scroll-quiet h-full overflow-y-auto">
-      <div className={`${COLUMNS} pt-6 pb-14 max-lg:pt-3`}>
+    <div ref={scrollRef} className="scroll-quiet h-full overflow-y-auto">
+      <div className={`${COLUMNS} pt-6 pb-12 max-lg:pt-3`}>
         {/* One column (narrow): its pieces join the grid, so the description can go last. */}
         <div className="flex min-w-0 flex-col gap-4 max-[1000px]:contents">
-          <div className="flex items-center gap-3">
-            <Segmented
-              size="sm"
-              label="Whose images"
-              value={source}
-              onChange={setSource}
-              options={[
-                { value: "creator", label: "Creator" },
-                {
-                  value: "community",
-                  label: community.data ? `Community · ${community.data.length}` : "Community",
-                },
-              ]}
-            />
-            {source === "community" && community.data?.length ? (
-              <span className="text-2xs text-fg-3">
-                Posted with {version?.name}, most liked first
-              </span>
-            ) : null}
-          </div>
-          {source === "community" && community.isLoading ? (
-            <Skeleton className={STAGE} />
-          ) : source === "community" && community.error ? (
-            <div
-              className={`${STAGE} grid place-items-center rounded-xl border border-line bg-sunken`}
-            >
-              <EmptyState
-                icon="globe"
-                tone="warning"
-                title="Couldn't load the community's images"
-                text={community.error.message}
-                action={<Button onClick={() => void community.refetch()}>Try again</Button>}
-              />
-            </div>
-          ) : list.length ? (
+          {images.length ? (
             <CivitaiCarousel
-              images={list}
+              images={images}
               label={`${model.name} images`}
               onIndex={setShown}
               blurNsfw={blurNsfw}
               height={STAGE}
             />
-          ) : source === "community" ? (
-            <div
-              className={`${STAGE} grid place-items-center rounded-xl border border-line bg-sunken`}
-            >
-              <EmptyState
-                icon="image"
-                title="No community images yet"
-                text={`Images people post with ${version?.name ?? "this version"} on Civitai show up here.`}
-              />
-            </div>
           ) : (
             <div className={`${STAGE} overflow-hidden rounded-xl border border-line bg-sunken`}>
               <FallbackFace name={model.name} kind={model.kind ?? "checkpoints"} />
@@ -214,7 +166,6 @@ function Page({
               title="About this model"
               icon="file-text"
               subtitle={model.creator ? `By ${model.creator}` : undefined}
-              defaultOpen
               className="max-[1000px]:order-last"
             >
               <div className="max-w-[72ch] px-1 py-1">
@@ -392,6 +343,14 @@ function Page({
           ) : null}
         </aside>
       </div>
+      {version ? (
+        <CommunityImages
+          key={version.id}
+          version={version}
+          scrollRef={scrollRef}
+          blurNsfw={blurNsfw}
+        />
+      ) : null}
     </div>
   );
 }

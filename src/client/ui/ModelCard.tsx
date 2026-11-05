@@ -195,7 +195,7 @@ export function ModelCard({
           <Art
             seed={thumb.slice(4)}
             className={cn(
-              "absolute inset-0 transition-[filter,transform] duration-200 group-hover:scale-[1.04]",
+              "absolute inset-0 transition-[filter,scale] duration-200 group-hover:scale-[1.04]",
               veiled && "scale-110 blur-xl saturate-50",
             )}
           />
@@ -206,7 +206,7 @@ export function ModelCard({
             loading="lazy"
             decoding="async"
             className={cn(
-              "absolute inset-0 h-full w-full object-cover transition-[filter,transform] duration-200",
+              "absolute inset-0 h-full w-full object-cover transition-[filter,scale] duration-200",
               veiled && "scale-110 blur-xl saturate-50",
             )}
           />

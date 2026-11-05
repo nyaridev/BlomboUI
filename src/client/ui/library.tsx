@@ -190,7 +190,7 @@ export function Veil({
     <div className={cn("relative h-full w-full overflow-hidden", className)}>
       <div
         className={cn(
-          "h-full w-full transition-[filter,transform] duration-200",
+          "h-full w-full transition-[filter,scale] duration-200",
           veiled && "scale-110 blur-xl saturate-50",
         )}
         aria-hidden={veiled || undefined}

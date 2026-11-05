@@ -1,11 +1,12 @@
 /**
  * A Civitai model inside Blombo. Left: the version's images as File Info's endless carousel (the
  * wheel or a drag moves through them, a click on the middle one opens it full screen; NSFW ones
- * blurred until clicked) and under it how the picked image was made, as its poster shared it
- * (prompt, negative, settings). Right, top to bottom: the header (badges, name, creator with
+ * blurred until clicked), under it how the picked image was made as its poster shared it (a
+ * fold, closed at first), then the model's description under a separator. Right, top to bottom: the header (badges, name, creator with
  * Follow, the Civitai link), the model's numbers, one card for the picked version (the picker,
- * its facts, Download with a preview of where the file lands, its files), trigger words and tags.
- * Below both: the descriptions (parsed on the server, rendered as plain elements). Download opens
+ * its facts, Download with a preview of where the file lands, its files), trigger words, tags
+ * and the version's notes (a fold). Descriptions are parsed on the server and rendered as plain
+ * elements. Download opens
  * the download pop-up (DownloadDialog) to change the folder and file name first. Marks show
  * what's already in the models folder.
  */
@@ -22,6 +23,7 @@ import {
   Badge,
   Button,
   Chip,
+  Collapsible,
   CopyButton,
   EmptyState,
   FallbackFace,
@@ -31,6 +33,7 @@ import {
 } from "@client/ui";
 import {
   CIVITAI_TYPE_LABELS,
+  type CivitaiImageMeta,
   type CivitaiModel,
   type CivitaiVersion,
   compactCount,
@@ -39,7 +42,7 @@ import type { EnqueueBody } from "@shared/downloads";
 import { type ReactNode, useMemo, useState } from "react";
 import { DownloadRow } from "../../downloads/DownloadRow";
 import { CivitaiCarousel } from "../../fileinfo/CivitaiCarousel";
-import { ImageSettings } from "../../fileinfo/CivitaiMatch";
+import { ImageSettingsBody } from "../../fileinfo/CivitaiMatch";
 import { useModelsNav } from "../nav";
 import { NsfwBlurToggle } from "./Browse";
 import { DownloadDialog } from "./DownloadDialog";
@@ -115,8 +118,9 @@ function Page({
 
   return (
     <div className="scroll-quiet h-full overflow-y-auto">
-      <div className={`${COLUMNS} pt-6 max-lg:pt-3`}>
-        <div className="flex min-w-0 flex-col gap-4">
+      <div className={`${COLUMNS} pt-6 pb-14 max-lg:pt-3`}>
+        {/* One column (narrow): its pieces join the grid, so the description can go last. */}
+        <div className="flex min-w-0 flex-col gap-4 max-[1000px]:contents">
           {images.length ? (
             <CivitaiCarousel
               images={images}
@@ -132,14 +136,35 @@ function Page({
               <FallbackFace name={model.name} kind={model.kind ?? "checkpoints"} />
             </div>
           )}
-          {current?.meta ? (
-            <ImageSettings meta={current.meta} />
-          ) : current ? (
-            <p className="flex items-center gap-1.5 text-xs text-fg-3">
-              <Icon name="info" size={13} className="shrink-0" />
-              {current.by ? `${current.by} didn't` : "The poster didn't"} share how this image was
-              made.
-            </p>
+          {current ? (
+            // One fold for every image, so it stays open (or closed) while you go through them.
+            <Collapsible
+              title="Image generation"
+              icon="sparkle"
+              tone="civitai"
+              subtitle={current.meta ? settingsSummary(current.meta) : "Not shared by its poster"}
+            >
+              {current.meta ? (
+                <ImageSettingsBody meta={current.meta} />
+              ) : (
+                <p className="text-sm text-fg-3">
+                  {current.by ? `${current.by} didn't` : "The poster didn't"} share how this image
+                  was made.
+                </p>
+              )}
+            </Collapsible>
+          ) : null}
+          {model.description.length ? (
+            <section className="mt-4 flex min-w-0 flex-col gap-4 max-[1000px]:order-last max-[1000px]:mt-0">
+              <div className="flex items-center gap-3">
+                <Icon name="file-text" size={15} className="shrink-0 text-fg-3" />
+                <h3 className="text-base font-semibold text-fg">About this model</h3>
+                <span className="h-px flex-1 bg-line" />
+              </div>
+              <div className="max-w-[72ch]">
+                <RichText blocks={model.description} blurImages={model.nsfw && blurNsfw} />
+              </div>
+            </section>
           ) : null}
         </div>
         <aside className="flex min-w-0 flex-col gap-5">
@@ -298,19 +323,18 @@ function Page({
               </div>
             </section>
           ) : null}
+
+          {version?.description.length ? (
+            <Collapsible
+              key={version.id}
+              title={`About ${version.name}`}
+              icon="info"
+              subtitle="The creator's notes on this version"
+            >
+              <RichText blocks={version.description} blurImages={model.nsfw && blurNsfw} />
+            </Collapsible>
+          ) : null}
         </aside>
-      </div>
-      <div className={`${COLUMNS} pt-8 pb-14`}>
-        <section className="flex min-w-0 flex-col gap-3">
-          <h3 className="label-caps">About this model</h3>
-          <RichText blocks={model.description} blurImages={model.nsfw && blurNsfw} />
-        </section>
-        {version?.description.length ? (
-          <section className="flex min-w-0 flex-col gap-3">
-            <h3 className="label-caps">About {version.name}</h3>
-            <RichText blocks={version.description} blurImages={model.nsfw && blurNsfw} />
-          </section>
-        ) : null}
       </div>
     </div>
   );
@@ -337,6 +361,16 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
       <dd className="truncate text-sm text-fg tabular">{children}</dd>
     </div>
   );
+}
+
+/** "Euler a · 28 steps · CFG 6": a fold's one-line summary of an image's settings. */
+function settingsSummary(meta: CivitaiImageMeta): string {
+  const get = (label: string) => meta.settings.find(([l]) => l === label)?.[1];
+  const steps = get("Steps");
+  const cfg = get("CFG");
+  const parts = [get("Sampler"), steps ? `${steps} steps` : null, cfg ? `CFG ${cfg}` : null];
+  const shown = parts.filter(Boolean).join(" · ");
+  return shown || (meta.prompt ? "Prompt shared" : "Settings shared");
 }
 
 /* ── download ───────────────────────────────────────────────────────────── */

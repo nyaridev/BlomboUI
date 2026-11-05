@@ -189,7 +189,16 @@ export function CivitaiLinks({ match }: { match: Found }) {
 /** The picked image's prompt and settings, as its poster shared them. */
 export function ImageSettings({ meta }: { meta: CivitaiImageMeta }) {
   return (
-    <Panel tone="civitai" className="flex flex-col gap-4 p-5">
+    <Panel tone="civitai" className="p-5">
+      <ImageSettingsBody meta={meta} />
+    </Panel>
+  );
+}
+
+/** ImageSettings without its panel, inside another surface (the model page's fold). */
+export function ImageSettingsBody({ meta }: { meta: CivitaiImageMeta }) {
+  return (
+    <div className="flex flex-col gap-4">
       {meta.prompt ? <TextBlock label="Prompt" text={meta.prompt} /> : null}
       {meta.negative ? <TextBlock label="Negative prompt" text={meta.negative} /> : null}
       <Facts
@@ -200,7 +209,7 @@ export function ImageSettings({ meta }: { meta: CivitaiImageMeta }) {
           copy: label === "Seed" ? value : undefined,
         }))}
       />
-    </Panel>
+    </div>
   );
 }
 

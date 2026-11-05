@@ -3,7 +3,7 @@
  * rendered as React elements: no outside markup reaches the page, links open in the browser,
  * and images (already behind Blombo's proxy) are blurred on NSFW models until clicked while the Civitai view's blur is on.
  */
-import { Veil } from "@client/ui";
+import { SharpImage, Veil } from "@client/ui";
 import type { RichBlock, RichInline } from "@shared/richtext";
 import { Fragment } from "react";
 
@@ -101,7 +101,11 @@ export function RichText({
             return (
               <div key={key} className="max-w-md overflow-hidden rounded-md border border-line">
                 <Veil active={blurImages} compact>
-                  <img src={b.src} alt={b.alt} loading="lazy" className="block w-full" />
+                  {b.small ? (
+                    <SharpImage small={b.small} large={b.src} alt={b.alt} fit="width" />
+                  ) : (
+                    <img src={b.src} alt={b.alt} loading="lazy" className="block w-full" />
+                  )}
                 </Veil>
               </div>
             );

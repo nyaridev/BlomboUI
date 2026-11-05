@@ -53,6 +53,7 @@ import {
   ScrubField,
   Segmented,
   Select,
+  SharpImage,
   Sheet,
   Skeleton,
   Slider,
@@ -1707,6 +1708,24 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                     hint="onFiles gets every file (the batch runner)"
                   />
                 </div>
+              </Row>
+              <Row label="Sharp image (small first, large when ready)">
+                {samples[0] ? (
+                  <SharpImage
+                    small={samples[0].thumb}
+                    large={samples[0].full}
+                    fit="cover"
+                    className="h-40 w-32 rounded-md border border-line"
+                  />
+                ) : null}
+                {samples[1] ? (
+                  <SharpImage
+                    small={samples[1].thumb}
+                    large={samples[1].full}
+                    fit="width"
+                    className="w-40 rounded-md border border-line"
+                  />
+                ) : null}
               </Row>
               <Row label="Carousel">
                 <Carousel images={samples} label="Sample images" className="w-56" />

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { fromBase64Url } from "../../../shared/civitai.ts";
-import { card, type NormalizeContext } from "./normalize.ts";
+import { card, description, type NormalizeContext } from "./normalize.ts";
 
 const ctx: NormalizeContext = {
   allowed: () => true,
@@ -28,5 +28,17 @@ describe("card", () => {
     const thumb = new URL(ill.image?.thumb ?? "", "http://x").searchParams.get("u") ?? "";
     expect(fromBase64Url(thumb)).toContain("/ill.jpeg");
     expect(card(model, ctx, ["Pony"])).toMatchObject({ versionId: 30 });
+  });
+});
+
+describe("description", () => {
+  it("gives each image a small version to show first", () => {
+    const [img] = description('<img src="https://image.civitai.com/a/b/pic.jpeg" alt="x">', ctx);
+    expect(img?.t).toBe("img");
+    const url = (u: string | undefined) =>
+      fromBase64Url(new URL(u ?? "", "http://x").searchParams.get("u") ?? "");
+    if (img?.t !== "img") return;
+    expect(url(img.src)).toContain("width=1024");
+    expect(url(img.small)).toContain("width=450");
   });
 });

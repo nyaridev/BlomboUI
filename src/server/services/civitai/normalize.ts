@@ -112,7 +112,13 @@ export function description(
   return htmlToBlocks(html, ctx.site).flatMap((b): RichBlock[] => {
     if (b.t !== "img") return [b];
     if (!ctx.allowed(b.src)) return [];
-    return [{ ...b, src: proxiedImage(civitaiImageVariant(b.src, 1024, false)) }];
+    return [
+      {
+        ...b,
+        src: proxiedImage(civitaiImageVariant(b.src, 1024, false)),
+        small: proxiedImage(civitaiImageVariant(b.src, THUMB_WIDTH, false)),
+      },
+    ];
   });
 }
 

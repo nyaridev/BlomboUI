@@ -25,7 +25,13 @@ export const RichBlock = z.discriminatedUnion("t", [
   z.object({ t: z.literal("quote"), c: z.array(RichInline) }),
   z.object({ t: z.literal("pre"), text: z.string() }),
   z.object({ t: z.literal("hr") }),
-  z.object({ t: z.literal("img"), src: z.string(), alt: z.string() }),
+  z.object({
+    t: z.literal("img"),
+    src: z.string(),
+    alt: z.string(),
+    /** A small version to show first (Civitai's images), swapped for `src` once it's loaded. */
+    small: z.string().optional(),
+  }),
 ]);
 export type RichBlock = z.infer<typeof RichBlock>;
 

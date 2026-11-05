@@ -44,6 +44,7 @@ export { NumberField } from "./NumberField";
 export { RangeCalendar } from "./RangeCalendar";
 export { type ResizeAxis, ResizeGrip } from "./ResizeGrip";
 export { MultiSelect, Select, type SelectOption } from "./Select";
+export { SharpImage, useSharp } from "./SharpImage";
 export { Sheet } from "./Sheet";
 export {
   type NumberControlProps,

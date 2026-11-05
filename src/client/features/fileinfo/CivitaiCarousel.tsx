@@ -12,7 +12,7 @@
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { IconButton, ImageViewer, Skeleton } from "@client/ui";
+import { IconButton, ImageViewer, Skeleton, useSharp } from "@client/ui";
 import { type CivitaiImage, civitaiFullSize } from "@shared/civitai";
 import { type AnimationPlaybackControls, animate } from "motion/react";
 import {
@@ -32,8 +32,6 @@ const WHEEL_STEP = 100;
 const SLOP = 5;
 /** Extra width rendered past each edge, so tiles exist before they slide in. */
 const OVERSCAN = 400;
-/** The small picture's width (`THUMB_WIDTH` on the server); wider tiles want the large one. */
-const SMALL_WIDTH = 450;
 /** The viewport's height: also what the placeholder uses, so nothing moves when images arrive. */
 export const CAROUSEL_HEIGHT = "h-[440px] max-lg:h-72";
 
@@ -398,47 +396,6 @@ function Tile({
       ) : null}
     </div>
   );
-}
-
-/**
- * True once the large picture is loaded and decoded: started only when the tile is near the
- * viewport and wider (in device pixels) than the small picture. Leaving or unmounting cancels
- * the download.
- */
-function useSharp(
-  src: string,
-  tile: RefObject<HTMLElement | null>,
-  root: RefObject<HTMLElement | null>,
-): boolean {
-  const [ready, setReady] = useState<string | null>(null);
-  useEffect(() => {
-    const el = tile.current;
-    if (!el || el.clientWidth * window.devicePixelRatio <= SMALL_WIDTH * 1.15) return;
-    let img: HTMLImageElement | null = null;
-    let live = true;
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (!entries.some((e) => e.isIntersecting) || img) return;
-        io.disconnect();
-        img = new Image();
-        img.decoding = "async";
-        img.src = src;
-        img
-          .decode()
-          .then(() => live && setReady(src))
-          .catch(() => undefined);
-      },
-      { root: root.current, rootMargin: "0px 200px" },
-    );
-    io.observe(el);
-    return () => {
-      live = false;
-      io.disconnect();
-      // Stops a download that hasn't finished.
-      if (img && !img.complete) img.src = "";
-    };
-  }, [src, tile, root]);
-  return ready === src;
 }
 
 /** The carousel's place while Civitai is searched: the same height, so nothing moves after. */

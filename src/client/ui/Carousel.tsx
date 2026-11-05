@@ -2,6 +2,8 @@
  * An image carousel: one large image with previous/next buttons and a thumbnail strip. Arrow
  * keys move while it has focus. Images marked NSFW stay blurred until clicked when `blurNsfw` is
  * on; a revealed image stays revealed while the carousel is open. Videos show their first frame.
+ * The stage shows the small picture at once and swaps in the large one when it's ready
+ * (`SharpImage`).
  *
  * The stage is as wide as the carousel and `1 / ratio` of that tall, up to `maxHeight` (a
  * container query, so it follows the column it sits in, not the window). `side` moves the strip
@@ -14,6 +16,7 @@ import { AnimatePresence, motion } from "motion/react";
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { IconButton } from "./Button";
 import { Veil } from "./library";
+import { SharpImage } from "./SharpImage";
 
 export interface CarouselImage {
   /** Small image for the strip. */
@@ -136,17 +139,22 @@ export function Carousel({
             onReveal={() => setRevealed((r) => new Set(r).add(index))}
           >
             <AnimatePresence initial={false} mode="popLayout">
-              <motion.img
+              <motion.div
                 key={current.full}
-                src={current.full}
-                alt=""
-                decoding="async"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 transition={{ duration: 0.16 }}
-                className="absolute inset-0 h-full w-full object-contain"
-              />
+                className="absolute inset-0"
+              >
+                {/* The strip's small picture shows at once; the large one swaps in when ready. */}
+                <SharpImage
+                  small={current.thumb}
+                  large={current.full}
+                  fit="contain"
+                  className="h-full w-full"
+                />
+              </motion.div>
             </AnimatePresence>
           </Veil>
           {onOpen && !veiled(index) ? (

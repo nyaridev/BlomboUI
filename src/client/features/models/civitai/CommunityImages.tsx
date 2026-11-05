@@ -1,6 +1,6 @@
 /**
  * The images people posted with a version (Civitai's images endpoint), under the model page
- * across its whole width, six a row at most. Filters: Civitai's order (most reactions, most
+ * across its whole width, five a row at most. Filters: Civitai's order (most reactions, most
  * comments, newest) and period, and With prompt (only images whose poster shared how they were
  * made; filtered here, so it keeps loading pages until there's enough to show). The grid is
  * virtualized against the page's own scroll and asks for the next page near its end. A tile shows who posted it and, when they shared how
@@ -36,7 +36,7 @@ import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState }
 
 const GAP = 8;
 const MIN_TILE = 180;
-const MAX_COLS = 6;
+const MAX_COLS = 5;
 
 const SORT_LABELS: Record<ImageSort, string> = {
   "Most Reactions": "Most reactions",
@@ -125,7 +125,7 @@ export function CommunityImages({
         ) : null}
       </div>
       {q.isLoading ? (
-        <div className="grid grid-cols-6 gap-2 max-lg:grid-cols-3 max-sm:grid-cols-2">
+        <div className="grid grid-cols-5 gap-2 max-lg:grid-cols-3 max-sm:grid-cols-2">
           {Array.from({ length: 12 }, (_, i) => (
             <Skeleton key={i} className="aspect-[3/4]" />
           ))}

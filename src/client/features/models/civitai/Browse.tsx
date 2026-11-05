@@ -1,9 +1,9 @@
 /**
  * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
  * filter) as a removable chip in front of the text, the NSFW blur, the types, category and base
- * model dropdowns (base models in family sections: shared/basemodels.ts), sort, period and a
- * Filters pop-up (a published-date range through Civitai's site search with the API key, and
- * Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
+ * model dropdowns (base models in family sections: shared/basemodels.ts), sort and a Filters
+ * pop-up (the period as a segmented bar, a published-date range through Civitai's site search with the
+ * API key, and Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -33,6 +33,7 @@ import {
   ModelCard,
   MultiSelect,
   Popover,
+  Segmented,
   Select,
   Skeleton,
   Switch,
@@ -285,19 +286,7 @@ export function FilterBar({
               options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
             />
           )}
-          <Select
-            size="sm"
-            label="Period"
-            value={filter.period}
-            onChange={(period) => setFilter({ period })}
-            className="w-[116px]"
-            options={CIVITAI_PERIODS.map((p) => ({
-              value: p,
-              label: CIVITAI_PERIOD_LABELS[p],
-              icon: "calendar",
-            }))}
-          />
-          <MoreFilters filter={filter} />
+          <MoreFilters filter={filter} defaultPeriod={defaults.period} />
           {changed ? (
             <Button
               size="sm"
@@ -451,11 +440,17 @@ function rangeLabel(f: BrowseFilter): string | null {
 }
 
 /**
- * The Filters pop-up (as on Civitai's site): a published-date range, on top of the period
- * (Civitai's own site search: 31 days at most, with the API key; setting one day fills in the
- * other), and Hide downloaded. The button counts what's on.
+ * The Filters pop-up (as on Civitai's site): the period as chips, a published-date range on top
+ * of it (Civitai's own site search: 31 days at most, with the API key; setting one day fills in
+ * the other), and Hide downloaded. The button counts what differs from the profile's defaults.
  */
-function MoreFilters({ filter }: { filter: BrowseFilter }) {
+function MoreFilters({
+  filter,
+  defaultPeriod,
+}: {
+  filter: BrowseFilter;
+  defaultPeriod: BrowseFilter["period"];
+}) {
   const setFilter = useCivitai((s) => s.setFilter);
   const hideLocal = useCivitai((s) => s.hideLocal);
   const toggleHideLocal = useCivitai((s) => s.toggleHideLocal);
@@ -465,11 +460,11 @@ function MoreFilters({ filter }: { filter: BrowseFilter }) {
   const setRange = (r: { from: string; to: string }) =>
     setFilter({ publishedFrom: r.from, publishedTo: r.to });
   const range = rangeLabel(filter);
-  const on = (range ? 1 : 0) + (hideLocal ? 1 : 0);
+  const on = (filter.period !== defaultPeriod ? 1 : 0) + (range ? 1 : 0) + (hideLocal ? 1 : 0);
   return (
     <Popover
       placement="bottom-end"
-      className="w-[320px] p-0"
+      className="w-[352px] p-0"
       trigger={
         <Button
           size="sm"
@@ -489,6 +484,17 @@ function MoreFilters({ filter }: { filter: BrowseFilter }) {
       {(close) => (
         <div className="flex flex-col">
           <section className="flex flex-col gap-2.5 p-3">
+            <h3 className="label-caps">Time period</h3>
+            <Segmented
+              size="sm"
+              full
+              label="Time period"
+              value={filter.period}
+              onChange={(period) => setFilter({ period })}
+              options={CIVITAI_PERIODS.map((p) => ({ value: p, label: CIVITAI_PERIOD_LABELS[p] }))}
+            />
+          </section>
+          <section className="flex flex-col gap-2.5 border-t border-line p-3">
             <div className="flex items-center gap-2">
               <h3 className="label-caps">Published</h3>
               {range ? <span className="text-2xs text-fg-2">{range}</span> : null}
@@ -559,7 +565,7 @@ function MoreFilters({ filter }: { filter: BrowseFilter }) {
               icon="undo"
               disabled={!on}
               onClick={() => {
-                setRange({ from: "", to: "" });
+                setFilter({ period: defaultPeriod, publishedFrom: "", publishedTo: "" });
                 if (hideLocal) toggleHideLocal();
               }}
             >

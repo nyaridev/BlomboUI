@@ -867,6 +867,8 @@ export function useCivitaiCommunityImages(
     getNextPageParam: (last: CivitaiImagePage) => last.nextCursor,
     enabled: profileId !== null && id !== null,
     staleTime: 5 * 60_000,
+    // Another order or period keeps the old images up until the new ones land: nothing collapses.
+    placeholderData: keepPreviousData,
   });
 }
 

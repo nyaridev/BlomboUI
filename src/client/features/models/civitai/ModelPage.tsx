@@ -2,8 +2,8 @@
  * A Civitai model inside Blombo. Left: the version's images as File Info's endless carousel (the
  * wheel or a drag moves through them, a click on the middle one opens it full screen; NSFW ones
  * blurred until clicked), under it how the picked image was made as its poster shared it and the
- * model's description (folds, closed at first). Under both columns, across the page: the images
- * people posted with the version (CommunityImages.tsx), loading more as you scroll. Right, top to bottom: the header (badges, name, creator with
+ * model's Description (folds, closed at first). Under both columns, wider than them: the Gallery
+ * of images people posted with the version (CommunityImages.tsx), loading more as you scroll. Right, top to bottom: the header (badges, name, creator with
  * Follow, the Civitai link), the model's numbers, one card for the picked version (the picker,
  * its facts, Download with a preview of where the file lands, its files), trigger words, tags
  * and the version's notes (a fold). Descriptions are parsed on the server and rendered as plain
@@ -163,7 +163,7 @@ function Page({
           ) : null}
           {model.description.length ? (
             <Collapsible
-              title="About this model"
+              title="Description"
               icon="file-text"
               subtitle={model.creator ? `By ${model.creator}` : undefined}
               className="max-[1000px]:order-last"

@@ -1,6 +1,8 @@
 /**
- * The images people posted with a version (Civitai's images endpoint), under the model page
- * wider than the columns above (1760 px at most), five a row at most. Filters: Civitai's order (most reactions, most
+ * The model page's Gallery: the images people posted with a version (Civitai's images endpoint),
+ * under the page wider than the columns above (1760 px at most), five a row at most. Its space
+ * never collapses while it loads (old images stay up until new ones land, and the area keeps a
+ * window's height), so the page doesn't jump. Filters, on the right of the title: Civitai's order (most reactions, most
  * comments, newest) and period, and With prompt (only images whose poster shared how they were
  * made; filtered here, so it keeps loading pages until there's enough to show). The grid is
  * virtualized against the page's own scroll and asks for the next page near its end. A tile shows who posted it and, when they shared how
@@ -8,6 +10,7 @@
  * everything loaded so far. NSFW tiles are veiled while the blur is on.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
+import { cn } from "@client/lib/cn";
 import { useElementWidth } from "@client/lib/hooks";
 import { clamp } from "@client/lib/number";
 import { useCivitaiCommunityImages } from "@client/lib/queries";
@@ -81,81 +84,82 @@ export function CommunityImages({
   return (
     // Wider than the columns above (1360 px), so the pictures get the room on big screens.
     <section className="mx-auto flex max-w-[1760px] flex-col gap-4 px-6 pb-14 max-lg:px-3">
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <Icon name="gallery" size={15} className="shrink-0 text-fg-3" />
-        <h3 className="shrink-0 text-base font-semibold text-fg">Made with this model</h3>
-        <span className="truncate text-2xs text-fg-3">Posted with {version.name}</span>
+        <h3 className="shrink-0 text-base font-semibold text-fg">Gallery</h3>
         <span className="h-px min-w-6 flex-1 bg-line" />
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Select
-          label="Order"
-          value={sort}
-          onChange={setSort}
-          className="w-[168px]"
-          options={IMAGE_SORTS.map((s) => ({
-            value: s,
-            label: SORT_LABELS[s],
-            icon: SORT_ICONS[s],
-          }))}
-        />
-        <Select
-          label="Period"
-          value={period}
-          onChange={setPeriod}
-          className="w-[132px]"
-          options={CIVITAI_PERIODS.map((p) => ({
-            value: p,
-            label: CIVITAI_PERIOD_LABELS[p],
-            icon: "calendar" as const,
-          }))}
-        />
-        <Chip
-          size="lg"
-          icon="sparkle"
-          selected={withPrompt}
-          onClick={() => setWithPrompt((v) => !v)}
-        >
-          With prompt
-        </Chip>
-        {loaded.length ? (
-          <span className="ml-auto text-2xs text-fg-3 tabular">
-            {withPrompt ? `${items.length} of ${loaded.length} loaded` : `${loaded.length} loaded`}
-            {q.hasNextPage ? ", more as you scroll" : ""}
-          </span>
-        ) : null}
-      </div>
-      {q.isLoading ? (
-        <div className="grid grid-cols-5 gap-2 max-lg:grid-cols-3 max-sm:grid-cols-2">
-          {Array.from({ length: 12 }, (_, i) => (
-            <Skeleton key={i} className="aspect-[3/4]" />
-          ))}
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <Select
+            label="Order"
+            value={sort}
+            onChange={setSort}
+            className="w-[168px]"
+            options={IMAGE_SORTS.map((s) => ({
+              value: s,
+              label: SORT_LABELS[s],
+              icon: SORT_ICONS[s],
+            }))}
+          />
+          <Select
+            label="Period"
+            value={period}
+            onChange={setPeriod}
+            className="w-[132px]"
+            options={CIVITAI_PERIODS.map((p) => ({
+              value: p,
+              label: CIVITAI_PERIOD_LABELS[p],
+              icon: "calendar" as const,
+            }))}
+          />
+          <Chip
+            size="lg"
+            icon="sparkle"
+            selected={withPrompt}
+            onClick={() => setWithPrompt((v) => !v)}
+          >
+            With prompt
+          </Chip>
         </div>
-      ) : q.error ? (
-        <EmptyState
-          icon="globe"
-          tone="warning"
-          title="Couldn't load the images people posted"
-          text={q.error.message}
-          action={<Button onClick={() => void q.refetch()}>Try again</Button>}
-        />
-      ) : items.length ? (
-        <Grid
-          items={items}
-          scrollRef={scrollRef}
-          blurNsfw={blurNsfw}
-          onOpen={setViewing}
-          onEnd={more}
-        />
-      ) : q.hasNextPage || q.isFetchingNextPage ? null : (
-        <p className="py-6 text-center text-sm text-fg-3">
-          {loaded.length
-            ? "None of these images has its prompt shared. Turn off With prompt to see them all."
-            : period !== "AllTime"
-              ? `Nothing posted with ${version.name} in this period. Try a longer one.`
-              : `No one has posted images with ${version.name} yet. They show up here when they do.`}
-        </p>
-      )}
+      </div>
+      {/* A window's height at least, so loading or a short answer never pulls the page up. */}
+      <div
+        className={cn(
+          "min-h-[calc(100vh-160px)] transition-opacity",
+          q.isPlaceholderData && "opacity-60",
+        )}
+      >
+        {q.isLoading ? (
+          <div className="grid grid-cols-5 gap-2 max-lg:grid-cols-3 max-sm:grid-cols-2">
+            {Array.from({ length: 12 }, (_, i) => (
+              <Skeleton key={i} className="aspect-[3/4]" />
+            ))}
+          </div>
+        ) : q.error ? (
+          <EmptyState
+            icon="globe"
+            tone="warning"
+            title="Couldn't load the images people posted"
+            text={q.error.message}
+            action={<Button onClick={() => void q.refetch()}>Try again</Button>}
+          />
+        ) : items.length ? (
+          <Grid
+            items={items}
+            scrollRef={scrollRef}
+            blurNsfw={blurNsfw}
+            onOpen={setViewing}
+            onEnd={more}
+          />
+        ) : q.hasNextPage || q.isFetchingNextPage ? null : (
+          <p className="py-6 text-center text-sm text-fg-3">
+            {loaded.length
+              ? "None of these images has its prompt shared. Turn off With prompt to see them all."
+              : period !== "AllTime"
+                ? `Nothing posted with ${version.name} in this period. Try a longer one.`
+                : `No one has posted images with ${version.name} yet. They show up here when they do.`}
+          </p>
+        )}
+      </div>
       {q.isFetchingNextPage ? (
         <div className="flex items-center justify-center gap-2 py-2 text-xs text-fg-3">
           <Icon name="refresh" size={13} className="animate-spin" />

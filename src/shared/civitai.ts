@@ -140,7 +140,6 @@ const DayOrNone = z.string().regex(ISO_DAY).or(z.literal("")).default("");
 export const DATE_RANGE_DAYS = 31;
 const DAY_MS = 24 * 3600_000;
 const dayMs = (day: string) => Date.parse(`${day}T00:00:00Z`);
-const dayOf = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
 /** What's wrong with a published-date range, or null when it's fine (or not set). */
 export function dateRangeProblem(from: string, to: string): string | null {
@@ -151,24 +150,6 @@ export function dateRangeProblem(from: string, to: string): string | null {
   if (dayMs(to) - dayMs(from) > (DATE_RANGE_DAYS - 1) * DAY_MS)
     return `Civitai searches ${DATE_RANGE_DAYS} days at most. Pick a shorter range.`;
   return null;
-}
-
-/**
- * A range after one end was edited, as Civitai's own menu does it: when the other end is empty
- * or no longer fits, it moves to make the longest range that does. Clearing one end clears both.
- */
-export function completeDateRange(
-  from: string,
-  to: string,
-  edited: "from" | "to",
-): { from: string; to: string } {
-  const span = (DATE_RANGE_DAYS - 1) * DAY_MS;
-  const set = edited === "from" ? from : to;
-  if (!set || Number.isNaN(dayMs(set))) return { from: "", to: "" };
-  if (!dateRangeProblem(from, to)) return { from, to };
-  return edited === "from"
-    ? { from, to: dayOf(dayMs(from) + span) }
-    : { from: dayOf(dayMs(to) - span), to };
 }
 
 export const BrowseFilter = z.object({

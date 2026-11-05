@@ -4,6 +4,7 @@ export { Avatar } from "./Avatar";
 export { Button, type ButtonProps, IconButton, type IconButtonProps } from "./Button";
 export { Carousel, type CarouselImage } from "./Carousel";
 export { CommandPalette, type PaletteItem } from "./CommandPalette";
+export { type DayRange, quickRanges, today } from "./calendar";
 export { Dialog } from "./Dialog";
 export {
   Badge,
@@ -40,6 +41,7 @@ export {
 } from "./library";
 export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
 export { NumberField } from "./NumberField";
+export { RangeCalendar } from "./RangeCalendar";
 export { type ResizeAxis, ResizeGrip } from "./ResizeGrip";
 export { MultiSelect, Select, type SelectOption } from "./Select";
 export { Sheet } from "./Sheet";

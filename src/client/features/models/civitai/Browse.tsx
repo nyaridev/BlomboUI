@@ -34,6 +34,8 @@ import {
   KIND_STYLE,
   ModelCard,
   Popover,
+  quickRanges,
+  RangeCalendar,
   Segmented,
   Select,
   Skeleton,
@@ -41,6 +43,7 @@ import {
   TextField,
   Tooltip,
   toast,
+  today,
 } from "@client/ui";
 import { groupBaseModels, KNOWN_BASE_MODELS } from "@shared/basemodels";
 import {
@@ -56,7 +59,6 @@ import {
   categoryLabel,
   civitaiKind,
   compactCount,
-  completeDateRange,
   DATE_RANGE_DAYS,
   type SavedFilter,
 } from "@shared/civitai";
@@ -469,7 +471,7 @@ function rangeLabel(f: BrowseFilter): string | null {
 /**
  * The Filters pop-up (as on Civitai's site): the period, the model types as chips (several at
  * once; none is all of them), a published-date range on top of the period (Civitai's own site
- * search: 31 days at most, with the API key; setting one day fills in the other), and Hide
+ * search: 31 days at most, with the API key; quick picks or two clicks on a calendar), and Hide
  * downloaded. The button counts what differs from the profile's defaults.
  */
 function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: BrowseFilter }) {
@@ -560,30 +562,19 @@ function MoreFilters({ filter, defaults }: { filter: BrowseFilter; defaults: Bro
                 </Button>
               ) : null}
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-1 text-2xs text-fg-3">
-                From
-                <TextField
-                  size="sm"
-                  type="date"
-                  value={from}
-                  onChange={(e) => setRange(completeDateRange(e.target.value, to, "from"))}
-                />
-              </label>
-              <label className="flex flex-col gap-1 text-2xs text-fg-3">
-                To
-                <TextField
-                  size="sm"
-                  type="date"
-                  value={to}
-                  onChange={(e) => setRange(completeDateRange(from, e.target.value, "to"))}
-                />
-              </label>
+            <div className="grid grid-cols-2 gap-1.5">
+              {quickRanges(today()).map((q) => (
+                <Chip
+                  key={q.label}
+                  className="w-full"
+                  selected={q.range.from === from && q.range.to === to}
+                  onClick={() => setRange(q.range)}
+                >
+                  {q.label}
+                </Chip>
+              ))}
             </div>
-            <p className="text-2xs text-pretty text-fg-3">
-              {DATE_RANGE_DAYS} days at most, both days counted (UTC), as Civitai allows. Picking
-              one day fills in the other.
-            </p>
+            <RangeCalendar from={from} to={to} maxDays={DATE_RANGE_DAYS} onChange={setRange} />
             {keySet ? null : (
               <p className="flex gap-1.5 text-2xs text-pretty text-warning">
                 <Icon name="info" size={12} className="mt-px shrink-0" />

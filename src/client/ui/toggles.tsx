@@ -354,7 +354,8 @@ export function Chip({
         aria-pressed={onClick ? Boolean(selected) : undefined}
         onClick={onClick}
         className={cn(
-          "inline-flex h-full items-center gap-1.5 rounded-sm focus-ring",
+          // Fills the chip when a caller stretches it (a grid of chips).
+          "inline-flex h-full flex-1 items-center justify-center gap-1.5 rounded-sm focus-ring",
           size === "sm" ? "px-2.5" : "px-3",
           onRemove && "pr-1",
         )}

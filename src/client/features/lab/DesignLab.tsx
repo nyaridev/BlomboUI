@@ -46,6 +46,7 @@ import {
   ProgressBar,
   ProgressRing,
   PropertyList,
+  RangeCalendar,
   type ResizeAxis,
   ResizeGrip,
   RunBar,
@@ -371,6 +372,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
   const [title, setTitle] = useState("Anime");
   const [progress, setProgress] = useState(0.42);
   const [stars, setStars] = useState(3);
+  const [days, setDays] = useState({ from: "", to: "" });
   const [palette, setPalette] = useState(false);
   const [tour, setTour] = useState(false);
   const samples = useSampleImages();
@@ -756,6 +758,18 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <GripBox axis="y" />
             <GripBox axis="x" />
             <GripBox axis="both" />
+          </Row>
+          <Row label="Range calendar (two clicks; 31 days at most, nothing after today)">
+            <RangeCalendar
+              from={days.from}
+              to={days.to}
+              maxDays={31}
+              onChange={setDays}
+              className="w-[320px]"
+            />
+            <span className="font-mono text-xs text-fg-3">
+              {days.from ? `${days.from} → ${days.to}` : "No range"}
+            </span>
           </Row>
         </Section>
 

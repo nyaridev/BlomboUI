@@ -59,8 +59,9 @@ function menuItems(p: Profile, props: ProfileGridProps): MenuEntry[] {
 
 export function ProfileGrid(props: ProfileGridProps) {
   return (
-    <div className="flex h-full flex-col overflow-auto bg-bg">
-      <header className="flex shrink-0 items-center justify-between px-6 pt-5">
+    <div className="relative h-full overflow-auto bg-bg">
+      {/* Over the page, so the cards center on the whole window, not on what's below it. */}
+      <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-6 pt-5">
         <Wordmark muted />
         {props.version ? (
           <Button
@@ -75,7 +76,8 @@ export function ProfileGrid(props: ProfileGridProps) {
           </Button>
         ) : null}
       </header>
-      <main className="flex flex-1 items-center justify-center p-8">
+      {/* The same space above and below, enough to clear the header when cards fill the page. */}
+      <main className="flex min-h-full items-center justify-center px-8 py-20">
         <ul className="flex max-w-6xl flex-wrap justify-center gap-5">
           {props.profiles.map((p) => (
             <li key={p.id}>

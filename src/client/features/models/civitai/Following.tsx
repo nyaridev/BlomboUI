@@ -3,42 +3,46 @@
  * one with ×), and their models on the right with the browser's filter (shared with Browse:
  * types, base model, period, category, search). "Everyone" merges each creator's newest models
  * (the server's feed, one page per creator); one creator lists all of theirs, newest first.
+ * A creator's name clicked anywhere opens them here, pinned at the top with Follow and ×, without
+ * following them (`visit` in state.ts). Avatars are the saved pictures, or looked up once.
  */
-
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { useCivitaiFeed, useCivitaiModels } from "@client/lib/queries";
+import { useCivitaiCreator, useCivitaiFeed, useCivitaiModels } from "@client/lib/queries";
 import { Avatar, Button, EmptyState, IconButton, TextField } from "@client/ui";
-import type { BrowseFilter } from "@shared/civitai";
-import { useState } from "react";
+import type { BrowseFilter, CivitaiCreator } from "@shared/civitai";
+import { type ReactNode, useMemo, useState } from "react";
 import { CardSkeletons, FilterBar, Results } from "./Browse";
-import { useFollowing } from "./follow";
+import { FollowButton, useFollowing } from "./follow";
 import { useCivitai } from "./state";
 
 export function Following() {
   const filter = useCivitai((s) => s.filter);
   const picked = useCivitai((s) => s.creator);
+  const visiting = useCivitai((s) => s.visiting);
   const { following, has } = useFollowing();
-  const creator = picked && has(picked) ? picked : null;
+  const users = useMemo(() => following.map((f) => f.username), [following]);
+  const creator =
+    picked && (has(picked) || picked.toLowerCase() === visiting?.toLowerCase()) ? picked : null;
   return (
     <div className="flex min-h-0 flex-1">
       <Creators creator={creator} />
       <div className="flex min-w-0 flex-1 flex-col">
         {!filter ? (
           <CardSkeletons count={10} />
-        ) : !following.length ? (
+        ) : !following.length && !creator ? (
           <EmptyState
             icon="user"
             title="Follow creators to see their new models here"
-            text="Press Follow next to a creator on a model's page or in the search bar, or add one by name on the left."
+            text="Click a creator's name on a model's page to look at their models, then press Follow. Or add one by name on the left."
           />
         ) : (
           <>
-            <FilterBar filter={filter} following />
+            <FilterBar filter={filter} following={creator ?? true} />
             {creator ? (
               <CreatorResults creator={creator} filter={filter} />
             ) : (
-              <FeedResults users={following} filter={filter} />
+              <FeedResults users={users} filter={filter} />
             )}
           </>
         )}
@@ -77,15 +81,19 @@ function NothingNew({ creator }: { creator?: string }) {
   );
 }
 
+const rowClass = (active: boolean) =>
+  cn(
+    "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors focus-ring",
+    active ? "bg-field text-fg" : "text-fg-2 hover:bg-field/60 hover:text-fg",
+  );
+
 function Creators({ creator }: { creator: string | null }) {
   const pick = useCivitai((s) => s.pickCreator);
-  const { following, follow, unfollow } = useFollowing();
+  const visiting = useCivitai((s) => s.visiting);
+  const endVisit = useCivitai((s) => s.endVisit);
+  const { following, has, follow, unfollow } = useFollowing();
   const [name, setName] = useState("");
-  const row = (active: boolean) =>
-    cn(
-      "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-left text-sm transition-colors focus-ring",
-      active ? "bg-field text-fg" : "text-fg-2 hover:bg-field/60 hover:text-fg",
-    );
+  const is = (a: string | null, b: string) => a?.toLowerCase() === b.toLowerCase();
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-line max-lg:w-44">
       <form
@@ -110,8 +118,20 @@ function Creators({ creator }: { creator: string | null }) {
         />
       </form>
       <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1.5">
+        {visiting && !has(visiting) ? (
+          <div className="mb-1 flex flex-col gap-1 border-b border-line pb-2">
+            <span className="px-2 pt-1 label-caps">Looking at</span>
+            <CreatorRow
+              creator={{ username: visiting, image: null }}
+              active={is(creator, visiting)}
+              onPick={() => pick(visiting)}
+              end={<IconButton icon="x" size="xs" label={`Close ${visiting}`} onClick={endVisit} />}
+              follow
+            />
+          </div>
+        ) : null}
         <div className="flex">
-          <button type="button" className={row(creator === null)} onClick={() => pick(null)}>
+          <button type="button" className={rowClass(creator === null)} onClick={() => pick(null)}>
             <Icon name="user" size={15} className="shrink-0 text-fg-3" />
             <span className="flex-1 truncate">Everyone</span>
             <span className="font-mono text-2xs text-fg-3 tabular">{following.length}</span>
@@ -119,26 +139,70 @@ function Creators({ creator }: { creator: string | null }) {
         </div>
         {following.length ? <div className="mx-2 my-1 border-t border-line" /> : null}
         {following.map((f) => (
-          <div key={f} className="group flex items-center">
-            <button type="button" className={row(creator === f)} onClick={() => pick(f)}>
-              <Avatar name={f} size={18} ring={false} />
-              <span className="flex-1 truncate" title={f}>
-                {f}
-              </span>
-            </button>
-            <IconButton
-              icon="x"
-              size="xs"
-              label={`Unfollow ${f}`}
-              className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
-              onClick={() => {
-                unfollow(f);
-                if (creator === f) pick(null);
-              }}
-            />
-          </div>
+          <CreatorRow
+            key={f.username}
+            creator={f}
+            active={is(creator, f.username)}
+            onPick={() => pick(f.username)}
+            end={
+              <IconButton
+                icon="x"
+                size="xs"
+                label={`Unfollow ${f.username}`}
+                className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
+                onClick={() => {
+                  unfollow(f.username);
+                  if (is(creator, f.username)) pick(null);
+                }}
+              />
+            }
+          />
         ))}
       </div>
     </aside>
+  );
+}
+
+/**
+ * One creator: their avatar (saved, or looked up once while none is saved) and name; dimmed when
+ * Civitai has no models by that name. `follow` adds a Follow chip (the creator you're looking at).
+ */
+function CreatorRow({
+  creator,
+  active,
+  onPick,
+  end,
+  follow,
+}: {
+  creator: CivitaiCreator;
+  active: boolean;
+  onPick: () => void;
+  end: ReactNode;
+  follow?: boolean;
+}) {
+  const looked = useCivitaiCreator(creator.image ? null : creator.username);
+  const missing = looked.data === null;
+  const image = creator.image ?? looked.data?.image ?? null;
+  return (
+    <div className="group flex flex-col gap-1">
+      <div className="flex items-center">
+        <button
+          type="button"
+          className={cn(rowClass(active), missing && "text-fg-3")}
+          onClick={onPick}
+          title={missing ? `Civitai has no models by ${creator.username}` : creator.username}
+        >
+          <Avatar name={creator.username} src={image} size={18} ring={false} />
+          <span className="flex-1 truncate">{looked.data?.username ?? creator.username}</span>
+          {missing ? <Icon name="info" size={13} className="shrink-0 text-fg-4" /> : null}
+        </button>
+        {end}
+      </div>
+      {follow ? (
+        <div className="pl-8">
+          <FollowButton name={looked.data?.username ?? creator.username} image={image} />
+        </div>
+      ) : null}
+    </div>
   );
 }

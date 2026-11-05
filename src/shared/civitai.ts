@@ -368,6 +368,27 @@ export const CivitaiUsername = z
   .max(60)
   .regex(/^[\w.-]+$/, "A Civitai username has only letters, digits, _, - and dots.");
 
+/**
+ * A creator as Civitai spells their name, with their picture: a URL of Blombo's image proxy
+ * (which keeps the file on disk), null while unknown or when they have none.
+ */
+export const CivitaiCreator = z.object({
+  username: CivitaiUsername,
+  image: z
+    .string()
+    .max(4000)
+    .regex(/^\/api\/civitai\/image\?u=[\w-]+$/, "Only Blombo's image proxy.")
+    .nullable()
+    .default(null),
+});
+export type CivitaiCreator = z.infer<typeof CivitaiCreator>;
+
+/** A followed creator (`settings.civitai.following`); a plain name (saved before pictures were kept) reads as one without a picture. */
+export const FollowedCreator = z.union([
+  CivitaiCreator,
+  CivitaiUsername.transform((username): CivitaiCreator => ({ username, image: null })),
+]);
+
 /** Most creators the Following feed asks about at once. */
 export const FEED_MAX_USERS = 100;
 

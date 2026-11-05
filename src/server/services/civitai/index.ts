@@ -4,8 +4,9 @@
  * folder, and the browse and search history in the profile's database.
  */
 import {
-  type BrowseFilter,
+  BrowseFilter,
   type CivitaiAccount,
+  CivitaiCreator,
   CivitaiImage,
   type CivitaiMatch,
   type CivitaiModel,
@@ -21,7 +22,7 @@ import { HttpError } from "../../lib/http.ts";
 import type { ModelService } from "../models.ts";
 import type { ProfileService } from "../profiles.ts";
 import type { SettingsService } from "../settings.ts";
-import { CivitaiApi, type RawModel, type RawVersion } from "./api.ts";
+import { CivitaiApi, type RawModel, type RawPage, type RawVersion } from "./api.ts";
 import type { ImageProxy } from "./images.ts";
 import * as normalize from "./normalize.ts";
 
@@ -174,6 +175,46 @@ export class CivitaiService {
       );
     if (!pages.length && failure) throw failure;
     return { items: mergeFeed(pages), nextCursor: null };
+  }
+
+  /**
+   * Who a username is on Civitai: their name as Civitai spells it and their picture, read from
+   * their newest model (the search is cached like any other). Null when Civitai has no models by
+   * that name. A followed creator's entry in settings takes the answer, so their avatar shows from
+   * then on without asking again (the picture itself stays in the image proxy's cache).
+   */
+  async refreshCreator(username: string): Promise<CivitaiCreator | null> {
+    const profileId = this.active();
+    let page: RawPage;
+    try {
+      page = await this.api.models(
+        BrowseFilter.parse({ username, sort: "Newest" }),
+        null,
+        await this.key(profileId),
+      );
+    } catch (error) {
+      // Civitai answers an unknown name with an error on some sites and an empty page on others.
+      if (error instanceof HttpError && (error.status === 404 || error.status === 400)) return null;
+      throw error;
+    }
+    const raw = (page.items ?? []).find(
+      (m) => m.creator?.username?.toLowerCase() === username.toLowerCase(),
+    );
+    if (!raw) return null;
+    const found = CivitaiCreator.safeParse({
+      username: raw.creator?.username,
+      image: normalize.creatorImage(raw, { allowed: this.allowedImage }),
+    });
+    if (!found.success) return null;
+    const same = (u: string) => u.toLowerCase() === username.toLowerCase();
+    await this.deps.settings.updateWith(profileId, (current) => {
+      const list = current.civitai.following;
+      if (!list.some((f) => same(f.username))) return {};
+      return {
+        civitai: { following: list.map((f) => (same(f.username) ? found.data : f)) },
+      };
+    });
+    return found.data;
   }
 
   async rawModel(id: number): Promise<RawModel> {

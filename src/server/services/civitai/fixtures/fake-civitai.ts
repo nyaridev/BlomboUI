@@ -364,7 +364,7 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
           )
           .filter((x) => !types.length || types.includes(x.type))
           .filter((x) => !bases.length || x.versions.some((v) => bases.includes(v.baseModel)))
-          .filter((x) => !user || x.creator === user)
+          .filter((x) => !user || x.creator.toLowerCase() === user.toLowerCase())
           .filter((x) => !tag || x.tags.includes(tag))
           .filter((x) => nsfw || !x.nsfw)
           .sort((a, b) =>

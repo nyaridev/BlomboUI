@@ -1,7 +1,7 @@
 /**
- * Models → Civitai → Browse: a clear filter bar (saved filters, search with the creator as a
- * removable chip in front of the text, the NSFW blur, types, base model, sort, period, Civitai's
- * categories; what's listed follows the profile's Civitai site), recent searches, and the results
+ * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
+ * filter) as a removable chip in front of the text, the NSFW blur, the types dropdown before
+ * Civitai's categories, base model, sort, period; what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
  * its model (a middle click opens it behind), a double click asks to download it
  * (DownloadDialog). The Following tab reuses the filter bar and the results. Results come from
@@ -26,8 +26,9 @@ import {
   Chip,
   EmptyState,
   IconButton,
+  KIND_STYLE,
   ModelCard,
-  MultiSegmented,
+  MultiSelect,
   Popover,
   Segmented,
   Select,
@@ -48,6 +49,7 @@ import {
   type CivitaiCard,
   type CivitaiSort,
   categoryLabel,
+  civitaiKind,
   compactCount,
   type SavedFilter,
 } from "@shared/civitai";
@@ -113,10 +115,17 @@ const SORT_ICONS: Record<CivitaiSort, IconName> = {
 };
 
 /**
- * The filter bar. On Following (`following`) the creator comes from the tab's list and the order
- * is newest first, so the creator chip, the sort and recent searches are left out.
+ * The filter bar. On Following (`following`: true, or the one creator shown there) the creator
+ * comes from the tab's list and the order is newest first, so the creator chip, the sort and
+ * recent searches are left out.
  */
-export function FilterBar({ filter, following }: { filter: BrowseFilter; following?: boolean }) {
+export function FilterBar({
+  filter,
+  following,
+}: {
+  filter: BrowseFilter;
+  following?: boolean | string;
+}) {
   const setFilter = useCivitai((s) => s.setFilter);
   const replace = useCivitai((s) => s.replaceFilter);
   const settings = useSettings().data;
@@ -182,8 +191,8 @@ export function FilterBar({ filter, following }: { filter: BrowseFilter; followi
           trailing={creator ? <FollowButton name={creator} /> : null}
           className="flex-1"
           placeholder={
-            creator
-              ? `Search ${creator}'s models`
+            creator || typeof following === "string"
+              ? `Search ${creator || following}'s models`
               : following
                 ? "Search the models of creators you follow"
                 : "Search Civitai: model names, tags, creators"
@@ -196,17 +205,41 @@ export function FilterBar({ filter, following }: { filter: BrowseFilter; followi
         <NsfwBlurToggle size="md" />
       </form>
       <div className="flex flex-wrap items-center gap-1.5">
-        <MultiSegmented
-          size="sm"
-          label="Model types"
-          allLabel="All"
-          value={filter.types}
-          onChange={(types) => setFilter({ types })}
-          options={CIVITAI_FILTER_TYPES.map((t) => ({
-            value: t,
-            label: CIVITAI_TYPE_LABELS[t] ?? t,
-          }))}
-        />
+        {/* Types in a dropdown, then Civitai's categories (one at a time, as on its site); the
+            categories scroll sideways when the row is narrow. */}
+        <div className="flex max-w-full min-w-0 items-center gap-1.5">
+          <MultiSelect
+            size="sm"
+            label="Model types"
+            clearLabel="All types"
+            value={filter.types}
+            onChange={(types) => setFilter({ types })}
+            className="w-[150px] shrink-0"
+            options={CIVITAI_FILTER_TYPES.map((t) => {
+              const kind = civitaiKind(t);
+              return {
+                value: t,
+                label: CIVITAI_TYPE_LABELS[t] ?? t,
+                icon: kind ? KIND_STYLE[kind].icon : undefined,
+              };
+            })}
+          />
+          <div className="scroll-quiet -mb-1 min-w-0 overflow-x-auto pb-1 [scrollbar-gutter:auto]">
+            {/* w-max: the segments keep their width and scroll, instead of squeezing to two lines. */}
+            <div className="w-max">
+              <Segmented<string>
+                size="sm"
+                label="Category"
+                value={filter.tag}
+                onChange={(tag) => setFilter({ tag })}
+                options={[
+                  { value: "", label: "All categories" },
+                  ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
+                ]}
+              />
+            </div>
+          </div>
+        </div>
         <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
           <Select<string>
             size="sm"
@@ -260,19 +293,6 @@ export function FilterBar({ filter, following }: { filter: BrowseFilter; followi
             </Button>
           ) : null}
         </div>
-      </div>
-      {/* Civitai's categories: one at a time, as on its site. Scrolls sideways when narrow. */}
-      <div className="scroll-quiet -mb-1 overflow-x-auto pb-1 [scrollbar-gutter:auto]">
-        <Segmented<string>
-          size="sm"
-          label="Category"
-          value={filter.tag}
-          onChange={(tag) => setFilter({ tag })}
-          options={[
-            { value: "", label: "All categories" },
-            ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
-          ]}
-        />
       </div>
       {searches.length && !following ? (
         <div className="flex flex-wrap items-center gap-1.5">

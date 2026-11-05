@@ -184,6 +184,12 @@ export function version(v: RawVersion, ctx: NormalizeContext): CivitaiVersion {
   };
 }
 
+/** A model's creator picture at avatar size, through the proxy (null when there's none). */
+export function creatorImage(raw: RawModel, ctx: Pick<NormalizeContext, "allowed">): string | null {
+  const url = str(raw.creator?.image);
+  return url && ctx.allowed(url) ? proxiedImage(civitaiImageVariant(url, 96, false)) : null;
+}
+
 export function model(raw: RawModel, ctx: NormalizeContext): CivitaiModel {
   const c = card(raw, ctx);
   return {
@@ -192,10 +198,7 @@ export function model(raw: RawModel, ctx: NormalizeContext): CivitaiModel {
     type: c.type,
     kind: c.kind,
     creator: c.creator,
-    creatorImage: (() => {
-      const url = str(raw.creator?.image);
-      return url && ctx.allowed(url) ? proxiedImage(civitaiImageVariant(url, 96, false)) : null;
-    })(),
+    creatorImage: creatorImage(raw, ctx),
     tags: (raw.tags ?? []).filter((t): t is string => typeof t === "string"),
     nsfw: c.nsfw,
     downloads: c.downloads,

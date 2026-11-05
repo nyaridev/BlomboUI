@@ -77,6 +77,8 @@ export const qk = {
   civitai: (profileId: string | null) => ["civitai", profileId] as const,
   civitaiModels: (profileId: string | null, filter: BrowseFilter) =>
     ["civitai", profileId, "models", filter] as const,
+  civitaiCreator: (profileId: string | null, username: string | null) =>
+    ["civitai", profileId, "creator", username?.toLowerCase() ?? null] as const,
   civitaiFeed: (profileId: string | null, users: string[], filter: BrowseFilter) =>
     ["civitai", profileId, "feed", users, filter] as const,
   civitaiModel: (profileId: string | null, id: number | null) =>
@@ -746,6 +748,30 @@ export function useCivitaiFeed(users: string[], filter: BrowseFilter | null) {
     enabled: profileId !== null && filter !== null && users.length > 0,
     staleTime: 5 * 60_000,
     placeholderData: keepPreviousData,
+  });
+}
+
+/**
+ * A creator's name as Civitai spells it and their picture (null: no models by that name), asked
+ * once per session. When they're followed, the server saves the answer with them, so the
+ * settings are read again.
+ */
+export function useCivitaiCreator(username: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  const qc = useQueryClient();
+  return useQuery({
+    queryKey: qk.civitaiCreator(profileId, username),
+    queryFn: async () => {
+      const found = await api.lookupCivitaiCreator(username ?? "");
+      const followed = qc
+        .getQueryData<Settings>(qk.settings(profileId))
+        ?.civitai.following.some((f) => f.username.toLowerCase() === username?.toLowerCase());
+      if (found && followed) void qc.invalidateQueries({ queryKey: qk.settings(profileId) });
+      return found;
+    },
+    enabled: profileId !== null && Boolean(username),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
   });
 }
 

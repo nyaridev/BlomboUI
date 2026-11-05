@@ -29,6 +29,7 @@ import {
   type BrowseFilter,
   browseQuery,
   type CivitaiAccount,
+  type CivitaiCreator,
   type CivitaiMatch,
   type CivitaiModel,
   type CivitaiPage,
@@ -415,6 +416,12 @@ export const api = {
     request<CivitaiPage>("GET", `/civitai/models?${browseQuery(filter, cursor)}`),
   civitaiFeed: (users: string[], filter: BrowseFilter) =>
     request<CivitaiPage>("GET", `/civitai/feed?${feedQuery(users, filter)}`),
+  /** Who a username is on Civitai; a followed creator's saved name and picture follow the answer. */
+  lookupCivitaiCreator: (username: string) =>
+    request<CivitaiCreator | null>(
+      "POST",
+      `/civitai/creators/${encodeURIComponent(username)}/lookup`,
+    ),
   civitaiModel: (id: number) => request<CivitaiModel>("GET", `/civitai/models/${id}`),
   civitaiByHash: (sha256: string) =>
     request<CivitaiMatch>("GET", `/civitai/by-hash/${encodeURIComponent(sha256)}`),

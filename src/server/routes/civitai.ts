@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { ZodError } from "zod";
 import {
+  CivitaiUsername,
   fromBase64Url,
   parseBrowseQuery,
   parseFeedUsers,
@@ -50,6 +51,13 @@ export function civitaiRoutes(civitai: CivitaiService) {
     if (!users.length)
       throw new HttpError(400, "Whose models? Pass ?users= with Civitai usernames.", "no_users");
     return c.json(await civitai.feed(users, browse(c.req.query()).filter));
+  });
+
+  /** Look a creator up (name as Civitai spells it, picture); a followed one's entry is updated. */
+  r.post("/creators/:username/lookup", async (c) => {
+    const name = CivitaiUsername.safeParse(c.req.param("username"));
+    if (!name.success) throw new HttpError(400, "That isn't a Civitai username.", "bad_username");
+    return c.json(await civitai.refreshCreator(name.data));
   });
 
   r.get("/models/:id", async (c) => {

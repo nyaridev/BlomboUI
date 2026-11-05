@@ -1,7 +1,9 @@
 /**
  * The Civitai browser's UI state: the applied filter (seeded from Settings → Civitai's browse
- * defaults the first time), which home tab shows (Browse or Following) and the creator picked
- * there, the opened model tabs, the last tab opened (its tab flashes), and whether NSFW images are
+ * defaults the first time), which home tab shows (Browse or Following), the creator picked
+ * there and the one you're only looking at (a creator's name clicked anywhere: pinned at the top
+ * of Following until you follow them or close it, so Browse's search stays as it was), the
+ * opened model tabs, the last tab opened (its tab flashes), and whether NSFW images are
  * blurred (this view only, on each time the app starts). The filter, home and tabs are remembered
  * in this window (localStorage), so a reload or a restart comes back to them. Server data stays in TanStack Query.
  */
@@ -25,6 +27,8 @@ interface CivitaiState {
   home: CivitaiHome;
   /** Following: one creator's models; null for everyone you follow. */
   creator: string | null;
+  /** A creator you're looking at without following them (this session only). */
+  visiting: string | null;
   /** The tab opened last; `n` changes on every open, so its tab flashes again. */
   flash: { id: number; n: number } | null;
   /** NSFW images stay blurred until clicked (the NSFW button switches it for every image). */
@@ -41,6 +45,10 @@ interface CivitaiState {
   show: (id: number | null) => void;
   showHome: (home: CivitaiHome) => void;
   pickCreator: (creator: string | null) => void;
+  /** Show a creator's models in Following, pinned at the top whether followed or not. */
+  visit: (creator: string) => void;
+  /** Close the creator you were looking at (back to everyone if they were picked). */
+  endVisit: () => void;
 }
 
 const MAX_TABS = 12;
@@ -75,6 +83,7 @@ function load(): Saved {
 export const useCivitai = create<CivitaiState>((set, get) => ({
   ...load(),
   creator: null,
+  visiting: null,
   flash: null,
   blur: true,
   toggleBlur: () => set((s) => ({ blur: !s.blur })),
@@ -107,6 +116,9 @@ export const useCivitai = create<CivitaiState>((set, get) => ({
   show: (id) => set({ active: id }),
   showHome: (home) => set({ home, active: null }),
   pickCreator: (creator) => set({ creator }),
+  visit: (creator) => set({ visiting: creator, creator, home: "following", active: null }),
+  endVisit: () =>
+    set((s) => ({ visiting: null, creator: s.creator === s.visiting ? null : s.creator })),
 }));
 
 useCivitai.subscribe((s, prev) => {

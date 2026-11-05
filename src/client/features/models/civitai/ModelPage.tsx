@@ -78,6 +78,7 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
   );
   const setFilter = useCivitai((s) => s.setFilter);
   const showHome = useCivitai((s) => s.showHome);
+  const visit = useCivitai((s) => s.visit);
   const style = model.kind ? KIND_STYLE[model.kind] : null;
   const images = useMemo(() => version?.images ?? [], [version]);
 
@@ -123,10 +124,9 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                 <button
                   type="button"
                   className="flex items-center gap-1.5 rounded-sm hover:text-fg focus-ring"
-                  title={`More from ${model.creator}`}
+                  title={`${model.creator}'s models (in Following)`}
                   onClick={() => {
-                    setFilter({ username: model.creator ?? "", query: "" });
-                    showHome("browse");
+                    if (model.creator) visit(model.creator);
                   }}
                 >
                   {model.creatorImage ? (
@@ -141,7 +141,9 @@ function Page({ model, blurNsfw }: { model: CivitaiModel; blurNsfw: boolean }) {
                   {model.creator}
                 </button>
               ) : null}
-              {model.creator ? <FollowButton name={model.creator} /> : null}
+              {model.creator ? (
+                <FollowButton name={model.creator} image={model.creatorImage} />
+              ) : null}
               <span className="flex items-center gap-1 tabular" title="Downloads">
                 <Icon name="download" size={13} />
                 {compactCount(model.downloads)}

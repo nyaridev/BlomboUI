@@ -111,6 +111,23 @@ describe("readSettings", () => {
     expect(r.settings.civitai.downloads.aliases.map((l) => l.from)).toEqual(["a", "c"]);
   });
 
+  it("reads followed creators saved as plain names, and drops pictures from elsewhere", () => {
+    const r = readSettings({
+      civitai: {
+        following: [
+          "old_name",
+          { username: "pixelsmith", image: "/api/civitai/image?u=aHR0cHM6Ly9h" },
+          { username: "evil", image: "https://example.com/x.png" },
+        ],
+      },
+    });
+    expect(r.settings.civitai.following).toEqual([
+      { username: "old_name", image: null },
+      { username: "pixelsmith", image: "/api/civitai/image?u=aHR0cHM6Ly9h" },
+      { username: "evil", image: null },
+    ]);
+  });
+
   it("starts the Set list with the SDXL sizes and drops a bad one from a saved list", () => {
     expect(Settings.parse({}).generate.setResolutions).toContain("1216x832");
     const r = readSettings({ generate: { setResolutions: ["1280x832", "huge", "896x640"] } });

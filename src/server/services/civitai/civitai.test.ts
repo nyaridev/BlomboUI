@@ -38,6 +38,22 @@ describe("browsing", () => {
     expect(o.fake.requests.length).toBe(before + 1);
   });
 
+  it("looks a creator up and keeps a followed one's spelling and picture", async () => {
+    const { settings } = o.services;
+    await settings.update(o.profileId, { civitai: { following: ["PIXELSMITH", "nightowl"] } });
+    const found = await o.services.civitai.refreshCreator("PIXELSMITH");
+    expect(found?.username).toBe("pixelsmith");
+    expect(found?.image).toMatch(/^\/api\/civitai\/image\?u=/);
+    expect(fromBase64Url(found?.image?.split("u=")[1] ?? "")).toContain("avatar-pixelsmith");
+    const saved = (await settings.get(o.profileId)).civitai.following;
+    expect(saved).toEqual([found, { username: "nightowl", image: null }]);
+    expect(await o.services.civitai.refreshCreator("nobody")).toBeNull();
+    // Not followed: answered, nothing saved.
+    await o.services.civitai.refreshCreator("lumen_lab");
+    expect((await settings.get(o.profileId)).civitai.following).toHaveLength(2);
+    await settings.update(o.profileId, { civitai: { following: [] } });
+  });
+
   it("filters by category and merges followed creators' newest models", async () => {
     const styles = await o.services.civitai.search(filter({ tag: "style" }), null);
     expect(styles.items.length).toBeGreaterThan(0);

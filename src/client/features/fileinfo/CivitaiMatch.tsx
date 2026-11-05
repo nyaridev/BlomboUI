@@ -214,10 +214,15 @@ export function CivitaiDetails({ match }: { match: Found }) {
   const goTo = useGoToView();
   const setFilter = useCivitai((s) => s.setFilter);
   const showHome = useCivitai((s) => s.showHome);
+  const visit = useCivitai((s) => s.visit);
   const installed = localVersions(model.id, model.local, []).has(match.versionId);
   const browse = (filter: { query: string; username: string }) => {
-    setFilter(filter);
-    showHome("browse");
+    // A creator opens in Following (looked at, not followed), so Browse's search stays.
+    if (filter.username) visit(filter.username);
+    else {
+      setFilter(filter);
+      showHome("browse");
+    }
     useModelsNav.getState().setTab("civitai");
     goTo("models");
   };

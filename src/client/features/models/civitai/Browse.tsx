@@ -1,7 +1,7 @@
 /**
  * Models → Civitai → Browse: a clear filter bar (saved filters, search with a creator (from a saved
- * filter) as a removable chip in front of the text, the NSFW blur, Civitai's categories as a
- * segmented bar, the base model dropdown (family sections: shared/basemodels.ts), sort and a
+ * filter) as a removable chip in front of the text, the NSFW blur, the category dropdown, the
+ * base model dropdown (family sections: shared/basemodels.ts), sort and a
  * Filters pop-up (the period, the model types as chips, a published-date range through
  * Civitai's site search with the API key, and Hide downloaded); what's listed follows the profile's Civitai site), recent searches, and the results
  * as one virtualized grid of ModelCards that loads the next page as you near the end. A card opens
@@ -109,7 +109,7 @@ export function CardSkeletons({ count }: { count: number }) {
 /* ── filter bar ─────────────────────────────────────────────────────────── */
 
 const CATEGORY_OPTIONS = [
-  { value: "", label: "All categories" },
+  { value: "", label: "All categories", icon: "tag" as IconName },
   ...CIVITAI_CATEGORIES.map((c) => ({ value: c, label: categoryLabel(c) })),
 ];
 
@@ -221,31 +221,20 @@ export function FilterBar({
         </Button>
         <NsfwBlurToggle size="lg" />
       </form>
-      <div className="flex flex-wrap items-center gap-2 lg:flex-nowrap">
-        {/* One category at a time, as on Civitai's site (a tag from elsewhere shows as itself).
-            The bar takes the room the right side leaves and scrolls sideways (the wheel too),
-            without a scrollbar, so the row keeps its height. */}
-        <div
-          className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none] max-lg:basis-full"
-          onWheel={(e) => {
-            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) e.currentTarget.scrollLeft += e.deltaY;
-          }}
-        >
-          {/* w-max: the segments keep their width and scroll, instead of squeezing to two lines. */}
-          <div className="w-max">
-            <Segmented<string>
-              label="Category"
-              value={filter.tag}
-              onChange={(tag) => setFilter({ tag })}
-              options={
-                filter.tag && !CATEGORY_OPTIONS.some((o) => o.value === filter.tag)
-                  ? [...CATEGORY_OPTIONS, { value: filter.tag, label: categoryLabel(filter.tag) }]
-                  : CATEGORY_OPTIONS
-              }
-            />
-          </div>
-        </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2 lg:shrink-0 max-lg:basis-full">
+      <div className="flex flex-wrap items-center gap-2">
+        {/* One category at a time, as on Civitai's site; a tag from elsewhere shows as itself. */}
+        <Select<string>
+          label="Category"
+          value={filter.tag}
+          onChange={(tag) => setFilter({ tag })}
+          className="w-[170px] shrink-0"
+          options={
+            filter.tag && !CATEGORY_OPTIONS.some((o) => o.value === filter.tag)
+              ? [...CATEGORY_OPTIONS, { value: filter.tag, label: categoryLabel(filter.tag) }]
+              : CATEGORY_OPTIONS
+          }
+        />
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <Select<string>
             label="Base model"
             value={filter.baseModels[0] ?? "any"}

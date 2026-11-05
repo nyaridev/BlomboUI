@@ -1,13 +1,11 @@
 /**
- * Models → Manager's entries, in three layouts on trial (List, Table, Cards; `useVariant` in
- * ManagerStore), all virtualized. Each entry links to its Hugging Face repo (or the catalog's
+ * Models → Manager's entries as a virtualized list (the catalog has hundreds of files). Each links to its Hugging Face repo (or the catalog's
  * project page), shows the repo's all-time downloads when Hugging Face reports them, and installs
  * through the download queue: Install opens a pop-up with the ComfyUI folder and file name the
  * catalog names, both changeable.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
-import { cn } from "@client/lib/cn";
 import { useLive } from "@client/lib/live";
 import { formatBytes } from "@client/lib/number";
 import { openWindow } from "@client/lib/platform";
@@ -30,7 +28,7 @@ import {
   type StoreCategory,
 } from "@shared/manager";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import { Destination, useDestination, useQueueDownload } from "./civitai/DownloadDialog";
 
 export const CATEGORY_ICON: Record<StoreCategory, IconName> = {
@@ -48,24 +46,18 @@ export const CATEGORY_ICON: Record<StoreCategory, IconName> = {
   other: "stack",
 };
 
-export const MANAGER_LAYOUTS = [
-  { id: "list", label: "List" },
-  { id: "table", label: "Table" },
-  { id: "cards", label: "Cards" },
-] as const;
-export type ManagerLayout = (typeof MANAGER_LAYOUTS)[number]["id"];
-
 export type Row =
   | { type: "header"; category: StoreCategory; count: number }
   | { type: "entry"; entry: CatalogEntry };
 
-/** What every layout needs besides the rows. */
+/** What every row needs besides its entry. */
 export interface EntryContext {
   noFolder: boolean;
   /** All-time downloads per Hugging Face repo; undefined while they load. */
   downloads: Record<string, number> | undefined;
 }
 
+const ROW_H = 68;
 const HEADER_H = 40;
 
 /** Hugging Face reports 0 for repos it doesn't count (no config file), so 0 shows as unknown. */
@@ -75,18 +67,10 @@ function downloadsOf(e: CatalogEntry, ctx: EntryContext): number | null | undefi
   return ctx.downloads[e.repo] || null;
 }
 
-function Downloads({
-  entry,
-  ctx,
-  bare,
-}: {
-  entry: CatalogEntry;
-  ctx: EntryContext;
-  bare?: boolean;
-}) {
+function Downloads({ entry, ctx }: { entry: CatalogEntry; ctx: EntryContext }) {
   const n = downloadsOf(entry, ctx);
   if (n === undefined) return <Skeleton className="h-3 w-12" />;
-  if (n === null) return bare ? <span className="text-fg-4">—</span> : null;
+  if (n === null) return null;
   return (
     <Tooltip content={`${n.toLocaleString()} downloads of ${entry.repo} on Hugging Face, all time`}>
       <span className="inline-flex items-center gap-1 font-mono tabular">
@@ -219,105 +203,42 @@ function EntryAction({ entry: e, noFolder }: { entry: CatalogEntry; noFolder: bo
   );
 }
 
-/* ── the virtual list every layout scrolls in ───────────────────────────── */
-
-type VRow = { type: "header"; category: StoreCategory; count: number } | CatalogEntry[];
-
-/** Rows of up to `cols` entries, with the headers between them. */
-function chunk(rows: Row[], cols: number): VRow[] {
-  const out: VRow[] = [];
-  let line: CatalogEntry[] = [];
-  const flush = () => {
-    if (line.length) out.push(line);
-    line = [];
-  };
-  for (const r of rows) {
-    if (r.type === "header") {
-      flush();
-      out.push(r);
-      continue;
-    }
-    line.push(r.entry);
-    if (line.length === cols) flush();
-  }
-  flush();
-  return out;
-}
-
-function Scroller({
-  rows,
-  rowH,
-  minCol,
-  head,
-  children,
-}: {
-  rows: Row[];
-  rowH: number;
-  /** Cards: the narrowest a column may be; without it, one entry per row. */
-  minCol?: number;
-  /** Stays above the list (a table's column titles). */
-  head?: ReactNode;
-  children: (line: CatalogEntry[], cols: number) => ReactNode;
-}) {
+export function ManagerList({ rows, ctx }: { rows: Row[]; ctx: EntryContext }) {
   const scroller = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el || !minCol) return;
-    const ro = new ResizeObserver(([e]) => setWidth(e?.contentRect.width ?? 0));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [minCol]);
-  const cols = minCol ? Math.max(1, Math.floor((width + 12) / (minCol + 12))) : 1;
-  const lines = useMemo(() => chunk(rows, cols), [rows, cols]);
   const virtual = useVirtualizer({
-    count: lines.length,
+    count: rows.length,
     getScrollElement: () => scroller.current,
-    estimateSize: (i) => (Array.isArray(lines[i]) ? rowH : HEADER_H),
-    overscan: 6,
+    estimateSize: (i) => (rows[i]?.type === "header" ? HEADER_H : ROW_H),
+    overscan: 8,
   });
-  // Column changes reshape every row.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: re-measure when the rows change
-  useEffect(() => virtual.measure(), [lines]);
   return (
     <div
       ref={scroller}
       className="scroll-quiet min-h-0 flex-1 overflow-y-auto px-5 pb-5 max-lg:px-3"
     >
-      {head}
       <div className="relative w-full" style={{ height: virtual.getTotalSize() }}>
         {virtual.getVirtualItems().map((v) => {
-          const line = lines[v.index];
-          if (!line) return null;
+          const row = rows[v.index];
+          if (!row) return null;
           return (
             <div
               key={v.key}
               className="absolute inset-x-0 top-0"
               style={{ transform: `translateY(${v.start}px)`, height: v.size }}
             >
-              {Array.isArray(line) ? (
-                children(line, cols)
-              ) : (
+              {row.type === "header" ? (
                 <h3 className="label-caps flex h-full items-end gap-2 pb-2">
-                  {STORE_CATEGORY_LABELS[line.category]}
-                  <span className="font-mono text-fg-4">{line.count}</span>
+                  {STORE_CATEGORY_LABELS[row.category]}
+                  <span className="font-mono text-fg-4">{row.count}</span>
                 </h3>
+              ) : (
+                <ListRow entry={row.entry} ctx={ctx} />
               )}
             </div>
           );
         })}
       </div>
     </div>
-  );
-}
-
-/* ── List ────────────────────────────────────────────────────────────────── */
-
-export function ListLayout({ rows, ctx }: { rows: Row[]; ctx: EntryContext }) {
-  return (
-    <Scroller rows={rows} rowH={68}>
-      {([e]) => (e ? <ListRow entry={e} ctx={ctx} /> : null)}
-    </Scroller>
   );
 }
 
@@ -344,120 +265,6 @@ function ListRow({ entry: e, ctx }: { entry: CatalogEntry; ctx: EntryContext }) 
         </span>
         <PageButton entry={e} />
         <EntryAction entry={e} noFolder={ctx.noFolder} />
-      </div>
-    </div>
-  );
-}
-
-/* ── Table ───────────────────────────────────────────────────────────────── */
-
-const TABLE_COLS =
-  "grid grid-cols-[minmax(0,1fr)_130px_72px_80px_150px] items-center gap-3 max-lg:grid-cols-[minmax(0,1fr)_auto]";
-
-export function TableLayout({ rows, ctx }: { rows: Row[]; ctx: EntryContext }) {
-  return (
-    <Scroller
-      rows={rows}
-      rowH={44}
-      head={
-        <div
-          className={cn(
-            TABLE_COLS,
-            "sticky top-0 z-10 -mx-5 mb-1 h-9 border-b border-line bg-bg px-8 text-2xs text-fg-3 max-lg:-mx-3 max-lg:px-6",
-          )}
-        >
-          <span>Name</span>
-          <span className="max-lg:hidden">Category</span>
-          <span className="text-right max-lg:hidden">Size</span>
-          <span className="text-right max-lg:hidden">Downloads</span>
-          <span className="sr-only">Actions</span>
-        </div>
-      }
-    >
-      {([e]) => (e ? <TableRow entry={e} ctx={ctx} /> : null)}
-    </Scroller>
-  );
-}
-
-function TableRow({ entry: e, ctx }: { entry: CatalogEntry; ctx: EntryContext }) {
-  return (
-    <div className={cn(TABLE_COLS, "h-[42px] rounded-md px-3 hover:bg-surface")}>
-      <div className="flex min-w-0 flex-col">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate text-sm text-fg" title={e.description || e.name}>
-            {e.name}
-          </span>
-          <Badges entry={e} />
-        </div>
-        <span className="truncate font-mono text-2xs text-fg-4" title={where(e)}>
-          {where(e)}
-        </span>
-      </div>
-      <span className="flex min-w-0 items-center gap-1.5 text-xs text-fg-2 max-lg:hidden">
-        <Icon name={CATEGORY_ICON[e.category]} size={13} className="shrink-0 text-fg-3" />
-        <span className="truncate">{STORE_CATEGORY_LABELS[e.category]}</span>
-      </span>
-      <span className="text-right font-mono text-xs text-fg-2 tabular max-lg:hidden">
-        {e.size ? formatBytes(e.size) : <span className="text-fg-4">—</span>}
-      </span>
-      <span className="flex justify-end text-xs text-fg-2 max-lg:hidden">
-        <Downloads entry={e} ctx={ctx} bare />
-      </span>
-      <div className="flex items-center justify-end gap-1.5">
-        <PageButton entry={e} />
-        <EntryAction entry={e} noFolder={ctx.noFolder} />
-      </div>
-    </div>
-  );
-}
-
-/* ── Cards ───────────────────────────────────────────────────────────────── */
-
-const CARD_MIN = 250;
-
-export function CardsLayout({ rows, ctx }: { rows: Row[]; ctx: EntryContext }) {
-  return (
-    <Scroller rows={rows} rowH={192} minCol={CARD_MIN}>
-      {(line, cols) => (
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
-        >
-          {line.map((e) => (
-            <EntryCard key={e.id} entry={e} ctx={ctx} />
-          ))}
-        </div>
-      )}
-    </Scroller>
-  );
-}
-
-function EntryCard({ entry: e, ctx }: { entry: CatalogEntry; ctx: EntryContext }) {
-  return (
-    <div className="flex h-[180px] min-w-0 flex-col gap-2 rounded-lg border border-line bg-surface p-3">
-      <div className="flex min-w-0 items-start gap-2.5">
-        <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-field text-fg-2">
-          <Icon name={CATEGORY_ICON[e.category]} size={17} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <span className="line-clamp-2 text-sm leading-tight font-medium text-fg" title={e.name}>
-            {e.name}
-          </span>
-          <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <Badges entry={e} />
-          </div>
-        </div>
-        <PageButton entry={e} />
-      </div>
-      <p className="line-clamp-3 text-xs text-pretty text-fg-3" title={e.description}>
-        {e.description || where(e)}
-      </p>
-      <div className="mt-auto flex min-w-0 items-center gap-2 text-2xs text-fg-3">
-        <Downloads entry={e} ctx={ctx} />
-        {e.size ? <span className="font-mono tabular">{formatBytes(e.size)}</span> : null}
-        <span className="ml-auto flex items-center gap-1.5">
-          <EntryAction entry={e} noFolder={ctx.noFolder} />
-        </span>
       </div>
     </div>
   );

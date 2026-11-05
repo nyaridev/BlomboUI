@@ -1,7 +1,7 @@
 /**
  * Models → Manager: the ComfyUI model catalog as a store. Categories with counts, search, sort
- * (by category, most downloaded, name, size), installed state, and the entries in the layout on
- * trial (ManagerEntries.tsx). Download counts load separately: Hugging Face is asked once per
+ * (by category, most downloaded, name, size), installed state, and the entries
+ * (ManagerEntries.tsx). Download counts load separately: Hugging Face is asked once per
  * repo, so the list shows before they arrive.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
@@ -9,7 +9,6 @@ import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { qk, useCatalog, useCatalogDownloads } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { useVariant } from "@client/lib/variants";
 import {
   Button,
   EmptyState,
@@ -31,15 +30,7 @@ import {
 } from "@shared/manager";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import {
-  CATEGORY_ICON,
-  CardsLayout,
-  type EntryContext,
-  ListLayout,
-  MANAGER_LAYOUTS,
-  type Row,
-  TableLayout,
-} from "./ManagerEntries";
+import { CATEGORY_ICON, type EntryContext, ManagerList, type Row } from "./ManagerEntries";
 import { useModelsNav } from "./nav";
 
 type Filter = StoreCategory | "all" | "installed";
@@ -51,7 +42,6 @@ const NO_SIZE = Number.MAX_SAFE_INTEGER;
 export function ManagerStore() {
   const catalog = useCatalog();
   const stats = useCatalogDownloads(Boolean(catalog.data));
-  const layout = useVariant("manager.layout", "Manager layout", MANAGER_LAYOUTS);
   // A deep link ("Find in Manager" from a stage) picks the category and search once.
   const [link] = useState(() => useModelsNav.getState().takeManager());
   const [filter, setFilter] = useState<Filter>(link?.category ?? "all");
@@ -149,7 +139,6 @@ export function ManagerStore() {
     (c) => c === "all" || c === "installed" || counts.get(c),
   );
   const ctx: EntryContext = { noFolder: catalog.data.noModelsFolder, downloads };
-  const Layout = { list: ListLayout, table: TableLayout, cards: CardsLayout }[layout];
   const search = (className: string) => (
     <TextField
       size="sm"
@@ -247,7 +236,7 @@ export function ManagerStore() {
           </p>
         ) : null}
         {rows.length ? (
-          <Layout rows={rows} ctx={ctx} />
+          <ManagerList rows={rows} ctx={ctx} />
         ) : (
           <EmptyState
             icon="search"

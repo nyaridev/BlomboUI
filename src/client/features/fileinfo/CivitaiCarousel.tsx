@@ -3,7 +3,8 @@
  * sits in the middle at its own shape, the others run off both sides and wrap around. A wheel notch moves one image; a
  * drag (with a fling) moves it freely and it settles on the nearest image; a click on a side
  * image brings it to the middle,
- * a click on the middle one opens it full screen; ← → step, Enter opens.
+ * a click on the middle one opens it full screen; ← → step, Enter opens. The image it's heading
+ * for is picked at once (outlined, counted, reported), while it slides into the middle.
  *
  * Only the tiles near the viewport are rendered (the row is laid out as one cycle repeated), and
  * moving writes the track's transform directly, so React renders only when tiles come or go.
@@ -123,6 +124,9 @@ export function CivitaiCarousel({
   const slideTo = useCallback(
     (k: number) => {
       aim.current = k;
+      // The target is picked at once (outline, counter, the settings under it), not once it lands.
+      setSettled(k);
+      onIndex(mod(k, n));
       anim.current?.stop();
       anim.current = animate(pos.current, geo.centerOf(k), {
         type: "spring",
@@ -132,7 +136,7 @@ export function CivitaiCarousel({
         onComplete: settle,
       });
     },
-    [geo, place, settle],
+    [geo, place, settle, n, onIndex],
   );
 
   // Measure the viewport.

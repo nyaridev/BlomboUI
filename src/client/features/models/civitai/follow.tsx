@@ -49,6 +49,8 @@ export function useFollowing() {
           );
       return true;
     },
+    /** The list in a new order (dragged in the Following tab). */
+    reorder: (list: CivitaiCreator[]) => save(list),
     /** Says so with an Undo, which puts the list back as it was. */
     unfollow: (name: string) => {
       save(following.filter((f) => !same(f.username, name)));

@@ -1,6 +1,6 @@
 /**
  * Models → Civitai → Following: the creators you follow down the left (add one by name, remove
- * one with ×), and their models on the right with the browser's filter (shared with Browse:
+ * one with ×, drag one or press Alt+↑/↓ to reorder), and their models on the right with the browser's filter (shared with Browse:
  * types, base model, period, category, search). "Everyone" merges each creator's newest models
  * (the server's feed, one page per creator); one creator lists all of theirs, newest first.
  * A creator's name clicked anywhere opens them here, pinned at the top with Follow and ×, without
@@ -9,9 +9,10 @@
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useCivitaiCreator, useCivitaiFeed, useCivitaiModels } from "@client/lib/queries";
+import { DRAG_LIFT, moveItem, NO_DRAG, type Sortable, useSortableRow } from "@client/lib/sortable";
 import { Avatar, Button, EmptyState, IconButton, TextField } from "@client/ui";
 import type { BrowseFilter, CivitaiCreator } from "@shared/civitai";
-import { type ReactNode, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CardSkeletons, FilterBar, Results } from "./Browse";
 import { FollowButton, useFollowing } from "./follow";
 import { useCivitai } from "./state";
@@ -91,9 +92,23 @@ function Creators({ creator }: { creator: string | null }) {
   const pick = useCivitai((s) => s.pickCreator);
   const visiting = useCivitai((s) => s.visiting);
   const endVisit = useCivitai((s) => s.endVisit);
-  const { following, has, follow, unfollow } = useFollowing();
+  const { following, has, follow, unfollow, reorder } = useFollowing();
   const [name, setName] = useState("");
   const is = (a: string | null, b: string) => a?.toLowerCase() === b.toLowerCase();
+  // While a drag runs, the new order stays here and is saved once on drop: a save per swap
+  // would have each answer put an older order back under the pointer.
+  const [draft, setDraft] = useState<CivitaiCreator[] | null>(null);
+  const list = draft ?? following;
+  const sortable = useSortableRow(list.length, (from, to) =>
+    setDraft((d) => moveItem(d ?? following, from, to)),
+  );
+  const dragging = list.some((_, i) => sortable(i).dragging);
+  useEffect(() => {
+    if (!draft || dragging) return;
+    const order = (l: CivitaiCreator[]) => l.map((f) => f.username).join("\n");
+    if (order(draft) !== order(following)) reorder(draft);
+    setDraft(null);
+  }, [draft, dragging, following, reorder]);
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r border-line max-lg:w-44">
       <form
@@ -138,12 +153,13 @@ function Creators({ creator }: { creator: string | null }) {
           </button>
         </div>
         {following.length ? <div className="mx-2 my-1 border-t border-line" /> : null}
-        {following.map((f) => (
+        {list.map((f, i) => (
           <CreatorRow
             key={f.username}
             creator={f}
             active={is(creator, f.username)}
             onPick={() => pick(f.username)}
+            sortable={sortable(i)}
             end={
               <IconButton
                 icon="x"
@@ -173,30 +189,44 @@ function CreatorRow({
   onPick,
   end,
   follow,
+  sortable,
 }: {
   creator: CivitaiCreator;
   active: boolean;
   onPick: () => void;
   end: ReactNode;
   follow?: boolean;
+  /** A followed creator: the row drags into another place (Alt+↑/↓ on it too). */
+  sortable?: Sortable;
 }) {
   const looked = useCivitaiCreator(creator.image ? null : creator.username);
   const missing = looked.data === null;
   const image = creator.image ?? looked.data?.image ?? null;
   return (
-    <div className="group flex flex-col gap-1">
+    <div
+      ref={sortable?.ref}
+      {...sortable?.handle}
+      className={cn(
+        "group flex flex-col gap-1 rounded-md transition-[scale,box-shadow] duration-150",
+        sortable?.dragging && cn(DRAG_LIFT, "bg-surface-2"),
+      )}
+    >
       <div className="flex items-center">
         <button
           type="button"
           className={cn(rowClass(active), missing && "text-fg-3")}
           onClick={onPick}
+          onKeyDown={sortable?.onKeyDown}
+          aria-keyshortcuts={sortable ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
           title={missing ? `Civitai has no models by ${creator.username}` : creator.username}
         >
           <Avatar name={creator.username} src={image} size={18} ring={false} />
           <span className="flex-1 truncate">{looked.data?.username ?? creator.username}</span>
           {missing ? <Icon name="info" size={13} className="shrink-0 text-fg-4" /> : null}
         </button>
-        {end}
+        <span {...{ [NO_DRAG]: "" }} className="flex">
+          {end}
+        </span>
       </div>
       {follow ? (
         <div className="pl-8">

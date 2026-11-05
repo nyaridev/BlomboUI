@@ -102,6 +102,11 @@ function Creators({ creator }: { creator: string | null }) {
           onChange={(e) => setName(e.target.value)}
           placeholder="Follow by username"
           aria-label="Follow a creator by Civitai username"
+          // Not a login: keep password managers (Bitwarden, 1Password, LastPass) out of it.
+          autoComplete="off"
+          data-bwignore
+          data-1p-ignore
+          data-lpignore="true"
         />
       </form>
       <div className="scroll-quiet flex min-h-0 flex-1 flex-col gap-px overflow-y-auto p-1.5">

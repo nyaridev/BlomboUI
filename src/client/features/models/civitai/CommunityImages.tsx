@@ -307,7 +307,7 @@ function Tile({
           type="button"
           aria-label={`Open the image${img.by ? ` by ${img.by}` : ""} full size`}
           onClick={onOpen}
-          className="absolute inset-0 z-10 cursor-zoom-in rounded-lg focus-ring"
+          className="absolute inset-0 z-10 cursor-pointer rounded-lg focus-ring"
         />
       )}
       {img.meta ? (

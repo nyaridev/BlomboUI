@@ -220,17 +220,16 @@ export function FilterBar({
         <Button variant="primary" type="submit" icon="search">
           Search
         </Button>
-        <NsfwBlurToggle size="md" />
+        <NsfwBlurToggle size="lg" />
       </form>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex max-w-full min-w-0 flex-wrap items-center gap-2">
           <MultiSelect
-            size="sm"
             label="Model types"
             clearLabel="All types"
             value={filter.types}
             onChange={(types) => setFilter({ types })}
-            className="w-[150px] shrink-0"
+            className="w-[160px] shrink-0"
             options={CIVITAI_FILTER_TYPES.map((t) => {
               const kind = civitaiKind(t);
               return {
@@ -242,11 +241,10 @@ export function FilterBar({
           />
           {/* One category at a time, as on Civitai's site; a tag from elsewhere shows as itself. */}
           <Select<string>
-            size="sm"
             label="Category"
             value={filter.tag}
             onChange={(tag) => setFilter({ tag })}
-            className="w-[150px] shrink-0"
+            className="w-[160px] shrink-0"
             options={
               filter.tag && !CATEGORY_OPTIONS.some((o) => o.value === filter.tag)
                 ? [...CATEGORY_OPTIONS, { value: filter.tag, label: categoryLabel(filter.tag) }]
@@ -254,13 +252,12 @@ export function FilterBar({
             }
           />
         </div>
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
           <Select<string>
-            size="sm"
             label="Base model"
             value={filter.baseModels[0] ?? "any"}
             onChange={(v) => setFilter({ baseModels: v === "any" ? [] : [v] })}
-            className="w-[190px]"
+            className="w-[200px]"
             options={
               filter.baseModels[0] &&
               !BASE_MODEL_OPTIONS.some((o) => o.value === filter.baseModels[0])
@@ -272,24 +269,22 @@ export function FilterBar({
             }
           />
           {following ? (
-            <span className="flex h-7 items-center gap-1.5 px-1 text-xs text-fg-3">
-              <Icon name="clock" size={13} />
+            <span className="flex h-8 items-center gap-1.5 px-1 text-sm text-fg-3">
+              <Icon name="clock" size={14} />
               Newest first
             </span>
           ) : (
             <Select
-              size="sm"
               label="Sort"
               value={filter.sort}
               onChange={(sort) => setFilter({ sort })}
-              className="w-[160px]"
+              className="w-[172px]"
               options={CIVITAI_SORTS.map((s) => ({ value: s, label: s, icon: SORT_ICONS[s] }))}
             />
           )}
           <MoreFilters filter={filter} defaultPeriod={defaults.period} />
           {changed ? (
             <Button
-              size="sm"
               variant="ghost"
               icon="undo"
               // Following keeps Browse's creator: it isn't shown there.
@@ -467,7 +462,6 @@ function MoreFilters({
       className="w-[352px] p-0"
       trigger={
         <Button
-          size="sm"
           variant="outline"
           icon="filter"
           className={cn(on > 0 && "border-accent-ink/60 text-fg")}
@@ -600,7 +594,7 @@ function describe(f: BrowseFilter): string {
  * The Civitai view's NSFW button: blurs every NSFW image until clicked, or shows them all.
  * Switching it re-blurs the ones clicked open before. Not saved: it's on each time the app starts.
  */
-export function NsfwBlurToggle({ size = "sm" }: { size?: "sm" | "md" }) {
+export function NsfwBlurToggle({ size = "sm" }: { size?: "sm" | "md" | "lg" }) {
   const blur = useCivitai((s) => s.blur);
   const toggle = useCivitai((s) => s.toggleBlur);
   return (

@@ -932,6 +932,9 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <Chip size="sm" onRemove={() => undefined}>
               detail slider
             </Chip>
+            <Chip size="lg" icon="eye-off" selected>
+              Large (beside fields)
+            </Chip>
           </Row>
         </Section>
 

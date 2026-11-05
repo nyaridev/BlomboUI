@@ -333,14 +333,15 @@ export function Chip({
   onRemove?: () => void;
   icon?: IconName;
   count?: number;
-  size?: "sm" | "md";
+  /** sm 24 px, md 28 px, lg 32 px (beside md buttons and fields). */
+  size?: "sm" | "md" | "lg";
   className?: string;
 }) {
   return (
     <span
       className={cn(
         "inline-flex items-center rounded-sm border transition-colors",
-        size === "sm" ? "h-6 text-xs" : "h-7 text-sm",
+        size === "sm" ? "h-6 text-xs" : size === "lg" ? "h-8 text-sm" : "h-7 text-sm",
         selected
           ? "border-accent/60 bg-accent/15 text-fg"
           : "border-line bg-field text-fg-2 hover:border-line-strong hover:text-fg",

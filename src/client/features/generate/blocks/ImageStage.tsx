@@ -117,17 +117,25 @@ export function ImageStage() {
   const speed = progress?.rate ?? smoothed;
 
   // The last run: the newest finished job and, when the last click queued it, the rest of that
-  // click's jobs (oldest first, so the strip reads in run order).
+  // click's jobs (oldest first, so the strip reads in run order). A grid made from the click (a
+  // batch grid, a matrix, an XY plot) comes first, then the click's own images.
   const results = useMemo<Result[]>(() => {
     // Batch files have their own panel.
     const done = jobs.filter((j) => j.state === "done" && j.group?.kind !== "batch");
-    const newest = done[0];
-    if (!newest) return [];
-    const run = runIds.includes(newest.id) ? done.filter((j) => runIds.includes(j.id)) : [newest];
-    return run.reverse().flatMap(resultsOf);
+    const grid = done[0]?.group?.kind === "grid" ? done[0] : null;
+    const latest = grid ? done[1] : done[0];
+    const run =
+      latest && runIds.includes(latest.id)
+        ? done.filter((j) => runIds.includes(j.id))
+        : latest && !grid
+          ? [latest]
+          : [];
+    return [...(grid ? resultsOf(grid) : []), ...run.reverse().flatMap(resultsOf)];
   }, [jobs, runIds]);
   const [selected, setSelected] = useState<string | null>(null);
-  const newest = results.at(-1)?.key ?? null;
+  // What a new result shows: the grid once it's there, else the newest image.
+  const newest =
+    (results[0]?.job.group?.kind === "grid" ? results[0].key : results.at(-1)?.key) ?? null;
   const seenNewest = useRef<string | null>(null);
   useEffect(() => {
     // A new result arrived: show it.

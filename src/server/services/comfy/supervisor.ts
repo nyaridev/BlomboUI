@@ -7,14 +7,18 @@
  * Managed slots get `--extra-model-paths-config` from the profile's model folders (main
  * first), `--output-directory` from its main outputs folder, and the attention and kernel
  * flags the profile picks (`profile.launch`, `launchArgs`). In dev mode a managed ComfyUI keeps running when
- * the server restarts (node --watch) and is re-adopted from its pid file, so editing server code
- * doesn't reload every model.
+ * the server restarts (tools/dev-server.ts) and is re-adopted from its pid file, so editing server
+ * code doesn't reload every model. For that it's spawned detached (on Windows a child that isn't
+ * dies with the server) and writes to `comfy.log` in the slot's state folder instead of pipes
+ * (once the server is gone, writes to its pipes fail and break ComfyUI's progress bars mid-run).
  */
 import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
+import { StringDecoder } from "node:string_decoder";
 import { z } from "zod";
 import type { ComfyLogLine, ComfyStatus } from "../../../shared/comfy.ts";
 import { PORTS } from "../../../shared/constants.ts";
@@ -302,22 +306,30 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       restartNeeded: false,
     });
 
+    // Dev keep-alive: detached, output to a file, so nothing ties ComfyUI to this server process.
+    const logFile = this.opts.keepAlive ? path.join(layout.stateDir, "comfy.log") : null;
     let child: ChildProcess;
     try {
-      child = spawn(spec.command, spec.args, {
-        cwd: spec.cwd,
-        env: {
-          ...process.env,
-          // Caches and settings of a slot's libraries stay in runtime/ (portable). The user's own
-          // ComfyUI keeps its usual ones, so it finds what it already downloaded.
-          ...(target.dir ? {} : slotCacheEnv(this.opts.runtimeDir)),
-          PYTHONUNBUFFERED: "1",
-          PYTHONIOENCODING: "utf-8",
-          ...spec.env,
-        },
-        windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
+      const out = logFile ? await fs.open(logFile, "w") : null;
+      try {
+        child = spawn(spec.command, spec.args, {
+          cwd: spec.cwd,
+          env: {
+            ...process.env,
+            // Caches and settings of a slot's libraries stay in runtime/ (portable). The user's own
+            // ComfyUI keeps its usual ones, so it finds what it already downloaded.
+            ...(target.dir ? {} : slotCacheEnv(this.opts.runtimeDir)),
+            PYTHONUNBUFFERED: "1",
+            PYTHONIOENCODING: "utf-8",
+            ...spec.env,
+          },
+          windowsHide: true,
+          detached: Boolean(out),
+          stdio: ["ignore", out?.fd ?? "pipe", out?.fd ?? "pipe"],
+        });
+      } finally {
+        await out?.close();
+      }
     } catch (error) {
       this.setStatus({ state: "crashed", message: `Couldn't start Python: ${String(error)}` });
       return this.current;
@@ -334,12 +346,14 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
         startedAt,
       }).catch(() => undefined);
 
+    const stopTail = logFile ? tailLines(logFile, (text) => this.log("out", text)) : null;
     pipeLines(child.stdout, (text) => this.log("out", text));
     pipeLines(child.stderr, (text) => this.log("err", text));
     child.on("error", (error) => {
       this.log("sys", `Python failed to start: ${error.message}`);
     });
     child.on("exit", (code, signal) => {
+      void stopTail?.();
       if (this.child !== child) return;
       this.child = null;
       this.runningTarget = null;
@@ -434,7 +448,26 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       return false;
     }
     const url = `http://127.0.0.1:${info.port}`;
-    const alive = isAlive(info.pid) && (await answers(url));
+    let alive = isAlive(info.pid) && (await answers(url));
+    // Still loading after a quick restart: wait for it, or a second ComfyUI would load the models
+    // next to it. Only until its own start would time out, and never for a pid from before boot.
+    const startedAt = Date.parse(info.startedAt);
+    const deadline = startedAt + (this.opts.readyTimeoutMs ?? 5 * 60_000);
+    if (!alive && isAlive(info.pid) && startedAt > Date.now() - os.uptime() * 1000) {
+      this.setStatus({
+        state: "starting",
+        mode: "managed",
+        slot: target.slot,
+        dir: target.dir,
+        url,
+        pid: info.pid,
+        message: "Waiting for the ComfyUI that's still loading…",
+      });
+      while (!alive && Date.now() < deadline && gen === this.generation && isAlive(info.pid)) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        alive = await answers(url);
+      }
+    }
     if (gen !== this.generation) return true;
     if (!alive) {
       await fs.rm(path.join(layout.stateDir, "comfy.pid"), { force: true }).catch(() => undefined);
@@ -715,18 +748,66 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
 
 /* ── process helpers ──────────────────────────────────────────────────────── */
 
+/** Splits text that arrives in chunks into lines (`\r` too: progress bars redraw with it). */
+function lineSplitter(onLine: (text: string) => void) {
+  let rest = "";
+  return {
+    push(chunk: string) {
+      const parts = (rest + chunk).split(/\r?\n|\r(?!\n)/);
+      rest = parts.pop() ?? "";
+      for (const p of parts) if (p.trim()) onLine(p);
+    },
+    end() {
+      if (rest.trim()) onLine(rest);
+      rest = "";
+    },
+  };
+}
+
 function pipeLines(stream: NodeJS.ReadableStream | null, onLine: (text: string) => void): void {
   if (!stream) return;
-  let rest = "";
+  const lines = lineSplitter(onLine);
   stream.setEncoding("utf8");
-  stream.on("data", (chunk: string) => {
-    const parts = (rest + chunk).split(/\r?\n|\r(?!\n)/);
-    rest = parts.pop() ?? "";
-    for (const p of parts) if (p.trim()) onLine(p);
-  });
-  stream.on("end", () => {
-    if (rest.trim()) onLine(rest);
-  });
+  stream.on("data", (chunk: string) => lines.push(chunk));
+  stream.on("end", () => lines.end());
+}
+
+/**
+ * Follows a file another process appends to. Reads it on a timer: NTFS doesn't report a file
+ * growing while it's held open, so fs.watch would miss writes. The returned stop reads what's left.
+ */
+function tailLines(file: string, onLine: (text: string) => void): () => Promise<void> {
+  const lines = lineSplitter(onLine);
+  const decoder = new StringDecoder("utf8");
+  const buf = Buffer.alloc(64 * 1024);
+  let offset = 0;
+  let chain = Promise.resolve();
+  const readNew = () => {
+    chain = chain.then(async () => {
+      const handle = await fs.open(file, "r").catch(() => null);
+      if (!handle) return;
+      try {
+        for (;;) {
+          const { bytesRead } = await handle.read(buf, 0, buf.length, offset);
+          if (!bytesRead) break;
+          offset += bytesRead;
+          lines.push(decoder.write(buf.subarray(0, bytesRead)));
+        }
+      } catch {
+        // Skip this tick; the next one reads from the same offset.
+      } finally {
+        await handle.close();
+      }
+    });
+    return chain;
+  };
+  const timer = setInterval(readNew, 250);
+  return async () => {
+    clearInterval(timer);
+    await readNew();
+    lines.push(decoder.end());
+    lines.end();
+  };
 }
 
 function isAlive(pid: number): boolean {

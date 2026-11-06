@@ -1,5 +1,5 @@
 @echo off
-rem BlomboUI for development: API on :4381 (restarts on change) + Vite on :4382 with hot reload.
+rem BlomboUI for development: API on :4381 (tools/dev-server.ts restarts it when server code changes) + Vite on :4382 with hot reload.
 rem For the desktop window with hot reload use: npm run dev:app
 setlocal
 cd /d "%~dp0"

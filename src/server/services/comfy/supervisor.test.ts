@@ -210,6 +210,10 @@ describe("managed slot", () => {
     await first.applyProfile(profile({ mode: "managed", slot: "kept" }));
     await until(first, "running");
     const pid = first.status().pid;
+    // Detached, it writes to comfy.log instead of pipes; the log view follows the file.
+    await expect
+      .poll(() => first.logs().some((l) => l.stream === "out" && /Total VRAM/.test(l.text)))
+      .toBe(true);
     await first.shutdown();
 
     const second = await supervisor();

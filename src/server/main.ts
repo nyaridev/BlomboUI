@@ -89,3 +89,7 @@ const shutdown = () => {
 };
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+// tools/dev-server.ts restarts the server this way: on Windows kill() skips signal handlers.
+process.on("message", (message) => {
+  if (message === "shutdown") shutdown();
+});

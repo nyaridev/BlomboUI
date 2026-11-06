@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "concurrently -k -n server,web -c yellow,cyan \"npm:dev:server\" \"npm:dev:web\"",
-    "dev:server": "node --watch-path=src/server --watch-path=src/shared src/server/main.ts --dev --port 4381 --open none",
+    "dev:server": "node tools/dev-server.ts --dev --port 4381 --open none",
     "dev:web": "vite --open",
     "dev:headless": "concurrently -k -n server,web -c yellow,cyan \"npm:dev:server\" \"vite\"",
     "dev:app": "concurrently -k -n server,web,app -c yellow,cyan,magenta \"npm:dev:server\" \"vite\" \"npm:app:dev-window\"",

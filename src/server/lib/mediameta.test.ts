@@ -50,6 +50,23 @@ describe("readMediaBytes", () => {
     expect(JSON.parse(head.text.workflow ?? "")).toEqual({ nodes: [] });
   });
 
+  it("reads the named tags ComfyUI's Save Video writes (QuickTime keys)", async () => {
+    const key = (name: string) => box("mdta", enc.encode(name));
+    const keys = box("keys", u32(0), u32(3), key("blombo"), key("prompt"), key("encoder"));
+    const item = (n: number, text: string) =>
+      cat(
+        u32(8 + 16 + enc.encode(text).byteLength),
+        u32(n),
+        box("data", u32(1), u32(0), enc.encode(text)),
+      );
+    const ilst = box("ilst", item(1, '{"seed":7}'), item(2, '{"1":{}}'), item(3, "Lavf63"));
+    const meta = box("meta", new Uint8Array(4), box("hdlr", new Uint8Array(24)), keys, ilst);
+    const head = await read(
+      cat(box("ftyp", enc.encode("isom"), u32(0)), box("moov", box("udta", meta))),
+    );
+    expect(head.text).toEqual({ blombo: '{"seed":7}', prompt: '{"1":{}}', encoder: "Lavf63" });
+  });
+
   it("reads a FLAC's length and ComfyUI's comments", async () => {
     // STREAMINFO: 44100 Hz, 88200 samples (2 s).
     const info = new Uint8Array(34);

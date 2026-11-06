@@ -3,8 +3,10 @@
  * and the text metadata ComfyUI writes.
  *
  *  - MP4: the box tree is walked by headers (the media data is skipped, wherever `moov` sits):
- *    `mvhd` gives the length, a video track's `tkhd` the size, and `udta/meta/ilst/©cmt` the
- *    comment Video Helper Suite writes (a JSON object: "prompt", "workflow", Blombo's chunk…).
+ *    `mvhd` gives the length, a video track's `tkhd` the size, and `udta/meta/ilst` the text:
+ *    the `©cmt` comment Video Helper Suite writes (a JSON object: "prompt", "workflow", Blombo's
+ *    chunk…), or the named tags ComfyUI's Save Video writes through ffmpeg (QuickTime metadata:
+ *    a `keys` box names them, the `ilst` items are numbered after it).
  *  - FLAC: STREAMINFO gives the length, VORBIS_COMMENT the "prompt" / "workflow" ComfyUI's
  *    Save Audio writes.
  *  - WAV: the length from the format and data chunks.
@@ -48,9 +50,17 @@ export function textFromComment(comment: string): Record<string, string> {
 
 const CONTAINERS = new Set(["moov", "trak", "mdia", "udta", "ilst"]);
 
+/** A tag's text: a comment is a JSON object of tags, anything else is one. */
+function addTag(text: Record<string, string>, name: string, value: string) {
+  if (name === "comment") Object.assign(text, textFromComment(value));
+  else text[name] = value;
+}
+
 async function readMp4(readAt: ReadAt, size: number): Promise<MediaHead> {
   const head = empty();
-  const walk = async (start: number, end: number, depth: number): Promise<void> => {
+  /** QuickTime metadata's tag names; `ilst` item n is keys[n - 1]. */
+  const keys: string[] = [];
+  const walk = async (start: number, end: number, depth: number, parent = ""): Promise<void> => {
     let pos = start;
     while (pos + 8 <= end && depth < 8) {
       const h = await readAt(pos, 16);
@@ -64,7 +74,7 @@ async function readMp4(readAt: ReadAt, size: number): Promise<MediaHead> {
       } else if (len === 0) len = end - pos;
       if (len < 8) return;
       const boxEnd = Math.min(end, pos + len);
-      if (CONTAINERS.has(type)) await walk(body, boxEnd, depth + 1);
+      if (CONTAINERS.has(type)) await walk(body, boxEnd, depth + 1, type);
       else if (type === "meta") {
         // A full box in MP4 (4 bytes of version and flags first), a plain one in QuickTime.
         const peek = await readAt(body + 4, 4);
@@ -87,11 +97,22 @@ async function readMp4(readAt: ReadAt, size: number): Promise<MediaHead> {
             head.height = Math.round(hh);
           }
         }
-      } else if (type === "©cmt" && depth > 0 && len <= MAX_TEXT) {
-        // An ilst item: a "data" box (type, locale) then the text.
+      } else if (type === "keys" && len <= MAX_TEXT) {
+        // Version and flags, the count, then each key: size, namespace ("mdta"), name.
         const d = await readAt(body, boxEnd - body);
-        if (latin1.decode(d.subarray(4, 8)) === "data")
-          Object.assign(head.text, textFromComment(utf8.decode(d.subarray(16))));
+        let at = 8;
+        while (at + 8 <= d.byteLength) {
+          const size = view(d).getUint32(at);
+          if (size < 8) break;
+          keys.push(utf8.decode(d.subarray(at + 8, at + size)));
+          at += size;
+        }
+      } else if (parent === "ilst" && len <= MAX_TEXT) {
+        const name = type === "©cmt" ? "comment" : keys[view(h).getUint32(4) - 1];
+        // An ilst item: a "data" box (type, locale) then the text.
+        const d = name ? await readAt(body, boxEnd - body) : null;
+        if (name && d && latin1.decode(d.subarray(4, 8)) === "data")
+          addTag(head.text, name, utf8.decode(d.subarray(16)));
       }
       pos = boxEnd;
     }

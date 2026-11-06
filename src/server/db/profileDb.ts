@@ -250,6 +250,11 @@ export const MIGRATIONS: readonly string[] = [
   UPDATE images SET size = -1 WHERE summary LIKE '%"Civitai model %' OR path LIKE 'civitai/%'
     OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg' OR lower(path) LIKE '%.webp';
   `,
+  // 12: MP4s from ComfyUI's Save Video keep their prompt in named tags (QuickTime keys): read
+  // them again.
+  `
+  UPDATE images SET size = -1 WHERE lower(path) LIKE '%.mp4';
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

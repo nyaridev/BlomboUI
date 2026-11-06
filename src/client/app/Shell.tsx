@@ -59,7 +59,7 @@ const DesignLab = import.meta.env.DEV
   ? lazy(() => import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })))
   : () => null;
 const SavedData = import.meta.env.DEV
-  ? lazy(() => import("../features/data/SavedData").then((m) => ({ default: m.SavedData })))
+  ? lazy(() => import("../features/storage/SavedData").then((m) => ({ default: m.SavedData })))
   : () => null;
 const ErrorsView = lazyView(() =>
   import("../features/errors/ErrorsView").then((m) => ({ default: m.ErrorsView })),

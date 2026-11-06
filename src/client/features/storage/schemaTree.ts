@@ -1,7 +1,8 @@
 /**
  * A JSON schema (from `z.toJSONSchema`) as indented rows for the Saved data view: each field's name,
- * type and default, nested objects and array items below their field. `$ref`s to `$defs` are
- * followed once per branch (layouts nest), then shown by name.
+ * type in words ("text", "yes / no", "list of numbers") and default, nested groups and list items
+ * below their field. `$ref`s to `$defs` are followed once per branch (layouts nest), then shown
+ * by name.
  */
 type Schema = Record<string, unknown>;
 
@@ -16,19 +17,40 @@ export interface SchemaRow {
 
 const MAX_DEPTH = 8;
 
-function typeOf(s: Schema): string {
-  if (typeof s.$ref === "string") return s.$ref.split("/").pop() ?? "ref";
-  if ("const" in s) return JSON.stringify(s.const);
-  if (Array.isArray(s.enum)) return s.enum.map((v) => JSON.stringify(v)).join(" | ");
+const WORDS: Record<string, [one: string, many: string]> = {
+  string: ["text", "texts"],
+  number: ["number", "numbers"],
+  integer: ["whole number", "whole numbers"],
+  boolean: ["yes / no", "yes / no values"],
+  object: ["group", "groups"],
+  null: ["empty", "empties"],
+};
+
+const show = (v: unknown) => (typeof v === "string" ? v : JSON.stringify(v));
+
+/** A schema's type in words; `many` for list items ("list of texts"). */
+export function typeOf(s: Schema, many = false): string {
+  if (typeof s.$ref === "string") return s.$ref.split("/").pop() ?? "group";
+  if ("const" in s) return `always ${show(s.const)}`;
+  if (Array.isArray(s.enum)) return `one of: ${s.enum.map(show).join(", ")}`;
   const options = (s.anyOf ?? s.oneOf) as Schema[] | undefined;
-  if (Array.isArray(options)) return options.map(typeOf).join(" | ");
+  if (Array.isArray(options)) return orEmpty(options.map((o) => typeOf(o, many)));
   const t = s.type;
-  if (Array.isArray(t)) return t.join(" | ");
-  if (t === "array" && s.items && typeof s.items === "object")
-    return `${typeOf(s.items as Schema)}[]`;
+  if (Array.isArray(t)) return orEmpty(t.map((x) => WORDS[String(x)]?.[many ? 1 : 0] ?? String(x)));
+  if (t === "array")
+    return s.items && typeof s.items === "object"
+      ? `list of ${typeOf(s.items as Schema, true)}`
+      : "list";
   if (t === "object" && s.additionalProperties && typeof s.additionalProperties === "object")
-    return `{ [key]: ${typeOf(s.additionalProperties as Schema)} }`;
-  return typeof t === "string" ? t : "any";
+    return `${typeOf(s.additionalProperties as Schema, true)} by name`;
+  return typeof t === "string" ? (WORDS[t]?.[many ? 1 : 0] ?? t) : "anything";
+}
+
+/** "text or empty" rather than "text, empty". */
+function orEmpty(parts: string[]): string {
+  const empty = parts.filter((p) => p === "empty" || p === "empties");
+  const rest = parts.filter((p) => p !== "empty" && p !== "empties");
+  return [rest.join(" or "), empty.length ? "or empty" : ""].filter(Boolean).join(" ");
 }
 
 /** The object schema to list fields of, if this one (or its array items) has any. */

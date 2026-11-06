@@ -18,12 +18,11 @@ import { WorkflowSwitcher } from "./WorkflowSwitcher";
 const NAV: Array<{
   value: MainView;
   label: string;
-  icon: "generate" | "gallery" | "models" | "wildcards" | "file-info" | "compare";
+  icon: "generate" | "gallery" | "models" | "file-info" | "compare";
 }> = [
   { value: "generate", label: "Generate", icon: "generate" },
   { value: "gallery", label: "Gallery", icon: "gallery" },
   { value: "models", label: "Models", icon: "models" },
-  { value: "wildcards", label: "Wildcards", icon: "wildcards" },
   { value: "file-info", label: "File Info", icon: "file-info" },
 ];
 
@@ -111,7 +110,7 @@ export function MobileNav({ profileId, view }: { profileId: string; view: ViewId
   return (
     <nav
       aria-label="Main"
-      className="grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="grid grid-cols-4 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       {NAV.map((n) => {
         const active = n.value === view || (n.value === "generate" && view === "compare");

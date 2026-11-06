@@ -46,8 +46,25 @@ export const WildcardEntry = z.object({
 });
 export type WildcardEntry = z.infer<typeof WildcardEntry>;
 
-/** GET /api/wildcards: the main wildcard folder ("" when none) and every name in all of them. */
-export const WildcardList = z.object({ root: z.string(), names: z.array(z.string()) });
+/** The file that defines a wildcard (its .txt, or the YAML file with its key), for sorting. */
+export const WildcardStat = z.object({
+  ctime: z.number(),
+  mtime: z.number(),
+  /** The defining file's size in bytes (a YAML file holds other keys too). */
+  size: z.number(),
+  entries: z.number().int(),
+});
+export type WildcardStat = z.infer<typeof WildcardStat>;
+
+/**
+ * GET /api/wildcards: the main wildcard folder ("" when none), every name in all of them, and
+ * each name's file dates, size and entry count.
+ */
+export const WildcardList = z.object({
+  root: z.string(),
+  names: z.array(z.string()),
+  stats: z.record(z.string(), WildcardStat).default({}),
+});
 export type WildcardList = z.infer<typeof WildcardList>;
 
 /**

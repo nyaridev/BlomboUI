@@ -53,7 +53,7 @@ export const MODEL_KINDS = [
 export type ModelKind = (typeof MODEL_KINDS)[number];
 
 /** Main views reachable from the header. Order is the default tab order. */
-export const MAIN_VIEWS = ["generate", "gallery", "models", "wildcards", "file-info"] as const;
+export const MAIN_VIEWS = ["generate", "gallery", "models", "file-info"] as const;
 export type MainView = (typeof MAIN_VIEWS)[number];
 
 /** Views reached from the avatar menu rather than the header tabs. */

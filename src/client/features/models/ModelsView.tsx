@@ -1,12 +1,14 @@
 /**
- * Models: Local · Civitai · Manager. One ModelCard everywhere. Local runs on the profile's
- * models folder (LocalModels.tsx), Civitai is the in-app browser with model tabs
- * (civitai/CivitaiView.tsx), Manager is the ComfyUI model catalog as a store (ManagerStore.tsx).
+ * Models: Local · Civitai · Manager · Wildcards. One ModelCard everywhere. Local runs on the
+ * profile's models folder (LocalModels.tsx), Civitai is the in-app browser with model tabs
+ * (civitai/CivitaiView.tsx), Manager is the ComfyUI model catalog as a store (ManagerStore.tsx),
+ * Wildcards the wildcards folders as cards or in the file editor (wildcards/WildcardsTab.tsx).
  * Which tab is open lives in nav.ts so other views can deep-link here.
  */
 import { formatBytes } from "@client/lib/number";
 import { useLocalModels } from "@client/lib/queries";
 import { Tabs } from "@client/ui";
+import { WildcardsTab } from "../wildcards/WildcardsTab";
 import { CivitaiView } from "./civitai/CivitaiView";
 import { LocalModels } from "./LocalModels";
 import { ManagerStore } from "./ManagerStore";
@@ -27,12 +29,21 @@ export function ModelsView() {
             { value: "local", label: "Local", icon: "folder" },
             { value: "civitai", label: "Civitai", icon: "globe" },
             { value: "manager", label: "Manager", icon: "store" },
+            { value: "wildcards", label: "Wildcards", icon: "wildcards" },
           ]}
           className="border-b-0"
         />
-        <FolderSummary />
+        {sub === "wildcards" ? null : <FolderSummary />}
       </div>
-      {sub === "local" ? <LocalModels /> : sub === "civitai" ? <CivitaiView /> : <ManagerStore />}
+      {sub === "local" ? (
+        <LocalModels />
+      ) : sub === "civitai" ? (
+        <CivitaiView />
+      ) : sub === "manager" ? (
+        <ManagerStore />
+      ) : (
+        <WildcardsTab />
+      )}
     </div>
   );
 }

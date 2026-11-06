@@ -19,6 +19,9 @@
  * With `picks` (an XY plot axis, `PicksDialog`), the same grid picks several models of one kind
  * instead: a click adds or removes a card from the list and nothing in the workflow changes;
  * the eye keeps the picked ones first.
+ *
+ * With `browse` (Models → Wildcards → View), it only looks: a click opens the card's info
+ * (wildcards: entries, file, Edit), nothing goes into the prompt and there's no eye.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
@@ -34,6 +37,7 @@ import {
   useSettings,
   useUpdateSettings,
   useWildcards,
+  useWildcardsChanged,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
@@ -62,6 +66,7 @@ import {
   swapLoraTag,
 } from "@shared/prompt/loras";
 import { type RenameChange, renameName, renameRefs } from "@shared/prompt/renames";
+import type { WildcardStat } from "@shared/wildcards";
 import type { Binding } from "@shared/workflow/manifest";
 import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -102,26 +107,36 @@ const OTHER_KINDS: Array<{ value: ModelKind; label: string }> = [
 const COLUMNS = { tree: 5, wide: 7 } as const;
 const MIN_CARD_W = 150;
 const CARD_RATIO = 2 / 3;
+/** Browsing (Models → Wildcards) sizes cards as Models → Local does: 176 px at least, 3:4. */
+const BROWSE_CARD = { min: 176, ratio: 3 / 4 } as const;
 const GAP = 12;
 
-type Sort = "suggested" | "name" | "created" | "modified" | "path" | "size";
+type Sort = "suggested" | "name" | "created" | "modified" | "path" | "size" | "entries";
 type Order = "asc" | "desc";
-/** Each sort with the order it starts in (dates and size newest / largest first). */
-const SORTS: Array<{ value: Sort; label: string; icon: IconName; order: Order; files?: true }> = [
-  { value: "suggested", label: "Favorites first", icon: "heart", order: "asc" },
-  { value: "name", label: "Name", icon: "text", order: "asc" },
-  { value: "path", label: "Path", icon: "folder", order: "asc" },
-  { value: "created", label: "Date created", icon: "calendar", order: "desc", files: true },
-  { value: "modified", label: "Date modified", icon: "clock", order: "desc", files: true },
-  { value: "size", label: "Size", icon: "stack", order: "desc", files: true },
-];
+/**
+ * Each sort with the order it starts in (dates, size and entries newest / largest first).
+ * Wildcards date and size by the file that defines them; entries is theirs only.
+ */
+const SORTS: Array<{ value: Sort; label: string; icon: IconName; order: Order; wildcards?: true }> =
+  [
+    { value: "suggested", label: "Favorites first", icon: "heart", order: "asc" },
+    { value: "name", label: "Name", icon: "text", order: "asc" },
+    { value: "path", label: "Path", icon: "folder", order: "asc" },
+    { value: "created", label: "Date created", icon: "calendar", order: "desc" },
+    { value: "modified", label: "Date modified", icon: "clock", order: "desc" },
+    { value: "size", label: "Size", icon: "stack", order: "desc" },
+    { value: "entries", label: "Entries", icon: "hash", order: "desc", wildcards: true },
+  ];
 const byText = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
 const COMPARE: Record<Exclude<Sort, "suggested">, (a: Item, b: Item) => number> = {
   name: (a, b) => byText(a.name, b.name),
   path: (a, b) => byText(a.id, b.id),
-  created: (a, b) => (a.local?.ctime ?? 0) - (b.local?.ctime ?? 0),
-  modified: (a, b) => (a.local?.mtime ?? 0) - (b.local?.mtime ?? 0),
-  size: (a, b) => (a.local?.size ?? 0) - (b.local?.size ?? 0),
+  created: (a, b) =>
+    (a.local?.ctime ?? a.stat?.ctime ?? 0) - (b.local?.ctime ?? b.stat?.ctime ?? 0),
+  modified: (a, b) =>
+    (a.local?.mtime ?? a.stat?.mtime ?? 0) - (b.local?.mtime ?? b.stat?.mtime ?? 0),
+  size: (a, b) => (a.local?.size ?? a.stat?.size ?? 0) - (b.local?.size ?? b.stat?.size ?? 0),
+  entries: (a, b) => (a.stat?.entries ?? 0) - (b.stat?.entries ?? 0),
 };
 
 interface Item {
@@ -130,6 +145,8 @@ interface Item {
   kind: CardKind;
   folder: string | null;
   local?: LocalModel;
+  /** A wildcard's defining file. */
+  stat?: WildcardStat;
 }
 
 /** "kind:style/foo.safetensors" (lowercase, forward slashes) for joining ComfyUI's names. */
@@ -145,6 +162,7 @@ export function ModelGrid({
   target = null,
   onTarget = () => {},
   picks,
+  browse = false,
   className,
 }: {
   tab: PickerTab;
@@ -153,7 +171,9 @@ export function ModelGrid({
   target?: StripTarget | null;
   onTarget?: (target: StripTarget | null) => void;
   picks?: ModelPicks;
-  /** The grid's height (75svh in the Generate view). */
+  /** Look only: a click opens the card's info instead of using it. */
+  browse?: boolean;
+  /** The grid's height (replaces the Generate view's 75svh). */
   className?: string;
 }) {
   // Picking into a list: LoRAs behave as the LoRAs tab, other kinds as Other with that kind.
@@ -180,6 +200,7 @@ export function ModelGrid({
           : null;
   const models = useModels(kind);
   const wildcards = useWildcards();
+  const reloadWildcards = useWildcardsChanged();
   const localList = useLocalModels().data;
   const settings = useSettings().data;
   const updateSettings = useUpdateSettings();
@@ -217,6 +238,7 @@ export function ModelGrid({
         name: n,
         kind: "wildcards",
         folder: modelFolder(n),
+        stat: wildcards.data?.stats[n],
       }));
     return (models.data?.names ?? []).map((n) => ({
       id: n,
@@ -234,9 +256,8 @@ export function ModelGrid({
   const [onlyFavorites, setOnlyFavorites] = useState(false);
   const [pickedSort, setSort] = useState<Sort>("created");
   const [order, setOrder] = useState<Order>("desc");
-  // Wildcards have no file dates or sizes: those sorts read as Name there.
-  const sort: Sort =
-    tab === "wildcards" && SORTS.find((s) => s.value === pickedSort)?.files ? "name" : pickedSort;
+  // Entries is a wildcard sort: models read it as Name.
+  const sort: Sort = tab !== "wildcards" && pickedSort === "entries" ? "name" : pickedSort;
   const [renaming, setRenaming] = useState<RenameTarget | null>(null);
   const [wildcardInfo, setWildcardInfo] = useState<string | null>(null);
   const editWildcard = useEditWildcard();
@@ -267,6 +288,7 @@ export function ModelGrid({
     [prompt, instant],
   );
   const isSelected = (item: Item) => {
+    if (browse) return false;
     if (picks) return picks.value.includes(item.id);
     if (tab === "loras")
       return inPrompt.has(tagName(item.id).toLowerCase()) || inPrompt.has(item.name.toLowerCase());
@@ -297,8 +319,8 @@ export function ModelGrid({
   };
 
   // Search, base models and favorites first; the tree counts what they leave, the folder
-  // narrows further. Wildcards have no favorites.
-  const favoritesOnly = onlyFavorites && tab !== "wildcards";
+  // narrows further.
+  const favoritesOnly = onlyFavorites;
   const found = useMemo(() => {
     const wanted = new Set(baseModels);
     return items.filter(
@@ -319,10 +341,13 @@ export function ModelGrid({
       const compare = COMPARE[sort];
       sorted = shown.sort(order === "asc" ? compare : (a, b) => compare(b, a));
     } else {
-      const suggested =
-        tab === "wildcards"
-          ? shown
-          : pickerOrder(shown, (i) => i.id, favorites, marks?.recent ?? []).map((o) => o.item);
+      // Wildcards: favorites, then by name (recent use is a models thing).
+      const suggested = pickerOrder(
+        tab === "wildcards" ? shown.sort(COMPARE.name) : shown,
+        (i) => i.id,
+        favorites,
+        tab === "wildcards" ? [] : (marks?.recent ?? []),
+      ).map((o) => o.item);
       sorted = order === "asc" ? suggested : suggested.reverse();
     }
     if (!loaded.size) return sorted;
@@ -443,6 +468,11 @@ export function ModelGrid({
   };
 
   const pick = (item: Item) => {
+    if (browse) {
+      if (item.local) openModelInfo(item.local.id);
+      else setWildcardInfo(item.id);
+      return;
+    }
     if (picks) {
       picks.onChange(
         picks.value.includes(item.id)
@@ -569,7 +599,7 @@ export function ModelGrid({
             },
             {
               id: "edit",
-              label: "Edit in Wildcards",
+              label: "Open in the editor",
               icon: "wildcards",
               onSelect: () =>
                 void api
@@ -582,7 +612,7 @@ export function ModelGrid({
           ]
         : [];
     return [
-      use,
+      ...(browse ? [] : [use]),
       ...wildcardEntries,
       {
         id: "copy",
@@ -601,7 +631,7 @@ export function ModelGrid({
 
   return (
     // The Generate view scrolls as a whole, so the grid gets a height of its own.
-    <div className={cn("flex h-[75svh] min-h-[420px] flex-col gap-3", className)}>
+    <div className={cn("flex flex-col gap-3", className ?? "h-[75svh] min-h-[420px]")}>
       <div className="flex items-center gap-2 max-lg:flex-wrap">
         <IconButton
           icon="sidebar"
@@ -623,21 +653,23 @@ export function ModelGrid({
           onClear={() => setQuery("")}
           className="min-w-0 flex-1"
         />
-        <IconButton
-          icon={showLoaded ? "eye" : "eye-off"}
-          label={
-            picks
-              ? showLoaded
-                ? "Showing the picked ones first (click to list them like the rest)"
-                : "Show the picked ones first, past the search and filters"
-              : showLoaded
-                ? "Showing what the workflow uses first (click to list it like the rest)"
-                : "Show what the workflow uses first, past the search and filters"
-          }
-          variant="secondary"
-          active={showLoaded}
-          onClick={() => updateSettings.mutate({ generate: { pickerShowLoaded: !showLoaded } })}
-        />
+        {browse ? null : (
+          <IconButton
+            icon={showLoaded ? "eye" : "eye-off"}
+            label={
+              picks
+                ? showLoaded
+                  ? "Showing the picked ones first (click to list them like the rest)"
+                  : "Show the picked ones first, past the search and filters"
+                : showLoaded
+                  ? "Showing what the workflow uses first (click to list it like the rest)"
+                  : "Show what the workflow uses first, past the search and filters"
+            }
+            variant="secondary"
+            active={showLoaded}
+            onClick={() => updateSettings.mutate({ generate: { pickerShowLoaded: !showLoaded } })}
+          />
+        )}
         {tab === "other" && !picks ? (
           <Segmented
             size="sm"
@@ -660,17 +692,15 @@ export function ModelGrid({
             options={bases.map((b) => ({ value: b.name, label: b.label, group: b.group }))}
           />
         ) : null}
-        {tab !== "wildcards" ? (
-          <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
-            Favorites
-          </Chip>
-        ) : null}
+        <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
+          Favorites
+        </Chip>
         <Select<Sort>
           value={sort}
           onChange={pickSort}
           label="Sort"
           className="w-40"
-          options={tab === "wildcards" ? SORTS.filter((s) => !s.files) : SORTS}
+          options={tab === "wildcards" ? SORTS : SORTS.filter((s) => !s.wildcards)}
         />
         <IconButton
           icon={order === "asc" ? "sort-asc" : "sort-desc"}
@@ -682,14 +712,21 @@ export function ModelGrid({
           variant="secondary"
           onClick={() => setOrder((o) => (o === "asc" ? "desc" : "asc"))}
         />
-        {tab !== "wildcards" ? (
+        {tab === "wildcards" ? (
+          <IconButton
+            icon="refresh"
+            label="Read the wildcards folders again"
+            variant="secondary"
+            onClick={reloadWildcards}
+          />
+        ) : (
           <IconButton
             icon="rescan-models"
             label="Rescan model folders"
             variant="secondary"
             onClick={() => void rescanModels()}
           />
-        ) : null}
+        )}
       </div>
       <div className="flex min-h-0 flex-1 gap-3">
         {showTree && !loading && !unavailable ? (
@@ -753,12 +790,16 @@ export function ModelGrid({
               isSelected={isSelected}
               onPick={pick}
               onMenu={(e, item) => openContextMenu(e, menuFor(item))}
-              favorites={tab === "wildcards" ? null : favorites}
+              favorites={favorites}
               onFavorite={(item) =>
-                kind &&
-                setFavorite.mutate({ kind, name: item.id, favorite: !favorites.has(item.id) })
+                setFavorite.mutate({
+                  kind: kind ?? "wildcards",
+                  name: item.id,
+                  favorite: !favorites.has(item.id),
+                })
               }
-              columns={showTree ? COLUMNS.tree : COLUMNS.wide}
+              columns={browse ? Number.POSITIVE_INFINITY : showTree ? COLUMNS.tree : COLUMNS.wide}
+              card={browse ? BROWSE_CARD : undefined}
               onInfo={tab === "wildcards" ? (item) => setWildcardInfo(item.id) : undefined}
             />
           )}
@@ -789,10 +830,13 @@ function VirtualGrid({
   favorites,
   onFavorite,
   columns: wanted,
+  card = { min: MIN_CARD_W, ratio: CARD_RATIO },
   onInfo,
 }: {
   /** Cards a row when there's room. */
   columns: number;
+  /** The narrowest a card gets, and its shape. */
+  card?: { min: number; ratio: number };
   /** The info button on cards without a local model (wildcards). */
   onInfo?: (i: Item) => void;
   items: Item[];
@@ -805,9 +849,9 @@ function VirtualGrid({
 }) {
   const scroller = useRef<HTMLDivElement>(null);
   const width = useElementWidth(scroller);
-  const columns = Math.max(1, Math.min(wanted, Math.floor((width + GAP) / (MIN_CARD_W + GAP))));
-  const cardWidth = width > 0 ? Math.floor((width - GAP * (columns - 1)) / columns) : MIN_CARD_W;
-  const rowHeight = Math.round(cardWidth / CARD_RATIO) + GAP;
+  const columns = Math.max(1, Math.min(wanted, Math.floor((width + GAP) / (card.min + GAP))));
+  const cardWidth = width > 0 ? Math.floor((width - GAP * (columns - 1)) / columns) : card.min;
+  const rowHeight = Math.round(cardWidth / card.ratio) + GAP;
   const rows = Math.ceil(items.length / columns);
   const virtual = useVirtualizer({
     count: rows,
@@ -844,6 +888,7 @@ function VirtualGrid({
                 favorite={favorites ? favorites.has(item.id) : null}
                 onFavorite={onFavorite}
                 onInfo={onInfo}
+                ratio={card.ratio}
               />
             ))}
           </div>
@@ -861,9 +906,11 @@ function PickerCard({
   favorite,
   onFavorite,
   onInfo,
+  ratio,
 }: {
   item: Item;
   onInfo?: (i: Item) => void;
+  ratio: number;
   selected: boolean;
   onPick: (i: Item) => void;
   onMenu: (e: MouseEvent<HTMLElement>, i: Item) => void;
@@ -879,7 +926,7 @@ function PickerCard({
       baseModel={item.local?.baseModel ?? item.folder ?? undefined}
       thumb={item.local?.thumb ?? null}
       meta={item.local?.triggerWords[0]}
-      ratio={CARD_RATIO}
+      ratio={ratio}
       selected={selected}
       onClick={() => onPick(item)}
       onContextMenu={(e) => onMenu(e, item)}

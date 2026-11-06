@@ -14,7 +14,7 @@ import {
 import { HttpError, readJson } from "../lib/http.ts";
 import type { ProfileService } from "../services/profiles.ts";
 import { openInFileManager, revealInFileManager } from "../services/system.ts";
-import { listWildcards, WildcardFolders } from "../services/wildcards.ts";
+import { listWildcards, WildcardFolders, wildcardStats } from "../services/wildcards.ts";
 
 export function wildcardRoutes(profiles: ProfileService) {
   const r = new Hono();
@@ -32,9 +32,11 @@ export function wildcardRoutes(profiles: ProfileService) {
   /** Names only (prompt autocomplete, pickers). */
   r.get("/", async (c) => {
     const f = await files();
+    const paths = f.folders.map((folder) => folder.path);
     return c.json<WildcardList>({
       root: f.folders[0]?.path ?? "",
-      names: await listWildcards(f.folders.map((folder) => folder.path)),
+      names: await listWildcards(paths),
+      stats: await wildcardStats(paths),
     });
   });
 

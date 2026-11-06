@@ -45,9 +45,6 @@ const ModelsView = lazyView(() =>
 const FileInfoView = lazyView(() =>
   import("../features/fileinfo/FileInfoView").then((m) => ({ default: m.FileInfoView })),
 );
-const WildcardsView = lazyView(() =>
-  import("../features/wildcards/WildcardsView").then((m) => ({ default: m.WildcardsView })),
-);
 const SettingsView = lazyView(() =>
   import("../features/settings/SettingsView").then((m) => ({ default: m.SettingsView })),
 );
@@ -81,8 +78,6 @@ function renderView(view: ViewId): ReactNode {
       return <ModelsView />;
     case "file-info":
       return <FileInfoView />;
-    case "wildcards":
-      return <WildcardsView />;
     case "settings":
       return <SettingsView />;
     case "history":

@@ -134,7 +134,8 @@ export const ModelMarks = z.object({
 export type ModelMarks = z.infer<typeof ModelMarks>;
 
 export const ModelFavoriteBody = z.object({
-  kind: z.enum(MODEL_KINDS),
+  /** A model kind, or "wildcards" (a wildcard's name). */
+  kind: z.enum([...MODEL_KINDS, "wildcards"]),
   name: z.string().min(1).max(400),
   favorite: z.boolean(),
 });

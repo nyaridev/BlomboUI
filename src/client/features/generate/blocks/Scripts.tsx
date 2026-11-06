@@ -8,8 +8,6 @@
  *           replacing a text in the prompts; each line runs once, or the batch count and size
  *   xy      an X and a Y type (None, the workflow's models, LoRA, resolution, its parameters,
  *           Prompt S/R) with their values, plus how the grid is drawn
- *   compare no script on Generate: a button that opens the Compare view (every combination of
- *           any number of settings, as saved comparisons) and what's running there
  */
 import { Icon } from "@client/icons/Icon";
 import { useLocalModels } from "@client/lib/queries";
@@ -33,7 +31,6 @@ import {
 } from "@shared/scripts";
 import type { Binding } from "@shared/workflow/manifest";
 import { useMemo, useRef } from "react";
-import { CompareScriptPanel } from "../../compare/ScriptPanel";
 import {
   axisTypes,
   buildScript,
@@ -75,11 +72,9 @@ export function ScriptsBlock() {
       title="Scripts"
       icon="layout-grid"
       subtitle={
-        !draft.on
-          ? undefined
-          : draft.kind === "compare"
-            ? "Compare · its own view"
-            : `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} image${count === 1 ? "" : "s"}`}`
+        draft.on
+          ? `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} image${count === 1 ? "" : "s"}`}`
+          : undefined
       }
       enabled={draft.on}
       onEnabledChange={(on) => set({ on })}
@@ -93,15 +88,12 @@ export function ScriptsBlock() {
           options={[
             { value: "matrix", label: SCRIPT_LABELS.matrix },
             { value: "xy", label: SCRIPT_LABELS.xy },
-            { value: "compare", label: SCRIPT_LABELS.compare },
           ]}
         />
         {draft.kind === "matrix" ? (
           <MatrixEditor draft={draft.matrix} bindings={bindings} />
-        ) : draft.kind === "xy" ? (
-          <XYEditor draft={draft.xy} bindings={bindings} />
         ) : (
-          <CompareScriptPanel />
+          <XYEditor draft={draft.xy} bindings={bindings} />
         )}
         {draft.on && built.error ? (
           <p className="flex items-start gap-1.5 text-xs text-warning">

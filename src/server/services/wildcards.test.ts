@@ -9,6 +9,7 @@ import {
   renameYamlKey,
   WildcardFiles,
   WildcardFolders,
+  wildcardStats,
 } from "./wildcards.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-wildcards-"));
@@ -36,6 +37,15 @@ beforeAll(async () => {
 afterAll(() => fs.rm(tmp, { recursive: true, force: true }));
 
 describe("wildcard files", () => {
+  it("gives each wildcard its defining file's dates, size and entry count", async () => {
+    const stats = await wildcardStats([root]);
+    expect(stats.colors).toMatchObject({ entries: 2, size: 20 });
+    expect(stats["outfits/fantasy"]?.entries).toBe(2);
+    expect(stats["outfits/modern"]?.entries).toBe(1);
+    expect(stats["outfits/fantasy"]?.mtime).toBeGreaterThan(0);
+    expect(Object.keys(stats)).not.toContain("readme");
+  });
+
   it("lists txt names and YAML keys", async () => {
     expect(await listWildcards([root])).toEqual([
       "colors",

@@ -4,6 +4,7 @@
  * button do the same thing. Views are opened with the `go` function the caller gets from
  * `useGoToView()`, which keeps this module free of the router.
  */
+
 import { cancelAll, generate, interrupt } from "@client/features/generate/actions";
 import { useValues } from "@client/features/generate/state";
 import { type SettingsPage, useSettingsNav } from "@client/features/settings/nav";
@@ -13,6 +14,7 @@ import { toast } from "@client/ui";
 import type { ViewId } from "@shared/constants";
 import { SHORTCUT_ACTIONS } from "@shared/shortcuts";
 import { create } from "zustand";
+import { useModelsNav } from "../features/models/nav";
 
 export type Go = (view: ViewId) => void;
 
@@ -66,6 +68,10 @@ export function runAction(id: string, go: Go): boolean {
     return true;
   }
   switch (id) {
+    case "view.wildcards":
+      useModelsNav.getState().showWildcards();
+      go("models");
+      return true;
     case "generate":
       // Nothing loaded yet (Generate never opened in this window): show it instead.
       if (!useValues.getState().workflowId) go("generate");

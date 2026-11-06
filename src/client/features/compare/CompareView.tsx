@@ -1,5 +1,5 @@
 /**
- * Compare (a view of Generate's, from the header's Generate menu or the Compare script): saved
+ * Compare (a view of Generate's, from the header's Generate tab menu): saved
  * comparisons on the left, the open one on the right with its setup (what it starts from, the
  * settings to compare and their values) and its results (the grid). A comparison lists here
  * whichever workflow it was made from. Below 1024 px the list becomes a picker on top.

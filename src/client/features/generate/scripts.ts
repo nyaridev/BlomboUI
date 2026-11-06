@@ -20,8 +20,7 @@ import {
 import type { Binding } from "@shared/workflow/manifest";
 import { create } from "zustand";
 
-/** compare: no script here; the block opens the Compare view (features/compare). */
-export type ScriptChoice = "matrix" | "xy" | "compare";
+export type ScriptChoice = "matrix" | "xy";
 
 export interface ScriptDraft {
   on: boolean;
@@ -50,7 +49,6 @@ export interface ScriptDraft {
 export const SCRIPT_LABELS: Record<ScriptChoice, string> = {
   matrix: "Prompt matrix",
   xy: "XY plot",
-  compare: "Compare",
 };
 
 export const initialScript: ScriptDraft = {
@@ -108,7 +106,7 @@ export function buildScript(
   values: Record<string, unknown>,
   ctx: BuildContext,
 ): BuiltScript {
-  if (!draft.on || draft.kind === "compare") return { script: null, plan: null, error: null };
+  if (!draft.on) return { script: null, plan: null, error: null };
   try {
     let input: unknown;
     if (draft.kind === "matrix") {

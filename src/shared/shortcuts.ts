@@ -28,13 +28,8 @@ export const SHORTCUT_ACTIONS: ShortcutAction[] = [
   },
   { id: "view.gallery", label: "Go to Gallery", group: "Views", keys: "Ctrl+2", view: "gallery" },
   { id: "view.models", label: "Go to Models", group: "Views", keys: "Ctrl+3", view: "models" },
-  {
-    id: "view.wildcards",
-    label: "Go to Wildcards",
-    group: "Views",
-    keys: "Ctrl+4",
-    view: "wildcards",
-  },
+  /** Models → Wildcards (no `view`: runAction opens the tab). */
+  { id: "view.wildcards", label: "Go to Wildcards", group: "Views", keys: "Ctrl+4" },
   {
     id: "view.file-info",
     label: "Go to File Info",

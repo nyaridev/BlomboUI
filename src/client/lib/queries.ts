@@ -1074,8 +1074,15 @@ export function useModelMarks() {
 export function useSetModelFavorite() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ kind, name, favorite }: { kind: ModelKind; name: string; favorite: boolean }) =>
-      api.setModelFavorite(kind, name, favorite),
+    mutationFn: ({
+      kind,
+      name,
+      favorite,
+    }: {
+      kind: ModelKind | "wildcards";
+      name: string;
+      favorite: boolean;
+    }) => api.setModelFavorite(kind, name, favorite),
     onSuccess: (marks) => qc.setQueryData(qk.modelMarks(useSession.getState().profileId), marks),
   });
 }

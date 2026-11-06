@@ -1,20 +1,22 @@
 /**
- * Wildcard info, from the Wildcards picker (a card's info button or right-click): where the
- * wildcard is defined, how many entries it has and the first few, and Edit in Wildcards, which
- * opens its file in the Wildcard Manager.
+ * Wildcard info, from a wildcards grid (a card's info button or right-click, or a click in
+ * Models → Wildcards → View): where the wildcard is defined, how many entries it has and the
+ * first few, and Open in the editor (Models → Wildcards → Editor).
  */
 import { Icon } from "@client/icons/Icon";
 import { useGoToView } from "@client/lib/hooks";
 import { useWildcardInfo } from "@client/lib/queries";
 import { Button, Dialog, Skeleton } from "@client/ui";
+import { useModelsNav } from "../models/nav";
 import { useWildcardUi } from "../wildcards/state";
 
-/** Open a wildcard file (its Wildcard Manager path) in the Wildcards view. */
+/** Open a wildcard file (its editor path) in Models → Wildcards → Editor. */
 export function useEditWildcard(): (path: string) => void {
   const go = useGoToView();
   return (path) => {
     useWildcardUi.getState().setOpen(path);
-    go("wildcards");
+    useModelsNav.getState().showWildcards("editor");
+    go("models");
   };
 }
 
@@ -54,7 +56,7 @@ export function WildcardInfoDialog({
               edit(d.path);
             }}
           >
-            Edit in Wildcards
+            Open in the editor
           </Button>
         </>
       }

@@ -37,6 +37,7 @@ import {
   type WildcardEntryType,
   type WildcardFile,
   type WildcardInfo,
+  type WildcardStat,
   type WildcardTree,
   wildcardFormat,
 } from "../../shared/wildcards.ts";
@@ -200,6 +201,46 @@ export async function loadWildcards(
     const lines = found.get(name);
     return lines?.length ? lines : undefined;
   };
+}
+
+/**
+ * Each wildcard's defining file (the same one that wins in listWildcards: folder order, .txt
+ * before YAML) with its dates, size and entry count.
+ * shortcut: reads every .txt file on each call; cache by mtime like YAML if big packs get slow.
+ */
+export async function wildcardStats(
+  folders: readonly string[],
+): Promise<Record<string, WildcardStat>> {
+  const out: Record<string, WildcardStat> = {};
+  const stat = async (abs: string) => {
+    try {
+      const s = await fs.stat(abs);
+      return { ctime: s.birthtimeMs || s.ctimeMs, mtime: s.mtimeMs, size: s.size };
+    } catch {
+      return null;
+    }
+  };
+  for (const root of folders.map((r) => r.trim()).filter(Boolean)) {
+    const txt: string[] = [];
+    await walkFiles(root, (abs) => {
+      if (wildcardFormat(abs) === "txt") txt.push(abs);
+    });
+    for (const abs of txt) {
+      const name = txtWildcardName(toRel(path.relative(root, abs)));
+      if (out[name]) continue;
+      const s = await stat(abs);
+      if (!s) continue;
+      const lines = wildcardLines(await fs.readFile(abs, "utf8").catch(() => ""));
+      out[name] = { ...s, entries: lines.length };
+    }
+    for (const file of await yamlFiles(root)) {
+      const names = await yamlNames(file);
+      const s = names?.size ? await stat(file) : null;
+      if (!names || !s) continue;
+      for (const [name, lines] of names) out[name] ??= { ...s, entries: lines.length };
+    }
+  }
+  return out;
 }
 
 /** Wildcard names in the folders ("outfits/fantasy"), from .txt files and YAML keys. */

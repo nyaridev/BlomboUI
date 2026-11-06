@@ -62,7 +62,7 @@ export async function generate(): Promise<void> {
   // A script on: Generate runs it (one click, many images).
   const draft = useScript.getState().draft;
   let script: ReturnType<typeof buildScript> | null = null;
-  if (draft.on && draft.kind !== "compare") {
+  if (draft.on) {
     const profileId = useSession.getState().profileId;
     const detail = queryClient.getQueryData<WorkflowDetail>(qk.workflow(profileId, workflowId));
     script = buildScript(draft, detail?.bindings ?? [], values, {

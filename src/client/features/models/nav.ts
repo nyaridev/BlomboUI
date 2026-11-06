@@ -7,8 +7,10 @@
 import type { StoreCategory } from "@shared/manager";
 import { create } from "zustand";
 
-export type ModelsTab = "local" | "civitai" | "manager";
-const TABS: ModelsTab[] = ["local", "civitai", "manager"];
+export type ModelsTab = "local" | "civitai" | "manager" | "wildcards";
+const TABS: ModelsTab[] = ["local", "civitai", "manager", "wildcards"];
+/** Models → Wildcards: the cards (view) or the file editor. */
+export type WildcardsPage = "view" | "editor";
 const KEY = "blombo.modelsTab";
 
 function savedTab(): ModelsTab {
@@ -26,7 +28,11 @@ interface ModelsNav {
   select: string | null;
   /** A Manager category and search to show (taken once by the store). */
   manager: { category: StoreCategory; query: string } | null;
+  wildcards: WildcardsPage;
   setTab: (tab: ModelsTab) => void;
+  setWildcardsPage: (page: WildcardsPage) => void;
+  /** Open Models → Wildcards (on a page). */
+  showWildcards: (page?: WildcardsPage) => void;
   showLocal: (id: string) => void;
   showManager: (category: StoreCategory, query?: string) => void;
   takeSelect: () => string | null;
@@ -37,7 +43,10 @@ export const useModelsNav = create<ModelsNav>((set, get) => ({
   tab: savedTab(),
   select: null,
   manager: null,
+  wildcards: "view",
   setTab: (tab) => set({ tab }),
+  setWildcardsPage: (wildcards) => set({ wildcards }),
+  showWildcards: (page) => set({ tab: "wildcards", ...(page ? { wildcards: page } : {}) }),
   showLocal: (id) => set({ tab: "local", select: id }),
   showManager: (category, query = "") => set({ tab: "manager", manager: { category, query } }),
   takeManager: () => {

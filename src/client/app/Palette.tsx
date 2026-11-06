@@ -57,7 +57,7 @@ export function Palette() {
       out.push({
         id: `action:${a.id}`,
         label: a.label,
-        group: a.view ? "Go to" : "Actions",
+        group: a.view || a.id === "view.wildcards" ? "Go to" : "Actions",
         icon: VIEW_ICONS[a.id] ?? ACTION_ICONS[a.id] ?? "bolt",
         keys: combo.length ? [combo.join(" ")] : undefined,
       });

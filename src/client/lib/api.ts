@@ -398,7 +398,7 @@ export const api = {
   removeSnippet: (id: string) =>
     request<void>("DELETE", `/history/snippets/${encodeURIComponent(id)}`),
   modelMarks: () => request<ModelMarks>("GET", "/history/model-marks"),
-  setModelFavorite: (kind: ModelKind, name: string, favorite: boolean) =>
+  setModelFavorite: (kind: ModelKind | "wildcards", name: string, favorite: boolean) =>
     request<ModelMarks>("POST", "/history/model-marks", { kind, name, favorite }),
 
   localModels: (rescan = false) =>

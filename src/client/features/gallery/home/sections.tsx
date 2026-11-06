@@ -3,6 +3,7 @@
  * crossfade through their newest images: rows on Home, grids in the Most used views. A model or
  * LoRA filters the image list, a tag searches it, a wildcard opens Wildcards.
  */
+
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { useSession } from "@client/lib/session";
@@ -11,6 +12,7 @@ import type { GalleryHome, HomeUse, UseKind } from "@shared/gallery";
 import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useState } from "react";
+import { useModelsNav } from "../../models/nav";
 import { useModelThumb } from "../../models/thumbs";
 import { useGalleryUi } from "../state";
 
@@ -143,8 +145,9 @@ export function UseCard({
   const show = useGalleryUi.getState().show;
   const open = () => {
     if (kind === "wildcards") {
+      useModelsNav.getState().showWildcards("view");
       if (profileId)
-        void navigate({ to: "/p/$profileId/$view", params: { profileId, view: "wildcards" } });
+        void navigate({ to: "/p/$profileId/$view", params: { profileId, view: "models" } });
     } else if (use.filter)
       show(
         kind === "models"

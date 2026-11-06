@@ -129,5 +129,6 @@ export const ROLE_RANGES: Record<
   // 8n + 1 frames suit both Wan (4n + 1) and LTX (8n + 1).
   "latent.length": { min: 1, max: 241, step: 8, presets: [33, 49, 81, 97, 121] },
   "video.fps": { min: 1, max: 60, step: 1, presets: [16, 24, 25, 30] },
+  "video.offset": { min: 0, max: 1000, step: 1 },
   "clip.skip": { min: -12, max: -1, step: 1, presets: [-1, -2] },
 };

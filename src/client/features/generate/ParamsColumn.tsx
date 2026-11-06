@@ -27,7 +27,7 @@ import { type Binding, resolveBind } from "@shared/workflow/manifest";
 import type { StageId } from "@shared/workflow/roles";
 import { type SourceMode, STAGE_LABELS, sourceModeLabel } from "@shared/workflow/stages";
 import { type ComponentType, type ReactNode, useState } from "react";
-import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
+import { ParamControl, styleFor } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
 import { ScriptsBlock } from "./blocks/Scripts";
 import { Seed } from "./blocks/Seed";
@@ -153,7 +153,7 @@ function RestBlock({ title, ctx }: { title: string; ctx: RenderContext }) {
               type: "param",
               id: `rest-${b.id}`,
               bind: `id:${b.id}`,
-              control: defaultStyle(bindingFamily(b)),
+              control: styleFor(b),
             }}
           />
         ))}
@@ -182,6 +182,8 @@ function renderBlock(block: Block, ctx: RenderContext): ReactNode {
   switch (block.type) {
     case "param": {
       const b = resolveBind(ctx.bindings, block.bind);
+      // A batch workflow's input picture is what the runner feeds, not a setting.
+      if (b && ctx.batch && b.role === "image.input") return null;
       if (b) return <ParamControl binding={b} block={block} />;
       // A block for a parameter this workflow doesn't have: a ghost while customizing, else nothing.
       return ctx.customizing ? (

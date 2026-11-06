@@ -181,7 +181,7 @@
       "node": "14",
       "input": "image",
       "type": "image",
-      "label": "Input image",
+      "label": "Character",
       "hidden": false,
       "role": "image.input"
     },
@@ -190,7 +190,7 @@
       "node": "9",
       "input": "file",
       "type": "video",
-      "label": "Input video",
+      "label": "Driving video",
       "hidden": false,
       "role": "video.input"
     },
@@ -202,8 +202,9 @@
       "label": "Start frame",
       "hidden": false,
       "role": "video.offset",
-      "min": -16384,
-      "max": 16384
+      "min": 0,
+      "max": 1000,
+      "step": 1
     },
     {
       "id": "output.image",

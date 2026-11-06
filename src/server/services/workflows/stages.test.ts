@@ -787,6 +787,9 @@ describe("smooth motion (frame interpolation)", () => {
     expect(() => run("sd15-api", { smooth: { enabled: true } })).toThrow(
       "Smooth motion needs the workflow's frame rate",
     );
+    expect(() => run("preset:scail2-replace", { smooth: { enabled: true } })).toThrow(
+      "it comes from the input video",
+    );
   });
 });
 

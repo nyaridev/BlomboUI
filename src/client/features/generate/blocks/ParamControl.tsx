@@ -33,6 +33,15 @@ export function defaultStyle(family: ControlFamily | null): string {
   return family ? CONTROL_STYLES[family][0] : "text";
 }
 
+/** A binding's style when its block doesn't pick one. */
+export function styleFor(binding: Binding): string {
+  const family = bindingFamily(binding);
+  const step = binding.step ?? (binding.type === "int" ? 1 : 0.01);
+  // ComfyUI's own limits (a primitive's ±2^53, a LoRA's ±100) make a slider useless: type it.
+  const wide = family === "number" && ((binding.max ?? 100) - (binding.min ?? 0)) / step > 5000;
+  return wide ? "number" : defaultStyle(family);
+}
+
 export function optionLabel(binding: Binding, value: string): string {
   if (binding.role === "sampler.name") return samplerLabel(value);
   if (binding.role === "sampler.scheduler") return schedulerLabel(value);
@@ -77,12 +86,12 @@ function ValueControl({ binding, block }: { binding: Binding; block: ParamBlock 
         ? "scheduler"
         : null,
   );
-  const style = block.control ?? defaultStyle(family);
   const size = block.size ?? "md";
   const label = block.label === "hidden" ? undefined : (block.title ?? binding.label);
   const min = binding.min ?? 0;
   const max = binding.max ?? 100;
   const step = binding.step ?? (binding.type === "int" ? 1 : 0.01);
+  const style = block.control ?? styleFor(binding);
 
   if (family === "number") {
     // ComfyUI's CLIP skip counts down from -1; people know it as 1, 2… (A1111), so show it so.

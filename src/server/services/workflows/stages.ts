@@ -533,8 +533,10 @@ function instancesFor(
     if (!Number.isFinite(rate))
       problems.push({
         code: "missing_port",
-        message:
-          "Smooth motion needs the workflow's frame rate, and this workflow has none. It works on video workflows.",
+        // A swap workflow takes its frame rate from the input video: a link, not a setting.
+        message: ctx.bindings.some((b) => b.role === "video.input")
+          ? "Smooth motion can't change this workflow's frame rate: it comes from the input video, not a setting."
+          : "Smooth motion needs the workflow's frame rate, and this workflow has none. It works on video workflows.",
       });
     return [
       {

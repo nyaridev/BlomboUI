@@ -42,6 +42,18 @@
               },
               {
                 "type": "param",
+                "id": "p-image-input",
+                "bind": "role:image.input",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-video-input",
+                "bind": "role:video.input",
+                "span": 6
+              },
+              {
+                "type": "param",
                 "id": "p-sampler",
                 "bind": "role:sampler.name",
                 "control": "select",

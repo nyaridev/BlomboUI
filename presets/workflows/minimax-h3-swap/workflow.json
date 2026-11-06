@@ -191,7 +191,7 @@
       "node": "9",
       "input": "image",
       "type": "image",
-      "label": "Input image",
+      "label": "Character",
       "hidden": false,
       "role": "image.input"
     },
@@ -200,7 +200,7 @@
       "node": "7",
       "input": "file",
       "type": "video",
-      "label": "Input video",
+      "label": "Video to swap into",
       "hidden": false,
       "role": "video.input"
     },

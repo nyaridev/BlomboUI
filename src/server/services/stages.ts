@@ -220,7 +220,7 @@ export class StageService {
     const info = await this.deps.supervisor.objectInfo();
     const packages = await this.packages();
     const settings = readStages(rawStages ?? manifest.stages);
-    const stages = (["source", "controlnet", "hires", "adetailer"] as StageId[]).flatMap(
+    const stages = (["source", "controlnet", "hires", "adetailer", "smooth"] as StageId[]).flatMap(
       (stage) =>
         applyStages(
           structuredClone(prompt),

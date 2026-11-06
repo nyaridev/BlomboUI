@@ -281,7 +281,9 @@ describe("job queue against a ComfyUI", () => {
       ["controlnet", "controlnet-checkpoint"],
       ["hires", "hires-checkpoint"],
       ["adetailer", "adetailer-checkpoint"],
+      ["smooth", "smooth"],
     ]);
+    expect(report.stages[4]?.choices.model).toBeDefined();
     // Text to image is checked as Image to image: it would need an image.
     expect(report.stages[0]?.problems.map((p) => p.code)).toEqual(["no_image"]);
     expect(report.stages[2]?.problems).toEqual([]);

@@ -159,6 +159,17 @@ describe("analyze: $-titled nodes", () => {
       type: "image",
     });
   });
+
+  it("labels file inputs by a plain title too, but not by the class's own name", () => {
+    const swap = analyze(preset("scail2-replace"), info);
+    const label = (role: string) => swap.bindings.find((b) => b.role === role)?.label;
+    expect([label("image.input"), label("video.input")]).toEqual(["Character", "Driving video"]);
+    const plain = preset("scail2-replace");
+    for (const n of Object.values(plain)) if (n._meta) n._meta.title = "Load Image";
+    expect(analyze(plain, info).bindings.find((b) => b.role === "image.input")?.label).toBe(
+      "Input image",
+    );
+  });
 });
 
 describe("findings", () => {

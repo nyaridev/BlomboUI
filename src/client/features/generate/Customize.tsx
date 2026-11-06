@@ -23,7 +23,7 @@ import { resolveBind } from "@shared/workflow/manifest";
 import { motion } from "motion/react";
 import { useState } from "react";
 import { blockLabel } from "./blockLabel";
-import { bindingFamily, defaultStyle } from "./blocks/ParamControl";
+import { bindingFamily, defaultStyle, styleFor } from "./blocks/ParamControl";
 import {
   chooseLayout,
   deleteLayout,
@@ -395,7 +395,8 @@ export function Inspector() {
                   const binding = resolveBind(bindings, block.bind);
                   const family = binding ? bindingFamily(binding) : null;
                   const styles = family ? CONTROL_STYLES[family] : [];
-                  const style = block.control ?? defaultStyle(family);
+                  const style =
+                    block.control ?? (binding ? styleFor(binding) : defaultStyle(family));
                   return (
                     <>
                       {binding ? (

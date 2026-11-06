@@ -666,13 +666,19 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
     break;
   }
 
+  // A file input named in the graph ("Character", "Driving video") keeps that name.
+  const named = (id: string): Partial<Binding> => {
+    const title = g.prompt[id]?._meta?.title?.trim() ?? "";
+    const plain = [g.classOf(id), objectInfo?.[g.classOf(id)]?.display_name];
+    return title && !title.startsWith("$") && !plain.includes(title) ? { label: title } : {};
+  };
   // Image inputs and outputs.
   for (const id of g.ids()) {
     if (typeof g.inputs(id).image !== "string") continue;
     const spec = objectInfo?.[g.classOf(id)]?.input.required?.image?.[1];
     const upload = Boolean(spec && typeof spec === "object" && "image_upload" in spec);
     if (IMAGE_INPUT_CLASSES.has(g.classOf(id)) || upload)
-      add({ node: id, input: "image" }, "image.input");
+      add({ node: id, input: "image" }, "image.input", named(id));
   }
   // A video input, and where in it the workflow starts (an image batch slice of its frames).
   for (const id of g.ids()) {
@@ -680,7 +686,7 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
     const spec = objectInfo?.[g.classOf(id)]?.input.required?.file?.[1];
     const upload = Boolean(spec && typeof spec === "object" && "video_upload" in spec);
     if (!VIDEO_INPUT_CLASSES.has(g.classOf(id)) && !upload) continue;
-    add({ node: id, input: "file" }, "video.input");
+    add({ node: id, input: "file" }, "video.input", named(id));
     const frames = g.ids().filter((c) => g.link(c, "video")?.[0] === id);
     const slice = g
       .ids()

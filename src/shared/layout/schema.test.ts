@@ -12,7 +12,7 @@ const params = doc.regions.params;
 describe("layout groups", () => {
   it("walks into tabs and cards", () => {
     const ids = allBlocks(params).map((b) => b.id);
-    expect(ids.slice(0, 4)).toEqual(["passes", "card-first-pass", "source", "p-sampler"]);
+    expect(ids.slice(0, 4)).toEqual(["passes", "card-first-pass", "source", "p-image-input"]);
     expect(ids).toContain("stage-hires");
   });
 

@@ -240,12 +240,15 @@ function SpeedRow({ profile }: { profile: Profile }) {
             disabled: !has(a) && a !== launch.attention,
           }))}
         />
-        <Switch
-          checked={launch.triton}
-          onCheckedChange={(triton) => save({ ...launch, triton })}
-          disabled={update.isPending || (!modules.triton && !launch.triton)}
-          label="Triton kernels"
-        />
+        <label className="flex items-center gap-2 text-xs text-fg-2">
+          <Switch
+            checked={launch.triton}
+            onCheckedChange={(triton) => save({ ...launch, triton })}
+            disabled={update.isPending || (!modules.triton && !launch.triton)}
+            label="Triton kernels"
+          />
+          Triton kernels
+        </label>
         {speed.isLoading ? <Spinner size={14} /> : null}
       </div>
       {!has(launch.attention) && speed.data ? (

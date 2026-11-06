@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { GenerateBody, LoopBody } from "../../shared/jobs.ts";
+import { GenerateBody, LoopBody, QueueOrderBody } from "../../shared/jobs.ts";
 import { readJson } from "../lib/http.ts";
 import type { JobQueue } from "../services/jobs.ts";
 import type { ScriptService } from "../services/scripts.ts";
@@ -25,6 +25,12 @@ export function jobRoutes(queue: JobQueue, scripts: ScriptService) {
 
   r.post("/cancel", async (c) => {
     await queue.cancelAll();
+    return c.json(queue.snapshot());
+  });
+
+  r.put("/order", async (c) => {
+    const { ids } = await readJson(c, QueueOrderBody);
+    queue.reorder(ids);
     return c.json(queue.snapshot());
   });
 

@@ -380,6 +380,17 @@ export class JobQueue extends Emitter<QueueEvents> {
     this.publishQueue();
   }
 
+  /**
+   * Put the waiting runs in this order. The running one isn't in `queued`, so it never moves;
+   * waiting runs the list leaves out (queued meanwhile) keep their order after the listed ones.
+   */
+  reorder(ids: string[]): void {
+    const at = new Map(ids.map((id, i) => [id, i]));
+    const rank = (r: Run) => at.get(r.job.id) ?? ids.length;
+    this.queued = this.queued.toSorted((a, b) => rank(a) - rank(b));
+    this.publishQueue();
+  }
+
   /** Profile switch: nothing from the previous profile keeps running. */
   async reset(): Promise<void> {
     await this.cancelAll();

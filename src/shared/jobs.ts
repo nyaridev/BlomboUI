@@ -135,6 +135,9 @@ export const GenerateBody = z.object({
 });
 export type GenerateBody = z.infer<typeof GenerateBody>;
 
+/** The waiting jobs' new order (ids, first runs first); the running job can't move. */
+export const QueueOrderBody = z.object({ ids: z.array(z.string()).max(5000) });
+
 /** Turn loop mode (keep queuing new seeds) on or off. */
 export const LoopBody = z.object({ on: z.boolean() });
 

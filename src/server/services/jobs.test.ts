@@ -360,6 +360,28 @@ describe("job queue against a ComfyUI", () => {
     expect(quick?.images.length).toBeGreaterThan(0);
   });
 
+  it("reorders the waiting runs and never the running one", async () => {
+    const res = await queue.enqueue({
+      workflowId: "sd15",
+      values: { "sampler.steps": 400 },
+      count: 4,
+      loop: false,
+    });
+    const [a, b, c, d] = res.jobs.map((j) => j.id);
+    await new Promise((r) => setTimeout(r, 60));
+    const live = () =>
+      queue
+        .snapshot()
+        .jobs.filter((j) => j.state === "queued" || j.state === "running")
+        .map((j) => j.id);
+    expect(live()[0]).toBe(a);
+    // The running one in the list is ignored; one left out keeps its place after the others.
+    queue.reorder([d as string, a as string, b as string]);
+    expect(live()).toEqual([a, d, b, c]);
+    await queue.cancelAll();
+    await settled(res.jobs.map((j) => j.id));
+  });
+
   it("cancels: interrupts the running image and drops the queue", async () => {
     const res = await queue.enqueue({
       workflowId: "sd15",

@@ -1,5 +1,5 @@
 /**
- * Header system status, all from the live bus: the queue (only while busy), VRAM, GPU
+ * Header system status, all from the live bus: the queue (only while busy, `QueueChip`), VRAM, GPU
  * temperature, the three memory actions, ComfyUI's state with start/stop/restart and its log,
  * and an errors badge that exists only when there's something to read.
  */
@@ -13,16 +13,7 @@ import { dismissErrors, useLive } from "@client/lib/live";
 import { snappy } from "@client/lib/motion";
 import { openWindow } from "@client/lib/platform";
 import { useSession } from "@client/lib/session";
-import {
-  Button,
-  CountBubble,
-  IconButton,
-  Meter,
-  Popover,
-  ProgressRing,
-  StatusDot,
-  Tooltip,
-} from "@client/ui";
+import { Button, CountBubble, IconButton, Meter, Popover, StatusDot, Tooltip } from "@client/ui";
 import type { ComfyState } from "@shared/comfy";
 import { useNavigate } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
@@ -32,6 +23,7 @@ import { freeMemory, rescanModels, runWithToast, unloadModels } from "../command
 import { useShortcutLabel } from "../useShortcuts";
 import { ComfyLogs } from "./ComfyLogs";
 import { DownloadsChip } from "./DownloadsChip";
+import { QueueChip } from "./QueueChip";
 
 function heatColor(c: number): string {
   if (c >= 85) return "var(--red-ink)";
@@ -125,43 +117,6 @@ export function SystemCluster() {
       <ComfyStatusButton />
       <ErrorsButton />
     </div>
-  );
-}
-
-function QueueChip() {
-  const jobs = useLive((s) => s.queue.jobs);
-  const waiting = useLive((s) => s.queue.waiting);
-  const overall = useLive((s) => s.progress?.progress.overall ?? 0);
-  const active = jobs.find((j) => j.state === "running");
-  const queued = jobs.filter((j) => j.state === "queued").length;
-  const busy = Boolean(active) || queued > 0;
-  const value = active ? overall : 0;
-  return (
-    <AnimatePresence>
-      {busy ? (
-        <motion.div
-          initial={{ opacity: 0, width: 0 }}
-          animate={{ opacity: 1, width: "auto" }}
-          exit={{ opacity: 0, width: 0 }}
-          transition={snappy}
-          className="overflow-hidden"
-        >
-          <Tooltip
-            content={
-              waiting
-                ? "Waiting for ComfyUI to be ready"
-                : `Generating${queued ? ` · ${queued} more in queue` : ""}`
-            }
-          >
-            <div className="mr-1 flex h-8 items-center gap-2 rounded-md border border-generate/40 bg-generate/10 pr-2.5 pl-1.5 text-xs font-medium text-generate-ink">
-              <ProgressRing value={value} />
-              <span className="tabular">{waiting ? "Waiting" : `${Math.round(value * 100)}%`}</span>
-              {queued > 0 ? <span className="text-fg-3">+{queued}</span> : null}
-            </div>
-          </Tooltip>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
   );
 }
 

@@ -47,9 +47,10 @@ export class WorkflowCheck {
     this.deps = deps;
   }
 
-  async check(id: string): Promise<WorkflowHealth> {
+  /** `values` go over the saved ones, so the models you picked are what's checked. */
+  async check(id: string, values: Record<string, unknown> = {}): Promise<WorkflowHealth> {
     const { workflows, supervisor } = this.deps;
-    await workflows.get(id);
+    const manifest = await workflows.get(id);
     const info = await supervisor.objectInfo();
     if (!info) return { checked: false, packs: [], unknownNodes: [], models: [], rebuild: false };
     const hf = this.deps.huggingface ? new URL(this.deps.huggingface).origin : null;
@@ -58,8 +59,16 @@ export class WorkflowCheck {
       .catalog()
       .then((c) => c.entries)
       .catch(() => []);
+    const prompt = structuredClone(await workflows.prompt(id));
+    const current = { ...manifest.values, ...values };
+    for (const b of manifest.bindings) {
+      const v = current[b.id];
+      const node = prompt[b.node];
+      if (node && b.type !== "loras" && (typeof v === "string" || typeof v === "number"))
+        node.inputs[b.input] = v;
+    }
     return checkHealth({
-      prompt: await workflows.prompt(id),
+      prompt,
       graph: await workflows.graph(id),
       info,
       known: await this.deps.known(),

@@ -1,6 +1,10 @@
 import { Hono } from "hono";
 import { APP_NAME } from "../../shared/constants.ts";
-import { HealthDownloadBody, HealthInstallBody } from "../../shared/workflow/health.ts";
+import {
+  HealthCheckBody,
+  HealthDownloadBody,
+  HealthInstallBody,
+} from "../../shared/workflow/health.ts";
 import {
   DuplicateWorkflowBody,
   PatchValuesBody,
@@ -34,7 +38,10 @@ export function workflowRoutes(
   const r = new Hono();
 
   /* The workflow check (ADR-0018): what it needs that ComfyUI doesn't have, and the fixes. */
-  r.get("/:id/health", async (c) => c.json(await check.check(c.req.param("id"))));
+  r.post("/:id/health", async (c) => {
+    const { values } = await readJson(c, HealthCheckBody);
+    return c.json(await check.check(c.req.param("id"), values));
+  });
   r.post("/:id/health/install", async (c) => {
     await check.install(c.req.param("id"), await readJson(c, HealthInstallBody));
     return c.json({ ok: true }, 202);

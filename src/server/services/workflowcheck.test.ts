@@ -30,12 +30,14 @@ const info = {
   Loader: { input: { required: { model_name: [["other.pth"]] } }, output: [] },
 } as unknown as ObjectInfo;
 
-function make() {
+function make(
+  saved: { bindings: unknown[]; values: Record<string, unknown> } = { bindings: [], values: {} },
+) {
   const installs: { urls: string[]; confirmed: NodePack[] }[] = [];
   const downloads: unknown[] = [];
   const deps = {
     workflows: {
-      get: async () => ({}),
+      get: async () => saved,
       prompt: async () => prompt,
       graph: async () => graph,
     },
@@ -79,6 +81,17 @@ describe("WorkflowCheck", () => {
         ],
       },
     ]);
+  });
+
+  it("checks the models you picked, not the ones the graph was saved with", async () => {
+    const bindings = [{ id: "up", node: "3", input: "model_name", type: "model" }];
+    // The graph names linked.pth; you picked other.pth, which ComfyUI has.
+    const picked = make({ bindings, values: { up: "other.pth" } });
+    expect((await picked.check.check("w")).models).toEqual([]);
+    // A pick on screen that isn't saved yet wins over the saved one.
+    const unsaved = make({ bindings, values: { up: "linked.pth" } });
+    expect((await unsaved.check.check("w", { up: "other.pth" })).models).toEqual([]);
+    expect((await unsaved.check.check("w")).models.map((m) => m.file)).toEqual(["linked.pth"]);
   });
 
   it("downloads only a file the check offers, from the address it found", async () => {

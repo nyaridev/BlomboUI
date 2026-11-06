@@ -22,6 +22,7 @@ import { useModelsNav } from "../models/nav";
 import { MANAGER_CATEGORY } from "./blocks/stages/common";
 import { NodesNotice } from "./blocks/stages/NodesNotice";
 import { useLayout, useValues } from "./state";
+import { useBindings } from "./workflow";
 
 type Confirm = { body: HealthInstallBody; packs: Omit<MissingPack, "source">[]; from: string[] };
 
@@ -35,8 +36,22 @@ const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e), "
 const names = (list: string[]) =>
   list.length <= 3 ? list.join(", ") : `${list.slice(0, 3).join(", ")} and ${list.length - 3} more`;
 
+/** The model picks on screen, as one string so the selector stays stable. */
+function useModelPicks(): Record<string, unknown> {
+  const bindings = useBindings();
+  const picks = useValues((s) =>
+    JSON.stringify(
+      Object.fromEntries(
+        bindings.filter((b) => b.type === "model").map((b) => [b.id, s.values[b.id] ?? null]),
+      ),
+    ),
+  );
+  return JSON.parse(picks) as Record<string, unknown>;
+}
+
 export function WorkflowCheckNotices({ workflowId }: { workflowId: string }) {
-  const health = useWorkflowHealth(workflowId).data;
+  const picks = useModelPicks();
+  const health = useWorkflowHealth(workflowId, picks).data;
   const managed = useLive((s) => s.comfy?.mode === "managed");
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   if (!health?.checked) return null;

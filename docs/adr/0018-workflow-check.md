@@ -16,7 +16,7 @@ Constraints:
 
 ## Decision
 
-**The check** (`services/workflows/health.ts`, pure; `services/workflowcheck.ts`, the service; `GET /api/workflows/:id/health`) reports, while ComfyUI is running:
+**The check** (`services/workflows/health.ts`, pure; `services/workflowcheck.ts`, the service; `POST /api/workflows/:id/health` (with the models picked on screen)) reports, while ComfyUI is running:
 
 - **Custom nodes**, grouped by pack. For each class object_info doesn't know (in the API graph and on the canvas, muted and bypassed nodes left out), the pack is, in order: one Blombo's stages or presets pin (`blombo`); the repository and commit ComfyUI saves on each node of the canvas (`properties.aux_id`, `properties.ver`; `workflow`); ComfyUI-Manager's `extension-node-map.json` (`manager`, `services/nodemap.ts`, fetched daily next to the model catalog and following `--catalog`). Only github.com repositories count. Classes none of these know are listed as **unknown**.
 - **Models**: node inputs whose value isn't among ComfyUI's choices, when the input is a model input or the value is a model file. A download is offered when ComfyUI-Manager's catalog has the same file, else when the workflow links it (`properties.models`, which ComfyUI saves for templates) on Hugging Face. Otherwise Find in Manager and Search Civitai.

@@ -528,7 +528,8 @@ export const api = {
   cancelInstall: () => request<InstallState>("POST", "/comfy/install/cancel"),
   nodeInstall: () => request<NodeInstallState>("GET", "/comfy/nodes"),
   /** What a workflow needs that ComfyUI doesn't have, and its fixes (ADR-0018). */
-  workflowHealth: (id: string) => request<WorkflowHealth>("GET", `/workflows/${id}/health`),
+  workflowHealth: (id: string, values: Record<string, unknown>) =>
+    request<WorkflowHealth>("POST", `/workflows/${id}/health`, { values }),
   healthInstall: (id: string, body: HealthInstallBody) =>
     request<{ ok: true }>("POST", `/workflows/${id}/health/install`, body),
   healthDownload: (id: string, file: string) =>

@@ -54,6 +54,11 @@ export const WorkflowHealth = z.object({
 });
 export type WorkflowHealth = z.infer<typeof WorkflowHealth>;
 
+/** Check with these values over the saved ones (the Generate screen's picks, saved or not). */
+export const HealthCheckBody = z.object({
+  values: z.record(z.string(), z.unknown()).default({}),
+});
+
 /** Install the packs a workflow needs; `repo` names the repository for unknown classes. */
 export const HealthInstallBody = z.object({
   packs: z.array(NodePack.shape.url).max(20).default([]),

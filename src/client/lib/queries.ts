@@ -134,8 +134,8 @@ export const qk = {
     ["batch-check", profileId, workflowId] as const,
   batch: ["batch"] as const,
   /** What a workflow needs that ComfyUI doesn't have (refetched when models or nodes change). */
-  workflowHealth: (profileId: string | null, workflowId: string | null) =>
-    ["workflow-health", profileId, workflowId] as const,
+  workflowHealth: (profileId: string | null, workflowId: string | null, values: unknown) =>
+    ["workflow-health", profileId, workflowId, values] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -300,12 +300,14 @@ export function useStageReport(workflowId: string | null, stages: unknown) {
   });
 }
 
-export function useWorkflowHealth(workflowId: string | null) {
+/** `values`: the Generate screen's model picks, so a model you just picked isn't "missing". */
+export function useWorkflowHealth(workflowId: string | null, values: Record<string, unknown>) {
   const profileId = useSession((s) => s.profileId);
   return useQuery({
-    queryKey: qk.workflowHealth(profileId, workflowId),
-    queryFn: () => api.workflowHealth(workflowId as string),
+    queryKey: qk.workflowHealth(profileId, workflowId, values),
+    queryFn: () => api.workflowHealth(workflowId as string, values),
     enabled: profileId !== null && workflowId !== null,
+    placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
 }

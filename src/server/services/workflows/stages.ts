@@ -231,6 +231,20 @@ export function spliceStage(
     added.push(nid);
   }
 
+  // Links into the workflow's own node at a port.
+  for (const [port, links] of Object.entries(stage.pkg.into)) {
+    const at = ports[port as Port];
+    const target = at ? prompt[at[0]] : undefined;
+    if (!target) {
+      missing.add(port as Port);
+      continue;
+    }
+    for (const [input, link] of Object.entries(links ?? {})) {
+      const r = resolve(link);
+      if (r !== DROP) target.inputs[input] = r;
+    }
+  }
+
   // Republish ports: everything outside this instance that read the old link reads the new one.
   const addedSet = new Set(added);
   const changed = new Set<Port>();

@@ -1,0 +1,224 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "minimax-h3",
+  "name": "MiniMax H3",
+  "kind": "generate",
+  "family": "MiniMax H3",
+  "description": "MiniMax H3 video with sound at 1024×576, 24 fps, in 4 steps (turbo LoRA). Starts from text, a first frame, or a first and a last frame. Uses minimax_h3_fl2va_pruned_fp8_scaled, qwen3vl_32b nvfp4, the video and audio VAEs (Comfy-Org/MiniMax-H3).",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "minimax-h3",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "prompt.positive",
+      "node": "6",
+      "input": "prompt",
+      "type": "prompt",
+      "label": "Prompt",
+      "hidden": false,
+      "role": "prompt.positive"
+    },
+    {
+      "id": "model.unet",
+      "node": "1",
+      "input": "unet_name",
+      "type": "model",
+      "label": "Diffusion model",
+      "hidden": false,
+      "role": "model.unet",
+      "modelKind": "diffusion_models"
+    },
+    {
+      "id": "model.clip",
+      "node": "2",
+      "input": "clip_name",
+      "type": "model",
+      "label": "Text encoder",
+      "hidden": false,
+      "role": "model.clip",
+      "modelKind": "text_encoders"
+    },
+    {
+      "id": "sampler.name",
+      "node": "8",
+      "input": "sampler_name",
+      "type": "enum",
+      "label": "Sampler",
+      "hidden": false,
+      "role": "sampler.name",
+      "options": [
+        "euler",
+        "euler_ancestral",
+        "heun",
+        "dpm_2",
+        "dpmpp_2m",
+        "dpmpp_2m_sde",
+        "dpmpp_3m_sde",
+        "uni_pc"
+      ]
+    },
+    {
+      "id": "sampler.scheduler",
+      "node": "9",
+      "input": "scheduler",
+      "type": "enum",
+      "label": "Scheduler",
+      "hidden": false,
+      "role": "sampler.scheduler",
+      "options": [
+        "normal",
+        "karras",
+        "exponential",
+        "sgm_uniform",
+        "simple",
+        "beta"
+      ]
+    },
+    {
+      "id": "sampler.steps",
+      "node": "9",
+      "input": "steps",
+      "type": "int",
+      "label": "Steps",
+      "hidden": false,
+      "role": "sampler.steps",
+      "min": 1,
+      "max": 150,
+      "step": 1,
+      "presets": [
+        20,
+        25,
+        30,
+        40
+      ]
+    },
+    {
+      "id": "sampler.seed",
+      "node": "7",
+      "input": "noise_seed",
+      "type": "seed",
+      "label": "Seed",
+      "hidden": false,
+      "role": "sampler.seed"
+    },
+    {
+      "id": "latent.width",
+      "node": "6",
+      "input": "width",
+      "type": "int",
+      "label": "Width",
+      "hidden": false,
+      "role": "latent.width",
+      "min": 32,
+      "max": 4096,
+      "step": 32
+    },
+    {
+      "id": "latent.height",
+      "node": "6",
+      "input": "height",
+      "type": "int",
+      "label": "Height",
+      "hidden": false,
+      "role": "latent.height",
+      "min": 32,
+      "max": 4096,
+      "step": 32
+    },
+    {
+      "id": "latent.length",
+      "node": "6",
+      "input": "length",
+      "type": "int",
+      "label": "Frames",
+      "hidden": false,
+      "role": "latent.length",
+      "min": 5,
+      "max": 241,
+      "step": 17
+    },
+    {
+      "id": "video.fps",
+      "node": "14",
+      "input": "fps",
+      "type": "float",
+      "label": "Frame rate",
+      "hidden": false,
+      "role": "video.fps",
+      "min": 1,
+      "max": 60,
+      "step": 1,
+      "presets": [
+        16,
+        24,
+        25,
+        30
+      ]
+    },
+    {
+      "id": "sampler.denoise",
+      "node": "9",
+      "input": "denoise",
+      "type": "float",
+      "label": "Denoise",
+      "hidden": true,
+      "role": "sampler.denoise",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "presets": [
+        0.3,
+        0.5,
+        0.75,
+        1
+      ]
+    },
+    {
+      "id": "model.vae",
+      "node": "3",
+      "input": "vae_name",
+      "type": "model",
+      "label": "VAE",
+      "hidden": false,
+      "role": "model.vae",
+      "modelKind": "vae"
+    },
+    {
+      "id": "output.image",
+      "node": "15",
+      "input": "filename_prefix",
+      "type": "string",
+      "label": "Filename prefix",
+      "hidden": true,
+      "role": "output.image"
+    }
+  ],
+  "values": {
+    "prompt.positive": "a red fox walks through a snowy forest at golden hour, snow falling softly, the camera slowly tracks beside it, the crunch of snow under its paws and a soft wind",
+    "model.unet": "minimax_h3_fl2va_pruned_fp8_scaled.safetensors",
+    "model.clip": "qwen3vl_32b_minimax_h3_nvfp4_awq.safetensors",
+    "sampler.name": "res_multistep",
+    "sampler.scheduler": "simple",
+    "sampler.steps": 4,
+    "sampler.seed": 0,
+    "latent.width": 1024,
+    "latent.height": 576,
+    "latent.length": 73,
+    "video.fps": 24,
+    "sampler.denoise": 1,
+    "model.vae": "minimax_h3_video_vae_fp16.safetensors",
+    "output.image": "ComfyUI"
+  },
+  "run": {
+    "seedMode": "random",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "packs": [],
+  "createdAt": "2026-11-06T00:00:00.000Z",
+  "updatedAt": "2026-11-06T00:00:00.000Z"
+}

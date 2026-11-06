@@ -1,0 +1,67 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-minimax-h3-flf",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "First and last frame (MiniMax H3)",
+  "description": "Makes a MiniMax H3 video between a first and a last frame: both, cropped to the workflow's size, go into the workflow's MiniMaxH3ImageToVideo, which anchors them at the first and the last frame. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "firstLast"
+  ],
+  "fits": [
+    "MiniMaxH3ImageToVideo"
+  ],
+  "into": {
+    "VIDEO": {
+      "first_frame": [
+        "scale-first",
+        0
+      ],
+      "last_frame": [
+        "scale-last",
+        0
+      ]
+    }
+  },
+  "requires": [
+    "VIDEO"
+  ],
+  "provides": [],
+  "packs": [],
+  "fields": [
+    {
+      "field": "image",
+      "node": "first",
+      "input": "image",
+      "label": "First frame"
+    },
+    {
+      "field": "last",
+      "node": "last",
+      "input": "image",
+      "label": "Last frame"
+    },
+    {
+      "field": "width",
+      "node": "scale-first",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "scale-first",
+      "input": "height"
+    },
+    {
+      "field": "width",
+      "node": "scale-last",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "scale-last",
+      "input": "height"
+    }
+  ],
+  "defaults": {}
+}

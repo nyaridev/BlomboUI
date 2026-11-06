@@ -44,7 +44,7 @@ Built-in presets ship in `presets/workflows/<id>/` with the same files and are c
 
 - **Bindings** connect a UI parameter to `(node, input)` in `prompt.json`. Types: `prompt`, `int`, `float`, `enum`, `bool`, `string` (with `multiline` for text boxes), `seed`, `model` (with `modelKind`), `image`, and `loras` (a LoRA stack node, filled from prompt tags). Ranges for roles are comfortable UI ranges (steps 1–150, CFG 1–20); ComfyUI's own limits still apply when it runs.
 - **Choices** (`options`) are saved at import time and refreshed from ComfyUI's `/object_info` whenever the workflow is opened, so new models and samplers appear without re-importing.
-- **Roles** (`src/shared/workflow/roles.ts`) mark what a binding *means*, so smart features attach to any graph: the prompt editor, LoRA tags, wildcards, resolution picker, seed modes, model galleries and stages. Video workflows add `latent.length` (frames, the `length` of the video latent), `video.fps` (the frame rate the video is saved at) and the `output.video` output, which makes the workflow a video one.
+- **Roles** (`src/shared/workflow/roles.ts`) mark what a binding *means*, so smart features attach to any graph: the prompt editor, LoRA tags, wildcards, resolution picker, seed modes, model galleries and stages. Video workflows add `latent.length` (frames, the `length` of the video latent; a node on a coarser grid than a role's keeps its own min and step, without the role's presets: MiniMax H3's 17k + 5 frames and sizes by 32), `video.fps` (the frame rate the video is saved at) and the `output.video` output, which makes the workflow a video one.
 - **Values** hold the current settings. Every change saves into the workflow (debounced). There are no templates: to keep a variant, **Duplicate** the workflow.
 
 ## Importing
@@ -103,7 +103,7 @@ Hires fix, ADetailer and ControlNet are **stages**: graph patches that splice in
 | `CLIP` | the text encoder the prompt is encoded with (after CLIP skip and LoRAs) |
 | `POSITIVE`, `NEGATIVE` | the conditioning going into the sampler (or its guider) |
 | `START` | the latent going into the main sampler (the empty one, in a text-to-image graph) |
-| `VIDEO` | video workflows: the empty video latent (`START` itself for Wan; the `video_latent` input of LTX's audio + video concat) |
+| `VIDEO` | video workflows: the empty video latent (`START` itself for Wan and MiniMax H3; the `video_latent` input of LTX's audio + video concat) |
 | `LATENT`, `VAE`, `IMAGE` | the sampler's output, and the decoder that reads it (its VAE and image) |
 
 They run in a fixed order, each reading the ports the one before left:
@@ -124,6 +124,7 @@ source → controlnet (units) → the workflow's own sampling → hires → adet
 | `source-ltx2-flf` | First and last frame | two `LTXVAddGuide` (frame 0 and -1), and `LTXVCropGuides` on `LATENT` before decoding |
 | `source-wan22-14b` | First frame | swaps Wan 2.2 14B's text to video experts and 4-step LoRAs for the image to video ones (`swap`), and `WanImageToVideo` gives `POSITIVE`, `NEGATIVE` and `VIDEO` |
 | `source-wan22-14b-flf` | First and last frame | the same swap, with `WanFirstLastFrameToVideo` |
+| `source-minimax-h3`, `source-minimax-h3-flf` | First frame, First and last frame | no new conditioning: the frames go `into` the workflow's own `MiniMaxH3ImageToVideo` (`first_frame`, `last_frame`), which shows them to the text encoder and anchors them at the first and last frame |
 
 **Two passes.** Wan 2.2 14B samples twice: a high noise pass (`KSamplerAdvanced`, adds the noise, stops early) and a low noise pass that samples its latent. The first sampler is the main one (the ports, seed, sampler, model), the decoder is found after the last sampler of that chain, and the second pass's own model is the `model.unet2` role ("Low noise model"; the first then reads "High noise model"). Steps and CFG come from primitives both passes read, so one control sets both. A prompt's `<lora:…>` tags go on the high noise model only.
 
@@ -144,10 +145,11 @@ presets/stages/
 ├── source/                                           image to image and inpaint (any family)
 ├── source-wan22/, source-wan22-fun/                  Wan 2.2 5B's first frame, first and last frame
 ├── source-wan22-14b/, source-wan22-14b-flf/          Wan 2.2 14B's
+├── source-minimax-h3/, source-minimax-h3-flf/        MiniMax H3's
 └── source-ltx2/, source-ltx2-flf/                    LTX-2's
 ```
 
-`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler). Source packages also list the `modes` they serve, and `fits`: the classes the node at their first required port must be, so a Wan package never lands on an LTX graph. `swap` (file → file) switches model files in the workflow's loaders while the package runs; a package with a swap fits only a workflow that uses one of its files (Wan 2.2 14B and HunyuanVideo share their empty latent), and a target ComfyUI doesn't list is a problem that names it.
+`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler). Source packages also list the `modes` they serve, and `fits`: the classes the node at their first required port must be, so a Wan package never lands on an LTX graph. `swap` (file → file) switches model files in the workflow's loaders while the package runs; a package with a swap fits only a workflow that uses one of its files (Wan 2.2 14B and HunyuanVideo share their empty latent), and a target ComfyUI doesn't list is a problem that names it. `into` (port → input → the package's node and output) links package nodes into inputs of the workflow's own node at a port, for models whose one node takes the frames (MiniMax H3).
 
 `prompt.json` is a ComfyUI API graph with three extras:
 

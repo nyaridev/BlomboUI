@@ -1,0 +1,52 @@
+{
+  "first": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "First frame"
+    }
+  },
+  "last": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "Last frame"
+    }
+  },
+  "scale-first": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 1024,
+      "height": 576,
+      "crop": "center",
+      "image": [
+        "first",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Fit the first frame"
+    }
+  },
+  "scale-last": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "upscale_method": "lanczos",
+      "width": 1024,
+      "height": 576,
+      "crop": "center",
+      "image": [
+        "last",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Fit the last frame"
+    }
+  }
+}

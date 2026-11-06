@@ -139,9 +139,9 @@
       "label": "Width",
       "hidden": false,
       "role": "latent.width",
-      "min": 64,
+      "min": 32,
       "max": 4096,
-      "step": 8
+      "step": 32
     },
     {
       "id": "latent.height",
@@ -151,9 +151,9 @@
       "label": "Height",
       "hidden": false,
       "role": "latent.height",
-      "min": 64,
+      "min": 32,
       "max": 4096,
-      "step": 8
+      "step": 32
     },
     {
       "id": "latent.batch",

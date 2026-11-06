@@ -113,6 +113,13 @@ export const StagePackage = z.object({
    * A package with a swap fits only a workflow that uses one of the `from` files.
    */
   swap: z.record(z.string(), z.string()).default({}),
+  /**
+   * Links into inputs of the workflow's own node at a port (port → input → this graph's node and
+   * output): MiniMax H3's frames go into the node that makes its conditioning and latent.
+   */
+  into: z
+    .partialRecord(z.enum(PORTS), z.record(z.string(), z.tuple([z.string(), z.number().int()])))
+    .default({}),
 });
 export type StagePackage = z.infer<typeof StagePackage>;
 

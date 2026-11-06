@@ -107,6 +107,8 @@ describe("stage packages", () => {
       "source",
       "source-ltx2",
       "source-ltx2-flf",
+      "source-minimax-h3",
+      "source-minimax-h3-flf",
       "source-wan22",
       "source-wan22-14b",
       "source-wan22-14b-flf",
@@ -417,6 +419,68 @@ describe("video first pass (source packages for Wan and LTX)", () => {
     // Text to video itself leaves the graph alone.
     const plain = run("preset:wan22-5b", { source: { mode: "txt2img", image: IMAGE } }).prompt;
     expect(plain["8"]?.inputs.latent_image).toEqual(["7", 0]);
+  });
+
+  describe("MiniMax H3: one node makes the conditioning and the latent", () => {
+    it("finds its ports on that node's two outputs, its prompt, and a length on its grid", () => {
+      const prompt = load("preset:minimax-h3");
+      expect(findPorts(prompt)).toMatchObject({
+        POSITIVE: ["6", 0],
+        START: ["6", 1],
+        VIDEO: ["6", 1],
+        LATENT: ["11", 0],
+        IMAGE: ["12", 0],
+      });
+      const { bindings } = analyze(prompt, info);
+      expect(bindings.find((b) => b.role === "prompt.positive")).toMatchObject({
+        node: "6",
+        input: "prompt",
+      });
+      // ComfyUI's grid (17k + 5 frames, sizes by 32) wins over the roles' steps and presets.
+      const length = bindings.find((b) => b.role === "latent.length");
+      expect(length).toMatchObject({ min: 5, step: 17 });
+      expect(length?.presets).toBeUndefined();
+      expect(bindings.find((b) => b.role === "latent.width")).toMatchObject({ step: 32 });
+      expect(sourceModes(prompt, packages, bindings, "video")).toEqual([
+        "txt2img",
+        "first",
+        "firstLast",
+      ]);
+    });
+
+    it("First frame: the image, cropped to the video's size, goes into the node itself", () => {
+      const p = run("preset:minimax-h3", { source: { mode: "first", image: IMAGE } }).prompt;
+      expectValidGraph(p);
+      const [loadId, loaded] = one(p, "LoadImage");
+      expect(loaded.inputs.image).toBe(images[IMAGE.file]);
+      // H3 stretches a first frame to the canvas; cropping first keeps its shape.
+      const [scaleId, scale] = one(p, "ImageScale");
+      expect(scale.inputs).toMatchObject({
+        image: [loadId, 0],
+        width: 1024,
+        height: 576,
+        crop: "center",
+      });
+      expect(p["6"]?.inputs.first_frame).toEqual([scaleId, 0]);
+      expect(p["6"]?.inputs.last_frame).toBeUndefined();
+      expect(p["11"]?.inputs.latent_image).toEqual(["6", 1]);
+      expect(p["10"]?.inputs.conditioning).toEqual(["6", 0]);
+    });
+
+    it("First and last frame: both images go into it", () => {
+      const p = run(
+        "preset:minimax-h3",
+        { source: { mode: "firstLast", image: IMAGE, last: LAST } },
+        { stageImages: images },
+      ).prompt;
+      expectValidGraph(p);
+      const scaled = (file: string) => {
+        const load = byClass(p, "LoadImage").find(([, n]) => n.inputs.image === file)?.[0];
+        return byClass(p, "ImageScale").find(([, n]) => from(n.inputs.image) === load)?.[0];
+      };
+      expect(p["6"]?.inputs.first_frame).toEqual([scaled(images[IMAGE.file] ?? ""), 0]);
+      expect(p["6"]?.inputs.last_frame).toEqual([scaled(images[LAST.file] ?? ""), 0]);
+    });
   });
 
   describe("Wan 2.2 14B: a high noise pass, then a low noise one", () => {

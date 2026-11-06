@@ -39,6 +39,9 @@ Each model takes frames its own way (ComfyUI 0.44):
   the image to video experts, so a package can `swap` model files (from → to) in the workflow's
   loaders; it fits only a workflow that uses one of those files. The analyzer follows the sampler
   chain to the decoder and binds the second pass's model as `model.unet2`.
+- **MiniMax H3** (video with sound) takes its prompt, size, length and frames on one node, which
+  also shows the frames to its text encoder. Its packages add only the images and link them
+  `into` that node's `first_frame` and `last_frame`; `VIDEO` is that node's latent output.
 
 ## Consequences
 

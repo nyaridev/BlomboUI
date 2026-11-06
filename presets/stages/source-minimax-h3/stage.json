@@ -1,0 +1,47 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-minimax-h3",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "First frame (MiniMax H3)",
+  "description": "Starts a MiniMax H3 video from a first frame: the image, cropped to the workflow's size, goes into the workflow's MiniMaxH3ImageToVideo, which shows it to the text encoder and anchors it at frame 0. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "first"
+  ],
+  "fits": [
+    "MiniMaxH3ImageToVideo"
+  ],
+  "into": {
+    "VIDEO": {
+      "first_frame": [
+        "scale-first",
+        0
+      ]
+    }
+  },
+  "requires": [
+    "VIDEO"
+  ],
+  "provides": [],
+  "packs": [],
+  "fields": [
+    {
+      "field": "image",
+      "node": "first",
+      "input": "image",
+      "label": "First frame"
+    },
+    {
+      "field": "width",
+      "node": "scale-first",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "scale-first",
+      "input": "height"
+    }
+  ],
+  "defaults": {}
+}

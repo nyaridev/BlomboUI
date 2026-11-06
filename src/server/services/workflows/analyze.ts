@@ -373,7 +373,8 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
   if (parts.negative) ports.NEGATIVE = parts.negative;
   if (parts.latent) ports.START = parts.latent;
   const video = videoLatent(g, parts.latent);
-  if (video) ports.VIDEO = [video, 0];
+  // START itself when the sampler reads it straight (its output slot: MiniMax H3's is the second).
+  if (video) ports.VIDEO = parts.latent?.[0] === video ? parts.latent : [video, 0];
   const encoder = findEncoder(g, parts.positive);
   const clip = encoder ? g.link(encoder, "clip") : null;
   if (clip) ports.CLIP = clip;
@@ -501,13 +502,16 @@ function makeBinding(
     ...(role ? { role } : {}),
   };
   if (type === "int" || type === "float") {
-    const min = range?.min ?? info?.min;
+    // A node on a coarser grid than the role's keeps its own (MiniMax H3: sizes by 32, frames
+    // 17k + 5), without the role's presets, which would fall off it.
+    const coarser = (info?.step ?? 0) > (range?.step ?? Number.POSITIVE_INFINITY);
+    const min = coarser ? (info?.min ?? range?.min) : (range?.min ?? info?.min);
     const max = range?.max ?? info?.max;
-    const step = range?.step ?? info?.step;
+    const step = coarser ? info?.step : (range?.step ?? info?.step);
     if (min !== undefined) b.min = min;
     if (max !== undefined) b.max = max;
     if (step !== undefined) b.step = type === "int" ? Math.max(1, Math.round(step)) : step;
-    if (range?.presets) b.presets = range.presets;
+    if (range?.presets && !coarser) b.presets = range.presets;
   }
   if ((type === "enum" || type === "model") && info?.options) b.options = info.options;
   if (type === "model") {

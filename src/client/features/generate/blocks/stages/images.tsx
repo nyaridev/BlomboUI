@@ -1,6 +1,6 @@
 /**
- * Picking a stage image (ControlNet's units, the first pass's image to image): the gallery picker
- * and the last finished output.
+ * Picking a stage image (ControlNet's units, the first pass's image to image) or video (Continue
+ * a video): the gallery picker and the last finished output.
  */
 import { useLive } from "@client/lib/live";
 import { useGalleryImages } from "@client/lib/queries";
@@ -21,25 +21,39 @@ export function useLastOutput() {
   });
 }
 
+/** The newest finished run's saved video, or null. */
+export function useLastVideo() {
+  return useLive((s) => {
+    for (const j of s.queue.jobs)
+      if (j.state === "done") {
+        const video = j.images.find((i) => i.type === "output" && mediaOf(i.filename) === "video");
+        if (video) return video;
+      }
+    return null;
+  });
+}
+
 /** Pick an image from the gallery: the newest first, with a search. */
 export function GalleryPicker({
   open,
   onOpenChange,
   onPick,
+  media = "image",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPick: (id: number) => void;
+  media?: "image" | "video";
 }) {
   const [q, setQ] = useState("");
   // One page is plenty for picking; search narrows it.
-  const images = useGalleryImages({ q, limit: 120 });
+  const images = useGalleryImages({ q, limit: 120, media });
   const items = images.data?.pages[0]?.items ?? [];
   return (
     <Dialog
       open={open}
       onOpenChange={onOpenChange}
-      title="Use an image from the gallery"
+      title={media === "video" ? "Use a video from the gallery" : "Use an image from the gallery"}
       description="It's copied into the profile, so it stays here even if the file moves."
       width={760}
     >
@@ -62,11 +76,13 @@ export function GalleryPicker({
             <EmptyState
               className="col-span-5"
               icon="gallery"
-              title="No images"
+              title={media === "video" ? "No videos" : "No images"}
               text={
                 q
                   ? "Nothing matches that search."
-                  : "Generated images and gallery folders show up here."
+                  : media === "video"
+                    ? "Videos you generate show up here."
+                    : "Generated images and gallery folders show up here."
               }
             />
           ) : (

@@ -27,6 +27,7 @@ import type { Binding } from "@shared/workflow/manifest";
 import { useChoiceFilter } from "../hiddenChoices";
 import { modelDisplayName, samplerGroup, samplerLabel, schedulerLabel } from "../labels";
 import { useValue } from "../state";
+import { MediaParam } from "./MediaParam";
 
 export function defaultStyle(family: ControlFamily | null): string {
   return family ? CONTROL_STYLES[family][0] : "text";
@@ -55,6 +56,18 @@ function numberPresets(b: Binding): number[] {
 }
 
 export function ParamControl({ binding, block }: { binding: Binding; block: ParamBlock }) {
+  // A picture or video input is a file well, whatever the block's style.
+  if (binding.type === "image" || binding.type === "video")
+    return (
+      <MediaParam
+        binding={binding}
+        label={block.label === "hidden" ? undefined : (block.title ?? binding.label)}
+      />
+    );
+  return <ValueControl binding={binding} block={block} />;
+}
+
+function ValueControl({ binding, block }: { binding: Binding; block: ParamBlock }) {
   const [value, setValue] = useValue<unknown>(binding.id);
   const family = bindingFamily(binding);
   const shown = useChoiceFilter(

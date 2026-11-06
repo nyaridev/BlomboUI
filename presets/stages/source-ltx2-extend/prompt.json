@@ -1,0 +1,229 @@
+{
+  "p-vae": {
+    "class_type": "PORT:VAE",
+    "inputs": {}
+  },
+  "p-video": {
+    "class_type": "PORT:VIDEO",
+    "inputs": {}
+  },
+  "load": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": ""
+    },
+    "_meta": {
+      "title": "The video so far"
+    }
+  },
+  "parts": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "load",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Its frames and sound"
+    }
+  },
+  "tail": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "parts",
+        0
+      ],
+      "batch_index": -5,
+      "length": 5
+    },
+    "_meta": {
+      "title": "Its last frames"
+    }
+  },
+  "prep": {
+    "class_type": "LTXVPreprocess",
+    "inputs": {
+      "image": [
+        "tail",
+        0
+      ],
+      "img_compression": 18
+    },
+    "_meta": {
+      "title": "Prepare"
+    }
+  },
+  "put": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": [
+        "p-vae",
+        0
+      ],
+      "image": [
+        "prep",
+        0
+      ],
+      "latent": [
+        "p-video",
+        0
+      ],
+      "strength": 1,
+      "bypass": false
+    },
+    "_meta": {
+      "title": "Last frames into the video"
+    }
+  },
+  "out-video": {
+    "class_type": "OUT:VIDEO",
+    "inputs": {
+      "value": [
+        "put",
+        0
+      ]
+    }
+  },
+  "p-image": {
+    "class_type": "PORT:IMAGE",
+    "inputs": {}
+  },
+  "last": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "parts",
+        0
+      ],
+      "batch_index": -1,
+      "length": 1
+    },
+    "_meta": {
+      "title": "Its last frame"
+    }
+  },
+  "match": {
+    "class_type": "ColorTransfer",
+    "inputs": {
+      "image_target": [
+        "p-image",
+        0
+      ],
+      "image_ref": [
+        "last",
+        0
+      ],
+      "method": "reinhard_lab",
+      "source_stats": "uniform",
+      "strength": 1
+    },
+    "_meta": {
+      "title": "Match the colors"
+    }
+  },
+  "new": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "match",
+        0
+      ],
+      "batch_index": 5,
+      "length": 4096
+    },
+    "_meta": {
+      "title": "The new frames"
+    }
+  },
+  "fit": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "parts",
+        0
+      ],
+      "upscale_method": "lanczos",
+      "width": 1024,
+      "height": 576,
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "Fit the earlier frames",
+      "blombo": {
+        "when": "resize",
+        "else": "input:image"
+      }
+    }
+  },
+  "joined": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "fit",
+        0
+      ],
+      "images.image1": [
+        "new",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "The whole video"
+    }
+  },
+  "out-image": {
+    "class_type": "OUT:IMAGE",
+    "inputs": {
+      "value": [
+        "joined",
+        0
+      ]
+    }
+  },
+  "p-sound": {
+    "class_type": "PORT:SOUND",
+    "inputs": {}
+  },
+  "new-sound": {
+    "class_type": "TrimAudioDuration",
+    "inputs": {
+      "audio": [
+        "p-sound",
+        0
+      ],
+      "start_index": 0.2,
+      "duration": 100000
+    },
+    "_meta": {
+      "title": "The new sound"
+    }
+  },
+  "sound": {
+    "class_type": "AudioConcat",
+    "inputs": {
+      "audio1": [
+        "parts",
+        1
+      ],
+      "audio2": [
+        "new-sound",
+        0
+      ],
+      "direction": "after"
+    },
+    "_meta": {
+      "title": "The whole sound"
+    }
+  },
+  "out-sound": {
+    "class_type": "OUT:SOUND",
+    "inputs": {
+      "value": [
+        "sound",
+        0
+      ]
+    }
+  }
+}

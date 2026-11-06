@@ -141,7 +141,7 @@ import type {
   WorkflowManifest,
   WorkflowSummary,
 } from "@shared/workflow/manifest";
-import type { StageImage, StageReport } from "@shared/workflow/stages";
+import type { StageImage, StageReport, StageVideo } from "@shared/workflow/stages";
 
 export class ApiError extends Error {
   readonly status: number;
@@ -283,6 +283,17 @@ export const api = {
     request<StageImage>("POST", "/stages/images/gallery", { id }),
   stageImageFromOutput: (ref: ComfyFileRef) =>
     request<StageImage>("POST", "/stages/images/output", ref),
+  uploadStageVideo: (file: Blob, filename: string) =>
+    request<StageVideo>(
+      "POST",
+      `/stages/videos?filename=${encodeURIComponent(filename)}`,
+      undefined,
+      file,
+    ),
+  stageVideoFromGallery: (id: number) =>
+    request<StageVideo>("POST", "/stages/videos/gallery", { id }),
+  stageVideoFromOutput: (ref: ComfyFileRef) =>
+    request<StageVideo>("POST", "/stages/videos/output", ref),
   previewMap: (file: string, preprocessor: string, resolution: number) =>
     request<ComfyFileRef>("POST", "/stages/preview", { file, preprocessor, resolution }),
 

@@ -1,0 +1,93 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-wan22-14b-extend",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "Continue a video (Wan 2.2 14B)",
+  "description": "Continues a Wan 2.2 14B video: switches both passes to the image to video models and their 4-step LoRAs, WanImageToVideo starts from the video's last 5 frames, and after decoding the earlier frames are put in front of the new ones, so the result is the whole video. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "extend"
+  ],
+  "fits": [
+    "EmptyHunyuanLatentVideo"
+  ],
+  "swap": {
+    "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+    "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+    "wan2.2_t2v_high_noise_14B_fp16.safetensors": "wan2.2_i2v_high_noise_14B_fp16.safetensors",
+    "wan2.2_t2v_low_noise_14B_fp16.safetensors": "wan2.2_i2v_low_noise_14B_fp16.safetensors",
+    "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+    "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+  },
+  "requires": [
+    "POSITIVE",
+    "NEGATIVE",
+    "VAE",
+    "VIDEO",
+    "IMAGE"
+  ],
+  "provides": [
+    "POSITIVE",
+    "NEGATIVE",
+    "VIDEO",
+    "IMAGE"
+  ],
+  "packs": [],
+  "fields": [
+    {
+      "field": "video",
+      "node": "load",
+      "input": "file",
+      "label": "Video"
+    },
+    {
+      "field": "overlapFrom",
+      "node": "tail",
+      "input": "batch_index"
+    },
+    {
+      "field": "overlap",
+      "node": "tail",
+      "input": "length"
+    },
+    {
+      "field": "overlap",
+      "node": "new",
+      "input": "batch_index"
+    },
+    {
+      "field": "width",
+      "node": "fit",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "fit",
+      "input": "height"
+    },
+    {
+      "field": "width",
+      "node": "video",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "video",
+      "input": "height"
+    },
+    {
+      "field": "length",
+      "node": "video",
+      "input": "length"
+    },
+    {
+      "field": "batch",
+      "node": "video",
+      "input": "batch_size"
+    }
+  ],
+  "defaults": {
+    "overlap": 5
+  }
+}

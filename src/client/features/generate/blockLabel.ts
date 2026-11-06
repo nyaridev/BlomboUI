@@ -12,6 +12,7 @@ const STAGE_ICONS: Record<StageId, IconName> = {
   adetailer: "face-scan",
   controlnet: "pose",
   upscale: "upscale",
+  smooth: "wave",
 };
 
 export function blockLabel(block: Block, bindings: Binding[]): { label: string; icon: IconName } {

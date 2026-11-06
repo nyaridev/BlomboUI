@@ -29,6 +29,8 @@ export { SOURCE_MODES, type SourceMode } from "./roles.ts";
  * Splice points. The compiler finds them in any graph (services/workflows/analyze.ts). START is
  * the latent going into the main sampler (the empty one, in a text-to-image graph). VIDEO is the
  * empty video latent in a video graph: START itself, or what an audio + video latent is built from.
+ * SOUND is the audio going into the video maker (CreateVideo), and AUDIO_VAE the VAE that decodes
+ * it, in workflows that make sound.
  */
 export const PORTS = [
   "MODEL",
@@ -40,6 +42,8 @@ export const PORTS = [
   "VIDEO",
   "LATENT",
   "IMAGE",
+  "SOUND",
+  "AUDIO_VAE",
 ] as const;
 export const Port = z.enum(PORTS);
 export type Port = z.infer<typeof Port>;
@@ -64,6 +68,7 @@ export const STAGE_LABELS: Record<StageId, string> = {
   hires: "Hires fix",
   adetailer: "ADetailer",
   upscale: "Upscale",
+  smooth: "Smooth motion",
 };
 
 /* ── packages ────────────────────────────────────────────────────────────── */
@@ -107,6 +112,13 @@ export const StagePackage = z.object({
    * package never lands on an LTX graph). Empty: any graph with the required ports.
    */
   fits: z.array(z.string()).default([]),
+  /**
+   * Role bindings of the workflow this package sets (role → field): Smooth motion raises the
+   * video's frame rate (`video.fps`) by its multiplier, so the length stays the same.
+   */
+  roles: z
+    .record(z.string(), z.union([z.string(), z.tuple([z.string(), z.number().int()])]))
+    .default({}),
   /**
    * Model files the workflow's loaders switch to while this package runs (from → to): Wan 2.2
    * 14B's frame modes swap its text to video experts and speed LoRAs for the image to video ones.
@@ -207,6 +219,19 @@ export const StageImage = z.object({
 });
 export type StageImage = z.infer<typeof StageImage>;
 
+/** The name of a file Blombo keeps with the stage files (named by its content). */
+export const STAGE_FILE = /^[a-f0-9]{16}\.(png|jpg|webp|mp4)$/;
+export const isStageFile = (name: unknown): name is string =>
+  typeof name === "string" && STAGE_FILE.test(name);
+
+/** A video a stage reads (Continue a video), kept with the stage images. */
+export const StageVideo = StageImage.extend({
+  file: z.string().regex(/^[a-f0-9]{16}\.mp4$/),
+  /** Seconds, when the file says. */
+  duration: z.number().nullable().default(null),
+});
+export type StageVideo = z.infer<typeof StageVideo>;
+
 export const ControlnetUnit = z.object({
   id: UnitId,
   name: z.string().trim().min(1).max(32),
@@ -227,6 +252,7 @@ export const SOURCE_MODE_LABELS: Record<SourceMode, string> = {
   txt2img: "Text to image",
   img2img: "Image to image",
   inpaint: "Inpaint",
+  extend: "Continue a video",
   first: "First frame",
   firstLast: "First and last frame",
 };
@@ -248,6 +274,8 @@ export const SourceSettings = z.object({
   image: StageImage.nullable().default(null),
   /** First and last frame: the last frame. */
   last: StageImage.nullable().default(null),
+  /** Continue a video: the video so far; the new part follows its last frames. */
+  video: StageVideo.nullable().default(null),
   /** The painted mask, the image's size: white is redrawn, black is kept. */
   mask: StageImage.nullable().default(null),
   /** How much the sampler changes the image (the main sampler's denoise). */
@@ -282,8 +310,18 @@ export const ControlnetSettings = z.object({
 });
 export type ControlnetSettings = z.infer<typeof ControlnetSettings>;
 
+/** Video workflows: frames drawn between the frames (RIFE or FILM), at a higher frame rate. */
+export const SmoothSettings = z.object({
+  enabled: z.boolean().default(false),
+  /** A file in the models' frame_interpolation folder. */
+  model: z.string().default("rife_v4.26.safetensors"),
+  multiplier: z.number().int().min(2).max(4).default(2),
+});
+export type SmoothSettings = z.infer<typeof SmoothSettings>;
+
 export const StageSettings = z.object({
   source: SourceSettings.prefault({}),
+  smooth: SmoothSettings.prefault({}),
   hires: HiresSettings.prefault({}),
   adetailer: AdetailerSettings.prefault({}),
   controlnet: ControlnetSettings.prefault({}),
@@ -299,6 +337,7 @@ export function stageImageFiles(stages: StageSettings): string[] {
     sourceOn(source) ? source.image : null,
     source.mode === "inpaint" ? source.mask : null,
     source.mode === "firstLast" ? source.last : null,
+    source.mode === "extend" ? source.video : null,
   ];
   return picked.flatMap((image) => (image ? [image.file] : []));
 }
@@ -315,6 +354,7 @@ export function readStages(raw: unknown): StageSettings {
     hires: salvage(HiresSettings, input.hires).data,
     adetailer: salvage(AdetailerSettings, input.adetailer).data,
     controlnet: salvage(ControlnetSettings, input.controlnet).data,
+    smooth: salvage(SmoothSettings, input.smooth).data,
   };
 }
 

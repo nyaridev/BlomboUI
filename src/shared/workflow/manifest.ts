@@ -19,6 +19,8 @@ export const BindingType = z.enum([
   "seed",
   "model",
   "image",
+  /** A Load Video node's file (role video.input). */
+  "video",
   /** A LoRA stack node (role lora.stack). Its value is filled from <lora:…> tags at run time. */
   "loras",
 ]);

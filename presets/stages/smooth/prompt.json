@@ -1,0 +1,14 @@
+{
+  "p-image": { "class_type": "PORT:IMAGE", "inputs": {} },
+  "loader": {
+    "class_type": "FrameInterpolationModelLoader",
+    "inputs": { "model_name": "rife_v4.26.safetensors" },
+    "_meta": { "title": "Interpolation model" }
+  },
+  "interpolate": {
+    "class_type": "FrameInterpolate",
+    "inputs": { "interp_model": ["loader", 0], "images": ["p-image", 0], "multiplier": 2 },
+    "_meta": { "title": "Frames in between" }
+  },
+  "out-image": { "class_type": "OUT:IMAGE", "inputs": { "value": ["interpolate", 0] } }
+}

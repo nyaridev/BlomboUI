@@ -20,7 +20,7 @@ import {
 import type { Binding } from "@shared/workflow/manifest";
 import { create } from "zustand";
 
-export type ScriptChoice = "matrix" | "xy";
+export type ScriptChoice = "matrix" | "xy" | "long";
 
 export interface ScriptDraft {
   on: boolean;
@@ -44,11 +44,17 @@ export interface ScriptDraft {
     /** LoRAs at the strength their model info saves (otherwise 1). */
     loraStrength: boolean;
   };
+  long: {
+    segments: number;
+    /** One prompt per part, one per line; an empty line keeps the workflow's prompt. */
+    prompts: string;
+  };
 }
 
 export const SCRIPT_LABELS: Record<ScriptChoice, string> = {
   matrix: "Prompt matrix",
   xy: "XY plot",
+  long: "Long video",
 };
 
 export const initialScript: ScriptDraft = {
@@ -72,6 +78,7 @@ export const initialScript: ScriptDraft = {
     margin: 0,
     loraStrength: true,
   },
+  long: { segments: 2, prompts: "" },
 };
 
 export const useScript = create<{
@@ -79,12 +86,14 @@ export const useScript = create<{
   set: (patch: Partial<ScriptDraft>) => void;
   setXY: (patch: Partial<ScriptDraft["xy"]>) => void;
   setMatrix: (patch: Partial<ScriptDraft["matrix"]>) => void;
+  setLong: (patch: Partial<ScriptDraft["long"]>) => void;
 }>((set, get) => ({
   draft: initialScript,
   set: (patch) => set({ draft: { ...get().draft, ...patch } }),
   setXY: (patch) => set({ draft: { ...get().draft, xy: { ...get().draft.xy, ...patch } } }),
   setMatrix: (patch) =>
     set({ draft: { ...get().draft, matrix: { ...get().draft.matrix, ...patch } } }),
+  setLong: (patch) => set({ draft: { ...get().draft, long: { ...get().draft.long, ...patch } } }),
 }));
 
 export interface BuiltScript {
@@ -125,6 +134,16 @@ export function buildScript(
         useBatch: m.useBatch,
         count: ctx.count,
         grid: m.grid,
+      };
+    } else if (draft.kind === "long") {
+      const { segments, prompts } = draft.long;
+      input = {
+        kind: "long",
+        segments,
+        prompts: prompts
+          .split(/\r?\n/)
+          .map((t) => t.trim())
+          .slice(0, segments),
       };
     } else {
       const xy = draft.xy;

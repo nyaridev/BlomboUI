@@ -17,6 +17,7 @@ const FOLDERS: Array<[string, string[]]> = [
   ["embeddings", ["embeddings"]],
   ["upscale_models", ["upscale_models"]],
   ["latent_upscale_models", ["latent_upscale_models"]],
+  ["frame_interpolation", ["frame_interpolation"]],
   ["controlnet", ["controlnet", "t2i_adapter"]],
   ["style_models", ["style_models"]],
   ["hypernetworks", ["hypernetworks"]],

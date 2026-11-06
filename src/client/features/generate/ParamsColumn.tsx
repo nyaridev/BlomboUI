@@ -32,7 +32,13 @@ import { Resolution } from "./blocks/Resolution";
 import { ScriptsBlock } from "./blocks/Scripts";
 import { Seed } from "./blocks/Seed";
 import { SourceBlock, SourceInTab } from "./blocks/Source";
-import { AdetailerStage, ControlNetStage, HiresStage, StageTabContext } from "./blocks/stages";
+import {
+  AdetailerStage,
+  ControlNetStage,
+  HiresStage,
+  SmoothStage,
+  StageTabContext,
+} from "./blocks/stages";
 import SortableParams from "./SortableParams";
 import { useLayout, useValues } from "./state";
 import { useBindings, useSourceModes } from "./workflow";
@@ -105,7 +111,7 @@ interface RenderContext {
   customizing: boolean;
   /** A batch workflow: its input image comes from the runner, and Generate-only blocks hide. */
   batch: boolean;
-  /** A video workflow: Hires fix, ADetailer and ControlNet don't apply to it. */
+  /** A video workflow: Smooth motion applies to it; Hires fix, ADetailer and ControlNet don't. */
   video: boolean;
   /** Rendering a card's children: feature blocks leave out their own card. */
   inCard?: boolean;
@@ -165,13 +171,14 @@ function StageBlock({ stage }: { stage: StageId }) {
   if (stage === "hires") return <HiresStage />;
   if (stage === "adetailer") return <AdetailerStage />;
   if (stage === "controlnet") return <ControlNetStage />;
+  if (stage === "smooth") return <SmoothStage />;
   // Upscale has no package yet; nothing to show.
   return null;
 }
 
 function renderBlock(block: Block, ctx: RenderContext): ReactNode {
   if (ctx.batch && generateOnly(block)) return null;
-  if (ctx.video && block.type === "stage" && !ctx.customizing) return null;
+  if (block.type === "stage" && !ctx.customizing && !stageFits(block.stage, ctx.video)) return null;
   switch (block.type) {
     case "param": {
       const b = resolveBind(ctx.bindings, block.bind);
@@ -246,7 +253,9 @@ function Card({ block, ctx }: { block: CardBlock; ctx: RenderContext }) {
 type PassBlock = TabsBlock["children"][number];
 
 /** Stages a tab can turn on and off (upscale has no package yet). */
-const TAB_STAGES = ["controlnet", "hires", "adetailer"] as const;
+const TAB_STAGES = ["controlnet", "hires", "adetailer", "smooth"] as const;
+/** Smooth motion is for video workflows only, the others for images only. */
+const stageFits = (stage: StageId, video: boolean) => (stage === "smooth") === video;
 type TabStage = (typeof TAB_STAGES)[number];
 const isTabStage = (stage: StageId): stage is TabStage =>
   (TAB_STAGES as readonly string[]).includes(stage);
@@ -260,7 +269,7 @@ function PassTabs({ block, ctx }: { block: TabsBlock; ctx: RenderContext }) {
       !(ctx.batch && generateOnly(c)) &&
       (c.type === "card"
         ? ctx.customizing || cardChildren(c, ctx).length > 0
-        : isTabStage(c.stage) && !(ctx.video && !ctx.customizing)),
+        : isTabStage(c.stage) && (ctx.customizing || stageFits(c.stage, ctx.video))),
   );
   if (ctx.customizing) {
     const { Item, Group } = ctx.arrange;
@@ -284,6 +293,7 @@ const STAGE_TAB_ICONS: Record<TabStage, IconName> = {
   controlnet: "pose",
   hires: "upscale",
   adetailer: "face-scan",
+  smooth: "wave",
 };
 
 const MODE_ICONS: Record<SourceMode, IconName> = {
@@ -292,6 +302,7 @@ const MODE_ICONS: Record<SourceMode, IconName> = {
   inpaint: "edit",
   first: "image",
   firstLast: "swap-horizontal",
+  extend: "skip",
 };
 
 /** A card holding the first pass's mode (the `source` feature): its tab gets the mode menu. */
@@ -306,6 +317,7 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
     controlnet: useValues((s) => s.stages.controlnet.enabled),
     hires: useValues((s) => s.stages.hires.enabled),
     adetailer: useValues((s) => s.stages.adetailer.enabled),
+    smooth: useValues((s) => s.stages.smooth.enabled),
   };
   const setOn = (stage: TabStage, enabled: boolean) => {
     const { stages, setStage } = useValues.getState();

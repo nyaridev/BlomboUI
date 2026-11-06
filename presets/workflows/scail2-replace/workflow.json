@@ -1,0 +1,325 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "scail2-replace",
+  "name": "SCAIL 2 character swap",
+  "kind": "generate",
+  "family": "Wan 2.1",
+  "description": "Puts the character from a picture into a video in place of a person (SCAIL 2 replacement), with the relight LoRA so light and shadows match. 81 frames per part at 832×480, 6 steps. SAM 3.1 finds who to replace. Longer videos: Scripts → Long video.",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "scail2-replace",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "prompt.positive",
+      "node": "22",
+      "input": "text",
+      "type": "prompt",
+      "label": "Prompt",
+      "hidden": false,
+      "role": "prompt.positive"
+    },
+    {
+      "id": "prompt.negative",
+      "node": "23",
+      "input": "text",
+      "type": "prompt",
+      "label": "Negative prompt",
+      "hidden": false,
+      "role": "prompt.negative"
+    },
+    {
+      "id": "model.unet",
+      "node": "1",
+      "input": "unet_name",
+      "type": "model",
+      "label": "Diffusion model",
+      "hidden": false,
+      "role": "model.unet",
+      "modelKind": "diffusion_models"
+    },
+    {
+      "id": "model.clip",
+      "node": "6",
+      "input": "clip_name",
+      "type": "model",
+      "label": "Text encoder",
+      "hidden": false,
+      "role": "model.clip",
+      "modelKind": "text_encoders"
+    },
+    {
+      "id": "sampler.name",
+      "node": "25",
+      "input": "sampler_name",
+      "type": "enum",
+      "label": "Sampler",
+      "hidden": false,
+      "role": "sampler.name",
+      "options": [
+        "euler",
+        "euler_ancestral",
+        "heun",
+        "dpm_2",
+        "dpmpp_2m",
+        "dpmpp_2m_sde",
+        "dpmpp_3m_sde",
+        "uni_pc"
+      ]
+    },
+    {
+      "id": "sampler.scheduler",
+      "node": "26",
+      "input": "scheduler",
+      "type": "enum",
+      "label": "Scheduler",
+      "hidden": false,
+      "role": "sampler.scheduler",
+      "options": [
+        "normal",
+        "karras",
+        "exponential",
+        "sgm_uniform",
+        "simple",
+        "beta"
+      ]
+    },
+    {
+      "id": "sampler.steps",
+      "node": "26",
+      "input": "steps",
+      "type": "int",
+      "label": "Steps",
+      "hidden": false,
+      "role": "sampler.steps",
+      "min": 1,
+      "max": 150,
+      "step": 1,
+      "presets": [
+        20,
+        25,
+        30,
+        40
+      ]
+    },
+    {
+      "id": "sampler.cfg",
+      "node": "27",
+      "input": "cfg",
+      "type": "float",
+      "label": "CFG scale",
+      "hidden": false,
+      "role": "sampler.cfg",
+      "min": 1,
+      "max": 20,
+      "step": 0.5,
+      "presets": [
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "id": "sampler.seed",
+      "node": "27",
+      "input": "noise_seed",
+      "type": "seed",
+      "label": "Seed",
+      "hidden": false,
+      "role": "sampler.seed"
+    },
+    {
+      "id": "latent.batch",
+      "node": "24",
+      "input": "batch_size",
+      "type": "int",
+      "label": "Batch size",
+      "hidden": false,
+      "role": "latent.batch",
+      "min": 1,
+      "max": 16,
+      "step": 1,
+      "presets": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "id": "sampler.denoise",
+      "node": "26",
+      "input": "denoise",
+      "type": "float",
+      "label": "Denoise",
+      "hidden": true,
+      "role": "sampler.denoise",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "presets": [
+        0.3,
+        0.5,
+        0.75,
+        1
+      ]
+    },
+    {
+      "id": "model.vae",
+      "node": "7",
+      "input": "vae_name",
+      "type": "model",
+      "label": "VAE",
+      "hidden": false,
+      "role": "model.vae",
+      "modelKind": "vae"
+    },
+    {
+      "id": "image.input",
+      "node": "14",
+      "input": "image",
+      "type": "image",
+      "label": "Input image",
+      "hidden": false,
+      "role": "image.input"
+    },
+    {
+      "id": "video.input",
+      "node": "9",
+      "input": "file",
+      "type": "video",
+      "label": "Input video",
+      "hidden": false,
+      "role": "video.input"
+    },
+    {
+      "id": "video.offset",
+      "node": "11",
+      "input": "batch_index",
+      "type": "int",
+      "label": "Start frame",
+      "hidden": false,
+      "role": "video.offset",
+      "min": -16384,
+      "max": 16384
+    },
+    {
+      "id": "output.image",
+      "node": "30",
+      "input": "filename_prefix",
+      "type": "string",
+      "label": "Filename prefix",
+      "hidden": true,
+      "role": "output.image"
+    },
+    {
+      "id": "n3.lora_name",
+      "node": "3",
+      "input": "lora_name",
+      "type": "model",
+      "label": "Relight · Lora name",
+      "hidden": false,
+      "modelKind": "loras",
+      "group": "Relight"
+    },
+    {
+      "id": "n3.strength_model",
+      "node": "3",
+      "input": "strength_model",
+      "type": "float",
+      "label": "Relight · Strength model",
+      "hidden": false,
+      "min": -100,
+      "max": 100,
+      "step": 0.01,
+      "group": "Relight"
+    },
+    {
+      "id": "n16.text",
+      "node": "16",
+      "input": "text",
+      "type": "string",
+      "label": "Who to replace",
+      "hidden": false,
+      "multiline": true,
+      "group": "More from this workflow"
+    },
+    {
+      "id": "n17.text",
+      "node": "17",
+      "input": "text",
+      "type": "string",
+      "label": "Who is in the picture",
+      "hidden": false,
+      "multiline": true,
+      "group": "More from this workflow"
+    },
+    {
+      "id": "n31.value",
+      "node": "31",
+      "input": "value",
+      "type": "bool",
+      "label": "Replace the person (off: animate the picture)",
+      "hidden": false,
+      "group": "More from this workflow"
+    },
+    {
+      "id": "n32.value",
+      "node": "32",
+      "input": "value",
+      "type": "int",
+      "label": "Width",
+      "hidden": false,
+      "min": -9007199254740991,
+      "max": 9007199254740991,
+      "group": "More from this workflow"
+    },
+    {
+      "id": "n33.value",
+      "node": "33",
+      "input": "value",
+      "type": "int",
+      "label": "Height",
+      "hidden": false,
+      "min": -9007199254740991,
+      "max": 9007199254740991,
+      "group": "More from this workflow"
+    }
+  ],
+  "values": {
+    "prompt.positive": "A person dancing in the same place as in the video, with natural light and shadows that match the scene. Normal-sized head, the same clothes as in the picture.",
+    "prompt.negative": "",
+    "model.unet": "wan2.1_14B_SCAIL_2_fp8_scaled.safetensors",
+    "model.clip": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    "sampler.name": "euler",
+    "sampler.scheduler": "simple",
+    "sampler.steps": 6,
+    "sampler.cfg": 1,
+    "sampler.seed": 0,
+    "latent.batch": 1,
+    "sampler.denoise": 1,
+    "model.vae": "wan_2.1_vae.safetensors",
+    "image.input": "",
+    "video.input": "",
+    "video.offset": 0,
+    "output.image": "ComfyUI",
+    "n3.lora_name": "wan2.1_SCAIL_2_relight_lora_bf16.safetensors",
+    "n3.strength_model": 1,
+    "n16.text": "person",
+    "n17.text": "person",
+    "n31.value": true,
+    "n32.value": 832,
+    "n33.value": 480
+  },
+  "run": {
+    "seedMode": "random",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "packs": [],
+  "createdAt": "2026-11-06T00:00:00.000Z",
+  "updatedAt": "2026-11-06T00:00:00.000Z"
+}

@@ -14,6 +14,7 @@ export const JOB_KINDS = [
   "matrix",
   "xy",
   "thumbs",
+  "long",
   "batch",
   "grid",
   "compare",

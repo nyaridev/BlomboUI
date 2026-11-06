@@ -127,6 +127,17 @@ export function GalleryPage() {
             />
           </Field>
           <Field
+            label="Exclude long video parts"
+            layout="left"
+            hint="Leaves out the parts a long video is made of before its last one, which holds the whole video. They stay on disk."
+          >
+            <Switch
+              checked={settings?.excludeSegments ?? true}
+              onCheckedChange={(excludeSegments) => update.mutate({ gallery: { excludeSegments } })}
+              label="Exclude long video parts"
+            />
+          </Field>
+          <Field
             label="Play animations"
             layout="left"
             hint="Animated WebPs and GIFs move in their tiles. Off, they play when you point at them or open them."

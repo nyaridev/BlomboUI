@@ -1,0 +1,68 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-ltx2-extend",
+  "stage": "source",
+  "family": "checkpoint",
+  "name": "Continue a video (LTX)",
+  "description": "Continues an LTX-2 video: its last 9 frames are written into the start of the empty video latent (LTXVImgToVideoInplace), and after decoding the earlier frames and sound are put in front of the new ones (without the 9 it started from), so the result is the whole video. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "extend"
+  ],
+  "fits": [
+    "EmptyLTXVLatentVideo"
+  ],
+  "requires": [
+    "VAE",
+    "VIDEO",
+    "IMAGE",
+    "SOUND"
+  ],
+  "provides": [
+    "VIDEO",
+    "IMAGE",
+    "SOUND"
+  ],
+  "packs": [],
+  "fields": [
+    {
+      "field": "video",
+      "node": "load",
+      "input": "file",
+      "label": "Video"
+    },
+    {
+      "field": "overlapFrom",
+      "node": "tail",
+      "input": "batch_index"
+    },
+    {
+      "field": "overlap",
+      "node": "tail",
+      "input": "length"
+    },
+    {
+      "field": "overlap",
+      "node": "new",
+      "input": "batch_index"
+    },
+    {
+      "field": "width",
+      "node": "fit",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "fit",
+      "input": "height"
+    },
+    {
+      "field": "overlapSeconds",
+      "node": "new-sound",
+      "input": "start_index"
+    }
+  ],
+  "defaults": {
+    "overlap": 9
+  }
+}

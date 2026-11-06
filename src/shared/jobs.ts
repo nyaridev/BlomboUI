@@ -54,7 +54,7 @@ export type JobTiming = z.infer<typeof JobTiming>;
  */
 export const JobGroup = z.object({
   id: z.string(),
-  kind: z.enum(["matrix", "xy", "thumbs", "batch", "grid", "compare"]),
+  kind: z.enum(["matrix", "xy", "thumbs", "long", "batch", "grid", "compare"]),
   /** "XY plot · CFG scale × Steps", "Remove background". */
   title: z.string(),
   /** This job's place in the group (0-based) and the group's size. */

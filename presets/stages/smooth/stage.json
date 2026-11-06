@@ -1,0 +1,18 @@
+{
+  "format": "blombo.stage/1",
+  "id": "smooth",
+  "stage": "smooth",
+  "family": "diffusion",
+  "name": "Smooth motion",
+  "description": "Draws frames between the video's frames (RIFE or FILM) and raises its frame rate by the same factor, so the length and the sound stay the same. Core nodes only.",
+  "attach": "after_decode",
+  "requires": ["IMAGE"],
+  "provides": ["IMAGE"],
+  "roles": { "video.fps": "fps" },
+  "packs": [],
+  "fields": [
+    { "field": "model", "node": "loader", "input": "model_name", "label": "Model" },
+    { "field": "multiplier", "node": "interpolate", "input": "multiplier" }
+  ],
+  "defaults": {}
+}

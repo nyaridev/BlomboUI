@@ -1,0 +1,81 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-wan22-extend",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "Continue a video (Wan 2.2)",
+  "description": "Continues a Wan 2.2 TI2V video: its last 5 frames start a new Wan22ImageToVideoLatent at the workflow's size and length, and after decoding the earlier frames are put in front of the new ones (without the 5 it started from), so the result is the whole video. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "extend"
+  ],
+  "fits": [
+    "Wan22ImageToVideoLatent"
+  ],
+  "requires": [
+    "VAE",
+    "VIDEO",
+    "IMAGE"
+  ],
+  "provides": [
+    "VIDEO",
+    "IMAGE"
+  ],
+  "packs": [],
+  "fields": [
+    {
+      "field": "video",
+      "node": "load",
+      "input": "file",
+      "label": "Video"
+    },
+    {
+      "field": "overlapFrom",
+      "node": "tail",
+      "input": "batch_index"
+    },
+    {
+      "field": "overlap",
+      "node": "tail",
+      "input": "length"
+    },
+    {
+      "field": "overlap",
+      "node": "new",
+      "input": "batch_index"
+    },
+    {
+      "field": "width",
+      "node": "fit",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "fit",
+      "input": "height"
+    },
+    {
+      "field": "width",
+      "node": "latent",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "latent",
+      "input": "height"
+    },
+    {
+      "field": "length",
+      "node": "latent",
+      "input": "length"
+    },
+    {
+      "field": "batch",
+      "node": "latent",
+      "input": "batch_size"
+    }
+  ],
+  "defaults": {
+    "overlap": 5
+  }
+}

@@ -79,7 +79,7 @@ export function createApp(services: Services) {
   api.route("/layouts", layoutRoutes(services.layouts, workflows));
   api.route("/stages", stageRoutes(services.stages));
   api.route("/autocomplete", autocompleteRoutes(services.autocomplete));
-  api.route("/jobs", jobRoutes(queue, services.scripts));
+  api.route("/jobs", jobRoutes(queue, services.scripts, services.longVideo));
   api.route(
     "/wildcards",
     wildcardRoutes(profiles, services.wildcardPictures, services.wildcardsRenamed),

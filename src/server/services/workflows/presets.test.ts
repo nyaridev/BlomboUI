@@ -50,16 +50,20 @@ describe("built-in presets", async () => {
       it("has the roles its screen uses, and a canvas", () => {
         const roles = preset.manifest.bindings.map((b) => b.role);
         const video = outputRoles(preset.prompt, info).has("output.video");
+        // A character swap takes its size, length and frame rate from the video it reads.
+        const swap = roles.includes("video.input");
         const needed =
           preset.manifest.kind === "batch"
             ? ["image.input"]
-            : [
-                "prompt.positive",
-                "sampler.seed",
-                "latent.width",
-                // A distilled video model samples on a fixed schedule: no steps.
-                ...(video ? ["latent.length", "video.fps"] : ["sampler.steps"]),
-              ];
+            : swap
+              ? ["prompt.positive", "sampler.seed", "image.input", "video.input"]
+              : [
+                  "prompt.positive",
+                  "sampler.seed",
+                  "latent.width",
+                  // A distilled video model samples on a fixed schedule: no steps.
+                  ...(video ? ["latent.length", "video.fps"] : ["sampler.steps"]),
+                ];
         for (const role of needed) expect(roles).toContain(role);
         if (preset.manifest.kind === "generate")
           expect(roles.some((r) => r === "model.checkpoint" || r === "model.unet")).toBe(true);

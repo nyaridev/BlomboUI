@@ -38,6 +38,7 @@ import {
   ROLE_RANGES,
   SEED_INPUTS,
   TEXT_INPUTS,
+  VIDEO_INPUT_CLASSES,
   VIDEO_OUTPUT_CLASSES,
 } from "./nodes.ts";
 
@@ -227,6 +228,16 @@ function videoLatent(g: GraphView, link: ApiLink | null): string | null {
   return id && "length" in g.inputs(id) ? id : null;
 }
 
+/** The node that turns frames into the video an output saves (CreateVideo, or the saver itself). */
+function videoMaker(g: GraphView): string | null {
+  for (const id of g.ids()) {
+    if (!g.makesVideo(id)) continue;
+    for (const node of [id, g.link(id, "video")?.[0]])
+      if (node && isApiLink(g.inputs(node).images)) return node;
+  }
+  return null;
+}
+
 /** The node making the video an output saves, and the frame rate it's made at. */
 function videoFps(g: GraphView): Ref | null {
   for (const id of g.ids()) {
@@ -383,10 +394,18 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
   const end = chainEnd(g, sid);
   const fromSampler = (link: ApiLink) =>
     link[0] === end || g.link(link[0], AV_SPLIT_INPUT)?.[0] === end;
+  // A video with sound: the audio going into the video maker, and the VAE that decoded it.
+  const maker = videoMaker(g);
+  const sound = maker ? g.link(maker, "audio") : null;
+  if (sound) {
+    ports.SOUND = sound;
+    const audioVae = g.link(sound[0], "vae");
+    if (audioVae) ports.AUDIO_VAE = audioVae;
+  }
   for (const id of g.ids()) {
     const samples = g.link(id, "samples");
     const vae = g.link(id, "vae");
-    if (!samples || !vae || !fromSampler(samples)) continue;
+    if (!samples || !vae || !fromSampler(samples) || id === sound?.[0]) continue;
     ports.LATENT = samples;
     ports.VAE = vae;
     ports.IMAGE = [id, 0];
@@ -465,6 +484,7 @@ function bindingType(
   if (role === "prompt.positive" || role === "prompt.negative") return "prompt";
   if (role === "sampler.seed") return "seed";
   if (role === "image.input") return "image";
+  if (role === "video.input") return "video";
   if (MODEL_INPUTS[ref.input] && (!info || info.type === "COMBO")) return "model";
   if (info) {
     if (info.type === "INT") return "int";
@@ -653,6 +673,23 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
     const upload = Boolean(spec && typeof spec === "object" && "image_upload" in spec);
     if (IMAGE_INPUT_CLASSES.has(g.classOf(id)) || upload)
       add({ node: id, input: "image" }, "image.input");
+  }
+  // A video input, and where in it the workflow starts (an image batch slice of its frames).
+  for (const id of g.ids()) {
+    if (typeof g.inputs(id).file !== "string") continue;
+    const spec = objectInfo?.[g.classOf(id)]?.input.required?.file?.[1];
+    const upload = Boolean(spec && typeof spec === "object" && "video_upload" in spec);
+    if (!VIDEO_INPUT_CLASSES.has(g.classOf(id)) && !upload) continue;
+    add({ node: id, input: "file" }, "video.input");
+    const frames = g.ids().filter((c) => g.link(c, "video")?.[0] === id);
+    const slice = g
+      .ids()
+      .find(
+        (s) =>
+          frames.includes(g.link(s, "image")?.[0] ?? "") &&
+          typeof g.inputs(s).batch_index === "number",
+      );
+    if (slice) add(g.widgetRef(slice, "batch_index"), "video.offset");
   }
   const outputs = g.ids().filter((id) => g.isOutput(id));
   const save = outputs.find((id) => "filename_prefix" in g.inputs(id));

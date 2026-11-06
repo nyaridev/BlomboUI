@@ -40,6 +40,7 @@ import { JobQueue } from "./services/jobs.ts";
 import { LayoutService } from "./services/layouts.ts";
 import { LeftoverService } from "./services/leftovers.ts";
 import { LiveBus } from "./services/live.ts";
+import { LongVideoService } from "./services/longvideo.ts";
 import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
@@ -84,6 +85,7 @@ export interface Services {
   autocomplete: AutocompleteService;
   bridge: BridgeService;
   scripts: ScriptService;
+  longVideo: LongVideoService;
   compare: CompareService;
   wildcardPictures: WildcardPictures;
   /** Wildcard names changed: their pictures and favorites follow. */
@@ -410,6 +412,13 @@ export function createServices(config: ServerConfig): Services {
       bus.publish(null, { t: "models.changed" });
     },
   });
+  const longVideo = new LongVideoService({
+    queue: jobs,
+    profiles,
+    workflows,
+    stages,
+    publish: (msg) => bus.publish(null, msg),
+  });
   const compare = new CompareService({
     queue: jobs,
     profiles,
@@ -535,6 +544,7 @@ export function createServices(config: ServerConfig): Services {
     autocomplete,
     bridge,
     scripts,
+    longVideo,
     compare,
     wildcardPictures,
     wildcardsRenamed: async (changes) => {

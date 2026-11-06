@@ -149,7 +149,9 @@ export function GenerateActions() {
             {busy
               ? `${Math.round(progress * 100)}% · ${queued} queued`
               : script.plan
-                ? `${script.plan.cells.length} image${script.plan.cells.length === 1 ? "" : "s"}`
+                ? script.plan.kind === "long"
+                  ? `${script.plan.cells.length} parts, one video`
+                  : `${script.plan.cells.length} image${script.plan.cells.length === 1 ? "" : "s"}`
                 : "Script needs a fix"}
           </span>
         ) : null}

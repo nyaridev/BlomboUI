@@ -104,14 +104,20 @@ describe("stage packages", () => {
       "controlnet-diffusion",
       "hires-checkpoint",
       "hires-diffusion",
+      "smooth",
       "source",
       "source-ltx2",
+      "source-ltx2-extend",
       "source-ltx2-flf",
       "source-minimax-h3",
+      "source-minimax-h3-extend",
       "source-minimax-h3-flf",
+      "source-scail2-extend",
       "source-wan22",
       "source-wan22-14b",
+      "source-wan22-14b-extend",
       "source-wan22-14b-flf",
+      "source-wan22-extend",
       "source-wan22-fun",
     ]);
   });
@@ -286,8 +292,8 @@ describe("video first pass (source packages for Wan and LTX)", () => {
       const prompt = load(name);
       return sourceModes(prompt, packages, analyze(prompt, info).bindings, media);
     };
-    expect(modes("preset:wan22-5b", "video")).toEqual(["txt2img", "first", "firstLast"]);
-    expect(modes("preset:ltx23", "video")).toEqual(["txt2img", "first", "firstLast"]);
+    expect(modes("preset:wan22-5b", "video")).toEqual(["txt2img", "first", "firstLast", "extend"]);
+    expect(modes("preset:ltx23", "video")).toEqual(["txt2img", "first", "firstLast", "extend"]);
     expect(modes("sd15-api", "image")).toEqual(["txt2img", "img2img", "inpaint"]);
     // A video model no package knows gets Text to video only.
     const other = load("preset:wan22-5b");
@@ -445,6 +451,7 @@ describe("video first pass (source packages for Wan and LTX)", () => {
         "txt2img",
         "first",
         "firstLast",
+        "extend",
       ]);
     });
 
@@ -509,7 +516,7 @@ describe("video first pass (source packages for Wan and LTX)", () => {
       });
       const modes = (prompt: ApiPrompt) =>
         sourceModes(prompt, packages, analyze(prompt, info).bindings, "video");
-      expect(modes(load("preset:wan22-14b"))).toEqual(["txt2img", "first", "firstLast"]);
+      expect(modes(load("preset:wan22-14b"))).toEqual(["txt2img", "first", "firstLast", "extend"]);
       // The same latent node with other models (HunyuanVideo, Wan 2.1): nothing to swap to.
       const other = load("preset:wan22-14b");
       for (const id of ["1", "2"]) if (other[id]) other[id].inputs.unet_name = "other.safetensors";
@@ -566,6 +573,220 @@ describe("video first pass (source packages for Wan and LTX)", () => {
         `needs ${I2V.high} in your diffusion_models folder`,
       );
     });
+  });
+});
+
+describe("continue a video (extend)", () => {
+  const VIDEO = { ...IMAGE, file: "00112233aabbccdd.mp4", label: "so-far.mp4", duration: 3 };
+  const uploaded = "blombo/00112233aabbccdd.mp4";
+  const stageImages = { [VIDEO.file]: uploaded };
+  const extend = { source: { mode: "extend", video: VIDEO } };
+  const from = (v: unknown) => String((v as [string, number] | undefined)?.[0]);
+  const withI2v = structuredClone(info);
+  for (const [cls, input, names] of [
+    [
+      "UNETLoader",
+      "unet_name",
+      [
+        "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+        "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+      ],
+    ],
+    [
+      "LoraLoaderModelOnly",
+      "lora_name",
+      [
+        "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+        "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+      ],
+    ],
+  ] as const) {
+    const spec = withI2v[cls]?.input.required?.[input];
+    if (spec && Array.isArray(spec[0])) spec[0] = [...(spec[0] as string[]), ...names];
+  }
+
+  /** The video's last frames, and the whole video put back together after decoding. */
+  function expectStitched(p: ApiPrompt, decoded: string, maker: string, overlap: number) {
+    const [loadId, loaded] = one(p, "LoadVideo");
+    expect(loaded.inputs.file).toBe(uploaded);
+    const [partsId] = one(p, "GetVideoComponents");
+    expect(p[partsId]?.inputs.video).toEqual([loadId, 0]);
+    const slices = byClass(p, "ImageFromBatch");
+    const fromParts = slices.filter(([, n]) => from(n.inputs.image) === partsId);
+    const tail = fromParts.find(([, n]) => n.inputs.length === overlap);
+    const last = fromParts.find(([, n]) => n.inputs.length === 1);
+    expect(tail?.[1].inputs).toMatchObject({ batch_index: -overlap, length: overlap });
+    expect(last?.[1].inputs).toMatchObject({ batch_index: -1 });
+    // The new frames' colors follow the old last frame.
+    const [matchId, match] = one(p, "ColorTransfer");
+    expect(match.inputs).toMatchObject({
+      image_target: [decoded, 0],
+      image_ref: [last?.[0], 0],
+      source_stats: "uniform",
+    });
+    const fresh = slices.find(([, n]) => from(n.inputs.image) === matchId);
+    expect(fresh?.[1].inputs).toMatchObject({ batch_index: overlap });
+    const [joinedId, joined] = one(p, "BatchImagesNode");
+    expect(joined.inputs["images.image1"]).toEqual([fresh?.[0], 0]);
+    expect(p[maker]?.inputs.images).toEqual([joinedId, 0]);
+    return { tail: tail?.[0] ?? "", partsId };
+  }
+
+  it("is offered on all four video workflows", () => {
+    for (const name of ["wan22-5b", "ltx23", "minimax-h3"]) {
+      const prompt = load(`preset:${name}`);
+      expect(sourceModes(prompt, packages, analyze(prompt, info).bindings, "video")).toContain(
+        "extend",
+      );
+    }
+  });
+
+  it("finds the sound going into the video and the VAE that decoded it", () => {
+    expect(findPorts(load("preset:minimax-h3"))).toMatchObject({
+      SOUND: ["13", 0],
+      AUDIO_VAE: ["4", 0],
+      IMAGE: ["12", 0],
+    });
+    expect(findPorts(load("preset:ltx23"))).toMatchObject({ SOUND: ["19", 0], IMAGE: ["18", 0] });
+    expect(findPorts(load("preset:wan22-5b")).SOUND).toBeUndefined();
+  });
+
+  it("Wan 2.2: starts a new latent from the last 5 frames and puts the old ones in front", () => {
+    const p = run("preset:wan22-5b", extend, { stageImages }).prompt;
+    expectValidGraph(p);
+    const { tail } = expectStitched(p, "9", "10", 5);
+    const latent = p[from(p["8"]?.inputs.latent_image)];
+    expect(latent?.class_type).toBe("Wan22ImageToVideoLatent");
+    expect(latent?.inputs).toMatchObject({ start_image: [tail, 0], width: 1280, length: 49 });
+  });
+
+  it("Wan 2.2 14B: the image to video models, WanImageToVideo from the last frames", () => {
+    const p = run("preset:wan22-14b", extend, { stageImages, objectInfo: withI2v }).prompt;
+    expectValidGraph(p);
+    const { tail } = expectStitched(p, "17", "18", 5);
+    const [videoId, video] = one(p, "WanImageToVideo");
+    expect(video.inputs.start_image).toEqual([tail, 0]);
+    expect(p["15"]?.inputs.latent_image).toEqual([videoId, 2]);
+    expect(p["1"]?.inputs.unet_name).toBe("wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors");
+  });
+
+  it("LTX: the last 9 frames into the latent, and the sound joined after the old sound", () => {
+    const p = run("preset:ltx23", extend, { stageImages }).prompt;
+    expectValidGraph(p);
+    const { tail, partsId } = expectStitched(p, "18", "20", 9);
+    const [, put] = one(p, "LTXVImgToVideoInplace");
+    expect(from(put.inputs.image)).not.toBe(tail);
+    const [trimId, trim] = one(p, "TrimAudioDuration");
+    expect(trim.inputs).toMatchObject({ audio: ["19", 0], start_index: 0.36 });
+    const [concatId, concat] = one(p, "AudioConcat");
+    expect(concat.inputs).toMatchObject({ audio1: [partsId, 1], audio2: [trimId, 0] });
+    expect(p["20"]?.inputs.audio).toEqual([concatId, 0]);
+  });
+
+  it("MiniMax H3: the last frames and their sound anchored at the start", () => {
+    const p = run("preset:minimax-h3", extend, { stageImages }).prompt;
+    expectValidGraph(p);
+    const { tail, partsId } = expectStitched(p, "12", "14", 5);
+    const [guideId, guide] = one(p, "MiniMaxH3AddGuide");
+    const seconds = Math.round((5 / 24) * 10000) / 10000;
+    expect(guide.inputs).toMatchObject({
+      positive: ["6", 0],
+      latent: ["6", 1],
+      vae: ["3", 0],
+      audio_vae: ["4", 0],
+      image: [tail, 0],
+      frame_idx: 0,
+    });
+    const tailSound = p[from(guide.inputs.audio)];
+    expect(tailSound?.inputs).toMatchObject({
+      audio: [partsId, 1],
+      start_index: -seconds,
+      duration: seconds,
+    });
+    expect(p["10"]?.inputs.conditioning).toEqual([guideId, 0]);
+    expect(p["6"]?.inputs.first_frame).toBeUndefined();
+  });
+
+  it("stops without a video", () => {
+    expect(() => run("preset:wan22-5b", { source: { mode: "extend" } })).toThrow(
+      "Continue a video has no video",
+    );
+  });
+});
+
+describe("character swaps (SCAIL 2, MiniMax H3)", () => {
+  const from = (v: unknown) => String((v as [string, number] | undefined)?.[0]);
+  it("bind the character picture, the video and where in it a part starts", () => {
+    const scail = analyze(load("preset:scail2-replace"), info).bindings;
+    expect(scail.find((b) => b.role === "image.input")).toMatchObject({
+      node: "14",
+      type: "image",
+    });
+    expect(scail.find((b) => b.role === "video.input")).toMatchObject({
+      node: "9",
+      input: "file",
+      type: "video",
+    });
+    expect(scail.find((b) => b.role === "video.offset")).toMatchObject({
+      node: "11",
+      input: "batch_index",
+    });
+    const h3 = analyze(load("preset:minimax-h3-swap"), info).bindings;
+    expect(h3.find((b) => b.role === "video.input")).toMatchObject({ node: "7", type: "video" });
+    expect(h3.find((b) => b.role === "prompt.positive")).toMatchObject({ node: "10" });
+  });
+
+  it("SCAIL continues from the video so far: its frames anchor, the driving video moves on", () => {
+    const VIDEO = { ...IMAGE, file: "00112233aabbccdd.mp4", label: "so-far.mp4", duration: 3 };
+    const prompt = load("preset:scail2-replace");
+    expect(sourceModes(prompt, packages, analyze(prompt, info).bindings, "video")).toEqual([
+      "txt2img",
+      "extend",
+    ]);
+    const p = run(
+      "preset:scail2-replace",
+      { source: { mode: "extend", video: VIDEO } },
+      { stageImages: { [VIDEO.file]: "blombo/00112233aabbccdd.mp4" } },
+    ).prompt;
+    expectValidGraph(p);
+    const [loadId] =
+      byClass(p, "LoadVideo").find(([, n]) => n.inputs.file === "blombo/00112233aabbccdd.mp4") ??
+      [];
+    const [partsId] =
+      byClass(p, "GetVideoComponents").find(([, n]) => from(n.inputs.video) === loadId) ?? [];
+    expect(p["24"]?.inputs.previous_frames).toEqual([partsId, 0]);
+    // The driving video's slice starts 5 frames before the end of the video so far.
+    const [mathId, math] = one(p, "ComfyMathExpression");
+    expect(math.inputs.expression).toBe("a - 5");
+    expect(p["11"]?.inputs.batch_index).toEqual([mathId, 1]);
+    const [joinedId, joined] = one(p, "BatchImagesNode");
+    expect(joined.inputs["images.image0"]).toEqual([partsId, 0]);
+    expect(p["29"]?.inputs.images).toEqual([joinedId, 0]);
+  });
+});
+
+describe("smooth motion (frame interpolation)", () => {
+  it("draws frames between the decoded frames and raises the frame rate by as much", () => {
+    const p = run("preset:wan22-14b", {
+      smooth: { enabled: true, model: "film_net_fp16.safetensors", multiplier: 3 },
+    }).prompt;
+    expectValidGraph(p);
+    const [loaderId, loader] = one(p, "FrameInterpolationModelLoader");
+    expect(loader.inputs.model_name).toBe("film_net_fp16.safetensors");
+    const [interpId, interp] = one(p, "FrameInterpolate");
+    expect(interp.inputs).toMatchObject({
+      interp_model: [loaderId, 0],
+      images: ["17", 0],
+      multiplier: 3,
+    });
+    expect(p["18"]?.inputs).toMatchObject({ images: [interpId, 0], fps: 48 });
+  });
+
+  it("is off by default and says so on a workflow without a frame rate", () => {
+    expect(byClass(run("preset:wan22-14b", {}).prompt, "FrameInterpolate")).toEqual([]);
+    expect(() => run("sd15-api", { smooth: { enabled: true } })).toThrow(
+      "Smooth motion needs the workflow's frame rate",
+    );
   });
 });
 

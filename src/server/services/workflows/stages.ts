@@ -158,7 +158,13 @@ export function spliceStage(
   ports: PortLinks,
   basePorts: PortLinks,
   nextId: () => string,
-): { added: string[]; missing: Port[]; changed: Port[] } {
+): {
+  added: string[];
+  missing: Port[];
+  changed: Port[];
+  /** A link to one of the package's nodes, as it is in the graph now (null if it's gone). */
+  linkTo: (link: [string, number]) => ApiLink | null;
+} {
   const graph = stage.graph;
   const missing = new Set<Port>();
   const removed = new Set<string>();
@@ -273,7 +279,11 @@ export function spliceStage(
     ports[port] = next;
     changed.add(port);
   }
-  return { added, missing: [...missing], changed: [...changed] };
+  const linkTo = (link: [string, number]) => {
+    const r = resolve(link);
+    return r === DROP ? null : r;
+  };
+  return { added, missing: [...missing], changed: [...changed], linkTo };
 }
 
 /* ── settings → instances ──────────────────────────────────────────────── */
@@ -342,12 +352,18 @@ function instancesFor(
   // Status checks run before anything is uploaded; a run needs the uploaded name.
   const uploaded = (img: StageImage | null) =>
     img ? (ctx.images ? ctx.images[img.file] : img.file) : undefined;
-  const video = settings.source.mode === "first" || settings.source.mode === "firstLast";
+  const video = (["first", "firstLast", "extend"] as const).some((m) => settings.source.mode === m);
   if (stage === "source" && video) {
     const s = settings.source;
     const both = s.mode === "firstLast";
+    const extend = s.mode === "extend";
     const name = SOURCE_MODE_LABELS[s.mode];
-    if (!s.image)
+    if (extend && !s.video)
+      problems.push({
+        code: "no_image",
+        message: `${name} has no video. Add one, or set the first pass back to Text to video.`,
+      });
+    if (!extend && !s.image)
       problems.push({
         code: "no_image",
         message: `${name} has no first frame. Add one, or set the first pass back to Text to video.`,
@@ -357,13 +373,24 @@ function instancesFor(
         code: "no_image",
         message: "First and last frame has no last frame. Add one, or pick First frame.",
       });
-    const image = uploaded(s.image);
+    const image = extend ? undefined : uploaded(s.image);
     const last = both ? uploaded(s.last) : undefined;
-    if ((s.image && image === undefined) || (both && s.last && last === undefined))
+    const clip = extend ? uploaded(s.video) : undefined;
+    if (
+      (!extend && s.image && image === undefined) ||
+      (both && s.last && last === undefined) ||
+      (extend && s.video && clip === undefined)
+    )
       problems.push({
         code: "no_image",
-        message: `${name}: a frame couldn't be sent to ComfyUI. Add it again.`,
+        message: `${name}: a file couldn't be sent to ComfyUI. Add it again.`,
       });
+    // Continue a video: the package's overlap (frames of the old video the new part starts
+    // from, then drops), in frames and in seconds of sound at the workflow's frame rate.
+    const overlap = Number(pkg.defaults.overlap ?? 5);
+    const fpsBinding = bindingFor(ctx.bindings, "video.fps");
+    const fps = Number(fpsBinding ? ctx.values[fpsBinding.id] : 24) || 24;
+    const seconds = Math.round((overlap / fps) * 10000) / 10000;
     const size = baseSize(ctx);
     const count = (role: string, fallback: number) => {
       const b = bindingFor(ctx.bindings, role);
@@ -378,10 +405,15 @@ function instancesFor(
           ...pkg.defaults,
           image,
           last,
+          video: clip,
           width: size?.width,
           height: size?.height,
           length: count("latent.length", 49),
           batch: count("latent.batch", 1),
+          overlap,
+          overlapFrom: -overlap,
+          overlapSeconds: seconds,
+          overlapSecondsFrom: -seconds,
         },
         flags: { last: both, resize: size !== null },
         loras: "",
@@ -493,6 +525,31 @@ function instancesFor(
           loras: s.loras,
         };
       });
+  }
+  if (stage === "smooth") {
+    const sm = settings.smooth;
+    const fps = bindingFor(ctx.bindings, "video.fps");
+    const rate = fps ? Number(ctx.values[fps.id]) : Number.NaN;
+    if (!Number.isFinite(rate))
+      problems.push({
+        code: "missing_port",
+        message:
+          "Smooth motion needs the workflow's frame rate, and this workflow has none. It works on video workflows.",
+      });
+    return [
+      {
+        key: "smooth",
+        label,
+        values: {
+          ...pkg.defaults,
+          model: sm.model,
+          multiplier: sm.multiplier,
+          fps: rate * sm.multiplier,
+        },
+        flags: {},
+        loras: "",
+      },
+    ];
   }
   if (stage === "controlnet") {
     return settings.controlnet.units
@@ -693,7 +750,7 @@ function choicesFor(stage: LoadedStage | null, info: ObjectInfo | null): Record<
 
 /* ── all stages ────────────────────────────────────────────────────────── */
 
-const RUN_ORDER: StageId[] = ["source", "controlnet", "hires", "adetailer"];
+const RUN_ORDER: StageId[] = ["source", "controlnet", "hires", "adetailer", "smooth"];
 
 function isOn(settings: StageSettings, stage: StageId): boolean {
   if (stage === "source") return sourceOn(settings.source);
@@ -779,6 +836,7 @@ export function applyStages(
         added,
         missing: lacking,
         changed,
+        linkTo,
       } = spliceStage(prompt, found, inst, instPorts, basePorts, nextId);
       // Republished ports flow on to the next instance and stage.
       for (const p of changed) if (instPorts[p]) ports[p] = instPorts[p];
@@ -792,6 +850,15 @@ export function applyStages(
             code: "missing_port",
             message: `${inst.label} sets the sampler's ${input}, and this workflow's sampler has none.`,
           });
+      }
+      // Role bindings the package sets: to a value (Smooth motion's frame rate) or a link to one
+      // of its nodes (SCAIL's start frame).
+      for (const [role, source] of Object.entries(found.pkg.roles)) {
+        const b = bindingFor(ctx.bindings, role);
+        const node = b ? prompt[b.node] : undefined;
+        if (!b || !node) continue;
+        const value = typeof source === "string" ? inst.values[source] : linkTo(source);
+        if (value !== null && value !== undefined) node.inputs[b.input] = value;
       }
       if (lacking.length)
         problems.push({
@@ -807,7 +874,9 @@ export function applyStages(
       if (typeof inst.values.prompt === "string") texts[`${inst.key}.prompt`] = inst.values.prompt;
     }
     if (ctx.info) {
-      const nodes = nodeProblems(prompt, addedAll, found.pkg, ctx.info, STAGE_LABELS[stage]);
+      // The source stage is named by its mode ("Continue a video"), the others by their stage.
+      const name = stage === "source" ? SOURCE_MODE_LABELS[run.source.mode] : STAGE_LABELS[stage];
+      const nodes = nodeProblems(prompt, addedAll, found.pkg, ctx.info, name);
       if (nodes) problems.unshift(nodes);
     }
   }
@@ -824,6 +893,8 @@ const PORT_NAMES: Record<Port, string> = {
   VIDEO: "video latent",
   LATENT: "latent",
   IMAGE: "decoded image",
+  SOUND: "video sound",
+  AUDIO_VAE: "audio VAE",
 };
 
 function portName(p: Port): string {
@@ -858,5 +929,5 @@ export function sourceModes(
   for (const v of Object.values(values)) if (typeof v === "string") files.add(v);
   const fits = (mode: SourceMode) =>
     pickPackage(packages, "source", family, ports, { mode, videoClass, files }).found !== null;
-  return ["txt2img", ...(["first", "firstLast"] as const).filter(fits)];
+  return ["txt2img", ...(["first", "firstLast", "extend"] as const).filter(fits)];
 }

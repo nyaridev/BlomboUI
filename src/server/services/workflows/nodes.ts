@@ -81,6 +81,8 @@ export const TEXT_OUTPUT_KEYS = ["text", "tags", "caption", "captions", "string"
 
 /** Image inputs recognized without object_info. */
 export const IMAGE_INPUT_CLASSES = new Set(["LoadImage"]);
+/** Video inputs (role video.input): ComfyUI's Load Video, without object_info. */
+export const VIDEO_INPUT_CLASSES = new Set(["LoadVideo"]);
 
 /** The small graph that previews a ControlNet map: load the image, preview the result. */
 export const LOAD_IMAGE = "LoadImage";

@@ -138,6 +138,8 @@ export const GallerySettings = z.object({
   excludeInterrupted: z.boolean().default(true),
   /** Leave out the JPEG copies of large images (Settings → Saving). */
   excludeJpegCopies: z.boolean().default(true),
+  /** Leave out a long video's parts before its last one (a `segments` folder). */
+  excludeSegments: z.boolean().default(true),
   /** Animated WebPs and GIFs play in their tiles; off, they play on hover or when opened. */
   autoplayAnimated: z.boolean().default(true),
   /** Videos play (muted) in their tiles; off, they play on hover or when opened. */

@@ -26,6 +26,8 @@ export const ROLES = [
   "video.fps",
   "clip.skip",
   "image.input",
+  "video.input",
+  "video.offset",
   "mask.input",
   "output.image",
   "output.text",
@@ -65,6 +67,8 @@ export const ROLE_LABELS: Partial<Record<Role, string>> = {
   "video.fps": "Frame rate",
   "clip.skip": "CLIP skip",
   "image.input": "Input image",
+  "video.input": "Input video",
+  "video.offset": "Start frame",
   "mask.input": "Mask",
   "output.image": "Filename prefix",
   "output.text": "Text output",
@@ -80,13 +84,20 @@ export type WorkflowMedia = (typeof WORKFLOW_MEDIA)[number];
  * mask. Video: an empty latent, a first frame, or a first and a last frame. A workflow offers the
  * ones a stage package fits (`sourceModes` on the workflow detail).
  */
-export const SOURCE_MODES = ["txt2img", "img2img", "inpaint", "first", "firstLast"] as const;
+export const SOURCE_MODES = [
+  "txt2img",
+  "img2img",
+  "inpaint",
+  "first",
+  "firstLast",
+  "extend",
+] as const;
 export type SourceMode = (typeof SOURCE_MODES)[number];
 
 /**
  * `source` is the first pass's image (img2img or inpaint): it runs before every other stage and
  * lives in the First pass card (a layout feature), not in a tab of its own (TAB_STAGES).
  */
-export const STAGES = ["source", "controlnet", "hires", "adetailer", "upscale"] as const;
+export const STAGES = ["source", "controlnet", "hires", "adetailer", "upscale", "smooth"] as const;
 export type StageId = (typeof STAGES)[number];
-export const TAB_STAGES = ["controlnet", "hires", "adetailer", "upscale"] as const;
+export const TAB_STAGES = ["controlnet", "hires", "adetailer", "upscale", "smooth"] as const;

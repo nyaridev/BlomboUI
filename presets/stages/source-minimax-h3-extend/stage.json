@@ -1,0 +1,80 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-minimax-h3-extend",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "Continue a video (MiniMax H3)",
+  "description": "Continues a MiniMax H3 video: its last 5 frames and their sound are anchored at the start of the new video (MiniMaxH3AddGuide), and after decoding the earlier frames and sound are put in front of the new ones (without the 5 it started from), so the result is the whole video. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "extend"
+  ],
+  "fits": [
+    "MiniMaxH3ImageToVideo"
+  ],
+  "requires": [
+    "POSITIVE",
+    "VAE",
+    "AUDIO_VAE",
+    "VIDEO",
+    "IMAGE",
+    "SOUND"
+  ],
+  "provides": [
+    "POSITIVE",
+    "IMAGE",
+    "SOUND"
+  ],
+  "packs": [],
+  "fields": [
+    {
+      "field": "video",
+      "node": "load",
+      "input": "file",
+      "label": "Video"
+    },
+    {
+      "field": "overlapFrom",
+      "node": "tail",
+      "input": "batch_index"
+    },
+    {
+      "field": "overlap",
+      "node": "tail",
+      "input": "length"
+    },
+    {
+      "field": "overlap",
+      "node": "new",
+      "input": "batch_index"
+    },
+    {
+      "field": "width",
+      "node": "fit",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "fit",
+      "input": "height"
+    },
+    {
+      "field": "overlapSeconds",
+      "node": "new-sound",
+      "input": "start_index"
+    },
+    {
+      "field": "overlapSecondsFrom",
+      "node": "tail-sound",
+      "input": "start_index"
+    },
+    {
+      "field": "overlapSeconds",
+      "node": "tail-sound",
+      "input": "duration"
+    }
+  ],
+  "defaults": {
+    "overlap": 5
+  }
+}

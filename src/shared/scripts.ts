@@ -19,7 +19,7 @@ import { comfyNameOf, type ModelList } from "./models.ts";
 import { INSTANT_LORAS, InstantLora, readInstantLoras } from "./prompt/instant.ts";
 import type { Binding } from "./workflow/manifest.ts";
 
-export const SCRIPT_KINDS = ["matrix", "xy", "thumbs"] as const;
+export const SCRIPT_KINDS = ["matrix", "xy", "thumbs", "long"] as const;
 export type ScriptKind = (typeof SCRIPT_KINDS)[number];
 
 /** One click queues at most this many runs. */
@@ -104,7 +104,26 @@ export const ThumbsScript = z.object({
   loraWeight: z.number().min(-4).max(4).default(1),
 });
 
-export const Script = z.discriminatedUnion("kind", [MatrixScript, XYScript, ThumbsScript]);
+/** The most parts a long video can have. */
+export const MAX_SEGMENTS = 8;
+
+/**
+ * Long video (video workflows that can continue a video): parts run one after the other, each
+ * continuing the one before (services/longvideo.ts), so they can't be queued all at once.
+ */
+export const LongVideoScript = z.object({
+  kind: z.literal("long"),
+  segments: z.number().int().min(2).max(MAX_SEGMENTS).default(2),
+  /** A prompt per part, in order; an empty or missing one keeps the workflow's prompt. */
+  prompts: z.array(z.string().trim().max(4000)).max(MAX_SEGMENTS).default([]),
+});
+
+export const Script = z.discriminatedUnion("kind", [
+  MatrixScript,
+  XYScript,
+  ThumbsScript,
+  LongVideoScript,
+]);
 export type Script = z.infer<typeof Script>;
 export type ScriptInput = z.input<typeof Script>;
 
@@ -613,6 +632,37 @@ function planXY(
   };
 }
 
+/** A long video's parts: each its own prompt (or the workflow's), its seed moved on by one. */
+function planLong(script: Extract<Script, { kind: "long" }>, bindings: Binding[]): ScriptPlan {
+  const positive = bindings.find((b) => b.role === "prompt.positive");
+  if (script.prompts.some(Boolean) && !positive)
+    throw new ScriptError("This workflow has no prompt to change per part. Clear the prompts.");
+  const cells = Array.from(
+    { length: script.segments },
+    (_, i): ScriptCell => ({
+      overrides: positive && script.prompts[i] ? { [positive.id]: script.prompts[i] } : {},
+      col: i,
+      row: 0,
+      label: `Part ${i + 1}`,
+      repeat: i,
+    }),
+  );
+  return {
+    kind: "long",
+    cells,
+    cols: cells.length,
+    rows: 1,
+    colLabels: cells.map((c) => c.label),
+    rowLabels: [],
+    grid: false,
+    legend: false,
+    margin: 0,
+    keepImages: true,
+    randomSeeds: false,
+    title: `Long video · ${cells.length} parts`,
+  };
+}
+
 /** Every run a script makes, in the order they're queued (row by row). */
 export function planScript(
   input: ScriptInput | Script,
@@ -622,6 +672,7 @@ export function planScript(
   const script = Script.parse(input);
   if (script.kind === "matrix") return planMatrix(script, bindings, values);
   if (script.kind === "xy") return planXY(script, bindings, values);
+  if (script.kind === "long") return planLong(script, bindings);
 
   const b = need(bindings, script.binding);
   checkCount(script.models.length);

@@ -47,10 +47,10 @@ export const IMPORT_FOLDERS = { imported: "imported", civitai: "civitai" } as co
 /**
  * Where Blombo saves what it makes, inside the main output folder:
  * `<workflow>/<type>/<yyyy-mm-dd>/<file>`, e.g. `illustrious/images/2026-11-01/blombo_00001_.png`.
- * Types: a run's images, a script's grids, and the images of a run that was stopped (moved there
- * once it stops).
+ * Types: a run's images, a script's grids, the images of a run that was stopped (moved there
+ * once it stops), and the parts of a long video before its last one (each the whole video so far).
  */
-export const OUTPUT_TYPES = ["images", "grids", "interrupted"] as const;
+export const OUTPUT_TYPES = ["images", "grids", "interrupted", "segments"] as const;
 export type OutputType = (typeof OUTPUT_TYPES)[number];
 /** The file name ComfyUI numbers (`blombo_00001_.png`). */
 export const OUTPUT_STEM = "blombo";
@@ -202,6 +202,12 @@ export const GalleryQuery = z.object({
     .max(80)
     .default(IMAGE_ORIGINS.join(","))
     .transform((v) => IMAGE_ORIGINS.filter((o) => v.split(",").includes(o))),
+  /** Which kinds of file to show, comma-separated ("video"); all of them by default. */
+  media: z
+    .string()
+    .max(80)
+    .default(MEDIA_KINDS.join(","))
+    .transform((v) => MEDIA_KINDS.filter((m) => v.split(",").includes(m))),
   sort: z.enum(GALLERY_SORTS).default("newest"),
   /** The shuffle's order (sort `random`). */
   seed: z.coerce.number().int().min(0).max(2_000_000_000).default(0),

@@ -8,6 +8,8 @@
  *           replacing a text in the prompts; each line runs once, or the batch count and size
  *   xy      an X and a Y type (None, the workflow's models, LoRA, resolution, its parameters,
  *           Prompt S/R) with their values, plus how the grid is drawn
+ *   long    video workflows that can continue a video: 2–8 parts, each continuing the one before,
+ *           with a prompt per part (services/longvideo.ts)
  */
 import { Icon } from "@client/icons/Icon";
 import { useLocalModels } from "@client/lib/queries";
@@ -26,6 +28,7 @@ import {
   type AxisDraft,
   loraWeights,
   MAX_GRID_MARGIN,
+  MAX_SEGMENTS,
   type MatrixInsert,
   NO_AXIS,
 } from "@shared/scripts";
@@ -40,7 +43,7 @@ import {
   useScript,
 } from "../scripts";
 import { useValues } from "../state";
-import { useBindings } from "../workflow";
+import { useBindings, useRoleBinding, useSourceModes } from "../workflow";
 import { AxisValues } from "./AxisValues";
 
 /** The current script, planned against the current values (shared by the block and the button). */
@@ -65,6 +68,8 @@ export function ScriptsBlock() {
   const bindings = useBindings();
   const built = useBuiltScript();
   const count = built.plan?.cells.length ?? 0;
+  const canExtend = useSourceModes().modes.includes("extend");
+  const unit = draft.kind === "long" ? "part" : "image";
 
   return (
     <Collapsible
@@ -73,7 +78,7 @@ export function ScriptsBlock() {
       icon="layout-grid"
       subtitle={
         draft.on
-          ? `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} image${count === 1 ? "" : "s"}`}`
+          ? `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} ${unit}${count === 1 ? "" : "s"}`}`
           : undefined
       }
       enabled={draft.on}
@@ -88,9 +93,20 @@ export function ScriptsBlock() {
           options={[
             { value: "matrix", label: SCRIPT_LABELS.matrix },
             { value: "xy", label: SCRIPT_LABELS.xy },
+            ...(canExtend || draft.kind === "long"
+              ? [{ value: "long" as const, label: SCRIPT_LABELS.long }]
+              : []),
           ]}
         />
-        {draft.kind === "matrix" ? (
+        {draft.kind === "long" && !canExtend ? (
+          <p className="flex items-start gap-1.5 text-xs text-warning">
+            <Icon name="info" size={13} className="mt-px shrink-0" />
+            This workflow can't continue a video. Long video works with Wan 2.2, LTX-2.3 and MiniMax
+            H3; pick another script here.
+          </p>
+        ) : draft.kind === "long" ? (
+          <LongEditor draft={draft.long} />
+        ) : draft.kind === "matrix" ? (
           <MatrixEditor draft={draft.matrix} bindings={bindings} />
         ) : (
           <XYEditor draft={draft.xy} bindings={bindings} />
@@ -314,6 +330,53 @@ function AxisRow({
       </Field>
       <Field label={`${name} values`}>
         <AxisValues axis={axis} bindings={bindings} label={`${name} values`} onChange={onChange} />
+      </Field>
+    </div>
+  );
+}
+
+/* ── Long video ─────────────────────────────────────────────────────────── */
+
+function LongEditor({ draft }: { draft: ScriptDraft["long"] }) {
+  const setLong = useScript((s) => s.setLong);
+  const length = useRoleBinding("latent.length");
+  const fps = useRoleBinding("video.fps");
+  const frames = useValues((s) => (length ? Number(s.values[length.id]) : Number.NaN));
+  const rate = useValues((s) => (fps ? Number(s.values[fps.id]) : Number.NaN));
+  const part = frames / rate;
+  const each = Number.isFinite(part) && part > 0 ? Math.round(part * 10) / 10 : null;
+  return (
+    <div className="flex flex-col gap-3">
+      <Slider
+        label="Parts"
+        field
+        size="sm"
+        min={2}
+        max={MAX_SEGMENTS}
+        value={draft.segments}
+        defaultValue={2}
+        onChange={(segments) => setLong({ segments })}
+      />
+      <p className="text-xs text-fg-3">
+        Each part continues the one before from its last frames
+        {each
+          ? `, about ${each} s each, so about ${Math.round(each * draft.segments)} s in all`
+          : ""}
+        . The result is one video; the parts before it are kept in the workflow's segments folder.
+      </p>
+      <Field
+        label="Prompt per part"
+        hint="One line per part, in order. An empty line keeps the prompt above."
+      >
+        {(id) => (
+          <TextArea
+            id={id}
+            placeholder={"a fox walks into the snow\n\nthe fox curls up and sleeps"}
+            value={draft.prompts}
+            onChange={(e) => setLong({ prompts: e.target.value })}
+            maxRows={12}
+          />
+        )}
       </Field>
     </div>
   );

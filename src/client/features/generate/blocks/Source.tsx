@@ -5,7 +5,8 @@
  * last output, and is kept in the profile like a ControlNet image. Sits at the top of the First
  * pass card (a layout feature, `source`). The mode is picked from that card's tab menu
  * (ParamsColumn, `SourceInTab`); a layout without the tab gets a Start from dropdown here.
- * Video workflows start from text, a first frame, or a first and a last frame instead; the
+ * Video workflows start from text, a first frame, or a first and a last frame instead, or
+ * continue a video (its last frames start the new part, and the result is the whole video); the
  * modes listed are the ones the workflow has a package for (`WorkflowDetail.sourceModes`).
  */
 import { pauseShortcuts } from "@client/app/useShortcuts";
@@ -24,12 +25,17 @@ import {
   toast,
 } from "@client/ui";
 import type { WorkflowDetail } from "@shared/workflow/manifest";
-import { type SourceMode, type StageImage, sourceModeLabel } from "@shared/workflow/stages";
+import {
+  type SourceMode,
+  type StageImage,
+  type StageVideo,
+  sourceModeLabel,
+} from "@shared/workflow/stages";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useStage, useValues } from "../state";
 import { useRoleBinding, useSourceModes } from "../workflow";
 import { StageNotices, useStageStatus } from "./stages/common";
-import { GalleryPicker, useLastOutput } from "./stages/images";
+import { GalleryPicker, useLastOutput, useLastVideo } from "./stages/images";
 
 /** True inside a pass tab whose menu picks the mode, so the block leaves out its own dropdown. */
 export const SourceInTab = createContext(false);
@@ -42,9 +48,11 @@ const HINTS: Record<SourceMode, string> = {
   inpaint: "Redraws only the part you paint; the rest stays as it is.",
   first: "The video starts from your picture and the prompt says what happens next.",
   firstLast: "The video starts from one picture and ends on the other.",
+  extend:
+    "Picks up where your video ends: the new part follows its last frames, and the result is the whole video.",
 };
 
-const VIDEO_MODES: SourceMode[] = ["first", "firstLast"];
+const VIDEO_MODES: SourceMode[] = ["first", "firstLast", "extend"];
 
 export function SourceBlock() {
   const [s, set] = useStage("source");
@@ -117,12 +125,16 @@ export function SourceBlock() {
       {on && video ? (
         <>
           <StageNotices status={status} />
-          <FrameWell
-            title="First frame"
-            image={s.image}
-            sized={sized ? `${w}×${h}` : null}
-            onChange={(image) => set({ image })}
-          />
+          {s.mode === "extend" ? (
+            <VideoWell video={s.video} onChange={(video) => set({ video })} />
+          ) : (
+            <FrameWell
+              title="First frame"
+              image={s.image}
+              sized={sized ? `${w}×${h}` : null}
+              onChange={(image) => set({ image })}
+            />
+          )}
           {s.mode === "firstLast" ? (
             <FrameWell
               title="Last frame"
@@ -419,6 +431,126 @@ function FrameWell({
   );
 }
 
+/** Continue a video: the video so far, from a file, the gallery or the last output. */
+function VideoWell({
+  video,
+  onChange,
+}: {
+  video: StageVideo | null;
+  onChange: (video: StageVideo | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const replaceInput = useRef<HTMLInputElement>(null);
+  const last = useLastVideo();
+  const add = async (work: () => Promise<StageVideo>) => {
+    setBusy(true);
+    try {
+      onChange(await work());
+    } catch (e) {
+      toast(message(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const upload = (f: File) => void add(() => api.uploadStageVideo(f, f.name));
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="label-caps">Video so far</span>
+      {video ? (
+        <div className="flex gap-3 max-sm:flex-col">
+          <div className="relative h-28 w-40 shrink-0 overflow-hidden rounded-md border border-line bg-sunken max-sm:w-full">
+            <video
+              src={stageImageUrl(video.file)}
+              muted
+              loop
+              playsInline
+              preload="metadata"
+              onPointerEnter={(e) => void e.currentTarget.play().catch(() => {})}
+              onPointerLeave={(e) => e.currentTarget.pause()}
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <span className="truncate font-mono text-2xs text-fg-3" title={video.label}>
+              {video.label}
+              {video.width ? ` · ${video.width}×${video.height}` : ""}
+              {video.duration ? ` · ${Math.round(video.duration * 10) / 10} s` : ""}
+            </span>
+            <span className="text-xs text-fg-3">
+              The new part starts from its last frames; the result is the whole video.
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="upload"
+                disabled={busy}
+                onClick={() => replaceInput.current?.click()}
+              >
+                Replace
+              </Button>
+              <Button size="sm" variant="ghost" icon="x" onClick={() => onChange(null)}>
+                Remove
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <DropZone
+          compact
+          busy={busy}
+          accept="video/mp4"
+          title="Drop a video or click to pick one"
+          hint="An MP4 to continue, such as one made here"
+          onFile={upload}
+        />
+      )}
+      <input
+        ref={replaceInput}
+        type="file"
+        accept="video/mp4"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) upload(f);
+        }}
+      />
+      <div className="flex gap-1.5">
+        <Button
+          size="sm"
+          icon="gallery"
+          className="flex-1"
+          disabled={busy}
+          onClick={() => setPicking(true)}
+        >
+          From gallery
+        </Button>
+        <Button
+          size="sm"
+          icon="play"
+          className="flex-1"
+          disabled={busy || !last}
+          title={last ? undefined : "Generate a video first"}
+          onClick={() => last && void add(() => api.stageVideoFromOutput(last))}
+        >
+          Last output
+        </Button>
+      </div>
+      <GalleryPicker
+        open={picking}
+        onOpenChange={setPicking}
+        media="video"
+        onPick={(id) => {
+          setPicking(false);
+          void add(() => api.stageVideoFromGallery(id));
+        }}
+      />
+    </div>
+  );
+}
+
 function MaskDialog({
   open,
   onOpenChange,
@@ -488,6 +620,35 @@ function MaskDialog({
  * Inpaint, with a new mask to paint) and the image goes in. A video workflow takes it as its first
  * frame (First and last frame stays, keeping its last frame).
  */
+/** The gallery viewer's Continue it: the open workflow's first pass continues this video. */
+export async function sourceVideoFromGallery(galleryId: number): Promise<boolean> {
+  const s = useValues.getState();
+  if (!s.workflowId) {
+    toast("Open Generate with a video workflow first.", "warning");
+    return false;
+  }
+  const detail = queryClient.getQueryData<WorkflowDetail>(
+    qk.workflow(useSession.getState().profileId, s.workflowId),
+  );
+  if (detail && !detail.sourceModes.includes("extend")) {
+    toast(
+      "The open workflow can't continue a video. Open Wan 2.2, LTX-2.3 or MiniMax H3 on Generate first.",
+      "warning",
+    );
+    return false;
+  }
+  try {
+    const video = await api.stageVideoFromGallery(galleryId);
+    const now = useValues.getState();
+    now.setStage("source", { ...now.stages.source, mode: "extend", video });
+    toast("The next video continues it", "success");
+    return true;
+  } catch (e) {
+    toast(message(e), "error");
+    return false;
+  }
+}
+
 export async function sourceImageFromGallery(galleryId: number): Promise<boolean> {
   if (!useValues.getState().workflowId) {
     toast("Open Generate with a workflow first.", "warning");

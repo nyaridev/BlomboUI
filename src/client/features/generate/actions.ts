@@ -111,7 +111,9 @@ export async function generate(): Promise<void> {
     );
     if (script?.plan)
       toast(
-        `Queued ${script.plan.title}: ${res.jobs.length} image${res.jobs.length === 1 ? "" : "s"}`,
+        script.plan.kind === "long"
+          ? `Queued ${script.plan.title}: each part starts once the one before it is done`
+          : `Queued ${script.plan.title}: ${res.jobs.length} image${res.jobs.length === 1 ? "" : "s"}`,
         "info",
       );
   } catch (e) {

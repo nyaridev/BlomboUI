@@ -36,6 +36,7 @@ import {
   type ImageOrigin,
   interruptedFolder,
   type LibraryInfo,
+  MEDIA_KINDS,
   type MediaKind,
   mediaOf,
   OUTPUTS_LIBRARY,
@@ -612,6 +613,7 @@ export class GalleryService {
       ...(gallery.excludeGrids ? [NOT_GRID, ...notIn(saving.paths.grids)] : []),
       ...(gallery.excludeInterrupted ? [NOT_INTERRUPTED, ...notIn(saving.paths.interrupted)] : []),
       ...(gallery.excludeJpegCopies ? notIn(saving.paths.jpegCopies) : []),
+      ...(gallery.excludeSegments ? [notInFolder("segments")] : []),
     ];
   }
 
@@ -727,6 +729,8 @@ export class GalleryService {
     if (q.favorites) where.push("m.favorite = 1");
     if (q.origins.length < IMAGE_ORIGINS.length)
       where.push(q.origins.length ? `(${q.origins.map((o) => ORIGIN_SQL[o]).join(" OR ")})` : "0");
+    if (q.media.length < MEDIA_KINDS.length)
+      where.push(q.media.length ? `i.media IN (${q.media.map((m) => `'${m}'`).join(",")})` : "0");
     if (q.model) {
       where.push(
         `((i.model = ? AND NOT ${CIVITAI_ROWS})${await this.versionMatch("model", q.model)})`,

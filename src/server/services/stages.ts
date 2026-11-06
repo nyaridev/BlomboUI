@@ -11,10 +11,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ComfyFileRef } from "../../shared/comfy.ts";
 import { STAGES, type StageId } from "../../shared/workflow/roles.ts";
-import { readStages, type StageImage, type StageReport } from "../../shared/workflow/stages.ts";
+import {
+  isStageFile,
+  readStages,
+  type StageImage,
+  type StageReport,
+  type StageVideo,
+} from "../../shared/workflow/stages.ts";
 import { exists, writeFileIfAbsent } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { readImageHeadBytes } from "../lib/imagemeta.ts";
+import { readMediaBytes } from "../lib/mediameta.ts";
 import type { ComfyClient, ComfyWsMessage } from "./comfy/client.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { GalleryService } from "./gallery/index.ts";
@@ -32,8 +39,8 @@ import type { WorkflowService } from "./workflows/store.ts";
 /** ComfyUI's input subfolder for Blombo's control images. */
 const COMFY_SUBFOLDER = "blombo";
 const MAX_IMAGE_BYTES = 64 * 1024 * 1024;
+export const MAX_VIDEO_BYTES = 512 * 1024 * 1024;
 const PREVIEW_TIMEOUT_MS = 180_000;
-const FILE = /^[a-f0-9]{16}\.(png|jpg|webp)$/;
 
 export interface StageDeps {
   presetsDir: string;
@@ -66,7 +73,7 @@ export class StageService {
 
   /** The stored file for a stage image name (names are checked, never paths). */
   async inputPath(file: string): Promise<string> {
-    if (!FILE.test(file)) throw new HttpError(400, "Invalid image name.", "bad_name");
+    if (!isStageFile(file)) throw new HttpError(400, "Invalid image name.", "bad_name");
     const p = path.join(this.inputsDir(), file);
     if (!(await exists(p)))
       throw new HttpError(404, "That control image is gone. Add it again.", "no_image");
@@ -105,13 +112,50 @@ export class StageService {
     };
   }
 
+  /** A video a stage reads (Continue a video); MP4 only, the format ComfyUI's Save Video writes. */
+  async addVideo(
+    bytes: Uint8Array,
+    label: string,
+    source: StageVideo["source"],
+  ): Promise<StageVideo> {
+    if (bytes.byteLength === 0) throw new HttpError(400, "The file is empty.", "empty");
+    if (bytes.byteLength > MAX_VIDEO_BYTES)
+      throw new HttpError(413, "That video is too large (512 MB max).", "too_large");
+    const isMp4 = new TextDecoder("latin1").decode(bytes.subarray(4, 8)) === "ftyp";
+    if (!isMp4) throw new HttpError(400, "Use an MP4 video.", "not_video");
+    const head = await readMediaBytes(
+      async (pos, length) => bytes.subarray(pos, Math.min(bytes.byteLength, pos + length)),
+      bytes.byteLength,
+    );
+    const file = `${createHash("sha256").update(bytes).digest("hex").slice(0, 16)}.mp4`;
+    await writeFileIfAbsent(path.join(this.inputsDir(), file), bytes);
+    return {
+      file,
+      source,
+      label: label.replace(/[\\/]/g, "_").slice(0, 200) || file,
+      width: head.width ?? 0,
+      height: head.height ?? 0,
+      duration: head.duration,
+    };
+  }
+
   async addFromGallery(id: number): Promise<StageImage> {
     const file = await this.deps.gallery.filePath(id);
     const bytes = new Uint8Array(await fs.readFile(file));
     return this.addImage(bytes, path.basename(file), "gallery");
   }
 
-  async addFromOutput(ref: ComfyFileRef): Promise<StageImage> {
+  async addVideoFromGallery(id: number): Promise<StageVideo> {
+    const file = await this.deps.gallery.filePath(id);
+    const bytes = new Uint8Array(await fs.readFile(file));
+    return this.addVideo(bytes, path.basename(file), "gallery");
+  }
+
+  async addVideoFromOutput(ref: ComfyFileRef): Promise<StageVideo> {
+    return this.addVideo(await this.fetchOutput(ref), ref.filename, "output");
+  }
+
+  private async fetchOutput(ref: ComfyFileRef): Promise<Uint8Array> {
     const api = this.requireApi();
     const q = new URLSearchParams({
       filename: ref.filename,
@@ -120,8 +164,12 @@ export class StageService {
     });
     const res = await api.fetchRaw(`/view?${q.toString()}`);
     if (!res.ok)
-      throw new HttpError(404, "ComfyUI doesn't have that image anymore.", "image_missing");
-    return this.addImage(new Uint8Array(await res.arrayBuffer()), ref.filename, "output");
+      throw new HttpError(404, "ComfyUI doesn't have that file anymore.", "image_missing");
+    return new Uint8Array(await res.arrayBuffer());
+  }
+
+  async addFromOutput(ref: ComfyFileRef): Promise<StageImage> {
+    return this.addImage(await this.fetchOutput(ref), ref.filename, "output");
   }
 
   /* ── ComfyUI ───────────────────────────────────────────────────────────── */

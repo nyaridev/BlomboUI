@@ -43,7 +43,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
-import { sourceImageFromGallery } from "../generate/blocks/Source";
+import { sourceImageFromGallery, sourceVideoFromGallery } from "../generate/blocks/Source";
 import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
 import { openCivitaiPage } from "../models/civitai/open";
@@ -600,6 +600,17 @@ function Details({
         >
           Start from it
         </Button>
+        {image.media === "video" ? (
+          <Button
+            icon="skip"
+            title="Make the open video workflow's next video continue this one"
+            onClick={() =>
+              void sourceVideoFromGallery(image.id).then((ok) => ok && onGo("generate"))
+            }
+          >
+            Continue it
+          </Button>
+        ) : null}
         <Button
           icon="trash"
           variant="danger"

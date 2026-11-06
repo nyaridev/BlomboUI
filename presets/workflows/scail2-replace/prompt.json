@@ -1,0 +1,465 @@
+{
+  "1": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.1_14B_SCAIL_2_fp8_scaled.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "2": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "wan2.1_SCAIL_2_DPO_lora_bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "1",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "DPO LoRA"
+    }
+  },
+  "3": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "wan2.1_SCAIL_2_relight_lora_bf16.safetensors",
+      "strength_model": 1,
+      "model": [
+        "2",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "$Relight"
+    }
+  },
+  "4": {
+    "class_type": "LoraLoaderModelOnly",
+    "inputs": {
+      "lora_name": "lightx2v_I2V_14B_480p_cfg_step_distill_rank64_bf16.safetensors",
+      "strength_model": 0.8,
+      "model": [
+        "3",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Distill LoRA (6 steps)"
+    }
+  },
+  "5": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "shift": 5,
+      "model": [
+        "4",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "7": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "8": {
+    "class_type": "CLIPVisionLoader",
+    "inputs": {
+      "clip_name": "clip_vision_h.safetensors"
+    }
+  },
+  "9": {
+    "class_type": "LoadVideo",
+    "inputs": {
+      "file": ""
+    },
+    "_meta": {
+      "title": "Driving video"
+    }
+  },
+  "10": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "9",
+        0
+      ]
+    }
+  },
+  "11": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "10",
+        0
+      ],
+      "batch_index": 0,
+      "length": 81
+    },
+    "_meta": {
+      "title": "Its frames for this part"
+    }
+  },
+  "12": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": [
+        "11",
+        0
+      ],
+      "upscale_method": "area",
+      "width": [
+        "32",
+        0
+      ],
+      "height": [
+        "33",
+        0
+      ],
+      "crop": "center"
+    },
+    "_meta": {
+      "title": "Fit to size"
+    }
+  },
+  "13": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "12",
+        0
+      ]
+    }
+  },
+  "14": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "Character"
+    }
+  },
+  "15": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": {
+      "ckpt_name": "sam3.1_multiplex_fp16.safetensors"
+    },
+    "_meta": {
+      "title": "SAM 3.1"
+    }
+  },
+  "16": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "person",
+      "clip": [
+        "15",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "$Who to replace"
+    }
+  },
+  "17": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "person",
+      "clip": [
+        "15",
+        1
+      ]
+    },
+    "_meta": {
+      "title": "$Who is in the picture"
+    }
+  },
+  "18": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "images": [
+        "12",
+        0
+      ],
+      "model": [
+        "15",
+        0
+      ],
+      "conditioning": [
+        "16",
+        0
+      ],
+      "detection_threshold": 0.5,
+      "max_objects": 4,
+      "detect_interval": 1
+    }
+  },
+  "19": {
+    "class_type": "SAM3_VideoTrack",
+    "inputs": {
+      "images": [
+        "14",
+        0
+      ],
+      "model": [
+        "15",
+        0
+      ],
+      "conditioning": [
+        "17",
+        0
+      ],
+      "detection_threshold": 0.5,
+      "max_objects": 4,
+      "detect_interval": 1
+    }
+  },
+  "20": {
+    "class_type": "SCAIL2ColoredMask",
+    "inputs": {
+      "driving_track_data": [
+        "18",
+        0
+      ],
+      "ref_track_data": [
+        "19",
+        0
+      ],
+      "object_indices": "",
+      "sort_by": "left_to_right",
+      "replacement_mode": [
+        "31",
+        0
+      ]
+    }
+  },
+  "21": {
+    "class_type": "CLIPVisionEncode",
+    "inputs": {
+      "clip_vision": [
+        "8",
+        0
+      ],
+      "image": [
+        "14",
+        0
+      ],
+      "crop": "none"
+    }
+  },
+  "22": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "A person dancing in the same place as in the video, with natural light and shadows that match the scene. Normal-sized head, the same clothes as in the picture.",
+      "clip": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Prompt"
+    }
+  },
+  "23": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "",
+      "clip": [
+        "6",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Negative"
+    }
+  },
+  "24": {
+    "class_type": "WanSCAILToVideo",
+    "inputs": {
+      "positive": [
+        "22",
+        0
+      ],
+      "negative": [
+        "23",
+        0
+      ],
+      "vae": [
+        "7",
+        0
+      ],
+      "pose_video": [
+        "12",
+        0
+      ],
+      "pose_video_mask": [
+        "20",
+        0
+      ],
+      "reference_image": [
+        "14",
+        0
+      ],
+      "reference_image_mask": [
+        "20",
+        1
+      ],
+      "clip_vision_output": [
+        "21",
+        0
+      ],
+      "width": [
+        "13",
+        0
+      ],
+      "height": [
+        "13",
+        1
+      ],
+      "length": [
+        "13",
+        2
+      ],
+      "batch_size": 1,
+      "pose_strength": 1,
+      "pose_start": 0,
+      "pose_end": 1,
+      "video_frame_offset": 0,
+      "previous_frame_count": 5,
+      "replacement_mode": [
+        "31",
+        0
+      ]
+    }
+  },
+  "25": {
+    "class_type": "KSamplerSelect",
+    "inputs": {
+      "sampler_name": "euler"
+    }
+  },
+  "26": {
+    "class_type": "BasicScheduler",
+    "inputs": {
+      "scheduler": "simple",
+      "steps": 6,
+      "denoise": 1,
+      "model": [
+        "4",
+        0
+      ]
+    }
+  },
+  "27": {
+    "class_type": "SamplerCustom",
+    "inputs": {
+      "model": [
+        "5",
+        0
+      ],
+      "add_noise": true,
+      "noise_seed": 0,
+      "cfg": 1,
+      "positive": [
+        "24",
+        0
+      ],
+      "negative": [
+        "24",
+        1
+      ],
+      "sampler": [
+        "25",
+        0
+      ],
+      "sigmas": [
+        "26",
+        0
+      ],
+      "latent_image": [
+        "24",
+        2
+      ]
+    }
+  },
+  "28": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "27",
+        1
+      ],
+      "vae": [
+        "7",
+        0
+      ]
+    }
+  },
+  "29": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "28",
+        0
+      ],
+      "audio": [
+        "10",
+        1
+      ],
+      "fps": [
+        "10",
+        2
+      ]
+    }
+  },
+  "31": {
+    "class_type": "PrimitiveBoolean",
+    "inputs": {
+      "value": true
+    },
+    "_meta": {
+      "title": "$Replace the person (off: animate the picture)"
+    }
+  },
+  "32": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 832
+    },
+    "_meta": {
+      "title": "$Width"
+    }
+  },
+  "33": {
+    "class_type": "PrimitiveInt",
+    "inputs": {
+      "value": 480
+    },
+    "_meta": {
+      "title": "$Height"
+    }
+  },
+  "30": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "ComfyUI",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "29",
+        0
+      ]
+    }
+  }
+}

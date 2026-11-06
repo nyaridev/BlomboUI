@@ -101,6 +101,11 @@
             "type": "stage",
             "stage": "adetailer",
             "id": "stage-adetailer"
+          },
+          {
+            "type": "stage",
+            "id": "stage-smooth",
+            "stage": "smooth"
           }
         ]
       },

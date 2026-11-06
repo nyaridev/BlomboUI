@@ -8,7 +8,7 @@ import { createHash, randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ComfyStatus } from "../../shared/comfy.ts";
-import { outputPrefix, workflowFolder } from "../../shared/gallery.ts";
+import { type OutputType, outputPrefix, workflowFolder } from "../../shared/gallery.ts";
 import type { BlomboImageMeta } from "../../shared/imageinfo.ts";
 import {
   type GenerateBody,
@@ -30,7 +30,13 @@ import {
   type SeedMode,
   type WorkflowManifest,
 } from "../../shared/workflow/manifest.ts";
-import { hiresSize, readStages, sourceOn, stageImageFiles } from "../../shared/workflow/stages.ts";
+import {
+  hiresSize,
+  isStageFile,
+  readStages,
+  sourceOn,
+  stageImageFiles,
+} from "../../shared/workflow/stages.ts";
 import { Emitter } from "../lib/emitter.ts";
 import { HttpError } from "../lib/http.ts";
 import { ComfyHttpError, type ComfyPreview, type ComfyWsMessage } from "./comfy/client.ts";
@@ -79,6 +85,8 @@ export interface RunSpec {
   preview?: boolean;
   /** Stage settings of its own (a comparison's), instead of the workflow's. */
   stages?: WorkflowManifest["stages"];
+  /** Save into the workflow's folder of this type instead (a long video's parts: `segments`). */
+  saveAs?: OutputType;
 }
 
 interface Run {
@@ -90,6 +98,7 @@ interface Run {
   stages: WorkflowManifest["stages"];
   inputs: RunInput[];
   preview?: boolean;
+  saveAs?: OutputType;
   clock?: RunClock;
   /** The prompts as they ran (compile's `shown`), once compiled. */
   shown?: Record<string, string>;
@@ -297,6 +306,7 @@ export class JobQueue extends Emitter<QueueEvents> {
         group: r.group,
         inputs: r.inputs ?? [],
         preview: r.preview,
+        saveAs: r.saveAs,
         ...(r.stages ? { stages: r.stages } : {}),
       }),
     );
@@ -409,6 +419,7 @@ export class JobQueue extends Emitter<QueueEvents> {
       inputs?: RunInput[];
       stages?: WorkflowManifest["stages"];
       preview?: boolean;
+      saveAs?: OutputType;
     } = {},
   ): Job {
     const values = extra.values ?? manifest.values;
@@ -453,6 +464,7 @@ export class JobQueue extends Emitter<QueueEvents> {
       stages: structuredClone(stages),
       inputs: extra.inputs ?? [],
       ...(extra.preview ? { preview: true } : {}),
+      ...(extra.saveAs ? { saveAs: extra.saveAs } : {}),
     });
     return job;
   }
@@ -553,21 +565,34 @@ export class JobQueue extends Emitter<QueueEvents> {
       const anyStage =
         source || stages.hires.enabled || stages.adetailer.enabled || stages.controlnet.enabled;
       const controlFiles = stageImageFiles(stages);
+      // The workflow's own picture and video inputs that are files kept with the stage files.
+      const inputFiles = run.manifest.bindings.flatMap((b) => {
+        const v = run.values[b.id];
+        return (b.type === "image" || b.type === "video") && isStageFile(v)
+          ? [{ id: b.id, file: v }]
+          : [];
+      });
       const instant = readInstantLoras(run.values[INSTANT_LORAS]);
       const local = this.deps.localModels ? await this.deps.localModels().catch(() => []) : [];
       const byFile = new Map(
         local.filter((m) => m.kind === "loras").map((m) => [loraKey(comfyNameOf(m)), m]),
       );
       run.vars = this.pathVars(run);
-      const filenamePrefix =
-        this.deps.outputs && run.profileId
+      const folder = workflowFolder(run.job.workflowName, run.job.workflowId);
+      const filenamePrefix = run.saveAs
+        ? outputPrefix(folder, run.saveAs)
+        : this.deps.outputs && run.profileId
           ? await this.deps.outputs.prefix(run.profileId, run.vars)
-          : outputPrefix(workflowFolder(run.job.workflowName, run.job.workflowId), "images");
+          : outputPrefix(folder, "images");
+      const files = [...controlFiles, ...inputFiles.map((f) => f.file)];
+      const uploaded = files.length ? await this.deps.stages.upload(files) : {};
+      const values = { ...run.values };
+      for (const f of inputFiles) values[f.id] = uploaded[f.file] ?? f.file;
       if (gone()) return;
       const compiled = compile({
         manifest: run.manifest,
         prompt,
-        values: run.values,
+        values,
         seed: run.job.seed ?? randomSeed(),
         wildcards,
         loraFiles,
@@ -576,7 +601,7 @@ export class JobQueue extends Emitter<QueueEvents> {
         preview: run.preview,
         stages,
         stagePackages: anyStage ? await this.deps.stages.packages() : [],
-        stageImages: controlFiles.length ? await this.deps.stages.upload(controlFiles) : {},
+        stageImages: uploaded,
         objectInfo: info,
         instant,
         triggersFor: (file) => {
@@ -711,6 +736,8 @@ export class JobQueue extends Emitter<QueueEvents> {
       run.job.images.push(saved);
       this.deps.publish("jobs", { t: "job.image", jobId: run.job.id, image: saved });
     };
+    // A Load Video node shows the file it read; that's not something the run made.
+    if (image.type === "input") return;
     if (!outputs || !run.profileId || image.type !== "output") {
       take(image);
       return;

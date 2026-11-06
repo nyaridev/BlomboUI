@@ -1,0 +1,21 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-scail2-extend",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "Continue a video (SCAIL 2)",
+  "description": "Continues a SCAIL 2 character swap, as ComfyUI's SCAIL 2 template does: the driving video's next part starts where the video so far ends (5 frames back), the whole video so far goes into WanSCAILToVideo as its previous frames (it anchors the last 5), and after decoding the new frames, colors matched to the old last frame, go after the earlier ones. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": ["extend"],
+  "fits": ["WanSCAILToVideo"],
+  "into": { "VIDEO": { "previous_frames": ["parts", 0] } },
+  "roles": { "video.offset": ["start", 1] },
+  "requires": ["VIDEO", "IMAGE"],
+  "provides": ["IMAGE"],
+  "packs": [],
+  "fields": [
+    { "field": "video", "node": "load", "input": "file", "label": "Video" },
+    { "field": "overlap", "node": "new", "input": "batch_index" }
+  ],
+  "defaults": { "overlap": 5 }
+}

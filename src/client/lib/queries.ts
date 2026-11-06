@@ -412,7 +412,9 @@ export function useUpdateSettings() {
       // The server filters gallery lists and counts by these.
       if (
         patch.gallery?.excludeGrids !== undefined ||
-        patch.gallery?.excludeInterrupted !== undefined
+        patch.gallery?.excludeInterrupted !== undefined ||
+        patch.gallery?.excludeJpegCopies !== undefined ||
+        patch.gallery?.excludeSegments !== undefined
       )
         void qc.invalidateQueries({ queryKey: ["gallery"] });
       // Results, pages and links come from the other Civitai site now.

@@ -13,10 +13,8 @@
  */
 
 import { useModalFocus } from "@client/lib/hooks";
-import { clamp } from "@client/lib/number";
 import {
   type MouseEvent,
-  type PointerEvent,
   type ReactNode,
   useEffect,
   useLayoutEffect,
@@ -24,6 +22,7 @@ import {
   useState,
 } from "react";
 import { IconButton } from "./Button";
+import { FIT, useZoomPan } from "./zoomPan";
 
 export interface ViewerImage {
   key: string;
@@ -36,17 +35,9 @@ export interface ViewerImage {
   height?: number | null;
 }
 
-const MAX_ZOOM = 8;
 /** Trackpads send small pixel steps: they add up to one image per this many pixels. */
 const TRACKPAD_STEP = 100;
 const ON_DARK = "bg-black/30 text-white/85 hover:bg-black/50 hover:text-white";
-
-interface View {
-  scale: number;
-  x: number;
-  y: number;
-}
-const FIT: View = { scale: 1, x: 0, y: 0 };
 
 export function ImageViewer({
   images,
@@ -69,14 +60,26 @@ export function ImageViewer({
   useModalFocus(ref);
   const image = images[index] ?? images[0];
   const many = images.length > 1;
-  const [view, setView] = useState<View>(FIT);
-  // The wheel listener is native (it must preventDefault), so it reads the latest values here.
-  const live = useRef({ view, index, count: images.length, wheel: 0 });
-  live.current.view = view;
+  // The wheel steps images through a native listener, so it reads the latest values here.
+  const live = useRef({ index, count: images.length, wheel: 0 });
   live.current.index = index;
   live.current.count = images.length;
-  const drag = useRef<{ id: number; x: number; y: number; from: View } | null>(null);
-  const [dragging, setDragging] = useState(false);
+  const { setView, handlers, style } = useZoomPan(ref, imgRef, (e) => {
+    const { count } = live.current;
+    const delta = e.deltaY || e.deltaX;
+    if (count < 2 || delta === 0) return;
+    // A mouse wheel notch is one image, however fast it turns; a trackpad adds up.
+    const notch = e.deltaMode !== 0 || Math.abs(delta) >= 50;
+    if (!notch) {
+      live.current.wheel += delta;
+      if (Math.abs(live.current.wheel) < TRACKPAD_STEP) return;
+    }
+    const dir = (notch ? delta : live.current.wheel) > 0 ? 1 : -1;
+    live.current.wheel = 0;
+    // Count from the image just stepped to, before React has re-rendered.
+    live.current.index = (live.current.index + dir + count) % count;
+    onIndex(live.current.index);
+  });
   const stageRef = useRef<HTMLDivElement>(null);
   const [stage, setStage] = useState({ w: 0, h: 0 });
   const [ready, setReady] = useState<string | null>(null);
@@ -118,7 +121,7 @@ export function ImageViewer({
 
   // Another picture starts fitted.
   // biome-ignore lint/correctness/useExhaustiveDependencies: index is the trigger
-  useEffect(() => setView(FIT), [index]);
+  useEffect(() => setView(FIT), [index, setView]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -133,76 +136,11 @@ export function ImageViewer({
     return () => window.removeEventListener("keydown", onKey);
   }, [index, images.length, many, onClose, onIndex]);
 
-  useEffect(() => {
-    const root = ref.current;
-    if (!root) return;
-    const onWheel = (e: WheelEvent) => {
-      e.preventDefault();
-      const img = imgRef.current;
-      const { view: v, count } = live.current;
-      const onImage = Boolean(img && e.target instanceof Node && img.contains(e.target));
-      if (img && (onImage || v.scale > 1)) {
-        const scale = clamp(v.scale * Math.exp(-e.deltaY * 0.002), 1, MAX_ZOOM);
-        if (scale === 1) {
-          setView(FIT);
-          return;
-        }
-        // Keep the point under the pointer still. The transform scales around the box's center;
-        // read it from the layout (the on-screen box is mid-animation while zoom eases).
-        const stage = img.parentElement?.getBoundingClientRect();
-        if (!stage) return;
-        const cx = stage.left + img.offsetLeft + img.offsetWidth / 2;
-        const cy = stage.top + img.offsetTop + img.offsetHeight / 2;
-        const dx = e.clientX - cx;
-        const dy = e.clientY - cy;
-        setView({
-          scale,
-          x: dx - ((dx - v.x) * scale) / v.scale,
-          y: dy - ((dy - v.y) * scale) / v.scale,
-        });
-        return;
-      }
-      const delta = e.deltaY || e.deltaX;
-      if (count < 2 || delta === 0) return;
-      // A mouse wheel notch is one image, however fast it turns; a trackpad adds up.
-      const notch = e.deltaMode !== 0 || Math.abs(delta) >= 50;
-      if (!notch) {
-        live.current.wheel += delta;
-        if (Math.abs(live.current.wheel) < TRACKPAD_STEP) return;
-      }
-      const dir = (notch ? delta : live.current.wheel) > 0 ? 1 : -1;
-      live.current.wheel = 0;
-      // Count from the image just stepped to, before React has re-rendered.
-      live.current.index = (live.current.index + dir + count) % count;
-      onIndex(live.current.index);
-    };
-    root.addEventListener("wheel", onWheel, { passive: false });
-    return () => root.removeEventListener("wheel", onWheel);
-  }, [onIndex]);
-
   if (!image) return null;
   const middle = (e: MouseEvent) => {
     if (e.button !== 1 || !onOpenTab) return;
     e.preventDefault();
     onOpenTab(image);
-  };
-  const zoomed = view.scale > 1;
-
-  const onPointerDown = (e: PointerEvent<HTMLImageElement>) => {
-    if (!zoomed || e.button !== 0) return;
-    e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, from: view };
-    setDragging(true);
-  };
-  const onPointerMove = (e: PointerEvent<HTMLImageElement>) => {
-    const d = drag.current;
-    if (!d || d.id !== e.pointerId) return;
-    setView({ ...d.from, x: d.from.x + e.clientX - d.x, y: d.from.y + e.clientY - d.y });
-  };
-  const endDrag = () => {
-    drag.current = null;
-    setDragging(false);
   };
 
   return (
@@ -233,21 +171,10 @@ export function ImageViewer({
             if (e.button === 1) e.preventDefault();
           }}
           onAuxClick={middle}
-          onDoubleClick={() => setView(FIT)}
-          onPointerDown={onPointerDown}
-          onPointerMove={onPointerMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+          {...handlers}
           className="max-h-full max-w-full touch-none object-contain select-none"
-          style={{
-            // The large picture's box, so the preview fills it and the swap doesn't move.
-            ...(progressive ? boxFor(image, stage) : null),
-            transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})`,
-            // The old app's feel: zoom eases over 140 ms, a drag follows the pointer exactly.
-            transition: dragging ? "none" : "transform 140ms ease-out",
-            willChange: "transform",
-            cursor: "all-scroll",
-          }}
+          // The large picture's box, so the preview fills it and the swap doesn't move.
+          style={{ ...(progressive ? boxFor(image, stage) : null), ...style }}
         />
       </div>
       {many ? (

@@ -70,3 +70,4 @@ export {
   type SegmentOption,
   Switch,
 } from "./toggles";
+export { FIT, useZoomPan, type ZoomView } from "./zoomPan";

@@ -1,5 +1,5 @@
 /**
- * Lightbox: the full image with zoom and pan, a filmstrip of its neighbors, and a details sheet
+ * Lightbox: the full image with zoom and drag (as in Generate's viewer), a filmstrip of its neighbors, and a details sheet
  * with what the image says about how it was made, plus its actions (use these settings, import
  * the workflow, File Info, reveal, copy, favorite, move to trash).
  *
@@ -7,7 +7,7 @@
  * few controls float over the backdrop's corner without a fill (where you are, rating,
  * favorite, show details, close). The choice is kept in this window.
  *
- * Keys: ← → browse, Esc close, F favorite, Z zoom, I details, Delete move to trash.
+ * Keys: ← → browse, Esc close, F favorite, Z 100% / fit, I details, Delete move to trash.
  */
 
 import { Icon } from "@client/icons/Icon";
@@ -29,15 +29,17 @@ import {
   Badge,
   Button,
   CopyButton,
+  FIT,
   IconButton,
   PropertyList,
   Skeleton,
   StarRating,
   toast,
+  useZoomPan,
 } from "@client/ui";
 import { fileUrl, type GalleryImage, type ImageDetails, playTime } from "@shared/gallery";
 import { AnimatePresence, motion } from "motion/react";
-import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
@@ -108,7 +110,6 @@ export function Lightbox({
     return () => window.removeEventListener("keydown", onKey);
   }, [current.id, rate]);
   const trash = useTrashImages();
-  const [zoom, setZoom] = useState(false);
 
   useEffect(() => {
     if (idx >= images.length - 5) onNeedMore();
@@ -117,10 +118,7 @@ export function Lightbox({
   const go = useCallback(
     (d: number) => {
       const next = images[idx + d];
-      if (next) {
-        setZoom(false);
-        onChange(next.id);
-      }
+      if (next) onChange(next.id);
     },
     [idx, images, onChange],
   );
@@ -149,7 +147,6 @@ export function Lightbox({
   useHotkey("ArrowRight", () => go(1));
   useHotkey("ArrowLeft", () => go(-1));
   useHotkey("f", () => favorite.mutate({ ids: [current.id], favorite: !current.favorite }));
-  useHotkey("z", () => setZoom((z) => !z));
   useHotkey("i", () => useDetailsShown.getState().toggle());
   useHotkey("Delete", remove);
   const shown = useDetailsShown((s) => s.shown);
@@ -182,7 +179,7 @@ export function Lightbox({
           shown ? "max-lg:h-[60svh] max-lg:flex-none" : "max-lg:h-full",
         )}
       >
-        <Stage image={current} zoom={zoom} onZoom={setZoom} />
+        <Stage image={current} />
         <AnimatePresence>
           {shown ? null : (
             <motion.div
@@ -256,10 +253,7 @@ export function Lightbox({
               type="button"
               aria-label={`Show ${i.name}`}
               aria-current={i.id === current.id || undefined}
-              onClick={() => {
-                setZoom(false);
-                onChange(i.id);
-              }}
+              onClick={() => onChange(i.id)}
               className={cn(
                 "h-16 shrink-0 overflow-hidden rounded-sm border-2 bg-white/5 transition-all focus-ring",
                 i.id === current.id
@@ -294,110 +288,70 @@ export function Lightbox({
   );
 }
 
-/** The image, fit to the space, or at 100% with drag-to-pan. */
-function Stage({
-  image,
-  zoom,
-  onZoom,
-}: {
-  image: GalleryImage;
-  zoom: boolean;
-  onZoom: (z: boolean) => void;
-}) {
+/**
+ * The image fitted to the space. The wheel on it zooms around the pointer and a drag moves it,
+ * as in Generate's viewer (`useZoomPan`); double click or Z fits it again (Z also zooms to 100%).
+ */
+function Stage({ image }: { image: GalleryImage }) {
   const [loaded, setLoaded] = useState<number | null>(null);
-  const box = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ x: number; y: number; sx: number; sy: number; moved: boolean } | null>(
-    null,
-  );
+  const root = useRef<HTMLDivElement>(null);
+  const picture = useRef<HTMLDivElement>(null);
+  const { setView, zoomed, handlers, style } = useZoomPan(root, picture);
 
-  // Center the 100% view on open.
-  useEffect(() => {
-    const el = box.current;
-    if (!zoom || !el) return;
-    el.scrollLeft = (el.scrollWidth - el.clientWidth) / 2;
-    el.scrollTop = (el.scrollHeight - el.clientHeight) / 2;
-  }, [zoom]);
+  // Another image starts fitted.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the image is the trigger
+  useEffect(() => setView(FIT), [image.id, setView]);
+
+  // Z: 100% (the image's own pixels; twice the size when it already fits at 100%), or fit.
+  useHotkey("z", () => {
+    const el = picture.current;
+    if (zoomed || !el) return setView(FIT);
+    setView({ scale: Math.max(2, image.width / Math.max(1, el.offsetWidth)), x: 0, y: 0 });
+  });
 
   const player = image.media === "video" || image.media === "audio";
-  const onDown = (e: PointerEvent) => {
-    if (!zoom || !box.current) return;
-    drag.current = {
-      x: e.clientX,
-      y: e.clientY,
-      sx: box.current.scrollLeft,
-      sy: box.current.scrollTop,
-      moved: false,
-    };
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  };
-  const onMove = (e: PointerEvent) => {
-    const d = drag.current;
-    if (!d || !box.current) return;
-    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 3) d.moved = true;
-    box.current.scrollLeft = d.sx - (e.clientX - d.x);
-    box.current.scrollTop = d.sy - (e.clientY - d.y);
-  };
-  const onUp = () => {
-    const moved = drag.current?.moved;
-    drag.current = null;
-    if (!moved && zoom) onZoom(false);
-  };
-
   return (
-    <div
-      ref={box}
-      className={cn(
-        "relative min-h-0 flex-1 [container-type:size]",
-        zoom ? "scroll-quiet cursor-grab overflow-auto active:cursor-grabbing" : "overflow-hidden",
-      )}
-      onPointerDown={onDown}
-      onPointerMove={onMove}
-      onPointerUp={onUp}
-    >
+    <div ref={root} className="relative min-h-0 flex-1 overflow-hidden [container-type:size]">
       {player ? (
         <div className="flex h-full items-center justify-center p-8 max-lg:p-3">
           <StagePlayer image={image} />
         </div>
-      ) : zoom ? (
-        <div
-          className="grid min-h-full min-w-full place-items-center p-8"
-          style={{ width: "max-content" }}
-        >
-          <img
-            src={fileUrl(image)}
-            alt={image.name}
-            draggable={false}
-            style={{ width: image.width, height: image.height, maxWidth: "none" }}
-          />
-        </div>
       ) : (
-        <div className="flex h-full items-center justify-center p-8 max-lg:p-3">
-          <motion.button
+        <div className="relative flex h-full items-center justify-center p-8 max-lg:p-3">
+          <motion.div
             key={image.id}
-            type="button"
-            aria-label="Zoom to 100%"
-            onClick={() => onZoom(true)}
             initial={{ opacity: 0, scale: 0.985 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={glide}
-            className="relative cursor-zoom-in overflow-hidden rounded-md bg-white/5 shadow-pop focus-ring"
             style={{
               aspectRatio: `${image.width} / ${image.height}`,
               width: `min(100cqw - 64px, (100cqh - 64px) * ${image.width / Math.max(1, image.height)}, ${image.width}px)`,
             }}
           >
-            <img src={image.thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
-            <img
-              src={fileUrl(image)}
-              alt={image.name}
-              draggable={false}
-              onLoad={() => setLoaded(image.id)}
-              className={cn(
-                "absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
-                loaded === image.id ? "opacity-100" : "opacity-0",
-              )}
-            />
-          </motion.button>
+            <div
+              ref={picture}
+              {...handlers}
+              className="relative h-full w-full touch-none overflow-hidden rounded-md bg-white/5 shadow-pop select-none"
+              style={style}
+            >
+              <img
+                src={image.thumb}
+                alt=""
+                draggable={false}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <img
+                src={fileUrl(image)}
+                alt={image.name}
+                draggable={false}
+                onLoad={() => setLoaded(image.id)}
+                className={cn(
+                  "absolute inset-0 h-full w-full object-contain transition-opacity duration-200",
+                  loaded === image.id ? "opacity-100" : "opacity-0",
+                )}
+              />
+            </div>
+          </motion.div>
         </div>
       )}
     </div>

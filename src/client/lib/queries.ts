@@ -434,7 +434,7 @@ export function useGalleryUses(kind: UseKind, seed: number) {
   });
 }
 
-/** The Data page (dev mode only): what the open profile keeps on disk. */
+/** The Saved data view (dev mode only): what the open profile keeps on disk. */
 export function useDevStorage() {
   const profileId = useSession((s) => s.profileId);
   return useQuery({
@@ -444,7 +444,7 @@ export function useDevStorage() {
   });
 }
 
-/** The Data page: one gallery image's metadata, as written. */
+/** The Saved data view: one gallery image's metadata, as written. */
 export function useDevImage(id: number | null) {
   const profileId = useSession((s) => s.profileId);
   return useQuery({

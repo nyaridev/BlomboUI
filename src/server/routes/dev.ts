@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { HttpError } from "../lib/http.ts";
 import type { DevInfoService } from "../services/devinfo.ts";
 
-/** The dev-only Data page (registered in dev mode only): storage and one image's metadata. */
+/** The dev-only Saved data view (registered in dev mode only): storage and one image's metadata. */
 export function devRoutes(dev: DevInfoService) {
   const r = new Hono();
 

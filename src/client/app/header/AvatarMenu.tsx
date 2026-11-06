@@ -84,6 +84,12 @@ export function AvatarMenu({
                 icon: "lab" as const,
                 onSelect: () => onNavigate("lab"),
               },
+              {
+                id: "data",
+                label: "Saved data",
+                icon: "data" as const,
+                onSelect: () => onNavigate("data"),
+              },
             ]
           : []),
         { type: "separator", id: "s2" },

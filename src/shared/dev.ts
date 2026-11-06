@@ -1,5 +1,5 @@
 /**
- * What the dev-only Data page shows (`/api/dev`, dev mode only): what a profile keeps on disk
+ * What the dev-only Saved data view shows (`/api/dev`, dev mode only): what a profile keeps on disk
  * (its folder and its database's tables) and the metadata inside one gallery image, so what the
  * app writes can be checked by eye.
  */

@@ -1,5 +1,5 @@
 /**
- * The Data page (dev mode only, a page of the Lab): what the open profile keeps and what an image
+ * Saved data (dev mode only; avatar menu → Saved data): what the open profile keeps and what an image
  * carries, read from the running app so it can be checked by eye. The profile folder (names and
  * sizes only), the database's tables with their columns and row counts, the shapes of the saved
  * files (from their Zod schemas), and one gallery image's metadata chunks as written, with what
@@ -62,16 +62,16 @@ const CHUNKS: Array<[string, string]> = [
   ["parameters", "A1111 / Forge text (images from those apps; Blombo doesn't write it)."],
 ];
 
-export function SavedData({ switcher }: { switcher: ReactNode }) {
+export function SavedData() {
   return (
     <div className="h-full overflow-y-auto bg-bg">
       <div className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur-[6px]">
         <div className="mx-auto flex max-w-[1180px] flex-wrap items-center gap-3 px-8 py-2.5 max-lg:px-4">
           <span className="mr-2 flex items-center gap-2 text-sm font-semibold text-fg">
-            <Icon name="lab" size={16} className="text-accent-ink" />
-            Design Lab
+            <Icon name="data" size={16} className="text-accent-ink" />
+            Saved data
+            <Badge>Dev mode</Badge>
           </span>
-          {switcher}
           <nav className="ml-auto flex flex-wrap gap-0.5 text-xs">
             {[
               ["files", "Files"],

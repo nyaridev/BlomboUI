@@ -328,7 +328,7 @@ export const api = {
     request<HomeUse[]>("GET", `/gallery/uses?kind=${kind}&seed=${seed}`),
   galleryImages: (q: GalleryQueryInput) =>
     request<GalleryPage>("GET", `/gallery/images?${query(q)}`),
-  /** Dev mode only (the Data page): the profile's folder and tables, one image's metadata. */
+  /** Dev mode only (the Saved data view): the profile's folder and tables, one image's metadata. */
   devStorage: () => request<DevStorage>("GET", "/dev/storage"),
   devImage: (id: number) => request<DevImageMeta>("GET", `/dev/images/${id}`),
   galleryFacets: (library: string) =>

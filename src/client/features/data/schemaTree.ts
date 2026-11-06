@@ -1,5 +1,5 @@
 /**
- * A JSON schema (from `z.toJSONSchema`) as indented rows for the Data page: each field's name,
+ * A JSON schema (from `z.toJSONSchema`) as indented rows for the Saved data view: each field's name,
  * type and default, nested objects and array items below their field. `$ref`s to `$defs` are
  * followed once per branch (layouts nest), then shown by name.
  */

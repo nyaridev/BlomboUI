@@ -55,8 +55,11 @@ const HistoryView = lazyView(() =>
   import("../features/history/HistoryView").then((m) => ({ default: m.HistoryView })),
 );
 // Dev mode only (see router.tsx).
-const LabView = import.meta.env.DEV
-  ? lazy(() => import("../features/lab/LabView").then((m) => ({ default: m.LabView })))
+const DesignLab = import.meta.env.DEV
+  ? lazy(() => import("../features/lab/DesignLab").then((m) => ({ default: m.DesignLab })))
+  : () => null;
+const SavedData = import.meta.env.DEV
+  ? lazy(() => import("../features/data/SavedData").then((m) => ({ default: m.SavedData })))
   : () => null;
 const ErrorsView = lazyView(() =>
   import("../features/errors/ErrorsView").then((m) => ({ default: m.ErrorsView })),
@@ -82,7 +85,9 @@ function renderView(view: ViewId): ReactNode {
     case "history":
       return <HistoryView />;
     case "lab":
-      return <LabView />;
+      return <DesignLab />;
+    case "data":
+      return <SavedData />;
     case "errors":
       return <ErrorsView />;
     case "help":

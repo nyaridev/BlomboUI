@@ -57,7 +57,7 @@ export const MAIN_VIEWS = ["generate", "gallery", "models", "wildcards", "file-i
 export type MainView = (typeof MAIN_VIEWS)[number];
 
 /** Views reached from the avatar menu rather than the header tabs. */
-export const MENU_VIEWS = ["settings", "history", "errors", "help", "lab"] as const;
+export const MENU_VIEWS = ["settings", "history", "errors", "help", "lab", "data"] as const;
 export type MenuView = (typeof MENU_VIEWS)[number];
 
 export type ViewId = MainView | MenuView;

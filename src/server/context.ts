@@ -49,7 +49,7 @@ import { WorkflowService } from "./services/workflows/store.ts";
 
 export interface Services {
   config: ServerConfig;
-  /** The dev-only Data page (routes registered in dev mode only). */
+  /** The dev-only Saved data view (routes registered in dev mode only). */
   devInfo: DevInfoService;
   profiles: ProfileService;
   supervisor: ComfySupervisor;

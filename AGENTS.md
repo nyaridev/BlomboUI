@@ -41,7 +41,7 @@ src/
 │                 gallery · imageinfo · fileinfo · safetensors · models · basemodels (groups) · wildcards · install
 │                 civitai · richtext (HTML → safe blocks) · downloads (destinations) · manager
 │                 autocomplete (tag CSV, prompt context, formatting) · bridge (edit sessions)
-│                 dev (the Lab's Saved data page)
+│                 dev (the Saved data view)
 │                 scripts (matrix / XY planner, thumbnails without UI) · batch (runner shapes)
 │                 history (job log, usage stats, snippets, model marks)
 │                 shortcuts (actions, defaults, combos)
@@ -65,7 +65,7 @@ src/
 │   │                 scripts (groups → grids, thumbnails) · batch (the batch runner)
 │   │                 modelthumbs (a model's pictures in <model>_data/) · history (job log, error log,
 │   │                 stats, model marks) · timing (RunClock: time and it/s per stage) · snippets
-│   │                 backup (profile export / import zip) · devinfo (the Lab's Saved data page:
+│   │                 backup (profile export / import zip) · devinfo (the Saved data view:
 │   │                 folder, tables, an image's raw metadata; its /api/dev routes exist in dev mode only)
 │   │   ├── comfy/        supervisor · client · stats · paths · slots · installer (slots, progress)
 │   │   │                 nodepacks (stage custom nodes into a slot) · uv (shared by both installers)
@@ -89,8 +89,9 @@ src/
 │   │                 palette and shortcuts run) · Palette (Ctrl+K) · useShortcuts
 │   ├── features/     profiles · generate · gallery · fileinfo · models (local, civitai/, Manager)
 │   │                 wildcards · settings · downloads · history (generations, downloads, Civitai)
-│   │                 errors · help (guide, playground) · lab (Design Lab; Saved data:
-│   │                 the profile's files, tables, formats and image metadata, dev only) · preview
+│   │                 errors · help (guide, playground) · lab (Design Lab, style only) ·
+│   │                 data (Saved data: the profile's files, tables, formats and image
+│   │                 metadata; dev only, avatar menu) · preview
 │   ├── ui/           the design system (hand-built controls). Import from "@client/ui"
 │   ├── icons/        hand-drawn SVG icon set + Logo
 │   ├── lib/          api · queries · session · live (bus client) · motion · platform · hooks
@@ -113,7 +114,7 @@ runtime/          (gitignored) ComfyUI slots, tools, caches, logs, app/ (desktop
 
 **Data flow:** client → `/api` (Zod-validated) → service → files in `data/` and ComfyUI's HTTP API. Live state comes back over one WebSocket per window, `/api/live` (ADR-0008): ComfyUI status, GPU stats at 1 Hz, queue snapshots, step progress, binary preview frames, errors, and ComfyUI's log while a log view is open. The server owns the single ComfyUI socket (`services/comfy/client.ts`) and fans it out (`services/live.ts`); the client keeps it in `lib/live.ts`.
 
-**What an image carries:** ComfyUI writes its `prompt` (API graph: LoRAs are loader nodes, models by file name) and `workflow` (canvas) chunks; Blombo adds a `blombo` chunk (`BlomboImageMeta` in `shared/imageinfo.ts`: workflow, seed, values, the prompts as they ran). The Lab's Saved data page shows them for any gallery image.
+**What an image carries:** ComfyUI writes its `prompt` (API graph: LoRAs are loader nodes, models by file name) and `workflow` (canvas) chunks; Blombo adds a `blombo` chunk (`BlomboImageMeta` in `shared/imageinfo.ts`: workflow, seed, values, the prompts as they ran). The Saved data view (avatar menu, dev mode) shows them for any gallery image.
 
 **Generating:** the Generate button posts the current values and stage settings to `/api/jobs`. The server queue (`services/jobs.ts`) compiles one run at a time (`workflows/compile.ts`: values → wildcards → LoRA tags → instant LoRAs (`shared/prompt/instant.ts`: the workflow's `loras.instant` value; their trigger words go at the start or end of the positive prompt, per LoRA) → stages spliced at the ports → seed → filename prefix (`<workflow>/images/<day>/blombo`; grids go to `<workflow>/grids/<day>/` and a stopped run's images move to `<workflow>/interrupted/<day>/`: `OUTPUT_TYPES` in `shared/gallery.ts`); its `shown` texts are the prompts as they ran, wildcards resolved and trigger words in, without `<lora:…>` tags (the graph's loaders record the LoRAs): they go into the image (`extra_pnginfo.blombo.prompts`, what the gallery and File info show) and the job log's `final_prompt` / `final_negative`, which the run info under the image shows), uploads ControlNet images, sends it to ComfyUI and turns its socket events into progress (split into segments: base passes, then each stage), previews and images. The queue lives on the server, so reloads and other windows see the same thing. Stage blocks ask `/api/stages/check` what's missing before you run. With a **script** on (Scripts block: prompt matrix, XY plot; `shared/scripts.ts`), the same button queues a **group** of runs with one seed; `services/scripts.ts` puts a matrix or plot into a labeled grid (`lib/grid.ts`; an XY plot that keeps only its grid runs its cells as previews: `compile`'s `preview`). The planner's thumbnails script (each image saved as its model's picture, `services/modelthumbs.ts`) has no UI for now. `kind: "batch"` workflows show the **batch runner** instead (`services/batch.ts`): one queued run per input file, results and sidecar captions written to the output folder (ADR-0014).
 

@@ -96,6 +96,6 @@ const VIEWS = new Set<string>([...MAIN_VIEWS, ...MENU_VIEWS]);
 
 export function viewFromPath(pathname: string): ViewId {
   const part = pathname.split("/")[3];
-  if (part === "lab" && !import.meta.env.DEV) return "generate";
+  if ((part === "lab" || part === "data") && !import.meta.env.DEV) return "generate";
   return part && VIEWS.has(part) ? (part as ViewId) : "generate";
 }

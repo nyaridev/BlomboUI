@@ -1,5 +1,5 @@
 /**
- * The dev-only Data page's answers (`routes/dev.ts`, dev mode only): the open profile's folder
+ * The dev-only Saved data view's answers (`routes/dev.ts`, dev mode only): the open profile's folder
  * and database tables, and the raw metadata of one gallery image. Read-only; file contents are
  * never sent from here (only names and sizes), so `secrets.json` stays on the server.
  */

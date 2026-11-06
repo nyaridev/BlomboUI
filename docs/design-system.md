@@ -1,6 +1,6 @@
 # Design system
 
-How BlomboUI looks, moves and reads. The Design Lab (`/lab`, or avatar menu → Design Lab; dev mode only, the built app hides it) shows everything on this page live, in every theme and accent. Inside a profile its bar has a Components / Saved data switch: **Saved data** (`features/lab/SavedData.tsx`, `/api/dev`, dev mode only) shows what the open profile keeps (its folder with sizes, the database's tables with columns and row counts, each saved file's shape from its schema) and one gallery image's metadata as written, to check by eye. Decisions are recorded in [ADR-0007](adr/0007-design-system.md).
+How BlomboUI looks, moves and reads. The Design Lab (`/lab`, or avatar menu → Design Lab; dev mode only, the built app hides it) shows everything on this page live, in every theme and accent. The Lab is style only. **Saved data** (avatar menu → Saved data, under Design Lab; dev mode only; `features/data/SavedData.tsx`, `/api/dev`) is a separate view: what the open profile keeps (its folder with sizes, the database's tables with columns and row counts, each saved file's shape from its schema) and one gallery image's metadata as written, to check by eye. Decisions are recorded in [ADR-0007](adr/0007-design-system.md).
 
 ## Direction
 

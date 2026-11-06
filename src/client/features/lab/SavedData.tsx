@@ -55,7 +55,10 @@ const FORMATS: Array<{ file: string; what: string; schema: z.ZodType }> = [
 const CHUNKS: Array<[string, string]> = [
   ["prompt", "ComfyUI's API graph: every node and input as it ran. LoRAs are loader nodes here."],
   ["workflow", "ComfyUI's canvas graph (what Import workflow and ComfyUI's Load read)."],
-  ["blombo", "Blombo's own record: workflow, seed, values, prompts (its shape is under Saved formats)."],
+  [
+    "blombo",
+    "Blombo's own record: workflow, seed, values, prompts (its shape is under Saved formats).",
+  ],
   ["parameters", "A1111 / Forge text (images from those apps; Blombo doesn't write it)."],
 ];
 

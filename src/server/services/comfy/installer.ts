@@ -78,6 +78,8 @@ export interface InstallOps {
   run(command: string, args: string[], opts: RunOptions): Promise<number>;
   /** The ComfyUI release to install: its tag and source zip URL. */
   release(version: string, signal: AbortSignal): Promise<Release>;
+  /** The commit a GitHub repository's default branch is at (a pack the workflow doesn't pin). */
+  latestCommit(repoUrl: string, signal: AbortSignal): Promise<string>;
   /** The uv build to download on Windows (UV_WINDOWS; tests pass their own). */
   uv: UvRelease;
   platform: NodeJS.Platform;
@@ -445,6 +447,21 @@ export function defaultOps(): InstallOps {
         tag,
         zip: `https://github.com/comfyanonymous/ComfyUI/archive/refs/tags/${encodeURIComponent(tag)}.zip`,
       };
+    },
+    async latestCommit(repoUrl, signal) {
+      const repo = new URL(repoUrl).pathname.replace(/^\/|\/$/g, "");
+      const res = await fetch(`https://api.github.com/repos/${repo}/commits/HEAD`, {
+        signal,
+        headers: { accept: "application/vnd.github.sha", "user-agent": "BlomboUI" },
+      });
+      const sha = res.ok ? (await res.text()).trim() : "";
+      if (!/^[0-9a-f]{40}$/.test(sha))
+        throw new Error(
+          res.status === 404 || res.status === 422
+            ? `${repoUrl} isn't a public GitHub repository.`
+            : `GitHub didn't answer (${res.status}) for ${repoUrl}.`,
+        );
+      return sha;
     },
   };
 }

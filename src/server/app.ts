@@ -62,7 +62,14 @@ export function createApp(services: Services) {
   );
   api.route(
     "/workflows",
-    workflowRoutes(config, workflows, supervisor, services.layouts, services.bridge),
+    workflowRoutes(
+      config,
+      workflows,
+      supervisor,
+      services.layouts,
+      services.bridge,
+      services.workflowCheck,
+    ),
   );
   api.route("/scripts", scriptRoutes(services.scripts));
   api.route("/compare", compareRoutes(services.compare));

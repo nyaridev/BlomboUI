@@ -133,6 +133,9 @@ export const qk = {
   batchCheck: (profileId: string | null, workflowId: string | null) =>
     ["batch-check", profileId, workflowId] as const,
   batch: ["batch"] as const,
+  /** What a workflow needs that ComfyUI doesn't have (refetched when models or nodes change). */
+  workflowHealth: (profileId: string | null, workflowId: string | null) =>
+    ["workflow-health", profileId, workflowId] as const,
 };
 
 export const queryClient = new QueryClient({
@@ -294,6 +297,16 @@ export function useStageReport(workflowId: string | null, stages: unknown) {
     enabled: profileId !== null && workflowId !== null,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+  });
+}
+
+export function useWorkflowHealth(workflowId: string | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.workflowHealth(profileId, workflowId),
+    queryFn: () => api.workflowHealth(workflowId as string),
+    enabled: profileId !== null && workflowId !== null,
+    staleTime: 60_000,
   });
 }
 

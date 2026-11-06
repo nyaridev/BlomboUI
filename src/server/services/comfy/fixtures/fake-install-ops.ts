@@ -66,5 +66,8 @@ export function fakeInstallOps(stepMs = 250): InstallOps {
     async release() {
       throw new Error("The fake installer doesn't install ComfyUI slots.");
     },
+    async latestCommit() {
+      return "f".repeat(40);
+    },
   };
 }

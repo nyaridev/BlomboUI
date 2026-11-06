@@ -122,6 +122,7 @@ import type {
   WildcardList,
   WildcardTree,
 } from "@shared/wildcards";
+import type { HealthInstallBody, WorkflowHealth } from "@shared/workflow/health";
 import type {
   ImportResult,
   PatchValuesBody,
@@ -526,6 +527,14 @@ export const api = {
   installComfy: (body: InstallBody) => request<InstallState>("POST", "/comfy/install", body),
   cancelInstall: () => request<InstallState>("POST", "/comfy/install/cancel"),
   nodeInstall: () => request<NodeInstallState>("GET", "/comfy/nodes"),
+  /** What a workflow needs that ComfyUI doesn't have, and its fixes (ADR-0018). */
+  workflowHealth: (id: string) => request<WorkflowHealth>("GET", `/workflows/${id}/health`),
+  healthInstall: (id: string, body: HealthInstallBody) =>
+    request<{ ok: true }>("POST", `/workflows/${id}/health/install`, body),
+  healthDownload: (id: string, file: string) =>
+    request<{ ok: true }>("POST", `/workflows/${id}/health/download`, { file }),
+  healthRebuild: (id: string) =>
+    request<WorkflowManifest>("POST", `/workflows/${id}/health/rebuild`),
   /** Install stage custom node packs (by repository URL) into the managed slot. */
   installNodes: (packs: string[]) =>
     request<NodeInstallState>("POST", "/comfy/nodes/install", { packs }),

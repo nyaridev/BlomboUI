@@ -214,6 +214,7 @@ function onJson(text: string): void {
         void queryClient.invalidateQueries({ queryKey: ["workflow"] });
         void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
         void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+        void queryClient.invalidateQueries({ queryKey: ["workflow-health"] });
       }
       // Whether the bridge is loaded can only change when ComfyUI (re)starts.
       if (msg.status.state !== s.comfy?.state)
@@ -285,6 +286,7 @@ function onJson(text: string): void {
       if (was === "running" && msg.install.state !== "running") {
         void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
         void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+        void queryClient.invalidateQueries({ queryKey: ["workflow-health"] });
       }
       break;
     }
@@ -299,6 +301,7 @@ function onJson(text: string): void {
       // A downloaded detector or ControlNet model can fix a stage.
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
       void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-health"] });
       break;
     case "wildcards.changed":
       // The open file refetches too: its editor shows the new text unless it has unsaved edits.
@@ -319,6 +322,7 @@ function onJson(text: string): void {
       void queryClient.invalidateQueries({ queryKey: ["workflow"] });
       void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
       void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+      void queryClient.invalidateQueries({ queryKey: ["workflow-health"] });
       useLive.setState({
         bridgeSaved: {
           at: Date.now(),

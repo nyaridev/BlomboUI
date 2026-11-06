@@ -1,5 +1,6 @@
 /**
- * A "needs custom nodes" notice (a stage's, or a batch workflow's). For a ComfyUI Blombo manages it offers Install (the
+ * A "needs custom nodes" notice (a stage's, a batch workflow's, or the workflow check's, which
+ * passes `onInstall` to confirm the packs first). For a ComfyUI Blombo manages it offers Install (the
  * server downloads the packs at their pinned commits, installs their packages and restarts
  * ComfyUI) and shows that install's progress in place; for your own ComfyUI it links the packs
  * and ComfyUI, because Blombo doesn't change a ComfyUI it doesn't run. The progress comes over
@@ -14,7 +15,14 @@ import type { NodeInstallState } from "@shared/install";
 import type { StageProblem } from "@shared/workflow/stages";
 import { useEffect, useState } from "react";
 
-export function NodesNotice({ problem }: { problem: StageProblem }) {
+export function NodesNotice({
+  problem,
+  onInstall,
+}: {
+  problem: StageProblem;
+  /** Install another way (the workflow check's confirmation) instead of by pinned pack. */
+  onInstall?: () => void;
+}) {
   useEffect(() => followTopic("install"), []);
   const initial = useNodeInstall();
   const live = useLive((s) => s.nodeInstall);
@@ -25,7 +33,7 @@ export function NodesNotice({ problem }: { problem: StageProblem }) {
   const install = live ?? initial.data ?? null;
 
   const packs = problem.packs ?? [];
-  const installable = managed && packs.length > 0 && packs.every((p) => p.ref);
+  const installable = managed && packs.length > 0 && (onInstall || packs.every((p) => p.ref));
   // The installer's latest run, if it was for (some of) these packs in this profile's slot.
   const ours =
     managed &&
@@ -38,6 +46,7 @@ export function NodesNotice({ problem }: { problem: StageProblem }) {
   const running = install?.state === "running";
 
   const start = async () => {
+    if (onInstall) return onInstall();
     setStarting(true);
     try {
       await api.installNodes(packs.map((p) => p.url));
@@ -52,6 +61,7 @@ export function NodesNotice({ problem }: { problem: StageProblem }) {
     await api.comfyRefresh().catch(() => undefined);
     void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
     void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
+    void queryClient.invalidateQueries({ queryKey: ["workflow-health"] });
   };
 
   if (ours?.state === "running") return <Progress install={ours} />;

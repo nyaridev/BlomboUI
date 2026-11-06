@@ -23,7 +23,8 @@ export const DOWNLOAD_STATES = [
 export const DownloadState = z.enum(DOWNLOAD_STATES);
 export type DownloadState = z.infer<typeof DownloadState>;
 
-export const DOWNLOAD_SOURCES = ["civitai", "manager"] as const;
+/** url: a file a workflow links (Hugging Face), queued by the workflow check, never by the page. */
+export const DOWNLOAD_SOURCES = ["civitai", "manager", "url"] as const;
 export const DownloadSource = z.enum(DOWNLOAD_SOURCES);
 export type DownloadSource = z.infer<typeof DownloadSource>;
 

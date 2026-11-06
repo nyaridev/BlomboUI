@@ -11,8 +11,10 @@
  *                       installed torch builds as constraints so a pack can't swap CUDA for CPU
  *   restart / verify    start ComfyUI again and check its object_info has the pack's nodes
  *
- * Only packs a stage package lists with a pinned commit can be installed; the page names them
- * by repository URL and never sends a URL of its own. A pack folder that's already there
+ * Packs a stage package lists with a pinned commit can be installed by URL. Others only as
+ * `confirmed` packs (ADR-0018): ones the user said yes to for a workflow that needs them, after
+ * Blombo showed where they come from; they're pinned to the commit the workflow names, else to
+ * the default branch's latest commit at install time. A pack folder that's already there
  * (installed by hand or by ComfyUI-Manager) is kept and only gets its requirements, which is
  * also how a pack whose import failed for a missing package gets fixed. An external ComfyUI
  * is the user's: Blombo says what to install there and changes nothing.
@@ -88,7 +90,7 @@ type NodePackEvents = {
 };
 
 interface Planned {
-  pack: NodePack & { ref: string };
+  pack: NodePack;
   folder: string;
   /** Set once the folder is in custom_nodes/. */
   dir: string | null;
@@ -135,20 +137,24 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
     return this.current.state === "running";
   }
 
-  /** Start installing these packs (repository URLs); progress comes as events. */
-  async start(urls: string[]): Promise<void> {
+  /**
+   * Start installing these packs (repository URLs); progress comes as events. `confirmed` are
+   * the packs the user said yes to for a workflow (any GitHub repository, see the top).
+   */
+  async start(urls: string[], confirmed: NodePack[] = []): Promise<void> {
     if (this.running) throw new HttpError(409, "Custom nodes are already being installed.", "busy");
     const known = await this.deps.known();
     const packs: Planned[] = [];
     for (const url of new Set(urls)) {
-      const pack = known.find((p) => p.url === url);
-      if (!pack?.ref)
+      const pack =
+        known.find((p) => p.url === url && p.ref) ?? confirmed.find((p) => p.url === url);
+      if (!pack)
         throw new HttpError(
           400,
           "Blombo can only install the custom nodes its stages list. Install other packs inside ComfyUI.",
           "unknown_pack",
         );
-      packs.push({ pack: { ...pack, ref: pack.ref }, folder: packFolder(pack), dir: null });
+      packs.push({ pack, folder: packFolder(pack), dir: null });
     }
     const target = this.deps.comfy.target();
     if (!target) throw new HttpError(409, "Open a profile first.", "no_profile");
@@ -368,13 +374,14 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
     signal: AbortSignal,
   ): Promise<string> {
     const id = `download:${p.folder}`;
+    const ref = p.pack.ref ?? (await this.ops.latestCommit(p.pack.url, signal));
     const zip = path.join(
       toolsDir(this.deps.runtimeDir),
       "downloads",
-      `${p.folder}-${p.pack.ref.slice(0, 12)}.zip`,
+      `${p.folder}-${ref.slice(0, 12)}.zip`,
     );
     await this.ops.download(
-      `${p.pack.url}/archive/${p.pack.ref}.zip`,
+      `${p.pack.url}/archive/${ref}.zip`,
       zip,
       (f) => this.step(id, { progress: f === null ? null : f * 0.9 }, false),
       signal,
@@ -395,11 +402,11 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
     );
     installed[p.folder] = {
       url: p.pack.url,
-      ref: p.pack.ref,
+      ref,
       installedAt: new Date().toISOString(),
     };
     await writeJsonAtomic(record, installed);
-    this.log(`${p.pack.name} ${p.pack.ref.slice(0, 7)} → custom_nodes/${p.folder}`);
+    this.log(`${p.pack.name} ${ref.slice(0, 7)} → custom_nodes/${p.folder}`);
     return dest;
   }
 

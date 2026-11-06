@@ -4,8 +4,8 @@ import { z } from "zod";
  * A custom node pack a stage graph or a built-in batch workflow needs, with the classes it
  * provides. `ref` pins the commit Blombo installs into a managed slot
  * (services/comfy/nodepacks.ts); `folder` is its name in custom_nodes/ (the repository's name
- * when left out, as ComfyUI-Manager names it). Only packs that Blombo's own packages list can be
- * installed, never a URL from a request or an imported workflow.
+ * when left out, as ComfyUI-Manager names it). Packs Blombo's own packages pin install by URL;
+ * any other only as a pack the user confirmed for a workflow (ADR-0018).
  */
 export const NodePack = z.object({
   name: z.string(),

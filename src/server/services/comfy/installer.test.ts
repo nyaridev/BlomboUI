@@ -56,6 +56,9 @@ function fakeOps(opts: { failTorch?: boolean; hang?: boolean; uv?: UvRelease } =
       calls.push(`release ${version}`);
       return { tag: "v0.9.9", zip: "https://example.invalid/comfy.zip" };
     },
+    async latestCommit() {
+      throw new Error("not used");
+    },
     async run(command, args, o) {
       const what = path.basename(command) === "uv.exe" ? args.slice(0, 2).join(" ") : "python";
       calls.push(`run ${what}`);

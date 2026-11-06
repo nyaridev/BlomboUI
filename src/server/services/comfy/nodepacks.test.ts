@@ -76,6 +76,10 @@ function fakeOps(opts: { failPip?: string; hang?: boolean } = {}) {
     async release() {
       throw new Error("not used");
     },
+    async latestCommit(url) {
+      calls.push(`latest ${url}`);
+      return "c".repeat(40);
+    },
     async run(command, args, o) {
       calls.push(`run ${path.basename(command)} ${args.slice(0, 2).join(" ")}`);
       if (args[1] === "freeze") {
@@ -127,6 +131,7 @@ function fakeComfy(comfyDir: string, opts: { mode?: "external"; running?: boolea
       const info: Record<string, unknown> = { KSampler: {} };
       if (loaded.includes("ComfyUI-Impact-Pack")) info.FaceDetailer = info.SAMLoader = {};
       if (loaded.includes("ComfyUI-Impact-Subpack")) info.UltralyticsDetectorProvider = {};
+      if (loaded.includes("mine")) info.Mine = {};
       return info as never;
     },
   };
@@ -201,6 +206,23 @@ describe("NodePackInstaller", () => {
     // Nothing left half-unpacked, and the zip is gone.
     expect(await fs.readdir(path.join(slot, "blombo", "tmp"))).toEqual([]);
     expect(await fs.readdir(path.join(runtime, "tools", "downloads"))).toEqual([]);
+  });
+
+  it("installs a confirmed pack no stage lists, pinned to its latest commit", async () => {
+    const { runtime, comfyDir } = await makeRuntime("confirmed");
+    const { ops, calls } = fakeOps();
+    const installer = make(runtime, fakeComfy(comfyDir).comfy, ops);
+    const done = finished(installer);
+    const pack: NodePack = { name: "Mine", url: "https://github.com/me/mine", nodes: ["Mine"] };
+    await expect(installer.start([pack.url])).rejects.toMatchObject({ status: 400 });
+    await installer.start([pack.url], [pack]);
+    expect((await done).state).toBe("done");
+    expect(calls).toContain(`latest ${pack.url}`);
+    expect(calls).toContain(`download ${pack.url}/archive/${"c".repeat(40)}.zip`);
+    const record = JSON.parse(
+      await fs.readFile(path.join(path.dirname(comfyDir), "blombo", "packs.json"), "utf8"),
+    );
+    expect(record.mine).toMatchObject({ url: pack.url, ref: "c".repeat(40) });
   });
 
   it("keeps a pack that's already there (any Manager spelling) and only installs its packages", async () => {

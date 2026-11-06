@@ -18,6 +18,7 @@ import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { CIVITAI_TYPE_LABELS, civitaiKind } from "../../shared/civitai.ts";
+import type { ModelKind } from "../../shared/constants.ts";
 import {
   aliasFor,
   autoPrefix,
@@ -103,6 +104,17 @@ interface Item {
   samples: Array<[number, number]>;
 }
 
+/**
+ * A model file a workflow links (ADR-0018). Only the workflow check queues one, with a link it
+ * read from the workflow and checked; the /api/downloads route takes Civitai and Manager only.
+ */
+export interface LinkedFile {
+  source: "url";
+  url: string;
+  file: string;
+  kind: ModelKind;
+}
+
 interface Prepared {
   plan: DownloadPlan;
   fields: Pick<
@@ -137,7 +149,7 @@ interface Row {
 function fromRow(r: Row): Download {
   return {
     id: r.id,
-    source: r.source === "manager" ? "manager" : "civitai",
+    source: r.source === "manager" || r.source === "url" ? r.source : "civitai",
     name: r.name,
     dest: r.dest,
     kind: (r.kind as Download["kind"]) ?? null,
@@ -314,13 +326,52 @@ export class DownloadQueue {
 
   private async prepare(
     profileId: string,
-    body: EnqueueBody,
+    body: EnqueueBody | LinkedFile,
     remember: boolean,
   ): Promise<Prepared> {
     const root = await this.rootOf(profileId);
     const blockedRoot = root
       ? null
       : "This profile has no models folder yet. Choose one in Settings → Folders.";
+    if (body.source === "url") {
+      const kf = kindFolder(body.kind);
+      const rel = `${kf}/${body.file}`;
+      const abs = root ? resolveInside(root, rel) : null;
+      const installed = abs && (await exists(abs)) ? rel : null;
+      return {
+        plan: {
+          name: body.file,
+          kind: body.kind,
+          kindFolder: kf,
+          folder: "",
+          file: body.file,
+          path: abs ?? rel,
+          size: null,
+          nameTaken: installed !== null,
+          installed,
+          blocked: blockedRoot,
+        },
+        fields: {
+          source: "url",
+          name: body.file,
+          dest: rel,
+          kind: body.kind,
+          size: null,
+          modelId: null,
+          versionId: null,
+          entryId: null,
+          thumb: null,
+        },
+        job: {
+          url: body.url,
+          civitaiAuth: false,
+          sha256: null,
+          info: null,
+          preview: null,
+          lookup: null,
+        },
+      };
+    }
     if (body.source === "manager") {
       const e = await this.deps.catalog.entry(body.entryId);
       // The catalog's folder and name, unless the download pop-up changed them (a custom node's
@@ -465,11 +516,11 @@ export class DownloadQueue {
 
   /* ── queue ───────────────────────────────────────────────────────────── */
 
-  async enqueue(body: EnqueueBody): Promise<Download> {
+  async enqueue(body: EnqueueBody | LinkedFile): Promise<Download> {
     const profileId = this.active();
     const prepared = await this.prepare(profileId, body, true);
     if (prepared.plan.blocked) throw new HttpError(409, prepared.plan.blocked, "blocked");
-    if (body.source === "manager" && prepared.plan.installed)
+    if (body.source !== "civitai" && prepared.plan.installed)
       throw new HttpError(409, `"${prepared.plan.file}" is already installed.`, "installed");
     const settings = await this.deps.settings.get(profileId);
     // From the duplicate check to the push there's no await, so two quick requests for the same

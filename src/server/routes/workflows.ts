@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { APP_NAME } from "../../shared/constants.ts";
+import { HealthDownloadBody, HealthInstallBody } from "../../shared/workflow/health.ts";
 import {
   DuplicateWorkflowBody,
   PatchValuesBody,
@@ -13,6 +14,7 @@ import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { BridgeService } from "../services/bridge.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 import type { LayoutService } from "../services/layouts.ts";
+import type { WorkflowCheck } from "../services/workflowcheck.ts";
 import { refreshBindings } from "../services/workflows/analyze.ts";
 import { exportBundle } from "../services/workflows/bundle.ts";
 import { importWorkflow } from "../services/workflows/import.ts";
@@ -27,8 +29,22 @@ export function workflowRoutes(
   supervisor: ComfySupervisor,
   layouts: LayoutService,
   bridge: BridgeService,
+  check: WorkflowCheck,
 ) {
   const r = new Hono();
+
+  /* The workflow check (ADR-0018): what it needs that ComfyUI doesn't have, and the fixes. */
+  r.get("/:id/health", async (c) => c.json(await check.check(c.req.param("id"))));
+  r.post("/:id/health/install", async (c) => {
+    await check.install(c.req.param("id"), await readJson(c, HealthInstallBody));
+    return c.json({ ok: true }, 202);
+  });
+  r.post("/:id/health/download", async (c) => {
+    const { file } = await readJson(c, HealthDownloadBody);
+    await check.download(c.req.param("id"), file);
+    return c.json({ ok: true }, 202);
+  });
+  r.post("/:id/health/rebuild", async (c) => c.json(await check.rebuild(c.req.param("id"))));
 
   /** The manifest with choices refreshed from ComfyUI (models added since it was saved). */
   const withLiveChoices = async (m: WorkflowManifest): Promise<WorkflowManifest> => {

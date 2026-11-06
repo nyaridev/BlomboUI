@@ -65,11 +65,18 @@ export function useStageStatus(stage: StageId): StageStatus | undefined {
   return useStageStatuses().statuses.find((s) => s.stage === stage);
 }
 
-const MANAGER_CATEGORY: Partial<Record<ModelKind, StoreCategory>> = {
+/** Where a missing model of each kind is looked for in Models → Manager. */
+export const MANAGER_CATEGORY: Record<ModelKind, StoreCategory> = {
+  checkpoints: "checkpoints",
+  diffusion_models: "diffusion",
+  loras: "loras",
+  vae: "vae",
+  text_encoders: "text-encoders",
+  upscale_models: "upscalers",
+  controlnet: "controlnet",
+  embeddings: "other",
   ultralytics: "detectors",
   sams: "detectors",
-  controlnet: "controlnet",
-  upscale_models: "upscalers",
 };
 
 const MANAGER_QUERY: Partial<Record<ModelKind, string>> = {

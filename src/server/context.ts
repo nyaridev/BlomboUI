@@ -42,6 +42,7 @@ import { LiveBus } from "./services/live.ts";
 import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
+import { NodeMap } from "./services/nodemap.ts";
 import { OutputSaver } from "./services/outputs.ts";
 import { ProfileService } from "./services/profiles.ts";
 import { ScriptService } from "./services/scripts.ts";
@@ -50,11 +51,14 @@ import { SnippetService } from "./services/snippets.ts";
 import { StageService } from "./services/stages.ts";
 import { WildcardPictures } from "./services/wildcardpics.ts";
 import { WildcardWatcher } from "./services/wildcardwatch.ts";
+import { WorkflowCheck } from "./services/workflowcheck.ts";
 import { installPreset, listPresets } from "./services/workflows/presets.ts";
 import { WorkflowService } from "./services/workflows/store.ts";
 
 export interface Services {
   config: ServerConfig;
+  /** What a workflow needs that ComfyUI doesn't have, and the fixes (ADR-0018). */
+  workflowCheck: WorkflowCheck;
   /** The dev-only Saved data view (routes registered in dev mode only). */
   devInfo: DevInfoService;
   profiles: ProfileService;
@@ -483,8 +487,20 @@ export function createServices(config: ServerConfig): Services {
     lookup.start();
   });
 
+  const workflowCheck = new WorkflowCheck({
+    workflows,
+    supervisor,
+    installer: nodePacks,
+    downloads,
+    catalog,
+    nodeMap: new NodeMap({ catalogUrl: config.catalogUrl, cacheDir: cache("manager") }),
+    known: () => knownPacks(),
+    huggingface: config.huggingfaceUrl,
+  });
+
   return {
     config,
+    workflowCheck,
     devInfo: new DevInfoService({ profiles, dbs, gallery }),
     profiles,
     supervisor,

@@ -30,6 +30,7 @@ import { ModelGrid } from "./ModelGrid";
 import { ParamsColumn } from "./ParamsColumn";
 import { StartWithWorkflow } from "./StartWithWorkflow";
 import { useLayout, useValues } from "./state";
+import { WorkflowCheckNotices } from "./WorkflowCheck";
 import { useActiveWorkflow } from "./workflow";
 import { useWorkTab } from "./worktab";
 
@@ -126,6 +127,8 @@ export function GenerateView() {
       <motion.div variants={item} data-tour="models">
         <ModelsStrip target={target} onTarget={(next, nextTab) => pick(next, nextTab)} />
       </motion.div>
+
+      <WorkflowCheckNotices workflowId={active.manifest.id} />
 
       <motion.div variants={item} className="flex gap-3 max-lg:flex-col">
         <div data-tour="prompt" className="flex min-w-0 flex-1">

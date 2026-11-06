@@ -9,6 +9,7 @@
  *   /api/download/models/:versionId  → redirects to /blobs/:fileId (range requests supported)
  *   /img/<uuid>/<transform>/<name>   → generated JPEGs (a "video" original is refused as mp4)
  *   /catalog/model-list.json         → a small ComfyUI-Manager style catalog of /files/<name>
+ *   /catalog/extension-node-map.json → ComfyUI-Manager's node map: a listed pack, a patterned one
  *   /api/models/:owner/:repo         → Hugging Face's model API (downloadsAllTime) for its repos
  *   /api/trpc/model.getAll           → Civitai's site search (the key, a published-date range of
  *                                      31 days at most, a bigint cursor), in its own shape
@@ -703,6 +704,17 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
           ],
         });
       }
+      if (p === "/catalog/extension-node-map.json")
+        return json(res, 200, {
+          "https://github.com/fake-org/ComfyUI-FakeNodes": [
+            ["FakeNodeA", "FakeNodeB"],
+            { title_aux: "Fake nodes" },
+          ],
+          "https://github.com/fake-org/comfyui-patterned": [
+            [],
+            { title_aux: "Patterned nodes", nodename_pattern: "\\(Patterned\\)$" },
+          ],
+        });
       m = /^\/files\/([^/]+)$/.exec(p);
       if (m) {
         const name = decodeURIComponent(m[1] ?? "");

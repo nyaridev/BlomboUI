@@ -57,6 +57,14 @@ ComfyUI 0.44 has the core nodes for all of it: `LoadVideo`, `GetVideoComponents`
   - `minimax-h3-swap`: H3's reference to video with the Character Swap LoRA and the reference
     turbo LoRA.
 
+  Both make the input video's shape at a megapixel count (`video.megapixels`, scaled with
+  `ImageScaleToTotalPixels` to 32 px steps), never a fixed size: a fixed landscape size cropped a
+  portrait video to its middle and lost the person. SCAIL pads the character picture to that
+  shape (`ResizeAndPadImage`) instead of letting `WanSCAILToVideo` crop it. Relight is a switch
+  times a strength, so off is strength 0, which ComfyUI's LoRA loader skips. They share the
+  built-in **Character swap** layout (`presets/layouts/swap.json`), which puts these settings on
+  the First pass card.
+
   Their picture and video inputs are bindings (`image.input`, the new `video.input`, binding type
   `video`) that Generate shows as file wells. A value that is a stage file name is uploaded to
   ComfyUI before the run.

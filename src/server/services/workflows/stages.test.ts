@@ -734,6 +734,32 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
     const h3 = analyze(load("preset:minimax-h3-swap"), info).bindings;
     expect(h3.find((b) => b.role === "video.input")).toMatchObject({ node: "7", type: "video" });
     expect(h3.find((b) => b.role === "prompt.positive")).toMatchObject({ node: "10" });
+    // Both are sized from the video; H3's one-frame look at it isn't a start frame.
+    expect(scail.find((b) => b.role === "video.megapixels")).toMatchObject({ node: "12" });
+    expect(h3.find((b) => b.role === "video.megapixels")).toMatchObject({ node: "21" });
+    expect(h3.find((b) => b.role === "video.offset")).toBeUndefined();
+  });
+
+  it("SCAIL keeps the video's shape, pads the character into it and turns Relight off at 0", () => {
+    const p = load("preset:scail2-replace");
+    expectValidGraph(p);
+    // The frames are scaled to the megapixels with their shape kept, and that size runs.
+    expect(p["12"]).toMatchObject({ class_type: "ImageScaleToTotalPixels" });
+    expect(p["24"]?.inputs).toMatchObject({ width: ["13", 0], height: ["13", 1] });
+    // The character is padded to that size (never cropped), for SAM and for SCAIL alike.
+    expect(p["34"]).toMatchObject({
+      class_type: "ResizeAndPadImage",
+      inputs: { image: ["14", 0], target_width: ["13", 0], target_height: ["13", 1] },
+    });
+    expect(p["19"]?.inputs.images).toEqual(["34", 0]);
+    expect(p["24"]?.inputs.reference_image).toEqual(["34", 0]);
+    // Relight: the switch times the strength, so off loads no LoRA (ComfyUI skips strength 0).
+    expect(p["3"]?.inputs.strength_model).toEqual(["37", 0]);
+    expect(p["37"]?.inputs).toMatchObject({
+      expression: "a * b",
+      "values.a": ["35", 0],
+      "values.b": ["36", 0],
+    });
   });
 
   it("SCAIL continues from the video so far: its frames anchor, the driving video moves on", () => {
@@ -756,8 +782,9 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
       byClass(p, "GetVideoComponents").find(([, n]) => from(n.inputs.video) === loadId) ?? [];
     expect(p["24"]?.inputs.previous_frames).toEqual([partsId, 0]);
     // The driving video's slice starts 5 frames before the end of the video so far.
-    const [mathId, math] = one(p, "ComfyMathExpression");
-    expect(math.inputs.expression).toBe("a - 5");
+    const [mathId, math] =
+      byClass(p, "ComfyMathExpression").find(([, n]) => n.inputs.expression === "a - 5") ?? [];
+    expect(math?.inputs.expression).toBe("a - 5");
     expect(p["11"]?.inputs.batch_index).toEqual([mathId, 1]);
     const [joinedId, joined] = one(p, "BatchImagesNode");
     expect(joined.inputs["images.image0"]).toEqual([partsId, 0]);
@@ -788,10 +815,11 @@ describe("smooth motion (frame interpolation)", () => {
     const p = run("preset:scail2-replace", { smooth: { enabled: true, multiplier: 3 } }).prompt;
     expectValidGraph(p);
     const [interpId] = one(p, "FrameInterpolate");
-    const [rateId, rate] = one(p, "ComfyMathExpression");
+    const [rateId, rate] =
+      byClass(p, "ComfyMathExpression").find(([, n]) => n._meta?.title?.startsWith("Smooth")) ?? [];
     const [multId] =
       byClass(p, "PrimitiveInt").find(([, n]) => n._meta?.title?.startsWith("Smooth")) ?? [];
-    expect(rate.inputs).toMatchObject({
+    expect(rate?.inputs).toMatchObject({
       expression: "a * b",
       "values.a": ["10", 2],
       "values.b": [multId, 0],

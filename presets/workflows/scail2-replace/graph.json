@@ -1,6 +1,6 @@
 {
-  "last_node_id": 33,
-  "last_link_id": 50,
+  "last_node_id": 38,
+  "last_link_id": 53,
   "nodes": [
     {
       "id": 1,
@@ -84,7 +84,7 @@
       ],
       "size": [
         300,
-        118
+        142
       ],
       "flags": {},
       "order": 2,
@@ -94,6 +94,14 @@
           "name": "model",
           "type": "MODEL",
           "link": 2
+        },
+        {
+          "name": "strength_model",
+          "type": "FLOAT",
+          "link": 3,
+          "widget": {
+            "name": "strength_model"
+          }
         }
       ],
       "outputs": [
@@ -101,7 +109,7 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            3
+            4
           ],
           "slot_index": 0
         }
@@ -113,7 +121,7 @@
         "wan2.1_SCAIL_2_relight_lora_bf16.safetensors",
         1
       ],
-      "title": "$Relight"
+      "title": "Relight LoRA"
     },
     {
       "id": 4,
@@ -133,7 +141,7 @@
         {
           "name": "model",
           "type": "MODEL",
-          "link": 3
+          "link": 4
         }
       ],
       "outputs": [
@@ -141,7 +149,7 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            4,
+            5,
             38
           ],
           "slot_index": 0
@@ -174,7 +182,7 @@
         {
           "name": "model",
           "type": "MODEL",
-          "link": 4
+          "link": 5
         }
       ],
       "outputs": [
@@ -214,8 +222,8 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            24,
-            25
+            23,
+            24
           ],
           "slot_index": 0
         }
@@ -248,7 +256,7 @@
           "name": "VAE",
           "type": "VAE",
           "links": [
-            28,
+            27,
             46
           ],
           "slot_index": 0
@@ -281,7 +289,7 @@
           "name": "CLIP_VISION",
           "type": "CLIP_VISION",
           "links": [
-            22
+            21
           ],
           "slot_index": 0
         }
@@ -313,7 +321,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            5
+            6
           ],
           "slot_index": 0
         }
@@ -345,7 +353,7 @@
         {
           "name": "video",
           "type": "VIDEO",
-          "link": 5
+          "link": 6
         }
       ],
       "outputs": [
@@ -353,7 +361,7 @@
           "name": "images",
           "type": "IMAGE",
           "links": [
-            6
+            7
           ],
           "slot_index": 0
         },
@@ -396,7 +404,7 @@
       "type": "ImageFromBatch",
       "pos": [
         680,
-        158
+        182
       ],
       "size": [
         300,
@@ -409,7 +417,7 @@
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 6
+          "link": 7
         }
       ],
       "outputs": [
@@ -417,7 +425,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            7
+            8
           ],
           "slot_index": 0
         }
@@ -433,14 +441,14 @@
     },
     {
       "id": 12,
-      "type": "ImageScale",
+      "type": "ImageScaleToTotalPixels",
       "pos": [
         1020,
         158
       ],
       "size": [
         300,
-        214
+        142
       ],
       "flags": {},
       "order": 3,
@@ -449,23 +457,7 @@
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 7
-        },
-        {
-          "name": "width",
-          "type": "INT",
-          "link": 8,
-          "widget": {
-            "name": "width"
-          }
-        },
-        {
-          "name": "height",
-          "type": "INT",
-          "link": 9,
-          "widget": {
-            "name": "height"
-          }
+          "link": 8
         }
       ],
       "outputs": [
@@ -473,23 +465,22 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            10,
-            13,
+            9,
+            12,
             32
           ],
           "slot_index": 0
         }
       ],
       "properties": {
-        "Node name for S&R": "ImageScale"
+        "Node name for S&R": "ImageScaleToTotalPixels"
       },
       "widgets_values": [
         "area",
-        512,
-        512,
-        "center"
+        0.4,
+        32
       ],
-      "title": "Fit to size"
+      "title": "Size from the video"
     },
     {
       "id": 13,
@@ -509,7 +500,7 @@
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 10
+          "link": 9
         }
       ],
       "outputs": [
@@ -517,7 +508,8 @@
           "name": "width",
           "type": "INT",
           "links": [
-            29
+            28,
+            52
           ],
           "slot_index": 0
         },
@@ -525,7 +517,8 @@
           "name": "height",
           "type": "INT",
           "links": [
-            30
+            29,
+            53
           ],
           "slot_index": 1
         },
@@ -533,7 +526,7 @@
           "name": "batch_size",
           "type": "INT",
           "links": [
-            31
+            30
           ],
           "slot_index": 2
         }
@@ -563,9 +556,8 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            16,
-            23,
-            35
+            22,
+            51
           ],
           "slot_index": 0
         },
@@ -605,8 +597,8 @@
           "name": "MODEL",
           "type": "MODEL",
           "links": [
-            14,
-            17
+            13,
+            16
           ],
           "slot_index": 0
         },
@@ -614,8 +606,8 @@
           "name": "CLIP",
           "type": "CLIP",
           "links": [
-            11,
-            12
+            10,
+            11
           ],
           "slot_index": 1
         },
@@ -652,7 +644,7 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 11
+          "link": 10
         }
       ],
       "outputs": [
@@ -660,7 +652,7 @@
           "name": "CONDITIONING",
           "type": "CONDITIONING",
           "links": [
-            15
+            14
           ],
           "slot_index": 0
         }
@@ -691,7 +683,7 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 12
+          "link": 11
         }
       ],
       "outputs": [
@@ -699,7 +691,7 @@
           "name": "CONDITIONING",
           "type": "CONDITIONING",
           "links": [
-            18
+            17
           ],
           "slot_index": 0
         }
@@ -730,12 +722,12 @@
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 13
+          "link": 12
         },
         {
           "name": "model",
           "type": "MODEL",
-          "link": 14
+          "link": 13
         },
         {
           "name": "initial_mask",
@@ -745,7 +737,7 @@
         {
           "name": "conditioning",
           "type": "CONDITIONING",
-          "link": 15
+          "link": 14
         }
       ],
       "outputs": [
@@ -753,7 +745,7 @@
           "name": "track_data",
           "type": "SAM3_TRACK_DATA",
           "links": [
-            19
+            18
           ],
           "slot_index": 0
         }
@@ -771,26 +763,26 @@
       "id": 19,
       "type": "SAM3_VideoTrack",
       "pos": [
-        680,
-        316
+        2040,
+        0
       ],
       "size": [
         300,
         214
       ],
       "flags": {},
-      "order": 2,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
           "name": "images",
           "type": "IMAGE",
-          "link": 16
+          "link": 15
         },
         {
           "name": "model",
           "type": "MODEL",
-          "link": 17
+          "link": 16
         },
         {
           "name": "initial_mask",
@@ -800,7 +792,7 @@
         {
           "name": "conditioning",
           "type": "CONDITIONING",
-          "link": 18
+          "link": 17
         }
       ],
       "outputs": [
@@ -808,7 +800,7 @@
           "name": "track_data",
           "type": "SAM3_TRACK_DATA",
           "links": [
-            21
+            20
           ],
           "slot_index": 0
         }
@@ -826,7 +818,7 @@
       "id": 20,
       "type": "SCAIL2ColoredMask",
       "pos": [
-        1700,
+        2380,
         0
       ],
       "size": [
@@ -834,18 +826,18 @@
         190
       ],
       "flags": {},
-      "order": 5,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
           "name": "driving_track_data",
           "type": "SAM3_TRACK_DATA",
-          "link": 19
+          "link": 18
         },
         {
           "name": "replacement_mode",
           "type": "BOOLEAN",
-          "link": 20,
+          "link": 19,
           "widget": {
             "name": "replacement_mode"
           }
@@ -853,7 +845,7 @@
         {
           "name": "ref_track_data",
           "type": "SAM3_TRACK_DATA,MASK",
-          "link": 21
+          "link": 20
         }
       ],
       "outputs": [
@@ -901,12 +893,12 @@
         {
           "name": "clip_vision",
           "type": "CLIP_VISION",
-          "link": 22
+          "link": 21
         },
         {
           "name": "image",
           "type": "IMAGE",
-          "link": 23
+          "link": 22
         }
       ],
       "outputs": [
@@ -944,7 +936,7 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 24
+          "link": 23
         }
       ],
       "outputs": [
@@ -952,7 +944,7 @@
           "name": "CONDITIONING",
           "type": "CONDITIONING",
           "links": [
-            26
+            25
           ],
           "slot_index": 0
         }
@@ -983,7 +975,7 @@
         {
           "name": "clip",
           "type": "CLIP",
-          "link": 25
+          "link": 24
         }
       ],
       "outputs": [
@@ -991,7 +983,7 @@
           "name": "CONDITIONING",
           "type": "CONDITIONING",
           "links": [
-            27
+            26
           ],
           "slot_index": 0
         }
@@ -1008,36 +1000,36 @@
       "id": 24,
       "type": "WanSCAILToVideo",
       "pos": [
-        2040,
+        2720,
         0
       ],
       "size": [
         300,
-        598
+        622
       ],
       "flags": {},
-      "order": 6,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
           "name": "positive",
           "type": "CONDITIONING",
-          "link": 26
+          "link": 25
         },
         {
           "name": "negative",
           "type": "CONDITIONING",
-          "link": 27
+          "link": 26
         },
         {
           "name": "vae",
           "type": "VAE",
-          "link": 28
+          "link": 27
         },
         {
           "name": "width",
           "type": "INT",
-          "link": 29,
+          "link": 28,
           "widget": {
             "name": "width"
           }
@@ -1045,7 +1037,7 @@
         {
           "name": "height",
           "type": "INT",
-          "link": 30,
+          "link": 29,
           "widget": {
             "name": "height"
           }
@@ -1053,9 +1045,17 @@
         {
           "name": "length",
           "type": "INT",
-          "link": 31,
+          "link": 30,
           "widget": {
             "name": "length"
+          }
+        },
+        {
+          "name": "pose_strength",
+          "type": "FLOAT",
+          "link": 31,
+          "widget": {
+            "name": "pose_strength"
           }
         },
         {
@@ -1221,7 +1221,7 @@
       "id": 27,
       "type": "SamplerCustom",
       "pos": [
-        2380,
+        3060,
         0
       ],
       "size": [
@@ -1229,7 +1229,7 @@
         286
       ],
       "flags": {},
-      "order": 7,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -1293,7 +1293,7 @@
       "id": 28,
       "type": "VAEDecode",
       "pos": [
-        2720,
+        3400,
         0
       ],
       "size": [
@@ -1301,7 +1301,7 @@
         94
       ],
       "flags": {},
-      "order": 8,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -1334,7 +1334,7 @@
       "id": 29,
       "type": "CreateVideo",
       "pos": [
-        3060,
+        3740,
         0
       ],
       "size": [
@@ -1342,7 +1342,7 @@
         238
       ],
       "flags": {},
-      "order": 9,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -1389,7 +1389,7 @@
       "id": 30,
       "type": "SaveVideo",
       "pos": [
-        3400,
+        4080,
         0
       ],
       "size": [
@@ -1397,7 +1397,7 @@
         166
       ],
       "flags": {},
-      "order": 10,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
@@ -1444,7 +1444,7 @@
           "name": "BOOLEAN",
           "type": "BOOLEAN",
           "links": [
-            20,
+            19,
             34
           ],
           "slot_index": 0
@@ -1459,15 +1459,74 @@
       "title": "$Replace the person (off: animate the picture)"
     },
     {
-      "id": 32,
-      "type": "PrimitiveInt",
+      "id": 34,
+      "type": "ResizeAndPadImage",
+      "pos": [
+        1700,
+        0
+      ],
+      "size": [
+        300,
+        214
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 51
+        },
+        {
+          "name": "target_width",
+          "type": "INT",
+          "link": 52,
+          "widget": {
+            "name": "target_width"
+          }
+        },
+        {
+          "name": "target_height",
+          "type": "INT",
+          "link": 53,
+          "widget": {
+            "name": "target_height"
+          }
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            15,
+            35
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ResizeAndPadImage"
+      },
+      "widgets_values": [
+        512,
+        512,
+        "white",
+        "lanczos"
+      ],
+      "title": "Character in the video's shape (padded, never cropped)"
+    },
+    {
+      "id": 35,
+      "type": "PrimitiveBoolean",
       "pos": [
         0,
         1374
       ],
       "size": [
         300,
-        118
+        94
       ],
       "flags": {},
       "order": 0,
@@ -1475,33 +1534,30 @@
       "inputs": [],
       "outputs": [
         {
-          "name": "INT",
-          "type": "INT",
-          "links": [
-            8
-          ],
+          "name": "BOOLEAN",
+          "type": "BOOLEAN",
+          "links": [],
           "slot_index": 0
         }
       ],
       "properties": {
-        "Node name for S&R": "PrimitiveInt"
+        "Node name for S&R": "PrimitiveBoolean"
       },
       "widgets_values": [
-        832,
-        "fixed"
+        true
       ],
-      "title": "$Width"
+      "title": "$Relight to the scene's light"
     },
     {
-      "id": 33,
-      "type": "PrimitiveInt",
+      "id": 36,
+      "type": "PrimitiveFloat",
       "pos": [
         0,
-        1532
+        1508
       ],
       "size": [
         300,
-        118
+        94
       ],
       "flags": {},
       "order": 0,
@@ -1509,22 +1565,103 @@
       "inputs": [],
       "outputs": [
         {
+          "name": "FLOAT",
+          "type": "FLOAT",
+          "links": [],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "PrimitiveFloat"
+      },
+      "widgets_values": [
+        1
+      ],
+      "title": "$Relight strength"
+    },
+    {
+      "id": 37,
+      "type": "ComfyMathExpression",
+      "pos": [
+        340,
+        1058
+      ],
+      "size": [
+        300,
+        142
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "values",
+          "type": "COMFY_AUTOGROW_V3",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "FLOAT",
+          "type": "FLOAT",
+          "links": [
+            3
+          ],
+          "slot_index": 0
+        },
+        {
           "name": "INT",
           "type": "INT",
+          "links": [],
+          "slot_index": 1
+        },
+        {
+          "name": "BOOL",
+          "type": "BOOLEAN",
+          "links": [],
+          "slot_index": 2
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "ComfyMathExpression"
+      },
+      "widgets_values": [
+        "a * b"
+      ],
+      "title": "Relight strength when on"
+    },
+    {
+      "id": 38,
+      "type": "PrimitiveFloat",
+      "pos": [
+        0,
+        1642
+      ],
+      "size": [
+        300,
+        94
+      ],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "FLOAT",
+          "type": "FLOAT",
           "links": [
-            9
+            31
           ],
           "slot_index": 0
         }
       ],
       "properties": {
-        "Node name for S&R": "PrimitiveInt"
+        "Node name for S&R": "PrimitiveFloat"
       },
       "widgets_values": [
-        480,
-        "fixed"
+        1
       ],
-      "title": "$Height"
+      "title": "$Pose strength"
     }
   ],
   "links": [
@@ -1546,6 +1683,14 @@
     ],
     [
       3,
+      37,
+      0,
+      3,
+      1,
+      "FLOAT"
+    ],
+    [
+      4,
       3,
       0,
       4,
@@ -1553,7 +1698,7 @@
       "MODEL"
     ],
     [
-      4,
+      5,
       4,
       0,
       5,
@@ -1561,7 +1706,7 @@
       "MODEL"
     ],
     [
-      5,
+      6,
       9,
       0,
       10,
@@ -1569,71 +1714,55 @@
       "VIDEO"
     ],
     [
-      6,
+      7,
       10,
       0,
       11,
-      0,
-      "IMAGE"
-    ],
-    [
-      7,
-      11,
-      0,
-      12,
       0,
       "IMAGE"
     ],
     [
       8,
-      32,
+      11,
       0,
       12,
-      1,
-      "INT"
+      0,
+      "IMAGE"
     ],
     [
       9,
-      33,
-      0,
-      12,
-      2,
-      "INT"
-    ],
-    [
-      10,
       12,
       0,
       13,
       0,
       "IMAGE"
+    ],
+    [
+      10,
+      15,
+      1,
+      16,
+      0,
+      "CLIP"
     ],
     [
       11,
       15,
       1,
-      16,
+      17,
       0,
       "CLIP"
     ],
     [
       12,
-      15,
-      1,
-      17,
+      12,
       0,
-      "CLIP"
+      18,
+      0,
+      "IMAGE"
     ],
     [
       13,
-      12,
-      0,
-      18,
-      0,
-      "IMAGE"
-    ],
-    [
-      14,
       15,
       0,
       18,
@@ -1641,7 +1770,7 @@
       "MODEL"
     ],
     [
-      15,
+      14,
       16,
       0,
       18,
@@ -1649,15 +1778,15 @@
       "CONDITIONING"
     ],
     [
-      16,
-      14,
+      15,
+      34,
       0,
       19,
       0,
       "IMAGE"
     ],
     [
-      17,
+      16,
       15,
       0,
       19,
@@ -1665,7 +1794,7 @@
       "MODEL"
     ],
     [
-      18,
+      17,
       17,
       0,
       19,
@@ -1673,7 +1802,7 @@
       "CONDITIONING"
     ],
     [
-      19,
+      18,
       18,
       0,
       20,
@@ -1681,7 +1810,7 @@
       "SAM3_TRACK_DATA"
     ],
     [
-      20,
+      19,
       31,
       0,
       20,
@@ -1689,7 +1818,7 @@
       "BOOLEAN"
     ],
     [
-      21,
+      20,
       19,
       0,
       20,
@@ -1697,7 +1826,7 @@
       "SAM3_TRACK_DATA,MASK"
     ],
     [
-      22,
+      21,
       8,
       0,
       21,
@@ -1705,7 +1834,7 @@
       "CLIP_VISION"
     ],
     [
-      23,
+      22,
       14,
       0,
       21,
@@ -1713,7 +1842,7 @@
       "IMAGE"
     ],
     [
-      24,
+      23,
       6,
       0,
       22,
@@ -1721,7 +1850,7 @@
       "CLIP"
     ],
     [
-      25,
+      24,
       6,
       0,
       23,
@@ -1729,7 +1858,7 @@
       "CLIP"
     ],
     [
-      26,
+      25,
       22,
       0,
       24,
@@ -1737,7 +1866,7 @@
       "CONDITIONING"
     ],
     [
-      27,
+      26,
       23,
       0,
       24,
@@ -1745,7 +1874,7 @@
       "CONDITIONING"
     ],
     [
-      28,
+      27,
       7,
       0,
       24,
@@ -1753,7 +1882,7 @@
       "VAE"
     ],
     [
-      29,
+      28,
       13,
       0,
       24,
@@ -1761,7 +1890,7 @@
       "INT"
     ],
     [
-      30,
+      29,
       13,
       1,
       24,
@@ -1769,7 +1898,7 @@
       "INT"
     ],
     [
-      31,
+      30,
       13,
       2,
       24,
@@ -1777,11 +1906,19 @@
       "INT"
     ],
     [
+      31,
+      38,
+      0,
+      24,
+      6,
+      "FLOAT"
+    ],
+    [
       32,
       12,
       0,
       24,
-      6,
+      7,
       "IMAGE"
     ],
     [
@@ -1789,7 +1926,7 @@
       20,
       0,
       24,
-      7,
+      8,
       "IMAGE"
     ],
     [
@@ -1797,15 +1934,15 @@
       31,
       0,
       24,
-      8,
+      9,
       "BOOLEAN"
     ],
     [
       35,
-      14,
+      34,
       0,
       24,
-      9,
+      10,
       "IMAGE"
     ],
     [
@@ -1813,7 +1950,7 @@
       20,
       1,
       24,
-      10,
+      11,
       "IMAGE"
     ],
     [
@@ -1821,7 +1958,7 @@
       21,
       0,
       24,
-      11,
+      12,
       "CLIP_VISION_OUTPUT"
     ],
     [
@@ -1927,6 +2064,30 @@
       30,
       0,
       "VIDEO"
+    ],
+    [
+      51,
+      14,
+      0,
+      34,
+      0,
+      "IMAGE"
+    ],
+    [
+      52,
+      13,
+      0,
+      34,
+      1,
+      "INT"
+    ],
+    [
+      53,
+      13,
+      1,
+      34,
+      2,
+      "INT"
     ]
   ],
   "groups": [],

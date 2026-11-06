@@ -36,7 +36,7 @@ afterAll(async () => {
 describe("layouts", () => {
   it("lists the built-in layouts with the default first", async () => {
     const list = await layouts.list();
-    expect(list.builtins.map((l) => l.id)).toEqual(["default"]);
+    expect(list.builtins.map((l) => l.id)).toEqual(["default", "swap"]);
     expect(list.custom).toEqual([]);
     expect(list.defaultId).toBe("default");
   });

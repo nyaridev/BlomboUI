@@ -120,7 +120,7 @@ presets/          workflows/ (sd15, sdxl, illustrious; video: wan22-5b, wan22-14
                   checkpoint/diffusion; source, and source-wan22(-fun), source-wan22-14b(-flf), source-ltx2(-flf),
                   source-minimax-h3(-flf), source-*-extend and source-scail2-extend for video;
                   smooth (frame interpolation))
-                  · layouts/ (default) · tags/ (starter list)
+                  · layouts/ (default, swap: the character swaps) · tags/ (starter list)
 tools/            ensure-build · ensure-app · dev-window · sync-rules · make-icons · build-presets ·
                   bench-gallery
 data/             (gitignored) profiles.json + profiles/<id>/   ← user data, never commit

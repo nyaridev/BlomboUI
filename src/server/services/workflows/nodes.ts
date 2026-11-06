@@ -130,5 +130,7 @@ export const ROLE_RANGES: Record<
   "latent.length": { min: 1, max: 241, step: 8, presets: [33, 49, 81, 97, 121] },
   "video.fps": { min: 1, max: 60, step: 1, presets: [16, 24, 25, 30] },
   "video.offset": { min: 0, max: 1000, step: 1 },
+  // 1024 × 1024 px per megapixel, as ComfyUI counts them: 0.4 is about 832 × 480.
+  "video.megapixels": { min: 0.1, max: 1.5, step: 0.01, presets: [0.25, 0.4, 0.56, 0.9] },
   "clip.skip": { min: -12, max: -1, step: 1, presets: [-1, -2] },
 };

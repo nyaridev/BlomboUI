@@ -127,6 +127,23 @@ describe("resync", () => {
     expect(r.values["n7.sigma"]).toBe(0.5);
     expect(r.report.removed).toContain("Sharpen · Sigma");
   });
+
+  it("drops a parameter whose input is a link now, so its value can't replace the link", () => {
+    const { prompt, manifest } = saved();
+    const next = shown(prompt, manifest);
+    // Sharpen isn't $-titled any more and its sigma comes from a new $Sigma primitive.
+    next["7"] = { ...structuredClone(next["7"]!), _meta: { title: "Sharpen" } };
+    next["7"].inputs.sigma = ["90", 0];
+    next["90"] = {
+      class_type: "PrimitiveFloat",
+      inputs: { value: 1.4 },
+      _meta: { title: "$Sigma" },
+    };
+    const r = resync(manifest, prompt, next, info);
+    expect(r.bindings.find((b) => b.id === "n7.sigma")).toBeUndefined();
+    expect(r.bindings.find((b) => b.id === "n7.alpha")).toBeDefined();
+    expect(r.report.removed).toContain("Sharpen · Sigma");
+  });
 });
 
 describe("resync: subgraph templates", () => {

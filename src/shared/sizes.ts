@@ -66,3 +66,21 @@ export function inferScaler(size: Size): { aspect: string; megapixels: number } 
   const mp = Math.round(((size.w * size.h) / MEGAPIXEL_PIXELS) * 20) / 20;
   return { aspect: best.id, megapixels: Math.min(MEGAPIXELS.max, Math.max(MEGAPIXELS.min, mp)) };
 }
+
+/** Python's round(): halves go to the even neighbour. */
+function roundHalfEven(x: number): number {
+  const r = Math.round(x);
+  return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+}
+
+/**
+ * The size ComfyUI's ImageScaleToTotalPixels gives a picture or video: its shape kept, scaled to
+ * `megapixels` (of 1024 × 1024 px), each side rounded to `step` (swap workflows use 32).
+ */
+export function scaleToMegapixels(size: Size, megapixels: number, step: number): Size {
+  const scale = Math.sqrt((megapixels * MEGAPIXEL_PIXELS) / (size.w * size.h));
+  return {
+    w: roundHalfEven((size.w * scale) / step) * step,
+    h: roundHalfEven((size.h * scale) / step) * step,
+  };
+}

@@ -24,14 +24,17 @@
     "class_type": "LoraLoaderModelOnly",
     "inputs": {
       "lora_name": "wan2.1_SCAIL_2_relight_lora_bf16.safetensors",
-      "strength_model": 1,
+      "strength_model": [
+        "37",
+        0
+      ],
       "model": [
         "2",
         0
       ]
     },
     "_meta": {
-      "title": "$Relight"
+      "title": "Relight LoRA"
     }
   },
   "4": {
@@ -111,25 +114,18 @@
     }
   },
   "12": {
-    "class_type": "ImageScale",
+    "class_type": "ImageScaleToTotalPixels",
     "inputs": {
       "image": [
         "11",
         0
       ],
       "upscale_method": "area",
-      "width": [
-        "32",
-        0
-      ],
-      "height": [
-        "33",
-        0
-      ],
-      "crop": "center"
+      "megapixels": 0.4,
+      "resolution_steps": 32
     },
     "_meta": {
-      "title": "Fit to size"
+      "title": "Size from the video"
     }
   },
   "13": {
@@ -209,7 +205,7 @@
     "class_type": "SAM3_VideoTrack",
     "inputs": {
       "images": [
-        "14",
+        "34",
         0
       ],
       "model": [
@@ -308,7 +304,7 @@
         0
       ],
       "reference_image": [
-        "14",
+        "34",
         0
       ],
       "reference_image_mask": [
@@ -332,7 +328,10 @@
         2
       ],
       "batch_size": 1,
-      "pose_strength": 1,
+      "pose_strength": [
+        "38",
+        0
+      ],
       "pose_start": 0,
       "pose_end": 1,
       "video_frame_offset": 0,
@@ -432,24 +431,6 @@
       "title": "$Replace the person (off: animate the picture)"
     }
   },
-  "32": {
-    "class_type": "PrimitiveInt",
-    "inputs": {
-      "value": 832
-    },
-    "_meta": {
-      "title": "$Width"
-    }
-  },
-  "33": {
-    "class_type": "PrimitiveInt",
-    "inputs": {
-      "value": 480
-    },
-    "_meta": {
-      "title": "$Height"
-    }
-  },
   "30": {
     "class_type": "SaveVideo",
     "inputs": {
@@ -460,6 +441,72 @@
         "29",
         0
       ]
+    }
+  },
+  "34": {
+    "class_type": "ResizeAndPadImage",
+    "inputs": {
+      "image": [
+        "14",
+        0
+      ],
+      "target_width": [
+        "13",
+        0
+      ],
+      "target_height": [
+        "13",
+        1
+      ],
+      "padding_color": "white",
+      "interpolation": "lanczos"
+    },
+    "_meta": {
+      "title": "Character in the video's shape (padded, never cropped)"
+    }
+  },
+  "35": {
+    "class_type": "PrimitiveBoolean",
+    "inputs": {
+      "value": true
+    },
+    "_meta": {
+      "title": "$Relight to the scene's light"
+    }
+  },
+  "36": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 1.0
+    },
+    "_meta": {
+      "title": "$Relight strength"
+    }
+  },
+  "37": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "a * b",
+      "values.a": [
+        "35",
+        0
+      ],
+      "values.b": [
+        "36",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Relight strength when on"
+    }
+  },
+  "38": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 1.0
+    },
+    "_meta": {
+      "title": "$Pose strength"
     }
   }
 }

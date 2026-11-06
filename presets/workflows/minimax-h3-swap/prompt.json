@@ -30,14 +30,17 @@
     "class_type": "LoraLoaderModelOnly",
     "inputs": {
       "lora_name": "h3_character_swap_v1.5.safetensors",
-      "strength_model": 1,
+      "strength_model": [
+        "23",
+        0
+      ],
       "model": [
         "1",
         0
       ]
     },
     "_meta": {
-      "title": "$Swap LoRA"
+      "title": "Character Swap LoRA"
     }
   },
   "6": {
@@ -89,8 +92,14 @@
         0
       ],
       "prompt": "Replace the person in <Video 1> with the character from <Picture 1>: their hair, face and clothes (describe them here). They move the same way. Keep the camera, the place, the light and the sound of <Video 1>.",
-      "width": 1024,
-      "height": 576,
+      "width": [
+        "22",
+        0
+      ],
+      "height": [
+        "22",
+        1
+      ],
       "length": 73,
       "ref_image_size": "match",
       "vae": [
@@ -227,6 +236,53 @@
         "18",
         0
       ]
+    }
+  },
+  "20": {
+    "class_type": "ImageFromBatch",
+    "inputs": {
+      "image": [
+        "8",
+        0
+      ],
+      "batch_index": 0,
+      "length": 1
+    },
+    "_meta": {
+      "title": "Its first frame"
+    }
+  },
+  "21": {
+    "class_type": "ImageScaleToTotalPixels",
+    "inputs": {
+      "image": [
+        "20",
+        0
+      ],
+      "upscale_method": "area",
+      "megapixels": 0.56,
+      "resolution_steps": 32
+    },
+    "_meta": {
+      "title": "Size from the video"
+    }
+  },
+  "22": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "21",
+        0
+      ]
+    }
+  },
+  "23": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 1.0
+    },
+    "_meta": {
+      "title": "$Swap strength"
     }
   }
 }

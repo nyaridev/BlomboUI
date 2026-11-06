@@ -4,7 +4,7 @@
   "name": "MiniMax H3 character swap",
   "kind": "generate",
   "family": "MiniMax H3",
-  "description": "Swaps the person in a video for the character in a picture, keeping motion, camera and sound (MiniMax H3 reference to video + Character Swap LoRA v1.5). 1024×576, 24 fps, 8 steps. In the prompt, <Video 1> is the video and <Picture 1> the character: describe their clothes.",
+  "description": "Swaps the person in a video for the character in a picture, keeping motion, camera and sound (MiniMax H3 + Character Swap LoRA v1.5), sized from the video's shape. 24 fps, 8 steps. In the prompt, <Video 1> is the video and <Picture 1> the character: describe their clothes.",
   "tags": [],
   "parentId": null,
   "preset": {
@@ -105,30 +105,6 @@
       "role": "sampler.seed"
     },
     {
-      "id": "latent.width",
-      "node": "10",
-      "input": "width",
-      "type": "int",
-      "label": "Width",
-      "hidden": false,
-      "role": "latent.width",
-      "min": 32,
-      "max": 4096,
-      "step": 32
-    },
-    {
-      "id": "latent.height",
-      "node": "10",
-      "input": "height",
-      "type": "int",
-      "label": "Height",
-      "hidden": false,
-      "role": "latent.height",
-      "min": 32,
-      "max": 4096,
-      "step": 32
-    },
-    {
       "id": "latent.length",
       "node": "10",
       "input": "length",
@@ -205,6 +181,24 @@
       "role": "video.input"
     },
     {
+      "id": "video.megapixels",
+      "node": "21",
+      "input": "megapixels",
+      "type": "float",
+      "label": "Size (megapixels)",
+      "hidden": false,
+      "role": "video.megapixels",
+      "min": 0.1,
+      "max": 1.5,
+      "step": 0.01,
+      "presets": [
+        0.25,
+        0.4,
+        0.56,
+        0.9
+      ]
+    },
+    {
       "id": "output.image",
       "node": "19",
       "input": "filename_prefix",
@@ -214,26 +208,16 @@
       "role": "output.image"
     },
     {
-      "id": "n5.lora_name",
-      "node": "5",
-      "input": "lora_name",
-      "type": "model",
-      "label": "Swap LoRA · Lora name",
-      "hidden": false,
-      "modelKind": "loras",
-      "group": "Swap LoRA"
-    },
-    {
-      "id": "n5.strength_model",
-      "node": "5",
-      "input": "strength_model",
+      "id": "n23.value",
+      "node": "23",
+      "input": "value",
       "type": "float",
-      "label": "Swap LoRA · Strength model",
+      "label": "Swap strength",
       "hidden": false,
-      "min": -100,
-      "max": 100,
-      "step": 0.01,
-      "group": "Swap LoRA"
+      "min": -9223372036854776000,
+      "max": 9223372036854776000,
+      "step": 0.1,
+      "group": "More from this workflow"
     }
   ],
   "values": {
@@ -244,24 +228,22 @@
     "sampler.scheduler": "normal",
     "sampler.steps": 8,
     "sampler.seed": 0,
-    "latent.width": 1024,
-    "latent.height": 576,
     "latent.length": 73,
     "video.fps": 24,
     "sampler.denoise": 1,
     "model.vae": "minimax_h3_video_vae_fp16.safetensors",
     "image.input": "",
     "video.input": "",
+    "video.megapixels": 0.56,
     "output.image": "ComfyUI",
-    "n5.lora_name": "h3_character_swap_v1.5.safetensors",
-    "n5.strength_model": 1
+    "n23.value": 1
   },
   "run": {
     "seedMode": "random",
     "count": 1
   },
   "stages": {},
-  "layout": null,
+  "layout": "swap",
   "packs": [],
   "createdAt": "2026-11-06T00:00:00.000Z",
   "updatedAt": "2026-11-06T00:00:00.000Z"

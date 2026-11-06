@@ -4,7 +4,7 @@
   "name": "SCAIL 2 character swap",
   "kind": "generate",
   "family": "Wan 2.1",
-  "description": "Puts the character from a picture into a video in place of a person (SCAIL 2 replacement), with the relight LoRA so light and shadows match. 81 frames per part at 832×480, 6 steps. SAM 3.1 finds who to replace. Longer videos: Scripts → Long video.",
+  "description": "Puts the character from a picture into a video in place of a person (SCAIL 2 replacement), sized from the video's shape. Relight matches light and shadows; SAM 3.1 finds who to replace. 81 frames per part, 6 steps. Longer videos: Scripts → Long video.",
   "tags": [],
   "parentId": null,
   "preset": {
@@ -207,6 +207,24 @@
       "step": 1
     },
     {
+      "id": "video.megapixels",
+      "node": "12",
+      "input": "megapixels",
+      "type": "float",
+      "label": "Size (megapixels)",
+      "hidden": false,
+      "role": "video.megapixels",
+      "min": 0.1,
+      "max": 1.5,
+      "step": 0.01,
+      "presets": [
+        0.25,
+        0.4,
+        0.56,
+        0.9
+      ]
+    },
+    {
       "id": "output.image",
       "node": "30",
       "input": "filename_prefix",
@@ -214,28 +232,6 @@
       "label": "Filename prefix",
       "hidden": true,
       "role": "output.image"
-    },
-    {
-      "id": "n3.lora_name",
-      "node": "3",
-      "input": "lora_name",
-      "type": "model",
-      "label": "Relight · Lora name",
-      "hidden": false,
-      "modelKind": "loras",
-      "group": "Relight"
-    },
-    {
-      "id": "n3.strength_model",
-      "node": "3",
-      "input": "strength_model",
-      "type": "float",
-      "label": "Relight · Strength model",
-      "hidden": false,
-      "min": -100,
-      "max": 100,
-      "step": 0.01,
-      "group": "Relight"
     },
     {
       "id": "n16.text",
@@ -267,25 +263,36 @@
       "group": "More from this workflow"
     },
     {
-      "id": "n32.value",
-      "node": "32",
+      "id": "n35.value",
+      "node": "35",
       "input": "value",
-      "type": "int",
-      "label": "Width",
+      "type": "bool",
+      "label": "Relight to the scene's light",
       "hidden": false,
-      "min": -9007199254740991,
-      "max": 9007199254740991,
       "group": "More from this workflow"
     },
     {
-      "id": "n33.value",
-      "node": "33",
+      "id": "n36.value",
+      "node": "36",
       "input": "value",
-      "type": "int",
-      "label": "Height",
+      "type": "float",
+      "label": "Relight strength",
       "hidden": false,
-      "min": -9007199254740991,
-      "max": 9007199254740991,
+      "min": -9223372036854776000,
+      "max": 9223372036854776000,
+      "step": 0.1,
+      "group": "More from this workflow"
+    },
+    {
+      "id": "n38.value",
+      "node": "38",
+      "input": "value",
+      "type": "float",
+      "label": "Pose strength",
+      "hidden": false,
+      "min": -9223372036854776000,
+      "max": 9223372036854776000,
+      "step": 0.1,
       "group": "More from this workflow"
     }
   ],
@@ -305,21 +312,21 @@
     "image.input": "",
     "video.input": "",
     "video.offset": 0,
+    "video.megapixels": 0.4,
     "output.image": "ComfyUI",
-    "n3.lora_name": "wan2.1_SCAIL_2_relight_lora_bf16.safetensors",
-    "n3.strength_model": 1,
     "n16.text": "person",
     "n17.text": "person",
     "n31.value": true,
-    "n32.value": 832,
-    "n33.value": 480
+    "n35.value": true,
+    "n36.value": 1,
+    "n38.value": 1
   },
   "run": {
     "seedMode": "random",
     "count": 1
   },
   "stages": {},
-  "layout": null,
+  "layout": "swap",
   "packs": [],
   "createdAt": "2026-11-06T00:00:00.000Z",
   "updatedAt": "2026-11-06T00:00:00.000Z"

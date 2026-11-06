@@ -1,0 +1,197 @@
+{
+  "format": "blombo.layout/1",
+  "id": "swap",
+  "name": "Character swap",
+  "regions": {
+    "models": [
+      {
+        "type": "feature",
+        "feature": "loaded-models",
+        "id": "models"
+      }
+    ],
+    "prompt": [
+      {
+        "type": "feature",
+        "feature": "prompts",
+        "id": "prompts"
+      }
+    ],
+    "actions": [
+      {
+        "type": "feature",
+        "feature": "generate-actions",
+        "id": "actions"
+      }
+    ],
+    "params": [
+      {
+        "type": "tabs",
+        "id": "passes",
+        "children": [
+          {
+            "type": "card",
+            "id": "card-first-pass",
+            "title": "First pass",
+            "icon": "activity",
+            "children": [
+              {
+                "type": "feature",
+                "feature": "source",
+                "id": "source"
+              },
+              {
+                "type": "param",
+                "id": "p-image-input",
+                "bind": "role:image.input",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-video-input",
+                "bind": "role:video.input",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-megapixels",
+                "bind": "role:video.megapixels",
+                "span": 12
+              },
+              {
+                "type": "param",
+                "id": "p-replace",
+                "bind": "id:n31.value",
+                "span": 12
+              },
+              {
+                "type": "param",
+                "id": "p-who-video",
+                "bind": "id:n16.text",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-who-picture",
+                "bind": "id:n17.text",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-relight",
+                "bind": "id:n35.value",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-relight-strength",
+                "bind": "id:n36.value",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-pose",
+                "bind": "id:n38.value",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-swap-strength",
+                "bind": "id:n23.value",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-length",
+                "bind": "role:latent.length",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-fps",
+                "bind": "role:video.fps",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-offset",
+                "bind": "role:video.offset",
+                "span": 6
+              },
+              {
+                "type": "param",
+                "id": "p-sampler",
+                "bind": "role:sampler.name",
+                "control": "select",
+                "span": 4
+              },
+              {
+                "type": "param",
+                "id": "p-scheduler",
+                "bind": "role:sampler.scheduler",
+                "control": "select",
+                "span": 4
+              },
+              {
+                "type": "param",
+                "id": "p-steps",
+                "bind": "role:sampler.steps",
+                "control": "slider",
+                "span": 4
+              },
+              {
+                "type": "param",
+                "id": "p-cfg",
+                "bind": "role:sampler.cfg",
+                "control": "slider",
+                "span": 6
+              },
+              {
+                "type": "feature",
+                "feature": "seed",
+                "id": "seed"
+              }
+            ]
+          },
+          {
+            "type": "stage",
+            "stage": "controlnet",
+            "id": "stage-controlnet"
+          },
+          {
+            "type": "stage",
+            "stage": "hires",
+            "id": "stage-hires"
+          },
+          {
+            "type": "stage",
+            "stage": "adetailer",
+            "id": "stage-adetailer"
+          },
+          {
+            "type": "stage",
+            "id": "stage-smooth",
+            "stage": "smooth"
+          }
+        ]
+      },
+      {
+        "type": "params-rest",
+        "id": "rest",
+        "title": "More from this workflow"
+      },
+      {
+        "type": "feature",
+        "feature": "scripts",
+        "id": "scripts"
+      }
+    ],
+    "stage": [
+      {
+        "type": "feature",
+        "feature": "image-stage",
+        "id": "stage"
+      }
+    ]
+  }
+}

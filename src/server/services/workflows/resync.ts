@@ -111,6 +111,8 @@ export function resync(
     if (matched.has(from) || from.role || from.type === "loras") continue;
     const node = locate(oldPrompt, newPrompt, from.node, from.input);
     if (node === null || at(node, from.input)) continue;
+    // An input that is a link now gets its value from that node: a kept value would replace it.
+    if (isApiLink(newPrompt[node]?.inputs[from.input])) continue;
     const moved: Binding = {
       ...from,
       node,

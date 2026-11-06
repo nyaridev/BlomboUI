@@ -691,14 +691,25 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
     if (!VIDEO_INPUT_CLASSES.has(g.classOf(id)) && !upload) continue;
     add({ node: id, input: "file" }, "video.input", named(id));
     const frames = g.ids().filter((c) => g.link(c, "video")?.[0] === id);
-    const slice = g
-      .ids()
-      .find(
-        (s) =>
-          frames.includes(g.link(s, "image")?.[0] ?? "") &&
-          typeof g.inputs(s).batch_index === "number",
-      );
+    const slice = g.ids().find(
+      (s) =>
+        frames.includes(g.link(s, "image")?.[0] ?? "") &&
+        typeof g.inputs(s).batch_index === "number" &&
+        // One frame is a look at the video (its size), not where the workflow starts.
+        g.inputs(s).length !== 1,
+    );
     if (slice) add(g.widgetRef(slice, "batch_index"), "video.offset");
+    // The size the video is scaled to (megapixels, its shape kept), a few image steps after it.
+    const fromVideo = (start: string) => {
+      let cur: string | undefined = start;
+      for (let i = 0; cur && i < 4; i++) {
+        if (frames.includes(cur)) return true;
+        cur = g.link(cur, "image")?.[0];
+      }
+      return false;
+    };
+    const scaler = g.ids().find((s) => typeof g.inputs(s).megapixels === "number" && fromVideo(s));
+    if (scaler) add(g.widgetRef(scaler, "megapixels"), "video.megapixels");
   }
   const outputs = g.ids().filter((id) => g.isOutput(id));
   const save = outputs.find((id) => "filename_prefix" in g.inputs(id));

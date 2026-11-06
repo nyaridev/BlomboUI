@@ -98,9 +98,10 @@ export const NodeDef = z.looseObject({
     .optional(),
   output: z.array(z.unknown()).default([]),
   output_name: z.array(z.string()).optional(),
-  display_name: z.string().optional(),
-  category: z.string().optional(),
-  output_node: z.boolean().optional(),
+  // ComfyUI 0.44 sends null for nodes without one (147 core nodes): null must not drop the node.
+  display_name: z.string().nullish(),
+  category: z.string().nullish(),
+  output_node: z.boolean().nullish(),
 });
 export type NodeDef = z.infer<typeof NodeDef>;
 

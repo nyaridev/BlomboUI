@@ -767,7 +767,8 @@ export class DownloadQueue {
       );
     if (opts.savePreview && item.job.preview) {
       const bytes = await this.deps.civitai.images.bytes(item.job.preview);
-      await saveModelThumbs(final, bytes, { replace: false });
+      const { pictures } = (await this.deps.settings.get(item.profileId)).models;
+      await saveModelThumbs(final, bytes, { replace: false, pictures });
     }
   }
 

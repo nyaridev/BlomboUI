@@ -12,7 +12,7 @@ import { CIVITAI_SITE_URLS } from "../shared/civitai.ts";
 import type { AppError } from "../shared/live.ts";
 import type { RenameChange } from "../shared/prompt/renames.ts";
 import { loraWeights } from "../shared/scripts.ts";
-import type { Settings } from "../shared/settings.ts";
+import { ModelSettings, type Settings } from "../shared/settings.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
 import { AutocompleteService } from "./services/autocomplete.ts";
@@ -171,6 +171,10 @@ export function createServices(config: ServerConfig): Services {
     hash: (profileId, id, size, mtime) => lookupRef?.storedHash(profileId, id, size, mtime) ?? null,
     civitaiSite: () => civitaiApi.baseUrl,
     onRenamed: (kind, changes) => history.renameMarks(kind, changes),
+    pictures: async () =>
+      profiles.active
+        ? (await settings.get(profiles.active)).models.pictures
+        : ModelSettings.parse({}).pictures,
   });
 
   const civitaiApi = new CivitaiApi({
@@ -380,6 +384,7 @@ export function createServices(config: ServerConfig): Services {
     queue: jobs,
     profiles,
     outputs,
+    pictures: async (id) => (await settings.get(id)).models.pictures,
     supervisor,
     publish: (msg) => bus.publish(null, msg),
     ingest: (ref) => gallery.ingestOutput(ref),

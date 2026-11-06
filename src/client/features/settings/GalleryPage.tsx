@@ -13,6 +13,12 @@ export function GalleryPage() {
   const update = useUpdateSettings();
   const [size, setSize] = useState<number | null>(null);
   const tile = size ?? settings?.tileSize ?? 220;
+  const [pageSize, setPageSize] = useState<number | null>(null);
+  useEffect(() => {
+    if (pageSize === null || pageSize === settings?.pageSize) return;
+    const t = setTimeout(() => update.mutate({ gallery: { pageSize } }), 400);
+    return () => clearTimeout(t);
+  }, [pageSize, settings?.pageSize, update]);
   useEffect(() => {
     if (size === null || size === settings?.tileSize) return;
     const t = setTimeout(() => update.mutate({ gallery: { tileSize: size } }), 400);
@@ -51,6 +57,22 @@ export function GalleryPage() {
                 step={10}
                 unit="px"
                 label="Tile size"
+              />
+            </div>
+          </Field>
+          <Field
+            label="Images at a time"
+            layout="left"
+            hint="How many images a list loads before you scroll for more. Fewer start faster on a slow disk."
+          >
+            <div className="w-72">
+              <Slider
+                value={pageSize ?? settings?.pageSize ?? 300}
+                onChange={setPageSize}
+                min={100}
+                max={1000}
+                step={50}
+                label="Images at a time"
               />
             </div>
           </Field>

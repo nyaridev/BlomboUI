@@ -17,6 +17,7 @@
  * (services/lookup.ts): name, thumbnail, base model and trigger words, kept in the profile's
  * database, never written next to the model.
  */
+
 import type { Dirent } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -38,8 +39,10 @@ import {
 } from "../../shared/models.ts";
 import type { ProfileFolder } from "../../shared/profile.ts";
 import { headerLength, parseSafetensorsHeader } from "../../shared/safetensors.ts";
+import type { PictureSettings } from "../../shared/settings.ts";
 import { exists, movePath, resolveInside, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
+import { readImageHead } from "../lib/imagemeta.ts";
 import { ThumbCache } from "../lib/thumbs.ts";
 import { DATA_SUFFIX, dataDirOf, findThumbs, RAW_TYPES, saveModelThumbs } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
@@ -58,6 +61,8 @@ export interface ModelDeps {
   lookup?: (profileId: string, id: string, size: number, mtime: number) => LookupInfo | null;
   /** A hash the background lookup already worked out for this file, or null. */
   hash?: (profileId: string, id: string, size: number, mtime: number) => string | null;
+  /** How model pictures are saved (Settings → Models → Pictures). */
+  pictures?: () => Promise<PictureSettings>;
   /** Models moved or were renamed (ComfyUI names before and after): favorites follow. */
   onRenamed?: (
     kind: ModelKind,
@@ -414,10 +419,13 @@ export class ModelService {
     const { entry, profileId } = await this.entry(id);
     if (!entry.sidecars.thumb) throw new HttpError(404, "No thumbnail.", "no_thumb");
     const stat = await fs.stat(entry.sidecars.thumb);
+    // An animated picture (thumb.webp saved from a GIF) keeps moving on the cards.
+    const animated = (await readImageHead(entry.sidecars.thumb).catch(() => null))?.animated;
     return this.thumbs(profileId).get(
       entry.sidecars.thumb,
       `${stat.size}-${stat.mtimeMs}`,
       MODEL_THUMB_MAX,
+      animated ? "animated" : "still",
     );
   }
 
@@ -569,6 +577,7 @@ export class ModelService {
       await saveModelThumbs(entry.abs, image, {
         replace: true,
         trashDir: this.pictureTrash(profileId),
+        pictures: await this.deps.pictures?.(),
       });
     } catch (error) {
       if (error instanceof HttpError) throw error;

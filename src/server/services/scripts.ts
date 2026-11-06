@@ -31,6 +31,7 @@ import { mainFolder } from "../../shared/profile.ts";
 import { randomSeed } from "../../shared/random.ts";
 import { timeVars } from "../../shared/savepaths.ts";
 import { planScript, type Script, ScriptError, type ScriptPlan } from "../../shared/scripts.ts";
+import type { PictureSettings } from "../../shared/settings.ts";
 import { bindingFor, type WorkflowManifest } from "../../shared/workflow/manifest.ts";
 import { freePath, writeFileIfAbsent } from "../lib/fsx.ts";
 import { composeGrid } from "../lib/grid.ts";
@@ -55,6 +56,8 @@ export interface ScriptDeps {
   onThumbs?: () => void;
   /** Grid settings and where grids go (Settings → Saving). */
   outputs?: Pick<OutputSaver, "saving" | "gridTarget">;
+  /** How model pictures are saved (Settings → Models → Pictures). */
+  pictures?: (profileId: string) => Promise<PictureSettings>;
 }
 
 /** A plain Generate click followed for its batch grid. */
@@ -300,6 +303,7 @@ export class ScriptService {
     await saveModelThumbs(file, bytes, {
       replace: true,
       trashDir: path.join(this.deps.profiles.dir(g.profileId), "trash", "model-pictures"),
+      pictures: await this.deps.pictures?.(g.profileId),
     });
     this.deps.onThumbs?.();
   }

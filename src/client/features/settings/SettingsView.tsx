@@ -32,6 +32,7 @@ import { GalleryPage } from "./GalleryPage";
 import { GeneratePage } from "./GeneratePage";
 import { InterfacePage } from "./InterfacePage";
 import { LeftoversPage } from "./LeftoversPage";
+import { ModelsPage } from "./ModelsPage";
 import { NotificationsPage } from "./NotificationsPage";
 import { type SettingsPage as PageId, SETTINGS_PAGES, useSettingsNav } from "./nav";
 import { OverviewPage } from "./OverviewPage";
@@ -167,6 +168,8 @@ function Page({ page, profile }: { page: PageId; profile: ReturnType<typeof useC
       return <InterfacePage />;
     case "saving":
       return <SavingPage />;
+    case "models":
+      return <ModelsPage />;
   }
 }
 

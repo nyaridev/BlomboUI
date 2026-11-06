@@ -142,6 +142,8 @@ export const GallerySettings = z.object({
   autoplayAnimated: z.boolean().default(true),
   /** Videos play (muted) in their tiles; off, they play on hover or when opened. */
   autoplayVideo: z.boolean().default(false),
+  /** Images a list loads at a time (more load as you scroll). */
+  pageSize: z.number().int().min(100).max(1000).default(300),
   // The gallery's folders are the profile's output folders (ADR-0017); version 1 files kept
   // them here as `libraries`, which profile.json's migration reads once.
 });
@@ -229,6 +231,25 @@ export const SavingSettings = z.object({
     .prefault({}),
 });
 export type SavingSettings = z.infer<typeof SavingSettings>;
+
+/**
+ * Model pictures (`<model>_data/thumb.*`, services/modelthumbs.ts): how big and in what format
+ * the card picture is saved, whether the full-size original is kept beside it, and whether an
+ * animated picture (GIF, animated WebP) stays animated (as WebP) or keeps its first frame.
+ */
+export const ModelSettings = z.object({
+  pictures: z
+    .object({
+      megapixels: z.number().min(0.05).max(2).default(0.25),
+      format: z.enum(IMAGE_FORMATS).default("jpeg"),
+      quality: z.number().int().min(50).max(100).default(85),
+      keepRaw: z.boolean().default(true),
+      animated: z.boolean().default(true),
+    })
+    .prefault({}),
+});
+export type ModelSettings = z.infer<typeof ModelSettings>;
+export type PictureSettings = ModelSettings["pictures"];
 
 /** Ctrl+↑/↓ in the prompt editor changes weights by this much. */
 export const WEIGHT_STEPS = [0.01, 0.05, 0.1] as const;
@@ -376,6 +397,7 @@ export const Settings = z.object({
   civitai: CivitaiSettings.prefault({}),
   generate: GenerateSettings.prefault({}),
   saving: SavingSettings.prefault({}),
+  models: ModelSettings.prefault({}),
   autocomplete: AutocompleteSettings.prefault({}),
   notifications: NotificationSettings.prefault({}),
   shortcuts: ShortcutSettings.prefault({}),
@@ -397,6 +419,7 @@ export const SettingsPatch = z
     civitai: Section,
     generate: Section,
     saving: Section,
+    models: Section,
     autocomplete: Section,
     notifications: Section,
     shortcuts: Section,

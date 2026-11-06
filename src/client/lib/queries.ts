@@ -459,9 +459,11 @@ export function useDevImage(id: number | null) {
 
 export function useGalleryImages(q: GalleryQueryInput) {
   const profileId = useSession((s) => s.profileId);
+  // Settings → Gallery → Images at a time.
+  const limit = useSettings().data?.gallery.pageSize ?? GALLERY_PAGE;
   return useInfiniteQuery({
     queryKey: qk.galleryImages(profileId, q),
-    queryFn: ({ pageParam }) => api.galleryImages({ ...q, offset: pageParam, limit: GALLERY_PAGE }),
+    queryFn: ({ pageParam }) => api.galleryImages({ ...q, offset: pageParam, limit }),
     initialPageParam: 0,
     getNextPageParam: (last: GalleryPage, pages) => {
       const loaded = pages.reduce((n, p) => n + p.items.length, 0);

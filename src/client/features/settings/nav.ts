@@ -11,6 +11,7 @@ export type SettingsPage =
   | "files"
   | "leftovers"
   | "gallery"
+  | "models"
   | "civitai"
   | "autocomplete"
   | "notifications"
@@ -83,7 +84,15 @@ export const SETTINGS_PAGES: Array<{
     label: "Gallery",
     icon: "gallery",
     group: "Tools",
-    keywords: "tiles justified grid grids libraries exclude interrupted stopped",
+    keywords:
+      "tiles justified grid grids libraries exclude interrupted stopped jpeg copies load page",
+  },
+  {
+    id: "models",
+    label: "Models",
+    icon: "models",
+    group: "Tools",
+    keywords: "pictures thumbnails thumb raw original megapixels quality animated webp gif",
   },
   {
     id: "civitai",

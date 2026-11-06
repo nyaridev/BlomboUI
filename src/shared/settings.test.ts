@@ -49,7 +49,9 @@ describe("settings", () => {
       models: { blurNsfw: false },
       civitai: { browse: { nsfw: false } },
     });
-    expect("models" in s).toBe(false);
+    // `models` is the picture settings now; the old blur setting goes.
+    expect("blurNsfw" in s.models).toBe(false);
+    expect(s.models.pictures.megapixels).toBe(0.25);
     expect("nsfw" in s.civitai.browse).toBe(false);
     expect(s.civitai.downloads.folderBy).toEqual(["baseModel", "category", "creator"]);
     expect(s.civitai.downloads).toMatchObject({ naming: "model", prefix: true, autoAliases: true });

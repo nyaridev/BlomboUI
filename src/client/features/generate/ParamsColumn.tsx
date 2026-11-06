@@ -7,7 +7,9 @@
 
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
+import { useVariant } from "@client/lib/variants";
 import {
+  Badge,
   Collapsible,
   SectionTitle,
   type SliderLook,
@@ -24,13 +26,18 @@ import {
 } from "@shared/layout/schema";
 import { type Binding, resolveBind } from "@shared/workflow/manifest";
 import type { StageId } from "@shared/workflow/roles";
-import { STAGE_LABELS } from "@shared/workflow/stages";
+import {
+  SOURCE_MODE_LABELS,
+  SOURCE_MODES,
+  type SourceMode,
+  STAGE_LABELS,
+} from "@shared/workflow/stages";
 import { type ComponentType, type ReactNode, useState } from "react";
 import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
 import { ScriptsBlock } from "./blocks/Scripts";
 import { Seed } from "./blocks/Seed";
-import { SourceBlock } from "./blocks/Source";
+import { SourceBlock, SourceInTab } from "./blocks/Source";
 import { AdetailerStage, ControlNetStage, HiresStage, StageTabContext } from "./blocks/stages";
 import SortableParams from "./SortableParams";
 import { useLayout, useValues } from "./state";
@@ -275,8 +282,34 @@ function PassTabs({ block, ctx }: { block: TabsBlock; ctx: RenderContext }) {
   return <PassTabsView passes={passes} ctx={ctx} />;
 }
 
+/** The pass tabs' look, compared in dev (lib/variants.ts) until one is picked. */
+const PASS_LOOKS = [
+  { id: "chip", label: "Chips" },
+  { id: "segment", label: "Segmented" },
+  { id: "line", label: "Line (before)" },
+] as const;
+
+const STAGE_TAB_ICONS: Record<TabStage, IconName> = {
+  controlnet: "pose",
+  hires: "upscale",
+  adetailer: "face-scan",
+};
+
+const MODE_ICONS: Record<SourceMode, IconName> = {
+  txt2img: "text",
+  img2img: "image",
+  inpaint: "edit",
+};
+
+/** A card holding the first pass's mode (the `source` feature): its tab gets the mode menu. */
+const holdsSource = (card: CardBlock) =>
+  card.children.some((c) => c.type === "feature" && c.feature === "source");
+
 function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext }) {
   const [picked, setPicked] = useState<string | null>(null);
+  const look = useVariant("pass-tabs", "Generate passes", PASS_LOOKS);
+  const icons = look !== "line";
+  const mode = useValues((s) => s.stages.source.mode);
   const on = {
     controlnet: useValues((s) => s.stages.controlnet.enabled),
     hires: useValues((s) => s.stages.hires.enabled),
@@ -287,22 +320,52 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
     setStage(stage, { ...stages[stage], enabled });
   };
   const active = passes.find((p) => p.id === picked) ?? (passes[0] as PassBlock);
+  const setMode = (cardId: string, next: SourceMode) => {
+    const { stages, setStage } = useValues.getState();
+    setStage("source", { ...stages.source, mode: next });
+    setPicked(cardId);
+  };
   const items: TabItem<string>[] = passes.map((p) => {
-    if (p.type === "card") return { value: p.id, label: p.title };
+    if (p.type === "card") {
+      const source = holdsSource(p);
+      return {
+        value: p.id,
+        label: p.title,
+        ...(icons ? { icon: (p.icon as IconName | undefined) ?? "activity" } : {}),
+        ...(source && mode !== "txt2img"
+          ? { badge: <Badge tone="accent">{SOURCE_MODE_LABELS[mode]}</Badge> }
+          : {}),
+        ...(source
+          ? {
+              menuLabel: `${p.title}: what it starts from`,
+              menu: SOURCE_MODES.map((m) => ({
+                id: m,
+                label: SOURCE_MODE_LABELS[m],
+                icon: MODE_ICONS[m],
+                checked: m === mode,
+                onSelect: () => setMode(p.id, m),
+              })),
+            }
+          : {}),
+      };
+    }
     const stage = p.stage as TabStage;
     return {
       value: p.id,
       label: STAGE_LABELS[stage],
+      ...(icons ? { icon: STAGE_TAB_ICONS[stage] } : {}),
       checked: on[stage],
       onCheckedChange: (v: boolean) => setOn(stage, v),
     };
   });
   return (
     <div className="flex flex-col">
-      <Tabs variant="line" items={items} value={active.id} onChange={setPicked} label="Passes" />
+      <Tabs variant={look} items={items} value={active.id} onChange={setPicked} label="Passes" />
       <div className="pt-3">
         {active.type === "card" ? (
-          <CardGrid block={active} ctx={ctx} />
+          <SourceInTab.Provider value={holdsSource(active)}>
+            <CardGrid block={active} ctx={ctx} />
+          </SourceInTab.Provider>
         ) : (
           <StageTabContext.Provider value={true}>
             <StageBlock stage={active.stage} />

@@ -193,6 +193,8 @@ export type MenuEntry =
       hint?: ReactNode;
       tone?: "default" | "danger";
       disabled?: boolean;
+      /** One choice of several (a mode): a check at the end marks the current one. */
+      checked?: boolean;
       onSelect: () => void;
     }
   | { type: "separator"; id: string }
@@ -317,7 +319,9 @@ function MenuItems({
       <button
         key={item.id}
         type="button"
-        role="menuitem"
+        {...(item.checked === undefined
+          ? { role: "menuitem" }
+          : { role: "menuitemradio", "aria-checked": item.checked })}
         tabIndex={active ? 0 : -1}
         disabled={item.disabled}
         ref={(node) => {
@@ -340,6 +344,7 @@ function MenuItems({
         <span className="flex-1 truncate">{item.label}</span>
         {item.hint}
         {item.shortcut ? <Kbd>{item.shortcut}</Kbd> : null}
+        {item.checked ? <Icon name="check" size={14} className="text-accent-ink" /> : null}
       </button>
     );
   });

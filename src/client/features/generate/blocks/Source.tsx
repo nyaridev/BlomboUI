@@ -3,7 +3,8 @@
  * image from a picture, fitted to the workflow's size (cropped) at a denoise; Inpaint also takes a
  * painted mask, so only that part is redrawn. The image comes from a file, the gallery or the
  * last output, and is kept in the profile like a ControlNet image. Sits at the top of the First
- * pass card (a layout feature, `source`).
+ * pass card (a layout feature, `source`). The mode is picked from that card's tab menu
+ * (ParamsColumn, `SourceInTab`); a layout without the tab gets a Start from dropdown here.
  */
 import { pauseShortcuts } from "@client/app/useShortcuts";
 import { api, stageImageUrl } from "@client/lib/api";
@@ -24,11 +25,14 @@ import {
   type SourceMode,
   type StageImage,
 } from "@shared/workflow/stages";
-import { useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useStage, useValues } from "../state";
 import { useRoleBinding } from "../workflow";
 import { StageNotices, useStageStatus } from "./stages/common";
 import { GalleryPicker, useLastOutput } from "./stages/images";
+
+/** True inside a pass tab whose menu picks the mode, so the block leaves out its own dropdown. */
+export const SourceInTab = createContext(false);
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -53,6 +57,7 @@ export function SourceBlock() {
   const setValue = useValues((st) => st.setValue);
   const on = s.mode !== "txt2img";
   const inpaint = s.mode === "inpaint";
+  const inTab = useContext(SourceInTab);
 
   const add = async (work: () => Promise<StageImage>) => {
     setBusy(true);
@@ -82,14 +87,23 @@ export function SourceBlock() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Field label="Start from" hint={HINTS[s.mode]}>
-        <Select
-          value={s.mode}
-          onChange={(mode) => set({ mode })}
-          options={SOURCE_MODES.map((m) => ({ value: m, label: SOURCE_MODE_LABELS[m] }))}
-          aria-label="What the first pass starts from"
-        />
-      </Field>
+      {inTab ? (
+        on ? (
+          <p className="text-xs text-fg-3">
+            <span className="font-medium text-fg-2">{SOURCE_MODE_LABELS[s.mode]}</span> ·{" "}
+            {HINTS[s.mode]} Switch back to Text to image from the tab's menu.
+          </p>
+        ) : null
+      ) : (
+        <Field label="Start from" hint={HINTS[s.mode]}>
+          <Select
+            value={s.mode}
+            onChange={(mode) => set({ mode })}
+            options={SOURCE_MODES.map((m) => ({ value: m, label: SOURCE_MODE_LABELS[m] }))}
+            aria-label="What the first pass starts from"
+          />
+        </Field>
+      )}
       {on ? (
         <>
           <StageNotices status={status} />

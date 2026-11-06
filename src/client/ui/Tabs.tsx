@@ -1,6 +1,7 @@
 /**
  * Tabs. `pill` is the header navigation look and `line` sits on top of a panel (Models
- * sub-views, the Generate passes), both with a sliding indicator; `folder` is book tabs (the
+ * sub-views), both with a sliding indicator; `chip` and `segment` are the Generate passes' looks
+ * (separate bordered chips, or one sunken track), with the indicator too; `folder` is book tabs (the
  * Generate workspace): each tab is a box with its top and sides drawn, and the active one is a
  * little taller, `bg-surface`, and joins the `bg-surface` panel placed right under the tabs
  * (the panel draws the line; give its corner under the first tab `rounded-tl-none`). A tab with `checked` gets a checkbox before
@@ -42,7 +43,7 @@ export function Tabs<T extends string>({
   items: TabItem<T>[];
   value: T;
   onChange: (value: T) => void;
-  variant?: "pill" | "line" | "folder";
+  variant?: "pill" | "line" | "folder" | "chip" | "segment";
   label?: string;
   className?: string;
 }) {
@@ -69,7 +70,12 @@ export function Tabs<T extends string>({
             ? "gap-0.5"
             : variant === "folder"
               ? "items-end gap-1"
-              : "gap-1 border-b border-line",
+              : variant === "chip"
+                ? // Chips that don't fit wrap to a second row (the passes sit in a narrow column).
+                  "flex-wrap gap-1.5"
+                : variant === "segment"
+                  ? "scroll-quiet w-fit max-w-full gap-0.5 overflow-x-auto rounded-lg bg-sunken p-0.5 ring-1 ring-line ring-inset"
+                  : "gap-1 border-b border-line",
           className,
         )}
       >
@@ -91,13 +97,24 @@ export function Tabs<T extends string>({
               onKeyDown={(e) => onKey(e, i)}
               className={cn(
                 "relative inline-flex shrink-0 items-center gap-2 text-sm font-medium transition-colors focus-ring",
-                variant === "pill" ? "h-8 rounded-md px-3" : "h-9 px-3",
+                variant === "pill"
+                  ? "h-8 rounded-md px-3"
+                  : variant === "segment"
+                    ? "h-8 rounded-md px-2.5"
+                    : variant === "chip"
+                      ? cn(
+                          "h-8 rounded-md border px-2.5",
+                          active
+                            ? "border-transparent"
+                            : "border-line bg-surface-2 hover:border-line-strong",
+                        )
+                      : "h-9 px-3",
                 // The active tab reaches 1 px into the panel below and covers its top line.
                 variant === "folder" &&
                   (active
                     ? "z-10 -mb-px h-10 rounded-t-md border border-b-0 border-line bg-surface"
                     : "rounded-t-md border border-b-0 border-line hover:bg-surface/50"),
-                checkable && "pl-9",
+                checkable && (variant === "chip" || variant === "segment" ? "pl-8" : "pl-9"),
                 menu && "pr-7",
                 active ? "text-fg" : "text-fg-3 hover:text-fg-2",
               )}
@@ -108,9 +125,11 @@ export function Tabs<T extends string>({
                   transition={snappy}
                   className={cn(
                     "absolute z-0",
-                    variant === "pill"
+                    variant === "pill" || variant === "segment"
                       ? "inset-0 rounded-md bg-field shadow-[inset_0_1px_0_var(--edge-hi)] ring-1 ring-line-strong"
-                      : "inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-ink max-lg:bottom-0",
+                      : variant === "chip"
+                        ? "inset-0 rounded-md bg-field ring-1 ring-accent-ink/60"
+                        : "inset-x-2 -bottom-px h-0.5 rounded-full bg-accent-ink max-lg:bottom-0",
                   )}
                 />
               ) : null}
@@ -155,7 +174,12 @@ export function Tabs<T extends string>({
           return (
             <span key={item.value} className="relative inline-flex shrink-0">
               {tab}
-              <span className="absolute top-1/2 left-3 z-20 -translate-y-1/2">
+              <span
+                className={cn(
+                  "absolute top-1/2 z-20 -translate-y-1/2",
+                  variant === "chip" || variant === "segment" ? "left-2.5" : "left-3",
+                )}
+              >
                 <Checkbox
                   checked={Boolean(item.checked)}
                   onCheckedChange={(v) => item.onCheckedChange?.(v)}

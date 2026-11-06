@@ -1026,63 +1026,58 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               ]}
             />
           </Row>
-          {(["chip", "segment"] as const).map((look) => (
-            <Row
-              key={look}
-              label={`${look === "chip" ? "Chip" : "Segment"} tabs (Generate passes: icons, a checkbox per stage, the mode menu on First pass)`}
-            >
-              <Tabs
-                variant={look}
-                value={pass}
-                onChange={setPass}
-                items={[
-                  {
-                    value: "first",
-                    label: "First pass",
-                    icon: "activity",
-                    ...(passMode !== "txt2img"
-                      ? {
-                          badge: (
-                            <Badge tone="accent">
-                              {passMode === "inpaint" ? "Inpaint" : "Image to image"}
-                            </Badge>
-                          ),
-                        }
-                      : {}),
-                    menuLabel: "First pass: what it starts from",
-                    menu: (
-                      [
-                        ["txt2img", "Text to image", "text"],
-                        ["img2img", "Image to image", "image"],
-                        ["inpaint", "Inpaint", "edit"],
-                      ] as const
-                    ).map(([id, label, icon]) => ({
-                      id,
-                      label,
-                      icon,
-                      checked: passMode === id,
-                      onSelect: () => setPassMode(id),
-                    })),
-                  },
-                  {
-                    value: "controlnet",
-                    label: "ControlNet",
-                    icon: "pose",
-                    checked: passOn.controlnet,
-                    onCheckedChange: (v) => setPassOn((o) => ({ ...o, controlnet: v })),
-                  },
-                  {
-                    value: "hires",
-                    label: "Hires fix",
-                    icon: "upscale",
-                    checked: passOn.hires,
-                    onCheckedChange: (v) => setPassOn((o) => ({ ...o, hires: v })),
-                  },
-                ]}
-              />
-            </Row>
-          ))}
-          <Row label="Line tabs with checkboxes (Generate passes)">
+          <Row label="Chip tabs (Generate passes: icons, a checkbox per stage, the mode menu on First pass)">
+            <Tabs
+              variant="chip"
+              value={pass}
+              onChange={setPass}
+              items={[
+                {
+                  value: "first",
+                  label: "First pass",
+                  icon: "activity",
+                  ...(passMode !== "txt2img"
+                    ? {
+                        badge: (
+                          <Badge tone="accent">
+                            {passMode === "inpaint" ? "Inpaint" : "Image to image"}
+                          </Badge>
+                        ),
+                      }
+                    : {}),
+                  menuLabel: "First pass: what it starts from",
+                  menu: (
+                    [
+                      ["txt2img", "Text to image", "text"],
+                      ["img2img", "Image to image", "image"],
+                      ["inpaint", "Inpaint", "edit"],
+                    ] as const
+                  ).map(([id, label, icon]) => ({
+                    id,
+                    label,
+                    icon,
+                    checked: passMode === id,
+                    onSelect: () => setPassMode(id),
+                  })),
+                },
+                {
+                  value: "controlnet",
+                  label: "ControlNet",
+                  icon: "pose",
+                  checked: passOn.controlnet,
+                  onCheckedChange: (v) => setPassOn((o) => ({ ...o, controlnet: v })),
+                },
+                {
+                  value: "hires",
+                  label: "Hires fix",
+                  icon: "upscale",
+                  checked: passOn.hires,
+                  onCheckedChange: (v) => setPassOn((o) => ({ ...o, hires: v })),
+                },
+              ]}
+            />
+          </Row>
+          <Row label="Line tabs with checkboxes">
             <Tabs
               variant="line"
               value={pass}

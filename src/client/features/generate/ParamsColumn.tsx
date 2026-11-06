@@ -7,7 +7,6 @@
 
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { useVariant } from "@client/lib/variants";
 import {
   Badge,
   Collapsible,
@@ -282,13 +281,6 @@ function PassTabs({ block, ctx }: { block: TabsBlock; ctx: RenderContext }) {
   return <PassTabsView passes={passes} ctx={ctx} />;
 }
 
-/** The pass tabs' look, compared in dev (lib/variants.ts) until one is picked. */
-const PASS_LOOKS = [
-  { id: "chip", label: "Chips" },
-  { id: "segment", label: "Segmented" },
-  { id: "line", label: "Line (before)" },
-] as const;
-
 const STAGE_TAB_ICONS: Record<TabStage, IconName> = {
   controlnet: "pose",
   hires: "upscale",
@@ -307,8 +299,6 @@ const holdsSource = (card: CardBlock) =>
 
 function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext }) {
   const [picked, setPicked] = useState<string | null>(null);
-  const look = useVariant("pass-tabs", "Generate passes", PASS_LOOKS);
-  const icons = look !== "line";
   const mode = useValues((s) => s.stages.source.mode);
   const on = {
     controlnet: useValues((s) => s.stages.controlnet.enabled),
@@ -331,7 +321,7 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
       return {
         value: p.id,
         label: p.title,
-        ...(icons ? { icon: (p.icon as IconName | undefined) ?? "activity" } : {}),
+        icon: (p.icon as IconName | undefined) ?? "activity",
         ...(source && mode !== "txt2img"
           ? { badge: <Badge tone="accent">{SOURCE_MODE_LABELS[mode]}</Badge> }
           : {}),
@@ -353,14 +343,14 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
     return {
       value: p.id,
       label: STAGE_LABELS[stage],
-      ...(icons ? { icon: STAGE_TAB_ICONS[stage] } : {}),
+      icon: STAGE_TAB_ICONS[stage],
       checked: on[stage],
       onCheckedChange: (v: boolean) => setOn(stage, v),
     };
   });
   return (
     <div className="flex flex-col">
-      <Tabs variant={look} items={items} value={active.id} onChange={setPicked} label="Passes" />
+      <Tabs variant="chip" items={items} value={active.id} onChange={setPicked} label="Passes" />
       <div className="pt-3">
         {active.type === "card" ? (
           <SourceInTab.Provider value={holdsSource(active)}>

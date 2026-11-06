@@ -19,9 +19,9 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
-import { cleanKey, GLOBAL_KEY } from "../../shared/scopes.ts";
+import { cleanKey } from "../../shared/scopes.ts";
 import { ModelSettings, type PictureSettings } from "../../shared/settings.ts";
-import { exists, movePath, writeFileAtomic } from "../lib/fsx.ts";
+import { movePath, writeFileAtomic } from "../lib/fsx.ts";
 import { EXTENSIONS } from "../lib/saveformat.ts";
 
 // No file cache: on Windows it would keep files open (see lib/thumbs.ts).
@@ -168,37 +168,4 @@ export async function removeModelThumbs(
   const dataDir = dataDirOf(modelFile);
   const pics = (await findPictures(dataDir)).get(key);
   return pics ? trashPictures(dataDir, pics, trashDir) : 0;
-}
-
-/**
- * The layout Blombo wrote between 2026-11-02 and ADR-0019 (`<model>_data/thumb.*` and
- * `thumb_raw.*`) → `thumbs/global.*` and `thumbs/global_raw.*`. Never overwrites: a picture whose
- * new name is taken stays where it is and is reported as skipped.
- */
-export async function moveFlatPictures(
-  dataDir: string,
-): Promise<{ moved: string[]; skipped: string[] }> {
-  const moved: string[] = [];
-  const skipped: string[] = [];
-  let names: string[];
-  try {
-    names = await fs.readdir(dataDir);
-  } catch {
-    return { moved, skipped };
-  }
-  for (const name of names) {
-    const ext = path.extname(name);
-    const base = name.slice(0, name.length - ext.length).toLowerCase();
-    const to = base === "thumb" ? GLOBAL_KEY : base === "thumb_raw" ? `${GLOBAL_KEY}_raw` : null;
-    if (!to) continue;
-    const target = path.join(dataDir, PICTURES_DIR, `${to}${ext.toLowerCase()}`);
-    const from = path.join(dataDir, name);
-    if (await exists(target)) {
-      skipped.push(from);
-      continue;
-    }
-    await movePath(from, target);
-    moved.push(from);
-  }
-  return { moved, skipped };
 }

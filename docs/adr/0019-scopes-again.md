@@ -32,8 +32,8 @@ A picture's *key* is its name without the extension: `global`, or 1–6 scope id
 sorted order (`pictureKey`, `cleanKey` in `shared/scopes.ts`), so a combination has one name
 whatever order it was picked in. Only names that are keys are Blombo's; `model_data.json` and
 other files are left alone. The flat layout of ADR-0016 (`thumb.*`, `thumb_raw.*`) isn't read any
-more: `node tools/move-model-pictures.ts <models folder>` moves it to `thumbs/global.*` (never
-over a picture that's there), and was run on the owner's library.
+more. The owner's library (the only one that had it) was moved to `thumbs/global.*` once, by a
+script that was removed afterwards.
 
 **Scopes belong to the profile.** `data/profiles/<id>/scopes.json` (`blombo.scopes/2`):
 `enabled` (false by default), the scopes (`id`: 12 random hex characters, `name`, an optional
@@ -81,8 +81,8 @@ routes (`/api/models/thumb`, `/picture/raw`, `PUT/DELETE /picture`) take `?scope
 
 - A scope list belongs to one profile. Two profiles on the same models folder each see only their
   own scopes' pictures (the global ones are shared). Exporting a profile carries `scopes.json`.
-- Models in a folder that had Blombo's flat layout show no picture until
-  `tools/move-model-pictures.ts` is run on it.
+- A folder that still had Blombo's flat layout would show no pictures until they're moved into
+  `thumbs/` by hand (`thumb.*` → `global.*`, `thumb_raw.*` → `global_raw.*`).
 - Deleting a scope only trashes pictures of models the current scan sees (a model hidden behind
   the same file in a higher folder keeps its pictures).
 - Not built: setting a scope picture from the Thumbnails script (it has no UI yet), exclude tags

@@ -8,7 +8,6 @@ import { realPng } from "../lib/test-images.ts";
 import {
   dataDirOf,
   findPictures,
-  moveFlatPictures,
   removeModelThumbs,
   saveModelThumbs,
   thumbSize,
@@ -127,29 +126,5 @@ describe("model pictures", () => {
     expect((await fs.readdir(dir)).sort()).toEqual(["global.webp", "global_raw.gif"]);
     const moving = await sharp(path.join(dir, "global.webp"), { animated: true }).metadata();
     expect(moving.pages).toBe(2);
-  });
-
-  it("moves the flat layout (thumb.*, thumb_raw.*) into thumbs/global.*, never over a picture", async () => {
-    const dir = path.join(tmp, "flat", "Old_data");
-    await fs.mkdir(dir, { recursive: true });
-    for (const name of ["thumb.jpg", "thumb_raw.MP4", "model_data.json"])
-      await fs.writeFile(path.join(dir, name), name);
-    const result = await moveFlatPictures(dir);
-    expect(result.moved.map((f) => path.basename(f)).sort()).toEqual([
-      "thumb.jpg",
-      "thumb_raw.MP4",
-    ]);
-    expect(result.skipped).toEqual([]);
-    expect((await fs.readdir(dir)).sort()).toEqual(["model_data.json", "thumbs"]);
-    expect((await fs.readdir(path.join(dir, "thumbs"))).sort()).toEqual([
-      "global.jpg",
-      "global_raw.mp4",
-    ]);
-
-    await fs.writeFile(path.join(dir, "thumb.jpg"), "newer");
-    const again = await moveFlatPictures(dir);
-    expect(again.moved).toEqual([]);
-    expect(again.skipped).toEqual([path.join(dir, "thumb.jpg")]);
-    expect(await fs.readFile(path.join(dir, "thumbs", "global.jpg"), "utf8")).toBe("thumb.jpg");
   });
 });

@@ -118,7 +118,7 @@
         0
       ],
       "ref_videos.ref_video_0": [
-        "8",
+        "31",
         0
       ],
       "ref_video_audios.ref_video_audio_0": [
@@ -326,6 +326,81 @@
     },
     "_meta": {
       "title": "Frames for that length"
+    }
+  },
+  "27": {
+    "class_type": "GetImageSize",
+    "inputs": {
+      "image": [
+        "8",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Frames in the window"
+    }
+  },
+  "28": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "round(a * 24 / b)",
+      "values.a": [
+        "27",
+        2
+      ],
+      "values.b": [
+        "8",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Frames at 24 fps"
+    }
+  },
+  "29": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "images": [
+        "8",
+        0
+      ],
+      "fps": [
+        "8",
+        2
+      ]
+    },
+    "_meta": {
+      "title": "Window as a video"
+    }
+  },
+  "30": {
+    "class_type": "VideoFrameSample",
+    "inputs": {
+      "video": [
+        "29",
+        0
+      ],
+      "num_frames": [
+        "28",
+        1
+      ],
+      "strategy": "uniform",
+      "seed": 0
+    },
+    "_meta": {
+      "title": "Resample to 24 fps"
+    }
+  },
+  "31": {
+    "class_type": "GetVideoComponents",
+    "inputs": {
+      "video": [
+        "30",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "The window at 24 fps"
     }
   }
 }

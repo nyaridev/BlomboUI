@@ -68,7 +68,13 @@ ComfyUI 0.44 has the core nodes for all of it: `LoadVideo`, `GetVideoComponents`
   whole long file (a 10-minute 540p video is about 100 GB of frames) filled the memory. SCAIL
   makes at most 81 frames per run; a longer window runs in parts on a plain click, as a Long
   video chain, each part reading only its own window (from 5 frames before the end of the video
-  so far, by its frame count and rate, which the MP4's header gives). They share the
+  so far, by its frame count and rate, which the MP4's header gives). SCAIL makes the video at
+  its input's frame rate. H3 reads its reference as 24 fps whatever the file's rate is, so a
+  60 fps video came out slowed down. The H3 swap resamples the window to 24 fps first:
+  `VideoFrameSample` (uniform) picks `round(frames × 24 / fps)` evenly spaced frames. It needs a
+  video, so the window's frames go through `CreateVideo` first. Core ComfyUI has no node that
+  resamples frames, and `VideoFrameSample` on the cut file would read from the file's start. A
+  video under 24 fps keeps its frames, since uniform sampling can't add frames. They share the
   built-in **Character swap** layout (`presets/layouts/swap.json`), which puts these settings on
   the First pass card.
 

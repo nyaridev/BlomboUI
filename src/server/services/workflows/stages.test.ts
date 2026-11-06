@@ -751,6 +751,20 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
     expect(h3p["8"]?.inputs.video).toEqual(["24", 0]);
     expect(h3p["10"]?.inputs.length).toEqual(["26", 1]);
     expect(h3p["26"]?.inputs.expression).toBe("max(5, round((a * 24 - 5) / 17) * 17 + 5)");
+    // H3 reads its reference as 24 fps: the window is resampled to that, so a 60 fps video keeps
+    // its speed; the sound stays the window's own.
+    expect(h3p["10"]?.inputs["ref_videos.ref_video_0"]).toEqual(["31", 0]);
+    expect(h3p["10"]?.inputs["ref_video_audios.ref_video_audio_0"]).toEqual(["8", 1]);
+    expect(h3p["30"]).toMatchObject({
+      class_type: "VideoFrameSample",
+      inputs: { video: ["29", 0], num_frames: ["28", 1], strategy: "uniform" },
+    });
+    expect(h3p["28"]?.inputs).toMatchObject({
+      expression: "round(a * 24 / b)",
+      "values.a": ["27", 2],
+      "values.b": ["8", 2],
+    });
+    expect(h3.filter((b) => b.role === "sampler.seed").map((b) => b.node)).not.toContain("30");
   });
 
   it("SCAIL keeps the video's shape, pads the character into it and turns Relight off at 0", () => {

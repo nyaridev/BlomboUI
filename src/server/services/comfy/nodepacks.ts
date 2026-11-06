@@ -170,7 +170,9 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
 
     const wasRunning = this.deps.comfy.running();
     const steps: NodeInstallStep[] = [
-      ...packs.map((p) => step(`download:${p.folder}`, `Download ${p.pack.name}`)),
+      ...packs
+        .filter((p) => !p.pack.pip?.length)
+        .map((p) => step(`download:${p.folder}`, `Download ${p.pack.name}`)),
       ...(wasRunning ? [step("stop", "Stop ComfyUI")] : []),
       ...packs.map((p) => step(`packages:${p.folder}`, `Install ${p.pack.name}'s packages`)),
       ...(wasRunning
@@ -265,7 +267,7 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
     try {
       this.linkMode = await uvLinkMode(this.deps.runtimeDir, slotDir);
       this.log(linkModeLine(this.linkMode));
-      for (const p of packs)
+      for (const p of packs.filter((p) => !p.pack.pip?.length))
         await run(`download:${p.folder}`, async () => {
           const found = await findPackDir(customNodes, p.folder);
           if (found) {
@@ -288,8 +290,12 @@ export class NodePackInstaller extends Emitter<NodePackEvents> {
       let constraints: string | null | undefined;
       for (const p of packs)
         await run(`packages:${p.folder}`, async () => {
-          const req = path.join(p.dir as string, "requirements.txt");
-          if (!(await exists(req))) return "No requirements.txt";
+          // A pip-only pack (SageAttention) installs its pinned lines; uv checks their hashes.
+          const req = p.pack.pip?.length
+            ? path.join(slotDir, "blombo", `${p.folder}.requirements.txt`)
+            : path.join(p.dir as string, "requirements.txt");
+          if (p.pack.pip?.length) await writeFileAtomic(req, `${p.pack.pip.join("\n")}\n`);
+          else if (!(await exists(req))) return "No requirements.txt";
           uv ||= await ensureUv(this.deps.runtimeDir, this.ops, signal, (f) =>
             this.step(`packages:${p.folder}`, { progress: f, detail: "Getting uv" }, false),
           );

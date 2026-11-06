@@ -123,6 +123,7 @@ import {
   type ScopesPatch,
 } from "@shared/scopes";
 import type { Settings, SettingsPatch } from "@shared/settings";
+import type { SpeedInfo } from "@shared/speed";
 import type {
   WildcardEntryType,
   WildcardFile,
@@ -546,6 +547,7 @@ export const api = {
   installComfy: (body: InstallBody) => request<InstallState>("POST", "/comfy/install", body),
   cancelInstall: () => request<InstallState>("POST", "/comfy/install/cancel"),
   nodeInstall: () => request<NodeInstallState>("GET", "/comfy/nodes"),
+  comfySpeed: () => request<SpeedInfo>("GET", "/comfy/speed"),
   /** What a workflow needs that ComfyUI doesn't have, and its fixes (ADR-0018). */
   workflowHealth: (id: string, values: Record<string, unknown>) =>
     request<WorkflowHealth>("POST", `/workflows/${id}/health`, { values }),

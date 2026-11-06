@@ -4,6 +4,7 @@ import path from "node:path";
 import { zipSync } from "fflate";
 import { afterAll, describe, expect, it } from "vitest";
 import type { NodeInstallState } from "../../../shared/install.ts";
+import { SAGE_PACK } from "../../../shared/speed.ts";
 import type { NodePack } from "../../../shared/workflow/stages.ts";
 import type { InstallOps } from "./installer.ts";
 import { externalHowTo, type NodePackComfy, NodePackInstaller, packFolder } from "./nodepacks.ts";
@@ -159,7 +160,7 @@ function make(
     runtimeDir: runtime,
     comfy,
     ops,
-    known: async () => [IMPACT, SUBPACK, UNPINNED],
+    known: async () => [IMPACT, SUBPACK, UNPINNED, SAGE_PACK],
     blocked: () => blocked,
   });
 }
@@ -206,6 +207,28 @@ describe("NodePackInstaller", () => {
     // Nothing left half-unpacked, and the zip is gone.
     expect(await fs.readdir(path.join(slot, "blombo", "tmp"))).toEqual([]);
     expect(await fs.readdir(path.join(runtime, "tools", "downloads"))).toEqual([]);
+  });
+
+  it("installs a pip-only pack (SageAttention) from its pinned lines, without downloading", async () => {
+    const { runtime, comfyDir } = await makeRuntime("pip");
+    const { ops, calls } = fakeOps();
+    const { comfy, events } = fakeComfy(comfyDir);
+    const installer = make(runtime, comfy, ops);
+    const done = finished(installer);
+    await installer.start([SAGE_PACK.url]);
+    const state = await done;
+    expect(state.state).toBe("done");
+    expect(state.steps.map((s) => s.id)).toEqual([
+      "stop",
+      "packages:SageAttention",
+      "restart",
+      "verify",
+    ]);
+    expect(calls.some((c) => c.startsWith("download"))).toBe(false);
+    expect(calls).toContain("  -r blombo -c true");
+    const req = path.join(path.dirname(comfyDir), "blombo", "SageAttention.requirements.txt");
+    expect((await fs.readFile(req, "utf8")).split("\n").filter(Boolean)).toEqual(SAGE_PACK.pip);
+    expect(events).toEqual(["stop", "start"]);
   });
 
   it("installs a confirmed pack no stage lists, pinned to its latest commit", async () => {

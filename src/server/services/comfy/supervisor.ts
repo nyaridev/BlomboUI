@@ -5,11 +5,12 @@
  * ComfyClient for that target, keeps recent log lines, and reports a ComfyStatus.
  *
  * Managed slots get `--extra-model-paths-config` from the profile's model folders (main
- * first) and `--output-directory` from its main outputs folder. In dev mode a managed ComfyUI keeps running when
+ * first), `--output-directory` from its main outputs folder, and the attention and kernel
+ * flags the profile picks (`profile.launch`, `launchArgs`). In dev mode a managed ComfyUI keeps running when
  * the server restarts (node --watch) and is re-adopted from its pid file, so editing server code
  * doesn't reload every model.
  */
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import net from "node:net";
@@ -18,6 +19,12 @@ import { z } from "zod";
 import type { ComfyLogLine, ComfyStatus } from "../../../shared/comfy.ts";
 import { PORTS } from "../../../shared/constants.ts";
 import { mainFolder, type Profile } from "../../../shared/profile.ts";
+import {
+  ATTENTION_MODULES,
+  type ComfyLaunch,
+  launchArgs,
+  type SpeedInfo,
+} from "../../../shared/speed.ts";
 import { NodeDef, type ObjectInfo } from "../../../shared/workflow/graph.ts";
 import { stripAnsi } from "../../lib/ansi.ts";
 import { Emitter } from "../../lib/emitter.ts";
@@ -37,6 +44,7 @@ export type ComfyTarget =
       /** Model folders, main first. */
       models: string[];
       outputs: string;
+      launch: ComfyLaunch;
     }
   | { mode: "external"; url: string };
 
@@ -86,6 +94,7 @@ export function targetFromProfile(profile: Profile): ComfyTarget {
     dir: comfy.mode === "local" ? comfy.dir : null,
     models: modelRoots(profile),
     outputs: mainFolder(profile, "outputs"),
+    launch: profile.launch,
   };
 }
 
@@ -109,6 +118,7 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
   private pendingLines: ComfyLogLine[] = [];
   private flushTimer: ReturnType<typeof setTimeout> | null = null;
   private objectInfoCache: Promise<ObjectInfo> | null = null;
+  private speedCache: { key: string; info: Promise<SpeedInfo> } | null = null;
   private followingLogs = false;
   /** Bumped by every start/stop so a slow start can tell it was superseded. */
   private generation = 0;
@@ -271,6 +281,7 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
     if (target.outputs.trim()) args.push("--output-directory", target.outputs.trim());
     // A CPU-only PyTorch makes ComfyUI crash looking for CUDA unless it's told.
     if (layout.torch === "cpu") args.push("--cpu");
+    else args.push(...launchArgs(target.launch));
     await ensureSlotTemp(this.opts.runtimeDir);
 
     const spec = this.opts.launch
@@ -538,6 +549,60 @@ export class ComfySupervisor extends Emitter<SupervisorEvents> {
       return;
     }
     this.emit("message", msg);
+  }
+
+  /**
+   * Which attention modules (and triton) the ComfyUI Blombo starts can import, read once per
+   * slot by importing them in its Python (`forgetSpeedInfo` after installing a pack).
+   */
+  async speedInfo(): Promise<SpeedInfo> {
+    const t = this.target;
+    if (!t || t.mode === "external") return { managed: false, modules: {} };
+    const key = `${t.slot}\u0000${t.dir}`;
+    if (this.speedCache?.key !== key) this.speedCache = { key, info: this.readModules(t) };
+    return this.speedCache.info;
+  }
+
+  forgetSpeedInfo(): void {
+    this.speedCache = null;
+  }
+
+  private async readModules(t: Extract<ComfyTarget, { mode: "managed" }>): Promise<SpeedInfo> {
+    const lookup = t.dir
+      ? await findLocal(this.opts.runtimeDir, t.dir)
+      : await findSlot(this.opts.runtimeDir, t.slot ?? "latest");
+    if (!lookup.ok) return { managed: true, modules: {} };
+    const names = [
+      ...Object.values(ATTENTION_MODULES).filter((m): m is string => m !== null),
+      "triton",
+    ];
+    // Importing (not just finding) catches a wheel built for another PyTorch.
+    const code = [
+      "import json",
+      "def ok(m):",
+      "    try:",
+      "        __import__(m)",
+      "        return True",
+      "    except Exception:",
+      "        return False",
+      `print(json.dumps({m: ok(m) for m in ${JSON.stringify(names)}}))`,
+    ].join("\n");
+    const out = await new Promise<string>((resolve) =>
+      execFile(
+        lookup.layout.python,
+        ["-c", code],
+        { cwd: lookup.layout.comfyDir, timeout: 60_000, windowsHide: true },
+        (_error, stdout) => resolve(String(stdout ?? "")),
+      ),
+    );
+    let last: unknown = {};
+    try {
+      last = JSON.parse(out.trim().split("\n").at(-1) || "{}");
+    } catch {
+      // A Python that can't run reports nothing installed.
+    }
+    const parsed = z.record(z.string(), z.boolean()).safeParse(last);
+    return { managed: true, modules: parsed.success ? parsed.data : {} };
   }
 
   /** ComfyUI's node definitions, cached until the connection changes. */

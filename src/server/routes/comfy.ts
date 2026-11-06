@@ -90,6 +90,8 @@ export function comfyRoutes(
   });
   r.post("/restart", async (c) => c.json(await supervisor.restart()));
   r.get("/logs", (c) => c.json({ lines: supervisor.logs() }));
+  /** Which attention modules the ComfyUI Blombo starts can import (Settings → ComfyUI). */
+  r.get("/speed", async (c) => c.json(await supervisor.speedInfo()));
 
   r.post("/free", async (c) => {
     const body = await readJson(c, FreeMemoryBody);

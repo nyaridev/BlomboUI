@@ -287,6 +287,7 @@ function onJson(text: string): void {
         void queryClient.invalidateQueries({ queryKey: ["stage-report"] });
         void queryClient.invalidateQueries({ queryKey: ["batch-check"] });
         void queryClient.invalidateQueries({ queryKey: ["workflow-health"] });
+        void queryClient.invalidateQueries({ queryKey: ["comfy-speed"] });
       }
       break;
     }

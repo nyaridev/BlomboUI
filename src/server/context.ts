@@ -13,6 +13,7 @@ import type { AppError } from "../shared/live.ts";
 import type { RenameChange } from "../shared/prompt/renames.ts";
 import { loraWeights } from "../shared/scripts.ts";
 import { ModelSettings, type Settings } from "../shared/settings.ts";
+import { SAGE_PACK } from "../shared/speed.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
 import { AutocompleteService } from "./services/autocomplete.ts";
@@ -340,8 +341,10 @@ export function createServices(config: ServerConfig): Services {
 
   jobs.holdComfy = () => installer.running || nodePacks.running;
 
-  // Packs Blombo's own packages list: stages and the built-in batch workflows.
+  // Packs Blombo's own packages list: stages, the built-in batch workflows, and SageAttention
+  // (Settings → ComfyUI → Attention).
   const knownPacks = async () => [
+    SAGE_PACK,
     ...(await stages.packages()).flatMap((s) => s.pkg.packs),
     ...(await listPresets(config.presetsDir)).flatMap((p) => p.manifest.packs),
   ];
@@ -380,7 +383,10 @@ export function createServices(config: ServerConfig): Services {
     },
   });
   nodePacks.on("state", (install) => bus.publish("install", { t: "nodes.install", install }));
-  nodePacks.on("installed", () => supervisor.refreshObjectInfo());
+  nodePacks.on("installed", () => {
+    supervisor.refreshObjectInfo();
+    supervisor.forgetSpeedInfo();
+  });
 
   const bridge = new BridgeService({
     workflows,

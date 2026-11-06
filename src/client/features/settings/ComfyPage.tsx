@@ -4,13 +4,20 @@
  * installed slots, and installing a slot with a progress view (the owner's choice over console
  * prompts). Progress comes from the server over the live bus, so it survives a page reload.
  * The bridge row says whether blombo-bridge (Edit in ComfyUI, ADR-0009) is loaded, and installs
- * it into a ComfyUI you run yourself.
+ * it into a ComfyUI you run yourself. Speed picks the attention a ComfyUI Blombo starts uses
+ * (`profile.launch`; saving restarts it) and installs SageAttention like a custom node pack.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { api } from "@client/lib/api";
 import { cn } from "@client/lib/cn";
 import { followTopic, useLive } from "@client/lib/live";
-import { queryClient, useBridgeStatus, useComfySlots, useUpdateProfile } from "@client/lib/queries";
+import {
+  queryClient,
+  useBridgeStatus,
+  useComfySlots,
+  useComfySpeed,
+  useUpdateProfile,
+} from "@client/lib/queries";
 import {
   Badge,
   Button,
@@ -20,6 +27,7 @@ import {
   Segmented,
   Select,
   Spinner,
+  Switch,
   TextField,
   toast,
 } from "@client/ui";
@@ -32,7 +40,16 @@ import {
   type TorchVariant,
 } from "@shared/install";
 import type { Profile } from "@shared/profile";
+import {
+  ATTENTION_LABELS,
+  ATTENTION_MODULES,
+  ATTENTIONS,
+  type Attention,
+  type ComfyLaunch,
+  SAGE_PACK,
+} from "@shared/speed";
 import { useEffect, useState } from "react";
+import { NodesNotice } from "../generate/blocks/stages/NodesNotice";
 import { FolderField } from "../profiles/FolderField";
 import { OwnComfyNotice } from "../profiles/OwnComfyNotice";
 
@@ -153,6 +170,16 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
         </div>
       </Field>
 
+      {profile && profile.comfy.mode !== "external" ? (
+        <Field
+          label="Speed"
+          layout="left"
+          hint="How this ComfyUI computes attention, the slowest part of a video. Changing it restarts ComfyUI."
+        >
+          <SpeedRow profile={profile} />
+        </Field>
+      ) : null}
+
       <Field
         label="Blombo bridge"
         layout="left"
@@ -168,6 +195,76 @@ export function ComfyPage({ profile }: { profile: Profile | undefined }) {
       >
         <Installer installed={installed} state={install} />
       </Field>
+    </div>
+  );
+}
+
+const ATTENTION_HINTS: Record<Attention, string> = {
+  default: "Works everywhere",
+  kitchen: "ComfyUI's own kernels",
+  sage: "Fastest on RTX cards",
+  flash: "Needs flash-attn in the slot",
+};
+
+/** Attention and Comfy Kitchen's Triton kernels; SageAttention installs here when it's missing. */
+function SpeedRow({ profile }: { profile: Profile }) {
+  const speed = useComfySpeed();
+  const update = useUpdateProfile();
+  const modules = speed.data?.modules ?? {};
+  const has = (a: Attention) => {
+    const m = ATTENTION_MODULES[a];
+    return m === null || modules[m] === true;
+  };
+  const save = (launch: ComfyLaunch) =>
+    update.mutate(
+      { id: profile.id, body: { launch } },
+      {
+        onSuccess: () => toast("Saved. ComfyUI restarts with it.", "success"),
+        onError: (e) => toast(e.message, "error"),
+      },
+    );
+  const launch = profile.launch;
+  return (
+    <div className="flex max-w-[560px] flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-3">
+        <Select
+          value={launch.attention}
+          onChange={(attention) => save({ ...launch, attention })}
+          className="w-64"
+          aria-label="Attention"
+          disabled={update.isPending || speed.isLoading}
+          options={ATTENTIONS.map((a) => ({
+            value: a,
+            label: ATTENTION_LABELS[a],
+            hint: has(a) ? ATTENTION_HINTS[a] : "Not installed",
+            disabled: !has(a) && a !== launch.attention,
+          }))}
+        />
+        <Switch
+          checked={launch.triton}
+          onCheckedChange={(triton) => save({ ...launch, triton })}
+          disabled={update.isPending || (!modules.triton && !launch.triton)}
+          label="Triton kernels"
+        />
+        {speed.isLoading ? <Spinner size={14} /> : null}
+      </div>
+      {!has(launch.attention) && speed.data ? (
+        <span className="flex items-center gap-1.5 text-xs text-orange-ink">
+          <Icon name="info" size={13} className="shrink-0" />
+          {ATTENTION_LABELS[launch.attention]} isn't installed here, so ComfyUI may not start. Pick
+          another one, or install it below.
+        </span>
+      ) : null}
+      {speed.data?.managed && !has("sage") ? (
+        <NodesNotice
+          problem={{
+            code: "missing_nodes",
+            message:
+              "SageAttention isn't in this ComfyUI. Install adds it and Triton (about 70 MB, pinned builds for CUDA 12.8) and restarts ComfyUI.",
+            packs: [SAGE_PACK],
+          }}
+        />
+      ) : null}
     </div>
   );
 }

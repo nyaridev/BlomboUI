@@ -94,6 +94,7 @@ export const qk = {
     ["model-hashes", profileId, id, version] as const,
   comfySlots: ["comfy-slots"] as const,
   nodeInstall: ["node-install"] as const,
+  comfySpeed: (profileId: string | null) => ["comfy-speed", profileId] as const,
   civitaiAccount: (profileId: string | null) => ["civitai-account", profileId] as const,
   /** Everything under ["civitai", profileId] holds Civitai answers (marks change on downloads). */
   civitai: (profileId: string | null) => ["civitai", profileId] as const,
@@ -799,6 +800,17 @@ export function useWildcardsChanged() {
 
 export function useComfySlots() {
   return useQuery({ queryKey: qk.comfySlots, queryFn: api.comfySlots });
+}
+
+/** Which attention modules the profile's ComfyUI can use (the slot's Python is asked once). */
+export function useComfySpeed() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.comfySpeed(profileId),
+    queryFn: api.comfySpeed,
+    enabled: profileId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
 }
 
 /** The custom node installer's state when the view opened; the live bus has it after that. */

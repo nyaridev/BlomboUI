@@ -5,6 +5,7 @@
 import { z } from "zod";
 import { ACCENTS, THEMES } from "./constants.ts";
 import { slugId } from "./settings.ts";
+import { ComfyLaunch } from "./speed.ts";
 
 export const ProfileId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/, "Invalid profile id");
 
@@ -150,6 +151,8 @@ export const Profile = z.object({
   avatarAt: z.string().nullable().default(null),
   folders: ProfileFolders.prefault({}),
   comfy: ComfyTarget.default({ mode: "managed", slot: "latest" }),
+  /** How Blombo starts that ComfyUI (attention, kernels); an address ignores it. */
+  launch: ComfyLaunch.prefault({}),
   createdAt: z.string(),
   lastOpenedAt: z.string().nullable().default(null),
 });
@@ -205,6 +208,7 @@ export const UpdateProfileBody = z.object({
     .partial()
     .optional(),
   comfy: ComfyTarget.optional(),
+  launch: ComfyLaunch.optional(),
 });
 export type UpdateProfileBody = z.infer<typeof UpdateProfileBody>;
 

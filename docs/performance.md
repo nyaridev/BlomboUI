@@ -70,3 +70,23 @@ Models, the Design Lab).
 
 dnd-kit is gone (2026-11): dragging into order is `lib/sortable.ts`, a few kB, so Customize's
 sortable wrappers (`SortableParams`) load with the params column instead of from a lazy chunk.
+
+## Attention backends (video)
+
+Settings → ComfyUI → Speed picks how a managed ComfyUI computes attention (`profile.launch`, ADR-0021).
+Measured 2026-11-06 on an RTX 5080 (16 GB), ComfyUI 0.44.0, torch 2.11 + cu128: Wan 2.2 14B image to
+video, 640 × 640, 49 frames, 4 steps (2 + 2), the Dev profile. Each backend got a warm-up run first
+(models loaded), then the measured run with the same seed for all three.
+
+| Backend | Flag | Sampling (both passes) | Whole run |
+|---|---|---|---|
+| PyTorch (default) | none | 42.2 s | 47.3 s |
+| Comfy Kitchen | `--use-ck-attention` | 35.2 s (−17%) | 40.8 s |
+| SageAttention 2 | `--use-sage-attention` | 34.3 s (−19%) | 39.4 s |
+
+The videos look alike in quality (SSIM to the default run: 0.91 Kitchen, 0.94 Sage); the motion
+takes a slightly different path, since the backends round differently. FlashAttention isn't
+installed in the slot, so it wasn't measured.
+
+To repeat it: switch the backend in Settings → ComfyUI (it restarts ComfyUI), run the same
+workflow twice with a fixed seed, and compare the second run's segment times under the image.

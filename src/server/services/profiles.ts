@@ -23,6 +23,7 @@ import type { ServerConfig } from "../config.ts";
 import { Emitter } from "../lib/emitter.ts";
 import { exists, movePath, readJsonFile, writeFileAtomic, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
+import { listSlots } from "./comfy/slots.ts";
 
 // Long edge of a stored avatar. Kept uncropped: the profile screen shows it as a full card.
 const AVATAR_MAX = 768;
@@ -196,7 +197,8 @@ export class ProfileService extends Emitter<ProfileEvents> {
 
   /**
    * Makes the dev profile (dev mode only) when it isn't there yet, with its models, outputs and
-   * wildcards folders in runtime/dev/. Returns whether it was made; an existing one is left as is.
+   * wildcards folders in runtime/dev/ and the newest installed ComfyUI slot (new models need a
+   * recent ComfyUI). Returns whether it was made; an existing one is left as is.
    */
   async ensureDev(): Promise<boolean> {
     if (!this.config.dev || (await exists(this.profileFile(DEV_PROFILE_ID)))) return false;
@@ -209,11 +211,15 @@ export class ProfileService extends Emitter<ProfileEvents> {
     for (const folder of Object.values(paths)) await fs.mkdir(folder, { recursive: true });
     await fs.mkdir(path.join(this.dir(DEV_PROFILE_ID), "workflows"), { recursive: true });
     await fs.mkdir(path.join(this.dir(DEV_PROFILE_ID), "layouts"), { recursive: true });
+    const [newest] = (await listSlots(this.config.runtimeDir)).sort((a, b) =>
+      b.localeCompare(a, "en", { numeric: true }),
+    );
     const profile = Profile.parse({
       id: DEV_PROFILE_ID,
       name: "Dev",
       accent: "orange",
       folders: foldersFromPaths(paths),
+      comfy: { mode: "managed", slot: newest ?? "latest" },
       createdAt: new Date().toISOString(),
     });
     await writeJsonAtomic(this.profileFile(DEV_PROFILE_ID), profile);

@@ -121,11 +121,16 @@ describe("the dev profile", () => {
       const plain = new ProfileService(createConfig({ ...flags, dev: false }));
       expect(await plain.ensureDev()).toBe(false);
 
+      for (const slot of ["0.9.0", "0.10.0"]) {
+        await fs.mkdir(path.join(root, "runtime", "comfyui", slot, "ComfyUI"), { recursive: true });
+        await fs.writeFile(path.join(root, "runtime", "comfyui", slot, "ComfyUI", "main.py"), "");
+      }
       const dev = new ProfileService(createConfig({ ...flags, dev: true }));
       expect(await dev.ensureDev()).toBe(true);
       expect(await dev.ensureDev()).toBe(false);
       const [listed] = await dev.list();
       expect(listed?.id).toBe("dev");
+      expect(listed?.comfy).toEqual({ mode: "managed", slot: "0.10.0" });
       expect(listed?.folders.models[0]?.path).toBe(path.join(root, "runtime", "dev", "models"));
       expect((await fs.stat(path.join(root, "runtime", "dev", "outputs"))).isDirectory()).toBe(
         true,

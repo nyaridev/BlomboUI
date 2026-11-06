@@ -5,11 +5,11 @@
  * one of Blombo's files is a name in ComfyUI's input folder, shown as it is.
  */
 import { api, stageImageUrl } from "@client/lib/api";
+import { useStageVideoInfo } from "@client/lib/queries";
 import { Button, DropZone, Field, toast } from "@client/ui";
 import type { Binding } from "@shared/workflow/manifest";
 import { isStageFile } from "@shared/workflow/stages";
 import { useRef, useState } from "react";
-import { useMediaSizes } from "../mediaSizes";
 import { useValue } from "../state";
 import { GalleryPicker, useLastOutput, useLastVideo } from "./stages/images";
 
@@ -27,8 +27,13 @@ export function MediaParam({ binding, label }: { binding: Binding; label?: strin
   const file = typeof value === "string" ? value : "";
   const ours = isStageFile(file);
   const accept = video ? "video/mp4" : "image/png,image/jpeg,image/webp";
-  const size = useMediaSizes((s) => s.sizes[file]);
-  const setSize = useMediaSizes((s) => s.set);
+  // A picture's size from the loaded image; a video's from the server (it knows its frame rate).
+  const [picture, setPicture] = useState<{ w: number; h: number; file: string } | null>(null);
+  const info = useStageVideoInfo(video ? file : "").data;
+  const size = video
+    ? info &&
+      `${info.width} × ${info.height} · ${info.fps ? `${Math.round(info.fps)} fps · ` : ""}${info.duration?.toFixed(1) ?? "?"} s`
+    : picture?.file === file && `${picture.w} × ${picture.h}`;
 
   const add = async (work: () => Promise<{ file: string }>) => {
     setBusy(true);
@@ -60,10 +65,6 @@ export function MediaParam({ binding, label }: { binding: Binding; label?: strin
                   loop
                   playsInline
                   preload="metadata"
-                  onLoadedMetadata={(e) => {
-                    const v = e.currentTarget;
-                    setSize(file, { w: v.videoWidth, h: v.videoHeight, seconds: v.duration });
-                  }}
                   onPointerEnter={(e) => void e.currentTarget.play().catch(() => {})}
                   onPointerLeave={(e) => e.currentTarget.pause()}
                   className="absolute inset-0 h-full w-full object-contain"
@@ -74,7 +75,7 @@ export function MediaParam({ binding, label }: { binding: Binding; label?: strin
                   alt={binding.label}
                   onLoad={(e) => {
                     const i = e.currentTarget;
-                    setSize(file, { w: i.naturalWidth, h: i.naturalHeight, seconds: null });
+                    setPicture({ w: i.naturalWidth, h: i.naturalHeight, file });
                   }}
                   className="absolute inset-0 h-full w-full object-contain"
                 />
@@ -84,12 +85,7 @@ export function MediaParam({ binding, label }: { binding: Binding; label?: strin
               <span className="truncate font-mono text-2xs text-fg-3" title={file}>
                 {file}
               </span>
-              {size ? (
-                <span className="font-mono text-2xs text-fg-2 tabular">
-                  {size.w} × {size.h}
-                  {size.seconds ? ` · ${size.seconds.toFixed(1)} s` : ""}
-                </span>
-              ) : null}
+              {size ? <span className="font-mono text-2xs text-fg-2 tabular">{size}</span> : null}
               <div className="flex flex-wrap gap-1.5">
                 <Button
                   size="sm"

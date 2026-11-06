@@ -17,11 +17,12 @@ import {
   type StageImage,
   type StageReport,
   type StageVideo,
+  type StageVideoInfo,
 } from "../../shared/workflow/stages.ts";
 import { exists, writeFileIfAbsent } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { readImageHeadBytes } from "../lib/imagemeta.ts";
-import { readMediaBytes } from "../lib/mediameta.ts";
+import { readMediaBytes, readMediaHead } from "../lib/mediameta.ts";
 import type { ComfyClient, ComfyWsMessage } from "./comfy/client.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import type { GalleryService } from "./gallery/index.ts";
@@ -136,6 +137,22 @@ export class StageService {
       width: head.width ?? 0,
       height: head.height ?? 0,
       duration: head.duration,
+      frames: head.frames,
+      fps: head.fps,
+    };
+  }
+
+  /** A stored stage video's size, length and frame rate (read from its header). */
+  async videoInfo(file: string): Promise<StageVideoInfo> {
+    if (!file.endsWith(".mp4")) throw new HttpError(400, "Not a stage video.", "bad_name");
+    const where = await this.inputPath(file);
+    const head = await readMediaHead(where);
+    return {
+      width: head.width ?? 0,
+      height: head.height ?? 0,
+      duration: head.duration,
+      frames: head.frames,
+      fps: head.fps,
     };
   }
 

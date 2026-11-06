@@ -738,6 +738,19 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
     expect(scail.find((b) => b.role === "video.megapixels")).toMatchObject({ node: "12" });
     expect(h3.find((b) => b.role === "video.megapixels")).toMatchObject({ node: "21" });
     expect(h3.find((b) => b.role === "video.offset")).toBeUndefined();
+    // The window of the video each reads: cut before it's decoded.
+    expect(scail.find((b) => b.role === "video.start")).toMatchObject({ node: "39" });
+    expect(scail.find((b) => b.role === "video.seconds")).toMatchObject({ node: "39" });
+    expect(scail.find((b) => b.role === "video.frames")).toMatchObject({
+      node: "11",
+      hidden: true,
+    });
+    // H3's length is one number for the cut and its frames (17k + 5 at 24 fps).
+    expect(h3.find((b) => b.role === "video.seconds")).toMatchObject({ node: "25" });
+    const h3p = load("preset:minimax-h3-swap");
+    expect(h3p["8"]?.inputs.video).toEqual(["24", 0]);
+    expect(h3p["10"]?.inputs.length).toEqual(["26", 1]);
+    expect(h3p["26"]?.inputs.expression).toBe("max(5, round((a * 24 - 5) / 17) * 17 + 5)");
   });
 
   it("SCAIL keeps the video's shape, pads the character into it and turns Relight off at 0", () => {
@@ -763,7 +776,15 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
   });
 
   it("SCAIL continues from the video so far: its frames anchor, the driving video moves on", () => {
-    const VIDEO = { ...IMAGE, file: "00112233aabbccdd.mp4", label: "so-far.mp4", duration: 3 };
+    // 81 frames made at 30 fps.
+    const VIDEO = {
+      ...IMAGE,
+      file: "00112233aabbccdd.mp4",
+      label: "so-far.mp4",
+      duration: 2.7,
+      frames: 81,
+      fps: 30,
+    };
     const prompt = load("preset:scail2-replace");
     expect(sourceModes(prompt, packages, analyze(prompt, info).bindings, "video")).toEqual([
       "txt2img",
@@ -781,11 +802,16 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
     const [partsId] =
       byClass(p, "GetVideoComponents").find(([, n]) => from(n.inputs.video) === loadId) ?? [];
     expect(p["24"]?.inputs.previous_frames).toEqual([partsId, 0]);
-    // The driving video's slice starts 5 frames before the end of the video so far.
-    const [mathId, math] =
-      byClass(p, "ComfyMathExpression").find(([, n]) => n.inputs.expression === "a - 5") ?? [];
-    expect(math?.inputs.expression).toBe("a - 5");
-    expect(p["11"]?.inputs.batch_index).toEqual([mathId, 1]);
+    // The driving video is cut to the next window: from 5 frames before the end of the video so
+    // far (a quarter frame early) to the end of its 3 s (the preset's length), from its start.
+    expect(p["39"]?.inputs).toMatchObject({ start_time: 2.525, duration: 0.475 });
+    expect(p["11"]?.inputs.batch_index).toBe(0);
+    // The sound: the video so far's, then the new window's after the 5 shared frames (at 30 fps).
+    const [soundId, sound] = one(p, "AudioConcat");
+    expect(sound.inputs.audio1).toEqual([partsId, 1]);
+    const [, trim] = one(p, "TrimAudioDuration");
+    expect(trim.inputs).toMatchObject({ audio: ["10", 1], start_index: 0.1667 });
+    expect(p["29"]?.inputs.audio).toEqual([soundId, 0]);
     const [joinedId, joined] = one(p, "BatchImagesNode");
     expect(joined.inputs["images.image0"]).toEqual([partsId, 0]);
     expect(p["29"]?.inputs.images).toEqual([joinedId, 0]);

@@ -23,14 +23,12 @@ import {
   controlFamily,
   type ParamBlock,
 } from "@shared/layout/schema";
-import { scaleToMegapixels } from "@shared/sizes";
 import type { Binding } from "@shared/workflow/manifest";
 import { useChoiceFilter } from "../hiddenChoices";
 import { modelDisplayName, samplerGroup, samplerLabel, schedulerLabel } from "../labels";
-import { useMediaSizes } from "../mediaSizes";
-import { useValue, useValues } from "../state";
-import { useRoleBinding } from "../workflow";
+import { useValue } from "../state";
 import { MediaParam } from "./MediaParam";
+import { OutputSize, VideoPlan } from "./VideoWindow";
 
 export function defaultStyle(family: ControlFamily | null): string {
   return family ? CONTROL_STYLES[family][0] : "text";
@@ -76,39 +74,15 @@ export function ParamControl({ binding, block }: { binding: Binding; block: Para
         label={block.label === "hidden" ? undefined : (block.title ?? binding.label)}
       />
     );
-  if (binding.role === "video.megapixels")
+  // The swaps' size and length say what a run will make from the input video.
+  if (binding.role === "video.megapixels" || binding.role === "video.seconds")
     return (
       <div className="flex flex-col gap-1.5">
         <ValueControl binding={binding} block={block} />
-        <OutputSize megapixels={binding.id} />
+        {binding.role === "video.seconds" ? <VideoPlan /> : <OutputSize megapixels={binding.id} />}
       </div>
     );
   return <ValueControl binding={binding} block={block} />;
-}
-
-/** What size a run makes: the input video's shape at the megapixels set (swap workflows). */
-function OutputSize({ megapixels }: { megapixels: string }) {
-  const videoId = useRoleBinding("video.input")?.id ?? "";
-  const mp = useValues((s) => Number(s.values[megapixels]));
-  const file = useValues((s) => s.values[videoId]);
-  const size = useMediaSizes((s) => (typeof file === "string" ? s.sizes[file] : undefined));
-  // shortcut: rounds to 32 px like both swap presets; a workflow with another step is a few px off.
-  const out = size && Number.isFinite(mp) ? scaleToMegapixels(size, mp, 32) : null;
-  return (
-    <p className="text-xs text-fg-3">
-      {out && size ? (
-        <>
-          Makes{" "}
-          <span className="font-mono text-fg-2 tabular">
-            {out.w} × {out.h}
-          </span>
-          , the shape of the {size.w} × {size.h} video. More megapixels: sharper, slower.
-        </>
-      ) : (
-        "The size follows the input video's shape. More megapixels: sharper, slower."
-      )}
-    </p>
-  );
 }
 
 function ValueControl({ binding, block }: { binding: Binding; block: ParamBlock }) {

@@ -70,7 +70,7 @@
     "class_type": "GetVideoComponents",
     "inputs": {
       "video": [
-        "7",
+        "24",
         0
       ]
     }
@@ -100,7 +100,10 @@
         "22",
         1
       ],
-      "length": 73,
+      "length": [
+        "26",
+        1
+      ],
       "ref_image_size": "match",
       "vae": [
         "3",
@@ -283,6 +286,46 @@
     },
     "_meta": {
       "title": "$Swap strength"
+    }
+  },
+  "24": {
+    "class_type": "Video Slice",
+    "inputs": {
+      "video": [
+        "7",
+        0
+      ],
+      "start_time": 0.0,
+      "duration": [
+        "25",
+        0
+      ],
+      "strict_duration": false
+    },
+    "_meta": {
+      "title": "The part to swap (cut before it's read)"
+    }
+  },
+  "25": {
+    "class_type": "PrimitiveFloat",
+    "inputs": {
+      "value": 3.0
+    },
+    "_meta": {
+      "title": "Seconds"
+    }
+  },
+  "26": {
+    "class_type": "ComfyMathExpression",
+    "inputs": {
+      "expression": "max(5, round((a * 24 - 5) / 17) * 17 + 5)",
+      "values.a": [
+        "25",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Frames for that length"
     }
   }
 }

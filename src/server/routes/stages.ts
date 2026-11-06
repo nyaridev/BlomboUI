@@ -38,6 +38,8 @@ export function stageRoutes(stages: StageService) {
     return c.json(await stages.addVideo(bytes, c.req.query("filename") ?? "video", "upload"), 201);
   });
 
+  r.get("/videos/:file/info", async (c) => c.json(await stages.videoInfo(c.req.param("file"))));
+
   r.post("/videos/gallery", async (c) => {
     const body = await readJson(c, GalleryImageBody);
     return c.json(await stages.addVideoFromGallery(body.id), 201);

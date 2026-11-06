@@ -19,8 +19,10 @@
  * adetailer units), each reading the ports the previous one left. A package's `base` sets inputs
  * of the workflow's main sampler from its fields (the source stage's denoise).
  */
+
 import { findLoraTags, stripLoraTags } from "../../../shared/prompt/loras.ts";
 import { expandPrompt, type WildcardResolver } from "../../../shared/prompt/wildcards.ts";
+import { partWindow } from "../../../shared/videoparts.ts";
 import {
   type ApiLink,
   type ApiNode,
@@ -390,12 +392,26 @@ function instancesFor(
     const overlap = Number(pkg.defaults.overlap ?? 5);
     const fpsBinding = bindingFor(ctx.bindings, "video.fps");
     const fps = Number(fpsBinding ? ctx.values[fpsBinding.id] : 24) || 24;
-    const seconds = Math.round((overlap / fps) * 10000) / 10000;
+    // The video so far's own frame rate when its file says (a swap's follows its input video).
+    const madeFps = s.video?.fps ?? fps;
+    const overlapSeconds = Math.round((overlap / madeFps) * 10000) / 10000;
     const size = baseSize(ctx);
     const count = (role: string, fallback: number) => {
       const b = bindingFor(ctx.bindings, role);
       return Math.max(1, Math.round(Number(b ? ctx.values[b.id] : fallback)) || fallback);
     };
+    // A workflow that reads its input video in a window (the swaps): the next part's window
+    // starts where the video so far ends, less the overlap (its file's frames and frame rate).
+    const seconds = (role: string) => {
+      const b = bindingFor(ctx.bindings, role);
+      return Math.max(0, Number(b ? ctx.values[b.id] : 0) || 0);
+    };
+    const window = partWindow(
+      { start: seconds("video.start"), seconds: seconds("video.seconds") },
+      madeFps,
+      count("video.frames", 81),
+      s.video?.frames ?? Math.round((s.video?.duration ?? 0) * madeFps),
+    );
     return [
       {
         key: "source",
@@ -412,8 +428,10 @@ function instancesFor(
           batch: count("latent.batch", 1),
           overlap,
           overlapFrom: -overlap,
-          overlapSeconds: seconds,
-          overlapSecondsFrom: -seconds,
+          overlapSeconds: overlapSeconds,
+          overlapSecondsFrom: -overlapSeconds,
+          windowStart: window.start,
+          windowLength: window.seconds,
         },
         flags: { last: both, resize: size !== null },
         loras: "",

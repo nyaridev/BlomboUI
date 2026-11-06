@@ -61,7 +61,14 @@ ComfyUI 0.44 has the core nodes for all of it: `LoadVideo`, `GetVideoComponents`
   `ImageScaleToTotalPixels` to 32 px steps), never a fixed size: a fixed landscape size cropped a
   portrait video to its middle and lost the person. SCAIL pads the character picture to that
   shape (`ResizeAndPadImage`) instead of letting `WanSCAILToVideo` crop it. Relight is a switch
-  times a strength, so off is strength 0, which ComfyUI's LoRA loader skips. They share the
+  times a strength, so off is strength 0, which ComfyUI's LoRA loader skips.
+
+  Both read only a window of the input video (Start at, Length in seconds): a `Video Slice`
+  right after the `LoadVideo` cuts it before `GetVideoComponents` decodes it, since decoding a
+  whole long file (a 10-minute 540p video is about 100 GB of frames) filled the memory. SCAIL
+  makes at most 81 frames per run; a longer window runs in parts on a plain click, as a Long
+  video chain, each part reading only its own window (from 5 frames before the end of the video
+  so far, by its frame count and rate, which the MP4's header gives). They share the
   built-in **Character swap** layout (`presets/layouts/swap.json`), which puts these settings on
   the First pass card.
 

@@ -50,6 +50,25 @@ describe("readMediaBytes", () => {
     expect(JSON.parse(head.text.workflow ?? "")).toEqual({ nodes: [] });
   });
 
+  it("counts the picture track's frames and works out its frame rate", async () => {
+    const hdlr = (kind: string) =>
+      box("hdlr", u32(0), u32(0), enc.encode(kind), new Uint8Array(12));
+    const mdhd = (scale: number, length: number) =>
+      box("mdhd", u32(0), u32(0), u32(0), u32(scale), u32(length), u32(0));
+    // 70 frames at 1001 and 3 at 1000 in a 30000 time scale: 73 frames in 2.4357 s.
+    const stts = box("stts", u32(0), u32(2), u32(70), u32(1001), u32(3), u32(1000));
+    const trak = (kind: string, scale: number, length: number, table: Uint8Array) =>
+      box("trak", box("mdia", mdhd(scale, length), hdlr(kind), box("minf", box("stbl", table))));
+    const sound = box("stts", u32(0), u32(1), u32(500), u32(1024));
+    const mp4 = cat(
+      box("ftyp", enc.encode("isom"), u32(0)),
+      box("moov", trak("soun", 48000, 512000, sound), trak("vide", 30000, 73070, stts)),
+    );
+    const head = await read(mp4);
+    expect(head.frames).toBe(73);
+    expect(head.fps).toBeCloseTo(29.971, 3);
+  });
+
   it("reads the named tags ComfyUI's Save Video writes (QuickTime keys)", async () => {
     const key = (name: string) => box("mdta", enc.encode(name));
     const keys = box("keys", u32(0), u32(3), key("blombo"), key("prompt"), key("encoder"));
@@ -109,6 +128,8 @@ describe("readMediaBytes", () => {
       width: null,
       height: null,
       duration: null,
+      frames: null,
+      fps: null,
       text: {},
     });
     expect(textFromComment("not json")).toEqual({});

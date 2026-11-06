@@ -3,7 +3,8 @@
  * and the text metadata ComfyUI writes.
  *
  *  - MP4: the box tree is walked by headers (the media data is skipped, wherever `moov` sits):
- *    `mvhd` gives the length, a video track's `tkhd` the size, and `udta/meta/ilst` the text:
+ *    `mvhd` gives the length, a video track's `tkhd` the size (and its `mdhd` and `stts` the
+ *    frame count and rate), and `udta/meta/ilst` the text:
  *    the `©cmt` comment Video Helper Suite writes (a JSON object: "prompt", "workflow", Blombo's
  *    chunk…), or the named tags ComfyUI's Save Video writes through ffmpeg (QuickTime metadata:
  *    a `keys` box names them, the `ilst` items are numbered after it).
@@ -19,13 +20,23 @@ export interface MediaHead {
   height: number | null;
   /** Seconds. */
   duration: number | null;
+  /** The picture track's frame count and frames per second (MP4). */
+  frames: number | null;
+  fps: number | null;
   /** Text metadata by key, as `ImageHead.text` (prompt, workflow, blombo…). */
   text: Record<string, string>;
 }
 
 type ReadAt = (pos: number, length: number) => Promise<Uint8Array>;
 
-const empty = (): MediaHead => ({ width: null, height: null, duration: null, text: {} });
+const empty = (): MediaHead => ({
+  width: null,
+  height: null,
+  duration: null,
+  frames: null,
+  fps: null,
+  text: {},
+});
 const latin1 = new TextDecoder("latin1");
 const utf8 = new TextDecoder("utf-8");
 const view = (b: Uint8Array) => new DataView(b.buffer, b.byteOffset, b.byteLength);
@@ -48,7 +59,15 @@ export function textFromComment(comment: string): Record<string, string> {
 
 /* ── MP4 ─────────────────────────────────────────────────────────────────── */
 
-const CONTAINERS = new Set(["moov", "trak", "mdia", "udta", "ilst"]);
+const CONTAINERS = new Set(["moov", "mdia", "minf", "stbl", "udta", "ilst"]);
+
+/** What one `trak` says about itself: its kind, time scale and length, and sample count. */
+interface Track {
+  handler: string;
+  scale: number;
+  length: number;
+  samples: number;
+}
 
 /** A tag's text: a comment is a JSON object of tags, anything else is one. */
 function addTag(text: Record<string, string>, name: string, value: string) {
@@ -60,7 +79,13 @@ async function readMp4(readAt: ReadAt, size: number): Promise<MediaHead> {
   const head = empty();
   /** QuickTime metadata's tag names; `ilst` item n is keys[n - 1]. */
   const keys: string[] = [];
-  const walk = async (start: number, end: number, depth: number, parent = ""): Promise<void> => {
+  const walk = async (
+    start: number,
+    end: number,
+    depth: number,
+    parent = "",
+    track: Track | null = null,
+  ): Promise<void> => {
     let pos = start;
     while (pos + 8 <= end && depth < 8) {
       const h = await readAt(pos, 16);
@@ -74,8 +99,27 @@ async function readMp4(readAt: ReadAt, size: number): Promise<MediaHead> {
       } else if (len === 0) len = end - pos;
       if (len < 8) return;
       const boxEnd = Math.min(end, pos + len);
-      if (CONTAINERS.has(type)) await walk(body, boxEnd, depth + 1, type);
-      else if (type === "meta") {
+      if (type === "trak") {
+        const t: Track = { handler: "", scale: 0, length: 0, samples: 0 };
+        await walk(body, boxEnd, depth + 1, type, t);
+        if (t.handler === "vide" && t.samples && t.scale && t.length && head.frames === null) {
+          head.frames = t.samples;
+          head.fps = Math.round((t.samples / (t.length / t.scale)) * 1000) / 1000;
+        }
+      } else if (CONTAINERS.has(type)) await walk(body, boxEnd, depth + 1, type, track);
+      else if (track && type === "hdlr") {
+        track.handler = latin1.decode((await readAt(body + 8, 4)).subarray(0, 4));
+      } else if (track && type === "mdhd") {
+        const d = await readAt(body, 32);
+        const v1 = d[0] === 1;
+        track.scale = view(d).getUint32(v1 ? 20 : 12);
+        track.length = v1 ? Number(view(d).getBigUint64(24)) : view(d).getUint32(16);
+      } else if (track && type === "stts") {
+        // Entries of (sample count, sample duration); the counts add up to the frames.
+        const n = view(await readAt(body + 4, 4)).getUint32(0);
+        const d = await readAt(body + 8, Math.min(n, 100_000) * 8);
+        for (let i = 0; i + 8 <= d.byteLength; i += 8) track.samples += view(d).getUint32(i);
+      } else if (type === "meta") {
         // A full box in MP4 (4 bytes of version and flags first), a plain one in QuickTime.
         const peek = await readAt(body + 4, 4);
         await walk(latin1.decode(peek) === "hdlr" ? body : body + 4, boxEnd, depth + 1);

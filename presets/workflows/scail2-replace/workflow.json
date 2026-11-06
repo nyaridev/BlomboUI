@@ -195,16 +195,56 @@
       "role": "video.input"
     },
     {
+      "id": "video.start",
+      "node": "39",
+      "input": "start_time",
+      "type": "float",
+      "label": "Start at (seconds)",
+      "hidden": false,
+      "role": "video.start",
+      "min": 0,
+      "max": 600,
+      "step": 0.1
+    },
+    {
+      "id": "video.seconds",
+      "node": "39",
+      "input": "duration",
+      "type": "float",
+      "label": "Length (seconds)",
+      "hidden": false,
+      "role": "video.seconds",
+      "min": 0.5,
+      "max": 30,
+      "step": 0.5,
+      "presets": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
       "id": "video.offset",
       "node": "11",
       "input": "batch_index",
       "type": "int",
       "label": "Start frame",
-      "hidden": false,
+      "hidden": true,
       "role": "video.offset",
       "min": 0,
       "max": 1000,
       "step": 1
+    },
+    {
+      "id": "video.frames",
+      "node": "11",
+      "input": "length",
+      "type": "int",
+      "label": "Frames per part",
+      "hidden": true,
+      "role": "video.frames",
+      "min": 1,
+      "max": 4096
     },
     {
       "id": "video.megapixels",
@@ -311,7 +351,10 @@
     "model.vae": "wan_2.1_vae.safetensors",
     "image.input": "",
     "video.input": "",
+    "video.start": 0,
+    "video.seconds": 3,
     "video.offset": 0,
+    "video.frames": 81,
     "video.megapixels": 0.4,
     "output.image": "ComfyUI",
     "n16.text": "person",

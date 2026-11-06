@@ -230,8 +230,21 @@ export const StageVideo = StageImage.extend({
   file: z.string().regex(/^[a-f0-9]{16}\.mp4$/),
   /** Seconds, when the file says. */
   duration: z.number().nullable().default(null),
+  /** The picture's frame count and frames per second, when the file says. */
+  frames: z.number().int().nullable().default(null),
+  fps: z.number().nullable().default(null),
 });
 export type StageVideo = z.infer<typeof StageVideo>;
+
+/** GET /api/stages/videos/:file/info: what a stage video is, for a workflow's video input. */
+export const StageVideoInfo = StageVideo.pick({
+  width: true,
+  height: true,
+  duration: true,
+  frames: true,
+  fps: true,
+});
+export type StageVideoInfo = z.infer<typeof StageVideoInfo>;
 
 export const ControlnetUnit = z.object({
   id: UnitId,

@@ -14,9 +14,11 @@
  *
  * Pure: the server plans with it, the client counts runs and checks values with it.
  */
+
 import { z } from "zod";
 import { comfyNameOf, type ModelList } from "./models.ts";
 import { INSTANT_LORAS, InstantLora, readInstantLoras } from "./prompt/instant.ts";
+import { MAX_PARTS } from "./videoparts.ts";
 import type { Binding } from "./workflow/manifest.ts";
 
 export const SCRIPT_KINDS = ["matrix", "xy", "thumbs", "long"] as const;
@@ -105,7 +107,7 @@ export const ThumbsScript = z.object({
 });
 
 /** The most parts a long video can have. */
-export const MAX_SEGMENTS = 8;
+export const MAX_SEGMENTS = MAX_PARTS;
 
 /**
  * Long video (video workflows that can continue a video): parts run one after the other, each

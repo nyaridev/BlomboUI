@@ -4,18 +4,19 @@
   "stage": "source",
   "family": "diffusion",
   "name": "Continue a video (SCAIL 2)",
-  "description": "Continues a SCAIL 2 character swap, as ComfyUI's SCAIL 2 template does: the driving video's next part starts where the video so far ends (5 frames back), the whole video so far goes into WanSCAILToVideo as its previous frames (it anchors the last 5), and after decoding the new frames, colors matched to the old last frame, go after the earlier ones. Core nodes only.",
+  "description": "Continues a SCAIL 2 character swap, as ComfyUI's SCAIL 2 template does: the driving video's next window starts 5 frames before the end of the video so far (cut before it's read), the whole video so far goes into WanSCAILToVideo as its previous frames (it anchors the last 5), and after decoding the new frames, colors matched to the old last frame, go after the earlier ones, and the new window's sound after the old sound. Core nodes only.",
   "attach": "before_sampler",
   "modes": ["extend"],
   "fits": ["WanSCAILToVideo"],
   "into": { "VIDEO": { "previous_frames": ["parts", 0] } },
-  "roles": { "video.offset": ["start", 1] },
+  "roles": { "video.offset": "zero", "video.start": "windowStart", "video.seconds": "windowLength" },
   "requires": ["VIDEO", "IMAGE"],
-  "provides": ["IMAGE"],
+  "provides": ["IMAGE", "SOUND"],
   "packs": [],
   "fields": [
     { "field": "video", "node": "load", "input": "file", "label": "Video" },
-    { "field": "overlap", "node": "new", "input": "batch_index" }
+    { "field": "overlap", "node": "new", "input": "batch_index" },
+    { "field": "overlapSeconds", "node": "new-sound", "input": "start_index" }
   ],
-  "defaults": { "overlap": 5 }
+  "defaults": { "overlap": 5, "zero": 0 }
 }

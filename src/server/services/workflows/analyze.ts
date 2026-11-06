@@ -690,7 +690,21 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
     const upload = Boolean(spec && typeof spec === "object" && "video_upload" in spec);
     if (!VIDEO_INPUT_CLASSES.has(g.classOf(id)) && !upload) continue;
     add({ node: id, input: "file" }, "video.input", named(id));
-    const frames = g.ids().filter((c) => g.link(c, "video")?.[0] === id);
+    // The window of it the workflow reads (Video Slice: cut before it's decoded).
+    const cut = g
+      .ids()
+      .find(
+        (c) =>
+          g.link(c, "video")?.[0] === id &&
+          "start_time" in g.inputs(c) &&
+          "duration" in g.inputs(c),
+      );
+    if (cut) {
+      add(g.widgetRef(cut, "start_time"), "video.start");
+      add(g.widgetRef(cut, "duration"), "video.seconds");
+    }
+    const from = [id, ...(cut ? [cut] : [])];
+    const frames = g.ids().filter((c) => from.includes(g.link(c, "video")?.[0] ?? ""));
     const slice = g.ids().find(
       (s) =>
         frames.includes(g.link(s, "image")?.[0] ?? "") &&
@@ -698,7 +712,12 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
         // One frame is a look at the video (its size), not where the workflow starts.
         g.inputs(s).length !== 1,
     );
-    if (slice) add(g.widgetRef(slice, "batch_index"), "video.offset");
+    if (slice) {
+      // With a cut, the window's start says where it begins (the chain sets this to 0).
+      add(g.widgetRef(slice, "batch_index"), "video.offset", cut ? { hidden: true } : {});
+      // The most frames one run takes from it: a longer window runs in parts.
+      add(g.widgetRef(slice, "length"), "video.frames", { hidden: true });
+    }
     // The size the video is scaled to (megapixels, its shape kept), a few image steps after it.
     const fromVideo = (start: string) => {
       let cur: string | undefined = start;

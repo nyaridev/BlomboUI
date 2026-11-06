@@ -94,7 +94,7 @@
     "class_type": "GetVideoComponents",
     "inputs": {
       "video": [
-        "9",
+        "39",
         0
       ]
     }
@@ -110,7 +110,7 @@
       "length": 81
     },
     "_meta": {
-      "title": "Its frames for this part"
+      "title": "Its frames for this part (81 at most)"
     }
   },
   "12": {
@@ -507,6 +507,21 @@
     },
     "_meta": {
       "title": "$Pose strength"
+    }
+  },
+  "39": {
+    "class_type": "Video Slice",
+    "inputs": {
+      "video": [
+        "9",
+        0
+      ],
+      "start_time": 0.0,
+      "duration": 3.0,
+      "strict_duration": false
+    },
+    "_meta": {
+      "title": "The part to swap (cut before it's read)"
     }
   }
 }

@@ -29,6 +29,8 @@ const VIDEO: StageVideo = {
   width: 1280,
   height: 704,
   duration: 2,
+  frames: 48,
+  fps: 24,
 };
 
 function setup(preset: string) {
@@ -63,9 +65,11 @@ function setup(preset: string) {
   const service = new LongVideoService({
     queue,
     profiles: { active: "p1" },
-    workflows: { prompt: async () => prompt },
+    workflows: { prompt: async () => prompt, get: async () => manifest },
     stages: {
       packages: () => listStagePackages(presetsDir),
+      // A 10 s driving video at 30 fps.
+      videoInfo: async () => ({ width: 720, height: 1280, duration: 10, frames: 300, fps: 30 }),
       addVideoFromOutput: async (ref) => {
         copied.push(ref.filename);
         return VIDEO;
@@ -137,6 +141,31 @@ describe("long video", () => {
     await service.run(body([]));
     await finish("interrupted");
     expect(runs).toHaveLength(1);
+  });
+
+  it("runs a swap in parts when its window of the video is longer than one run makes", async () => {
+    const { manifest, service, runs } = setup("scail2-replace");
+    const id = (role: string) => manifest.bindings.find((b) => b.role === role)?.id ?? "";
+    const swap = (seconds: number) => ({
+      workflowId: "scail2-replace",
+      values: {
+        [id("video.input")]: "0123456789abcdef.mp4",
+        [id("video.start")]: 1,
+        [id("video.seconds")]: seconds,
+      },
+      count: 1,
+      loop: false,
+    });
+    // 2.5 s is 75 frames: one run (81 at most) does it.
+    expect(await service.split(swap(2.5))).toBeNull();
+    manifest.values = { ...manifest.values, ...swap(5).values };
+    // 5 s is 150 frames: 81, then 76 more.
+    const res = await service.split(swap(5));
+    expect(res?.jobs).toHaveLength(1);
+    expect(runs[0]?.group).toMatchObject({ kind: "long", total: 2 });
+    // The first part reads only its own window (81 frames from 1 s).
+    expect(runs[0]?.values[id("video.start")]).toBe(1);
+    expect(runs[0]?.values[id("video.seconds")]).toBe(2.7);
   });
 
   it("refuses a workflow that can't continue a video", async () => {

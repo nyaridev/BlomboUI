@@ -105,18 +105,6 @@
       "role": "sampler.seed"
     },
     {
-      "id": "latent.length",
-      "node": "10",
-      "input": "length",
-      "type": "int",
-      "label": "Frames",
-      "hidden": false,
-      "role": "latent.length",
-      "min": 5,
-      "max": 241,
-      "step": 17
-    },
-    {
       "id": "video.fps",
       "node": "18",
       "input": "fps",
@@ -181,6 +169,35 @@
       "role": "video.input"
     },
     {
+      "id": "video.start",
+      "node": "24",
+      "input": "start_time",
+      "type": "float",
+      "label": "Start at (seconds)",
+      "hidden": false,
+      "role": "video.start",
+      "min": 0,
+      "max": 600,
+      "step": 0.1
+    },
+    {
+      "id": "video.seconds",
+      "node": "25",
+      "input": "value",
+      "type": "float",
+      "label": "Length (seconds)",
+      "hidden": false,
+      "role": "video.seconds",
+      "min": 0.5,
+      "max": 30,
+      "step": 0.5,
+      "presets": [
+        3,
+        5,
+        10
+      ]
+    },
+    {
       "id": "video.megapixels",
       "node": "21",
       "input": "megapixels",
@@ -228,12 +245,13 @@
     "sampler.scheduler": "normal",
     "sampler.steps": 8,
     "sampler.seed": 0,
-    "latent.length": 73,
     "video.fps": 24,
     "sampler.denoise": 1,
     "model.vae": "minimax_h3_video_vae_fp16.safetensors",
     "image.input": "",
     "video.input": "",
+    "video.start": 0,
+    "video.seconds": 3,
     "video.megapixels": 0.56,
     "output.image": "ComfyUI",
     "n23.value": 1

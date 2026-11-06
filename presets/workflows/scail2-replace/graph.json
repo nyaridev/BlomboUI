@@ -1,6 +1,6 @@
 {
-  "last_node_id": 38,
-  "last_link_id": 53,
+  "last_node_id": 39,
+  "last_link_id": 54,
   "nodes": [
     {
       "id": 1,
@@ -321,7 +321,7 @@
           "name": "VIDEO",
           "type": "VIDEO",
           "links": [
-            6
+            54
           ],
           "slot_index": 0
         }
@@ -339,15 +339,15 @@
       "id": 10,
       "type": "GetVideoComponents",
       "pos": [
-        340,
-        158
+        680,
+        182
       ],
       "size": [
         300,
         166
       ],
       "flags": {},
-      "order": 1,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
@@ -403,15 +403,15 @@
       "id": 11,
       "type": "ImageFromBatch",
       "pos": [
-        680,
-        182
+        1020,
+        158
       ],
       "size": [
         300,
         118
       ],
       "flags": {},
-      "order": 2,
+      "order": 3,
       "mode": 0,
       "inputs": [
         {
@@ -437,21 +437,21 @@
         0,
         81
       ],
-      "title": "Its frames for this part"
+      "title": "Its frames for this part (81 at most)"
     },
     {
       "id": 12,
       "type": "ImageScaleToTotalPixels",
       "pos": [
-        1020,
-        158
+        1360,
+        134
       ],
       "size": [
         300,
         142
       ],
       "flags": {},
-      "order": 3,
+      "order": 4,
       "mode": 0,
       "inputs": [
         {
@@ -486,15 +486,15 @@
       "id": 13,
       "type": "GetImageSize",
       "pos": [
-        1360,
-        134
+        1700,
+        0
       ],
       "size": [
         300,
         118
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -631,7 +631,7 @@
       "type": "CLIPTextEncode",
       "pos": [
         340,
-        364
+        158
       ],
       "size": [
         300,
@@ -670,7 +670,7 @@
       "type": "CLIPTextEncode",
       "pos": [
         340,
-        498
+        292
       ],
       "size": [
         300,
@@ -708,15 +708,15 @@
       "id": 18,
       "type": "SAM3_VideoTrack",
       "pos": [
-        1360,
-        292
+        1700,
+        158
       ],
       "size": [
         300,
         214
       ],
       "flags": {},
-      "order": 4,
+      "order": 5,
       "mode": 0,
       "inputs": [
         {
@@ -763,7 +763,7 @@
       "id": 19,
       "type": "SAM3_VideoTrack",
       "pos": [
-        2040,
+        2380,
         0
       ],
       "size": [
@@ -771,7 +771,7 @@
         214
       ],
       "flags": {},
-      "order": 6,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
@@ -818,7 +818,7 @@
       "id": 20,
       "type": "SCAIL2ColoredMask",
       "pos": [
-        2380,
+        2720,
         0
       ],
       "size": [
@@ -826,7 +826,7 @@
         190
       ],
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
@@ -880,7 +880,7 @@
       "type": "CLIPVisionEncode",
       "pos": [
         340,
-        632
+        426
       ],
       "size": [
         300,
@@ -923,7 +923,7 @@
       "type": "CLIPTextEncode",
       "pos": [
         340,
-        790
+        584
       ],
       "size": [
         300,
@@ -962,7 +962,7 @@
       "type": "CLIPTextEncode",
       "pos": [
         340,
-        924
+        718
       ],
       "size": [
         300,
@@ -1000,7 +1000,7 @@
       "id": 24,
       "type": "WanSCAILToVideo",
       "pos": [
-        2720,
+        3060,
         0
       ],
       "size": [
@@ -1008,7 +1008,7 @@
         622
       ],
       "flags": {},
-      "order": 8,
+      "order": 9,
       "mode": 0,
       "inputs": [
         {
@@ -1182,7 +1182,7 @@
       "type": "BasicScheduler",
       "pos": [
         1360,
-        546
+        316
       ],
       "size": [
         300,
@@ -1221,7 +1221,7 @@
       "id": 27,
       "type": "SamplerCustom",
       "pos": [
-        3060,
+        3400,
         0
       ],
       "size": [
@@ -1229,7 +1229,7 @@
         286
       ],
       "flags": {},
-      "order": 9,
+      "order": 10,
       "mode": 0,
       "inputs": [
         {
@@ -1293,7 +1293,7 @@
       "id": 28,
       "type": "VAEDecode",
       "pos": [
-        3400,
+        3740,
         0
       ],
       "size": [
@@ -1301,7 +1301,7 @@
         94
       ],
       "flags": {},
-      "order": 10,
+      "order": 11,
       "mode": 0,
       "inputs": [
         {
@@ -1334,7 +1334,7 @@
       "id": 29,
       "type": "CreateVideo",
       "pos": [
-        3740,
+        4080,
         0
       ],
       "size": [
@@ -1342,7 +1342,7 @@
         238
       ],
       "flags": {},
-      "order": 11,
+      "order": 12,
       "mode": 0,
       "inputs": [
         {
@@ -1389,7 +1389,7 @@
       "id": 30,
       "type": "SaveVideo",
       "pos": [
-        4080,
+        4420,
         0
       ],
       "size": [
@@ -1397,7 +1397,7 @@
         166
       ],
       "flags": {},
-      "order": 12,
+      "order": 13,
       "mode": 0,
       "inputs": [
         {
@@ -1462,7 +1462,7 @@
       "id": 34,
       "type": "ResizeAndPadImage",
       "pos": [
-        1700,
+        2040,
         0
       ],
       "size": [
@@ -1470,7 +1470,7 @@
         214
       ],
       "flags": {},
-      "order": 5,
+      "order": 6,
       "mode": 0,
       "inputs": [
         {
@@ -1584,7 +1584,7 @@
       "type": "ComfyMathExpression",
       "pos": [
         340,
-        1058
+        852
       ],
       "size": [
         300,
@@ -1662,6 +1662,47 @@
         1
       ],
       "title": "$Pose strength"
+    },
+    {
+      "id": 39,
+      "type": "Video Slice",
+      "pos": [
+        340,
+        1034
+      ],
+      "size": [
+        300,
+        142
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 54
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "links": [
+            6
+          ],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "Video Slice"
+      },
+      "widgets_values": [
+        0,
+        3,
+        false
+      ],
+      "title": "The part to swap (cut before it's read)"
     }
   ],
   "links": [
@@ -1707,7 +1748,7 @@
     ],
     [
       6,
-      9,
+      39,
       0,
       10,
       0,
@@ -2088,6 +2129,14 @@
       34,
       2,
       "INT"
+    ],
+    [
+      54,
+      9,
+      0,
+      39,
+      0,
+      "VIDEO"
     ]
   ],
   "groups": [],

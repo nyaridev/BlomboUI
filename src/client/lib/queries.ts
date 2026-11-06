@@ -128,6 +128,9 @@ export const qk = {
   /** Stage checks follow the settings being checked (and refetch when models or nodes change). */
   stageReport: (profileId: string | null, workflowId: string | null, stages: unknown) =>
     ["stage-report", profileId, workflowId, stages] as const,
+  /** A stage video's size, length and frame rate (named by its content: never changes). */
+  stageVideoInfo: (profileId: string | null, file: string) =>
+    ["stage-video-info", profileId, file] as const,
   tagLists: (profileId: string | null) => ["tag-lists", profileId] as const,
   tagSources: ["tag-sources"] as const,
   /** Is blombo-bridge loaded in the open profile's ComfyUI (follows ComfyUI's status). */
@@ -300,6 +303,17 @@ export function useStageReport(workflowId: string | null, stages: unknown) {
     enabled: profileId !== null && workflowId !== null,
     placeholderData: keepPreviousData,
     staleTime: 30_000,
+  });
+}
+
+/** A stage video's size, length and frame rate; `file` empty or not a stage video: nothing. */
+export function useStageVideoInfo(file: string) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.stageVideoInfo(profileId, file),
+    queryFn: () => api.stageVideoInfo(file),
+    enabled: profileId !== null && /^[a-f0-9]{16}\.mp4$/.test(file),
+    staleTime: Number.POSITIVE_INFINITY,
   });
 }
 

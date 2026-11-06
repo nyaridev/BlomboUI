@@ -5309,5 +5309,61 @@
     "search_aliases": ["fit to size"],
     "essentials_category": null,
     "has_intermediate_output": false
+  },
+  "Video Slice": {
+    "input": {
+      "required": {
+        "video": ["VIDEO", {}],
+        "start_time": [
+          "FLOAT",
+          {
+            "tooltip": "Start time in seconds",
+            "default": 0,
+            "min": -100000,
+            "max": 100000,
+            "step": 0.001
+          }
+        ],
+        "duration": [
+          "FLOAT",
+          {
+            "tooltip": "Duration in seconds, or 0 for unlimited duration",
+            "default": 0,
+            "min": 0,
+            "step": 0.001
+          }
+        ],
+        "strict_duration": [
+          "BOOLEAN",
+          {
+            "tooltip": "If True, when the specified duration is not possible, an error will be raised.",
+            "default": false
+          }
+        ]
+      }
+    },
+    "input_order": {
+      "required": ["video", "start_time", "duration", "strict_duration"]
+    },
+    "is_input_list": false,
+    "output": ["VIDEO"],
+    "output_is_list": [false],
+    "output_name": ["VIDEO"],
+    "output_tooltips": [null],
+    "output_matchtypes": null,
+    "name": "Video Slice",
+    "display_name": "Trim Video",
+    "description": "",
+    "python_module": "comfy_extras.nodes_video",
+    "category": "video",
+    "output_node": false,
+    "deprecated": false,
+    "experimental": false,
+    "dev_only": false,
+    "api_node": false,
+    "price_badge": null,
+    "search_aliases": ["trim video duration", "skip first frames", "frame load cap", "start time"],
+    "essentials_category": "Video Tools",
+    "has_intermediate_output": false
   }
 }

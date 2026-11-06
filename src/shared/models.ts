@@ -97,6 +97,8 @@ export const LocalModel = z.object({
     .object({ modelId: z.number(), versionId: z.number(), lookup: z.boolean() })
     .nullable()
     .default(null),
+  /** SHA256 (uppercase hex), from its .civitai.info file or the background lookup's hashing. */
+  sha256: z.string().nullable().default(null),
 });
 export type LocalModel = z.infer<typeof LocalModel>;
 

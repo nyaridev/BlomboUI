@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Job, QueueSnapshot } from "../../shared/jobs.ts";
 import { decodePreviewFrame, type ServerMessage } from "../../shared/live.ts";
+import type { LocalModel } from "../../shared/models.ts";
 import { createConfig, parseFlags } from "../config.ts";
 import { realPng } from "../lib/test-images.ts";
 import { type FakeComfy, startFakeComfy } from "./comfy/fixtures/fake-comfy.ts";
@@ -57,6 +58,18 @@ beforeAll(async () => {
     publish: (_topic, msg) => messages.push(msg),
     publishBinary: (_topic, frame) => frames.push(frame),
     reportError: () => undefined,
+    localModels: async () =>
+      [
+        {
+          id: "loras/detail_tweaker.safetensors",
+          kind: "loras",
+          folder: "",
+          file: "detail_tweaker.safetensors",
+          sha256: "A".repeat(64),
+          civitai: { modelId: 58390, versionId: 62833, lookup: false },
+          triggerWords: [],
+        },
+      ] as unknown as LocalModel[],
   });
   const ready = new Promise<void>((resolve) =>
     supervisor.on("status", (s) => s.state === "running" && resolve()),
@@ -134,6 +147,21 @@ describe("job queue against a ComfyUI", () => {
       preview_method: "auto",
       extra_pnginfo: { blombo: { workflow: "sd15", seed: 100 } },
     });
+    // Every model file it used goes in, with the hash and Civitai ids of the local ones.
+    const extra = first?.extra as
+      | { extra_pnginfo?: { blombo?: { models?: unknown[] } } }
+      | undefined;
+    const models = extra?.extra_pnginfo?.blombo?.models;
+    expect(models).toContainEqual({
+      kind: "loras",
+      name: "detail_tweaker.safetensors",
+      strength: 0.5,
+      sha256: "A".repeat(64),
+      civitai: { modelId: 58390, versionId: 62833 },
+    });
+    expect(models).toContainEqual(
+      expect.objectContaining({ kind: "checkpoints", sha256: null, civitai: null }),
+    );
 
     expect(messages.some((m) => m.t === "job.progress" && m.progress.max === 4)).toBe(true);
     expect(messages.some((m) => m.t === "job.image")).toBe(true);

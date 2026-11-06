@@ -10,6 +10,7 @@
  */
 import { z } from "zod";
 import { parseAir } from "./civitai.ts";
+import { MODEL_KINDS } from "./constants.ts";
 import { findLoraTags } from "./prompt/loras.ts";
 
 export const IMAGE_SOURCES = ["blombo", "comfy", "a1111", "civitai", "none"] as const;
@@ -21,6 +22,19 @@ export type LoraUse = z.infer<typeof LoraUse>;
 /** A model on Civitai: the model and the version. */
 export const CivitaiRef = z.object({ modelId: z.number().int(), versionId: z.number().int() });
 export type CivitaiRef = z.infer<typeof CivitaiRef>;
+
+/** A model file a run used, as the image's `blombo` chunk keeps it (`modelsInGraph`). */
+export const ModelUse = z.object({
+  kind: z.enum(MODEL_KINDS),
+  /** As ComfyUI names it, inside its kind folder ("style/detail_tweaker.safetensors"). */
+  name: z.string(),
+  /** A LoRA's strength. */
+  strength: z.number().nullable(),
+  /** SHA256 (uppercase hex, as Civitai writes it); null until the file was hashed. */
+  sha256: z.string().nullable(),
+  civitai: CivitaiRef.nullable(),
+});
+export type ModelUse = z.infer<typeof ModelUse>;
 
 /**
  * What Blombo writes into every image it makes, beside ComfyUI's `prompt` (API graph) and
@@ -35,6 +49,8 @@ export const BlomboImageMeta = z.object({
   values: z.record(z.string(), z.unknown()),
   /** The prompts as they ran by role: wildcards filled in, trigger words added, LoRA tags out. */
   prompts: z.record(z.string(), z.string()),
+  /** Every model file the run used, with its hash and Civitai ids (images before this have none). */
+  models: z.array(ModelUse).default([]),
 });
 export type BlomboImageMeta = z.infer<typeof BlomboImageMeta>;
 
@@ -55,8 +71,10 @@ export const ImageSummary = z.object({
   height: z.number().nullable(),
   workflow: z.string().nullable(),
   workflowId: z.string().nullable(),
-  /** The Civitai model behind a model or LoRA name, by that name (models named by AIR). */
+  /** The Civitai model behind a model or LoRA name, by that name (AIRs, Blombo's own record). */
   civitai: z.record(z.string(), CivitaiRef).default({}),
+  /** A model or LoRA's SHA256 by its name (Blombo's own record), to find it after a rename. */
+  hashes: z.record(z.string(), z.string()).default({}),
 });
 export type ImageSummary = z.infer<typeof ImageSummary>;
 
@@ -76,6 +94,7 @@ export const EMPTY_SUMMARY: ImageSummary = {
   workflow: null,
   workflowId: null,
   civitai: {},
+  hashes: {},
 };
 
 /**
@@ -327,7 +346,10 @@ export interface UsedModel {
   kind: "checkpoint" | "lora";
   name: string;
   strength: number | null;
-  /** The hash A1111 wrote for it ("Model hash", "Lora hashes"), uppercase; null without one. */
+  /**
+   * Its hash, uppercase: what A1111 wrote ("Model hash", "Lora hashes") or Blombo's own record
+   * (SHA256); null without one.
+   */
   hash: string | null;
 }
 
@@ -353,13 +375,18 @@ export function usedModels(s: ImageSummary, a1111: Array<[string, string]> = [])
   }
   const out: UsedModel[] = [];
   if (s.model)
-    out.push({ kind: "checkpoint", name: s.model, strength: null, hash: hex(get("model hash")) });
+    out.push({
+      kind: "checkpoint",
+      name: s.model,
+      strength: null,
+      hash: hex(get("model hash")) ?? hex(s.hashes[s.model]),
+    });
   for (const l of s.loras)
     out.push({
       kind: "lora",
       name: l.name,
       strength: l.strength,
-      hash: loraHashes.get(modelKey(l.name)) ?? null,
+      hash: loraHashes.get(modelKey(l.name)) ?? hex(s.hashes[l.name]),
     });
   return out;
 }

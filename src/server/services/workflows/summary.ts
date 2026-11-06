@@ -67,7 +67,7 @@ export function findLoras(prompt: ApiPrompt): LoraUse[] {
 
 /** Summary fields and role values found in a graph. */
 export function summarizeGraph(prompt: ApiPrompt): {
-  summary: Omit<ImageSummary, "source" | "workflow" | "workflowId" | "civitai">;
+  summary: Omit<ImageSummary, "source" | "workflow" | "workflowId" | "civitai" | "hashes">;
   roles: RoleValues;
 } {
   const { values } = analyze(prompt, null);

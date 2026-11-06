@@ -6,14 +6,16 @@
  */
 import {
   a1111Summary,
+  type CivitaiRef,
   civitaiSummary,
   EMPTY_SUMMARY,
   type ImageSettings,
   type ImageSummary,
+  ModelUse,
   parseA1111,
 } from "../../../shared/imageinfo.ts";
 import { ApiPrompt } from "../../../shared/workflow/graph.ts";
-import { summarizeGraph } from "../workflows/summary.ts";
+import { modelLabel, summarizeGraph } from "../workflows/summary.ts";
 
 export interface ParsedMeta {
   summary: ImageSummary;
@@ -29,6 +31,28 @@ interface BlomboChunk {
   seed?: unknown;
   values?: unknown;
   prompts?: unknown;
+  models?: unknown;
+}
+
+/**
+ * The models Blombo recorded in an image, by the name the summary shows them under (the file
+ * name without folders or extension): their Civitai ids and hashes. One that doesn't read is
+ * skipped.
+ */
+export function recordedModels(value: unknown): {
+  civitai: Record<string, CivitaiRef>;
+  hashes: Record<string, string>;
+} {
+  const civitai: Record<string, CivitaiRef> = {};
+  const hashes: Record<string, string> = {};
+  for (const item of Array.isArray(value) ? value : []) {
+    const m = ModelUse.safeParse(item);
+    if (!m.success) continue;
+    const label = modelLabel(m.data.name) ?? m.data.name;
+    if (m.data.civitai) civitai[label] = m.data.civitai;
+    if (m.data.sha256) hashes[label] = m.data.sha256;
+  }
+  return { civitai, hashes };
 }
 
 function parseJson(text: string | undefined): unknown {
@@ -121,6 +145,9 @@ export function parseMeta(text: Record<string, string>): ParsedMeta {
       if (blombo.seed !== null) result.summary.seed = blombo.seed;
       result.summary.workflow = blombo.name;
       result.summary.workflowId = blombo.workflow;
+      const recorded = recordedModels(raw.models);
+      result.summary.civitai = { ...result.summary.civitai, ...recorded.civitai };
+      result.summary.hashes = recorded.hashes;
       const values =
         raw.values && typeof raw.values === "object" ? { ...(raw.values as object) } : null;
       result.settings = {

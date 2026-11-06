@@ -1,6 +1,6 @@
 /**
  * The lightbox's model and LoRA names, each a link to the model: File info when it's in your
- * models folder (by its Civitai version, else its file name), else its Civitai page when the
+ * models folder (by the hash the image recorded, its Civitai version, else its file name), else its Civitai page when the
  * image says which model it is (names from Civitai's generator), else a Civitai search for the
  * name. Civitai opens in the app or on the site (`useCivitaiOpener`); the icon after a name says
  * where it goes.
@@ -16,18 +16,23 @@ import { useCivitaiOpener } from "../models/civitai/open";
 
 type Kind = "model" | "lora";
 
-/** The local model a name stands for: the Civitai version first, then the file name. */
+/**
+ * The local model a name stands for: by hash first (found after a rename), then the Civitai
+ * version, then the file name.
+ */
 export function findLocalModel(
   models: LocalModel[],
   name: string,
   kind: Kind,
   ref: CivitaiRef | undefined,
+  hash?: string,
 ): LocalModel | null {
   const kinds: LocalModel["kind"][] =
     kind === "lora" ? ["loras"] : ["checkpoints", "diffusion_models"];
   const ofKind = models.filter((m) => kinds.includes(m.kind));
   const key = modelKey(name);
   return (
+    (hash && ofKind.find((m) => m.sha256 === hash.toUpperCase())) ||
     (ref && ofKind.find((m) => m.civitai?.versionId === ref.versionId)) ||
     ofKind.find((m) => modelKey(m.file) === key) ||
     null
@@ -62,7 +67,7 @@ export function ModelLinks({
     <span className="flex min-w-0 flex-wrap gap-x-2.5 gap-y-1">
       {names.map((n, i) => {
         const ref = summary.civitai[n.name];
-        const model = findLocalModel(local, n.name, kind, ref);
+        const model = findLocalModel(local, n.name, kind, ref, summary.hashes[n.name]);
         const leaves = !model && !civitai.inApp;
         const [icon, hint, open]: [IconName, string, () => void] = model
           ? [

@@ -32,6 +32,9 @@ export function UsedModels({ image }: { image: ImageFileInfo }) {
   if (!used.length) return null;
 
   const find = (u: UsedModel) => {
+    // The full hash Blombo recorded finds the file even after a rename.
+    const byHash = u.hash?.length === 64 ? local?.find((m) => m.sha256 === u.hash) : undefined;
+    if (byHash) return byHash;
     const same = byKey.get(modelKey(u.name)) ?? [];
     const kinds: LocalModel["kind"][] =
       u.kind === "lora" ? ["loras"] : ["checkpoints", "diffusion_models"];

@@ -157,6 +157,7 @@ export function createServices(config: ServerConfig): Services {
       lookupRef?.start();
     },
     lookup: (profileId, id, size, mtime) => lookupRef?.infoFor(profileId, id, size, mtime) ?? null,
+    hash: (profileId, id, size, mtime) => lookupRef?.storedHash(profileId, id, size, mtime) ?? null,
     civitaiSite: () => civitaiApi.baseUrl,
   });
 
@@ -264,7 +265,7 @@ export function createServices(config: ServerConfig): Services {
     profiles,
     stages,
     recordPrompts: (texts) => void autocomplete.record(texts),
-    loras: async () => (await models.list()).models.filter((m) => m.kind === "loras"),
+    localModels: async () => (await models.list()).models,
     publish: (topic, msg) => {
       bus.publish(topic, msg);
       // New outputs appear in the gallery as they land, without a rescan.
@@ -278,6 +279,7 @@ export function createServices(config: ServerConfig): Services {
   });
   const jobs = queue;
   jobs.on("finished", (job, run) => {
+    if (run?.unhashed?.length) lookup.hashLater(run.unhashed);
     const record = () => {
       try {
         history.record(job, run);

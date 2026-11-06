@@ -39,6 +39,7 @@ import type { StageService } from "./stages.ts";
 import { RunClock } from "./timing.ts";
 import { loadWildcards } from "./wildcards.ts";
 import { CompileError, compile } from "./workflows/compile.ts";
+import { modelsInGraph } from "./workflows/modeluse.ts";
 import { LORA_LOADER, TEXT_OUTPUT_KEYS } from "./workflows/nodes.ts";
 import type { WorkflowService } from "./workflows/store.ts";
 
@@ -52,8 +53,8 @@ export interface QueueDeps {
   reportError: (source: "job" | "comfy", title: string, detail: string) => void;
   /** The prompts of each click, for the frequent-tags list. */
   recordPrompts?: (texts: string[]) => void;
-  /** The profile's local LoRAs, for instant LoRAs' trigger words. */
-  loras?: () => Promise<LocalModel[]>;
+  /** The profile's local models: instant LoRAs' trigger words, the models an image records. */
+  localModels?: () => Promise<LocalModel[]>;
 }
 
 const loraKey = (file: string) => file.replace(/\\/g, "/").toLowerCase();
@@ -86,6 +87,8 @@ interface Run {
   clock?: RunClock;
   /** The prompts as they ran (compile's `shown`), once compiled. */
   shown?: Record<string, string>;
+  /** Local models it used that had no hash yet (hashed after the run). */
+  unhashed?: string[];
 }
 
 /** What a finished job ran with, for the job log ("Run again", usage stats). */
@@ -97,6 +100,8 @@ export interface RunContext {
   stages: WorkflowManifest["stages"];
   /** The prompts as they ran (wildcards resolved, instant LoRAs' tags in), by binding id. */
   shown?: Record<string, string>;
+  /** Local model ids it used that had no hash yet. */
+  unhashed?: string[];
 }
 
 type QueueEvents = {
@@ -524,8 +529,10 @@ export class JobQueue extends Emitter<QueueEvents> {
         ? stages.controlnet.units.flatMap((u) => (u.enabled && u.image ? [u.image.file] : []))
         : [];
       const instant = readInstantLoras(run.values[INSTANT_LORAS]);
-      const local = instant.length && this.deps.loras ? await this.deps.loras() : [];
-      const byFile = new Map(local.map((m) => [loraKey(comfyNameOf(m)), m]));
+      const local = this.deps.localModels ? await this.deps.localModels().catch(() => []) : [];
+      const byFile = new Map(
+        local.filter((m) => m.kind === "loras").map((m) => [loraKey(comfyNameOf(m)), m]),
+      );
       const compiled = compile({
         manifest: run.manifest,
         prompt,
@@ -552,6 +559,12 @@ export class JobQueue extends Emitter<QueueEvents> {
       if (gone()) return;
       run.job.segments = compiled.segments;
       run.shown = compiled.shown;
+      const models = modelsInGraph(compiled.prompt, local);
+      run.unhashed = local
+        .filter(
+          (m) => !m.sha256 && models.some((u) => u.kind === m.kind && u.name === comfyNameOf(m)),
+        )
+        .map((m) => m.id);
       run.clock?.setSegments(compiled.segments);
       const res = await api.queuePrompt(compiled.prompt, {
         preview_method: "auto",
@@ -563,6 +576,7 @@ export class JobQueue extends Emitter<QueueEvents> {
             values: run.values,
             // What the gallery and File info show: the prompt as it ran (the LoRAs are in the graph).
             prompts: compiled.shown,
+            models,
           } satisfies BlomboImageMeta,
         },
       });
@@ -630,6 +644,7 @@ export class JobQueue extends Emitter<QueueEvents> {
             values: run.values,
             stages: run.stages,
             shown: run.shown,
+            unhashed: run.unhashed,
           }
         : null,
     );

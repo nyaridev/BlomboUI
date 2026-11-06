@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseMeta } from "./meta.ts";
+import { parseMeta, recordedModels } from "./meta.ts";
 
 // What Civitai's generator saves in a JPEG's comment: the graph, plus its own record beside it.
 const civitai = {
@@ -71,5 +71,33 @@ describe("parseMeta", () => {
   it("still reads A1111 text", () => {
     const meta = parseMeta({ parameters: "a cat\nNegative prompt: dog\nSteps: 5, Seed: 7" });
     expect(meta.summary).toMatchObject({ source: "a1111", prompt: "a cat", negative: "dog" });
+  });
+});
+
+describe("recordedModels", () => {
+  it("keys Blombo's model record by the names the summary shows", () => {
+    const sha = "C".repeat(64);
+    const out = recordedModels([
+      {
+        kind: "loras",
+        name: "style/Detail Tweaker.safetensors",
+        strength: 0.5,
+        sha256: sha,
+        civitai: { modelId: 5, versionId: 55 },
+      },
+      {
+        kind: "checkpoints",
+        name: "base.safetensors",
+        strength: null,
+        sha256: null,
+        civitai: null,
+      },
+      { broken: true },
+    ]);
+    expect(out).toEqual({
+      civitai: { "Detail Tweaker": { modelId: 5, versionId: 55 } },
+      hashes: { "Detail Tweaker": sha },
+    });
+    expect(recordedModels(undefined)).toEqual({ civitai: {}, hashes: {} });
   });
 });

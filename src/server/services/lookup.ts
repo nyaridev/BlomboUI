@@ -140,12 +140,37 @@ export class ModelLookup {
     return sha;
   }
 
-  private storedHash(profileId: string, id: string, size: number, mtime: number): string | null {
-    const row = this.deps.dbs
-      .get(profileId)
-      .db.prepare("SELECT sha256 FROM model_hashes WHERE path = ? AND size = ? AND mtime = ?")
-      .get(id, size, mtime) as { sha256: string } | undefined;
-    return row?.sha256 ?? null;
+  /** A hash worked out before for this file (same path, size and time), or null. */
+  storedHash(profileId: string, id: string, size: number, mtime: number): string | null {
+    try {
+      const row = this.deps.dbs
+        .get(profileId)
+        .db.prepare("SELECT sha256 FROM model_hashes WHERE path = ? AND size = ? AND mtime = ?")
+        .get(id, size, mtime) as { sha256: string } | undefined;
+      return row?.sha256 ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private hashing: Promise<void> = Promise.resolve();
+
+  /**
+   * Hash models a run used that had no hash yet, one at a time after the run, so the next image
+   * carries them; the model list is refreshed once they're done.
+   */
+  hashLater(ids: string[]): void {
+    this.hashing = this.hashing.then(async () => {
+      let hashed = false;
+      for (const id of ids)
+        try {
+          await this.hashOf(id);
+          hashed = true;
+        } catch {
+          // Gone or unreadable: the next run tries again.
+        }
+      if (hashed) this.deps.onFound();
+    });
   }
 
   private storedLookup(

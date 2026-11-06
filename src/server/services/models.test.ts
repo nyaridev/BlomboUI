@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createConfig, parseFlags } from "../config.ts";
 import { realPng } from "../lib/test-images.ts";
-import { ModelService, sidecarsFor } from "./models.ts";
+import { infoHash, ModelService, sidecarsFor } from "./models.ts";
 import { ProfileService } from "./profiles.ts";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-models-"));
@@ -272,5 +272,21 @@ describe("sidecarsFor", () => {
     expect((await models.rawPicture("vae/pic.safetensors")).type).toBe("image/png");
     expect(list.models.find((m) => m.id === "vae/clip.safetensors")?.rawThumb).toBeNull();
     await expect(models.rawPicture("vae/clip.safetensors")).rejects.toThrow(/full-size/);
+  });
+});
+
+describe("infoHash", () => {
+  const sha = (c: string) => c.repeat(64);
+  it("takes the SHA256 of the file with its name, else the primary one", () => {
+    const info = {
+      files: [
+        { name: "other.safetensors", primary: true, hashes: { SHA256: sha("a") } },
+        { name: "Mine.safetensors", hashes: { SHA256: sha("b") } },
+      ],
+    };
+    expect(infoHash(info, "mine.safetensors")).toBe(sha("B"));
+    expect(infoHash(info, "renamed.safetensors")).toBe(sha("A"));
+    expect(infoHash({ files: [{ hashes: { SHA256: "short" } }] }, "x")).toBeNull();
+    expect(infoHash(null, "x")).toBeNull();
   });
 });

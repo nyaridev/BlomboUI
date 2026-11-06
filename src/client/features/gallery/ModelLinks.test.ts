@@ -24,6 +24,21 @@ describe("findLocalModel", () => {
     expect(findLocalModel(models, "missing", "model", undefined)).toBeNull();
   });
 
+  it("finds a renamed file by the hash the image recorded", () => {
+    const renamed = [
+      {
+        id: "loras/new-name.safetensors",
+        file: "new-name.safetensors",
+        kind: "loras",
+        sha256: "E".repeat(64),
+      },
+      ...models,
+    ] as unknown as LocalModel[];
+    expect(findLocalModel(renamed, "old name", "lora", undefined, "e".repeat(64))?.id).toBe(
+      "loras/new-name.safetensors",
+    );
+  });
+
   it("finds a Civitai version first, whatever its file is called", () => {
     const ref = { modelId: 1, versionId: 11 };
     expect(findLocalModel(models, "WAI Illustrious", "model", ref)?.id).toBe(

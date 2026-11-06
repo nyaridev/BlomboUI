@@ -158,3 +158,19 @@ describe("nameAirs", () => {
     expect(hasAirs(named)).toBe(false);
   });
 });
+
+describe("usedModels with Blombo's record", () => {
+  it("takes the hash Blombo recorded when A1111 wrote none", () => {
+    const sha = "d".repeat(64);
+    const used = usedModels({
+      ...EMPTY_SUMMARY,
+      model: "base",
+      loras: [{ name: "detail", strength: 0.5 }],
+      hashes: { base: sha },
+    });
+    expect(used.map((u) => [u.name, u.hash])).toEqual([
+      ["base", sha.toUpperCase()],
+      ["detail", null],
+    ]);
+  });
+});

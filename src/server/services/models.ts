@@ -56,6 +56,8 @@ export interface ModelDeps {
   civitaiSite?: () => string;
   /** What a lookup by hash found for a file (same size and mtime), if anything. */
   lookup?: (profileId: string, id: string, size: number, mtime: number) => LookupInfo | null;
+  /** A hash the background lookup already worked out for this file, or null. */
+  hash?: (profileId: string, id: string, size: number, mtime: number) => string | null;
 }
 
 interface Sidecars {
@@ -89,6 +91,7 @@ interface CivitaiInfo {
   description?: unknown;
   model?: { name?: unknown; description?: unknown };
   creator?: { username?: unknown };
+  files?: Array<{ name?: unknown; primary?: unknown; hashes?: { SHA256?: unknown } }>;
 }
 
 interface A1111Info {
@@ -373,6 +376,10 @@ export class ModelService {
             : found
               ? { modelId: found.modelId, versionId: found.versionId, lookup: true }
               : null,
+          sha256:
+            infoHash(civitai, e.name) ??
+            this.deps.hash?.(profileId, id, stat.size, stat.mtimeMs) ??
+            null,
         },
       });
     }
@@ -667,6 +674,17 @@ export class ModelService {
 }
 
 /* ── helpers ──────────────────────────────────────────────────────────────── */
+
+/** The file's SHA256 in its .civitai.info (the entry with its name, else the primary one). */
+export function infoHash(info: CivitaiInfo | null, file: string): string | null {
+  const files = Array.isArray(info?.files) ? info.files : [];
+  const entry =
+    files.find((f) => typeof f?.name === "string" && f.name.toLowerCase() === file.toLowerCase()) ??
+    files.find((f) => f?.primary === true) ??
+    (files.length === 1 ? files[0] : undefined);
+  const sha = entry?.hashes?.SHA256;
+  return typeof sha === "string" && /^[0-9a-f]{64}$/i.test(sha) ? sha.toUpperCase() : null;
+}
 
 /** Civitai model and version ids from a .civitai.info file. */
 function civitaiIds(info: CivitaiInfo | null): { modelId: number; versionId: number } | null {

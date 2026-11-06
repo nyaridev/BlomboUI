@@ -17,13 +17,31 @@ import { type Binding, bindingFor } from "./manifest.ts";
 import { NodePack } from "./packs.ts";
 import { STAGES, type StageId } from "./roles.ts";
 
-/** Splice points. The compiler finds them in any graph (services/workflows/analyze.ts). */
-export const PORTS = ["MODEL", "CLIP", "VAE", "POSITIVE", "NEGATIVE", "LATENT", "IMAGE"] as const;
+/**
+ * Splice points. The compiler finds them in any graph (services/workflows/analyze.ts). START is
+ * the latent going into the main sampler (the empty one, in a text-to-image graph).
+ */
+export const PORTS = [
+  "MODEL",
+  "CLIP",
+  "VAE",
+  "POSITIVE",
+  "NEGATIVE",
+  "START",
+  "LATENT",
+  "IMAGE",
+] as const;
 export const Port = z.enum(PORTS);
 export type Port = z.infer<typeof Port>;
 
 /** Stages run in this order, with the workflow's own sampling between controlnet and hires. */
-export const STAGE_ORDER: readonly StageId[] = ["controlnet", "hires", "adetailer", "upscale"];
+export const STAGE_ORDER: readonly StageId[] = [
+  "source",
+  "controlnet",
+  "hires",
+  "adetailer",
+  "upscale",
+];
 
 /** Checkpoint graphs (one file, real negative prompt) or diffusion-model graphs (UNET + CLIP + VAE). */
 export const STAGE_FAMILIES = ["checkpoint", "diffusion"] as const;
@@ -31,6 +49,7 @@ export const StageFamily = z.enum(STAGE_FAMILIES);
 export type StageFamily = z.infer<typeof StageFamily>;
 
 export const STAGE_LABELS: Record<StageId, string> = {
+  source: "Image to image",
   controlnet: "ControlNet",
   hires: "Hires fix",
   adetailer: "ADetailer",
@@ -69,6 +88,8 @@ export const StagePackage = z.object({
   fields: z.array(StageField),
   /** Values used when the base workflow has no binding to inherit from (no CFG in Flux graphs). */
   defaults: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
+  /** Inputs of the workflow's main sampler this stage sets, each from one of its fields. */
+  base: z.partialRecord(z.enum(["denoise"]), z.string()).default({}),
 });
 export type StagePackage = z.infer<typeof StagePackage>;
 
@@ -172,6 +193,36 @@ export const ControlnetUnit = z.object({
 });
 export type ControlnetUnit = z.infer<typeof ControlnetUnit>;
 
+/** What the first pass starts from: an empty latent, an image, or an image with a painted mask. */
+export const SOURCE_MODES = ["txt2img", "img2img", "inpaint"] as const;
+export type SourceMode = (typeof SOURCE_MODES)[number];
+
+export const SOURCE_MODE_LABELS: Record<SourceMode, string> = {
+  txt2img: "Text to image",
+  img2img: "Image to image",
+  inpaint: "Inpaint",
+};
+
+export const SourceSettings = z.object({
+  mode: z.enum(SOURCE_MODES).default("txt2img"),
+  /** Resized to the workflow's width and height (cropped to fit) before it's encoded. */
+  image: StageImage.nullable().default(null),
+  /** The painted mask, the image's size: white is redrawn, black is kept. */
+  mask: StageImage.nullable().default(null),
+  /** How much the sampler changes the image (the main sampler's denoise). */
+  denoise: z.number().min(0.01).max(1).default(0.75),
+  /** Inpaint: grow the mask, in pixels of the image. */
+  grow: z.number().int().min(0).max(128).default(6),
+  /** Inpaint: soften the mask's edge, in pixels. */
+  blur: z.number().int().min(0).max(31).default(4),
+});
+export type SourceSettings = z.infer<typeof SourceSettings>;
+
+/** The source stage runs when the first pass starts from an image. */
+export function sourceOn(s: Pick<SourceSettings, "mode">): boolean {
+  return s.mode !== "txt2img";
+}
+
 export const AdetailerSettings = z.object({
   enabled: z.boolean().default(false),
   units: z
@@ -191,6 +242,7 @@ export const ControlnetSettings = z.object({
 export type ControlnetSettings = z.infer<typeof ControlnetSettings>;
 
 export const StageSettings = z.object({
+  source: SourceSettings.prefault({}),
   hires: HiresSettings.prefault({}),
   adetailer: AdetailerSettings.prefault({}),
   controlnet: ControlnetSettings.prefault({}),
@@ -205,6 +257,7 @@ export type StageSettings = z.infer<typeof StageSettings>;
 export function readStages(raw: unknown): StageSettings {
   const input = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
   return {
+    source: salvage(SourceSettings, input.source).data,
     hires: salvage(HiresSettings, input.hires).data,
     adetailer: salvage(AdetailerSettings, input.adetailer).data,
     controlnet: salvage(ControlnetSettings, input.controlnet).data,

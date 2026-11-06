@@ -94,6 +94,7 @@ describe("stage packages", () => {
       "controlnet-diffusion",
       "hires-checkpoint",
       "hires-diffusion",
+      "source",
     ]);
   });
 
@@ -126,6 +127,7 @@ describe("ports", () => {
       VAE: ["4", 2],
       POSITIVE: ["6", 0],
       NEGATIVE: ["7", 0],
+      START: ["5", 0],
       LATENT: ["3", 0],
       IMAGE: ["8", 0],
     });
@@ -138,6 +140,93 @@ describe("ports", () => {
     });
     expect(flux.NEGATIVE).toBeUndefined();
     expect(flux.IMAGE).toEqual(["12", 0]);
+  });
+});
+
+describe("image to image and inpaint (the source stage)", () => {
+  const MASK = { ...IMAGE, file: "fedcba9876543210.png", label: "mask.png" };
+  const images = {
+    [IMAGE.file]: "blombo/0123456789abcdef.png",
+    [MASK.file]: "blombo/fedcba9876543210.png",
+  };
+
+  it("starts the main sampler from the encoded image, fitted to the size, at its denoise", () => {
+    const out = run("sd15-api", { source: { mode: "img2img", image: IMAGE, denoise: 0.6 } });
+    const p = out.prompt;
+    expectValidGraph(p);
+    const [loadId, load] = one(p, "LoadImage");
+    expect(load.inputs.image).toBe("blombo/0123456789abcdef.png");
+    const [scaleId, scale] = one(p, "ImageScale");
+    expect(scale.inputs).toMatchObject({ image: [loadId, 0], crop: "center" });
+    expect(scale.inputs.width).toBe(p["5"]?.inputs.width);
+    expect(scale.inputs.height).toBe(p["5"]?.inputs.height);
+    const [encId, enc] = one(p, "VAEEncode");
+    expect(enc.inputs).toMatchObject({ pixels: [scaleId, 0], vae: ["4", 2] });
+    expect(p["3"]?.inputs).toMatchObject({ latent_image: [encId, 0], denoise: 0.6 });
+    expect(byClass(p, "LoadImageMask")).toEqual([]);
+    expect(byClass(p, "SetLatentNoiseMask")).toEqual([]);
+    expect(out.segments.map((s) => s.id)).toEqual(["base"]);
+  });
+
+  it("inpaints: only the painted part is redrawn, the mask grown, fitted and softened", () => {
+    const p = run(
+      "sd15-api",
+      { source: { mode: "inpaint", image: IMAGE, mask: MASK, grow: 10, blur: 6 } },
+      { stageImages: images },
+    ).prompt;
+    expectValidGraph(p);
+    const [maskLoadId, maskLoad] = one(p, "LoadImageMask");
+    expect(maskLoad.inputs).toMatchObject({ image: "blombo/fedcba9876543210.png", channel: "red" });
+    const [growId, grow] = one(p, "GrowMask");
+    expect(grow.inputs).toMatchObject({ mask: [maskLoadId, 0], expand: 10 });
+    const [toImageId] = one(p, "MaskToImage");
+    expect(p[toImageId]?.inputs.mask).toEqual([growId, 0]);
+    const scales = byClass(p, "ImageScale");
+    expect(scales).toHaveLength(2);
+    const [blurId, blur] = one(p, "ImageBlur");
+    expect(blur.inputs).toMatchObject({ blur_radius: 6, sigma: 3 });
+    const [maskId, mask] = one(p, "ImageToMask");
+    expect(mask.inputs.image).toEqual([blurId, 0]);
+    const [encId] = one(p, "VAEEncode");
+    const [noiseId, noise] = one(p, "SetLatentNoiseMask");
+    expect(noise.inputs).toEqual({ samples: [encId, 0], mask: [maskId, 0] });
+    expect(p["3"]?.inputs).toMatchObject({ latent_image: [noiseId, 0], denoise: 0.75 });
+  });
+
+  it("repeats the latent for a batch, and works on diffusion graphs (denoise on the scheduler)", () => {
+    const batch = run("sd15-api", { source: { mode: "img2img", image: IMAGE } });
+    expect(byClass(batch.prompt, "RepeatLatentBatch")).toEqual([]);
+    const s = setup("sd15-api", { source: { mode: "img2img", image: IMAGE } });
+    const b = s.manifest.bindings.find((x) => x.role === "latent.batch");
+    expect(b).toBeDefined();
+    const four = run(
+      "sd15-api",
+      { source: { mode: "img2img", image: IMAGE } },
+      { values: { ...s.values, [b?.id ?? ""]: 4 } },
+    ).prompt;
+    const [repeatId, repeat] = one(four, "RepeatLatentBatch");
+    expect(repeat.inputs.amount).toBe(4);
+    expect(four["3"]?.inputs.latent_image).toEqual([repeatId, 0]);
+
+    const flux = run("flux-unet-api", {
+      source: { mode: "img2img", image: IMAGE, denoise: 0.5 },
+    }).prompt;
+    expectValidGraph(flux);
+    const [encId] = one(flux, "VAEEncode");
+    expect(flux["11"]?.inputs.latent_image).toEqual([encId, 0]);
+    expect(flux["9"]?.inputs.denoise).toBe(0.5);
+  });
+
+  it("does nothing for text to image, and stops without an image or a mask", () => {
+    const plain = run("sd15-api", { source: { mode: "txt2img", image: IMAGE } }).prompt;
+    expect(byClass(plain, "LoadImage")).toEqual([]);
+    expect(plain["3"]?.inputs.latent_image).toEqual(["5", 0]);
+    expect(() => run("sd15-api", { source: { mode: "img2img" } })).toThrow(
+      "Image to image has no image.",
+    );
+    expect(() => run("sd15-api", { source: { mode: "inpaint", image: IMAGE } })).toThrow(
+      "Inpaint has no mask.",
+    );
   });
 });
 

@@ -41,6 +41,7 @@ import { type PointerEvent, useCallback, useEffect, useRef, useState } from "rea
 import { create } from "zustand";
 import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
+import { sourceImageFromGallery } from "../generate/blocks/Source";
 import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
 import { openCivitaiPage } from "../models/civitai/open";
@@ -636,6 +637,14 @@ function Details({
           }
         >
           Use for ControlNet
+        </Button>
+        <Button
+          icon="image"
+          disabled={!stillOrAnimated(image)}
+          title="Start Generate's first pass from this image (image to image or inpaint)"
+          onClick={() => void sourceImageFromGallery(image.id).then((ok) => ok && onGo("generate"))}
+        >
+          Start from it
         </Button>
         <Button
           icon="trash"

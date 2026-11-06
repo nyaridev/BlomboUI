@@ -49,3 +49,7 @@ prompt.json    ComfyUI API graph with PORT:<ROLE> stub nodes
 4. [ ] Upscale stage (after ADetailer), and user stage packages dropped into the profile.
 5. [ ] Check a real run of each stage on real models (needs detector, SAM and ControlNet downloads, and the real packs installed through ADR-0013).
 6. [x] Install the custom node packs a stage needs from its notice (ADR-0013).
+
+## Update (image to image and inpaint, 2026-11-06)
+
+A fourth stage, **source**, runs before all others: the first pass's "Start from" (Text to image, Image to image, Inpaint). It splices at a new port, `START` (the latent going into the main sampler), and is the first stage that changes the workflow's own sampler: a package's `base` maps a sampler input to one of its fields (`denoise`), set on the node the analyzer finds for it (the scheduler with `SamplerCustomAdvanced`). It lives in the First pass card as a layout feature rather than a stage tab, since it changes the pass itself. Core nodes only (`LoadImage`, `ImageScale`, `VAEEncode`, `LoadImageMask`, `GrowMask`, `ImageBlur`, `SetLatentNoiseMask`, `RepeatLatentBatch`), so one package fits both families. Not done: pasting the result back over the original outside the mask, and inpaint-specific models (`InpaintModelConditioning`).

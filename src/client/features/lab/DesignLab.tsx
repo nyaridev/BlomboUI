@@ -77,6 +77,7 @@ import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { CompareLab } from "./CompareLab";
+import { MaskLab } from "./MaskLab";
 
 const SECTIONS = [
   ["brand", "Brand"],
@@ -96,6 +97,7 @@ const SECTIONS = [
   ["library", "Library"],
   ["batch", "Batch"],
   ["compare", "Compare"],
+  ["mask", "Mask"],
   ["prompt", "Prompt editor"],
   ["guides", "Guides"],
 ] as const;
@@ -1818,6 +1820,14 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
           text="ImageCompare: two images in one box. Flip switches on a click or Space, the slider reveals one under the other (drag, or ← →), side by side splits the box."
         >
           <CompareLab />
+        </Section>
+
+        <Section
+          id="mask"
+          title="Mask"
+          text="MaskPainter (Inpaint): paint what's redrawn over the image. Brush and eraser in image pixels, [ ] for the size, X swaps, Ctrl+Z undoes; invert and clear. It saves an opaque black-and-white PNG at the image's size."
+        >
+          <MaskLab />
         </Section>
 
         <Section

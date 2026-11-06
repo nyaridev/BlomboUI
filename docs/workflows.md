@@ -95,13 +95,16 @@ Hires fix, ADetailer and ControlNet are **stages**: graph patches that splice in
 | `MODEL` | the model going into the main sampler (after its LoRAs) |
 | `CLIP` | the text encoder the prompt is encoded with (after CLIP skip and LoRAs) |
 | `POSITIVE`, `NEGATIVE` | the conditioning going into the sampler (or its guider) |
+| `START` | the latent going into the main sampler (the empty one, in a text-to-image graph) |
 | `LATENT`, `VAE`, `IMAGE` | the sampler's output, and the decoder that reads it (its VAE and image) |
 
 They run in a fixed order, each reading the ports the one before left:
 
 ```text
-controlnet (units) → the workflow's own sampling → hires → adetailer (units) → upscale (later)
+source → controlnet (units) → the workflow's own sampling → hires → adetailer (units) → upscale (later)
 ```
+
+**Source** is the first pass's mode, the "Start from" dropdown at the top of the First pass card (a layout feature, `source`, not a tab): Text to image leaves the graph alone; **Image to image** loads the image (a stage image, like ControlNet's), fits it to the workflow's width and height (`ImageScale`, cropped to fill), encodes it with the workflow's VAE and republishes `START`, so the main sampler starts from it; **Inpaint** also loads the painted mask (`LoadImageMask`, red channel), grows it (`GrowMask`), fits and softens it (`ImageBlur`) and puts it on the latent (`SetLatentNoiseMask`), so only the painted part is redrawn. A batch size above 1 repeats the latent (`RepeatLatentBatch`). Its denoise is set on the main sampler through the package's `base` (`"base": { "denoise": "denoise" }`: the sampler's input → the stage field; the scheduler's denoise with `SamplerCustomAdvanced`). Core nodes only, so the one package (`presets/stages/source/`) fits both families. The gallery viewer's **Start from it** puts an image in.
 
 ControlNet changes the conditioning, so the base sampler and Hires fix use it. ADetailer redraws with the plain prompt (`from: "base"`), since a full-image control map doesn't fit a face crop.
 

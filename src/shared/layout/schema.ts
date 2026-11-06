@@ -3,7 +3,7 @@
  * default layout is just one document. Blocks bind by role (portable) or binding id.
  */
 import { z } from "zod";
-import { STAGES } from "../workflow/roles.ts";
+import { TAB_STAGES } from "../workflow/roles.ts";
 
 export const CONTROL_STYLES = {
   number: ["slider", "scrub", "number", "chips"],
@@ -23,6 +23,8 @@ export const FEATURES = [
   "image-stage",
   /** Prompt matrix and XY plot (shared/scripts.ts). */
   "scripts",
+  /** The first pass's mode: text to image, image to image or inpaint (the `source` stage). */
+  "source",
 ] as const;
 export type FeatureId = (typeof FEATURES)[number];
 
@@ -47,7 +49,11 @@ export const FeatureBlock = z.object({
   feature: z.enum(FEATURES),
   ...common,
 });
-export const StageBlock = z.object({ type: z.literal("stage"), stage: z.enum(STAGES), ...common });
+export const StageBlock = z.object({
+  type: z.literal("stage"),
+  stage: z.enum(TAB_STAGES),
+  ...common,
+});
 export const RestBlock = z.object({
   type: z.literal("params-rest"),
   title: z.string().max(40).optional(),

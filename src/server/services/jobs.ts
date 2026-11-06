@@ -30,7 +30,7 @@ import {
   type SeedMode,
   type WorkflowManifest,
 } from "../../shared/workflow/manifest.ts";
-import { hiresSize, readStages } from "../../shared/workflow/stages.ts";
+import { hiresSize, readStages, sourceOn } from "../../shared/workflow/stages.ts";
 import { Emitter } from "../lib/emitter.ts";
 import { HttpError } from "../lib/http.ts";
 import { ComfyHttpError, type ComfyPreview, type ComfyWsMessage } from "./comfy/client.ts";
@@ -549,11 +549,18 @@ export class JobQueue extends Emitter<QueueEvents> {
         profile?.folders.wildcards.map((f) => f.path) ?? [],
         texts,
       );
+      const source = sourceOn(stages.source);
       const anyStage =
-        stages.hires.enabled || stages.adetailer.enabled || stages.controlnet.enabled;
-      const controlFiles = stages.controlnet.enabled
-        ? stages.controlnet.units.flatMap((u) => (u.enabled && u.image ? [u.image.file] : []))
-        : [];
+        source || stages.hires.enabled || stages.adetailer.enabled || stages.controlnet.enabled;
+      const controlFiles = [
+        ...(stages.controlnet.enabled
+          ? stages.controlnet.units.flatMap((u) => (u.enabled && u.image ? [u.image.file] : []))
+          : []),
+        ...(source && stages.source.image ? [stages.source.image.file] : []),
+        ...(stages.source.mode === "inpaint" && stages.source.mask
+          ? [stages.source.mask.file]
+          : []),
+      ];
       const instant = readInstantLoras(run.values[INSTANT_LORAS]);
       const local = this.deps.localModels ? await this.deps.localModels().catch(() => []) : [];
       const byFile = new Map(

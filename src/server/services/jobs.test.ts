@@ -277,12 +277,15 @@ describe("job queue against a ComfyUI", () => {
     const report = await stages.check("sd15", {});
     expect(report.checked).toBe(true);
     expect(report.stages.map((s) => [s.stage, s.package])).toEqual([
+      ["source", "source"],
       ["controlnet", "controlnet-checkpoint"],
       ["hires", "hires-checkpoint"],
       ["adetailer", "adetailer-checkpoint"],
     ]);
-    expect(report.stages[1]?.problems).toEqual([]);
-    expect(report.stages[1]?.choices.upscaler).toContain("4x-UltraSharp.pth");
+    // Text to image is checked as Image to image: it would need an image.
+    expect(report.stages[0]?.problems.map((p) => p.code)).toEqual(["no_image"]);
+    expect(report.stages[2]?.problems).toEqual([]);
+    expect(report.stages[2]?.choices.upscaler).toContain("4x-UltraSharp.pth");
   });
 
   it("turns validation errors into plain messages and stops the rest of that batch", async () => {

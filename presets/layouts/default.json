@@ -36,6 +36,11 @@
             "icon": "activity",
             "children": [
               {
+                "type": "feature",
+                "feature": "source",
+                "id": "source"
+              },
+              {
                 "type": "param",
                 "id": "p-sampler",
                 "bind": "role:sampler.name",

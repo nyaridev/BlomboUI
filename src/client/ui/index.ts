@@ -40,6 +40,7 @@ export {
   TreeRow,
   Veil,
 } from "./library";
+export { MaskPainter, type MaskPainterHandle } from "./MaskPainter";
 export { type CardKind, type CardMark, FallbackFace, KIND_STYLE, ModelCard } from "./ModelCard";
 export { NumberField } from "./NumberField";
 export { RangeCalendar } from "./RangeCalendar";

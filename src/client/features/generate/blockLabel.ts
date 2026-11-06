@@ -7,6 +7,7 @@ import { STAGE_LABELS } from "@shared/workflow/stages";
 
 /** Names come from STAGE_LABELS; only the icons are the client's. */
 const STAGE_ICONS: Record<StageId, IconName> = {
+  source: "image",
   hires: "upscale",
   adetailer: "face-scan",
   controlnet: "pose",
@@ -30,15 +31,17 @@ export function blockLabel(block: Block, bindings: Binding[]): { label: string; 
     case "feature":
       return {
         label:
-          { resolution: "Size", seed: "Seed & batch", scripts: "Scripts" }[
-            block.feature as "resolution" | "seed" | "scripts"
+          { resolution: "Size", seed: "Seed & batch", scripts: "Scripts", source: "Mode" }[
+            block.feature as "resolution" | "seed" | "scripts" | "source"
           ] ?? block.feature,
         icon:
           block.feature === "resolution"
             ? "aspect-ratio"
             : block.feature === "scripts"
               ? "layout-grid"
-              : "seed",
+              : block.feature === "source"
+                ? "image"
+                : "seed",
       };
   }
 }

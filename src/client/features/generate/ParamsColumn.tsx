@@ -30,6 +30,7 @@ import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl
 import { Resolution } from "./blocks/Resolution";
 import { ScriptsBlock } from "./blocks/Scripts";
 import { Seed } from "./blocks/Seed";
+import { SourceBlock } from "./blocks/Source";
 import { AdetailerStage, ControlNetStage, HiresStage, StageTabContext } from "./blocks/stages";
 import SortableParams from "./SortableParams";
 import { useLayout, useValues } from "./state";
@@ -111,7 +112,8 @@ interface RenderContext {
 function generateOnly(block: Block): boolean {
   return (
     block.type === "stage" ||
-    (block.type === "feature" && ["scripts", "resolution", "seed"].includes(block.feature))
+    (block.type === "feature" &&
+      ["scripts", "resolution", "seed", "source"].includes(block.feature))
   );
 }
 
@@ -182,6 +184,7 @@ function renderBlock(block: Block, ctx: RenderContext): ReactNode {
       if (block.feature === "resolution") return <Resolution bare={ctx.inCard} />;
       if (block.feature === "seed") return <Seed bare={ctx.inCard} />;
       if (block.feature === "scripts") return <ScriptsBlock />;
+      if (block.feature === "source") return <SourceBlock />;
       return null;
     case "stage":
       return <StageBlock stage={block.stage} />;

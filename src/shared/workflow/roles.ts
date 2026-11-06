@@ -63,5 +63,10 @@ export const ROLE_LABELS: Partial<Record<Role, string>> = {
   "output.text": "Text output",
 };
 
-export const STAGES = ["controlnet", "hires", "adetailer", "upscale"] as const;
+/**
+ * `source` is the first pass's image (img2img or inpaint): it runs before every other stage and
+ * lives in the First pass card (a layout feature), not in a tab of its own (TAB_STAGES).
+ */
+export const STAGES = ["source", "controlnet", "hires", "adetailer", "upscale"] as const;
 export type StageId = (typeof STAGES)[number];
+export const TAB_STAGES = ["controlnet", "hires", "adetailer", "upscale"] as const;

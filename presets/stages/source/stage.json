@@ -1,0 +1,26 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source",
+  "stage": "source",
+  "family": "checkpoint",
+  "name": "Image to image",
+  "description": "Starts the first pass from an image instead of an empty latent: resized to the workflow's size, encoded, and for inpaint masked so only the painted part changes. Sets the sampler's denoise. Core nodes only, so it fits checkpoint and diffusion-model workflows alike.",
+  "attach": "before_sampler",
+  "requires": ["VAE", "START"],
+  "provides": ["START"],
+  "packs": [],
+  "fields": [
+    { "field": "image", "node": "load", "input": "image", "label": "Image" },
+    { "field": "width", "node": "scale", "input": "width" },
+    { "field": "height", "node": "scale", "input": "height" },
+    { "field": "mask", "node": "mask-load", "input": "image", "label": "Mask" },
+    { "field": "grow", "node": "mask-grow", "input": "expand" },
+    { "field": "width", "node": "mask-scale", "input": "width" },
+    { "field": "height", "node": "mask-scale", "input": "height" },
+    { "field": "blur", "node": "mask-blur", "input": "blur_radius" },
+    { "field": "sigma", "node": "mask-blur", "input": "sigma" },
+    { "field": "batch", "node": "repeat", "input": "amount" }
+  ],
+  "defaults": {},
+  "base": { "denoise": "denoise" }
+}

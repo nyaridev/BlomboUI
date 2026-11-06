@@ -10,7 +10,7 @@ import { toast } from "@client/ui";
 import type { ModelList } from "@shared/models";
 import { loraWeights } from "@shared/scripts";
 import type { WorkflowDetail } from "@shared/workflow/manifest";
-import type { StageReport } from "@shared/workflow/stages";
+import { type StageReport, sourceOn } from "@shared/workflow/stages";
 import { useLastRun } from "./preview";
 import { buildScript, useScript } from "./scripts";
 import { takePendingSave, useValues } from "./state";
@@ -35,6 +35,15 @@ function blockedByStage(workflowId: string): boolean {
   const report = match?.state.data as StageReport | undefined;
   if (!report?.checked) return false;
   for (const s of report.stages) {
+    if (s.stage === "source") {
+      const problem = sourceOn(stages.source) ? s.problems[0] : undefined;
+      if (!problem) continue;
+      toast(problem.message, "warning", {
+        label: "Use text to image",
+        run: () => setStage("source", { ...stages.source, mode: "txt2img" }),
+      });
+      return true;
+    }
     const key = s.stage as "hires" | "adetailer" | "controlnet";
     if (!stages[key]?.enabled) continue;
     // Problems of units that are off don't matter.

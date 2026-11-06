@@ -1,0 +1,59 @@
+{
+  "p-vae": { "class_type": "PORT:VAE", "inputs": {} },
+  "load": {
+    "class_type": "LoadImage",
+    "inputs": { "image": "" },
+    "_meta": { "title": "Image" }
+  },
+  "scale": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["load", 0], "upscale_method": "lanczos", "width": 512, "height": 512, "crop": "center" },
+    "_meta": { "title": "Fit to size", "blombo": { "when": "resize", "else": "input:image" } }
+  },
+  "encode": {
+    "class_type": "VAEEncode",
+    "inputs": { "pixels": ["scale", 0], "vae": ["p-vae", 0] },
+    "_meta": { "title": "Encode" }
+  },
+  "mask-load": {
+    "class_type": "LoadImageMask",
+    "inputs": { "image": "", "channel": "red" },
+    "_meta": { "title": "Mask", "blombo": { "when": "inpaint" } }
+  },
+  "mask-grow": {
+    "class_type": "GrowMask",
+    "inputs": { "mask": ["mask-load", 0], "expand": 6, "tapered_corners": true },
+    "_meta": { "title": "Grow mask", "blombo": { "when": "grow", "else": "input:mask" } }
+  },
+  "mask-image": {
+    "class_type": "MaskToImage",
+    "inputs": { "mask": ["mask-grow", 0] },
+    "_meta": { "title": "Mask as image", "blombo": { "when": "inpaint" } }
+  },
+  "mask-scale": {
+    "class_type": "ImageScale",
+    "inputs": { "image": ["mask-image", 0], "upscale_method": "bilinear", "width": 512, "height": 512, "crop": "center" },
+    "_meta": { "title": "Fit mask to size", "blombo": { "when": "maskResize", "else": "input:image" } }
+  },
+  "mask-blur": {
+    "class_type": "ImageBlur",
+    "inputs": { "image": ["mask-scale", 0], "blur_radius": 4, "sigma": 2 },
+    "_meta": { "title": "Soften mask", "blombo": { "when": "blur", "else": "input:image" } }
+  },
+  "mask": {
+    "class_type": "ImageToMask",
+    "inputs": { "image": ["mask-blur", 0], "channel": "red" },
+    "_meta": { "title": "Mask", "blombo": { "when": "inpaint" } }
+  },
+  "noise-mask": {
+    "class_type": "SetLatentNoiseMask",
+    "inputs": { "samples": ["encode", 0], "mask": ["mask", 0] },
+    "_meta": { "title": "Only redraw the mask", "blombo": { "when": "inpaint", "else": "input:samples" } }
+  },
+  "repeat": {
+    "class_type": "RepeatLatentBatch",
+    "inputs": { "samples": ["noise-mask", 0], "amount": 1 },
+    "_meta": { "title": "Batch", "blombo": { "when": "batch", "else": "input:samples" } }
+  },
+  "out-start": { "class_type": "OUT:START", "inputs": { "value": ["repeat", 0] } }
+}

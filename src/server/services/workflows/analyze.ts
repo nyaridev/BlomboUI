@@ -308,6 +308,7 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
   if (parts.model) ports.MODEL = parts.model;
   if (parts.positive) ports.POSITIVE = parts.positive;
   if (parts.negative) ports.NEGATIVE = parts.negative;
+  if (parts.latent) ports.START = parts.latent;
   const encoder = findEncoder(g, parts.positive);
   const clip = encoder ? g.link(encoder, "clip") : null;
   if (clip) ports.CLIP = clip;
@@ -322,6 +323,13 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
     break;
   }
   return ports;
+}
+
+/** Where the main sampler takes a setting (denoise sits on the scheduler with custom samplers). */
+export function mainSamplerInput(prompt: ApiPrompt, input: "denoise"): Ref | null {
+  const g = new GraphView(prompt, null);
+  const sid = mainSampler(g);
+  return sid ? samplerParts(g, sid)[input] : null;
 }
 
 /** Nodes that sample (their progress is a pass on the progress bar), in id order. */

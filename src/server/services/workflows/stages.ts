@@ -15,8 +15,9 @@
  *    "node:<id>" uses another node, nothing drops the link). `inputsWhen: { input: flag }`
  *    keeps an input only when its flag is on.
  *
- * Stages run in a fixed order (controlnet → the workflow's own sampling → hires → adetailer
- * units), each reading the ports the previous one left.
+ * Stages run in a fixed order (source → controlnet → the workflow's own sampling → hires →
+ * adetailer units), each reading the ports the previous one left. A package's `base` sets inputs
+ * of the workflow's main sampler from its fields (the source stage's denoise).
  */
 import { findLoraTags, stripLoraTags } from "../../../shared/prompt/loras.ts";
 import { expandPrompt, type WildcardResolver } from "../../../shared/prompt/wildcards.ts";
@@ -39,15 +40,18 @@ import {
   PORTS,
   type Port,
   type RunSegment,
+  SOURCE_MODE_LABELS,
   STAGE_LABELS,
   type StageFamily,
+  type StageImage,
   type StagePackage,
   type StageProblem,
   type StageSettings,
   type StageStatus,
+  sourceOn,
   workflowFamily,
 } from "../../../shared/workflow/stages.ts";
-import { findPorts, GraphView, type PortLinks } from "./analyze.ts";
+import { findPorts, GraphView, mainSamplerInput, type PortLinks } from "./analyze.ts";
 import { CompileError, chainLoras, idGenerator, lorasIn } from "./loras.ts";
 
 export interface LoadedStage {
@@ -298,6 +302,62 @@ function instancesFor(
   problems: StageProblem[],
 ): Instance[] {
   const label = STAGE_LABELS[stage];
+  // Status checks run before anything is uploaded; a run needs the uploaded name.
+  const uploaded = (img: StageImage | null) =>
+    img ? (ctx.images ? ctx.images[img.file] : img.file) : undefined;
+  if (stage === "source") {
+    // Checked as if on, like every stage: Text to image is checked as Image to image.
+    const s = settings.source;
+    const mode = s.mode === "txt2img" ? "img2img" : s.mode;
+    const inpaint = mode === "inpaint";
+    const name = SOURCE_MODE_LABELS[mode];
+    if (!s.image)
+      problems.push({
+        code: "no_image",
+        message: `${name} has no image. Add one, or set the first pass back to Text to image.`,
+      });
+    if (inpaint && !s.mask)
+      problems.push({
+        code: "no_image",
+        message: "Inpaint has no mask. Paint over what should change.",
+      });
+    const image = uploaded(s.image);
+    const mask = inpaint ? uploaded(s.mask) : undefined;
+    if ((s.image && image === undefined) || (inpaint && s.mask && mask === undefined))
+      problems.push({
+        code: "no_image",
+        message: `${name}: its image couldn't be sent to ComfyUI. Add it again.`,
+      });
+    const size = baseSize(ctx);
+    const b = bindingFor(ctx.bindings, "latent.batch");
+    const batch = Math.max(1, Math.round(Number(b ? ctx.values[b.id] : 1)) || 1);
+    return [
+      {
+        key: "source",
+        label: name,
+        values: {
+          image,
+          mask,
+          width: size?.width,
+          height: size?.height,
+          denoise: s.denoise,
+          grow: s.grow,
+          blur: s.blur,
+          sigma: Math.max(0.1, s.blur / 2),
+          batch,
+        },
+        flags: {
+          inpaint,
+          resize: size !== null,
+          maskResize: inpaint && size !== null,
+          grow: inpaint && s.grow > 0,
+          blur: inpaint && s.blur > 0,
+          batch: batch > 1,
+        },
+        loras: "",
+      },
+    ];
+  }
   if (stage === "hires") {
     const h = settings.hires;
     const size = hiresSize(h, baseSize(ctx));
@@ -361,8 +421,7 @@ function instancesFor(
             unit: u.id,
             message: `ControlNet ${u.name} has no image. Add one, or turn the unit off.`,
           });
-        // Status checks run before anything is uploaded; a run needs the uploaded name.
-        const image = u.image ? (ctx.images ? ctx.images[u.image.file] : u.image.file) : undefined;
+        const image = uploaded(u.image);
         if (u.image && image === undefined)
           problems.push({
             code: "no_image",
@@ -518,7 +577,12 @@ function choicesFor(stage: LoadedStage | null, info: ObjectInfo | null): Record<
 
 /* ── all stages ────────────────────────────────────────────────────────── */
 
-const RUN_ORDER: StageId[] = ["controlnet", "hires", "adetailer"];
+const RUN_ORDER: StageId[] = ["source", "controlnet", "hires", "adetailer"];
+
+function isOn(settings: StageSettings, stage: StageId): boolean {
+  if (stage === "source") return sourceOn(settings.source);
+  return stage === "upscale" ? false : settings[stage].enabled;
+}
 
 /**
  * Splice the enabled stages (or, with `only`, that one stage whatever its switch says) into
@@ -541,7 +605,7 @@ export function applyStages(
   const texts: Record<string, string> = {};
 
   for (const stage of RUN_ORDER) {
-    if (only ? only !== stage : !settings[stage as "hires"].enabled) continue;
+    if (only ? only !== stage : !isOn(settings, stage)) continue;
     const problems: StageProblem[] = [];
     const { found, missing } = pickPackage(packages, stage, family, ports);
     const status: StageStatus = {
@@ -594,6 +658,16 @@ export function applyStages(
       // Republished ports flow on to the next instance and stage.
       for (const p of found.pkg.provides) if (instPorts[p]) ports[p] = instPorts[p];
       addedAll.push(...added);
+      for (const [input, field] of Object.entries(found.pkg.base)) {
+        const ref = mainSamplerInput(prompt, input as "denoise");
+        const node = ref ? prompt[ref.node] : undefined;
+        if (ref && node) node.inputs[ref.input] = inst.values[field];
+        else
+          problems.push({
+            code: "missing_port",
+            message: `${inst.label} sets the sampler's ${input}, and this workflow's sampler has none.`,
+          });
+      }
       if (lacking.length)
         problems.push({
           code: "missing_port",
@@ -620,6 +694,7 @@ const PORT_NAMES: Record<Port, string> = {
   VAE: "VAE",
   POSITIVE: "prompt",
   NEGATIVE: "negative prompt",
+  START: "sampler latent input",
   LATENT: "latent",
   IMAGE: "decoded image",
 };

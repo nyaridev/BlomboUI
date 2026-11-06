@@ -4,9 +4,10 @@ dist/
 src-tauri/target/
 src-tauri/gen/
 
-# user data (profiles, settings, workflows, databases) and runtime (ComfyUI slots, caches, logs)
-data/
-runtime/
+# user data (profiles, settings, workflows, databases) and runtime (ComfyUI slots, caches, logs).
+# Anchored to the repo root, so a source folder named data/ or runtime/ isn't ignored too.
+/data/
+/runtime/
 
 # OS / editor noise
 .DS_Store

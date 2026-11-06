@@ -7,6 +7,7 @@ export type SettingsPage =
   | "appearance"
   | "interface"
   | "generate"
+  | "saving"
   | "files"
   | "leftovers"
   | "gallery"
@@ -67,7 +68,15 @@ export const SETTINGS_PAGES: Array<{
     label: "Generate",
     icon: "generate",
     group: "Tools",
-    keywords: "layout default tour weight step",
+    keywords: "layout default tour weight step preview samplers schedulers resolutions",
+  },
+  {
+    id: "saving",
+    label: "Saving",
+    icon: "save",
+    group: "Tools",
+    keywords:
+      "format png jpeg jpg webp quality copy file names folders paths placeholders grids batch interrupted",
   },
   {
     id: "gallery",

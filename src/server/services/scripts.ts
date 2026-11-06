@@ -14,9 +14,14 @@
  *                modelthumbs.ts); the pictures it replaces go to the profile's trash
  *
  * Cancelling the group (Cancel, or the group's own cancel) still makes the grid of what finished.
+ *
+ * Batch grids: a plain click that makes more than one image (count or batch size) gets a grid of
+ * them too, laid out as square as they go, when Settings → Saving → Grids says so. Every grid is
+ * saved in the grids format where the grids pattern says (services/outputs.ts).
  */
 
 import { randomUUID } from "node:crypto";
+import fs from "node:fs/promises";
 import path from "node:path";
 import type { ModelKind } from "../../shared/constants.ts";
 import { workflowFolder } from "../../shared/gallery.ts";
@@ -24,14 +29,17 @@ import type { GenerateBody, GenerateResponse, Job, JobImage } from "../../shared
 import type { ServerMessage } from "../../shared/live.ts";
 import { mainFolder } from "../../shared/profile.ts";
 import { randomSeed } from "../../shared/random.ts";
+import { timeVars } from "../../shared/savepaths.ts";
 import { planScript, type Script, ScriptError, type ScriptPlan } from "../../shared/scripts.ts";
 import { bindingFor, type WorkflowManifest } from "../../shared/workflow/manifest.ts";
 import { freePath, writeFileIfAbsent } from "../lib/fsx.ts";
 import { composeGrid } from "../lib/grid.ts";
 import { HttpError } from "../lib/http.ts";
+import { encodeImage } from "../lib/saveformat.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
 import { type JobQueue, nextSeed } from "./jobs.ts";
 import { saveModelThumbs } from "./modelthumbs.ts";
+import type { OutputSaver } from "./outputs.ts";
 import type { ProfileService } from "./profiles.ts";
 
 export interface ScriptDeps {
@@ -45,6 +53,25 @@ export interface ScriptDeps {
   modelFile?: (kind: ModelKind, comfyName: string) => Promise<string | null>;
   /** Model pictures changed: model lists refresh. */
   onThumbs?: () => void;
+  /** Grid settings and where grids go (Settings → Saving). */
+  outputs?: Pick<OutputSaver, "saving" | "gridTarget">;
+}
+
+/** A plain Generate click followed for its batch grid. */
+interface Click {
+  id: string;
+  profileId: string;
+  workflow: Pick<WorkflowManifest, "id" | "name">;
+  seed: number | null;
+  order: string[];
+  done: Map<string, Job>;
+}
+
+/** A grid ready to save and show as a finished "grid" job. */
+interface GridOut {
+  png: Buffer;
+  width: number;
+  height: number;
 }
 
 interface Group {
@@ -73,6 +100,8 @@ export class ScriptService {
   private readonly groups = new Map<string, Group>();
   /** Grid id → file, for /api/scripts/grids/:id. */
   private readonly grids = new Map<string, string>();
+  /** Job id → the click it belongs to (batch grids). */
+  private readonly clicks = new Map<string, Click>();
 
   constructor(deps: ScriptDeps) {
     this.deps = deps;
@@ -134,6 +163,22 @@ export class ScriptService {
     return { jobs, values: {} };
   }
 
+  /** Follow a plain click's runs, to put their images in a batch grid once they're all done. */
+  followClick(jobs: Job[]): void {
+    const profileId = this.deps.profiles.active;
+    const first = jobs[0];
+    if (!profileId || !first) return;
+    const click: Click = {
+      id: randomUUID(),
+      profileId,
+      workflow: { id: first.workflowId, name: first.workflowName },
+      seed: first.seed,
+      order: jobs.map((j) => j.id),
+      done: new Map(),
+    };
+    for (const j of jobs) this.clicks.set(j.id, click);
+  }
+
   /** The grid image file for a grid job's URL. */
   gridFile(id: string): string {
     const file = this.grids.get(id);
@@ -169,7 +214,58 @@ export class ScriptService {
     }
   }
 
+  private async onClickFinished(click: Click, job: Job): Promise<void> {
+    this.clicks.delete(job.id);
+    click.done.set(job.id, job);
+    if (click.done.size < click.order.length) return;
+    try {
+      await this.batchGrids(click);
+    } catch (error) {
+      console.error("Batch grid failed:", error);
+    }
+  }
+
+  /** The click's images as grids of at most `maxImages`, when the settings ask for them. */
+  private async batchGrids(click: Click): Promise<void> {
+    const opts = this.deps.outputs ? (await this.deps.outputs.saving(click.profileId)).grids : null;
+    if (!opts?.batch) return;
+    const jobs = click.order.flatMap((id) => click.done.get(id) ?? []);
+    const stopped = jobs.some((j) => j.state === "cancelled" || j.state === "interrupted");
+    if (stopped && !opts.onCancel) return;
+    const images = jobs.flatMap((j) =>
+      j.state === "done" || (j.state === "interrupted" && opts.includeInterrupted)
+        ? j.images.filter((i) => i.type === "output")
+        : [],
+    );
+    if (images.length < 2) return;
+    for (let at = 0; at < images.length; at += opts.maxImages) {
+      const bytes: Uint8Array[] = [];
+      for (const image of images.slice(at, at + opts.maxImages)) {
+        const b = await this.imageBytes(image);
+        if (b) bytes.push(b);
+      }
+      if (bytes.length < 2) continue;
+      // As square as they go: 64 make 8 × 8, 10 make 4 × 3.
+      const cols = Math.ceil(Math.sqrt(bytes.length));
+      const grid = await composeGrid({
+        images: bytes,
+        cols,
+        rows: Math.ceil(bytes.length / cols),
+        colLabels: [],
+        rowLabels: [],
+        skipEmpty: true,
+      });
+      await this.saveGrid(click.profileId, click.workflow, click.seed, grid, {
+        kind: "batch",
+        title: `Batch of ${bytes.length}`,
+        groupId: click.id,
+      });
+    }
+  }
+
   private async onFinished(job: Job): Promise<void> {
+    const click = this.clicks.get(job.id);
+    if (click) return this.onClickFinished(click, job);
     const g = job.group ? this.groups.get(job.group.id) : undefined;
     if (!g || !job.group) return;
     g.done.set(job.group.index, job);
@@ -226,20 +322,60 @@ export class ScriptService {
       margin: g.plan.margin,
       title: g.plan.legend ? `${g.workflow.name} · ${g.plan.title} · seed ${g.seed}` : undefined,
     });
+    await this.saveGrid(g.profileId, g.workflow, g.seed, grid, {
+      kind: g.plan.kind,
+      title: g.plan.title,
+      groupId: g.id,
+    });
+  }
 
+  /** Where a grid goes without the output saver (tests): the old layout. */
+  private async legacyGridTarget(
+    profileId: string,
+    workflow: Pick<WorkflowManifest, "id" | "name">,
+    kind: string,
+  ): Promise<{ file: string; subfolder: string | null }> {
     const now = new Date();
     const day = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
     const stamp = `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const profile = await this.deps.profiles.find(g.profileId);
+    const profile = await this.deps.profiles.find(profileId);
     const outputs = profile ? mainFolder(profile, "outputs").trim() : "";
-    // <workflow>/grids/<day>/, beside the run's images (OUTPUT_TYPES).
-    const subfolder = `${workflowFolder(g.workflow.name, g.workflow.id)}/grids/${day}`;
+    const subfolder = `${workflowFolder(workflow.name, workflow.id)}/grids/${day}`;
     const dir = outputs
       ? path.join(outputs, ...subfolder.split("/"))
-      : path.join(this.deps.profiles.dir(g.profileId), "grids", day);
-    const file = await freePath(path.join(dir, `${g.plan.kind}-${stamp}.png`));
-    await writeFileIfAbsent(file, grid.png);
-    if (outputs)
+      : path.join(this.deps.profiles.dir(profileId), "grids", day);
+    const file = await freePath(path.join(dir, `${kind}-${stamp}.png`));
+    return { file, subfolder: outputs ? subfolder : null };
+  }
+
+  /** Save a grid (format and place from Settings → Saving) and show it as a finished job. */
+  private async saveGrid(
+    profileId: string,
+    workflow: Pick<WorkflowManifest, "id" | "name">,
+    seed: number | null,
+    grid: GridOut,
+    info: { kind: string; title: string; groupId: string },
+  ): Promise<void> {
+    const now = new Date();
+    const outputs = this.deps.outputs;
+    const opts = outputs ? (await outputs.saving(profileId)).grids : null;
+    const format = opts?.format ?? "png";
+    const data =
+      format === "png" ? grid.png : await encodeImage(grid.png, format, opts?.quality ?? 90);
+    const vars = {
+      ...timeVars(now),
+      workflow: workflowFolder(workflow.name, workflow.id),
+      seed,
+      kind: info.kind,
+      width: grid.width,
+      height: grid.height,
+    };
+    const { file, subfolder } = outputs
+      ? await outputs.gridTarget(profileId, vars, format)
+      : await this.legacyGridTarget(profileId, workflow, info.kind);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await writeFileIfAbsent(file, data);
+    if (subfolder !== null)
       void this.deps
         .ingest?.({ filename: path.basename(file), subfolder, type: "output" })
         .catch(() => undefined);
@@ -254,10 +390,10 @@ export class ScriptService {
     this.deps.queue.addFinished({
       id,
       seq: 0,
-      workflowId: g.workflow.id,
-      workflowName: g.workflow.name,
+      workflowId: workflow.id,
+      workflowName: workflow.name,
       state: "done",
-      seed: g.seed,
+      seed,
       width: grid.width,
       height: grid.height,
       segments: [],
@@ -270,12 +406,12 @@ export class ScriptService {
       error: null,
       promptId: null,
       group: {
-        id: g.id,
+        id: info.groupId,
         kind: "grid",
-        title: g.plan.title,
+        title: info.title,
         index: 0,
         total: 1,
-        label: g.plan.title,
+        label: info.title,
       },
       file: { url: `/api/scripts/grids/${id}`, path: file, width: grid.width, height: grid.height },
       timings: [],

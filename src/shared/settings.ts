@@ -10,6 +10,7 @@ import { z } from "zod";
 import { BrowseFilter, CIVITAI_SITES, FollowedCreator, SavedFilter } from "./civitai.ts";
 import { MAIN_VIEWS, type MainView, WORK_TABS, type WorkTab } from "./constants.ts";
 import { salvage } from "./salvage.ts";
+import { pathPattern } from "./savepaths.ts";
 import { SET_RESOLUTIONS, SIZE_MODES } from "./sizes.ts";
 
 export const SETTINGS_VERSION = 2;
@@ -135,6 +136,8 @@ export const GallerySettings = z.object({
   excludeGrids: z.boolean().default(true),
   /** Leave out images saved by a run that was stopped before it finished. */
   excludeInterrupted: z.boolean().default(true),
+  /** Leave out the JPEG copies of large images (Settings → Saving). */
+  excludeJpegCopies: z.boolean().default(true),
   /** Animated WebPs and GIFs play in their tiles; off, they play on hover or when opened. */
   autoplayAnimated: z.boolean().default(true),
   /** Videos play (muted) in their tiles; off, they play on hover or when opened. */
@@ -180,6 +183,52 @@ export const GenerateSettings = z.object({
   /** A rename in the pickers also updates full <lora:…> and __wildcard__ references in wildcard files. */
   renameRefs: z.boolean().default(true),
 });
+
+/** Formats Blombo can save images and grids in. */
+export const IMAGE_FORMATS = ["png", "jpeg", "webp"] as const;
+export type ImageFormat = (typeof IMAGE_FORMATS)[number];
+
+/**
+ * How generated images and grids are saved (Settings → Saving). ComfyUI saves PNGs; another
+ * format is converted right after, keeping the generation data (shared/savepaths.ts for paths).
+ */
+export const SavingSettings = z.object({
+  format: z.enum(IMAGE_FORMATS).default("png"),
+  /** JPEG and WebP quality. */
+  quality: z.number().int().min(50).max(100).default(95),
+  /** A JPEG copy beside an image whose file is bigger than `overKb` (for sharing). */
+  jpegCopy: z
+    .object({
+      enabled: z.boolean().default(true),
+      overKb: z.number().int().min(256).max(65536).default(4096),
+      quality: z.number().int().min(50).max(100).default(90),
+    })
+    .prefault({}),
+  paths: z
+    .object({
+      images: pathPattern("images"),
+      grids: pathPattern("grids"),
+      interrupted: pathPattern("interrupted"),
+      jpegCopies: pathPattern("jpegCopies"),
+    })
+    .prefault({}),
+  grids: z
+    .object({
+      /** A grid of a click's images when it made more than one (batch size or count). */
+      batch: z.boolean().default(true),
+      /** Still make it, of the finished images, when the click was stopped or cancelled. */
+      onCancel: z.boolean().default(true),
+      /** Put a stopped run's images in it too. */
+      includeInterrupted: z.boolean().default(false),
+      /** Images per batch grid (more make several); laid out as square as they go. */
+      maxImages: z.number().int().min(4).max(100).default(64),
+      /** Format and quality of every grid (batch, matrix, XY). */
+      format: z.enum(IMAGE_FORMATS).default("png"),
+      quality: z.number().int().min(50).max(100).default(90),
+    })
+    .prefault({}),
+});
+export type SavingSettings = z.infer<typeof SavingSettings>;
 
 /** Ctrl+↑/↓ in the prompt editor changes weights by this much. */
 export const WEIGHT_STEPS = [0.01, 0.05, 0.1] as const;
@@ -326,6 +375,7 @@ export const Settings = z.object({
   gallery: GallerySettings.prefault({}),
   civitai: CivitaiSettings.prefault({}),
   generate: GenerateSettings.prefault({}),
+  saving: SavingSettings.prefault({}),
   autocomplete: AutocompleteSettings.prefault({}),
   notifications: NotificationSettings.prefault({}),
   shortcuts: ShortcutSettings.prefault({}),
@@ -346,6 +396,7 @@ export const SettingsPatch = z
     gallery: Section,
     civitai: Section,
     generate: Section,
+    saving: Section,
     autocomplete: Section,
     notifications: Section,
     shortcuts: Section,

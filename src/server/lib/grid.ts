@@ -21,6 +21,8 @@ export interface GridInput {
   captions?: string[];
   /** Pixels between cells. */
   margin?: number;
+  /** Leave cells past the last image blank instead of saying "No image" (a batch grid's last row). */
+  skipEmpty?: boolean;
   title?: string;
 }
 
@@ -150,8 +152,8 @@ export async function composeGrid(input: GridInput): Promise<{
   for (let r = 0; r < input.rows; r++)
     for (let c = 0; c < input.cols; c++) {
       const index = r * input.cols + c;
-      // A captioned grid's last row can be short.
-      if (captions && index >= input.images.length) continue;
+      // A captioned grid's (or a batch grid's) last row can be short.
+      if ((captions || input.skipEmpty) && index >= input.images.length) continue;
       const img = input.images[index] ?? null;
       const top = titleH + headH + r * stepY;
       const left = sideW + c * stepX;

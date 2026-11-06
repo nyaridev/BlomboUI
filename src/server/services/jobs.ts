@@ -23,6 +23,7 @@ import { encodePreviewFrame, type LiveTopic, type ServerMessage } from "../../sh
 import { comfyNameOf, type LocalModel } from "../../shared/models.ts";
 import { INSTANT_LORAS, readInstantLoras } from "../../shared/prompt/instant.ts";
 import { randomSeed } from "../../shared/random.ts";
+import { type PathVars, timeVars } from "../../shared/savepaths.ts";
 import { nodeInputs } from "../../shared/workflow/graph.ts";
 import {
   bindingFor,
@@ -34,6 +35,7 @@ import { Emitter } from "../lib/emitter.ts";
 import { HttpError } from "../lib/http.ts";
 import { ComfyHttpError, type ComfyPreview, type ComfyWsMessage } from "./comfy/client.ts";
 import type { ComfySupervisor } from "./comfy/supervisor.ts";
+import type { OutputSaver } from "./outputs.ts";
 import type { ProfileService } from "./profiles.ts";
 import type { StageService } from "./stages.ts";
 import { RunClock } from "./timing.ts";
@@ -55,6 +57,8 @@ export interface QueueDeps {
   recordPrompts?: (texts: string[]) => void;
   /** The profile's local models: instant LoRAs' trigger words, the models an image records. */
   localModels?: () => Promise<LocalModel[]>;
+  /** Where images are saved and what happens to them after (Settings → Saving). */
+  outputs?: Pick<OutputSaver, "prefix" | "process">;
 }
 
 const loraKey = (file: string) => file.replace(/\\/g, "/").toLowerCase();
@@ -91,6 +95,12 @@ interface Run {
   shown?: Record<string, string>;
   /** Local models it used that had no hash yet (hashed after the run). */
   unhashed?: string[];
+  /** Its save paths' placeholders, fixed when it's compiled. */
+  vars?: PathVars;
+  /** Images already taken in (ComfyUI reports them on the socket and again in its history). */
+  seen?: Set<string>;
+  /** Images being converted or copied, in order; the run finishes after them. */
+  saving?: Promise<void>;
 }
 
 /** What a finished job ran with, for the job log ("Run again", usage stats). */
@@ -104,6 +114,8 @@ export interface RunContext {
   shown?: Record<string, string>;
   /** Local model ids it used that had no hash yet. */
   unhashed?: string[];
+  /** Its save paths' placeholders (where a stopped run's images move). */
+  vars?: PathVars;
 }
 
 type QueueEvents = {
@@ -536,6 +548,12 @@ export class JobQueue extends Emitter<QueueEvents> {
       const byFile = new Map(
         local.filter((m) => m.kind === "loras").map((m) => [loraKey(comfyNameOf(m)), m]),
       );
+      run.vars = this.pathVars(run);
+      const filenamePrefix =
+        this.deps.outputs && run.profileId
+          ? await this.deps.outputs.prefix(run.profileId, run.vars)
+          : outputPrefix(workflowFolder(run.job.workflowName, run.job.workflowId), "images");
+      if (gone()) return;
       const compiled = compile({
         manifest: run.manifest,
         prompt,
@@ -543,11 +561,8 @@ export class JobQueue extends Emitter<QueueEvents> {
         seed: run.job.seed ?? randomSeed(),
         wildcards,
         loraFiles,
-        // <workflow>/images/<day>/blombo_00001_.png (a stopped run's move to interrupted/).
-        filenamePrefix: outputPrefix(
-          workflowFolder(run.job.workflowName, run.job.workflowId),
-          "images",
-        ),
+        // <workflow>/images/<day>/blombo_00001_.png by default (Settings → Saving).
+        filenamePrefix,
         preview: run.preview,
         stages,
         stagePackages: anyStage ? await this.deps.stages.packages() : [],
@@ -637,20 +652,25 @@ export class JobQueue extends Emitter<QueueEvents> {
     job.finishedAt = new Date().toISOString();
     this.finished.unshift(job);
     if (this.finished.length > KEEP_FINISHED) this.finished.length = KEEP_FINISHED;
-    this.emit(
-      "finished",
-      job,
-      run
-        ? {
-            profileId: run.profileId,
-            manifest: run.manifest,
-            values: run.values,
-            stages: run.stages,
-            shown: run.shown,
-            unhashed: run.unhashed,
-          }
-        : null,
-    );
+    const emit = () =>
+      this.emit(
+        "finished",
+        job,
+        run
+          ? {
+              profileId: run.profileId,
+              manifest: run.manifest,
+              values: run.values,
+              stages: run.stages,
+              shown: run.shown,
+              unhashed: run.unhashed,
+              vars: run.vars,
+            }
+          : null,
+      );
+    // Listeners (the job log, grids, the interrupted move) see the images as saved.
+    if (run?.saving) void run.saving.then(emit);
+    else emit();
   }
 
   private finish(
@@ -672,15 +692,50 @@ export class JobQueue extends Emitter<QueueEvents> {
   }
 
   private addImage(run: Run, image: JobImage): void {
-    if (
-      run.job.images.some(
-        (i) =>
-          i.filename === image.filename && i.subfolder === image.subfolder && i.type === image.type,
-      )
-    )
+    const key = `${image.type}:${image.subfolder}/${image.filename}`;
+    run.seen ??= new Set();
+    if (run.seen.has(key)) return;
+    run.seen.add(key);
+    const outputs = this.deps.outputs;
+    const take = (saved: JobImage) => {
+      run.job.images.push(saved);
+      this.deps.publish("jobs", { t: "job.image", jobId: run.job.id, image: saved });
+    };
+    if (!outputs || !run.profileId || image.type !== "output") {
+      take(image);
       return;
-    run.job.images.push(image);
-    this.deps.publish("jobs", { t: "job.image", jobId: run.job.id, image });
+    }
+    // Converted or copied first (Settings → Saving), in the order ComfyUI reported them.
+    const profileId = run.profileId;
+    run.saving = (run.saving ?? Promise.resolve())
+      .then(() => outputs.process(profileId, run.vars ?? {}, image))
+      .catch((error) => {
+        console.warn("Couldn't convert or copy a saved image:", error);
+        return image;
+      })
+      .then((saved) => {
+        take(saved);
+        this.publishQueue();
+      });
+  }
+
+  /** The placeholders of a run's save paths (shared/savepaths.ts), as of now. */
+  private pathVars(run: Run): PathVars {
+    const binding =
+      bindingFor(run.manifest.bindings, "model.checkpoint") ??
+      bindingFor(run.manifest.bindings, "model.unet");
+    const model = String((binding && run.values[binding.id]) ?? "")
+      .split(/[\\/]/)
+      .at(-1)
+      ?.replace(/\.[^.]+$/, "");
+    return {
+      ...timeVars(new Date()),
+      workflow: workflowFolder(run.job.workflowName, run.job.workflowId),
+      seed: run.job.seed,
+      width: run.job.width,
+      height: run.job.height,
+      model: model ?? "",
+    };
   }
 
   private async collectHistory(run: Run): Promise<void> {

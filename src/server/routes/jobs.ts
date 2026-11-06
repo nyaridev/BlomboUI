@@ -11,7 +11,11 @@ export function jobRoutes(queue: JobQueue, scripts: ScriptService) {
 
   r.post("/", async (c) => {
     const body = await readJson(c, GenerateBody);
-    return c.json(await (body.script ? scripts.run(body) : queue.enqueue(body)), 201);
+    if (body.script) return c.json(await scripts.run(body), 201);
+    const res = await queue.enqueue(body);
+    // A click that makes several images gets a batch grid (not Generate forever's endless runs).
+    if (!body.loop) scripts.followClick(res.jobs);
+    return c.json(res, 201);
   });
 
   r.post("/interrupt", async (c) => {

@@ -54,6 +54,7 @@ import {
 import type { LiveTopic, ServerMessage } from "../../../shared/live.ts";
 import type { LocalModel } from "../../../shared/models.ts";
 import { folderIdFrom, type ProfileFolder } from "../../../shared/profile.ts";
+import { markerOf } from "../../../shared/savepaths.ts";
 import { slugId } from "../../../shared/settings.ts";
 import { type ProfileDb, type ProfileDbs, transaction } from "../../db/profileDb.ts";
 import { freePath, movePath, resolveInside } from "../../lib/fsx.ts";
@@ -155,6 +156,12 @@ const NOT_GRID = `('/' || i.folder || '/') NOT LIKE '%/grids/%' AND ('/' || i.fo
  */
 const NOT_INTERRUPTED = `('/' || i.folder || '/') NOT LIKE '%/interrupted/%' AND NOT EXISTS (
   SELECT 1 FROM interrupted x WHERE x.library = i.library AND x.path = i.path AND x.marked_at >= i.mtime)`;
+
+/** Not inside a folder with this name, at any depth (a pattern's fixed folder). */
+function notInFolder(name: string): string {
+  const like = name.replace(/['\\%_]/g, (c) => (c === "'" ? "''" : `\\${c}`));
+  return `('/' || i.folder || '/') NOT LIKE '%/${like}/%' ESCAPE '\\'`;
+}
 
 /**
  * A shuffled order that stays the same for one seed: the id through a hash in integer math
@@ -541,15 +548,16 @@ export class GalleryService {
   }
 
   /**
-   * A run was stopped: the images it saved in the main output folder move into their workflow's
-   * `interrupted/` folder (`interruptedFolder`), and `refs` are updated in place so the job and
-   * its log point where they are now. An image in another layout (older days, a prefix set in
-   * the graph), or one that can't be moved, is marked where it is instead (the `interrupted`
-   * table). Either way the gallery can leave them out (`excludeInterrupted`). Lists refetch.
+   * A run was stopped: the images it saved in the main output folder move where `target` says
+   * (the interrupted pattern, Settings → Saving; without one, their workflow's `interrupted/`
+   * folder, `interruptedFolder`), and `refs` are updated in place so the job and its log point
+   * where they are now. An image that can't be moved is marked where it is instead (the
+   * `interrupted` table). Either way the gallery can leave them out (`excludeInterrupted`).
    */
   async markInterrupted(
     profileId: string,
     refs: Array<{ filename: string; subfolder: string; type: string }>,
+    target?: (ref: { filename: string }) => Promise<string>,
   ): Promise<void> {
     const outputs = refs.filter((r) => r.type === "output");
     const open = this.current;
@@ -563,14 +571,20 @@ export class GalleryService {
     const find = db.prepare("SELECT id FROM images WHERE library = ? AND path = ?");
     for (const ref of outputs) {
       const rel = refPath(ref);
-      const to = lib.path ? interruptedFolder(ref.subfolder) : null;
+      const legacy = interruptedFolder(ref.subfolder);
+      const to = !lib.path
+        ? null
+        : target
+          ? await target(ref).catch(() => null)
+          : legacy && `${legacy}/${ref.filename}`;
       if (to && !rel.split("/").includes("..") && !ref.filename.includes("/")) {
         try {
-          const dest = await freePath(fromRel(lib.path, `${to}/${ref.filename}`));
+          const dest = await freePath(resolveInside(lib.path, to));
+          await fs.mkdir(path.dirname(dest), { recursive: true });
           await movePath(fromRel(lib.path, rel), dest);
           const old = find.get(lib.id, rel) as { id: number } | undefined;
           if (old) this.deleteRow(open, Number(old.id));
-          ref.subfolder = to;
+          ref.subfolder = path.relative(lib.path, path.dirname(dest)).replace(/\\/g, "/");
           ref.filename = path.basename(dest);
           await this.ingest(refPath(ref)).catch(() => null);
           continue;
@@ -583,12 +597,21 @@ export class GalleryService {
     this.deps.publish("gallery", { t: "gallery.changed" });
   }
 
-  /** What the gallery settings let through, as conditions on `images i`. */
+  /**
+   * What the gallery settings let through, as conditions on `images i`. Grids, stopped runs'
+   * images and JPEG copies are told apart by their pattern's fixed folder (Settings → Saving),
+   * as well as the folders older versions used.
+   */
   private async shown(): Promise<string[]> {
-    const { gallery } = await this.deps.settings.get(this.need().profileId);
+    const { gallery, saving } = await this.deps.settings.get(this.need().profileId);
+    const notIn = (pattern: string) => {
+      const marker = markerOf(pattern);
+      return marker ? [notInFolder(marker)] : [];
+    };
     return [
-      ...(gallery.excludeGrids ? [NOT_GRID] : []),
-      ...(gallery.excludeInterrupted ? [NOT_INTERRUPTED] : []),
+      ...(gallery.excludeGrids ? [NOT_GRID, ...notIn(saving.paths.grids)] : []),
+      ...(gallery.excludeInterrupted ? [NOT_INTERRUPTED, ...notIn(saving.paths.interrupted)] : []),
+      ...(gallery.excludeJpegCopies ? notIn(saving.paths.jpegCopies) : []),
     ];
   }
 

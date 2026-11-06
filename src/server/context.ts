@@ -42,6 +42,7 @@ import { LiveBus } from "./services/live.ts";
 import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
 import { ModelService } from "./services/models.ts";
+import { OutputSaver } from "./services/outputs.ts";
 import { ProfileService } from "./services/profiles.ts";
 import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
@@ -272,7 +273,14 @@ export function createServices(config: ServerConfig): Services {
     models,
   });
 
+  const outputs = new OutputSaver({
+    profiles,
+    settings,
+    ingest: (ref) => gallery.ingestOutput(ref),
+  });
+
   queue = new JobQueue({
+    outputs,
     supervisor,
     workflows,
     profiles,
@@ -305,12 +313,15 @@ export function createServices(config: ServerConfig): Services {
     };
     // A stopped run's images move to its workflow's interrupted/ folder first, so the log
     // records where they are.
-    if (job.state === "interrupted" && run?.profileId)
+    if (job.state === "interrupted" && run?.profileId) {
+      const profileId = run.profileId;
       void gallery
-        .markInterrupted(run.profileId, job.images)
+        .markInterrupted(profileId, job.images, (ref) =>
+          outputs.interruptedPath(profileId, run.vars ?? {}, ref),
+        )
         .catch((error) => console.warn("Couldn't move a stopped run's images:", error))
         .finally(record);
-    else record();
+    } else record();
   });
 
   jobs.holdComfy = () => installer.running || nodePacks.running;
@@ -368,6 +379,7 @@ export function createServices(config: ServerConfig): Services {
   const scripts = new ScriptService({
     queue: jobs,
     profiles,
+    outputs,
     supervisor,
     publish: (msg) => bus.publish(null, msg),
     ingest: (ref) => gallery.ingestOutput(ref),

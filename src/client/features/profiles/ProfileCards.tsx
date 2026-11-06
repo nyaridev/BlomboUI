@@ -1,7 +1,7 @@
 /**
- * The profile screen's page: the mark and the version on top, the profiles as portrait cards
- * filled with their picture (name, then images, favorites and runs from `useProfileStats`, and
- * when it was last opened, over a dark scrim), and a New profile card.
+ * The profile screen's page: the mark on top, the version bottom right, the profiles as
+ * portrait cards filled with their picture (name, then images, favorites and runs from
+ * `useProfileStats`, and when it was last opened, over a dark scrim), and a New profile card.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { Wordmark } from "@client/icons/Logo";
@@ -61,23 +61,11 @@ export function ProfileGrid(props: ProfileGridProps) {
   return (
     <div className="relative h-full overflow-auto bg-bg">
       {/* Over the page, so the cards center on the whole window, not on what's below it. */}
-      <header className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-6 pt-5">
+      <header className="absolute inset-x-0 top-0 z-10 flex items-center px-6 pt-5">
         <Wordmark muted />
-        {props.version ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            iconRight="github"
-            className="font-mono"
-            aria-label={`BlomboUI v${props.version} on GitHub`}
-            onClick={() => openWindow(REPO, "BlomboUI on GitHub")}
-          >
-            v{props.version}
-          </Button>
-        ) : null}
       </header>
-      {/* The same space above and below, enough to clear the header when cards fill the page. */}
-      <main className="flex min-h-full items-center justify-center px-8 py-20">
+      {/* The same space above and below, enough to clear the header and the version. */}
+      <main className="relative flex min-h-full items-center justify-center px-8 py-20">
         <ul className="flex max-w-6xl flex-wrap justify-center gap-5">
           {props.profiles.map((p) => (
             <li key={p.id}>
@@ -98,6 +86,21 @@ export function ProfileGrid(props: ProfileGridProps) {
             </button>
           </li>
         </ul>
+        {/* In the page's corner, or after the cards once they scroll, so it never covers one. */}
+        {props.version ? (
+          <div className="absolute right-6 bottom-5">
+            <Button
+              variant="ghost"
+              size="sm"
+              iconRight="github"
+              className="font-mono"
+              aria-label={`BlomboUI v${props.version} on GitHub`}
+              onClick={() => openWindow(REPO, "BlomboUI on GitHub")}
+            >
+              v{props.version}
+            </Button>
+          </div>
+        ) : null}
       </main>
     </div>
   );

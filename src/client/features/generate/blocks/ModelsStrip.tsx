@@ -429,6 +429,7 @@ export function ModelsStrip({
 }) {
   const checkpoint = useRoleBinding("model.checkpoint");
   const unet = useRoleBinding("model.unet");
+  const unet2 = useRoleBinding("model.unet2");
   const vae = useRoleBinding("model.vae");
   const clip = useRoleBinding("model.clip");
   const clip2 = useRoleBinding("model.clip2");
@@ -466,7 +467,7 @@ export function ModelsStrip({
       ? "Not in your loras folder: generating will stop with an error"
       : null;
   const main = checkpoint ?? unet;
-  const models = [main, vae, clip, clip2].filter((b): b is Binding => Boolean(b));
+  const models = [main, unet2, vae, clip, clip2].filter((b): b is Binding => Boolean(b));
 
   return (
     <div className="flex items-stretch gap-2">

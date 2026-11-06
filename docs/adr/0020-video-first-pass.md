@@ -34,7 +34,11 @@ Each model takes frames its own way (ComfyUI 0.44):
 - **Modes a workflow can't do are hidden** (chosen by the owner). `GET /api/workflows/:id` lists
   `sourceModes`: Text to image (or video) plus the modes whose package fits.
 - Video workflows hide the Hires fix, ADetailer and ControlNet tabs; Generate's box plays the video.
-- Built-in presets `wan22-5b` and `ltx23`.
+- Built-in presets `wan22-5b`, `wan22-14b` and `ltx23`.
+- **Wan 2.2 14B** (added the same day) samples in two passes on two experts. Its frame modes need
+  the image to video experts, so a package can `swap` model files (from → to) in the workflow's
+  loaders; it fits only a workflow that uses one of those files. The analyzer follows the sampler
+  chain to the decoder and binds the second pass's model as `model.unet2`.
 
 ## Consequences
 

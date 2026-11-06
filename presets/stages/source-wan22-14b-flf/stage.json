@@ -1,0 +1,70 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-wan22-14b-flf",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "First and last frame (Wan 2.2 14B)",
+  "description": "Makes a Wan 2.2 14B video between a first and a last frame: switches both passes to the image to video models and their 4-step LoRAs, and WanFirstLastFrameToVideo gives the conditioning and the latent. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": [
+    "firstLast"
+  ],
+  "fits": [
+    "EmptyHunyuanLatentVideo"
+  ],
+  "swap": {
+    "wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+    "wan2.2_t2v_low_noise_14B_fp8_scaled.safetensors": "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+    "wan2.2_t2v_high_noise_14B_fp16.safetensors": "wan2.2_i2v_high_noise_14B_fp16.safetensors",
+    "wan2.2_t2v_low_noise_14B_fp16.safetensors": "wan2.2_i2v_low_noise_14B_fp16.safetensors",
+    "wan2.2_t2v_lightx2v_4steps_lora_v1.1_high_noise.safetensors": "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+    "wan2.2_t2v_lightx2v_4steps_lora_v1.1_low_noise.safetensors": "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors"
+  },
+  "requires": [
+    "POSITIVE",
+    "NEGATIVE",
+    "VAE",
+    "VIDEO"
+  ],
+  "provides": [
+    "POSITIVE",
+    "NEGATIVE",
+    "VIDEO"
+  ],
+  "packs": [],
+  "fields": [
+    {
+      "field": "image",
+      "node": "first",
+      "input": "image",
+      "label": "First frame"
+    },
+    {
+      "field": "last",
+      "node": "last",
+      "input": "image",
+      "label": "Last frame"
+    },
+    {
+      "field": "width",
+      "node": "video",
+      "input": "width"
+    },
+    {
+      "field": "height",
+      "node": "video",
+      "input": "height"
+    },
+    {
+      "field": "length",
+      "node": "video",
+      "input": "length"
+    },
+    {
+      "field": "batch",
+      "node": "video",
+      "input": "batch_size"
+    }
+  ],
+  "defaults": {}
+}

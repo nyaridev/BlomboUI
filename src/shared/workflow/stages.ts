@@ -107,6 +107,12 @@ export const StagePackage = z.object({
    * package never lands on an LTX graph). Empty: any graph with the required ports.
    */
   fits: z.array(z.string()).default([]),
+  /**
+   * Model files the workflow's loaders switch to while this package runs (from → to): Wan 2.2
+   * 14B's frame modes swap its text to video experts and speed LoRAs for the image to video ones.
+   * A package with a swap fits only a workflow that uses one of the `from` files.
+   */
+  swap: z.record(z.string(), z.string()).default({}),
 });
 export type StagePackage = z.infer<typeof StagePackage>;
 

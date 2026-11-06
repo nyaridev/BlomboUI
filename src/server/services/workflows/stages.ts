@@ -55,6 +55,7 @@ import {
 } from "../../../shared/workflow/stages.ts";
 import { findPorts, GraphView, mainSamplerInput, type PortLinks } from "./analyze.ts";
 import { CompileError, chainLoras, idGenerator, lorasIn } from "./loras.ts";
+import { MODEL_INPUTS } from "./nodes.ts";
 
 export interface LoadedStage {
   pkg: StagePackage;
@@ -115,21 +116,24 @@ function isPort(s: string): s is Port {
 
 /**
  * The package for a stage that fits this workflow: its family first, then any that fits. A first
- * pass package must run the picked `mode`, and one with `fits` only takes a VIDEO latent made by
- * one of those classes (`videoClass`).
+ * pass package must run the picked `mode`, one with `fits` only takes a VIDEO latent made by
+ * one of those classes (`videoClass`), and one with a `swap` only a workflow that uses one of
+ * the files it swaps (`files`).
  */
 export function pickPackage(
   packages: LoadedStage[],
   stage: StageId,
   family: StageFamily,
   ports: PortLinks,
-  match: { mode?: SourceMode; videoClass?: string | null } = {},
+  match: { mode?: SourceMode; videoClass?: string | null; files?: Set<string> } = {},
 ): { found: LoadedStage | null; missing: Port[] } {
-  const { mode, videoClass } = match;
+  const { mode, videoClass, files } = match;
+  const swaps = (pkg: StagePackage) => Object.keys(pkg.swap);
   const candidates = packages
     .filter((p) => p.pkg.stage === stage)
     .filter((p) => !mode || p.pkg.modes.length === 0 || p.pkg.modes.includes(mode))
     .filter((p) => p.pkg.fits.length === 0 || p.pkg.fits.includes(videoClass ?? ""))
+    .filter((p) => swaps(p.pkg).length === 0 || swaps(p.pkg).some((f) => files?.has(f)))
     .sort((a, b) => Number(b.pkg.family === family) - Number(a.pkg.family === family));
   for (const c of candidates)
     if (c.pkg.requires.every((p) => ports[p])) return { found: c, missing: [] };
@@ -571,6 +575,39 @@ function nodeProblems(
   };
 }
 
+/** Every text value in the graph's inputs (the model files its loaders name, among others). */
+export function graphFiles(prompt: ApiPrompt): Set<string> {
+  const out = new Set<string>();
+  for (const node of Object.values(prompt))
+    for (const v of Object.values(node.inputs)) if (typeof v === "string") out.add(v);
+  return out;
+}
+
+/** A package's `swap`: the loaders switch files; a file ComfyUI doesn't list is a problem. */
+function swapFiles(
+  prompt: ApiPrompt,
+  swap: Record<string, string>,
+  info: ObjectInfo | null,
+  label: string,
+): StageProblem[] {
+  const out: StageProblem[] = [];
+  for (const node of Object.values(prompt))
+    for (const [input, value] of Object.entries(node.inputs)) {
+      const to = typeof value === "string" ? swap[value] : undefined;
+      if (!to) continue;
+      node.inputs[input] = to;
+      const options = inputOptions(info, node.class_type, input);
+      const kind = MODEL_INPUTS[input];
+      if (options && !options.includes(to))
+        out.push({
+          code: "missing_model",
+          ...(kind ? { modelKind: kind } : {}),
+          message: `${label} needs ${to} in your ${kind ?? "models"} folder. Download it, or set the first pass back to Text to video.`,
+        });
+    }
+  return out;
+}
+
 function inputOptions(info: ObjectInfo | null, cls: string, input: string): string[] | null {
   if (!info) return null;
   return nodeInputs(info[cls]).find((i) => i.name === input)?.options ?? null;
@@ -670,6 +707,7 @@ export function applyStages(
   const texts: Record<string, string> = {};
 
   const videoClass = ports.VIDEO ? (prompt[ports.VIDEO[0]]?.class_type ?? null) : null;
+  const files = graphFiles(prompt);
   // Text to image is checked as if on: as Image to image, or a video graph as First frame.
   const run: StageSettings =
     settings.source.mode === "txt2img"
@@ -682,6 +720,7 @@ export function applyStages(
     const { found, missing } = pickPackage(packages, stage, family, ports, {
       ...(stage === "source" ? { mode: run.source.mode } : {}),
       videoClass,
+      files,
     });
     const status: StageStatus = {
       stage,
@@ -747,6 +786,7 @@ export function applyStages(
           message: `${inst.label} needs the workflow's ${joinNames(lacking.map(portName))}, and this workflow has none.`,
         });
       if (ctx.info) problems.push(...modelProblems(found, inst, keptFields(found, inst), ctx.info));
+      problems.push(...swapFiles(prompt, found.pkg.swap, ctx.info, inst.label));
       const g = new GraphView(prompt, null);
       const samplers = added.filter((id) => g.isSampler(id));
       if (samplers.length) segments.push({ id: inst.key, label: inst.label, nodes: samplers });
@@ -793,12 +833,16 @@ export function sourceModes(
   packages: LoadedStage[],
   bindings: Binding[],
   media: WorkflowMedia,
+  values: Record<string, unknown> = {},
 ): SourceMode[] {
   if (media === "image") return [...IMAGE_SOURCE_MODES];
   const ports = findPorts(prompt);
   const videoClass = ports.VIDEO ? (prompt[ports.VIDEO[0]]?.class_type ?? null) : null;
   const family = workflowFamily(bindings);
+  // The files the workflow runs with: its graph's, and the model values picked since.
+  const files = graphFiles(prompt);
+  for (const v of Object.values(values)) if (typeof v === "string") files.add(v);
   const fits = (mode: SourceMode) =>
-    pickPackage(packages, "source", family, ports, { mode, videoClass }).found !== null;
+    pickPackage(packages, "source", family, ports, { mode, videoClass, files }).found !== null;
   return ["txt2img", ...(["first", "firstLast"] as const).filter(fits)];
 }

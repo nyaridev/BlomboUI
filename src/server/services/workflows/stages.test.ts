@@ -108,6 +108,8 @@ describe("stage packages", () => {
       "source-ltx2",
       "source-ltx2-flf",
       "source-wan22",
+      "source-wan22-14b",
+      "source-wan22-14b-flf",
       "source-wan22-fun",
     ]);
   });
@@ -415,6 +417,91 @@ describe("video first pass (source packages for Wan and LTX)", () => {
     // Text to video itself leaves the graph alone.
     const plain = run("preset:wan22-5b", { source: { mode: "txt2img", image: IMAGE } }).prompt;
     expect(plain["8"]?.inputs.latent_image).toEqual(["7", 0]);
+  });
+
+  describe("Wan 2.2 14B: a high noise pass, then a low noise one", () => {
+    const I2V = {
+      high: "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors",
+      low: "wan2.2_i2v_low_noise_14B_fp8_scaled.safetensors",
+      loraHigh: "wan2.2_i2v_lightx2v_4steps_lora_v1_high_noise.safetensors",
+      loraLow: "wan2.2_i2v_lightx2v_4steps_lora_v1_low_noise.safetensors",
+    };
+    const withI2v = structuredClone(info);
+    const add = (cls: string, input: string, names: string[]) => {
+      const spec = withI2v[cls]?.input.required?.[input];
+      if (spec && Array.isArray(spec[0])) spec[0] = [...(spec[0] as string[]), ...names];
+    };
+    add("UNETLoader", "unet_name", [I2V.high, I2V.low]);
+    add("LoraLoaderModelOnly", "lora_name", [I2V.loraHigh, I2V.loraLow]);
+
+    it("decodes after the low noise pass and offers the frame modes only with Wan's files", () => {
+      expect(findPorts(load("preset:wan22-14b"))).toMatchObject({
+        MODEL: ["7", 0],
+        START: ["11", 0],
+        VIDEO: ["11", 0],
+        LATENT: ["16", 0],
+        VAE: ["4", 0],
+        IMAGE: ["17", 0],
+      });
+      const modes = (prompt: ApiPrompt) =>
+        sourceModes(prompt, packages, analyze(prompt, info).bindings, "video");
+      expect(modes(load("preset:wan22-14b"))).toEqual(["txt2img", "first", "firstLast"]);
+      // The same latent node with other models (HunyuanVideo, Wan 2.1): nothing to swap to.
+      const other = load("preset:wan22-14b");
+      for (const id of ["1", "2"]) if (other[id]) other[id].inputs.unet_name = "other.safetensors";
+      for (const id of ["5", "6"]) if (other[id]) other[id].inputs.lora_name = "speed.safetensors";
+      expect(modes(other)).toEqual(["txt2img"]);
+    });
+
+    it("First frame: both passes on the image to video models, WanImageToVideo before them", () => {
+      const p = run(
+        "preset:wan22-14b",
+        { source: { mode: "first", image: IMAGE } },
+        { objectInfo: withI2v },
+      ).prompt;
+      expectValidGraph(p);
+      expect([1, 2, 5, 6].map((id) => Object.values(p[id]?.inputs ?? {})[0])).toEqual([
+        I2V.high,
+        I2V.low,
+        I2V.loraHigh,
+        I2V.loraLow,
+      ]);
+      const [videoId, video] = one(p, "WanImageToVideo");
+      expect(video.inputs).toMatchObject({
+        positive: ["9", 0],
+        negative: ["10", 0],
+        vae: ["4", 0],
+        width: 640,
+        height: 640,
+        length: 81,
+      });
+      for (const pass of ["15", "16"])
+        expect(p[pass]?.inputs).toMatchObject({ positive: [videoId, 0], negative: [videoId, 1] });
+      expect(p["15"]?.inputs.latent_image).toEqual([videoId, 2]);
+      expect(p["16"]?.inputs.latent_image).toEqual(["15", 0]);
+    });
+
+    it("First and last frame: WanFirstLastFrameToVideo with both frames", () => {
+      const p = run(
+        "preset:wan22-14b",
+        { source: { mode: "firstLast", image: IMAGE, last: LAST } },
+        { stageImages: images, objectInfo: withI2v },
+      ).prompt;
+      expectValidGraph(p);
+      const [loadFirst] =
+        byClass(p, "LoadImage").find(([, n]) => n.inputs.image === images[IMAGE.file]) ?? [];
+      const [loadLast] =
+        byClass(p, "LoadImage").find(([, n]) => n.inputs.image === images[LAST.file]) ?? [];
+      const [videoId, video] = one(p, "WanFirstLastFrameToVideo");
+      expect(video.inputs).toMatchObject({ start_image: [loadFirst, 0], end_image: [loadLast, 0] });
+      expect(p["15"]?.inputs.latent_image).toEqual([videoId, 2]);
+    });
+
+    it("says which image to video file is missing", () => {
+      expect(() => run("preset:wan22-14b", { source: { mode: "first", image: IMAGE } })).toThrow(
+        `needs ${I2V.high} in your diffusion_models folder`,
+      );
+    });
   });
 });
 

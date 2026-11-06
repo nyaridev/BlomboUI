@@ -292,6 +292,22 @@ function mainSampler(g: GraphView): string | null {
   );
 }
 
+/**
+ * The last sampler of the chain that starts at `sid`: Wan 2.2 14B's low noise pass samples the
+ * high noise pass's latent, and the decoder reads the last one.
+ */
+function chainEnd(g: GraphView, sid: string): string {
+  let cur = sid;
+  for (let i = 0; i < 8; i++) {
+    const next = g
+      .ids()
+      .find((id) => id !== cur && g.isSampler(id) && g.link(id, "latent_image")?.[0] === cur);
+    if (!next) break;
+    cur = next;
+  }
+  return cur;
+}
+
 /** Where LoRAs go when a graph has no LoRA stack: right after the model and CLIP loaders. */
 export function findLoraSources(
   prompt: ApiPrompt,
@@ -363,8 +379,9 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
   if (clip) ports.CLIP = clip;
   // The decoder that reads this sampler's output (directly, or the video half of an audio +
   // video latent split after sampling).
+  const end = chainEnd(g, sid);
   const fromSampler = (link: ApiLink) =>
-    link[0] === sid || g.link(link[0], AV_SPLIT_INPUT)?.[0] === sid;
+    link[0] === end || g.link(link[0], AV_SPLIT_INPUT)?.[0] === end;
   for (const id of g.ids()) {
     const samples = g.link(id, "samples");
     const vae = g.link(id, "vae");
@@ -541,6 +558,14 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
       if ("ckpt_name" in g.inputs(loader))
         add(g.widgetRef(loader, "ckpt_name"), "model.checkpoint");
       else if ("unet_name" in g.inputs(loader)) add(g.widgetRef(loader, "unet_name"), "model.unet");
+    }
+    // A second pass on its own model (Wan 2.2 14B: high noise, then low noise).
+    const end = chainEnd(g, sid);
+    const second = traceChain(g, samplerParts(g, end).model, "model").nodes.at(-1);
+    if (end !== sid && second && second !== loader && "unet_name" in g.inputs(second)) {
+      add(g.widgetRef(second, "unet_name"), "model.unet2");
+      const first = bindings.find((b) => b.role === "model.unet");
+      if (first) first.label = "High noise model";
     }
     const stack = model.nodes.find((id) => LORA_STACK_CLASSES.has(g.classOf(id)));
     if (stack) {

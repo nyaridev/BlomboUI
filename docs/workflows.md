@@ -122,6 +122,10 @@ source → controlnet (units) → the workflow's own sampling → hires → adet
 | `source-wan22-fun` | First and last frame | Wan 2.2 TI2V can't take an end frame, so it swaps the model for Wan 2.2 Fun Inpaint 5B (its own `UNETLoader` + `ModelSamplingSD3` shift 8, which drops the base model's LoRAs) and `WanFunInpaintToVideo` gives `POSITIVE`, `NEGATIVE` and `VIDEO` |
 | `source-ltx2` | First frame | `LTXVPreprocess` + `LTXVImgToVideoInplace` writes the frame into the empty video latent |
 | `source-ltx2-flf` | First and last frame | two `LTXVAddGuide` (frame 0 and -1), and `LTXVCropGuides` on `LATENT` before decoding |
+| `source-wan22-14b` | First frame | swaps Wan 2.2 14B's text to video experts and 4-step LoRAs for the image to video ones (`swap`), and `WanImageToVideo` gives `POSITIVE`, `NEGATIVE` and `VIDEO` |
+| `source-wan22-14b-flf` | First and last frame | the same swap, with `WanFirstLastFrameToVideo` |
+
+**Two passes.** Wan 2.2 14B samples twice: a high noise pass (`KSamplerAdvanced`, adds the noise, stops early) and a low noise pass that samples its latent. The first sampler is the main one (the ports, seed, sampler, model), the decoder is found after the last sampler of that chain, and the second pass's own model is the `model.unet2` role ("Low noise model"; the first then reads "High noise model"). Steps and CFG come from primitives both passes read, so one control sets both. A prompt's `<lora:…>` tags go on the high noise model only.
 
 ControlNet changes the conditioning, so the base sampler and Hires fix use it. ADetailer redraws with the plain prompt (`from: "base"`), since a full-image control map doesn't fit a face crop.
 
@@ -138,11 +142,12 @@ presets/stages/
 ├── controlnet-checkpoint/                            ControlNetApplyAdvanced on positive + negative
 ├── controlnet-diffusion/                             …on the prompt only
 ├── source/                                           image to image and inpaint (any family)
-├── source-wan22/, source-wan22-fun/                  Wan 2.2's first frame, first and last frame
+├── source-wan22/, source-wan22-fun/                  Wan 2.2 5B's first frame, first and last frame
+├── source-wan22-14b/, source-wan22-14b-flf/          Wan 2.2 14B's
 └── source-ltx2/, source-ltx2-flf/                    LTX-2's
 ```
 
-`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler). Source packages also list the `modes` they serve, and `fits`: the classes the node at their first required port must be, so a Wan package never lands on an LTX graph.
+`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler). Source packages also list the `modes` they serve, and `fits`: the classes the node at their first required port must be, so a Wan package never lands on an LTX graph. `swap` (file → file) switches model files in the workflow's loaders while the package runs; a package with a swap fits only a workflow that uses one of its files (Wan 2.2 14B and HunyuanVideo share their empty latent), and a target ComfyUI doesn't list is a problem that names it.
 
 `prompt.json` is a ComfyUI API graph with three extras:
 

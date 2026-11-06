@@ -46,6 +46,7 @@ const FEATURE_ROLES = new Set([
   "prompt.negative",
   "model.checkpoint",
   "model.unet",
+  "model.unet2",
   "model.vae",
   "model.clip",
   "model.clip2",

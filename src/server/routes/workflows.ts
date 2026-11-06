@@ -106,7 +106,13 @@ export function workflowRoutes(
       layoutDoc: layout.doc,
       layoutSource: layout.source,
       media,
-      sourceModes: sourceModes(prompt, await stages.packages(), manifest.bindings, media),
+      sourceModes: sourceModes(
+        prompt,
+        await stages.packages(),
+        manifest.bindings,
+        media,
+        manifest.values,
+      ),
     };
     return c.json(detail);
   });

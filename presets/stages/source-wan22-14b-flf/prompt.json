@@ -1,0 +1,91 @@
+{
+  "p-pos": {
+    "class_type": "PORT:POSITIVE",
+    "inputs": {}
+  },
+  "p-neg": {
+    "class_type": "PORT:NEGATIVE",
+    "inputs": {}
+  },
+  "p-vae": {
+    "class_type": "PORT:VAE",
+    "inputs": {}
+  },
+  "first": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "First frame"
+    }
+  },
+  "last": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": ""
+    },
+    "_meta": {
+      "title": "Last frame"
+    }
+  },
+  "video": {
+    "class_type": "WanFirstLastFrameToVideo",
+    "inputs": {
+      "positive": [
+        "p-pos",
+        0
+      ],
+      "negative": [
+        "p-neg",
+        0
+      ],
+      "vae": [
+        "p-vae",
+        0
+      ],
+      "width": 640,
+      "height": 640,
+      "length": 81,
+      "batch_size": 1,
+      "start_image": [
+        "first",
+        0
+      ],
+      "end_image": [
+        "last",
+        0
+      ]
+    },
+    "_meta": {
+      "title": "Video from the frames"
+    }
+  },
+  "out-pos": {
+    "class_type": "OUT:POSITIVE",
+    "inputs": {
+      "value": [
+        "video",
+        0
+      ]
+    }
+  },
+  "out-neg": {
+    "class_type": "OUT:NEGATIVE",
+    "inputs": {
+      "value": [
+        "video",
+        1
+      ]
+    }
+  },
+  "out-video": {
+    "class_type": "OUT:VIDEO",
+    "inputs": {
+      "value": [
+        "video",
+        2
+      ]
+    }
+  }
+}

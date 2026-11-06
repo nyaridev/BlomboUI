@@ -168,8 +168,8 @@ describe("scripts", () => {
 
   it("saves each model's image as its picture, the old one going to the trash", async () => {
     const data = path.join(tmp, "models", "checkpoints", "sd15", "dreamshaper_8_data");
-    await fs.mkdir(data, { recursive: true });
-    await fs.writeFile(path.join(data, "thumb.jpg"), "old picture");
+    await fs.mkdir(path.join(data, "thumbs"), { recursive: true });
+    await fs.writeFile(path.join(data, "thumbs", "global.jpg"), "old picture");
     await fs.writeFile(path.join(data, "model_data.json"), "{}");
     const res = await scripts.run({
       workflowId: "sd15",
@@ -185,19 +185,19 @@ describe("scripts", () => {
       },
     });
     expect(res.jobs).toHaveLength(1);
-    const raw = path.join(data, "thumb_raw.png");
+    const raw = path.join(data, "thumbs", "global_raw.png");
     for (let i = 0; i < 200 && !(await fs.stat(raw).catch(() => null)); i++)
       await new Promise((r) => setTimeout(r, 25));
     await new Promise((r) => setTimeout(r, 100));
     expect((await sharp(await fs.readFile(raw)).metadata()).format).toBe("png");
-    expect((await sharp(await fs.readFile(path.join(data, "thumb.jpg"))).metadata()).format).toBe(
-      "jpeg",
-    );
+    expect(
+      (await sharp(await fs.readFile(path.join(data, "thumbs", "global.jpg"))).metadata()).format,
+    ).toBe("jpeg");
     // Other tools' files stay; the replaced picture is in the profile's trash.
     expect(await fs.readFile(path.join(data, "model_data.json"), "utf8")).toBe("{}");
     const trash = path.join(profiles.dir(profileId), "trash", "model-pictures");
     const [stamp] = await fs.readdir(trash);
-    expect(await fs.readFile(path.join(trash, stamp ?? "", "thumb.jpg"), "utf8")).toBe(
+    expect(await fs.readFile(path.join(trash, stamp ?? "", "global.jpg"), "utf8")).toBe(
       "old picture",
     );
   });

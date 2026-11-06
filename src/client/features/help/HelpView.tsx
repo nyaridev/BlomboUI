@@ -283,7 +283,7 @@ function LoadingModels() {
           },
           {
             title: "Copied files yourself?",
-            text: "Press Rescan in the header (R) so ComfyUI and Blombo see them. A model's picture is thumb.jpg in the folder named after it (Detailer_data/ next to Detailer.safetensors).",
+            text: "Press Rescan in the header (R) so ComfyUI and Blombo see them. A model's picture is thumbs/global.jpg in the folder named after it (Detailer_data/ next to Detailer.safetensors).",
           },
         ]}
       />

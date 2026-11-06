@@ -73,6 +73,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { rescanModels } from "../../app/commands";
 import { openModelInfo, useModelMenu } from "../models/actions";
+import { useModelPicture } from "../scopes/pick";
+import { ScopeBar } from "../scopes/ScopeBar";
 import type { StripTarget } from "./blocks/ModelsStrip";
 import { FolderTree } from "./FolderTree";
 import { folderTree, inFolder } from "./folders";
@@ -707,6 +709,7 @@ export function ModelGrid({
         <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
           Favorites
         </Chip>
+        {tab === "wildcards" ? null : <ScopeBar className="max-w-80" />}
         <Select<Sort>
           value={sort}
           onChange={pickSort}
@@ -939,12 +942,13 @@ function PickerCard({
 }) {
   // Only files in the models folder have info to show (wildcards and ComfyUI-only names don't).
   const localId = item.local?.id;
+  const picture = useModelPicture(item.local);
   return (
     <ModelCard
       name={item.name}
       kind={item.kind}
       baseModel={item.local?.baseModel ?? item.folder ?? undefined}
-      thumb={item.local?.thumb ?? item.thumb ?? null}
+      thumb={picture ?? item.thumb ?? null}
       meta={item.local?.triggerWords[0]}
       ratio={ratio}
       selected={selected}

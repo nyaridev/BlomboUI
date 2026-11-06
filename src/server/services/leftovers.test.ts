@@ -69,7 +69,7 @@ beforeAll(async () => {
   await put(path.join(lora, "gone.civitai.info"), "{}");
   await put(path.join(lora, "gone.json"), JSON.stringify({ "activation text": "x" }));
   await put(path.join(lora, "config.json"), JSON.stringify({ hidden_size: 1 }));
-  await put(path.join(lora, "gone_data", "thumb.jpg"));
+  await put(path.join(lora, "gone_data", "thumbs", "global.jpg"));
   await put(path.join(wildcards, "colors.txt"), "red\nblue");
   await pictures.set("colors", await png());
   await pictures.set("gone", await png());

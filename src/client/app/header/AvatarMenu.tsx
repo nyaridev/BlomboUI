@@ -1,6 +1,7 @@
 /** Avatar button + menu: profile card, the secondary views, and switching profiles. */
 import { avatarUrl } from "@client/lib/api";
 import { useLive } from "@client/lib/live";
+import { useScopes } from "@client/lib/queries";
 import { Avatar, Badge, Menu } from "@client/ui";
 import type { ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
@@ -18,6 +19,7 @@ export function AvatarMenu({
   const navigate = useNavigate();
   const keys = useShortcutLabel();
   const errors = useLive((s) => s.errors.length);
+  const scopesOn = useScopes().data?.enabled ?? false;
   const name = profile?.name ?? "Profile";
   const src = profile ? avatarUrl(profile) : null;
 
@@ -57,6 +59,13 @@ export function AvatarMenu({
           hint: errors ? <Badge tone="danger">{errors}</Badge> : undefined,
           shortcut: errors ? undefined : keys("view.errors"),
           onSelect: () => onNavigate("errors"),
+        },
+        {
+          id: "scopes",
+          label: "Scopes",
+          icon: "scopes",
+          hint: scopesOn ? undefined : <span className="text-xs text-fg-4">off</span>,
+          onSelect: () => onNavigate("scopes"),
         },
         { type: "separator", id: "s1" },
         {

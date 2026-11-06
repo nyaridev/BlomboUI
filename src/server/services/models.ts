@@ -1,7 +1,7 @@
 /**
  * Local models: the files under the profile's model folders, by kind (MODEL_FOLDERS), with their
  * sidecars: Civitai or A1111 info JSON next to the model, and its pictures in the folder named
- * after it (`<model>_data/thumb.*`, services/modelthumbs.ts).
+ * after it (`<model>_data/thumbs/`: global and scope pictures, services/modelthumbs.ts).
  *
  * A scan reads each folder once and only the small sidecar JSON files, so a thousand LoRAs list
  * quickly; the result is cached until a rename, a move or a rescan. Renaming or moving takes the
@@ -33,18 +33,27 @@ import {
   type ModelDetails,
   ModelFileStem,
   type ModelList,
+  type ModelPicture,
   type SaveModelInfoBody,
   StrengthRange,
   shortBaseModel,
 } from "../../shared/models.ts";
 import type { ProfileFolder } from "../../shared/profile.ts";
 import { headerLength, parseSafetensorsHeader } from "../../shared/safetensors.ts";
+import { GLOBAL_KEY, keyIds } from "../../shared/scopes.ts";
 import type { PictureSettings } from "../../shared/settings.ts";
 import { exists, movePath, resolveInside, writeJsonAtomic } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import { readImageHead } from "../lib/imagemeta.ts";
 import { ThumbCache } from "../lib/thumbs.ts";
-import { DATA_SUFFIX, dataDirOf, findThumbs, RAW_TYPES, saveModelThumbs } from "./modelthumbs.ts";
+import {
+  DATA_SUFFIX,
+  findPictures,
+  type ModelThumbs,
+  RAW_TYPES,
+  removeModelThumbs,
+  saveModelThumbs,
+} from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
 
 export const MODEL_THUMB_MAX = 480;
@@ -71,10 +80,8 @@ export interface ModelDeps {
 }
 
 interface Sidecars {
-  /** The picture cards show (`<model>_data/thumb.*`). */
-  thumb: string | null;
-  /** The full-size picture (`<model>_data/thumb_raw.*`) when it's an image. */
-  raw: string | null;
+  /** Its pictures by key (`<model>_data/thumbs/<key>.*`): "global" and scope combinations. */
+  pictures: Map<string, ModelThumbs>;
   civitai: string | null;
   json: string | null;
   /** The model's data folder (`<model>_data`), if it has one. */
@@ -138,6 +145,23 @@ async function readJson<T>(file: string | null): Promise<T | null> {
 /** Stem of a model file ("foo.safetensors" → "foo"). */
 const stemOf = (file: string) => file.slice(0, file.length - path.extname(file).length);
 
+/** A picture's versioned URLs (thumb null: only its full size is there). */
+async function pictureUrls(id: string, key: string, pics: ModelThumbs) {
+  const t = pics.thumb ? await fs.stat(pics.thumb).catch(() => null) : null;
+  const query = `id=${encodeURIComponent(id)}${key === GLOBAL_KEY ? "" : `&scope=${encodeURIComponent(key)}`}`;
+  const v = (s: { size: number; mtimeMs: number }) =>
+    `${s.size.toString(36)}-${Math.round(s.mtimeMs).toString(36)}`;
+  const r =
+    pics.raw && RAW_TYPES[path.extname(pics.raw).toLowerCase()]
+      ? await fs.stat(pics.raw).catch(() => null)
+      : null;
+  return {
+    thumb: t ? `/api/models/thumb?${query}&v=${v(t)}` : null,
+    raw: r ? `/api/models/picture/raw?${query}&v=${v(r)}` : null,
+    mtime: t?.mtimeMs ?? 0,
+  };
+}
+
 /**
  * What in one folder belongs to a model stem: "foo.civitai.info" and other "foo.*" files, and
  * the "foo_data" folder (`dirs`: the folder's subfolders, lowercase → name). `stems` are the
@@ -168,8 +192,7 @@ export function sidecarsFor(
     )
       all.push(name);
   return {
-    thumb: null,
-    raw: null,
+    pictures: new Map(),
     civitai: pick(".civitai.info"),
     json: pick(".json"),
     dataDir: dataName ? path.join(dir, dataName) : null,
@@ -319,25 +342,16 @@ export class ModelService {
       }
       const stem = stemOf(e.name);
       const sidecars = sidecarsFor(stem, files, dir, stems, dirs);
-      if (sidecars.dataDir) {
-        const pictures = await findThumbs(sidecars.dataDir);
-        sidecars.thumb = pictures.thumb;
-        if (pictures.raw && RAW_TYPES[path.extname(pictures.raw).toLowerCase()])
-          sidecars.raw = pictures.raw;
-      }
+      if (sidecars.dataDir) sidecars.pictures = await findPictures(sidecars.dataDir);
       const civitai = await readJson<CivitaiInfo>(sidecars.civitai);
       const a1111 = await readJson<A1111Info>(sidecars.json);
+      const pictures: ModelPicture[] = [];
       let thumb: string | null = null;
-      if (sidecars.thumb) {
-        const t = await fs.stat(sidecars.thumb).catch(() => null);
-        if (t)
-          thumb = `/api/models/thumb?id=${encodeURIComponent(id)}&v=${t.size.toString(36)}-${Math.round(t.mtimeMs).toString(36)}`;
-      }
       let rawThumb: string | null = null;
-      if (sidecars.raw) {
-        const t = await fs.stat(sidecars.raw).catch(() => null);
-        if (t)
-          rawThumb = `/api/models/picture/raw?id=${encodeURIComponent(id)}&v=${t.size.toString(36)}-${Math.round(t.mtimeMs).toString(36)}`;
+      for (const [key, pics] of sidecars.pictures) {
+        const urls = await pictureUrls(id, key, pics);
+        if (key === GLOBAL_KEY) [thumb, rawThumb] = [urls.thumb, urls.raw];
+        else if (urls.thumb) pictures.push({ key, ...urls, thumb: urls.thumb });
       }
       const ids = civitaiIds(civitai);
       // Without a Civitai info file, what a lookup by hash found fills the gaps.
@@ -366,6 +380,7 @@ export class ModelService {
           ctime: stat.birthtimeMs,
           thumb: thumb ?? found?.image ?? null,
           rawThumb,
+          pictures,
           baseModel: shortBaseModel(
             str(civitai?.baseModel) ?? str(a1111?.["sd version"]) ?? found?.baseModel ?? null,
           ),
@@ -404,25 +419,25 @@ export class ModelService {
     return { entry, root: entry.root, profileId: cache.profileId };
   }
 
-  /** The full-size picture of a local model and how to serve it. */
-  async rawPicture(id: string): Promise<{ file: string; type: string }> {
+  /** The full-size picture of a local model (global, or for scopes) and how to serve it. */
+  async rawPicture(id: string, key = GLOBAL_KEY): Promise<{ file: string; type: string }> {
     const { entry } = await this.entry(id);
-    const type = entry.sidecars.raw
-      ? RAW_TYPES[path.extname(entry.sidecars.raw).toLowerCase()]
-      : undefined;
-    if (!entry.sidecars.raw || !type)
+    const raw = entry.sidecars.pictures.get(key)?.raw;
+    const type = raw ? RAW_TYPES[path.extname(raw).toLowerCase()] : undefined;
+    if (!raw || !type)
       throw new HttpError(404, "This model has no full-size picture.", "no_picture");
-    return { file: entry.sidecars.raw, type };
+    return { file: raw, type };
   }
 
-  async thumbFile(id: string): Promise<string> {
+  async thumbFile(id: string, key = GLOBAL_KEY): Promise<string> {
     const { entry, profileId } = await this.entry(id);
-    if (!entry.sidecars.thumb) throw new HttpError(404, "No thumbnail.", "no_thumb");
-    const stat = await fs.stat(entry.sidecars.thumb);
-    // An animated picture (thumb.webp saved from a GIF) keeps moving on the cards.
-    const animated = (await readImageHead(entry.sidecars.thumb).catch(() => null))?.animated;
+    const thumb = entry.sidecars.pictures.get(key)?.thumb;
+    if (!thumb) throw new HttpError(404, "No thumbnail.", "no_thumb");
+    const stat = await fs.stat(thumb);
+    // An animated picture (a WebP saved from a GIF) keeps moving on the cards.
+    const animated = (await readImageHead(thumb).catch(() => null))?.animated;
     return this.thumbs(profileId).get(
-      entry.sidecars.thumb,
+      thumb,
       `${stat.size}-${stat.mtimeMs}`,
       MODEL_THUMB_MAX,
       animated ? "animated" : "still",
@@ -532,7 +547,7 @@ export class ModelService {
                 : null,
             }
           : null,
-      picture: entry.sidecars.thumb !== null,
+      picture: Boolean(entry.sidecars.pictures.get(GLOBAL_KEY)?.thumb),
       header,
       headerError,
       folders: await subfolders(kindRoot),
@@ -570,14 +585,18 @@ export class ModelService {
     return this.details(body.id);
   }
 
-  /** Make an image the model's picture; the old one moves to the profile's trash. */
-  async setPicture(id: string, image: Uint8Array): Promise<void> {
+  /**
+   * Make an image the model's picture (global, or for a set of scopes: `key`); the old one moves
+   * to the profile's trash.
+   */
+  async setPicture(id: string, image: Uint8Array, key = GLOBAL_KEY): Promise<void> {
     const { entry, profileId } = await this.entry(id);
     try {
       await saveModelThumbs(entry.abs, image, {
         replace: true,
         trashDir: this.pictureTrash(profileId),
         pictures: await this.deps.pictures?.(),
+        key,
       });
     } catch (error) {
       if (error instanceof HttpError) throw error;
@@ -590,16 +609,33 @@ export class ModelService {
     this.changed();
   }
 
-  /** Move the model's picture to the profile's trash (cards show Civitai's or the fallback). */
-  async removePicture(id: string): Promise<void> {
+  /**
+   * Move one of the model's pictures to the profile's trash (cards then show the global one, or
+   * Civitai's, or the fallback).
+   */
+  async removePicture(id: string, key = GLOBAL_KEY): Promise<void> {
     const { entry, profileId } = await this.entry(id);
-    const dir = dataDirOf(entry.abs);
-    const old = await findThumbs(dir);
-    const stamp = `${Date.now().toString(36)}-${path.basename(dir)}`;
-    for (const file of [old.thumb, old.raw])
-      if (file)
-        await movePath(file, path.join(this.pictureTrash(profileId), stamp, path.basename(file)));
+    await removeModelThumbs(entry.abs, key, this.pictureTrash(profileId));
     this.changed();
+  }
+
+  /**
+   * A scope was deleted: every picture made for it (alone or in a combination) moves to the
+   * profile's trash. Returns how many pictures moved.
+   */
+  async removeScopePictures(scopeId: string): Promise<number> {
+    await this.list();
+    const cache = this.cache;
+    if (!cache) return 0;
+    let count = 0;
+    for (const entry of cache.entries.values())
+      for (const key of entry.sidecars.pictures.keys())
+        if (keyIds(key).includes(scopeId)) {
+          await removeModelThumbs(entry.abs, key, this.pictureTrash(cache.profileId));
+          count++;
+        }
+    if (count) this.changed();
+    return count;
   }
 
   private pictureTrash(profileId: string): string {

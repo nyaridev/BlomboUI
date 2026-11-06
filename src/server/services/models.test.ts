@@ -43,7 +43,7 @@ async function put(rel: string, data: Uint8Array | string) {
 
 beforeAll(async () => {
   await put("loras/style/Detailer.safetensors", safetensors({ ss_network_dim: "16" }));
-  await put("loras/style/Detailer_data/thumb.jpg", await realPng(30, 40));
+  await put("loras/style/Detailer_data/thumbs/global.jpg", await realPng(30, 40));
   await put("loras/style/Detailer_data/model_data.json", "{}");
   await put(
     "loras/style/Detailer.civitai.info",
@@ -141,7 +141,7 @@ describe("local models", () => {
     ]);
     expect(
       (await fs.readdir(path.join(root, "loras", "style", "Detailer v2_data"))).sort(),
-    ).toEqual(["model_data.json", "thumb.jpg"]);
+    ).toEqual(["model_data.json", "thumbs"]);
     expect(changed).toBe(1);
     await expect(models.rename("loras/plain.safetensors", "../evil")).rejects.toThrow();
   });
@@ -231,6 +231,28 @@ describe("local models", () => {
     const trash = path.join(profiles.dir(profiles.active as string), "trash", "model-pictures");
     expect(await fs.readdir(trash)).toHaveLength(2);
   });
+
+  it("keeps pictures for scopes beside the global one, and trashes a deleted scope's", async () => {
+    const id = "checkpoints/base.ckpt";
+    const [a, b] = ["aaaaaaaaaaaa", "bbbbbbbbbbbb"];
+    await models.setPicture(id, await realPng(40, 60), a);
+    await models.setPicture(id, await realPng(40, 60), `${b}+${a}`);
+    const listed = (await models.list()).models.find((m) => m.id === id);
+    expect(listed?.thumb).toBeNull();
+    expect(listed?.pictures.map((p) => p.key).sort()).toEqual([a, `${a}+${b}`]);
+    expect(listed?.pictures[0]?.thumb).toContain("&scope=");
+    // "+" in a query is a space: the combination key is encoded.
+    expect(listed?.pictures.find((p) => p.key.includes("+"))?.thumb).toContain(`scope=${a}%2B${b}`);
+    expect(await models.thumbFile(id, a)).toBeTruthy();
+    await expect(models.thumbFile(id)).rejects.toThrow(/No thumbnail/);
+
+    expect(await models.removeScopePictures(b)).toBe(1);
+    expect(
+      (await models.list()).models.find((m) => m.id === id)?.pictures.map((p) => p.key),
+    ).toEqual([a]);
+    await models.removePicture(id, a);
+    expect((await models.list()).models.find((m) => m.id === id)?.pictures).toEqual([]);
+  });
 });
 
 describe("sidecarsFor", () => {
@@ -262,9 +284,9 @@ describe("sidecarsFor", () => {
 
   it("serves the full-size picture when it's an image, not a video", async () => {
     await put("vae/pic.safetensors", "x");
-    await put("vae/pic_data/thumb_raw.png", await realPng(64, 32));
+    await put("vae/pic_data/thumbs/global_raw.png", await realPng(64, 32));
     await put("vae/clip.safetensors", "x");
-    await put("vae/clip_data/thumb_raw.mp4", "not a picture");
+    await put("vae/clip_data/thumbs/global_raw.mp4", "not a picture");
     models.invalidate();
     const list = await models.list();
     const pic = list.models.find((m) => m.id === "vae/pic.safetensors");

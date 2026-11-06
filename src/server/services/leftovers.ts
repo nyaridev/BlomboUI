@@ -19,7 +19,7 @@ import { movePath } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
 import type { HistoryService } from "./history.ts";
 import type { ModelService } from "./models.ts";
-import { findThumbs } from "./modelthumbs.ts";
+import { findPictures } from "./modelthumbs.ts";
 import type { ProfileService } from "./profiles.ts";
 import type { WildcardPictures } from "./wildcardpics.ts";
 import { listWildcards } from "./wildcards.ts";
@@ -221,8 +221,8 @@ export class LeftoverService {
       const lower = e.name.toLowerCase();
       if (e.isDirectory()) {
         if (DATA.test(e.name)) {
-          const pics = await findThumbs(full);
-          if (pics.thumb || pics.raw) add(e.name.slice(0, -"_data".length), full, "pictures");
+          const pics = await findPictures(full);
+          if (pics.size) add(e.name.slice(0, -"_data".length), full, "pictures");
           continue; // A data folder holds pictures, not models.
         }
         await this.scanModels(root, full, label, out, depth + 1);

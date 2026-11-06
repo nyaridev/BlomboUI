@@ -17,6 +17,7 @@ import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
 import { CivitaiPagePrompt } from "../features/models/civitai/open";
 import { ModelInfoDialog } from "../features/models/ModelInfoDialog";
+import { ScopeFollower } from "../features/scopes/pick";
 import { Header, MobileNav } from "./header/Header";
 import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
@@ -65,6 +66,9 @@ const ErrorsView = lazyView(() =>
 const CompareView = lazyView(() =>
   import("../features/compare/CompareView").then((m) => ({ default: m.CompareView })),
 );
+const ScopesView = lazyView(() =>
+  import("../features/scopes/ScopesView").then((m) => ({ default: m.ScopesView })),
+);
 const HelpView = lazyView(() =>
   import("../features/help/HelpView").then((m) => ({ default: m.HelpView })),
 );
@@ -89,6 +93,8 @@ function renderView(view: ViewId): ReactNode {
       return <SavedData />;
     case "errors":
       return <ErrorsView />;
+    case "scopes":
+      return <ScopesView />;
     case "help":
       return <HelpView />;
     case "compare":
@@ -181,6 +187,7 @@ export function Shell() {
       <MobileNav profileId={profileId} view={view} />
       <Palette />
       <ModelInfoDialog />
+      <ScopeFollower />
       <CivitaiPagePrompt />
     </div>
   );

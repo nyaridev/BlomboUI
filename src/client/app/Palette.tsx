@@ -24,6 +24,7 @@ const VIEW_ICONS: Record<string, IconName> = {
   "view.file-info": "file-info",
   "view.history": "history",
   "view.errors": "errors",
+  "view.scopes": "scopes",
   "view.settings": "settings",
   "view.help": "book",
 };

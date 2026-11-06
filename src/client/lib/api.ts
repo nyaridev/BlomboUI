@@ -114,6 +114,14 @@ import type {
   UpdateProfileBody,
 } from "@shared/profile";
 import type { RenameChange } from "@shared/prompt/renames";
+import {
+  type DeletedScope,
+  GLOBAL_KEY,
+  type SaveScopeBody,
+  type ScopeDef,
+  type ScopesFile,
+  type ScopesPatch,
+} from "@shared/scopes";
 import type { Settings, SettingsPatch } from "@shared/settings";
 import type {
   WildcardEntryType,
@@ -169,6 +177,9 @@ async function request<T>(
   }
   return data as T;
 }
+
+const pictureUrl = (id: string, key: string) =>
+  `/models/picture?id=${encodeURIComponent(id)}${key === GLOBAL_KEY ? "" : `&scope=${encodeURIComponent(key)}`}`;
 
 export const api = {
   system: () => request<SystemInfo>("GET", "/system"),
@@ -433,10 +444,18 @@ export const api = {
   renameModelFolder: (kind: ModelKind, folder: string, name: string, root?: string) =>
     request<{ ok: true }>("POST", "/models/rename-folder", { kind, folder, name, root }),
   saveModelInfo: (body: SaveModelInfoBody) => request<ModelDetails>("PATCH", "/models/info", body),
-  setModelPicture: (id: string, image: Blob) =>
-    request<{ ok: true }>("PUT", `/models/picture?id=${encodeURIComponent(id)}`, undefined, image),
-  removeModelPicture: (id: string) =>
-    request<{ ok: true }>("DELETE", `/models/picture?id=${encodeURIComponent(id)}`),
+  /** `key`: "global" or the scope ids the picture is for (shared/scopes.ts → pictureKey). */
+  setModelPicture: (id: string, image: Blob, key: string) =>
+    request<{ ok: true }>("PUT", pictureUrl(id, key), undefined, image),
+  removeModelPicture: (id: string, key: string) =>
+    request<{ ok: true }>("DELETE", pictureUrl(id, key)),
+
+  scopes: () => request<ScopesFile>("GET", "/scopes"),
+  patchScopes: (body: ScopesPatch) => request<ScopesFile>("PATCH", "/scopes", body),
+  createScope: (body: SaveScopeBody) => request<ScopeDef>("POST", "/scopes", body),
+  saveScope: (id: string, body: SaveScopeBody) =>
+    request<ScopeDef>("PUT", `/scopes/${encodeURIComponent(id)}`, body),
+  deleteScope: (id: string) => request<DeletedScope>("DELETE", `/scopes/${encodeURIComponent(id)}`),
   modelHashes: (id: string) =>
     request<ModelHashes>("GET", `/models/hash?id=${encodeURIComponent(id)}`),
 

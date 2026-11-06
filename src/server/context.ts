@@ -45,6 +45,7 @@ import { ModelService } from "./services/models.ts";
 import { NodeMap } from "./services/nodemap.ts";
 import { OutputSaver } from "./services/outputs.ts";
 import { ProfileService } from "./services/profiles.ts";
+import { ScopeService } from "./services/scopes.ts";
 import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
 import { SnippetService } from "./services/snippets.ts";
@@ -90,6 +91,7 @@ export interface Services {
   batch: BatchService;
   history: HistoryService;
   snippets: SnippetService;
+  scopes: ScopeService;
   backup: ProfileBackup;
   /** Install starter presets into a new profile; unknown ids are skipped with a warning. */
   installPresets: (profileId: string, presetIds: string[]) => Promise<void>;
@@ -255,6 +257,10 @@ export function createServices(config: ServerConfig): Services {
   const leftovers = new LeftoverService({ profiles, models, history, pictures: wildcardPictures });
   const backup = new ProfileBackup({ profiles, dbs, runtimeDir: config.runtimeDir });
   const snippets = new SnippetService(profiles);
+  const scopes = new ScopeService({
+    profiles,
+    removePictures: (scopeId) => models.removeScopePictures(scopeId),
+  });
   const reportError = (source: AppError["source"], title: string, detail: string) => {
     const error: AppError = { id: randomUUID(), at: Date.now(), source, title, detail };
     bus.publish(null, { t: "error", error });
@@ -533,6 +539,7 @@ export function createServices(config: ServerConfig): Services {
     batch,
     history,
     snippets,
+    scopes,
     backup,
     installPresets: async (profileId, presetIds) => {
       for (const id of presetIds) {

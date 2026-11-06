@@ -1,5 +1,5 @@
 /**
- * A model's local info (its picture: `<model>_data/thumb.*` or what a Civitai lookup found; a
+ * A model's local info (its picture: `<model>_data/thumbs/`, the one the scopes picked, or what a Civitai lookup found; a
  * LoRA's strength range…), looked up by kind and ComfyUI name or LoRA tag name, from Models →
  * Local's list.
  */
@@ -12,6 +12,7 @@ import {
   type ModelList,
 } from "@shared/models";
 import { useMemo } from "react";
+import { useModelPicture } from "../scopes/pick";
 
 const stem = (name: string) =>
   name
@@ -37,9 +38,9 @@ export function useLocalModel(kind: ModelKind, name: string): LocalModel | undef
   return name ? map?.get(`${kind}:${stem(name)}`) : undefined;
 }
 
-/** A model tile's picture. */
+/** A model tile's picture (the scopes' pick when they're on). */
 export function useModelThumb(kind: ModelKind, name: string): string | null {
-  return useLocalModel(kind, name)?.thumb ?? null;
+  return useModelPicture(useLocalModel(kind, name));
 }
 
 /** A LoRA's strength slider range (0–2 unless its model info says otherwise). */

@@ -1,6 +1,6 @@
 # ADR-0016: One picture per model, next to it; scopes removed
 
-**Status:** Accepted
+**Status:** Accepted. The picture layout and "scopes are gone" are superseded by [ADR-0019](0019-scopes-again.md): pictures live in `<model>_data/thumbs/` again (`global.*`), and scopes are back, off by default.
 **Date:** 2026-11-02
 **Deciders:** nyaridev
 

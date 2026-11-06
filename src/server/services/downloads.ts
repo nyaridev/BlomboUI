@@ -7,8 +7,8 @@
  *    resumes with an HTTP range request instead of starting over.
  *  - Civitai files are checked against Civitai's SHA256; the profile's API key is sent only to
  *    Civitai itself, never to the storage host a download redirects to.
- *  - A finished Civitai download gets its sidecars (.civitai.info, <model>_data/thumb.jpg, unless turned
- *    off), its hash and Civitai match go into the lookup tables, and the model lists refresh.
+ *  - A finished Civitai download gets its sidecars (.civitai.info, <model>_data/thumbs/global.jpg,
+ *    unless turned off), its hash and Civitai match go into the lookup tables, and the model lists refresh.
  *  - Every download is a row in the profile's database (the History view); unfinished ones come
  *    back paused when the profile opens again.
  */
@@ -90,7 +90,7 @@ interface Job {
   sha256: string | null;
   /** The .civitai.info to save next to the model. */
   info: Record<string, unknown> | null;
-  /** Remote image for the model's picture (<model>_data/thumb.jpg). */
+  /** Remote image for the model's picture (<model>_data/thumbs/global.jpg). */
   preview: string | null;
   /** What to remember about the file once it's in place. */
   lookup: LookupInfo | null;

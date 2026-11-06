@@ -8,7 +8,9 @@
  * (each column scrolls on its own) and the picture is always 2:3, sized from its height. Below
  * 1024 px the settings and the file share one column beside the picture (settings first);
  * below 640 px the picture goes. Opened from any model's right-click menu (`openModelInfo`);
- * mounted once in Shell.
+ * mounted once in Shell. With scopes on (ADR-0019), "Picture for" above the picture picks which
+ * of the model's pictures the dialog shows and Replace picture changes: the global one, or one
+ * for a scope or a combination of scopes. It starts on the scopes cards show right now.
  */
 
 import { Icon } from "@client/icons/Icon";
@@ -21,6 +23,7 @@ import {
   useModelDetails,
   useModelHashes,
   useSaveModelInfo,
+  useScopes,
 } from "@client/lib/queries";
 import {
   Button,
@@ -31,6 +34,7 @@ import {
   IconButton,
   KIND_STYLE,
   Menu,
+  MultiSelect,
   NumberField,
   Segmented,
   Skeleton,
@@ -44,6 +48,7 @@ import {
 import { comfyViewUrl } from "@shared/comfy";
 import type { Job } from "@shared/jobs";
 import { DEFAULT_STRENGTH_RANGE, type LocalModel, type ModelDetails } from "@shared/models";
+import { GLOBAL_KEY, keyIds, keyLabel, MAX_COMBO, pictureKey, type ScopeDef } from "@shared/scopes";
 import {
   type CSSProperties,
   type ReactNode,
@@ -54,6 +59,7 @@ import {
   useState,
 } from "react";
 import { PromptEditor } from "../generate/PromptEditor";
+import { useScopePick } from "../scopes/pick";
 import { useModelActions, useModelInfo } from "./actions";
 
 export function ModelInfoDialog() {
@@ -123,6 +129,15 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
   const fileInput = useRef<HTMLInputElement>(null);
   const latest = useLive((s) => latestResult(s.queue.jobs));
 
+  // Which picture: global, or the scopes it's for.
+  const scopes = useScopes().data;
+  const scopesOn = Boolean(scopes?.enabled);
+  const [target, setTarget] = useState<string[]>(() => useScopePick.getState().pick.ids);
+  const known = new Set(scopes?.scopes.map((s) => s.id));
+  const key = scopesOn ? pictureKey(target.filter((id) => known.has(id))) : GLOBAL_KEY;
+  const scoped = key === GLOBAL_KEY ? null : model.pictures.find((p) => p.key === key);
+  const targetLabel = keyLabel(key, scopes?.scopes ?? []);
+
   const wordsChanged = splitWords(words).join(", ") !== splitWords(startWords).join(", ");
   const weightChanged = weight !== model.weight;
   const sameRange = (a: [number, number], b: [number, number]) => a[0] === b[0] && a[1] === b[1];
@@ -167,7 +182,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
         }
       : null;
     save.mutate(
-      { info, picture: picture ? { id: model.id, image: picture } : null },
+      { info, picture: picture ? { id: model.id, key, image: picture } : null },
       {
         onSuccess: () => {
           toast(`Saved ${model.name}`, "success");
@@ -178,9 +193,17 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
     );
   };
 
-  // The full-size picture when there is one: it's shown big here.
-  const shownThumb = picture === "remove" ? null : (preview ?? model.rawThumb ?? model.thumb);
-  const hasPicture = picture === "remove" ? false : picture !== null || Boolean(d?.picture);
+  // The full-size picture when there is one: it's shown big here. A scope without its own
+  // picture shows the global one, dimmed.
+  const own = key === GLOBAL_KEY ? (model.rawThumb ?? model.thumb) : (scoped?.raw ?? scoped?.thumb);
+  const shownThumb =
+    picture === "remove" ? null : (preview ?? own ?? (key === GLOBAL_KEY ? null : model.thumb));
+  const borrowed = picture === null && !own && key !== GLOBAL_KEY;
+  const hasPicture =
+    picture === "remove"
+      ? false
+      : picture !== null || (key === GLOBAL_KEY ? Boolean(d?.picture) : Boolean(scoped));
+  const forWhat = key === GLOBAL_KEY ? "" : ` for ${targetLabel}`;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" style={SIZES}>
@@ -223,18 +246,30 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
           "scroll-quiet h-(--body-h) overflow-y-auto p-5 max-sm:grid-cols-1 lg:grid-rows-[minmax(0,1fr)] lg:overflow-hidden",
         )}
       >
-        <div className="h-(--pic-h) w-(--pic-w) max-lg:sticky max-lg:top-0 max-lg:row-span-2 max-lg:row-start-1 max-sm:hidden">
-          <Picture
-            model={model}
-            thumb={shownThumb}
-            pending={
-              picture === null
-                ? null
-                : picture === "remove"
-                  ? "The picture moves to the profile's trash when you save."
-                  : "The new picture is used when you save. The old one goes to the profile's trash."
-            }
-          />
+        <div className="flex h-(--pic-h) w-(--pic-w) flex-col gap-2 max-lg:sticky max-lg:top-0 max-lg:row-span-2 max-lg:row-start-1 max-sm:hidden">
+          {scopesOn && scopes ? (
+            <PictureFor
+              scopes={scopes.scopes}
+              target={target}
+              onTarget={setTarget}
+              others={model.pictures.map((p) => p.key).filter((k) => k !== key)}
+            />
+          ) : null}
+          <div className="min-h-0 flex-1">
+            <Picture
+              model={model}
+              thumb={shownThumb}
+              dim={borrowed}
+              note={borrowed ? `No picture${forWhat} yet: cards show the global one.` : null}
+              pending={
+                picture === null
+                  ? null
+                  : picture === "remove"
+                    ? `The picture${forWhat} moves to the profile's trash when you save.`
+                    : `The new picture${forWhat} is used when you save. The old one goes to the profile's trash.`
+              }
+            />
+          </div>
         </div>
 
         <section className={cn(COLUMN, "max-lg:row-start-2")}>
@@ -413,7 +448,7 @@ function InfoBody({ model, onClose }: { model: LocalModel; onClose: () => void }
             { type: "separator", id: "s" },
             {
               id: "remove",
-              label: "Remove picture",
+              label: key === GLOBAL_KEY ? "Remove picture" : `Remove the ${targetLabel} picture`,
               icon: "trash",
               tone: "danger",
               disabled: !hasPicture,
@@ -519,23 +554,87 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+/**
+ * "Picture for": Global, or the scopes a picture is for (several make a combination). Below it,
+ * the model's other pictures, one click each.
+ */
+function PictureFor({
+  scopes,
+  target,
+  onTarget,
+  others,
+}: {
+  scopes: ScopeDef[];
+  target: string[];
+  onTarget: (ids: string[]) => void;
+  /** Keys of its other scope pictures. */
+  others: string[];
+}) {
+  const options = scopes.map((s) => ({ value: s.id, label: s.name, group: s.group || undefined }));
+  const known = new Set(scopes.map((s) => s.id));
+  const shown = others.filter((k) => keyIds(k).every((id) => known.has(id)));
+  const now = pictureKey(target.filter((id) => known.has(id)));
+  const links = [...(now === GLOBAL_KEY ? [] : [GLOBAL_KEY]), ...shown];
+  return (
+    <div className="flex shrink-0 flex-col gap-1.5">
+      <MultiSelect
+        value={target.filter((id) => known.has(id))}
+        onChange={(ids) => onTarget(ids.slice(0, MAX_COMBO))}
+        label="Picture for"
+        clearLabel="Global"
+        placeholder="Global"
+        size="sm"
+        options={options}
+      />
+      {links.length ? (
+        <div className="flex flex-wrap gap-1">
+          {links.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => onTarget(keyIds(k))}
+              className="max-w-full truncate rounded-xs border border-line px-1.5 py-0.5 text-2xs text-fg-3 hover:border-line-strong hover:text-fg focus-ring"
+            >
+              {keyLabel(k, scopes)}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function Picture({
   model,
   thumb,
   pending,
+  note,
+  dim,
 }: {
   model: LocalModel;
   thumb: string | null;
   /** A picture change waiting for Save: what will happen, shown over the bottom. */
   pending: string | null;
+  /** Something to know about the picture shown (it's the global one, standing in). */
+  note?: string | null;
+  dim?: boolean;
 }) {
   return (
     <div className="relative h-full w-full overflow-hidden rounded-lg border border-line bg-sunken">
       {thumb ? (
-        <img src={thumb} alt="" className="absolute inset-0 h-full w-full object-cover" />
+        <img
+          src={thumb}
+          alt=""
+          className={cn("absolute inset-0 h-full w-full object-cover", dim && "opacity-40")}
+        />
       ) : (
         <FallbackFace name={model.name} kind={model.kind} className="absolute inset-0" />
       )}
+      {note && pending === null ? (
+        <p className="absolute inset-x-0 bottom-0 bg-black/65 px-3 py-2 text-xs text-white/85">
+          {note}
+        </p>
+      ) : null}
       {pending !== null ? (
         <>
           <span className="absolute top-2 left-2 rounded-xs bg-black/60 px-1.5 py-0.5 text-2xs font-medium text-white">

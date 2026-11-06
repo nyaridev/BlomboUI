@@ -57,7 +57,15 @@ export const MAIN_VIEWS = ["generate", "gallery", "models", "file-info"] as cons
 export type MainView = (typeof MAIN_VIEWS)[number];
 
 /** Views reached from the avatar menu rather than the header tabs. */
-export const MENU_VIEWS = ["settings", "history", "errors", "help", "lab", "data"] as const;
+export const MENU_VIEWS = [
+  "settings",
+  "history",
+  "errors",
+  "scopes",
+  "help",
+  "lab",
+  "data",
+] as const;
 export type MenuView = (typeof MENU_VIEWS)[number];
 
 /** Views that belong to a main view (the header's Generate tab opens Compare from its menu). */

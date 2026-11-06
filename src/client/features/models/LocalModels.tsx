@@ -53,6 +53,8 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import { FolderTree } from "../generate/FolderTree";
 import { folderTree, inFolder } from "../generate/folders";
+import { shownPicture, useScopePick } from "../scopes/pick";
+import { ScopeBar } from "../scopes/ScopeBar";
 import { openModelInfo, useModelMenu } from "./actions";
 import { useModelsNav } from "./nav";
 
@@ -309,6 +311,7 @@ export function LocalModels() {
           <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
             Favorites
           </Chip>
+          <ScopeBar className="max-w-96" />
           <div className="ml-auto flex items-center gap-2">
             <LookupStatus />
             <Select<Sort>
@@ -439,6 +442,7 @@ function CardGrid({
     overscan: 3,
   });
   const setFavorite = useSetModelFavorite();
+  const pick = useScopePick((s) => s.pick);
   // Card size follows the width; re-measure when it changes.
   useEffect(() => {
     if (rowH > 0) virtualizer.measure();
@@ -466,7 +470,7 @@ function CardGrid({
                 name={m.name}
                 kind={m.kind}
                 baseModel={m.baseModel ?? undefined}
-                thumb={m.thumb}
+                thumb={shownPicture(m, pick).thumb}
                 favorite={isFavorite(m)}
                 onFavorite={() =>
                   setFavorite.mutate({

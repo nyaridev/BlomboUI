@@ -19,6 +19,7 @@ import type {
 import type { JobHistoryPage, JobHistoryQueryInput, SaveSnippetBody } from "@shared/history";
 import type { LocalModel, ModelList, SaveModelInfoBody } from "@shared/models";
 import type { CreateProfileBody, Profile, UpdateProfileBody } from "@shared/profile";
+import type { SaveScopeBody, ScopesFile, ScopesPatch } from "@shared/scopes";
 import { deepMerge, type Settings, type SettingsPatch } from "@shared/settings";
 import type { WorkflowManifest } from "@shared/workflow/manifest";
 import {
@@ -81,6 +82,7 @@ export const qk = {
   modelMarks: (profileId: string | null) => ["history", profileId, "model-marks"] as const,
   errorLog: (profileId: string | null) => ["error-log", profileId] as const,
   snippets: (profileId: string | null) => ["snippets", profileId] as const,
+  scopes: (profileId: string | null) => ["scopes", profileId] as const,
   compare: (profileId: string | null) => ["compare", profileId] as const,
   leftovers: (profileId: string | null) => ["leftovers", profileId] as const,
   /** Files in the models folder (not ComfyUI's lists, which are `models`). */
@@ -705,11 +707,12 @@ export function useSaveModelInfo() {
       picture,
     }: {
       info: SaveModelInfoBody | null;
-      picture: { id: string; image: Blob | "remove" } | null;
+      /** `key`: which picture, "global" or the scope ids it's for. */
+      picture: { id: string; key: string; image: Blob | "remove" } | null;
     }) => {
       if (info) await api.saveModelInfo(info);
-      if (picture?.image === "remove") await api.removeModelPicture(picture.id);
-      else if (picture) await api.setModelPicture(picture.id, picture.image);
+      if (picture?.image === "remove") await api.removeModelPicture(picture.id, picture.key);
+      else if (picture) await api.setModelPicture(picture.id, picture.image, picture.key);
     },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: ["local-models"] });
@@ -1139,6 +1142,55 @@ export function useRemoveSnippet() {
   return useMutation({
     mutationFn: (id: string) => api.removeSnippet(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["snippets"] }),
+  });
+}
+
+/* ── scopes (ADR-0019) ─────────────────────────────────────────────────── */
+
+export function useScopes() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.scopes(profileId),
+    queryFn: api.scopes,
+    enabled: profileId !== null,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
+/** Scopes on or off, and which ones cards show: the cache changes at once, then saves. */
+export function usePatchScopes() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: ScopesPatch) => api.patchScopes(body),
+    onMutate: (body) => {
+      const key = qk.scopes(useSession.getState().profileId);
+      const before = qc.getQueryData<ScopesFile>(key);
+      if (before) qc.setQueryData<ScopesFile>(key, { ...before, ...body });
+      return { key, before };
+    },
+    onError: (_e, _b, ctx) => ctx?.before && qc.setQueryData(ctx.key, ctx.before),
+    onSuccess: (file, _b, ctx) => qc.setQueryData(ctx.key, file),
+  });
+}
+
+export function useSaveScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: string | null; body: SaveScopeBody }) =>
+      id ? api.saveScope(id, body) : api.createScope(body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["scopes"] }),
+  });
+}
+
+/** Deleting a scope moves its pictures to the trash, so the model lists change too. */
+export function useDeleteScope() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteScope(id),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ["scopes"] });
+      void qc.invalidateQueries({ queryKey: ["local-models"] });
+    },
   });
 }
 

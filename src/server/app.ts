@@ -27,6 +27,7 @@ import { leftoverRoutes } from "./routes/leftovers.ts";
 import { managerRoutes } from "./routes/manager.ts";
 import { modelRoutes } from "./routes/models.ts";
 import { profileRoutes } from "./routes/profiles.ts";
+import { scopeRoutes } from "./routes/scopes.ts";
 import { scriptRoutes } from "./routes/scripts.ts";
 import { settingsRoutes } from "./routes/settings.ts";
 import { stageRoutes } from "./routes/stages.ts";
@@ -103,6 +104,7 @@ export function createApp(services: Services) {
     }),
   );
   api.route("/models", modelRoutes(models, services.lookup));
+  api.route("/scopes", scopeRoutes(services.scopes));
   api.route("/civitai", civitaiRoutes(services.civitai));
   api.route("/downloads", downloadRoutes(services.downloads));
   api.route("/manager", managerRoutes(services.catalog));

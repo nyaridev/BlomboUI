@@ -10,7 +10,7 @@
  *                labeled grid (lib/grid.ts), saved in the outputs folder by day
  *                (<outputs>/<workflow>/grids/<date>/…, or the profile's grids/ without one) and shown as a
  *                finished "grid" job, so it lands on the image stage like any result
- *   thumbs       each finished image becomes that model's picture (<model>_data/thumb.jpg,
+ *   thumbs       each finished image becomes that model's global picture (<model>_data/thumbs/global.jpg,
  *                modelthumbs.ts); the pictures it replaces go to the profile's trash
  *
  * Cancelling the group (Cancel, or the group's own cancel) still makes the grid of what finished.

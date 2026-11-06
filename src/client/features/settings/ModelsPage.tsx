@@ -72,7 +72,7 @@ export function ModelsPage() {
           <Field
             label="Full-size original"
             layout="left"
-            hint="Keeps the original beside the card picture (thumb_raw), for the model info dialog and to make new card pictures later."
+            hint="Keeps the original beside the card picture (global_raw), for the model info dialog and to make new card pictures later."
           >
             <label className="flex items-center gap-3 text-sm text-fg-2">
               <Switch

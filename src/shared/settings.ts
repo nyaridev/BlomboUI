@@ -339,7 +339,7 @@ export const CivitaiSettings = z.object({
       aliases: z.array(AuthorAlias).max(5000).default([]),
       /** Save Civitai's info (.civitai.info) next to the model. */
       saveInfo: z.boolean().default(true),
-      /** Save the first image as the model's picture (`<model>_data/thumb.jpg`). */
+      /** Save the first image as the model's picture (`<model>_data/thumbs/global.jpg`). */
       savePreview: z.boolean().default(true),
     })
     .prefault({}),

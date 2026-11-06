@@ -8,6 +8,7 @@ import {
   RenameModelFolderBody,
   SaveModelInfoBody,
 } from "../../shared/models.ts";
+import { cleanKey } from "../../shared/scopes.ts";
 import { HttpError, readBody, readJson } from "../lib/http.ts";
 import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { ModelLookup } from "../services/lookup.ts";
@@ -21,6 +22,13 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
   const id = (raw: string | undefined) => {
     if (!raw) throw new HttpError(400, "Which model? Pass ?id=.", "no_id");
     return raw;
+  };
+  /** Which picture: `?scope=<ids joined by +>`, or none for the global one. */
+  const scope = (raw: string | undefined) => {
+    const key = cleanKey(raw);
+    if (!key)
+      throw new HttpError(400, "That isn't a scope picture. Pick the scopes again.", "bad_scope");
+    return key;
   };
 
   r.get("/local", async (c) => {
@@ -45,14 +53,17 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
   r.get("/local/details", async (c) => c.json(await models.details(id(c.req.query("id")))));
 
   r.get("/thumb", async (c) =>
-    sendFile(await models.thumbFile(id(c.req.query("id"))), {
+    sendFile(await models.thumbFile(id(c.req.query("id")), scope(c.req.query("scope"))), {
       cache: c.req.query("v") ? IMMUTABLE : "no-cache",
       type: "image/webp",
     }),
   );
 
   r.get("/picture/raw", async (c) => {
-    const { file, type } = await models.rawPicture(id(c.req.query("id")));
+    const { file, type } = await models.rawPicture(
+      id(c.req.query("id")),
+      scope(c.req.query("scope")),
+    );
     return sendFile(file, { cache: c.req.query("v") ? IMMUTABLE : "no-cache", type });
   });
 
@@ -61,16 +72,20 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
     c.json(await models.saveInfo(await readJson(c, SaveModelInfoBody))),
   );
 
-  /** The model's own picture: an image in the body replaces it; DELETE moves it to the trash. */
+  /**
+   * One of the model's own pictures (global, or `?scope=`): an image in the body replaces it;
+   * DELETE moves it to the trash.
+   */
   r.put("/picture", async (c) => {
     const target = id(c.req.query("id"));
+    const key = scope(c.req.query("scope"));
     const bytes = await readBody(c, 64 * 1024 * 1024, "Pick an image under 64 MB.");
     if (bytes.byteLength === 0) throw new HttpError(400, "The image is empty.", "empty");
-    await models.setPicture(target, bytes);
+    await models.setPicture(target, bytes, key);
     return c.json({ ok: true });
   });
   r.delete("/picture", async (c) => {
-    await models.removePicture(id(c.req.query("id")));
+    await models.removePicture(id(c.req.query("id")), scope(c.req.query("scope")));
     return c.json({ ok: true });
   });
 

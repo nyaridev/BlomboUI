@@ -31,6 +31,7 @@ import {
 import type { CivitaiImage } from "@shared/civitai";
 import type { FileInfo, ImageFileInfo } from "@shared/fileinfo";
 import { headerLength, MAX_HEADER_BYTES } from "@shared/safetensors";
+import { GLOBAL_KEY } from "@shared/scopes";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -337,7 +338,10 @@ function UseAsPicture({ modelId, image }: { modelId: string; image: CivitaiImage
         void (async () => {
           try {
             const blob = await (await fetch(image.full)).blob();
-            await save.mutateAsync({ info: null, picture: { id: modelId, image: blob } });
+            await save.mutateAsync({
+              info: null,
+              picture: { id: modelId, key: GLOBAL_KEY, image: blob },
+            });
             toast("That image is now the model's picture.", "success");
           } catch (e) {
             toast(e instanceof Error ? e.message : String(e), "error");

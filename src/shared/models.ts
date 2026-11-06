@@ -5,8 +5,9 @@
  *   foo.safetensors
  *   foo.civitai.info                  Civitai model/version JSON
  *   foo.json                          A1111 extra-network notes
- *   foo_data/thumb.jpg                what cards show
- *   foo_data/thumb_raw.png            the full-size original (server/services/modelthumbs.ts)
+ *   foo_data/thumbs/global.jpg        what cards show
+ *   foo_data/thumbs/global_raw.png    the full-size original (server/services/modelthumbs.ts)
+ *   foo_data/thumbs/<scope ids>.jpg   pictures for scopes (shared/scopes.ts)
  */
 import { z } from "zod";
 import { MODEL_KINDS, type ModelKind } from "./constants.ts";
@@ -56,6 +57,17 @@ export const StrengthRange = z
   .tuple([z.number().min(-10).max(10), z.number().min(-10).max(10)])
   .refine(([min, max]) => min < max, "Make the lowest strength smaller than the highest.");
 
+/** One of a model's pictures for scopes (`<model>_data/thumbs/<key>.*`). */
+export const ModelPicture = z.object({
+  /** Sorted scope ids joined by "+" (shared/scopes.ts → pictureKey). */
+  key: z.string(),
+  thumb: z.string(),
+  /** Its full size, when that's an image. */
+  raw: z.string().nullable(),
+  mtime: z.number(),
+});
+export type ModelPicture = z.infer<typeof ModelPicture>;
+
 export const LocalModel = z.object({
   /**
    * Path inside its model folder with forward slashes ("loras/style/foo.safetensors"), as
@@ -74,9 +86,12 @@ export const LocalModel = z.object({
   mtime: z.number(),
   /** When the file was created (birth time; Linux file systems without one give 0). */
   ctime: z.number().default(0),
+  /** The global picture (`<model>_data/thumbs/global.*`) or, without one, Civitai's. */
   thumb: z.string().nullable(),
-  /** The full-size picture (`<model>_data/thumb_raw.*`, images only) for big views. */
+  /** The global picture's full size (`thumbs/global_raw.*`, images only) for big views. */
   rawThumb: z.string().nullable().default(null),
+  /** Its pictures for scopes; which one a card shows is `pickPicture`'s call. */
+  pictures: z.array(ModelPicture).default([]),
   baseModel: z.string().nullable(),
   /** Your trigger words (the A1111 .json's activation text) or, without them, Civitai's. */
   triggerWords: z.array(z.string()),
@@ -163,7 +178,7 @@ export const ModelDetails = LocalModel.extend({
       url: z.string().nullable(),
     })
     .nullable(),
-  /** It has a picture of its own (`<model>_data/thumb.*`), not only Civitai's. */
+  /** It has a global picture of its own (`<model>_data/thumbs/global.*`), not only Civitai's. */
   picture: z.boolean(),
   header: SafetensorsInfo.nullable(),
   headerError: z.string().nullable(),

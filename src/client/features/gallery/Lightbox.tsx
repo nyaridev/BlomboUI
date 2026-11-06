@@ -5,7 +5,7 @@
  *
  * The details sheet can be hidden (I, or its button): the image takes the whole width and a
  * few controls float over the backdrop's corner without a fill (where you are, rating,
- * favorite, use these settings, show details, close). The choice is kept in this window.
+ * favorite, show details, close). The choice is kept in this window.
  *
  * Keys: ← → browse, Esc close, F favorite, Z zoom, I details, Delete move to trash.
  */
@@ -210,14 +210,6 @@ export function Lightbox({
                 size="sm"
                 className={current.favorite ? "text-pink-ink [&_svg]:fill-current" : undefined}
                 onClick={() => favorite.mutate({ ids: [current.id], favorite: !current.favorite })}
-              />
-              <IconButton
-                variant="scrim"
-                icon="generate"
-                label="Use these settings"
-                size="sm"
-                disabled={!details.data || details.data.summary.source === "none"}
-                onClick={reuseSettings}
               />
               <IconButton
                 variant="scrim"

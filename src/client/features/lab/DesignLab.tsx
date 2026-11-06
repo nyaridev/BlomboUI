@@ -1871,7 +1871,6 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
                 size="sm"
                 className="text-pink-ink [&_svg]:fill-current"
               />
-              <IconButton variant="scrim" icon="generate" label="Use these settings" size="sm" />
               <IconButton variant="scrim" icon="sidebar" label="Show details" size="sm" />
               <IconButton variant="scrim" icon="x" label="Close" size="sm" />
               <IconButton variant="scrim" icon="generate" label="Disabled" size="sm" disabled />

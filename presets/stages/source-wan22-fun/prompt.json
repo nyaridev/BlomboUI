@@ -1,0 +1,36 @@
+{
+  "p-vae": { "class_type": "PORT:VAE", "inputs": {} },
+  "p-pos": { "class_type": "PORT:POSITIVE", "inputs": {} },
+  "p-neg": { "class_type": "PORT:NEGATIVE", "inputs": {} },
+  "unet": {
+    "class_type": "UNETLoader",
+    "inputs": { "unet_name": "wan2.2_fun_inpaint_5B_bf16.safetensors", "weight_dtype": "default" },
+    "_meta": { "title": "Fun Inpaint model" }
+  },
+  "shift": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": { "shift": 8, "model": ["unet", 0] },
+    "_meta": { "title": "Shift" }
+  },
+  "first": { "class_type": "LoadImage", "inputs": { "image": "" }, "_meta": { "title": "First frame" } },
+  "last": { "class_type": "LoadImage", "inputs": { "image": "" }, "_meta": { "title": "Last frame" } },
+  "fun": {
+    "class_type": "WanFunInpaintToVideo",
+    "inputs": {
+      "positive": ["p-pos", 0],
+      "negative": ["p-neg", 0],
+      "vae": ["p-vae", 0],
+      "width": 1280,
+      "height": 704,
+      "length": 49,
+      "batch_size": 1,
+      "start_image": ["first", 0],
+      "end_image": ["last", 0]
+    },
+    "_meta": { "title": "Video between the frames" }
+  },
+  "out-model": { "class_type": "OUT:MODEL", "inputs": { "value": ["shift", 0] } },
+  "out-pos": { "class_type": "OUT:POSITIVE", "inputs": { "value": ["fun", 0] } },
+  "out-neg": { "class_type": "OUT:NEGATIVE", "inputs": { "value": ["fun", 1] } },
+  "out-video": { "class_type": "OUT:VIDEO", "inputs": { "value": ["fun", 2] } }
+}

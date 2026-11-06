@@ -30,17 +30,19 @@ import {
   type ObjectInfo,
 } from "../../../shared/workflow/graph.ts";
 import { type Binding, bindingFor } from "../../../shared/workflow/manifest.ts";
-import type { StageId } from "../../../shared/workflow/roles.ts";
+import type { StageId, WorkflowMedia } from "../../../shared/workflow/roles.ts";
 import {
   type AdetailerUnit,
   type ControlnetUnit,
   hiresSize,
+  IMAGE_SOURCE_MODES,
   inheritedValue,
   type NodePack,
   PORTS,
   type Port,
   type RunSegment,
   SOURCE_MODE_LABELS,
+  type SourceMode,
   STAGE_LABELS,
   type StageFamily,
   type StageImage,
@@ -111,15 +113,23 @@ function isPort(s: string): s is Port {
   return (PORTS as readonly string[]).includes(s);
 }
 
-/** The package for a stage that fits this workflow: its family first, then any that fits. */
+/**
+ * The package for a stage that fits this workflow: its family first, then any that fits. A first
+ * pass package must run the picked `mode`, and one with `fits` only takes a VIDEO latent made by
+ * one of those classes (`videoClass`).
+ */
 export function pickPackage(
   packages: LoadedStage[],
   stage: StageId,
   family: StageFamily,
   ports: PortLinks,
+  match: { mode?: SourceMode; videoClass?: string | null } = {},
 ): { found: LoadedStage | null; missing: Port[] } {
+  const { mode, videoClass } = match;
   const candidates = packages
     .filter((p) => p.pkg.stage === stage)
+    .filter((p) => !mode || p.pkg.modes.length === 0 || p.pkg.modes.includes(mode))
+    .filter((p) => p.pkg.fits.length === 0 || p.pkg.fits.includes(videoClass ?? ""))
     .sort((a, b) => Number(b.pkg.family === family) - Number(a.pkg.family === family));
   for (const c of candidates)
     if (c.pkg.requires.every((p) => ports[p])) return { found: c, missing: [] };
@@ -144,7 +154,7 @@ export function spliceStage(
   ports: PortLinks,
   basePorts: PortLinks,
   nextId: () => string,
-): { added: string[]; missing: Port[] } {
+): { added: string[]; missing: Port[]; changed: Port[] } {
   const graph = stage.graph;
   const missing = new Set<Port>();
   const removed = new Set<string>();
@@ -219,6 +229,7 @@ export function spliceStage(
 
   // Republish ports: everything outside this instance that read the old link reads the new one.
   const addedSet = new Set(added);
+  const changed = new Set<Port>();
   for (const node of Object.values(graph)) {
     const out = OUT.exec(node.class_type);
     const port = out?.[1] ?? "";
@@ -234,9 +245,17 @@ export function spliceStage(
         for (const [name, iv] of Object.entries(n.inputs))
           if (isApiLink(iv) && String(iv[0]) === old[0] && iv[1] === old[1]) n.inputs[name] = next;
       }
+    // Another port on the same link moves with it (a Wan graph's START is its VIDEO).
+    for (const p of PORTS) {
+      const at = ports[p];
+      if (p === port || !old || !at || at[0] !== old[0] || at[1] !== old[1]) continue;
+      ports[p] = next;
+      changed.add(p);
+    }
     ports[port] = next;
+    changed.add(port);
   }
-  return { added, missing: [...missing] };
+  return { added, missing: [...missing], changed: [...changed] };
 }
 
 /* ── settings → instances ──────────────────────────────────────────────── */
@@ -305,6 +324,52 @@ function instancesFor(
   // Status checks run before anything is uploaded; a run needs the uploaded name.
   const uploaded = (img: StageImage | null) =>
     img ? (ctx.images ? ctx.images[img.file] : img.file) : undefined;
+  const video = settings.source.mode === "first" || settings.source.mode === "firstLast";
+  if (stage === "source" && video) {
+    const s = settings.source;
+    const both = s.mode === "firstLast";
+    const name = SOURCE_MODE_LABELS[s.mode];
+    if (!s.image)
+      problems.push({
+        code: "no_image",
+        message: `${name} has no first frame. Add one, or set the first pass back to Text to video.`,
+      });
+    if (both && !s.last)
+      problems.push({
+        code: "no_image",
+        message: "First and last frame has no last frame. Add one, or pick First frame.",
+      });
+    const image = uploaded(s.image);
+    const last = both ? uploaded(s.last) : undefined;
+    if ((s.image && image === undefined) || (both && s.last && last === undefined))
+      problems.push({
+        code: "no_image",
+        message: `${name}: a frame couldn't be sent to ComfyUI. Add it again.`,
+      });
+    const size = baseSize(ctx);
+    const count = (role: string, fallback: number) => {
+      const b = bindingFor(ctx.bindings, role);
+      return Math.max(1, Math.round(Number(b ? ctx.values[b.id] : fallback)) || fallback);
+    };
+    return [
+      {
+        key: "source",
+        label: name,
+        // A package's own defaults first (Wan's first and last frame names its model there).
+        values: {
+          ...pkg.defaults,
+          image,
+          last,
+          width: size?.width,
+          height: size?.height,
+          length: count("latent.length", 49),
+          batch: count("latent.batch", 1),
+        },
+        flags: { last: both, resize: size !== null },
+        loras: "",
+      },
+    ];
+  }
   if (stage === "source") {
     // Checked as if on, like every stage: Text to image is checked as Image to image.
     const s = settings.source;
@@ -604,10 +669,20 @@ export function applyStages(
   const statuses: StageStatus[] = [];
   const texts: Record<string, string> = {};
 
+  const videoClass = ports.VIDEO ? (prompt[ports.VIDEO[0]]?.class_type ?? null) : null;
+  // Text to image is checked as if on: as Image to image, or a video graph as First frame.
+  const run: StageSettings =
+    settings.source.mode === "txt2img"
+      ? { ...settings, source: { ...settings.source, mode: videoClass ? "first" : "img2img" } }
+      : settings;
+
   for (const stage of RUN_ORDER) {
     if (only ? only !== stage : !isOn(settings, stage)) continue;
     const problems: StageProblem[] = [];
-    const { found, missing } = pickPackage(packages, stage, family, ports);
+    const { found, missing } = pickPackage(packages, stage, family, ports, {
+      ...(stage === "source" ? { mode: run.source.mode } : {}),
+      videoClass,
+    });
     const status: StageStatus = {
       stage,
       package: found?.pkg.id ?? null,
@@ -625,7 +700,7 @@ export function applyStages(
       });
       continue;
     }
-    const instances = instancesFor(stage, settings, ctx, found.pkg, problems);
+    const instances = instancesFor(stage, run, ctx, found.pkg, problems);
     const addedAll: string[] = [];
     for (const inst of instances) {
       let instPorts = ports;
@@ -647,16 +722,13 @@ export function applyStages(
           };
         }
       }
-      const { added, missing: lacking } = spliceStage(
-        prompt,
-        found,
-        inst,
-        instPorts,
-        basePorts,
-        nextId,
-      );
+      const {
+        added,
+        missing: lacking,
+        changed,
+      } = spliceStage(prompt, found, inst, instPorts, basePorts, nextId);
       // Republished ports flow on to the next instance and stage.
-      for (const p of found.pkg.provides) if (instPorts[p]) ports[p] = instPorts[p];
+      for (const p of changed) if (instPorts[p]) ports[p] = instPorts[p];
       addedAll.push(...added);
       for (const [input, field] of Object.entries(found.pkg.base)) {
         const ref = mainSamplerInput(prompt, input as "denoise");
@@ -695,6 +767,7 @@ const PORT_NAMES: Record<Port, string> = {
   POSITIVE: "prompt",
   NEGATIVE: "negative prompt",
   START: "sampler latent input",
+  VIDEO: "video latent",
   LATENT: "latent",
   IMAGE: "decoded image",
 };
@@ -709,4 +782,23 @@ export function baseSegments(prompt: ApiPrompt): RunSegment[] {
   const samplers = g.ids().filter((id) => g.isSampler(id));
   if (samplers.length <= 1) return [{ id: "base", label: "Sampling", nodes: samplers }];
   return samplers.map((id, i) => ({ id: `base-${i + 1}`, label: `Pass ${i + 1}`, nodes: [id] }));
+}
+
+/**
+ * What a workflow's first pass can start from, in menu order: an image workflow has Text to
+ * image, Image to image and Inpaint; a video one Text to video plus the modes a package fits.
+ */
+export function sourceModes(
+  prompt: ApiPrompt,
+  packages: LoadedStage[],
+  bindings: Binding[],
+  media: WorkflowMedia,
+): SourceMode[] {
+  if (media === "image") return [...IMAGE_SOURCE_MODES];
+  const ports = findPorts(prompt);
+  const videoClass = ports.VIDEO ? (prompt[ports.VIDEO[0]]?.class_type ?? null) : null;
+  const family = workflowFamily(bindings);
+  const fits = (mode: SourceMode) =>
+    pickPackage(packages, "source", family, ports, { mode, videoClass }).found !== null;
+  return ["txt2img", ...(["first", "firstLast"] as const).filter(fits)];
 }

@@ -1,0 +1,20 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-ltx2",
+  "stage": "source",
+  "family": "checkpoint",
+  "name": "First frame (LTX)",
+  "description": "Starts an LTX-2 video from a first frame, as ComfyUI's LTX-2.3 image to video template does: the image is fitted to the workflow's size, prepared (LTXVPreprocess) and written into the empty video latent (LTXVImgToVideoInplace). Core nodes only.",
+  "attach": "before_sampler",
+  "modes": ["first"],
+  "fits": ["EmptyLTXVLatentVideo"],
+  "requires": ["VAE", "VIDEO"],
+  "provides": ["VIDEO"],
+  "packs": [],
+  "fields": [
+    { "field": "image", "node": "first", "input": "image", "label": "First frame" },
+    { "field": "width", "node": "scale", "input": "width" },
+    { "field": "height", "node": "scale", "input": "height" }
+  ],
+  "defaults": {}
+}

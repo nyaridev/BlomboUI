@@ -70,6 +70,7 @@ export function createApp(services: Services) {
       services.layouts,
       services.bridge,
       services.workflowCheck,
+      services.stages,
     ),
   );
   api.route("/scripts", scriptRoutes(services.scripts));

@@ -1,0 +1,130 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "inputs": { "ckpt_name": "ltx-2.3-22b-distilled-fp8.safetensors" },
+    "_meta": { "title": "Checkpoint" }
+  },
+  "2": {
+    "class_type": "LTXVAudioVAELoader",
+    "inputs": { "ckpt_name": "ltx-2.3-22b-distilled-fp8.safetensors" },
+    "_meta": { "title": "Audio VAE" }
+  },
+  "3": {
+    "class_type": "LTXAVTextEncoderLoader",
+    "inputs": {
+      "text_encoder": "gemma_3_12B_it_fp4_mixed.safetensors",
+      "ckpt_name": "ltx-2.3-22b-distilled-fp8.safetensors",
+      "device": "default"
+    },
+    "_meta": { "title": "Text encoder" }
+  },
+  "4": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "A red fox walks through a snowy forest at golden hour, snow falling softly, the camera slowly tracks beside it. Sound: crunching snow and a gentle wind.",
+      "clip": ["3", 0]
+    },
+    "_meta": { "title": "Prompt" }
+  },
+  "5": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry, out of focus, overexposed, underexposed, low contrast, washed out colors, excessive noise, grainy texture, poor lighting, flickering, motion blur, distorted",
+      "clip": ["3", 0]
+    },
+    "_meta": { "title": "Negative prompt" }
+  },
+  "6": {
+    "class_type": "PrimitiveInt",
+    "inputs": { "value": 97 },
+    "_meta": { "title": "Frames" }
+  },
+  "7": {
+    "class_type": "PrimitiveFloat",
+    "inputs": { "value": 25 },
+    "_meta": { "title": "Frame rate" }
+  },
+  "8": {
+    "class_type": "LTXVConditioning",
+    "inputs": { "frame_rate": ["7", 0], "positive": ["4", 0], "negative": ["5", 0] },
+    "_meta": { "title": "Frame rate conditioning" }
+  },
+  "9": {
+    "class_type": "EmptyLTXVLatentVideo",
+    "inputs": { "width": 768, "height": 512, "length": ["6", 0], "batch_size": 1 },
+    "_meta": { "title": "Size and length" }
+  },
+  "10": {
+    "class_type": "LTXVEmptyLatentAudio",
+    "inputs": { "frames_number": ["6", 0], "frame_rate": ["7", 0], "batch_size": 1, "audio_vae": ["2", 0] },
+    "_meta": { "title": "Empty audio" }
+  },
+  "11": {
+    "class_type": "LTXVConcatAVLatent",
+    "inputs": { "video_latent": ["9", 0], "audio_latent": ["10", 0] },
+    "_meta": { "title": "Video and audio" }
+  },
+  "12": {
+    "class_type": "CFGGuider",
+    "inputs": { "cfg": 1, "model": ["1", 0], "positive": ["8", 0], "negative": ["8", 1] },
+    "_meta": { "title": "Guider" }
+  },
+  "13": {
+    "class_type": "SamplerEulerAncestral",
+    "inputs": { "eta": 0, "s_noise": 1 },
+    "_meta": { "title": "Sampler" }
+  },
+  "14": {
+    "class_type": "ManualSigmas",
+    "inputs": { "sigmas": "1., 0.99375, 0.9875, 0.98125, 0.975, 0.909375, 0.725, 0.421875, 0.0" },
+    "_meta": { "title": "Distilled schedule" }
+  },
+  "15": {
+    "class_type": "RandomNoise",
+    "inputs": { "noise_seed": 0 },
+    "_meta": { "title": "Seed" }
+  },
+  "16": {
+    "class_type": "SamplerCustomAdvanced",
+    "inputs": {
+      "noise": ["15", 0],
+      "guider": ["12", 0],
+      "sampler": ["13", 0],
+      "sigmas": ["14", 0],
+      "latent_image": ["11", 0]
+    },
+    "_meta": { "title": "Sample" }
+  },
+  "17": {
+    "class_type": "LTXVSeparateAVLatent",
+    "inputs": { "av_latent": ["16", 1] },
+    "_meta": { "title": "Split video and audio" }
+  },
+  "18": {
+    "class_type": "VAEDecodeTiled",
+    "inputs": {
+      "tile_size": 768,
+      "overlap": 64,
+      "temporal_size": 4096,
+      "temporal_overlap": 64,
+      "samples": ["17", 0],
+      "vae": ["1", 2]
+    },
+    "_meta": { "title": "Decode video" }
+  },
+  "19": {
+    "class_type": "LTXVAudioVAEDecode",
+    "inputs": { "samples": ["17", 1], "audio_vae": ["2", 0] },
+    "_meta": { "title": "Decode audio" }
+  },
+  "20": {
+    "class_type": "CreateVideo",
+    "inputs": { "fps": ["7", 0], "images": ["18", 0], "audio": ["19", 0] },
+    "_meta": { "title": "Video" }
+  },
+  "21": {
+    "class_type": "SaveVideo",
+    "inputs": { "filename_prefix": "ComfyUI", "format": "auto", "codec": "auto", "video": ["20", 0] },
+    "_meta": { "title": "Save video" }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "p-vae": { "class_type": "PORT:VAE", "inputs": {} },
+  "p-video": { "class_type": "PORT:VIDEO", "inputs": {} },
+  "first": { "class_type": "LoadImage", "inputs": { "image": "" }, "_meta": { "title": "First frame" } },
+  "scale": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": ["first", 0],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 512,
+      "crop": "center"
+    },
+    "_meta": { "title": "Fit to size", "blombo": { "when": "resize", "else": "input:image" } }
+  },
+  "prep": {
+    "class_type": "LTXVPreprocess",
+    "inputs": { "image": ["scale", 0], "img_compression": 18 },
+    "_meta": { "title": "Prepare" }
+  },
+  "put": {
+    "class_type": "LTXVImgToVideoInplace",
+    "inputs": {
+      "vae": ["p-vae", 0],
+      "image": ["prep", 0],
+      "latent": ["p-video", 0],
+      "strength": 1,
+      "bypass": false
+    },
+    "_meta": { "title": "First frame into the video" }
+  },
+  "out-video": { "class_type": "OUT:VIDEO", "inputs": { "value": ["put", 0] } }
+}

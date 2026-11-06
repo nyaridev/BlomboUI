@@ -25,12 +25,7 @@ import {
 } from "@shared/layout/schema";
 import { type Binding, resolveBind } from "@shared/workflow/manifest";
 import type { StageId } from "@shared/workflow/roles";
-import {
-  SOURCE_MODE_LABELS,
-  SOURCE_MODES,
-  type SourceMode,
-  STAGE_LABELS,
-} from "@shared/workflow/stages";
+import { type SourceMode, STAGE_LABELS, sourceModeLabel } from "@shared/workflow/stages";
 import { type ComponentType, type ReactNode, useState } from "react";
 import { bindingFamily, defaultStyle, ParamControl } from "./blocks/ParamControl";
 import { Resolution } from "./blocks/Resolution";
@@ -40,7 +35,7 @@ import { SourceBlock, SourceInTab } from "./blocks/Source";
 import { AdetailerStage, ControlNetStage, HiresStage, StageTabContext } from "./blocks/stages";
 import SortableParams from "./SortableParams";
 import { useLayout, useValues } from "./state";
-import { useBindings } from "./workflow";
+import { useBindings, useSourceModes } from "./workflow";
 
 /** The params' sliders: a little bigger, with the value in a number box (the old app's look). */
 const PARAMS_SLIDERS: SliderLook = { size: "lg", field: true };
@@ -109,6 +104,8 @@ interface RenderContext {
   customizing: boolean;
   /** A batch workflow: its input image comes from the runner, and Generate-only blocks hide. */
   batch: boolean;
+  /** A video workflow: Hires fix, ADetailer and ControlNet don't apply to it. */
+  video: boolean;
   /** Rendering a card's children: feature blocks leave out their own card. */
   inCard?: boolean;
   arrange: Arrange;
@@ -173,6 +170,7 @@ function StageBlock({ stage }: { stage: StageId }) {
 
 function renderBlock(block: Block, ctx: RenderContext): ReactNode {
   if (ctx.batch && generateOnly(block)) return null;
+  if (ctx.video && block.type === "stage" && !ctx.customizing) return null;
   switch (block.type) {
     case "param": {
       const b = resolveBind(ctx.bindings, block.bind);
@@ -261,7 +259,7 @@ function PassTabs({ block, ctx }: { block: TabsBlock; ctx: RenderContext }) {
       !(ctx.batch && generateOnly(c)) &&
       (c.type === "card"
         ? ctx.customizing || cardChildren(c, ctx).length > 0
-        : isTabStage(c.stage)),
+        : isTabStage(c.stage) && !(ctx.video && !ctx.customizing)),
   );
   if (ctx.customizing) {
     const { Item, Group } = ctx.arrange;
@@ -291,6 +289,8 @@ const MODE_ICONS: Record<SourceMode, IconName> = {
   txt2img: "text",
   img2img: "image",
   inpaint: "edit",
+  first: "image",
+  firstLast: "swap-horizontal",
 };
 
 /** A card holding the first pass's mode (the `source` feature): its tab gets the mode menu. */
@@ -300,6 +300,7 @@ const holdsSource = (card: CardBlock) =>
 function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext }) {
   const [picked, setPicked] = useState<string | null>(null);
   const mode = useValues((s) => s.stages.source.mode);
+  const { media, modes } = useSourceModes();
   const on = {
     controlnet: useValues((s) => s.stages.controlnet.enabled),
     hires: useValues((s) => s.stages.hires.enabled),
@@ -323,14 +324,14 @@ function PassTabsView({ passes, ctx }: { passes: PassBlock[]; ctx: RenderContext
         label: p.title,
         icon: (p.icon as IconName | undefined) ?? "activity",
         ...(source && mode !== "txt2img"
-          ? { badge: <Badge tone="accent">{SOURCE_MODE_LABELS[mode]}</Badge> }
+          ? { badge: <Badge tone="accent">{sourceModeLabel(mode, media)}</Badge> }
           : {}),
         ...(source
           ? {
               menuLabel: `${p.title}: what it starts from`,
-              menu: SOURCE_MODES.map((m) => ({
+              menu: modes.map((m) => ({
                 id: m,
-                label: SOURCE_MODE_LABELS[m],
+                label: sourceModeLabel(m, media),
                 icon: MODE_ICONS[m],
                 checked: m === mode,
                 onSelect: () => setMode(p.id, m),
@@ -383,9 +384,11 @@ export function ParamsColumn({ batch = false }: { batch?: boolean }) {
   const doc = useLayout((s) => s.doc);
   const customizing = useLayout((s) => s.customizing);
   const bindings = useBindings();
+  const video = useSourceModes().media === "video";
   const blocks = doc?.regions.params ?? [];
   const ctx: RenderContext = {
     bindings,
+    video,
     placed: placedBindingIds(blocks, bindings),
     customizing,
     batch,

@@ -44,7 +44,7 @@ Built-in presets ship in `presets/workflows/<id>/` with the same files and are c
 
 - **Bindings** connect a UI parameter to `(node, input)` in `prompt.json`. Types: `prompt`, `int`, `float`, `enum`, `bool`, `string` (with `multiline` for text boxes), `seed`, `model` (with `modelKind`), `image`, and `loras` (a LoRA stack node, filled from prompt tags). Ranges for roles are comfortable UI ranges (steps 1–150, CFG 1–20); ComfyUI's own limits still apply when it runs.
 - **Choices** (`options`) are saved at import time and refreshed from ComfyUI's `/object_info` whenever the workflow is opened, so new models and samplers appear without re-importing.
-- **Roles** (`src/shared/workflow/roles.ts`) mark what a binding *means*, so smart features attach to any graph: the prompt editor, LoRA tags, wildcards, resolution picker, seed modes, model galleries and stages.
+- **Roles** (`src/shared/workflow/roles.ts`) mark what a binding *means*, so smart features attach to any graph: the prompt editor, LoRA tags, wildcards, resolution picker, seed modes, model galleries and stages. Video workflows add `latent.length` (frames, the `length` of the video latent), `video.fps` (the frame rate the video is saved at) and the `output.video` output, which makes the workflow a video one.
 - **Values** hold the current settings. Every change saves into the workflow (debounced). There are no templates: to keep a variant, **Duplicate** the workflow.
 
 ## Importing
@@ -103,6 +103,7 @@ Hires fix, ADetailer and ControlNet are **stages**: graph patches that splice in
 | `CLIP` | the text encoder the prompt is encoded with (after CLIP skip and LoRAs) |
 | `POSITIVE`, `NEGATIVE` | the conditioning going into the sampler (or its guider) |
 | `START` | the latent going into the main sampler (the empty one, in a text-to-image graph) |
+| `VIDEO` | video workflows: the empty video latent (`START` itself for Wan; the `video_latent` input of LTX's audio + video concat) |
 | `LATENT`, `VAE`, `IMAGE` | the sampler's output, and the decoder that reads it (its VAE and image) |
 
 They run in a fixed order, each reading the ports the one before left:
@@ -112,6 +113,15 @@ source → controlnet (units) → the workflow's own sampling → hires → adet
 ```
 
 **Source** is the first pass's mode, picked from the First pass tab's menu (its arrow; the tab names the mode when it isn't Text to image), with the image, denoise and mask at the top of that card (a layout feature, `source`, not a tab; a layout without the pass tabs shows a "Start from" dropdown there instead): Text to image leaves the graph alone; **Image to image** loads the image (a stage image, like ControlNet's), fits it to the workflow's width and height (`ImageScale`, cropped to fill), encodes it with the workflow's VAE and republishes `START`, so the main sampler starts from it; **Inpaint** also loads the painted mask (`LoadImageMask`, red channel), grows it (`GrowMask`), fits and softens it (`ImageBlur`) and puts it on the latent (`SetLatentNoiseMask`), so only the painted part is redrawn. A batch size above 1 repeats the latent (`RepeatLatentBatch`). Its denoise is set on the main sampler through the package's `base` (`"base": { "denoise": "denoise" }`: the sampler's input → the stage field; the scheduler's denoise with `SamplerCustomAdvanced`). Core nodes only, so the one package (`presets/stages/source/`) fits both families. The gallery viewer's **Start from it** puts an image in.
+
+**Video workflows** (any whose output node saves a video: the `output.video` role) start from **Text to video**, a **First frame** or a **First and last frame** instead, and have no Hires fix, ADetailer or ControlNet tabs. The modes a workflow offers are the ones a `source` package fits (`GET /api/workflows/:id` → `media`, `sourceModes`; others are hidden): each package names its `modes` and the classes it `fits` (the node at its first required port). The frames are stage images (`image` and `last` in the source settings), fitted to the workflow's size:
+
+| Package | Modes | How |
+|---|---|---|
+| `source-wan22` | First frame | a new `Wan22ImageToVideoLatent` with the start image, at the workflow's size, length and batch, replaces `VIDEO` |
+| `source-wan22-fun` | First and last frame | Wan 2.2 TI2V can't take an end frame, so it swaps the model for Wan 2.2 Fun Inpaint 5B (its own `UNETLoader` + `ModelSamplingSD3` shift 8, which drops the base model's LoRAs) and `WanFunInpaintToVideo` gives `POSITIVE`, `NEGATIVE` and `VIDEO` |
+| `source-ltx2` | First frame | `LTXVPreprocess` + `LTXVImgToVideoInplace` writes the frame into the empty video latent |
+| `source-ltx2-flf` | First and last frame | two `LTXVAddGuide` (frame 0 and -1), and `LTXVCropGuides` on `LATENT` before decoding |
 
 ControlNet changes the conditioning, so the base sampler and Hires fix use it. ADetailer redraws with the plain prompt (`from: "base"`), since a full-image control map doesn't fit a face crop.
 
@@ -126,10 +136,13 @@ presets/stages/
 ├── adetailer-checkpoint/                             Impact Pack FaceDetailer, one per unit
 ├── adetailer-diffusion/                              …with an empty negative (ConditioningZeroOut)
 ├── controlnet-checkpoint/                            ControlNetApplyAdvanced on positive + negative
-└── controlnet-diffusion/                             …on the prompt only
+├── controlnet-diffusion/                             …on the prompt only
+├── source/                                           image to image and inpaint (any family)
+├── source-wan22/, source-wan22-fun/                  Wan 2.2's first frame, first and last frame
+└── source-ltx2/, source-ltx2-flf/                    LTX-2's
 ```
 
-`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler).
+`stage.json` names the stage and **family** (`checkpoint`: one checkpoint file with a real negative; `diffusion`: UNET + text encoders + VAE, picked when the workflow has `model.unet` and no checkpoint), the ports it `requires` and `provides`, the custom node `packs` it may need (name, GitHub repository, classes, and `ref`: the commit Blombo installs; optional `folder` for its name in `custom_nodes/`, the repository name otherwise), `fields` (a setting → `node.input` in the graph; `modelKind` marks model choices) and `defaults` used when the workflow has nothing to inherit (diffusion packages: CFG 1, `simple` scheduler). Source packages also list the `modes` they serve, and `fits`: the classes the node at their first required port must be, so a Wan package never lands on an LTX graph.
 
 `prompt.json` is a ComfyUI API graph with three extras:
 

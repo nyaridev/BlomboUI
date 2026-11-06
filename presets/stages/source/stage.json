@@ -6,6 +6,7 @@
   "name": "Image to image",
   "description": "Starts the first pass from an image instead of an empty latent: resized to the workflow's size, encoded, and for inpaint masked so only the painted part changes. Sets the sampler's denoise. Core nodes only, so it fits checkpoint and diffusion-model workflows alike.",
   "attach": "before_sampler",
+  "modes": ["img2img", "inpaint"],
   "requires": ["VAE", "START"],
   "provides": ["START"],
   "packs": [],

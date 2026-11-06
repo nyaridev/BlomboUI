@@ -25,16 +25,20 @@ import type {
 import { ROLE_LABELS, type Role } from "../../../shared/workflow/roles.ts";
 import type { Port } from "../../../shared/workflow/stages.ts";
 import {
+  AV_SPLIT_INPUT,
   CONDITIONING_PASS,
+  FPS_INPUTS,
   FRONTEND_ONLY_CLASSES,
   IMAGE_INPUT_CLASSES,
   IMAGE_OUTPUT_CLASSES,
+  LATENT_PASS,
   LORA_STACK_CLASSES,
   MODEL_INPUTS,
   PASS_INPUTS,
   ROLE_RANGES,
   SEED_INPUTS,
   TEXT_INPUTS,
+  VIDEO_OUTPUT_CLASSES,
 } from "./nodes.ts";
 
 export interface Analysis {
@@ -109,7 +113,15 @@ export class GraphView {
   isOutput(id: string): boolean {
     const def = this.info?.[this.classOf(id)];
     if (def) return def.output_node === true;
-    return IMAGE_OUTPUT_CLASSES.has(this.classOf(id));
+    return IMAGE_OUTPUT_CLASSES.has(this.classOf(id)) || VIDEO_OUTPUT_CLASSES.has(this.classOf(id));
+  }
+
+  /** An output node that saves a video (it takes a `video` link, or is a known video saver). */
+  makesVideo(id: string): boolean {
+    return (
+      this.isOutput(id) &&
+      (isApiLink(this.inputs(id).video) || VIDEO_OUTPUT_CLASSES.has(this.classOf(id)))
+    );
   }
 
   /** An output node that shows text (captioners, taggers). Only object_info can tell. */
@@ -204,7 +216,24 @@ function traceLatentSize(g: GraphView, link: ApiLink | null): string | null {
     const inputs = g.inputs(id);
     if ("width" in inputs && "height" in inputs && !g.isSampler(id)) return id;
     if (g.isSampler(id)) return null;
-    cur = g.link(id, "samples") ?? g.link(id, "latent") ?? g.link(id, "latent_image");
+    cur = firstLink(g, id, LATENT_PASS);
+  }
+  return null;
+}
+
+/** The node that sets a video's size and length (it has a `length`), or null for images. */
+function videoLatent(g: GraphView, link: ApiLink | null): string | null {
+  const id = traceLatentSize(g, link);
+  return id && "length" in g.inputs(id) ? id : null;
+}
+
+/** The node making the video an output saves, and the frame rate it's made at. */
+function videoFps(g: GraphView): Ref | null {
+  for (const id of g.ids()) {
+    if (!g.makesVideo(id)) continue;
+    for (const node of [id, g.link(id, "video")?.[0]])
+      for (const name of FPS_INPUTS)
+        if (node && name in g.inputs(node)) return g.widgetRef(node, name);
   }
   return null;
 }
@@ -215,6 +244,8 @@ function traceText(g: GraphView, link: ApiLink | null, side: "positive" | "negat
     const id = cur[0];
     for (const name of TEXT_INPUTS) {
       if (!(name in g.inputs(id))) continue;
+      // A linked `positive` is conditioning (LTXVConditioning), not a prompt node's text.
+      if (name === "positive" && g.link(id, name)) continue;
       const ref = g.widgetRef(id, name) ?? traceString(g, g.link(id, name));
       if (ref && typeof g.inputs(ref.node)[ref.input] === "string") return ref;
     }
@@ -325,14 +356,19 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
   if (parts.positive) ports.POSITIVE = parts.positive;
   if (parts.negative) ports.NEGATIVE = parts.negative;
   if (parts.latent) ports.START = parts.latent;
+  const video = videoLatent(g, parts.latent);
+  if (video) ports.VIDEO = [video, 0];
   const encoder = findEncoder(g, parts.positive);
   const clip = encoder ? g.link(encoder, "clip") : null;
   if (clip) ports.CLIP = clip;
-  // The decoder that reads this sampler's output (directly or through latent helpers).
+  // The decoder that reads this sampler's output (directly, or the video half of an audio +
+  // video latent split after sampling).
+  const fromSampler = (link: ApiLink) =>
+    link[0] === sid || g.link(link[0], AV_SPLIT_INPUT)?.[0] === sid;
   for (const id of g.ids()) {
     const samples = g.link(id, "samples");
     const vae = g.link(id, "vae");
-    if (!samples || !vae || samples[0] !== sid) continue;
+    if (!samples || !vae || !fromSampler(samples)) continue;
     ports.LATENT = samples;
     ports.VAE = vae;
     ports.IMAGE = [id, 0];
@@ -369,12 +405,13 @@ export function refreshBindings(
   });
 }
 
-export type OutputRole = Extract<Role, "output.image" | "output.text">;
+export type OutputRole = Extract<Role, "output.image" | "output.text" | "output.video">;
 
 /**
  * What a graph's output nodes make: `output.image` for one that takes images (Save Image,
- * Preview Image…), `output.text` for one that shows text (a caption or tags; needs object_info).
- * The batch runner decides what it writes from these.
+ * Preview Image…), `output.text` for one that shows text (a caption or tags; needs object_info),
+ * `output.video` for one that saves a video. The batch runner decides what it writes from these;
+ * Generate treats a workflow with a video output as a video workflow.
  */
 export function outputRoles(prompt: ApiPrompt, info: ObjectInfo | null): Set<OutputRole> {
   const g = new GraphView(prompt, info);
@@ -383,6 +420,7 @@ export function outputRoles(prompt: ApiPrompt, info: ObjectInfo | null): Set<Out
     if (!g.isOutput(id)) continue;
     if (isApiLink(g.inputs(id).images)) roles.add("output.image");
     if (g.showsText(id)) roles.add("output.text");
+    if (g.makesVideo(id)) roles.add("output.video");
   }
   return roles;
 }
@@ -524,8 +562,11 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
       const skip = clip.nodes.find((id) => "stop_at_clip_layer" in g.inputs(id));
       if (skip) add(g.widgetRef(skip, "stop_at_clip_layer"), "clip.skip");
       const clipLoader = clip.nodes[clip.nodes.length - 1];
-      if (clipLoader && !("ckpt_name" in g.inputs(clipLoader))) {
-        const first = ["clip_name", "clip_name1"].find((n) => n in g.inputs(clipLoader));
+      if (clipLoader) {
+        // A checkpoint's own CLIP has none of these; LTX's loader names its file text_encoder.
+        const first = ["clip_name", "clip_name1", "text_encoder"].find(
+          (n) => n in g.inputs(clipLoader),
+        );
         if (first) add(g.widgetRef(clipLoader, first), "model.clip");
         if ("clip_name2" in g.inputs(clipLoader))
           add(g.widgetRef(clipLoader, "clip_name2"), "model.clip2");
@@ -554,7 +595,9 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
           bindings.push(makeBinding(g, ref, `n${from}.${input}`, undefined, { group: SIZE }));
         }
       if ("batch_size" in g.inputs(latent)) add(g.widgetRef(latent, "batch_size"), "latent.batch");
+      if ("length" in g.inputs(latent)) add(g.widgetRef(latent, "length"), "latent.length");
     }
+    add(videoFps(g), "video.fps");
     // Denoise only matters when the sampler starts from an existing image.
     add(parts.denoise, "sampler.denoise", { hidden: Boolean(latent) });
   } else {

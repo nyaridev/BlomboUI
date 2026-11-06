@@ -1,0 +1,76 @@
+{
+  "p-vae": { "class_type": "PORT:VAE", "inputs": {} },
+  "p-pos": { "class_type": "PORT:POSITIVE", "inputs": {} },
+  "p-neg": { "class_type": "PORT:NEGATIVE", "inputs": {} },
+  "p-video": { "class_type": "PORT:VIDEO", "inputs": {} },
+  "p-latent": { "class_type": "PORT:LATENT", "inputs": {} },
+  "first": { "class_type": "LoadImage", "inputs": { "image": "" }, "_meta": { "title": "First frame" } },
+  "last": { "class_type": "LoadImage", "inputs": { "image": "" }, "_meta": { "title": "Last frame" } },
+  "scale-first": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": ["first", 0],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 512,
+      "crop": "center"
+    },
+    "_meta": { "title": "Fit the first frame", "blombo": { "when": "resize", "else": "input:image" } }
+  },
+  "scale-last": {
+    "class_type": "ImageScale",
+    "inputs": {
+      "image": ["last", 0],
+      "upscale_method": "lanczos",
+      "width": 768,
+      "height": 512,
+      "crop": "center"
+    },
+    "_meta": { "title": "Fit the last frame", "blombo": { "when": "resize", "else": "input:image" } }
+  },
+  "prep-first": {
+    "class_type": "LTXVPreprocess",
+    "inputs": { "image": ["scale-first", 0], "img_compression": 25 },
+    "_meta": { "title": "Prepare the first frame" }
+  },
+  "prep-last": {
+    "class_type": "LTXVPreprocess",
+    "inputs": { "image": ["scale-last", 0], "img_compression": 25 },
+    "_meta": { "title": "Prepare the last frame" }
+  },
+  "guide-first": {
+    "class_type": "LTXVAddGuide",
+    "inputs": {
+      "positive": ["p-pos", 0],
+      "negative": ["p-neg", 0],
+      "vae": ["p-vae", 0],
+      "latent": ["p-video", 0],
+      "image": ["prep-first", 0],
+      "frame_idx": 0,
+      "strength": 0.7
+    },
+    "_meta": { "title": "Guide: first frame" }
+  },
+  "guide-last": {
+    "class_type": "LTXVAddGuide",
+    "inputs": {
+      "positive": ["guide-first", 0],
+      "negative": ["guide-first", 1],
+      "vae": ["p-vae", 0],
+      "latent": ["guide-first", 2],
+      "image": ["prep-last", 0],
+      "frame_idx": -1,
+      "strength": 0.7
+    },
+    "_meta": { "title": "Guide: last frame" }
+  },
+  "crop": {
+    "class_type": "LTXVCropGuides",
+    "inputs": { "positive": ["guide-last", 0], "negative": ["guide-last", 1], "latent": ["p-latent", 0] },
+    "_meta": { "title": "Crop the guides" }
+  },
+  "out-pos": { "class_type": "OUT:POSITIVE", "inputs": { "value": ["guide-last", 0] } },
+  "out-neg": { "class_type": "OUT:NEGATIVE", "inputs": { "value": ["guide-last", 1] } },
+  "out-video": { "class_type": "OUT:VIDEO", "inputs": { "value": ["guide-last", 2] } },
+  "out-latent": { "class_type": "OUT:LATENT", "inputs": { "value": ["crop", 2] } }
+}

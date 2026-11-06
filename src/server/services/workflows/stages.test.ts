@@ -12,13 +12,23 @@ import { readStages, type StageSettings } from "../../../shared/workflow/stages.
 import { analyze, findPorts } from "./analyze.ts";
 import { CompileError, compile } from "./compile.ts";
 import { listStagePackages } from "./presets.ts";
-import { applyStages, type LoadedStage } from "./stages.ts";
+import { applyStages, type LoadedStage, sourceModes } from "./stages.ts";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const dir = path.join(here, "fixtures");
 const presetsDir = path.join(here, "..", "..", "..", "..", "presets");
+/** A fixture graph, or a built-in preset's (`preset:wan22-5b`). */
 const load = (name: string) =>
-  ApiPromptSchema.parse(JSON.parse(fs.readFileSync(path.join(dir, `${name}.json`), "utf8")));
+  ApiPromptSchema.parse(
+    JSON.parse(
+      fs.readFileSync(
+        name.startsWith("preset:")
+          ? path.join(presetsDir, "workflows", name.slice(7), "prompt.json")
+          : path.join(dir, `${name}.json`),
+        "utf8",
+      ),
+    ),
+  );
 const info = ObjectInfo.parse(
   JSON.parse(fs.readFileSync(path.join(dir, "object_info.json"), "utf8")),
 );
@@ -95,6 +105,10 @@ describe("stage packages", () => {
       "hires-checkpoint",
       "hires-diffusion",
       "source",
+      "source-ltx2",
+      "source-ltx2-flf",
+      "source-wan22",
+      "source-wan22-fun",
     ]);
   });
 
@@ -227,6 +241,180 @@ describe("image to image and inpaint (the source stage)", () => {
     expect(() => run("sd15-api", { source: { mode: "inpaint", image: IMAGE } })).toThrow(
       "Inpaint has no mask.",
     );
+  });
+});
+
+describe("video first pass (source packages for Wan and LTX)", () => {
+  const LAST = { ...IMAGE, file: "fedcba9876543210.png", label: "last.png" };
+  const images = {
+    [IMAGE.file]: "blombo/0123456789abcdef.png",
+    [LAST.file]: "blombo/fedcba9876543210.png",
+  };
+  const FUN = "wan2.2_fun_inpaint_5B_bf16.safetensors";
+  /** The node id a link input points at. */
+  const from = (v: unknown) => String((v as [string, number] | undefined)?.[0]);
+  const withFun = structuredClone(info);
+  const unet = withFun.UNETLoader?.input.required?.unet_name;
+  if (unet && Array.isArray(unet[0])) unet[0] = [...(unet[0] as string[]), FUN];
+
+  it("finds the video ports: Wan's VIDEO is its START, LTX's the video half of its latent", () => {
+    expect(findPorts(load("preset:wan22-5b"))).toMatchObject({
+      START: ["7", 0],
+      VIDEO: ["7", 0],
+      LATENT: ["8", 0],
+      VAE: ["3", 0],
+      IMAGE: ["9", 0],
+    });
+    expect(findPorts(load("preset:ltx23"))).toMatchObject({
+      START: ["11", 0],
+      VIDEO: ["9", 0],
+      POSITIVE: ["8", 0],
+      NEGATIVE: ["8", 1],
+      LATENT: ["17", 0],
+      VAE: ["1", 2],
+      IMAGE: ["18", 0],
+    });
+    expect(findPorts(load("sd15-api")).VIDEO).toBeUndefined();
+  });
+
+  it("offers the modes whose package fits the workflow", () => {
+    const modes = (name: string, media: "image" | "video") => {
+      const prompt = load(name);
+      return sourceModes(prompt, packages, analyze(prompt, info).bindings, media);
+    };
+    expect(modes("preset:wan22-5b", "video")).toEqual(["txt2img", "first", "firstLast"]);
+    expect(modes("preset:ltx23", "video")).toEqual(["txt2img", "first", "firstLast"]);
+    expect(modes("sd15-api", "image")).toEqual(["txt2img", "img2img", "inpaint"]);
+    // A video model no package knows gets Text to video only.
+    const other = load("preset:wan22-5b");
+    if (other["7"]) other["7"].class_type = "SomeVideoLatent";
+    expect(sourceModes(other, packages, analyze(other, info).bindings, "video")).toEqual([
+      "txt2img",
+    ]);
+  });
+
+  it("Wan first frame: a new latent with the start image, at the workflow's size and length", () => {
+    const p = run("preset:wan22-5b", { source: { mode: "first", image: IMAGE } }).prompt;
+    expectValidGraph(p);
+    const [loadId, load] = one(p, "LoadImage");
+    expect(load.inputs.image).toBe("blombo/0123456789abcdef.png");
+    const latentId = from(p["8"]?.inputs.latent_image);
+    expect(latentId).not.toBe("7");
+    expect(p[latentId]?.inputs).toMatchObject({
+      start_image: [loadId, 0],
+      vae: ["3", 0],
+      width: 1280,
+      height: 704,
+      length: 49,
+      batch_size: 1,
+    });
+  });
+
+  it("Wan first and last frame: Fun Inpaint's model, both frames and its conditioning", () => {
+    const p = run(
+      "preset:wan22-5b",
+      { source: { mode: "firstLast", image: IMAGE, last: LAST } },
+      { stageImages: images, objectInfo: withFun },
+    ).prompt;
+    expectValidGraph(p);
+    const [funId, fun] = one(p, "WanFunInpaintToVideo");
+    expect(fun.inputs).toMatchObject({
+      positive: ["5", 0],
+      negative: ["6", 0],
+      vae: ["3", 0],
+      length: 49,
+    });
+    const frames = byClass(p, "LoadImage").map(([, n]) => String(n.inputs.image));
+    expect(frames.sort()).toEqual(["blombo/0123456789abcdef.png", "blombo/fedcba9876543210.png"]);
+    const sampler = p["8"]?.inputs;
+    expect(sampler).toMatchObject({
+      positive: [funId, 0],
+      negative: [funId, 1],
+      latent_image: [funId, 2],
+    });
+    const shift = p[from(sampler?.model)];
+    expect(shift?.class_type).toBe("ModelSamplingSD3");
+    expect(p[from(shift?.inputs.model)]?.inputs.unet_name).toBe(FUN);
+  });
+
+  it("Wan first and last frame says so when the Fun Inpaint model isn't there", () => {
+    expect(() =>
+      run(
+        "preset:wan22-5b",
+        { source: { mode: "firstLast", image: IMAGE, last: LAST } },
+        { stageImages: images },
+      ),
+    ).toThrow(FUN);
+  });
+
+  it("LTX first frame: written into the empty video latent before the audio joins it", () => {
+    const p = run("preset:ltx23", { source: { mode: "first", image: IMAGE } }).prompt;
+    expectValidGraph(p);
+    const [putId, put] = one(p, "LTXVImgToVideoInplace");
+    expect(put.inputs).toMatchObject({ latent: ["9", 0], vae: ["1", 2], strength: 1 });
+    expect(p["11"]?.inputs.video_latent).toEqual([putId, 0]);
+    const [, scale] = one(p, "ImageScale");
+    expect(scale.inputs).toMatchObject({ width: 768, height: 512, crop: "center" });
+    expect(byClass(p, "LTXVCropGuides")).toEqual([]);
+  });
+
+  it("LTX first and last frame: guides at the first and last frame, cropped before decoding", () => {
+    const p = run(
+      "preset:ltx23",
+      { source: { mode: "firstLast", image: IMAGE, last: LAST } },
+      { stageImages: images },
+    ).prompt;
+    expectValidGraph(p);
+    const guides = byClass(p, "LTXVAddGuide");
+    expect(guides.map(([, n]) => n.inputs.frame_idx)).toEqual([0, -1]);
+    const [firstId, first] = guides[0] as [string, ApiPrompt[string]];
+    const [lastId, last] = guides[1] as [string, ApiPrompt[string]];
+    expect(first.inputs).toMatchObject({
+      positive: ["8", 0],
+      negative: ["8", 1],
+      latent: ["9", 0],
+    });
+    expect(last.inputs).toMatchObject({
+      positive: [firstId, 0],
+      negative: [firstId, 1],
+      latent: [firstId, 2],
+    });
+    expect(p["12"]?.inputs).toMatchObject({ positive: [lastId, 0], negative: [lastId, 1] });
+    expect(p["11"]?.inputs.video_latent).toEqual([lastId, 2]);
+    const [cropId, crop] = one(p, "LTXVCropGuides");
+    expect(crop.inputs).toMatchObject({ positive: [lastId, 0], latent: ["17", 0] });
+    expect(p["18"]?.inputs.samples).toEqual([cropId, 2]);
+  });
+
+  it("stops without the frames a mode needs, and checks Text to video as First frame", () => {
+    expect(() => run("preset:wan22-5b", { source: { mode: "first" } })).toThrow(
+      "First frame has no first frame.",
+    );
+    expect(() => run("preset:ltx23", { source: { mode: "firstLast", image: IMAGE } })).toThrow(
+      "First and last frame has no last frame.",
+    );
+    const s = setup("preset:wan22-5b", { source: { mode: "txt2img" } });
+    const status = applyStages(
+      s.prompt,
+      s.stages,
+      packages,
+      {
+        bindings: s.manifest.bindings,
+        values: s.values,
+        seed: 1,
+        wildcards: null,
+        random: Math.random,
+        loraFiles: "skip",
+        images: null,
+        filenamePrefix: "check",
+        info,
+      },
+      "source",
+    ).statuses[0];
+    expect(status?.package).toBe("source-wan22");
+    // Text to video itself leaves the graph alone.
+    const plain = run("preset:wan22-5b", { source: { mode: "txt2img", image: IMAGE } }).prompt;
+    expect(plain["8"]?.inputs.latent_image).toEqual(["7", 0]);
   });
 });
 

@@ -5,9 +5,13 @@
  * last output, and is kept in the profile like a ControlNet image. Sits at the top of the First
  * pass card (a layout feature, `source`). The mode is picked from that card's tab menu
  * (ParamsColumn, `SourceInTab`); a layout without the tab gets a Start from dropdown here.
+ * Video workflows start from text, a first frame, or a first and a last frame instead; the
+ * modes listed are the ones the workflow has a package for (`WorkflowDetail.sourceModes`).
  */
 import { pauseShortcuts } from "@client/app/useShortcuts";
 import { api, stageImageUrl } from "@client/lib/api";
+import { qk, queryClient } from "@client/lib/queries";
+import { useSession } from "@client/lib/session";
 import {
   Button,
   Dialog,
@@ -19,15 +23,11 @@ import {
   Slider,
   toast,
 } from "@client/ui";
-import {
-  SOURCE_MODE_LABELS,
-  SOURCE_MODES,
-  type SourceMode,
-  type StageImage,
-} from "@shared/workflow/stages";
+import type { WorkflowDetail } from "@shared/workflow/manifest";
+import { type SourceMode, type StageImage, sourceModeLabel } from "@shared/workflow/stages";
 import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { useStage, useValues } from "../state";
-import { useRoleBinding } from "../workflow";
+import { useRoleBinding, useSourceModes } from "../workflow";
 import { StageNotices, useStageStatus } from "./stages/common";
 import { GalleryPicker, useLastOutput } from "./stages/images";
 
@@ -40,7 +40,11 @@ const HINTS: Record<SourceMode, string> = {
   txt2img: "Starts from noise: the prompt makes the whole image.",
   img2img: "Starts from your image: low denoise keeps it, high denoise changes more.",
   inpaint: "Redraws only the part you paint; the rest stays as it is.",
+  first: "The video starts from your picture and the prompt says what happens next.",
+  firstLast: "The video starts from one picture and ends on the other.",
 };
+
+const VIDEO_MODES: SourceMode[] = ["first", "firstLast"];
 
 export function SourceBlock() {
   const [s, set] = useStage("source");
@@ -57,7 +61,10 @@ export function SourceBlock() {
   const setValue = useValues((st) => st.setValue);
   const on = s.mode !== "txt2img";
   const inpaint = s.mode === "inpaint";
+  const video = VIDEO_MODES.includes(s.mode);
   const inTab = useContext(SourceInTab);
+  const { media, modes } = useSourceModes();
+  const label = (m: SourceMode) => sourceModeLabel(m, media);
 
   const add = async (work: () => Promise<StageImage>) => {
     setBusy(true);
@@ -90,21 +97,42 @@ export function SourceBlock() {
       {inTab ? (
         on ? (
           <p className="text-xs text-fg-3">
-            <span className="font-medium text-fg-2">{SOURCE_MODE_LABELS[s.mode]}</span> ·{" "}
-            {HINTS[s.mode]} Switch back to Text to image from the tab's menu.
+            <span className="font-medium text-fg-2">{label(s.mode)}</span> · {HINTS[s.mode]} Switch
+            back to {label("txt2img")} from the tab's menu.
           </p>
         ) : null
       ) : (
-        <Field label="Start from" hint={HINTS[s.mode]}>
+        <Field
+          label="Start from"
+          hint={s.mode === "txt2img" && media === "video" ? undefined : HINTS[s.mode]}
+        >
           <Select
             value={s.mode}
             onChange={(mode) => set({ mode })}
-            options={SOURCE_MODES.map((m) => ({ value: m, label: SOURCE_MODE_LABELS[m] }))}
+            options={modes.map((m) => ({ value: m, label: label(m) }))}
             aria-label="What the first pass starts from"
           />
         </Field>
       )}
-      {on ? (
+      {on && video ? (
+        <>
+          <StageNotices status={status} />
+          <FrameWell
+            title="First frame"
+            image={s.image}
+            sized={sized ? `${w}×${h}` : null}
+            onChange={(image) => set({ image })}
+          />
+          {s.mode === "firstLast" ? (
+            <FrameWell
+              title="Last frame"
+              image={s.last}
+              sized={sized ? `${w}×${h}` : null}
+              onChange={(last) => set({ last })}
+            />
+          ) : null}
+        </>
+      ) : on ? (
         <>
           <StageNotices status={status} />
           {s.image ? (
@@ -275,6 +303,122 @@ export function SourceBlock() {
   );
 }
 
+/** One frame of a video mode: a picture from a file, the gallery or the last output. */
+function FrameWell({
+  title,
+  image,
+  sized,
+  onChange,
+}: {
+  title: string;
+  image: StageImage | null;
+  /** The workflow's size ("1280×704"), which the frame is fitted to. */
+  sized: string | null;
+  onChange: (image: StageImage | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const replaceInput = useRef<HTMLInputElement>(null);
+  const last = useLastOutput();
+  const add = async (work: () => Promise<StageImage>) => {
+    setBusy(true);
+    try {
+      onChange(await work());
+    } catch (e) {
+      toast(message(e), "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="label-caps">{title}</span>
+      {image ? (
+        <div className="flex gap-3 max-sm:flex-col">
+          <div className="relative h-28 w-40 shrink-0 overflow-hidden rounded-md border border-line bg-sunken max-sm:w-full">
+            <img
+              src={stageImageUrl(image.file)}
+              alt={image.label}
+              className="absolute inset-0 h-full w-full object-contain"
+            />
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col gap-2">
+            <span className="truncate font-mono text-2xs text-fg-3" title={image.label}>
+              {image.label} · {image.width}×{image.height}
+            </span>
+            {sized ? (
+              <span className="text-xs text-fg-3">Fitted to {sized} (cropped to fill).</span>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5">
+              <Button
+                size="sm"
+                variant="ghost"
+                icon="upload"
+                disabled={busy}
+                onClick={() => replaceInput.current?.click()}
+              >
+                Replace
+              </Button>
+              <Button size="sm" variant="ghost" icon="x" onClick={() => onChange(null)}>
+                Remove
+              </Button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <DropZone
+          compact
+          busy={busy}
+          accept="image/png,image/jpeg,image/webp"
+          title="Drop an image or click to pick one"
+          hint={title === "Last frame" ? "Where the video ends" : "Where the video starts"}
+          onFile={(f) => void add(() => api.uploadStageImage(f, f.name))}
+        />
+      )}
+      <input
+        ref={replaceInput}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        hidden
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) void add(() => api.uploadStageImage(f, f.name));
+        }}
+      />
+      <div className="flex gap-1.5">
+        <Button
+          size="sm"
+          icon="gallery"
+          className="flex-1"
+          disabled={busy}
+          onClick={() => setPicking(true)}
+        >
+          From gallery
+        </Button>
+        <Button
+          size="sm"
+          icon="image"
+          className="flex-1"
+          disabled={busy || !last}
+          title={last ? undefined : "Generate something first"}
+          onClick={() => last && void add(() => api.stageImageFromOutput(last))}
+        >
+          Last output
+        </Button>
+      </div>
+      <GalleryPicker
+        open={picking}
+        onOpenChange={setPicking}
+        onPick={(id) => {
+          setPicking(false);
+          void add(() => api.stageImageFromGallery(id));
+        }}
+      />
+    </div>
+  );
+}
+
 function MaskDialog({
   open,
   onOpenChange,
@@ -341,7 +485,8 @@ function MaskDialog({
 
 /**
  * "Start from this image" from the gallery: the first pass becomes Image to image (Inpaint stays
- * Inpaint, with a new mask to paint) and the image goes in.
+ * Inpaint, with a new mask to paint) and the image goes in. A video workflow takes it as its first
+ * frame (First and last frame stays, keeping its last frame).
  */
 export async function sourceImageFromGallery(galleryId: number): Promise<boolean> {
   if (!useValues.getState().workflowId) {
@@ -352,10 +497,29 @@ export async function sourceImageFromGallery(galleryId: number): Promise<boolean
     const image = await api.stageImageFromGallery(galleryId);
     const s = useValues.getState();
     const source = s.stages.source;
-    const mode = source.mode === "inpaint" ? "inpaint" : "img2img";
+    const detail = queryClient.getQueryData<WorkflowDetail>(
+      qk.workflow(useSession.getState().profileId, s.workflowId),
+    );
+    const modes = detail?.sourceModes ?? [];
+    const mode: SourceMode =
+      detail?.media === "video"
+        ? source.mode === "firstLast"
+          ? "firstLast"
+          : "first"
+        : source.mode === "inpaint"
+          ? "inpaint"
+          : "img2img";
+    if (detail && !modes.includes(mode)) {
+      toast("This workflow can't start from an image.", "warning");
+      return false;
+    }
     s.setStage("source", { ...source, mode, image, mask: null });
     toast(
-      mode === "inpaint" ? "Ready to inpaint: paint the mask" : "The first pass starts from it",
+      mode === "inpaint"
+        ? "Ready to inpaint: paint the mask"
+        : mode === "img2img"
+          ? "The first pass starts from it"
+          : "The video starts from it",
       "success",
     );
     return true;

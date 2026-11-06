@@ -21,11 +21,14 @@ export const ROLES = [
   "latent.width",
   "latent.height",
   "latent.batch",
+  "latent.length",
+  "video.fps",
   "clip.skip",
   "image.input",
   "mask.input",
   "output.image",
   "output.text",
+  "output.video",
   "port.MODEL",
   "port.CLIP",
   "port.VAE",
@@ -56,12 +59,27 @@ export const ROLE_LABELS: Partial<Record<Role, string>> = {
   "latent.width": "Width",
   "latent.height": "Height",
   "latent.batch": "Batch size",
+  "latent.length": "Frames",
+  "video.fps": "Frame rate",
   "clip.skip": "CLIP skip",
   "image.input": "Input image",
   "mask.input": "Mask",
   "output.image": "Filename prefix",
   "output.text": "Text output",
+  "output.video": "Video output",
 };
+
+/** What a workflow makes: still images, or video (it has an `output.video` node). */
+export const WORKFLOW_MEDIA = ["image", "video"] as const;
+export type WorkflowMedia = (typeof WORKFLOW_MEDIA)[number];
+
+/**
+ * What the first pass starts from. Images: an empty latent, an image, an image with a painted
+ * mask. Video: an empty latent, a first frame, or a first and a last frame. A workflow offers the
+ * ones a stage package fits (`sourceModes` on the workflow detail).
+ */
+export const SOURCE_MODES = ["txt2img", "img2img", "inpaint", "first", "firstLast"] as const;
+export type SourceMode = (typeof SOURCE_MODES)[number];
 
 /**
  * `source` is the first pass's image (img2img or inpaint): it runs before every other stage and

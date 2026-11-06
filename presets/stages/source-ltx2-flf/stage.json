@@ -1,0 +1,23 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-ltx2-flf",
+  "stage": "source",
+  "family": "checkpoint",
+  "name": "First and last frame (LTX)",
+  "description": "Makes an LTX-2 video that starts at one frame and ends at another, as ComfyUI's LTX-2.3 first-last-frame template does: each frame is fitted to the workflow's size, prepared and added as a guide (LTXVAddGuide at the first and the last frame), and the guide frames are cropped off after sampling (LTXVCropGuides). Core nodes only.",
+  "attach": "before_sampler",
+  "modes": ["firstLast"],
+  "fits": ["EmptyLTXVLatentVideo"],
+  "requires": ["VAE", "POSITIVE", "NEGATIVE", "VIDEO", "LATENT"],
+  "provides": ["POSITIVE", "NEGATIVE", "VIDEO", "LATENT"],
+  "packs": [],
+  "fields": [
+    { "field": "image", "node": "first", "input": "image", "label": "First frame" },
+    { "field": "last", "node": "last", "input": "image", "label": "Last frame" },
+    { "field": "width", "node": "scale-first", "input": "width" },
+    { "field": "height", "node": "scale-first", "input": "height" },
+    { "field": "width", "node": "scale-last", "input": "width" },
+    { "field": "height", "node": "scale-last", "input": "height" }
+  ],
+  "defaults": {}
+}

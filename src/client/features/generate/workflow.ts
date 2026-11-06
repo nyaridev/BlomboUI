@@ -5,6 +5,8 @@
 import { useWorkflow, useWorkflows } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import type { Binding, WorkflowDetail, WorkflowSummary } from "@shared/workflow/manifest";
+import type { WorkflowMedia } from "@shared/workflow/roles";
+import { IMAGE_SOURCE_MODES, type SourceMode } from "@shared/workflow/stages";
 import { create } from "zustand";
 
 const KEY = "blombo.activeWorkflow";
@@ -76,4 +78,11 @@ export function useBindings(): Binding[] {
 /** The binding with a role in the active workflow. */
 export function useRoleBinding(role: string): Binding | undefined {
   return useBindings().find((b) => b.role === role);
+}
+
+/** What the active workflow makes, and the first pass modes it can start from. */
+export function useSourceModes(): { media: WorkflowMedia; modes: SourceMode[] } {
+  const id = useActiveWorkflowId();
+  const detail = useWorkflow(id).data;
+  return { media: detail?.media ?? "image", modes: detail?.sourceModes ?? IMAGE_SOURCE_MODES };
 }

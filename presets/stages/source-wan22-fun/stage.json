@@ -1,0 +1,30 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-wan22-fun",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "First and last frame (Wan 2.2 Fun Inpaint)",
+  "description": "Makes a Wan 2.2 video that starts at one frame and ends at another. Wan 2.2 TI2V can't take a last frame, so this runs Wan 2.2 Fun Inpaint 5B instead (wan2.2_fun_inpaint_5B_bf16.safetensors in diffusion_models, from Comfy-Org/Wan_2.2_ComfyUI_Repackaged on Hugging Face) with the workflow's text encoder, VAE and sampler settings. The workflow's own model and its LoRAs aren't used in this mode.",
+  "attach": "before_sampler",
+  "modes": ["firstLast"],
+  "fits": ["Wan22ImageToVideoLatent"],
+  "requires": ["MODEL", "VAE", "POSITIVE", "NEGATIVE", "VIDEO"],
+  "provides": ["MODEL", "POSITIVE", "NEGATIVE", "VIDEO"],
+  "packs": [],
+  "fields": [
+    {
+      "field": "model",
+      "node": "unet",
+      "input": "unet_name",
+      "modelKind": "diffusion_models",
+      "label": "Fun Inpaint model"
+    },
+    { "field": "image", "node": "first", "input": "image", "label": "First frame" },
+    { "field": "last", "node": "last", "input": "image", "label": "Last frame" },
+    { "field": "width", "node": "fun", "input": "width" },
+    { "field": "height", "node": "fun", "input": "height" },
+    { "field": "length", "node": "fun", "input": "length" },
+    { "field": "batch", "node": "fun", "input": "batch_size" }
+  ],
+  "defaults": { "model": "wan2.2_fun_inpaint_5B_bf16.safetensors" }
+}

@@ -8,6 +8,7 @@ import { buildPresetManifest } from "../../../../tools/build-presets.ts";
 import { ObjectInfo } from "../../../shared/workflow/graph.ts";
 import { createConfig, parseFlags } from "../../config.ts";
 import { ProfileService } from "../profiles.ts";
+import { outputRoles } from "./analyze.ts";
 import { compile } from "./compile.ts";
 import { installPreset, listPresets, presetSummaries } from "./presets.ts";
 import { WorkflowService } from "./store.ts";
@@ -48,17 +49,20 @@ describe("built-in presets", async () => {
 
       it("has the roles its screen uses, and a canvas", () => {
         const roles = preset.manifest.bindings.map((b) => b.role);
+        const video = outputRoles(preset.prompt, info).has("output.video");
         const needed =
           preset.manifest.kind === "batch"
             ? ["image.input"]
             : [
                 "prompt.positive",
-                "model.checkpoint",
-                "sampler.steps",
                 "sampler.seed",
                 "latent.width",
+                // A distilled video model samples on a fixed schedule: no steps.
+                ...(video ? ["latent.length", "video.fps"] : ["sampler.steps"]),
               ];
         for (const role of needed) expect(roles).toContain(role);
+        if (preset.manifest.kind === "generate")
+          expect(roles.some((r) => r === "model.checkpoint" || r === "model.unet")).toBe(true);
         expect(preset.graph).toBeTruthy();
       });
 

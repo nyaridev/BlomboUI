@@ -15,11 +15,20 @@ import { MODEL_KINDS } from "../constants.ts";
 import { salvage } from "../salvage.ts";
 import { type Binding, bindingFor } from "./manifest.ts";
 import { NodePack } from "./packs.ts";
-import { STAGES, type StageId } from "./roles.ts";
+import {
+  SOURCE_MODES,
+  type SourceMode,
+  STAGES,
+  type StageId,
+  type WorkflowMedia,
+} from "./roles.ts";
+
+export { SOURCE_MODES, type SourceMode } from "./roles.ts";
 
 /**
  * Splice points. The compiler finds them in any graph (services/workflows/analyze.ts). START is
- * the latent going into the main sampler (the empty one, in a text-to-image graph).
+ * the latent going into the main sampler (the empty one, in a text-to-image graph). VIDEO is the
+ * empty video latent in a video graph: START itself, or what an audio + video latent is built from.
  */
 export const PORTS = [
   "MODEL",
@@ -28,6 +37,7 @@ export const PORTS = [
   "POSITIVE",
   "NEGATIVE",
   "START",
+  "VIDEO",
   "LATENT",
   "IMAGE",
 ] as const;
@@ -90,6 +100,13 @@ export const StagePackage = z.object({
   defaults: z.record(z.string(), z.union([z.number(), z.string(), z.boolean()])).default({}),
   /** Inputs of the workflow's main sampler this stage sets, each from one of its fields. */
   base: z.partialRecord(z.enum(["denoise"]), z.string()).default({}),
+  /** First pass (`source`) packages: the modes this one runs. */
+  modes: z.array(z.enum(SOURCE_MODES)).default([]),
+  /**
+   * Node classes the workflow's VIDEO latent must come from for this package to fit (a Wan
+   * package never lands on an LTX graph). Empty: any graph with the required ports.
+   */
+  fits: z.array(z.string()).default([]),
 });
 export type StagePackage = z.infer<typeof StagePackage>;
 
@@ -193,20 +210,31 @@ export const ControlnetUnit = z.object({
 });
 export type ControlnetUnit = z.infer<typeof ControlnetUnit>;
 
-/** What the first pass starts from: an empty latent, an image, or an image with a painted mask. */
-export const SOURCE_MODES = ["txt2img", "img2img", "inpaint"] as const;
-export type SourceMode = (typeof SOURCE_MODES)[number];
-
 export const SOURCE_MODE_LABELS: Record<SourceMode, string> = {
   txt2img: "Text to image",
   img2img: "Image to image",
   inpaint: "Inpaint",
+  first: "First frame",
+  firstLast: "First and last frame",
 };
+
+/** A mode's name for a workflow: starting from nothing is Text to video for video. */
+export function sourceModeLabel(mode: SourceMode, media: WorkflowMedia): string {
+  return mode === "txt2img" && media === "video" ? "Text to video" : SOURCE_MODE_LABELS[mode];
+}
+
+/** The modes every image workflow has; video ones come from the packages that fit. */
+export const IMAGE_SOURCE_MODES: SourceMode[] = ["txt2img", "img2img", "inpaint"];
 
 export const SourceSettings = z.object({
   mode: z.enum(SOURCE_MODES).default("txt2img"),
-  /** Resized to the workflow's width and height (cropped to fit) before it's encoded. */
+  /**
+   * Resized to the workflow's width and height (cropped to fit) before it's encoded. In the
+   * video modes, the first frame.
+   */
   image: StageImage.nullable().default(null),
+  /** First and last frame: the last frame. */
+  last: StageImage.nullable().default(null),
   /** The painted mask, the image's size: white is redrawn, black is kept. */
   mask: StageImage.nullable().default(null),
   /** How much the sampler changes the image (the main sampler's denoise). */
@@ -248,6 +276,19 @@ export const StageSettings = z.object({
   controlnet: ControlnetSettings.prefault({}),
 });
 export type StageSettings = z.infer<typeof StageSettings>;
+
+/** The stage images a run uses: they're sent to ComfyUI before it runs. */
+export function stageImageFiles(stages: StageSettings): string[] {
+  const { controlnet, source } = stages;
+  const units = controlnet.enabled ? controlnet.units.filter((u) => u.enabled) : [];
+  const picked = [
+    ...units.map((u) => u.image),
+    sourceOn(source) ? source.image : null,
+    source.mode === "inpaint" ? source.mask : null,
+    source.mode === "firstLast" ? source.last : null,
+  ];
+  return picked.flatMap((image) => (image ? [image.file] : []));
+}
 
 /**
  * Stage settings as saved in a manifest. One bad value never resets a stage: a number out of

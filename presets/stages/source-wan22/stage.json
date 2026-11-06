@@ -1,0 +1,22 @@
+{
+  "format": "blombo.stage/1",
+  "id": "source-wan22",
+  "stage": "source",
+  "family": "diffusion",
+  "name": "First frame (Wan 2.2)",
+  "description": "Starts a Wan 2.2 TI2V video from a first frame: a new Wan22ImageToVideoLatent with the image as its start, at the workflow's size and length. Core nodes only.",
+  "attach": "before_sampler",
+  "modes": ["first"],
+  "fits": ["Wan22ImageToVideoLatent"],
+  "requires": ["VAE", "VIDEO"],
+  "provides": ["VIDEO"],
+  "packs": [],
+  "fields": [
+    { "field": "image", "node": "first", "input": "image", "label": "First frame" },
+    { "field": "width", "node": "latent", "input": "width" },
+    { "field": "height", "node": "latent", "input": "height" },
+    { "field": "length", "node": "latent", "input": "length" },
+    { "field": "batch", "node": "latent", "input": "batch_size" }
+  ],
+  "defaults": {}
+}

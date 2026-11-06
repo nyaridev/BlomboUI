@@ -7,7 +7,7 @@ import { z } from "zod";
 import { MODEL_KINDS } from "../constants.ts";
 import { LayoutDocument } from "../layout/schema.ts";
 import { NodePack } from "./packs.ts";
-import { ROLES, STAGES } from "./roles.ts";
+import { ROLES, SOURCE_MODES, STAGES, WORKFLOW_MEDIA } from "./roles.ts";
 
 export const BindingType = z.enum([
   "prompt",
@@ -110,6 +110,10 @@ export const WorkflowDetail = WorkflowManifest.extend({
   layoutDoc: LayoutDocument,
   /** "linked": manifest.layout found; "default": the profile's default layout. */
   layoutSource: z.enum(["linked", "default"]),
+  /** Still images, or video (Generate leaves out the image-only stages and plays results). */
+  media: z.enum(WORKFLOW_MEDIA),
+  /** What the first pass can start from here, in menu order (the packages that fit). */
+  sourceModes: z.array(z.enum(SOURCE_MODES)),
 });
 export type WorkflowDetail = z.infer<typeof WorkflowDetail>;
 

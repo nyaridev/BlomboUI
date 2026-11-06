@@ -6,7 +6,8 @@
  * ADetailer), the whole run with a divider between parts. A finished result shows how long it
  * took and how fast it went (it/s; images per second when the run made several). Clicking the
  * image opens it full screen, a middle click opens it in a new tab (while a run goes too, until
- * its preview covers the last picture). A strip under the box shows the last run's images, only
+ * its preview covers the last picture). A video result plays in the box (its controls go full
+ * screen) instead of opening the viewer. A strip under the box shows the last run's images, only
  * when it made more than one (centered, arrows on both sides), and the shown image's run info
  * (RunInfo) comes after it, kept while the next run goes. The column scrolls with the page.
  * Everything comes from the live bus: queue snapshots, step progress and binary preview frames.
@@ -18,6 +19,7 @@ import { openWindow } from "@client/lib/platform";
 import { useSettings } from "@client/lib/queries";
 import { IconButton, ImageViewer, RunBar, Spinner, Tooltip } from "@client/ui";
 import { comfyViewUrl } from "@shared/comfy";
+import { mediaOf } from "@shared/gallery";
 import { averageRate, formatDuration } from "@shared/history";
 import type { Job, JobImage } from "@shared/jobs";
 import { PreviewSettings } from "@shared/settings";
@@ -31,6 +33,16 @@ interface Result {
   /** File name for the new tab's title. */
   name: string;
   job: Job;
+  video: boolean;
+}
+
+/** A still of a result: a video's first frame (no controls), else the picture. */
+function Still({ r, className, alt = "" }: { r: Result; className: string; alt?: string }) {
+  return r.video ? (
+    <video src={r.url} muted preload="metadata" className={className} aria-label={alt} />
+  ) : (
+    <img src={r.url} alt={alt} loading="lazy" className={className} />
+  );
 }
 
 const DEFAULT_PREVIEW = PreviewSettings.parse({});
@@ -59,6 +71,7 @@ function resultsOf(job: Job): Result[] {
         url: job.file.url,
         name: job.file.path.split(/[\\/]/).pop() ?? "grid.png",
         job,
+        video: false,
       },
     ];
   return job.images
@@ -68,6 +81,7 @@ function resultsOf(job: Job): Result[] {
       url: comfyViewUrl(image),
       name: image.filename,
       job,
+      video: mediaOf(image.filename) === "video",
     }));
 }
 
@@ -149,7 +163,8 @@ export function ImageStage() {
     results.findIndex((r) => r.key === selected),
   );
   const current = results.length ? (results[selected ? index : results.length - 1] ?? null) : null;
-  const shownUrl = current?.url ?? null;
+  // Only a picture can be a workflow's thumbnail.
+  const shownUrl = current && !current.video ? current.url : null;
   useEffect(() => useShownImage.setState({ url: shownUrl }), [shownUrl]);
   const [viewing, setViewing] = useState(false);
   const strip = useRef<HTMLDivElement>(null);
@@ -209,11 +224,7 @@ export function ImageStage() {
         {running ? (
           <>
             {current ? (
-              <img
-                src={current.url}
-                alt=""
-                className="absolute inset-0 h-full w-full object-contain"
-              />
+              <Still r={current} className="absolute inset-0 h-full w-full object-contain" />
             ) : (
               <div className="absolute inset-0 grid place-items-center text-fg-3">
                 <Spinner size={22} />
@@ -228,6 +239,19 @@ export function ImageStage() {
               />
             ) : null}
           </>
+        ) : current?.video ? (
+          <video
+            key={current.key}
+            src={current.url}
+            controls
+            autoPlay
+            muted
+            loop
+            playsInline
+            aria-label={`Result, seed ${current.job.seed ?? "unknown"}`}
+            onAuxClick={(e) => middleOpen(e, current)}
+            className="absolute inset-0 h-full w-full object-contain"
+          />
         ) : current ? (
           <button
             type="button"
@@ -318,12 +342,7 @@ export function ImageStage() {
                     : "border-transparent opacity-75 hover:opacity-100",
                 )}
               >
-                <img
-                  src={r.url}
-                  alt=""
-                  loading="lazy"
-                  className="absolute inset-0 h-full w-full object-cover"
-                />
+                <Still r={r} className="absolute inset-0 h-full w-full object-cover" />
               </button>
             ))}
           </div>
@@ -339,7 +358,7 @@ export function ImageStage() {
 
       {current ? <RunInfo jobId={current.job.id} /> : null}
 
-      {viewing && current ? (
+      {viewing && current && !current.video ? (
         <ImageViewer
           images={results.map((r) => ({
             key: r.key,

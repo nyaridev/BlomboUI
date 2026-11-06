@@ -5,14 +5,16 @@
 import { useLive } from "@client/lib/live";
 import { useGalleryImages } from "@client/lib/queries";
 import { Dialog, EmptyState, Spinner, TextField } from "@client/ui";
+import { mediaOf } from "@shared/gallery";
 import { useState } from "react";
 
-/** The newest finished run's first saved image, or null. */
+/** The newest finished run's first saved picture (videos can't be a stage image), or null. */
 export function useLastOutput() {
   return useLive((s) => {
     for (const j of s.queue.jobs)
       if (j.state === "done") {
-        const img = j.images.find((i) => i.type === "output") ?? j.images[0];
+        const pictures = j.images.filter((i) => mediaOf(i.filename) === "image");
+        const img = pictures.find((i) => i.type === "output") ?? pictures[0];
         if (img) return img;
       }
     return null;

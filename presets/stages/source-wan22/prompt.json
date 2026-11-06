@@ -1,0 +1,17 @@
+{
+  "p-vae": { "class_type": "PORT:VAE", "inputs": {} },
+  "first": { "class_type": "LoadImage", "inputs": { "image": "" }, "_meta": { "title": "First frame" } },
+  "latent": {
+    "class_type": "Wan22ImageToVideoLatent",
+    "inputs": {
+      "vae": ["p-vae", 0],
+      "width": 1280,
+      "height": 704,
+      "length": 49,
+      "batch_size": 1,
+      "start_image": ["first", 0]
+    },
+    "_meta": { "title": "Video from the first frame" }
+  },
+  "out-video": { "class_type": "OUT:VIDEO", "inputs": { "value": ["latent", 0] } }
+}

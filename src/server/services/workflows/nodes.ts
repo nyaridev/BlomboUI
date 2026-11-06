@@ -16,6 +16,7 @@ export const MODEL_INPUTS: Record<string, ModelKind> = {
   clip_name1: "text_encoders",
   clip_name2: "text_encoders",
   clip_name3: "text_encoders",
+  text_encoder: "text_encoders",
   control_net_name: "controlnet",
   model_name: "upscale_models",
   embedding_name: "embeddings",
@@ -37,6 +38,18 @@ export const CONDITIONING_PASS = ["conditioning", "conditioning_to", "conditioni
  */
 export const PASS_INPUTS = ["on_false", "source"];
 
+/**
+ * Inputs a latent passes through on its way back from the sampler to the node that sets its size.
+ * `video_latent` is the video half of an audio + video latent (LTX).
+ */
+export const LATENT_PASS = ["samples", "latent", "latent_image", "video_latent"];
+
+/** A latent split back into video and audio after sampling (LTX): its input is the sampler's. */
+export const AV_SPLIT_INPUT = "av_latent";
+
+/** Frame rate inputs of the node that makes a video. */
+export const FPS_INPUTS = ["fps", "frame_rate"];
+
 /** Nodes holding several LoRAs in one place; tags are added as lora_<n> entries. */
 export const LORA_STACK_CLASSES = new Set(["Power Lora Loader (rgthree)"]);
 
@@ -53,6 +66,12 @@ export const IMAGE_OUTPUT_CLASSES = new Set([
   "Image Save",
   "SaveImageWebsocket",
 ]);
+
+/**
+ * Video outputs recognized without object_info. With it, an output node that takes a `video`
+ * link is one too; VHS_VideoCombine takes images and saves a video.
+ */
+export const VIDEO_OUTPUT_CLASSES = new Set(["SaveVideo", "SaveWEBM", "VHS_VideoCombine"]);
 
 /**
  * Keys of a node's UI output that hold text worth keeping: WD14 Tagger shows "tags", show-text
@@ -105,5 +124,8 @@ export const ROLE_RANGES: Record<
   "latent.width": { min: 64, max: 4096, step: 8 },
   "latent.height": { min: 64, max: 4096, step: 8 },
   "latent.batch": { min: 1, max: 16, step: 1, presets: [1, 2, 4] },
+  // 8n + 1 frames suit both Wan (4n + 1) and LTX (8n + 1).
+  "latent.length": { min: 1, max: 241, step: 8, presets: [33, 49, 81, 97, 121] },
+  "video.fps": { min: 1, max: 60, step: 1, presets: [16, 24, 25, 30] },
   "clip.skip": { min: -12, max: -1, step: 1, presets: [-1, -2] },
 };

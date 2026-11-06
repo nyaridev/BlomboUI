@@ -1,0 +1,278 @@
+{
+  "format": "blombo.workflow/1",
+  "id": "wan22-5b",
+  "name": "Wan 2.2 5B",
+  "kind": "generate",
+  "family": "Wan 2.2",
+  "description": "Wan 2.2 TI2V 5B text to video at 1280×704, 24 fps. Starts from a first frame too, and from a first and a last frame with Wan 2.2 Fun Inpaint 5B. Uses wan2.2_ti2v_5B_fp16, umt5_xxl_fp8_e4m3fn_scaled and wan2.2_vae (Comfy-Org/Wan_2.2_ComfyUI_Repackaged).",
+  "tags": [],
+  "parentId": null,
+  "preset": {
+    "id": "wan22-5b",
+    "version": 1
+  },
+  "bindings": [
+    {
+      "id": "prompt.positive",
+      "node": "5",
+      "input": "text",
+      "type": "prompt",
+      "label": "Prompt",
+      "hidden": false,
+      "role": "prompt.positive"
+    },
+    {
+      "id": "prompt.negative",
+      "node": "6",
+      "input": "text",
+      "type": "prompt",
+      "label": "Negative prompt",
+      "hidden": false,
+      "role": "prompt.negative"
+    },
+    {
+      "id": "model.unet",
+      "node": "1",
+      "input": "unet_name",
+      "type": "model",
+      "label": "Diffusion model",
+      "hidden": false,
+      "role": "model.unet",
+      "modelKind": "diffusion_models"
+    },
+    {
+      "id": "model.clip",
+      "node": "2",
+      "input": "clip_name",
+      "type": "model",
+      "label": "Text encoder",
+      "hidden": false,
+      "role": "model.clip",
+      "modelKind": "text_encoders"
+    },
+    {
+      "id": "sampler.name",
+      "node": "8",
+      "input": "sampler_name",
+      "type": "enum",
+      "label": "Sampler",
+      "hidden": false,
+      "role": "sampler.name",
+      "options": [
+        "euler",
+        "euler_ancestral",
+        "heun",
+        "dpm_2",
+        "dpmpp_2m",
+        "dpmpp_2m_sde",
+        "dpmpp_3m_sde",
+        "uni_pc"
+      ]
+    },
+    {
+      "id": "sampler.scheduler",
+      "node": "8",
+      "input": "scheduler",
+      "type": "enum",
+      "label": "Scheduler",
+      "hidden": false,
+      "role": "sampler.scheduler",
+      "options": [
+        "normal",
+        "karras",
+        "exponential",
+        "sgm_uniform",
+        "simple",
+        "beta"
+      ]
+    },
+    {
+      "id": "sampler.steps",
+      "node": "8",
+      "input": "steps",
+      "type": "int",
+      "label": "Steps",
+      "hidden": false,
+      "role": "sampler.steps",
+      "min": 1,
+      "max": 150,
+      "step": 1,
+      "presets": [
+        20,
+        25,
+        30,
+        40
+      ]
+    },
+    {
+      "id": "sampler.cfg",
+      "node": "8",
+      "input": "cfg",
+      "type": "float",
+      "label": "CFG scale",
+      "hidden": false,
+      "role": "sampler.cfg",
+      "min": 1,
+      "max": 20,
+      "step": 0.5,
+      "presets": [
+        4,
+        5,
+        6,
+        7
+      ]
+    },
+    {
+      "id": "sampler.seed",
+      "node": "8",
+      "input": "seed",
+      "type": "seed",
+      "label": "Seed",
+      "hidden": false,
+      "role": "sampler.seed"
+    },
+    {
+      "id": "latent.width",
+      "node": "7",
+      "input": "width",
+      "type": "int",
+      "label": "Width",
+      "hidden": false,
+      "role": "latent.width",
+      "min": 64,
+      "max": 4096,
+      "step": 8
+    },
+    {
+      "id": "latent.height",
+      "node": "7",
+      "input": "height",
+      "type": "int",
+      "label": "Height",
+      "hidden": false,
+      "role": "latent.height",
+      "min": 64,
+      "max": 4096,
+      "step": 8
+    },
+    {
+      "id": "latent.batch",
+      "node": "7",
+      "input": "batch_size",
+      "type": "int",
+      "label": "Batch size",
+      "hidden": false,
+      "role": "latent.batch",
+      "min": 1,
+      "max": 16,
+      "step": 1,
+      "presets": [
+        1,
+        2,
+        4
+      ]
+    },
+    {
+      "id": "latent.length",
+      "node": "7",
+      "input": "length",
+      "type": "int",
+      "label": "Frames",
+      "hidden": false,
+      "role": "latent.length",
+      "min": 1,
+      "max": 241,
+      "step": 8,
+      "presets": [
+        33,
+        49,
+        81,
+        97,
+        121
+      ]
+    },
+    {
+      "id": "video.fps",
+      "node": "10",
+      "input": "fps",
+      "type": "float",
+      "label": "Frame rate",
+      "hidden": false,
+      "role": "video.fps",
+      "min": 1,
+      "max": 60,
+      "step": 1,
+      "presets": [
+        16,
+        24,
+        25,
+        30
+      ]
+    },
+    {
+      "id": "sampler.denoise",
+      "node": "8",
+      "input": "denoise",
+      "type": "float",
+      "label": "Denoise",
+      "hidden": true,
+      "role": "sampler.denoise",
+      "min": 0,
+      "max": 1,
+      "step": 0.01,
+      "presets": [
+        0.3,
+        0.5,
+        0.75,
+        1
+      ]
+    },
+    {
+      "id": "model.vae",
+      "node": "3",
+      "input": "vae_name",
+      "type": "model",
+      "label": "VAE",
+      "hidden": false,
+      "role": "model.vae",
+      "modelKind": "vae"
+    },
+    {
+      "id": "output.image",
+      "node": "11",
+      "input": "filename_prefix",
+      "type": "string",
+      "label": "Filename prefix",
+      "hidden": true,
+      "role": "output.image"
+    }
+  ],
+  "values": {
+    "prompt.positive": "a red fox walks through a snowy forest at golden hour, snow falling softly, the camera slowly tracks beside it",
+    "prompt.negative": "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走",
+    "model.unet": "wan2.2_ti2v_5B_fp16.safetensors",
+    "model.clip": "umt5_xxl_fp8_e4m3fn_scaled.safetensors",
+    "sampler.name": "uni_pc",
+    "sampler.scheduler": "simple",
+    "sampler.steps": 20,
+    "sampler.cfg": 5,
+    "sampler.seed": 0,
+    "latent.width": 1280,
+    "latent.height": 704,
+    "latent.batch": 1,
+    "latent.length": 49,
+    "video.fps": 24,
+    "sampler.denoise": 1,
+    "model.vae": "wan2.2_vae.safetensors",
+    "output.image": "ComfyUI"
+  },
+  "run": {
+    "seedMode": "random",
+    "count": 1
+  },
+  "stages": {},
+  "layout": null,
+  "packs": [],
+  "createdAt": "2026-11-06T00:00:00.000Z",
+  "updatedAt": "2026-11-06T00:00:00.000Z"
+}

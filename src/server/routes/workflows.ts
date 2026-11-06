@@ -18,11 +18,13 @@ import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { BridgeService } from "../services/bridge.ts";
 import type { ComfySupervisor } from "../services/comfy/supervisor.ts";
 import type { LayoutService } from "../services/layouts.ts";
+import type { StageService } from "../services/stages.ts";
 import type { WorkflowCheck } from "../services/workflowcheck.ts";
-import { refreshBindings } from "../services/workflows/analyze.ts";
+import { outputRoles, refreshBindings } from "../services/workflows/analyze.ts";
 import { exportBundle } from "../services/workflows/bundle.ts";
 import { importWorkflow } from "../services/workflows/import.ts";
 import { installPreset, presetSummaries } from "../services/workflows/presets.ts";
+import { sourceModes } from "../services/workflows/stages.ts";
 import type { WorkflowService } from "../services/workflows/store.ts";
 
 const MAX_IMPORT_BYTES = 64 * 1024 * 1024;
@@ -34,6 +36,7 @@ export function workflowRoutes(
   layouts: LayoutService,
   bridge: BridgeService,
   check: WorkflowCheck,
+  stages: StageService,
 ) {
   const r = new Hono();
 
@@ -94,10 +97,16 @@ export function workflowRoutes(
   r.get("/:id", async (c) => {
     const manifest = await withLiveChoices(await workflows.get(c.req.param("id")));
     const layout = await layouts.resolve(manifest.layout);
+    const prompt = await workflows.prompt(manifest.id);
+    const media = outputRoles(prompt, await supervisor.objectInfo()).has("output.video")
+      ? "video"
+      : "image";
     const detail: WorkflowDetail = {
       ...manifest,
       layoutDoc: layout.doc,
       layoutSource: layout.source,
+      media,
+      sourceModes: sourceModes(prompt, await stages.packages(), manifest.bindings, media),
     };
     return c.json(detail);
   });

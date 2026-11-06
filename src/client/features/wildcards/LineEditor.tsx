@@ -4,6 +4,7 @@
  * (YamlSections.tsx).
  */
 import { Button, IconButton, InlineInput } from "@client/ui";
+import type { RenameChange } from "@shared/prompt/renames";
 import type { WildcardFormat } from "@shared/wildcards";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useRef, useState } from "react";
@@ -14,14 +15,17 @@ export function LineEditor({
   text,
   format,
   onChange,
+  onRename,
 }: {
   text: string;
   format: WildcardFormat;
   onChange: (text: string) => void;
+  /** A YAML key was renamed (Sections). */
+  onRename?: (change: RenameChange) => void;
 }) {
   if (format === "txt")
     return <LineList lines={toLines(text)} onChange={(lines) => onChange(fromLines(lines))} />;
-  return <YamlSections text={text} onChange={onChange} />;
+  return <YamlSections text={text} onChange={onChange} onRename={onRename} />;
 }
 
 function LineList({ lines, onChange }: { lines: string[]; onChange: (lines: string[]) => void }) {

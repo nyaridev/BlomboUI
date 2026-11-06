@@ -1,6 +1,6 @@
 import path from "node:path";
 import { Hono } from "hono";
-import { RenameRefsBody } from "../../shared/prompt/renames.ts";
+import { type RenameChange, RenameRefsBody } from "../../shared/prompt/renames.ts";
 import {
   CreateWildcardBody,
   MoveWildcardBody,
@@ -11,13 +11,28 @@ import {
   WildcardPath,
   WildcardPathBody,
 } from "../../shared/wildcards.ts";
-import { HttpError, readJson } from "../lib/http.ts";
+import { HttpError, readBody, readJson } from "../lib/http.ts";
+import { IMMUTABLE, sendFile } from "../lib/send.ts";
 import type { ProfileService } from "../services/profiles.ts";
 import { openInFileManager, revealInFileManager } from "../services/system.ts";
+import type { WildcardPictures } from "../services/wildcardpics.ts";
 import { listWildcards, WildcardFolders, wildcardStats } from "../services/wildcards.ts";
 
-export function wildcardRoutes(profiles: ProfileService) {
+/**
+ * The wildcards folders: names, the tree, files, pictures. `renamed` hears every change to
+ * wildcard names (renames, moves, YAML keys renamed in a save), so pictures and favorites follow.
+ */
+export function wildcardRoutes(
+  profiles: ProfileService,
+  pictures: WildcardPictures,
+  renamed: (changes: RenameChange[]) => Promise<void>,
+) {
   const r = new Hono();
+  const name = (v: string | undefined) => {
+    const n = (v ?? "").trim();
+    if (!n || n.length > 400) throw new HttpError(400, "Say which wildcard.", "no_name");
+    return n;
+  };
 
   const files = async () => {
     const id = profiles.active;
@@ -37,6 +52,7 @@ export function wildcardRoutes(profiles: ProfileService) {
       root: f.folders[0]?.path ?? "",
       names: await listWildcards(paths),
       stats: await wildcardStats(paths),
+      pictures: await pictures.urls(),
     });
   });
 
@@ -57,7 +73,9 @@ export function wildcardRoutes(profiles: ProfileService) {
 
   r.put("/file", async (c) => {
     const body = await readJson(c, SaveWildcardBody);
-    return c.json(await (await files()).save(body.path, body.text, body.baseMtime));
+    const saved = await (await files()).save(body.path, body.text, body.baseMtime);
+    if (body.renames.length) await renamed(body.renames);
+    return c.json(saved);
   });
 
   r.post("/create", async (c) => {
@@ -68,7 +86,8 @@ export function wildcardRoutes(profiles: ProfileService) {
 
   r.post("/move", async (c) => {
     const body = await readJson(c, MoveWildcardBody);
-    await (await files()).move(body.from, body.to);
+    const change = await (await files()).move(body.from, body.to);
+    if (change) await renamed([change]);
     return c.json({ ok: true });
   });
 
@@ -86,7 +105,28 @@ export function wildcardRoutes(profiles: ProfileService) {
 
   r.post("/rename", async (c) => {
     const body = await readJson(c, RenameWildcardBody);
-    return c.json(await (await files()).rename(body.name, body.to, body.folder));
+    const change = await (await files()).rename(body.name, body.to, body.folder);
+    await renamed([change]);
+    return c.json(change);
+  });
+
+  /** The picture you set for a wildcard (its card shows it). */
+  r.get("/picture", async (c) =>
+    sendFile(await pictures.file(name(c.req.query("name"))), {
+      cache: c.req.query("v") ? IMMUTABLE : "no-cache",
+      type: "image/jpeg",
+    }),
+  );
+  r.put("/picture", async (c) => {
+    const target = name(c.req.query("name"));
+    const bytes = await readBody(c, 64 * 1024 * 1024, "Pick an image under 64 MB.");
+    if (bytes.byteLength === 0) throw new HttpError(400, "The image is empty.", "empty");
+    await pictures.set(target, bytes);
+    return c.json({ ok: true });
+  });
+  r.delete("/picture", async (c) => {
+    await pictures.remove(name(c.req.query("name")));
+    return c.json({ ok: true });
   });
 
   r.post("/rename-refs", async (c) => {

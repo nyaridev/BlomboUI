@@ -503,6 +503,51 @@ export class HistoryService {
     return this.modelMarks();
   }
 
+  /**
+   * Models or wildcards were renamed: their favorites follow (a folder's: every name inside).
+   * Names keep the slashes they were saved with (ComfyUI on Windows writes backslashes).
+   */
+  renameMarks(kind: string, changes: Array<{ from: string; to: string; folder: boolean }>): void {
+    if (!this.deps.profiles.active) return;
+    const db = this.db();
+    const rows = db.prepare("SELECT name FROM model_marks WHERE kind = ?").all(kind) as Array<{
+      name: string;
+    }>;
+    const norm = (s: string) => s.replace(/\\/g, "/");
+    const move = db.prepare(
+      "UPDATE OR REPLACE model_marks SET name = ? WHERE kind = ? AND name = ?",
+    );
+    for (const c of changes) {
+      const from = norm(c.from);
+      for (const row of rows) {
+        const name = norm(row.name);
+        const to =
+          name === from && !c.folder
+            ? norm(c.to)
+            : c.folder && name.startsWith(`${from}/`)
+              ? norm(c.to) + name.slice(from.length)
+              : null;
+        if (to === null || to === name) continue;
+        const saved = row.name.includes("\\") ? to.replace(/\//g, "\\") : to;
+        move.run(saved, kind, row.name);
+        row.name = saved;
+      }
+    }
+  }
+
+  /** Every favorite, by kind (Settings → Leftovers looks for ones whose file is gone). */
+  allMarks(): Array<{ kind: string; name: string }> {
+    return this.db().prepare("SELECT kind, name FROM model_marks").all() as Array<{
+      kind: string;
+      name: string;
+    }>;
+  }
+
+  removeMarks(marks: Array<{ kind: string; name: string }>): void {
+    const del = this.db().prepare("DELETE FROM model_marks WHERE kind = ? AND name = ?");
+    for (const m of marks) del.run(m.kind, m.name);
+  }
+
   /* ── errors ───────────────────────────────────────────────────────────── */
 
   addError(error: AppError): void {

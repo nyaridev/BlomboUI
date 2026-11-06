@@ -147,6 +147,8 @@ interface Item {
   local?: LocalModel;
   /** A wildcard's defining file. */
   stat?: WildcardStat;
+  /** A wildcard's picture. */
+  thumb?: string;
 }
 
 /** "kind:style/foo.safetensors" (lowercase, forward slashes) for joining ComfyUI's names. */
@@ -239,6 +241,7 @@ export function ModelGrid({
         kind: "wildcards",
         folder: modelFolder(n),
         stat: wildcards.data?.stats[n],
+        thumb: wildcards.data?.pictures[n],
       }));
     return (models.data?.names ?? []).map((n) => ({
       id: n,
@@ -399,6 +402,8 @@ export function ModelGrid({
     void qc.invalidateQueries({ queryKey: ["local-models"] });
     void qc.invalidateQueries({ queryKey: qk.modelsAll });
     void qc.invalidateQueries({ queryKey: qk.wildcards(useSession.getState().profileId) });
+    // The server carried favorites (and wildcard pictures) along.
+    void qc.invalidateQueries({ queryKey: qk.modelMarks(useSession.getState().profileId) });
   };
   const lastPart = (p: string) => p.replace(/\\/g, "/").split("/").pop() ?? p;
   const parentOf = (p: string) => {
@@ -595,6 +600,12 @@ export function ModelGrid({
               id: "info",
               label: "Wildcard info…",
               icon: "info",
+              onSelect: () => setWildcardInfo(item.id),
+            },
+            {
+              id: "picture",
+              label: item.thumb ? "Change picture…" : "Set picture…",
+              icon: "image",
               onSelect: () => setWildcardInfo(item.id),
             },
             {
@@ -924,7 +935,7 @@ function PickerCard({
       name={item.name}
       kind={item.kind}
       baseModel={item.local?.baseModel ?? item.folder ?? undefined}
-      thumb={item.local?.thumb ?? null}
+      thumb={item.local?.thumb ?? item.thumb ?? null}
       meta={item.local?.triggerWords[0]}
       ratio={ratio}
       selected={selected}

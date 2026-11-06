@@ -54,6 +54,7 @@ function fileFor(root: string, name: string): string | null {
 }
 
 const toRel = (p: string) => p.split(path.sep).join("/");
+const trimSlash = (p: string) => p.replace(/\/+$/, "");
 
 /* ── YAML index (cached per file by mtime) ─────────────────────────────── */
 
@@ -470,7 +471,12 @@ export class WildcardFolders {
     await files.create(rel, type);
   }
 
-  async move(from: string, to: string): Promise<void> {
+  /**
+   * Move or rename a file or folder in one wildcard folder. Returns what that does to wildcard
+   * names (a .txt file's name, or a folder's), so pictures and favorites can follow; a YAML
+   * file's keys don't change with its path.
+   */
+  async move(from: string, to: string): Promise<RenameChange | null> {
     const a = this.inside(from);
     const b = this.inside(to);
     if (a.folder.id !== b.folder.id)
@@ -479,7 +485,18 @@ export class WildcardFolders {
         "Files move within one wildcard folder. Copy it in Explorer to use it in another.",
         "other_folder",
       );
+    const stat = await fs.stat(resolveInside(a.files.root, a.rel)).catch(() => null);
     await a.files.move(a.rel, b.rel);
+    if (stat?.isDirectory())
+      return { kind: "wildcard", from: trimSlash(a.rel), to: trimSlash(b.rel), folder: true };
+    if (wildcardFormat(a.rel) === "txt" && wildcardFormat(b.rel) === "txt")
+      return {
+        kind: "wildcard",
+        from: txtWildcardName(a.rel),
+        to: txtWildcardName(b.rel),
+        folder: false,
+      };
+    return null;
   }
 
   async remove(p: string): Promise<string> {

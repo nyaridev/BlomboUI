@@ -23,6 +23,7 @@ import { galleryRoutes } from "./routes/gallery.ts";
 import { historyRoutes } from "./routes/history.ts";
 import { jobRoutes } from "./routes/jobs.ts";
 import { layoutRoutes } from "./routes/layouts.ts";
+import { leftoverRoutes } from "./routes/leftovers.ts";
 import { managerRoutes } from "./routes/manager.ts";
 import { modelRoutes } from "./routes/models.ts";
 import { profileRoutes } from "./routes/profiles.ts";
@@ -70,7 +71,11 @@ export function createApp(services: Services) {
   api.route("/stages", stageRoutes(services.stages));
   api.route("/autocomplete", autocompleteRoutes(services.autocomplete));
   api.route("/jobs", jobRoutes(queue, services.scripts));
-  api.route("/wildcards", wildcardRoutes(profiles));
+  api.route(
+    "/wildcards",
+    wildcardRoutes(profiles, services.wildcardPictures, services.wildcardsRenamed),
+  );
+  api.route("/leftovers", leftoverRoutes(services.leftovers));
   api.route("/settings", settingsRoutes(profiles, settings));
   api.route(
     "/gallery",

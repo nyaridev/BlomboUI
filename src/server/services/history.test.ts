@@ -205,6 +205,24 @@ describe("job log", () => {
     expect(history.modelMarks().favorites).toEqual([]);
   });
 
+  it("moves favorites along when models and wildcards are renamed", () => {
+    history.setModelFavorite("loras", "style\\old.safetensors", true);
+    history.setModelFavorite("loras", "style\\keep.safetensors", true);
+    history.setModelFavorite("wildcards", "outfits/fantasy", true);
+    history.renameMarks("loras", [
+      { from: "style/old.safetensors", to: "style/new.safetensors", folder: false },
+    ]);
+    history.renameMarks("loras", [{ from: "style", to: "looks", folder: true }]);
+    history.renameMarks("wildcards", [{ from: "outfits", to: "clothes", folder: true }]);
+    expect(history.modelMarks().favorites.sort()).toEqual([
+      "loras/looks\\keep.safetensors",
+      "loras/looks\\new.safetensors",
+      "wildcards/clothes/fantasy",
+    ]);
+    history.removeMarks(history.allMarks());
+    expect(history.modelMarks().favorites).toEqual([]);
+  });
+
   it("keeps and clears errors", () => {
     history.addError({ id: "e1", at: 1, source: "job", title: "SD 1.5 failed", detail: "OOM" });
     history.addError({ id: "e2", at: 2, source: "comfy", title: "Crashed", detail: "" });

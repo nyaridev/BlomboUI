@@ -29,6 +29,7 @@ import { ComfyPage } from "./ComfyPage";
 import { PageHeader, SettingsSection, useCurrentProfile } from "./common";
 import { FoldersPage } from "./FoldersPage";
 import { GeneratePage } from "./GeneratePage";
+import { LeftoversPage } from "./LeftoversPage";
 import { NotificationsPage } from "./NotificationsPage";
 import { type SettingsPage as PageId, SETTINGS_PAGES, useSettingsNav } from "./nav";
 import { OverviewPage } from "./OverviewPage";
@@ -157,6 +158,8 @@ function Page({ page, profile }: { page: PageId; profile: ReturnType<typeof useC
       return <ShortcutsPage />;
     case "about":
       return <AboutPage />;
+    case "leftovers":
+      return <LeftoversPage />;
   }
 }
 

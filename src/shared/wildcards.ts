@@ -8,6 +8,7 @@
  * name isn't part of the reference. A .txt file wins when both define a name.
  */
 import { z } from "zod";
+import { RenameChange } from "./prompt/renames.ts";
 
 export const WILDCARD_FORMATS = ["txt", "yaml"] as const;
 export type WildcardFormat = (typeof WILDCARD_FORMATS)[number];
@@ -64,6 +65,8 @@ export const WildcardList = z.object({
   root: z.string(),
   names: z.array(z.string()),
   stats: z.record(z.string(), WildcardStat).default({}),
+  /** name → the picture you set for it (its URL), for the ones that have one. */
+  pictures: z.record(z.string(), z.string()).default({}),
 });
 export type WildcardList = z.infer<typeof WildcardList>;
 
@@ -96,6 +99,8 @@ export const SaveWildcardBody = z.object({
   text: z.string().max(20 * 1024 * 1024),
   /** The mtime the editor loaded; a newer file on disk means someone else changed it. */
   baseMtime: z.number().nullable(),
+  /** YAML keys renamed in this edit: pictures and favorites follow once it's saved. */
+  renames: z.array(RenameChange).max(200).default([]),
 });
 export const CreateWildcardBody = z.object({
   path: WildcardPath,

@@ -77,7 +77,7 @@ export function ModelInfoDialog() {
 }
 
 /** The newest picture Generate made (what its image stage shows first), if any. */
-function latestResult(jobs: Job[]): string | null {
+export function latestResult(jobs: Job[]): string | null {
   for (const job of jobs) {
     if (job.state !== "done" || job.group?.kind === "batch") continue;
     if (job.file) return job.file.url;

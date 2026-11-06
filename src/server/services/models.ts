@@ -58,6 +58,11 @@ export interface ModelDeps {
   lookup?: (profileId: string, id: string, size: number, mtime: number) => LookupInfo | null;
   /** A hash the background lookup already worked out for this file, or null. */
   hash?: (profileId: string, id: string, size: number, mtime: number) => string | null;
+  /** Models moved or were renamed (ComfyUI names before and after): favorites follow. */
+  onRenamed?: (
+    kind: ModelKind,
+    changes: Array<{ from: string; to: string; folder: boolean }>,
+  ) => void;
 }
 
 interface Sidecars {
@@ -458,6 +463,9 @@ export class ModelService {
         "exists",
       );
     await movePath(dir, target);
+    const from = folder.replace(/\\/g, "/").replace(/\/+$/, "");
+    const parent = from.includes("/") ? from.slice(0, from.lastIndexOf("/") + 1) : "";
+    this.deps.onRenamed?.(kind, [{ from, to: parent + parsed.data, folder: true }]);
     this.changed();
   }
 
@@ -669,6 +677,9 @@ export class ModelService {
         "The model moved but couldn't be found again. Rescan models.",
         "lost",
       );
+    this.deps.onRenamed?.(model.kind, [
+      { from: comfyNameOf(entry.model), to: comfyNameOf(model), folder: false },
+    ]);
     return model;
   }
 }

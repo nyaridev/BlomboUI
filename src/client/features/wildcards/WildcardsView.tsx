@@ -10,6 +10,7 @@ import { cn } from "@client/lib/cn";
 import { qk, useWildcardFile, useWildcardsChanged, useWildcardTree } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { Badge, Button, EmptyState, IconButton, Kbd, Segmented, Skeleton, toast } from "@client/ui";
+import type { RenameChange } from "@shared/prompt/renames";
 import { flattenYamlWildcards, txtWildcardName, type WildcardFile } from "@shared/wildcards";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -114,8 +115,21 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
 
   const setText = useCallback(
     (next: string) => {
+      const renames = useWildcardUi.getState().drafts[file.path]?.renames;
       if (next === file.text) ui.dropDraft(file.path);
-      else ui.setDraft(file.path, { text: next, baseMtime: file.mtime });
+      else ui.setDraft(file.path, { text: next, baseMtime: file.mtime, renames });
+    },
+    [file.path, file.text, file.mtime, ui],
+  );
+  // Recorded before the text change that renames the key (LineEditor calls this first).
+  const addRename = useCallback(
+    (change: RenameChange) => {
+      const d = useWildcardUi.getState().drafts[file.path];
+      ui.setDraft(file.path, {
+        text: d?.text ?? file.text,
+        baseMtime: d?.baseMtime ?? file.mtime,
+        renames: [...(d?.renames ?? []), change],
+      });
     },
     [file.path, file.text, file.mtime, ui],
   );
@@ -125,7 +139,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
     if (!d) return;
     setSaving(true);
     try {
-      const saved = await api.saveWildcard(file.path, d.text, d.baseMtime);
+      const saved = await api.saveWildcard(file.path, d.text, d.baseMtime, d.renames ?? []);
       useWildcardUi.getState().dropDraft(file.path);
       qc.setQueryData(qk.wildcardFile(profileId, file.path), saved);
       changed();
@@ -239,7 +253,7 @@ function OpenFile({ file, names }: { file: WildcardFile; names: string[] }) {
               className="h-full"
             />
           ) : (
-            <LineEditor text={text} format={file.format} onChange={setText} />
+            <LineEditor text={text} format={file.format} onChange={setText} onRename={addRename} />
           )}
         </div>
       </div>

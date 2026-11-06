@@ -94,6 +94,7 @@ import type {
 import type { InstallBody, InstallState, NodeInstallState, SlotsResponse } from "@shared/install";
 import type { GenerateBody, GenerateResponse, Job, QueueSnapshot } from "@shared/jobs";
 import type { CreateLayoutBody, LayoutDocument, LayoutList } from "@shared/layout/schema";
+import type { ClearedLeftovers, LeftoverReport } from "@shared/leftovers";
 import type { AppError } from "@shared/live";
 import type { Catalog, CatalogStats } from "@shared/manager";
 import type {
@@ -306,8 +307,23 @@ export const api = {
     request<WildcardInfo>("GET", `/wildcards/info?name=${encodeURIComponent(name)}`),
   wildcardFile: (path: string) =>
     request<WildcardFile>("GET", `/wildcards/file?path=${encodeURIComponent(path)}`),
-  saveWildcard: (path: string, text: string, baseMtime: number | null) =>
-    request<WildcardFile>("PUT", "/wildcards/file", { path, text, baseMtime }),
+  saveWildcard: (
+    path: string,
+    text: string,
+    baseMtime: number | null,
+    renames: RenameChange[] = [],
+  ) => request<WildcardFile>("PUT", "/wildcards/file", { path, text, baseMtime, renames }),
+  setWildcardPicture: (name: string, image: Blob) =>
+    request<{ ok: true }>(
+      "PUT",
+      `/wildcards/picture?name=${encodeURIComponent(name)}`,
+      undefined,
+      image,
+    ),
+  removeWildcardPicture: (name: string) =>
+    request<{ ok: true }>("DELETE", `/wildcards/picture?name=${encodeURIComponent(name)}`),
+  leftovers: () => request<LeftoverReport>("GET", "/leftovers"),
+  clearLeftovers: (ids: string[]) => request<ClearedLeftovers>("POST", "/leftovers/clear", { ids }),
   createWildcard: (path: string, type: WildcardEntryType) =>
     request<{ ok: true }>("POST", "/wildcards/create", { path, type }),
   moveWildcard: (from: string, to: string) =>

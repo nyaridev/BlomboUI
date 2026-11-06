@@ -82,6 +82,7 @@ export const qk = {
   errorLog: (profileId: string | null) => ["error-log", profileId] as const,
   snippets: (profileId: string | null) => ["snippets", profileId] as const,
   compare: (profileId: string | null) => ["compare", profileId] as const,
+  leftovers: (profileId: string | null) => ["leftovers", profileId] as const,
   /** Files in the models folder (not ComfyUI's lists, which are `models`). */
   localModels: (profileId: string | null) => ["local-models", profileId] as const,
   modelDetails: (profileId: string | null, id: string | null) =>
@@ -769,6 +770,8 @@ export function useWildcardsChanged() {
   return () => {
     void qc.invalidateQueries({ queryKey: ["wildcard-tree"] });
     void qc.invalidateQueries({ queryKey: ["wildcards"] });
+    // Renames and moves carry favorites along on the server.
+    void qc.invalidateQueries({ queryKey: qk.modelMarks(useSession.getState().profileId) });
   };
 }
 
@@ -1143,4 +1146,16 @@ export function putCompare(task: CompareTask): void {
   queryClient.setQueryData<CompareTask[]>(qk.compare(profileId), (old) =>
     old ? [task, ...old.filter((t) => t.id !== task.id)] : old,
   );
+}
+
+/** Settings → Leftovers: scanned when the page opens and on Scan again (never in the background). */
+export function useLeftovers() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.leftovers(profileId),
+    queryFn: api.leftovers,
+    enabled: profileId !== null,
+    staleTime: 0,
+    gcTime: 0,
+  });
 }

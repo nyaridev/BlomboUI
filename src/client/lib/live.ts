@@ -304,6 +304,9 @@ function onJson(text: string): void {
       // The open file refetches too: its editor shows the new text unless it has unsaved edits.
       for (const key of ["wildcard-tree", "wildcards", "wildcard-file", "wildcard-info"])
         void queryClient.invalidateQueries({ queryKey: [key] });
+      void queryClient.invalidateQueries({
+        queryKey: qk.modelMarks(useSession.getState().profileId),
+      });
       break;
     case "models.lookup":
       useLive.setState({ lookup: msg.lookup });

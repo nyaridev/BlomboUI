@@ -7,6 +7,7 @@ export type SettingsPage =
   | "appearance"
   | "generate"
   | "files"
+  | "leftovers"
   | "gallery"
   | "civitai"
   | "autocomplete"
@@ -44,6 +45,13 @@ export const SETTINGS_PAGES: Array<{
     icon: "folder",
     group: "Profile",
     keywords: "models outputs wildcards paths",
+  },
+  {
+    id: "leftovers",
+    label: "Leftovers",
+    icon: "eraser",
+    group: "Profile",
+    keywords: "cleanup clean unused orphan thumbnails pictures info favorites trash",
   },
   {
     id: "generate",

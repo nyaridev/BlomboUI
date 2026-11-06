@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CIVITAI_SITE_URLS } from "../shared/civitai.ts";
 import type { AppError } from "../shared/live.ts";
+import type { RenameChange } from "../shared/prompt/renames.ts";
 import { loraWeights } from "../shared/scripts.ts";
 import type { Settings } from "../shared/settings.ts";
 import type { ServerConfig } from "./config.ts";
@@ -36,6 +37,7 @@ import { GalleryService } from "./services/gallery/index.ts";
 import { HistoryService } from "./services/history.ts";
 import { JobQueue } from "./services/jobs.ts";
 import { LayoutService } from "./services/layouts.ts";
+import { LeftoverService } from "./services/leftovers.ts";
 import { LiveBus } from "./services/live.ts";
 import { ModelLookup } from "./services/lookup.ts";
 import { ManagerCatalog } from "./services/manager.ts";
@@ -45,6 +47,7 @@ import { ScriptService } from "./services/scripts.ts";
 import { SettingsService } from "./services/settings.ts";
 import { SnippetService } from "./services/snippets.ts";
 import { StageService } from "./services/stages.ts";
+import { WildcardPictures } from "./services/wildcardpics.ts";
 import { WildcardWatcher } from "./services/wildcardwatch.ts";
 import { installPreset, listPresets } from "./services/workflows/presets.ts";
 import { WorkflowService } from "./services/workflows/store.ts";
@@ -75,6 +78,10 @@ export interface Services {
   bridge: BridgeService;
   scripts: ScriptService;
   compare: CompareService;
+  wildcardPictures: WildcardPictures;
+  /** Wildcard names changed: their pictures and favorites follow. */
+  wildcardsRenamed: (changes: RenameChange[]) => Promise<void>;
+  leftovers: LeftoverService;
   batch: BatchService;
   history: HistoryService;
   snippets: SnippetService;
@@ -162,6 +169,7 @@ export function createServices(config: ServerConfig): Services {
     lookup: (profileId, id, size, mtime) => lookupRef?.infoFor(profileId, id, size, mtime) ?? null,
     hash: (profileId, id, size, mtime) => lookupRef?.storedHash(profileId, id, size, mtime) ?? null,
     civitaiSite: () => civitaiApi.baseUrl,
+    onRenamed: (kind, changes) => history.renameMarks(kind, changes),
   });
 
   const civitaiApi = new CivitaiApi({
@@ -234,6 +242,8 @@ export function createServices(config: ServerConfig): Services {
 
   // Finished runs and errors are logged in the profile database (History, Errors, Overview).
   const history = new HistoryService({ profiles, dbs, gallery });
+  const wildcardPictures = new WildcardPictures(profiles);
+  const leftovers = new LeftoverService({ profiles, models, history, pictures: wildcardPictures });
   const backup = new ProfileBackup({ profiles, dbs, runtimeDir: config.runtimeDir });
   const snippets = new SnippetService(profiles);
   const reportError = (source: AppError["source"], title: string, detail: string) => {
@@ -481,6 +491,12 @@ export function createServices(config: ServerConfig): Services {
     bridge,
     scripts,
     compare,
+    wildcardPictures,
+    wildcardsRenamed: async (changes) => {
+      await wildcardPictures.rename(changes);
+      history.renameMarks("wildcards", changes);
+    },
+    leftovers,
     batch,
     history,
     snippets,

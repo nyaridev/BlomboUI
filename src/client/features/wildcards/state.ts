@@ -2,12 +2,15 @@
  * Wildcard Manager UI state: the open file, open folders, the editing mode and unsaved drafts.
  * Drafts are kept per file, so switching files never loses typing; a dot in the tree shows them.
  */
+import type { RenameChange } from "@shared/prompt/renames";
 import { create } from "zustand";
 
 export interface Draft {
   text: string;
   /** mtime of the file the draft started from (save refuses if the file changed since). */
   baseMtime: number;
+  /** YAML keys renamed in this draft; saving sends them so pictures and favorites follow. */
+  renames?: RenameChange[];
 }
 
 interface WildcardUi {

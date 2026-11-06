@@ -11,6 +11,7 @@ import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { DRAG_LIFT, type Sortable, useSortableRow } from "@client/lib/sortable";
 import { Button, CopyButton, Dialog, IconButton, TextField } from "@client/ui";
+import type { RenameChange } from "@shared/prompt/renames";
 import { createContext, use, useEffect, useMemo, useRef, useState } from "react";
 import {
   addItem,
@@ -41,6 +42,8 @@ interface Ctx {
   text: string;
   sections: YamlSection[];
   onChange: (text: string) => void;
+  /** A key was renamed (wildcard names before and after; a group is a folder of names). */
+  onRename?: (change: RenameChange) => void;
   /** The field to focus once it's rendered: `line:<path>:<index>` or `key:<path>`. */
   focus: string | null;
   setFocus: (id: string | null) => void;
@@ -66,9 +69,11 @@ function useFocusWhen(id: string, select = false) {
 export function YamlSections({
   text,
   onChange,
+  onRename,
 }: {
   text: string;
   onChange: (text: string) => void;
+  onRename?: (change: RenameChange) => void;
 }) {
   const read = useMemo(() => readSections(text), [text]);
   const [focus, setFocus] = useState<string | null>(null);
@@ -82,7 +87,7 @@ export function YamlSections({
         </p>
       </div>
     );
-  const ctx: Ctx = { text, sections: read.sections, onChange, focus, setFocus };
+  const ctx: Ctx = { text, sections: read.sections, onChange, onRename, focus, setFocus };
   return (
     <EditorCtx value={ctx}>
       <div className="scroll-quiet h-full overflow-y-auto">
@@ -111,7 +116,7 @@ export function YamlSections({
 }
 
 function Section({ section, depth }: { section: YamlSection; depth: number }) {
-  const { text, sections, onChange } = useEditor();
+  const { text, sections, onChange, onRename } = useEditor();
   const [open, setOpen] = useState(true);
   const [name, setName] = useState(section.key);
   const [asking, setAsking] = useState(false);
@@ -131,8 +136,17 @@ function Section({ section, depth }: { section: YamlSection; depth: number }) {
         ? plural(value.children.length, "key")
         : null;
   const commit = () => {
-    if (name.trim() && name !== section.key) onChange(renameKey(text, path, name));
-    else setName(section.key);
+    if (!name.trim() || name === section.key) {
+      setName(section.key);
+      return;
+    }
+    const next = renameKey(text, path, name);
+    // The name it got (a taken one gets _2), read back from the new text.
+    const after = readSections(next).sections;
+    const to = after ? referenceOf(after, path) : "";
+    if (to && to !== reference)
+      onRename?.({ kind: "wildcard", from: reference, to, folder: value.kind === "group" });
+    onChange(next);
   };
 
   return (

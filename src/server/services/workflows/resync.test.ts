@@ -2,8 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { ApiPrompt, ObjectInfo } from "../../../shared/workflow/graph.ts";
+import { ApiPrompt, ObjectInfo, UiGraph } from "../../../shared/workflow/graph.ts";
 import { analyze } from "./analyze.ts";
+import { applyWidgetValues, uiToApi } from "./convert.ts";
 import { resync } from "./resync.ts";
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -126,4 +127,39 @@ describe("resync", () => {
     expect(r.values["n7.sigma"]).toBe(0.5);
     expect(r.report.removed).toContain("Sharpen · Sigma");
   });
+});
+
+describe("resync: subgraph templates", () => {
+  const sub = path.join(dir, "subgraphs");
+  const real = ObjectInfo.parse(
+    JSON.parse(fs.readFileSync(path.join(sub, "object_info.json"), "utf8")),
+  );
+
+  // Import, change values in Blombo, Edit in ComfyUI (the canvas opens with them), save back
+  // unchanged. uiToApi stands in for ComfyUI's graphToPrompt: the ids are the same (convert.test.ts).
+  for (const name of ["z-image-turbo", "krea2-turbo"])
+    it(`keeps every value of the ${name} template across a round trip`, () => {
+      const graph = UiGraph.parse(
+        JSON.parse(fs.readFileSync(path.join(sub, `${name}.json`), "utf8")),
+      );
+      const prompt = uiToApi(graph, real).prompt;
+      const a = analyze(prompt, real);
+      const values: Record<string, unknown> = {
+        ...a.values,
+        "prompt.positive": "a red fox in the snow",
+        "sampler.seed": 42,
+        "sampler.steps": 6,
+      };
+      const opened = applyWidgetValues(
+        graph,
+        a.bindings
+          .filter((b) => b.id in values)
+          .map((b) => ({ node: b.node, input: b.input, value: values[b.id] })),
+        real,
+      );
+      const back = uiToApi(UiGraph.parse(opened), real).prompt;
+      const r = resync({ bindings: a.bindings, values, kind: a.kind }, prompt, back, real);
+      expect(r.values).toEqual(values);
+      expect(r.report).toMatchObject({ changed: [], added: [], removed: [] });
+    });
 });

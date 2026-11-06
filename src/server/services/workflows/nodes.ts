@@ -30,6 +30,13 @@ export const TEXT_INPUTS = ["text", "text_g", "prompt", "positive", "string", "v
 /** Inputs that pass conditioning through modifier nodes (ControlNet apply, combine, area…). */
 export const CONDITIONING_PASS = ["conditioning", "conditioning_to", "conditioning_1", "cond"];
 
+/**
+ * Inputs any value passes straight through, followed when a chain has nothing else: a switch's
+ * `on_false` branch (usually the plain path: no LoRA, no prompt rewriting; ComfyUI's templates
+ * build it that way) and a preview's `source`.
+ */
+export const PASS_INPUTS = ["on_false", "source"];
+
 /** Nodes holding several LoRAs in one place; tags are added as lora_<n> entries. */
 export const LORA_STACK_CLASSES = new Set(["Power Lora Loader (rgthree)"]);
 
@@ -60,10 +67,14 @@ export const IMAGE_INPUT_CLASSES = new Set(["LoadImage"]);
 export const LOAD_IMAGE = "LoadImage";
 export const PREVIEW_IMAGE = "PreviewImage";
 
+/** Frontend nodes the converter resolves: a reroute passes its link on, a primitive holds a value. */
+export const REROUTE = "Reroute";
+export const PRIMITIVE_NODE = "PrimitiveNode";
+
 /** Nodes that exist only in the ComfyUI frontend and never reach the API graph. */
 export const FRONTEND_ONLY_CLASSES = new Set([
-  "Reroute",
-  "PrimitiveNode",
+  REROUTE,
+  PRIMITIVE_NODE,
   "Note",
   "MarkdownNote",
   "Label (rgthree)",

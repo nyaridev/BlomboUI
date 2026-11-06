@@ -24,7 +24,9 @@ describe("apiToUi → uiToApi", () => {
       const ui = UiGraph.parse(apiToUi(api, info));
       const back = uiToApi(ui, info);
       expect(back.findings).toEqual([]);
-      expect(strip(back.prompt)).toEqual(strip(api));
+      // Every value comes back; optional inputs the API graph left out get their defaults.
+      expect(Object.keys(back.prompt)).toEqual(Object.keys(api));
+      expect(strip(back.prompt)).toMatchObject(strip(api));
       // Custom titles survive.
       for (const [id, node] of Object.entries(api))
         if (node._meta?.title) expect(back.prompt[id]?._meta?.title).toBe(node._meta.title);
@@ -167,18 +169,19 @@ describe("uiToApi", () => {
     expect(own?.[0]).toBe(0);
   });
 
-  it("reports unknown nodes and subgraphs instead of guessing", () => {
-    const g = UiGraph.parse({
-      nodes: [
-        { id: 1, type: "MysteryNode" },
-        { id: 2, type: "a1b2c3d4-subgraph", title: "Upscale group" },
-      ],
-      links: [],
-      definitions: { subgraphs: [{ id: "a1b2c3d4-subgraph" }] },
-    });
+  it("reports unknown nodes instead of guessing", () => {
+    const g = UiGraph.parse({ nodes: [{ id: 1, type: "MysteryNode" }], links: [] });
     const { prompt, findings } = uiToApi(g, info);
     expect(prompt).toEqual({});
-    expect(findings.map((f) => f.code).sort()).toEqual(["missing_node", "subgraph"]);
+    expect(findings.map((f) => f.code)).toEqual(["missing_node"]);
+  });
+
+  it("fills defaults for inputs a save has no value for", () => {
+    const g = UiGraph.parse({
+      nodes: [{ id: 1, type: "KSampler", widgets_values: [5, "fixed", 20] }],
+      links: [],
+    });
+    expect(uiToApi(g, info).prompt["1"]?.inputs).toMatchObject({ seed: 5, steps: 20, cfg: 8 });
   });
 });
 
@@ -209,5 +212,139 @@ describe("applyWidgetValues", () => {
     expect(uiToApi(UiGraph.parse(ui), info).prompt["3"]?.inputs.steps).toBe(
       prompt["3"]?.inputs.steps,
     );
+  });
+});
+
+/* ── subgraphs ────────────────────────────────────────────────────────────── */
+
+const sub = path.join(dir, "subgraphs");
+const readSub = (name: string): unknown =>
+  JSON.parse(fs.readFileSync(path.join(sub, `${name}.json`), "utf8"));
+/** ComfyUI 0.44's object_info, the classes the templates use. */
+const real = ObjectInfo.parse(readSub("object_info"));
+const template = (name: string) => UiGraph.parse(readSub(name));
+/** A node's widgets_values in a UI graph, inside subgraph definitions too. */
+const widgetsOf = (graph: unknown, id: number, def?: string): unknown[] => {
+  const g = graph as {
+    nodes: UiGraph["nodes"];
+    definitions: { subgraphs: Array<{ id: string; nodes: UiGraph["nodes"] }> };
+  };
+  const nodes = def ? g.definitions.subgraphs.find((s) => s.id === def)?.nodes : g.nodes;
+  return (nodes?.find((n) => n.id === id)?.widgets_values ?? []) as unknown[];
+};
+
+describe("uiToApi: subgraphs", () => {
+  // ComfyUI's own templates. The .api.json files are what its frontend (1.57.6) runs for them
+  // (app.graphToPrompt(), compared node by node).
+  for (const name of ["z-image-turbo", "flux2-klein", "krea2-turbo"])
+    it(`flattens the ${name} template the way ComfyUI does`, () => {
+      const { prompt, findings } = uiToApi(template(name), real);
+      expect(findings).toEqual([]);
+      expect(strip(prompt)).toEqual(readSub(`${name}.api`));
+    });
+
+  it("leaves out a bypassed instance and the nodes inside it", () => {
+    const { prompt } = uiToApi(template("flux2-klein"), real);
+    expect(Object.keys(prompt).filter((id) => id.startsWith("77") || id === "78")).toEqual([]);
+    expect(prompt["9"]?.inputs.images).toEqual(["75:65", 0]);
+  });
+
+  it("flattens nested subgraphs, with the instance's values over the inner ones", () => {
+    const { prompt, findings } = uiToApi(UiGraph.parse(readSub("nested")), info);
+    expect(findings).toEqual([]);
+    // The muted instance 13, the bypassed 22 and the muted 23 don't run.
+    expect(Object.keys(prompt).sort()).toEqual(
+      ["1", "10:20", "10:21", "10:30:40", "10:30:41", "11", "9"].sort(),
+    );
+    expect(prompt["10:30:41"]?.inputs).toEqual({
+      model: ["1", 0],
+      seed: 1234,
+      steps: 30,
+      cfg: 6,
+      sampler_name: "euler",
+      scheduler: "normal",
+      positive: ["10:20", 0],
+      negative: ["10:21", 0],
+      latent_image: ["10:30:40", 0],
+      denoise: 1,
+    });
+    expect(prompt["10:20"]?.inputs).toEqual({ text: "a lighthouse", clip: ["1", 1] });
+    expect(prompt["10:20"]?._meta?.title).toBe("Positive");
+    expect(prompt["9"]?.inputs.samples).toEqual(["10:30:41", 0]);
+  });
+
+  it("refuses a subgraph that contains itself", () => {
+    const g = UiGraph.parse({
+      nodes: [{ id: 5, type: "loop", title: "Loop" }],
+      links: [],
+      definitions: { subgraphs: [{ id: "loop", nodes: [{ id: 1, type: "loop" }] }] },
+    });
+    const { prompt, findings } = uiToApi(g, info);
+    expect(prompt).toEqual({});
+    expect(findings.map((f) => [f.code, f.node])).toEqual([["subgraph", "5:1"]]);
+  });
+});
+
+describe("applyWidgetValues: subgraphs", () => {
+  it("writes inner values where a template keeps them", () => {
+    const g = template("z-image-turbo");
+    const edited = applyWidgetValues(
+      g,
+      [
+        { node: "57:27", input: "text", value: "a red fox" },
+        { node: "57:3", input: "steps", value: 6 },
+      ],
+      real,
+    );
+    const back = uiToApi(UiGraph.parse(edited), real).prompt;
+    expect(back["57:27"]?.inputs.text).toBe("a red fox");
+    expect(back["57:3"]?.inputs.steps).toBe(6);
+    expect(uiToApi(g, real).prompt["57:3"]?.inputs.steps).toBe(8);
+  });
+
+  it("writes into the instance when it keeps the value (older saves)", () => {
+    const edited = applyWidgetValues(
+      template("krea2-turbo"),
+      [
+        { node: "30:3", input: "seed", value: 42 },
+        { node: "30:19", input: "value", value: "a red fox" },
+      ],
+      real,
+    );
+    const krea = "b0e5ca93-2731-42b9-8e0a-d28ea851ff81";
+    expect(widgetsOf(edited, 30).slice(0, 7)).toEqual([
+      "a red fox",
+      true,
+      false,
+      512,
+      1024,
+      1024,
+      42,
+    ]);
+    expect(widgetsOf(edited, 3, krea)[0]).toBe(735915477938686);
+    const back = uiToApi(UiGraph.parse(edited), real).prompt;
+    expect(back["30:3"]?.inputs.seed).toBe(42);
+    expect(back["30:19"]?.inputs.value).toBe("a red fox");
+  });
+
+  it("follows nested subgraphs to the primitive or instance that holds a value", () => {
+    const edited = applyWidgetValues(
+      readSub("nested"),
+      [
+        { node: "10:30:41", input: "seed", value: 99 },
+        { node: "10:30:41", input: "steps", value: 12 },
+        { node: "10:30:41", input: "cfg", value: 4.5 },
+        { node: "10:20", input: "text", value: "a barn" },
+      ],
+      info,
+    );
+    expect(widgetsOf(edited, 2)[0]).toBe(99);
+    expect(widgetsOf(edited, 10)).toEqual([0, "a barn", 12]);
+    expect(widgetsOf(edited, 41, "sg-inner")[3]).toBe(4.5);
+    expect(uiToApi(UiGraph.parse(edited), info).prompt["10:30:41"]?.inputs).toMatchObject({
+      seed: 99,
+      steps: 12,
+      cfg: 4.5,
+    });
   });
 });

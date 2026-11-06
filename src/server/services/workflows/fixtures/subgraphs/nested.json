@@ -1,0 +1,299 @@
+{
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CheckpointLoaderSimple",
+      "outputs": [
+        { "name": "MODEL", "type": "MODEL", "links": [1] },
+        { "name": "CLIP", "type": "CLIP", "links": [2] },
+        { "name": "VAE", "type": "VAE", "links": [3] }
+      ],
+      "widgets_values": ["sd15/dreamshaper_8.safetensors"]
+    },
+    {
+      "id": 2,
+      "type": "PrimitiveNode",
+      "outputs": [{ "name": "INT", "type": "INT", "links": [4] }],
+      "widgets_values": [1234, "fixed"]
+    },
+    {
+      "id": 10,
+      "type": "sg-outer",
+      "title": "Text to image",
+      "inputs": [
+        { "name": "model", "type": "MODEL", "link": 1 },
+        { "name": "clip", "type": "CLIP", "link": 2 },
+        { "name": "seed", "type": "INT", "widget": { "name": "seed" }, "link": 4 },
+        { "name": "text", "type": "STRING", "widget": { "name": "text" }, "link": null },
+        { "name": "steps", "type": "INT", "widget": { "name": "steps" }, "link": null }
+      ],
+      "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [5] }],
+      "widgets_values": [0, "a lighthouse", 30]
+    },
+    {
+      "id": 13,
+      "type": "sg-outer",
+      "mode": 2,
+      "inputs": [],
+      "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [] }],
+      "widgets_values": [0, "muted", 5]
+    },
+    {
+      "id": 9,
+      "type": "VAEDecode",
+      "inputs": [
+        { "name": "samples", "type": "LATENT", "link": 5 },
+        { "name": "vae", "type": "VAE", "link": 3 }
+      ],
+      "outputs": [{ "name": "IMAGE", "type": "IMAGE", "links": [6] }]
+    },
+    {
+      "id": 11,
+      "type": "SaveImage",
+      "inputs": [{ "name": "images", "type": "IMAGE", "link": 6 }],
+      "widgets_values": ["nested"]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 10, 0, "MODEL"],
+    [2, 1, 1, 10, 1, "CLIP"],
+    [3, 1, 2, 9, 1, "VAE"],
+    [4, 2, 0, 10, 2, "INT"],
+    [5, 10, 0, 9, 0, "LATENT"],
+    [6, 9, 0, 11, 0, "IMAGE"]
+  ],
+  "definitions": {
+    "subgraphs": [
+      {
+        "id": "sg-outer",
+        "name": "Text to image",
+        "inputs": [
+          { "name": "model", "type": "MODEL" },
+          { "name": "clip", "type": "CLIP" },
+          { "name": "seed", "type": "INT" },
+          { "name": "text", "type": "STRING" },
+          { "name": "steps", "type": "INT" }
+        ],
+        "outputs": [{ "name": "LATENT", "type": "LATENT" }],
+        "nodes": [
+          {
+            "id": 20,
+            "type": "CLIPTextEncode",
+            "title": "Positive",
+            "inputs": [
+              { "name": "clip", "type": "CLIP", "link": 101 },
+              { "name": "text", "type": "STRING", "widget": { "name": "text" }, "link": 102 }
+            ],
+            "outputs": [{ "name": "CONDITIONING", "type": "CONDITIONING", "links": [103] }],
+            "widgets_values": ["the inner default"]
+          },
+          {
+            "id": 21,
+            "type": "CLIPTextEncode",
+            "title": "Negative",
+            "inputs": [{ "name": "clip", "type": "CLIP", "link": 104 }],
+            "outputs": [{ "name": "CONDITIONING", "type": "CONDITIONING", "links": [105] }],
+            "widgets_values": ["blurry"]
+          },
+          {
+            "id": 22,
+            "type": "ModelSamplingDiscrete",
+            "mode": 4,
+            "inputs": [{ "name": "model", "type": "MODEL", "link": 106 }],
+            "outputs": [{ "name": "MODEL", "type": "MODEL", "links": [107] }],
+            "widgets_values": ["eps", false]
+          },
+          { "id": 23, "type": "SaveImage", "mode": 2, "inputs": [], "widgets_values": ["muted"] },
+          {
+            "id": 30,
+            "type": "sg-inner",
+            "inputs": [
+              { "name": "model", "type": "MODEL", "link": 107 },
+              { "name": "positive", "type": "CONDITIONING", "link": 103 },
+              { "name": "negative", "type": "CONDITIONING", "link": 105 },
+              { "name": "seed", "type": "INT", "widget": { "name": "seed" }, "link": 108 },
+              { "name": "steps", "type": "INT", "widget": { "name": "steps" }, "link": 109 }
+            ],
+            "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [110] }],
+            "properties": { "proxyWidgets": [["41", "cfg"]] },
+            "widgets_values": []
+          }
+        ],
+        "links": [
+          {
+            "id": 101,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 20,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 102,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 20,
+            "target_slot": 1,
+            "type": "STRING"
+          },
+          {
+            "id": 103,
+            "origin_id": 20,
+            "origin_slot": 0,
+            "target_id": 30,
+            "target_slot": 1,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 104,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 21,
+            "target_slot": 0,
+            "type": "CLIP"
+          },
+          {
+            "id": 105,
+            "origin_id": 21,
+            "origin_slot": 0,
+            "target_id": 30,
+            "target_slot": 2,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 106,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 22,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 107,
+            "origin_id": 22,
+            "origin_slot": 0,
+            "target_id": 30,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 108,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 30,
+            "target_slot": 3,
+            "type": "INT"
+          },
+          {
+            "id": 109,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 30,
+            "target_slot": 4,
+            "type": "INT"
+          },
+          {
+            "id": 110,
+            "origin_id": 30,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "LATENT"
+          }
+        ]
+      },
+      {
+        "id": "sg-inner",
+        "name": "Sample",
+        "inputs": [
+          { "name": "model", "type": "MODEL" },
+          { "name": "positive", "type": "CONDITIONING" },
+          { "name": "negative", "type": "CONDITIONING" },
+          { "name": "seed", "type": "INT" },
+          { "name": "steps", "type": "INT" }
+        ],
+        "outputs": [{ "name": "LATENT", "type": "LATENT" }],
+        "nodes": [
+          {
+            "id": 40,
+            "type": "EmptyLatentImage",
+            "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [201] }],
+            "widgets_values": [768, 512, 1]
+          },
+          {
+            "id": 41,
+            "type": "KSampler",
+            "inputs": [
+              { "name": "model", "type": "MODEL", "link": 202 },
+              { "name": "positive", "type": "CONDITIONING", "link": 203 },
+              { "name": "negative", "type": "CONDITIONING", "link": 204 },
+              { "name": "latent_image", "type": "LATENT", "link": 201 },
+              { "name": "seed", "type": "INT", "widget": { "name": "seed" }, "link": 205 },
+              { "name": "steps", "type": "INT", "widget": { "name": "steps" }, "link": 206 }
+            ],
+            "outputs": [{ "name": "LATENT", "type": "LATENT", "links": [207] }],
+            "widgets_values": [7, "randomize", 20, 6, "euler", "normal", 1]
+          }
+        ],
+        "links": [
+          {
+            "id": 201,
+            "origin_id": 40,
+            "origin_slot": 0,
+            "target_id": 41,
+            "target_slot": 3,
+            "type": "LATENT"
+          },
+          {
+            "id": 202,
+            "origin_id": -10,
+            "origin_slot": 0,
+            "target_id": 41,
+            "target_slot": 0,
+            "type": "MODEL"
+          },
+          {
+            "id": 203,
+            "origin_id": -10,
+            "origin_slot": 1,
+            "target_id": 41,
+            "target_slot": 1,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 204,
+            "origin_id": -10,
+            "origin_slot": 2,
+            "target_id": 41,
+            "target_slot": 2,
+            "type": "CONDITIONING"
+          },
+          {
+            "id": 205,
+            "origin_id": -10,
+            "origin_slot": 3,
+            "target_id": 41,
+            "target_slot": 4,
+            "type": "INT"
+          },
+          {
+            "id": 206,
+            "origin_id": -10,
+            "origin_slot": 4,
+            "target_id": 41,
+            "target_slot": 5,
+            "type": "INT"
+          },
+          {
+            "id": 207,
+            "origin_id": 41,
+            "origin_slot": 0,
+            "target_id": -20,
+            "target_slot": 0,
+            "type": "LATENT"
+          }
+        ]
+      }
+    ]
+  }
+}

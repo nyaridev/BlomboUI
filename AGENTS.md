@@ -81,7 +81,7 @@ src/
 │   │   ├── gallery/      index (sync, search, favorites, trash, libraries) · meta · home ·
 │   │   │                 imports (Add to gallery: imported/, civitai/ + sidecars) · files (reading
 │   │   │                 files for the index: images, animations, videos, audio)
-│   │   └── workflows/    store · analyze (roles, ports) · convert · import · compile · loras · health
+│   │   └── workflows/    store · analyze (roles, ports) · convert · flatten (subgraphs) · import · compile · loras · health
 │   │                     stages (the splicer) · presets · nodes · summary · resync · bundle (.blombo)
 │   ├── db/           profileDb (node:sqlite, migrations, FTS5 trigram) · ProfileDbs (shared connections)
 │   └── lib/          fsx (atomic, queued writes; movePath; resolveInside; part files) · saveformat

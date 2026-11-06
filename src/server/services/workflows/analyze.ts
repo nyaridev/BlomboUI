@@ -31,6 +31,7 @@ import {
   IMAGE_OUTPUT_CLASSES,
   LORA_STACK_CLASSES,
   MODEL_INPUTS,
+  PASS_INPUTS,
   ROLE_RANGES,
   SEED_INPUTS,
   TEXT_INPUTS,
@@ -49,6 +50,7 @@ interface Ref {
 }
 
 const MORE = "More from this workflow";
+const SIZE = "Size";
 
 /** Read-only view of an API graph with object_info lookups. */
 export class GraphView {
@@ -213,10 +215,24 @@ function traceText(g: GraphView, link: ApiLink | null, side: "positive" | "negat
     const id = cur[0];
     for (const name of TEXT_INPUTS) {
       if (!(name in g.inputs(id))) continue;
-      const ref = g.widgetRef(id, name);
+      const ref = g.widgetRef(id, name) ?? traceString(g, g.link(id, name));
       if (ref && typeof g.inputs(ref.node)[ref.input] === "string") return ref;
     }
     cur = g.link(id, side) ?? firstLink(g, id, CONDITIONING_PASS);
+  }
+  return null;
+}
+
+/** A text input fed through switches and previews: the text widget it starts at. */
+function traceString(g: GraphView, link: ApiLink | null): Ref | null {
+  let cur = link;
+  for (let i = 0; cur && i < 16; i++) {
+    const id = cur[0];
+    for (const name of TEXT_INPUTS) {
+      const ref = g.widgetRef(id, name);
+      if (ref && typeof g.inputs(ref.node)[ref.input] === "string") return ref;
+    }
+    cur = firstLink(g, id, PASS_INPUTS);
   }
   return null;
 }
@@ -233,7 +249,7 @@ function traceChain(
   for (let i = 0; cur && i < 32; i++) {
     nodes.push(cur[0]);
     source = cur;
-    cur = g.link(cur[0], input);
+    cur = g.link(cur[0], input) ?? firstLink(g, cur[0], PASS_INPUTS);
   }
   return { nodes, source };
 }
@@ -524,8 +540,19 @@ export function analyze(prompt: ApiPrompt, objectInfo: ObjectInfo | null): Analy
 
     const latent = traceLatentSize(g, parts.latent);
     if (latent) {
-      add(g.widgetRef(latent, "width"), "latent.width");
-      add(g.widgetRef(latent, "height"), "latent.height");
+      const width = g.widgetRef(latent, "width");
+      const height = g.widgetRef(latent, "height");
+      add(width, "latent.width");
+      add(height, "latent.height");
+      // The size comes from a node with settings of its own (aspect ratio, megapixels).
+      const from = g.link(latent, "width")?.[0];
+      if (!width && !height && from && from === g.link(latent, "height")?.[0])
+        for (const input of g.widgets(from)) {
+          const ref = { node: from, input };
+          if (used.has(key(ref))) continue;
+          used.add(key(ref));
+          bindings.push(makeBinding(g, ref, `n${from}.${input}`, undefined, { group: SIZE }));
+        }
       if ("batch_size" in g.inputs(latent)) add(g.widgetRef(latent, "batch_size"), "latent.batch");
     }
     // Denoise only matters when the sampler starts from an existing image.

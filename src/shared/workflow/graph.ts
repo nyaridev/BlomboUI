@@ -79,6 +79,22 @@ export const UiGraph = z.looseObject({
 });
 export type UiGraph = z.infer<typeof UiGraph>;
 
+/**
+ * One entry of `definitions.subgraphs`: a graph of its own that nodes use as their `type`.
+ * Inner links from node -10 come in through `inputs[origin_slot]`, links to node -20 go out
+ * through `outputs[target_slot]`.
+ */
+export const UiSubgraph = z.looseObject({
+  id: z.string().min(1),
+  name: z.string().optional(),
+  inputs: z.array(z.looseObject({ name: z.string(), type: z.unknown().optional() })).optional(),
+  outputs: z.array(z.looseObject({ name: z.string().optional() })).optional(),
+  nodes: z.array(UiNode).optional(),
+  links: z.array(UiLink).optional(),
+  definitions: z.looseObject({ subgraphs: z.array(z.unknown()).optional() }).optional(),
+});
+export type UiSubgraph = z.infer<typeof UiSubgraph>;
+
 /** One input definition: [type or choice list, options]. Newer ComfyUI writes ["COMBO", { options }]. */
 export const InputSpec = z.tuple([z.unknown()]).rest(z.unknown());
 export type InputSpec = z.infer<typeof InputSpec>;
@@ -121,6 +137,10 @@ export interface InputInfo {
   /** Seeds and similar ints have a "control after generate" widget next to them in the UI. */
   hasControl: boolean;
   required: boolean;
+  /** Shown only as a socket (`forceInput`): no widget, so nothing in widgets_values. */
+  forceInput: boolean;
+  /** A dynamic combo (`COMFY_DYNAMICCOMBO_V3`): the inputs each choice adds, as "<input>.<sub>". */
+  choices: Record<string, InputInfo[]> | undefined;
 }
 
 const WIDGET_TYPES = new Set(["INT", "FLOAT", "STRING", "BOOLEAN", "COMBO"]);
@@ -130,7 +150,10 @@ export function isWidgetType(type: string): boolean {
   return WIDGET_TYPES.has(type);
 }
 
-function readSpec(name: string, spec: InputSpec, required: boolean): InputInfo {
+const DYNAMIC_COMBO = "COMFY_DYNAMICCOMBO_V3";
+
+/** `nested`: an input a dynamic combo adds; only an explicit flag gives those a control widget. */
+function readSpec(name: string, spec: InputSpec, required: boolean, nested = false): InputInfo {
   const [head, raw] = spec;
   const opts = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : undefined);
@@ -143,6 +166,16 @@ function readSpec(name: string, spec: InputSpec, required: boolean): InputInfo {
     type = String(head);
     if (type === "COMBO" && Array.isArray(opts.options)) options = opts.options.map(String);
   }
+  let choices: Record<string, InputInfo[]> | undefined;
+  if (type === DYNAMIC_COMBO && Array.isArray(opts.options)) {
+    choices = {};
+    for (const o of opts.options as Array<{ key?: unknown; inputs?: unknown }>) {
+      const sub = NodeDef.shape.input.safeParse(o?.inputs ?? {});
+      if (o && typeof o.key === "string")
+        choices[o.key] = sub.success ? groupInputs(sub.data, undefined, true) : [];
+    }
+    options = Object.keys(choices);
+  }
   return {
     name,
     type,
@@ -154,21 +187,29 @@ function readSpec(name: string, spec: InputSpec, required: boolean): InputInfo {
     multiline: opts.multiline === true,
     hasControl:
       opts.control_after_generate === true ||
-      ((name === "seed" || name === "noise_seed") && type === "INT"),
+      (!nested && (name === "seed" || name === "noise_seed") && type === "INT"),
     required,
+    forceInput: opts.forceInput === true,
+    choices,
   };
 }
 
 /** Inputs of a node definition in ComfyUI's declared order (required first). */
 export function nodeInputs(def: NodeDef | undefined): InputInfo[] {
-  if (!def) return [];
+  return def ? groupInputs(def.input, def.input_order, false) : [];
+}
+
+function groupInputs(
+  input: NodeDef["input"],
+  order: NodeDef["input_order"],
+  nested: boolean,
+): InputInfo[] {
   const out: InputInfo[] = [];
   for (const group of ["required", "optional"] as const) {
-    const specs = def.input[group] ?? {};
-    const order = def.input_order?.[group] ?? Object.keys(specs);
-    for (const name of order) {
+    const specs = input[group] ?? {};
+    for (const name of order?.[group] ?? Object.keys(specs)) {
       const spec = specs[name];
-      if (spec) out.push(readSpec(name, spec, group === "required"));
+      if (spec) out.push(readSpec(name, spec, group === "required", nested));
     }
   }
   return out;

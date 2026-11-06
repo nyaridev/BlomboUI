@@ -58,13 +58,20 @@ Drop a file on the workflow picker, the Generate screen or File Info:
 | UI JSON | the canvas as is; it's converted to API with `/object_info` (anything that can't be converted is finalized on the first Edit in ComfyUI) |
 | `.blombo` | a full package: manifest (values, stages, run settings), graphs, linked layout, thumbnail (see Export) |
 
-A UI JSON can only be converted while ComfyUI runs, because the widget values are matched to inputs by `/object_info`. Reroutes, primitive nodes and bypassed nodes are resolved; subgraphs and frontend-only plugin nodes can't be converted, and the import says so (exporting with ComfyUI's **Export (API)** always works). An API JSON imported while ComfyUI runs gets a generated canvas (`graph.json`) so it can be opened in ComfyUI.
+A UI JSON can only be converted while ComfyUI runs, because the widget values are matched to inputs by `/object_info`: in the order ComfyUI's frontend lays the widgets out, with a dynamic combo's picked choice adding its inputs right after it (`sampling_mode.temperature`…), socket-only (`forceInput`) inputs taking none, and an input the save has no value for (a node newer than the file) getting its default. Reroutes, primitive nodes and bypassed and muted nodes are resolved. **Subgraphs** are flattened the way ComfyUI runs them (`services/workflows/flatten.ts`), so every current ComfyUI template imports:
+
+- A node inside subgraph instance 57 becomes `57:27`, inside a nested one `57:80:27`: the ids ComfyUI's own export uses, so Save to Blombo sends the same ids back and re-sync keeps every value.
+- Links come in through the subgraph's inputs and go out through its outputs. An unlinked input takes the value the instance keeps for it (older saves: one per widget input), else the inner widget's own value (newer saves, with `proxyWidgets`, keep the values inside).
+- A bypassed or muted instance acts like a bypassed or muted node; nothing inside it runs. Inner nodes can be bypassed or muted too.
+- Instances of one subgraph share its definition, as in ComfyUI: Edit in ComfyUI writes a value where it's read from (the instance, a primitive, or the inner widget, which every instance shares).
+
+Unknown custom nodes are reported (exporting with ComfyUI's **Export (API)** always works). An API JSON imported while ComfyUI runs gets a generated canvas (`graph.json`) so it can be opened in ComfyUI.
 
 The **analyzer** then:
 
 1. reads node definitions from ComfyUI's `/object_info` (types, ranges, choices); without it, types come from the current values
 2. picks the **main sampler**: the one whose latent starts from an empty-latent (size) node. Settings split over helper nodes (`SamplerCustomAdvanced` with noise, guider, sampler and sigmas nodes) are followed too
-3. finds roles by walking links from it: conditioning back to the prompt text (through ControlNet, combine and guidance nodes), the model chain back to its loader (`model.checkpoint` or `model.unet`, noting an rgthree **Power Lora Loader** on the way as `lora.stack`), the CLIP chain through clip skip to its loader (`model.clip`, `model.clip2`), the decoder's VAE loader, and the latent's width, height and batch size. A value converted to an input (a seed from a primitive or "Seed" node) is followed to where it really lives
+3. finds roles by walking links from it: conditioning back to the prompt text (through ControlNet, combine and guidance nodes), the model chain back to its loader (`model.checkpoint` or `model.unet`, noting an rgthree **Power Lora Loader** on the way as `lora.stack`), the CLIP chain through clip skip to its loader (`model.clip`, `model.clip2`), the decoder's VAE loader, and the latent's width, height and batch size. A value converted to an input (a seed from a primitive or "Seed" node) is followed to where it really lives. Switch nodes are followed along their `on_false` branch (the plain path in ComfyUI's templates: no LoRA, no prompt rewriting), and a prompt through string switches and previews to the text node it starts at. When width and height both come from one node with settings of its own (a resolution selector's aspect ratio and megapixels), those settings show instead, grouped as "Size"
 4. exposes the widget inputs of nodes titled with a `$` prefix: a single input is labeled with the title (`$Detail strength` → "Detail strength"), several are grouped under it ("Sharpen · Sigma"). A `$` title on a node that already has a role just renames it
 5. reports missing custom nodes, models that aren't in your folders, and graphs without an output
 

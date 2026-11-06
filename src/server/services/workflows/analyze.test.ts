@@ -208,3 +208,55 @@ describe("graph helpers", () => {
     expect([...outputRoles(preset("caption"), null)]).toEqual([]);
   });
 });
+
+describe("analyze: subgraph templates", () => {
+  // ComfyUI's own templates, flattened by the converter (convert.test.ts checks that part).
+  const sub = path.join(dir, "subgraphs");
+  const real = ObjectInfo.parse(
+    JSON.parse(fs.readFileSync(path.join(sub, "object_info.json"), "utf8")),
+  );
+  const api = (name: string) =>
+    ApiPrompt.parse(JSON.parse(fs.readFileSync(path.join(sub, `${name}.api.json`), "utf8")));
+
+  it("finds the roles inside Z-Image Turbo's subgraph", () => {
+    const a = analyze(api("z-image-turbo"), real);
+    expect(byRole(a.bindings)).toMatchObject({
+      "prompt.positive": "57:27.text",
+      "model.unet": "57:28.unet_name",
+      "model.clip": "57:30.clip_name",
+      "model.vae": "57:29.vae_name",
+      "sampler.seed": "57:3.seed",
+      "sampler.steps": "57:3.steps",
+      "latent.width": "57:13.width",
+      "latent.height": "57:13.height",
+    });
+    expect(a.findings).toEqual([]);
+  });
+
+  it("finds FLUX.2 klein's prompt outside the subgraph and its size on primitives", () => {
+    const a = analyze(api("flux2-klein"), real);
+    expect(byRole(a.bindings)).toMatchObject({
+      "prompt.positive": "76.value",
+      "prompt.negative": "75:67.text",
+      "model.unet": "75:70.unet_name",
+      "sampler.seed": "75:73.noise_seed",
+      "sampler.steps": "75:62.steps",
+      "latent.width": "75:68.value",
+      "latent.height": "75:69.value",
+    });
+  });
+
+  it("follows Krea 2's switches to the user prompt and the plain model", () => {
+    const a = analyze(api("krea2-turbo"), real);
+    expect(byRole(a.bindings)).toMatchObject({
+      "prompt.positive": "30:19.value",
+      "model.unet": "30:10.unet_name",
+      "sampler.seed": "30:3.seed",
+      "sampler.steps": "30:3.steps",
+    });
+    // Its size comes from a resolution selector: that node's settings are the size controls.
+    const size = a.bindings.filter((b) => b.group === "Size").map((b) => `${b.node}.${b.input}`);
+    expect(size).toEqual(["49.aspect_ratio", "49.megapixels", "49.multiple"]);
+    expect(a.values["n49.aspect_ratio"]).toBe("1:1 (Square)");
+  });
+});

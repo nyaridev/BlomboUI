@@ -780,15 +780,30 @@ describe("smooth motion (frame interpolation)", () => {
       multiplier: 3,
     });
     expect(p["18"]?.inputs).toMatchObject({ images: [interpId, 0], fps: 48 });
+    // A frame rate setting is set directly: no math nodes.
+    expect(byClass(p, "ComfyMathExpression")).toEqual([]);
+  });
+
+  it("multiplies a frame rate that comes from the input video (SCAIL swap)", () => {
+    const p = run("preset:scail2-replace", { smooth: { enabled: true, multiplier: 3 } }).prompt;
+    expectValidGraph(p);
+    const [interpId] = one(p, "FrameInterpolate");
+    const [rateId, rate] = one(p, "ComfyMathExpression");
+    const [multId] =
+      byClass(p, "PrimitiveInt").find(([, n]) => n._meta?.title?.startsWith("Smooth")) ?? [];
+    expect(rate.inputs).toMatchObject({
+      expression: "a * b",
+      "values.a": ["10", 2],
+      "values.b": [multId, 0],
+    });
+    expect(multId && p[multId]?.inputs.value).toBe(3);
+    expect(p["29"]?.inputs).toMatchObject({ images: [interpId, 0], fps: [rateId, 0] });
   });
 
   it("is off by default and says so on a workflow without a frame rate", () => {
     expect(byClass(run("preset:wan22-14b", {}).prompt, "FrameInterpolate")).toEqual([]);
     expect(() => run("sd15-api", { smooth: { enabled: true } })).toThrow(
-      "Smooth motion needs the workflow's frame rate",
-    );
-    expect(() => run("preset:scail2-replace", { smooth: { enabled: true } })).toThrow(
-      "it comes from the input video",
+      "Smooth motion needs the workflow's frame rate, and this workflow has none.",
     );
   });
 });

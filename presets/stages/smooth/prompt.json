@@ -10,5 +10,17 @@
     "inputs": { "interp_model": ["loader", 0], "images": ["p-image", 0], "multiplier": 2 },
     "_meta": { "title": "Frames in between" }
   },
-  "out-image": { "class_type": "OUT:IMAGE", "inputs": { "value": ["interpolate", 0] } }
+  "out-image": { "class_type": "OUT:IMAGE", "inputs": { "value": ["interpolate", 0] } },
+  "p-fps": { "class_type": "PORT:FPS", "inputs": {} },
+  "multiplier": {
+    "class_type": "PrimitiveInt",
+    "inputs": { "value": 2 },
+    "_meta": { "title": "Frames per frame", "blombo": { "when": "linkedFps" } }
+  },
+  "rate": {
+    "class_type": "ComfyMathExpression",
+    "inputs": { "expression": "a * b", "values.a": ["p-fps", 0], "values.b": ["multiplier", 0] },
+    "_meta": { "title": "Frame rate", "blombo": { "when": "linkedFps" } }
+  },
+  "out-fps": { "class_type": "OUT:FPS", "inputs": { "value": ["rate", 0] } }
 }

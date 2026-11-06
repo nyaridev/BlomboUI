@@ -12,7 +12,8 @@
   "packs": [],
   "fields": [
     { "field": "model", "node": "loader", "input": "model_name", "label": "Model" },
-    { "field": "multiplier", "node": "interpolate", "input": "multiplier" }
+    { "field": "multiplier", "node": "interpolate", "input": "multiplier" },
+    { "field": "multiplier", "node": "multiplier", "input": "value" }
   ],
   "defaults": {}
 }

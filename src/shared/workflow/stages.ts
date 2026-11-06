@@ -44,6 +44,7 @@ export const PORTS = [
   "IMAGE",
   "SOUND",
   "AUDIO_VAE",
+  "FPS",
 ] as const;
 export const Port = z.enum(PORTS);
 export type Port = z.infer<typeof Port>;

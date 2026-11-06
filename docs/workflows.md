@@ -106,6 +106,7 @@ Hires fix, ADetailer and ControlNet are **stages**: graph patches that splice in
 | `VIDEO` | video workflows: the empty video latent (`START` itself for Wan and MiniMax H3; the `video_latent` input of LTX's audio + video concat) |
 | `LATENT`, `VAE`, `IMAGE` | the sampler's output, and the decoder that reads it (its VAE and image) |
 | `SOUND`, `AUDIO_VAE` | videos with sound: the audio going into the video maker (`CreateVideo.audio`), and the VAE that decoded it (LTX-2.3, MiniMax H3) |
+| `FPS` | a frame rate that comes from another node into the video maker, not a setting (the SCAIL swap takes its input video's) |
 
 They run in a fixed order, each reading the ports the one before left:
 
@@ -133,7 +134,7 @@ source → controlnet (units) → the workflow's own sampling → hires → adet
 
 **Continue a video** (ADR-0021) takes a stage video (`video` in the source settings: an MP4 from a file, the gallery or the last output, kept with the stage images). Every extend package ends the same way: the new frames' colors are matched to the old last frame (`ColorTransfer`, one transform worked out from all the new frames; SCAIL's matches each frame, as ComfyUI's template does), the frames it started from are dropped, the old frames go in front (`BatchImagesNode`, after `IMAGE`), and the old sound goes in front of the new (`AudioConcat`, the new trimmed by the overlap's seconds; `SOUND`). The result is the whole video. The gallery viewer's **Continue it** puts a video in.
 
-**Smooth motion** (`smooth`, a pass tab on video workflows) draws frames between the decoded frames with `FrameInterpolate` (RIFE 4.26 or FILM from the `frame_interpolation` models folder, 2–4×). Its package's `roles` sets the workflow's frame rate (`video.fps`) to the rate times the multiplier, so the length and the sound stay the same.
+**Smooth motion** (`smooth`, a pass tab on video workflows) draws frames between the decoded frames with `FrameInterpolate` (RIFE 4.26 or FILM from the `frame_interpolation` models folder, 2–4×). Its package's `roles` sets the workflow's frame rate (`video.fps`) to the rate times the multiplier, so the length and the sound stay the same. A workflow without that setting whose frame rate comes in linked (the `FPS` port) gets a `ComfyMathExpression` that multiplies it instead (flag `linkedFps`).
 
 **Two passes.** Wan 2.2 14B samples twice: a high noise pass (`KSamplerAdvanced`, adds the noise, stops early) and a low noise pass that samples its latent. The first sampler is the main one (the ports, seed, sampler, model), the decoder is found after the last sampler of that chain, and the second pass's own model is the `model.unet2` role ("Low noise model"; the first then reads "High noise model"). Steps and CFG come from primitives both passes read, so one control sets both. A prompt's `<lora:…>` tags go on the high noise model only.
 

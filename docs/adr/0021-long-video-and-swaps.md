@@ -48,7 +48,9 @@ ComfyUI 0.44 has the core nodes for all of it: `LoadVideo`, `GetVideoComponents`
   over sliding-window custom nodes (a pack per model).
 - **Smooth motion is a stage** (`smooth`, after decoding): `FrameInterpolate` with RIFE or FILM at
   2–4×. The package's new `roles` field sets the workflow's `video.fps` binding to fps ×
-  multiplier, so the length and the sound stay the same. It's a pass tab on video workflows.
+  multiplier, so the length and the sound stay the same. Where the frame rate comes in linked
+  instead (the SCAIL swap takes its input video's), the package multiplies it in the graph (port
+  `FPS`). It's a pass tab on video workflows.
 - **Character swaps are presets**:
   - `scail2-replace`: SCAIL 2 with its DPO and relight LoRAs, a 6-step distill LoRA, and SAM 3.1
     to find who to replace.

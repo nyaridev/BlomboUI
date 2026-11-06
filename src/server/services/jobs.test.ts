@@ -273,6 +273,20 @@ describe("job queue against a ComfyUI", () => {
     await workflows.patchValues("sd15", { values: {}, stages: { adetailer: { enabled: false } } });
   });
 
+  it("runs Smooth motion even when it's the only stage on", async () => {
+    // Without its package the run would fail with "There's no Smooth motion stage package".
+    const res = await queue.enqueue({
+      workflowId: "sd15",
+      values: { "sampler.steps": 3 },
+      stages: { smooth: { enabled: true } },
+      count: 1,
+      loop: false,
+    });
+    const [job] = await settled(res.jobs.map((j) => j.id));
+    expect(job?.error).toContain("needs the workflow's frame rate");
+    await workflows.patchValues("sd15", { values: {}, stages: { smooth: { enabled: false } } });
+  });
+
   it("checks stages for the Generate screen", async () => {
     const report = await stages.check("sd15", {});
     expect(report.checked).toBe(true);

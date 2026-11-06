@@ -563,7 +563,11 @@ export class JobQueue extends Emitter<QueueEvents> {
       );
       const source = sourceOn(stages.source);
       const anyStage =
-        source || stages.hires.enabled || stages.adetailer.enabled || stages.controlnet.enabled;
+        source ||
+        stages.hires.enabled ||
+        stages.adetailer.enabled ||
+        stages.controlnet.enabled ||
+        stages.smooth.enabled;
       const controlFiles = stageImageFiles(stages);
       // The workflow's own picture and video inputs that are files kept with the stage files.
       const inputFiles = run.manifest.bindings.flatMap((b) => {

@@ -402,6 +402,9 @@ export function findPorts(prompt: ApiPrompt): PortLinks {
     const audioVae = g.link(sound[0], "vae");
     if (audioVae) ports.AUDIO_VAE = audioVae;
   }
+  // A frame rate that comes from another node (a swap's input video), not a setting.
+  const fps = maker ? FPS_INPUTS.map((name) => g.link(maker, name)).find(Boolean) : null;
+  if (fps) ports.FPS = fps;
   for (const id of g.ids()) {
     const samples = g.link(id, "samples");
     const vae = g.link(id, "vae");

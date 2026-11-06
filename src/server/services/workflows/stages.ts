@@ -530,14 +530,9 @@ function instancesFor(
     const sm = settings.smooth;
     const fps = bindingFor(ctx.bindings, "video.fps");
     const rate = fps ? Number(ctx.values[fps.id]) : Number.NaN;
-    if (!Number.isFinite(rate))
-      problems.push({
-        code: "missing_port",
-        // A swap workflow takes its frame rate from the input video: a link, not a setting.
-        message: ctx.bindings.some((b) => b.role === "video.input")
-          ? "Smooth motion can't change this workflow's frame rate: it comes from the input video, not a setting."
-          : "Smooth motion needs the workflow's frame rate, and this workflow has none. It works on video workflows.",
-      });
+    // Without a frame rate setting, the package multiplies the linked one (the FPS port; a
+    // swap's input video). A workflow with neither is told it has no frame rate.
+    const linked = !Number.isFinite(rate);
     return [
       {
         key: "smooth",
@@ -546,9 +541,9 @@ function instancesFor(
           ...pkg.defaults,
           model: sm.model,
           multiplier: sm.multiplier,
-          fps: rate * sm.multiplier,
+          ...(linked ? {} : { fps: rate * sm.multiplier }),
         },
-        flags: {},
+        flags: { linkedFps: linked },
         loras: "",
       },
     ];
@@ -897,6 +892,7 @@ const PORT_NAMES: Record<Port, string> = {
   IMAGE: "decoded image",
   SOUND: "video sound",
   AUDIO_VAE: "audio VAE",
+  FPS: "frame rate",
 };
 
 function portName(p: Port): string {

@@ -11,7 +11,7 @@ import type { ImageFileInfo } from "@shared/fileinfo";
 import { modelKey, type UsedModel, usedModels } from "@shared/imageinfo";
 import type { LocalModel } from "@shared/models";
 import { useMemo } from "react";
-import { openCivitaiModel } from "../models/civitai/state";
+import { useCivitaiOpener } from "../models/civitai/open";
 import { useModelsNav } from "../models/nav";
 import { versionOf } from "./CivitaiMatch";
 
@@ -52,6 +52,7 @@ export function UsedModels({ image }: { image: ImageFileInfo }) {
 
 function Row({ used, local }: { used: UsedModel; local: LocalModel | null }) {
   const goTo = useGoToView();
+  const civitai = useCivitaiOpener();
   const known = local?.civitai ?? null;
   const q = useCivitaiByHash(!known && used.hash ? used.hash : null);
   const hit = q.data ?? null;
@@ -116,11 +117,10 @@ function Row({ used, local }: { used: UsedModel; local: LocalModel | null }) {
         {modelId ? (
           <Button
             size="sm"
-            icon="globe"
-            onClick={() => {
-              openCivitaiModel(modelId, name);
-              goTo("models");
-            }}
+            icon={civitai.inApp ? "globe" : "external"}
+            onClick={() =>
+              civitai.model({ modelId, versionId: known?.versionId ?? version?.id, name })
+            }
           >
             Civitai page
           </Button>

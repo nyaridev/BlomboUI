@@ -326,8 +326,36 @@ export const CivitaiAccount = z.object({
   keyHint: z.string().nullable(),
   username: z.string().nullable(),
   checkedAt: z.string().nullable(),
+  /** The site its pages are on (the profile's: civitai.com or civitai.red). */
+  site: z.string(),
 });
 export type CivitaiAccount = z.infer<typeof CivitaiAccount>;
+
+/**
+ * Whether Civitai pages open inside the app (Models → Civitai): with a key Civitai accepted.
+ * Without one, or one that was never checked, they open on the site.
+ */
+export function civitaiInApp(account: CivitaiAccount | null | undefined): boolean {
+  return Boolean(account?.keySet && account.username);
+}
+
+/** A page on the Civitai site: a model (on a version), or a model search. */
+export function civitaiPageUrl(
+  site: string,
+  target: { modelId: number; versionId?: number | null } | { query: string },
+): string {
+  const url = new URL(
+    "modelId" in target ? `/models/${target.modelId}` : "/search/models",
+    site.endsWith("/") ? site : `${site}/`,
+  );
+  if ("modelId" in target) {
+    if (target.versionId) url.searchParams.set("modelVersionId", String(target.versionId));
+  } else url.searchParams.set("query", target.query);
+  return url.toString();
+}
+
+/** Open a page of the profile's Civitai site in the system browser (from the desktop window). */
+export const OpenCivitaiPageBody = z.object({ url: z.string().url().max(2000) });
 
 export const SetCivitaiKeyBody = z.object({
   key: z

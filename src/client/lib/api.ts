@@ -437,6 +437,8 @@ export const api = {
   setCivitaiKey: (key: string, check = true) =>
     request<CivitaiAccount>("PUT", "/civitai/account/key", { key, check }),
   removeCivitaiKey: () => request<CivitaiAccount>("DELETE", "/civitai/account/key"),
+  /** Open a page of the profile's Civitai site in the system browser (desktop window). */
+  openCivitaiPage: (url: string) => request<{ ok: true }>("POST", "/civitai/open-page", { url }),
   civitaiModels: (filter: BrowseFilter, cursor: string | null) =>
     request<CivitaiPage>("GET", `/civitai/models?${browseQuery(filter, cursor)}`),
   civitaiFeed: (users: string[], filter: BrowseFilter) =>

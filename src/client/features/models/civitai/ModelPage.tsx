@@ -52,6 +52,7 @@ import { CommunityImages } from "./CommunityImages";
 import { DownloadDialog } from "./DownloadDialog";
 import { FollowButton } from "./follow";
 import { localVersions } from "./marks";
+import { openCivitaiPage } from "./open";
 import { RichText } from "./RichText";
 import { useCivitai } from "./state";
 
@@ -227,15 +228,14 @@ function Page({
                   <FollowButton name={model.creator} image={model.creatorImage} />
                 </>
               ) : null}
-              <a
-                href={model.url}
-                target="_blank"
-                rel="noreferrer noopener"
+              <button
+                type="button"
+                onClick={() => openCivitaiPage(model.url, model.name)}
                 className="ml-auto inline-flex items-center gap-1 rounded-sm text-xs text-accent-ink hover:underline focus-ring"
               >
                 Open on {new URL(model.url).host}
                 <Icon name="external" size={12} />
-              </a>
+              </button>
             </div>
           </header>
 

@@ -29,8 +29,10 @@ import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
 import { controlImageFromGallery } from "../generate/blocks/stages";
 import { useActiveChoice } from "../generate/workflow";
+import { openCivitaiPage } from "../models/civitai/open";
 import { copyImage } from "./imageMenu";
 import { Marks } from "./Marks";
+import { ModelLinks } from "./ModelLinks";
 import { StagePlayer, stillOrAnimated } from "./media";
 
 export function Lightbox({
@@ -392,14 +394,28 @@ function Details({
             {s.negative ? <TextBlock label="Negative prompt" text={s.negative} /> : null}
             <PropertyList
               items={[
-                { label: "Model", value: s.model, copy: s.model ?? undefined },
+                {
+                  label: "Model",
+                  value: s.model ? (
+                    <ModelLinks
+                      summary={s}
+                      kind="model"
+                      onFileInfo={() => onGo("file-info")}
+                      onLeave={onClose}
+                    />
+                  ) : null,
+                  copy: s.model ?? undefined,
+                },
                 {
                   label: "LoRAs",
-                  value: s.loras.length
-                    ? s.loras
-                        .map((l) => `${l.name}${l.strength !== null ? ` ${l.strength}` : ""}`)
-                        .join(", ")
-                    : null,
+                  value: s.loras.length ? (
+                    <ModelLinks
+                      summary={s}
+                      kind="lora"
+                      onFileInfo={() => onGo("file-info")}
+                      onLeave={onClose}
+                    />
+                  ) : null,
                 },
                 {
                   label: "Sampler",
@@ -437,15 +453,14 @@ function Details({
               value:
                 image.origin === "civitai" ? (
                   details?.civitai?.page ? (
-                    <a
-                      href={details.civitai.page}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="inline-flex items-center gap-1 text-accent-ink hover:underline focus-ring"
+                    <button
+                      type="button"
+                      onClick={() => openCivitaiPage(details.civitai?.page ?? "", image.name)}
+                      className="inline-flex items-center gap-1 rounded-sm text-accent-ink hover:underline focus-ring"
                     >
                       Civitai
                       <Icon name="external" size={12} />
-                    </a>
+                    </button>
                   ) : (
                     "Civitai"
                   )

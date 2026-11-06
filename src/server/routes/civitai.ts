@@ -4,6 +4,7 @@ import {
   CivitaiUsername,
   CommunityQuery,
   fromBase64Url,
+  OpenCivitaiPageBody,
   parseBrowseQuery,
   parseFeedUsers,
   SetCivitaiKeyBody,
@@ -27,6 +28,12 @@ export function civitaiRoutes(civitai: CivitaiService) {
   });
 
   r.delete("/account/key", async (c) => c.json(await civitai.removeKey()));
+
+  r.post("/open-page", async (c) => {
+    const { url } = await readJson(c, OpenCivitaiPageBody);
+    await civitai.openPage(url);
+    return c.json({ ok: true });
+  });
 
   const browse = (query: Record<string, string | undefined>) => {
     try {

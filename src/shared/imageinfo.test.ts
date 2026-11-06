@@ -151,6 +151,10 @@ describe("nameAirs", () => {
     const named = nameAirs(s, (v) => (v === 1761560 ? "WAI Illustrious" : null));
     expect(named.model).toBe("WAI Illustrious");
     expect(named.loras.map((l) => l.name)).toEqual(["Civitai model 1773874", "detail_tweaker"]);
+    expect(named.civitai).toEqual({
+      "WAI Illustrious": { modelId: 827184, versionId: 1761560 },
+      "Civitai model 1773874": { modelId: 1773874, versionId: 2175773 },
+    });
     expect(hasAirs(named)).toBe(false);
   });
 });

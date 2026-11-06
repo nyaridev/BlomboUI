@@ -13,7 +13,7 @@ import { useLive } from "@client/lib/live";
 import { formatBytes, formatEta } from "@client/lib/number";
 import { Badge, IconButton, KIND_STYLE, ProgressBar, toast } from "@client/ui";
 import type { Download } from "@shared/downloads";
-import { openCivitaiModel } from "../models/civitai/state";
+import { useCivitaiOpener } from "../models/civitai/open";
 import { useModelsNav } from "../models/nav";
 
 async function act(action: () => Promise<unknown>) {
@@ -72,6 +72,7 @@ export function DownloadRow({
   const p = useLive((s) => s.downloadProgress[d.id]);
   const clock = useClock();
   const goTo = useGoToView();
+  const civitai = useCivitaiOpener();
   const received = p?.received ?? d.received;
   const size = p?.size ?? d.size;
   const fraction = size ? received / size : null;
@@ -178,13 +179,15 @@ export function DownloadRow({
         ) : null}
         {d.source === "civitai" && d.modelId && !dense ? (
           <IconButton
-            icon="globe"
-            label="Open its Civitai page"
+            icon={civitai.inApp ? "globe" : "external"}
+            label={civitai.inApp ? "Open its Civitai page" : "Open its page on Civitai"}
             size="sm"
-            onClick={() => {
-              openCivitaiModel(d.modelId as number, d.name.split(" · ")[0] ?? d.name);
-              goTo("models");
-            }}
+            onClick={() =>
+              civitai.model({
+                modelId: d.modelId as number,
+                name: d.name.split(" · ")[0] ?? d.name,
+              })
+            }
           />
         ) : null}
         {d.state === "running" ||

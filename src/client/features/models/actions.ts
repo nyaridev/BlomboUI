@@ -10,7 +10,7 @@ import { type MenuEntry, toast } from "@client/ui";
 import { comfyNameOf, type LocalModel, modelKey } from "@shared/models";
 import { create } from "zustand";
 import { useFileInfoTarget } from "../fileinfo/state";
-import { openCivitaiModel } from "./civitai/state";
+import { useCivitaiOpener } from "./civitai/open";
 
 /** Which model the info dialog shows (ModelInfoDialog, mounted in Shell). */
 export const useModelInfo = create<{ id: string | null }>(() => ({ id: null }));
@@ -22,6 +22,7 @@ export function openModelInfo(id: string): void {
 
 export function useModelActions() {
   const go = useGoToView();
+  const opener = useCivitaiOpener();
   const setTarget = useFileInfoTarget((s) => s.set);
   const setFavorite = useSetModelFavorite();
   return {
@@ -31,10 +32,11 @@ export function useModelActions() {
       setTarget({ type: "model", id: m.id, name: m.name });
       go("file-info");
     },
+    /** Its Civitai page leaves the app (no key Civitai accepted): the menu shows that. */
+    civitaiLeaves: !opener.inApp,
     civitai: (m: LocalModel) => {
       if (!m.civitai) return;
-      openCivitaiModel(m.civitai.modelId, m.name);
-      go("models");
+      opener.model({ modelId: m.civitai.modelId, versionId: m.civitai.versionId, name: m.name });
     },
     favorite: (m: LocalModel, favorite: boolean) =>
       setFavorite.mutate({ kind: m.kind, name: comfyNameOf(m), favorite }),
@@ -78,7 +80,7 @@ export function useModelMenu() {
             {
               id: "civitai",
               label: "Open on Civitai",
-              icon: "globe",
+              icon: actions.civitaiLeaves ? "external" : "globe",
               onSelect: () => actions.civitai(m),
             } satisfies MenuEntry,
           ]

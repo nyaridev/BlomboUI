@@ -18,6 +18,10 @@ export type ImageSource = (typeof IMAGE_SOURCES)[number];
 export const LoraUse = z.object({ name: z.string(), strength: z.number().nullable() });
 export type LoraUse = z.infer<typeof LoraUse>;
 
+/** A model on Civitai: the model and the version. */
+export const CivitaiRef = z.object({ modelId: z.number().int(), versionId: z.number().int() });
+export type CivitaiRef = z.infer<typeof CivitaiRef>;
+
 /** The settings worth showing (and searching) for one image. */
 export const ImageSummary = z.object({
   source: z.enum(IMAGE_SOURCES),
@@ -35,6 +39,8 @@ export const ImageSummary = z.object({
   height: z.number().nullable(),
   workflow: z.string().nullable(),
   workflowId: z.string().nullable(),
+  /** The Civitai model behind a model or LoRA name, by that name (models named by AIR). */
+  civitai: z.record(z.string(), CivitaiRef).default({}),
 });
 export type ImageSummary = z.infer<typeof ImageSummary>;
 
@@ -53,6 +59,7 @@ export const EMPTY_SUMMARY: ImageSummary = {
   height: null,
   workflow: null,
   workflowId: null,
+  civitai: {},
 };
 
 /**
@@ -181,20 +188,25 @@ export function hasAirs(s: ImageSummary): boolean {
 
 /**
  * The summary with each model or LoRA named by AIR given its name by version id (`nameOf`), or
- * "Civitai model <id>" when nothing knows it.
+ * "Civitai model <id>" when nothing knows it. `civitai` keeps the ids behind each new name.
  */
 export function nameAirs(
   s: ImageSummary,
   nameOf: (versionId: number) => string | null | undefined,
 ): ImageSummary {
+  const civitai = { ...s.civitai };
   const name = (n: string) => {
     const air = parseAir(n);
-    return air ? nameOf(air.versionId) || `Civitai model ${air.modelId}` : n;
+    if (!air) return n;
+    const named = nameOf(air.versionId) || `Civitai model ${air.modelId}`;
+    civitai[named] = air;
+    return named;
   };
   return {
     ...s,
     model: s.model === null ? null : name(s.model),
     loras: s.loras.map((l) => ({ ...l, name: name(l.name) })),
+    civitai,
   };
 }
 

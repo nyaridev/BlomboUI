@@ -31,6 +31,7 @@ import { HttpError } from "../../lib/http.ts";
 import type { ModelService } from "../models.ts";
 import type { ProfileService } from "../profiles.ts";
 import type { SettingsService } from "../settings.ts";
+import { openInBrowser } from "../system.ts";
 import { CivitaiApi, type RawImage, type RawModel, type RawPage, type RawVersion } from "./api.ts";
 import type { ImageProxy } from "./images.ts";
 import * as normalize from "./normalize.ts";
@@ -94,7 +95,16 @@ export class CivitaiService {
       keyHint: civitai.key ? civitai.key.slice(-4) : null,
       username: civitai.username,
       checkedAt: civitai.checkedAt,
+      site: this.site,
     };
+  }
+
+  /** Open a page of the profile's Civitai site in the system browser; no other address. */
+  async openPage(url: string): Promise<void> {
+    const at = new URL(url);
+    if (!/^https?:$/.test(at.protocol) || at.origin !== new URL(this.site).origin)
+      throw new HttpError(400, "Only Civitai pages can be opened from here.", "not_civitai");
+    await openInBrowser(at.toString());
   }
 
   async setKey(key: string, check: boolean): Promise<CivitaiAccount> {

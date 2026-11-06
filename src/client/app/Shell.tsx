@@ -15,6 +15,7 @@ import { type ComponentType, lazy, type ReactNode, Suspense, useEffect, useState
 import { GalleryView } from "../features/gallery/GalleryView";
 import { useBridgeToasts } from "../features/generate/bridge";
 import { GenerateView } from "../features/generate/GenerateView";
+import { CivitaiPagePrompt } from "../features/models/civitai/open";
 import { ModelInfoDialog } from "../features/models/ModelInfoDialog";
 import { Header, MobileNav } from "./header/Header";
 import { Palette } from "./Palette";
@@ -173,6 +174,7 @@ export function Shell() {
       <MobileNav profileId={profileId} view={view} />
       <Palette />
       <ModelInfoDialog />
+      <CivitaiPagePrompt />
     </div>
   );
 }

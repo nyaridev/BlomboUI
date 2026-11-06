@@ -25,8 +25,9 @@ import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "motion/react";
 import { type ReactNode, useId, useMemo, useState } from "react";
 import { localVersions } from "../models/civitai/marks";
+import { openCivitaiPage, useCivitaiOpener } from "../models/civitai/open";
 import { RichText } from "../models/civitai/RichText";
-import { openCivitaiModel, useCivitai } from "../models/civitai/state";
+import { useCivitai } from "../models/civitai/state";
 import { useModelsNav } from "../models/nav";
 import { CarouselPlaceholder } from "./CivitaiCarousel";
 import { Facts, TextBlock } from "./parts";
@@ -160,28 +161,43 @@ export function CivitaiStatus({ civitai }: { civitai: FileCivitai }) {
 
 /** Open in Models and the site link, for the actions row under the carousel. */
 export function CivitaiLinks({ match }: { match: Found }) {
-  const goTo = useGoToView();
+  const civitai = useCivitaiOpener();
+  const page = `${match.model.url}?modelVersionId=${match.versionId}`;
+  const host = new URL(match.model.url).host;
+  // Without a key Civitai accepted, Models would open the site anyway: one button for it.
+  if (!civitai.inApp)
+    return (
+      <Button
+        variant="primary"
+        icon="external"
+        onClick={() => openCivitaiPage(page, match.model.name)}
+      >
+        Open on {host}
+      </Button>
+    );
   return (
     <>
       <Button
         variant="primary"
         icon="models"
-        onClick={() => {
-          openCivitaiModel(match.model.id, match.model.name);
-          goTo("models");
-        }}
+        onClick={() =>
+          civitai.model({
+            modelId: match.model.id,
+            versionId: match.versionId,
+            name: match.model.name,
+          })
+        }
       >
         Open in Models
       </Button>
-      <a
-        href={`${match.model.url}?modelVersionId=${match.versionId}`}
-        target="_blank"
-        rel="noreferrer noopener"
+      <button
+        type="button"
+        onClick={() => openCivitaiPage(page, match.model.name)}
         className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-sm text-accent-ink hover:underline focus-ring"
       >
-        {new URL(match.model.url).host}
+        {host}
         <Icon name="external" size={12} />
-      </a>
+      </button>
     </>
   );
 }

@@ -6,8 +6,10 @@ import {
   type CivitaiCard,
   civitaiImageKey,
   civitaiImageVariant,
+  civitaiInApp,
   civitaiKind,
   civitaiOriginal,
+  civitaiPageUrl,
   compactCount,
   dateRangeProblem,
   feedQuery,
@@ -134,5 +136,27 @@ describe("image keys and originals", () => {
     expect(civitaiOriginal(url)).toBe(
       "https://image.civitai.com/acct/dd9b038c-bd15/original=true/1777041.jpeg",
     );
+  });
+});
+
+describe("Civitai pages", () => {
+  it("links a model on a version, or a search", () => {
+    expect(civitaiPageUrl("https://civitai.com", { modelId: 5, versionId: 9 })).toBe(
+      "https://civitai.com/models/5?modelVersionId=9",
+    );
+    expect(civitaiPageUrl("https://civitai.red/", { modelId: 5 })).toBe(
+      "https://civitai.red/models/5",
+    );
+    expect(civitaiPageUrl("https://civitai.com", { query: "detail tweaker" })).toBe(
+      "https://civitai.com/search/models?query=detail+tweaker",
+    );
+  });
+
+  it("opens in the app only with a key Civitai accepted", () => {
+    const account = { keySet: true, keyHint: "abcd", username: "me", checkedAt: "x", site: "s" };
+    expect(civitaiInApp(account)).toBe(true);
+    expect(civitaiInApp({ ...account, username: null })).toBe(false);
+    expect(civitaiInApp({ ...account, keySet: false })).toBe(false);
+    expect(civitaiInApp(undefined)).toBe(false);
   });
 });

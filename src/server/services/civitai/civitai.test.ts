@@ -252,6 +252,13 @@ describe("account", () => {
     expect(o.fake.requests.at(-1)?.auth).toBe(`Bearer ${FAKE_KEY}`);
     expect((await o.services.civitai.removeKey()).keySet).toBe(false);
   });
+
+  it("says where its pages are and opens only those", async () => {
+    const { site } = await o.services.civitai.account();
+    expect(site).toBe(o.services.civitai.site);
+    for (const url of ["https://example.com/models/1", "file:///C:/Windows/notepad.exe"])
+      await expect(o.services.civitai.openPage(url)).rejects.toMatchObject({ status: 400 });
+  });
 });
 
 describe("image proxy", () => {

@@ -34,7 +34,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { DownloadRow } from "../downloads/DownloadRow";
-import { openCivitaiModel, useCivitai } from "../models/civitai/state";
+import { useCivitaiOpener } from "../models/civitai/open";
+import { useCivitai } from "../models/civitai/state";
 import { useModelsNav } from "../models/nav";
 import { Generations } from "./Generations";
 
@@ -221,6 +222,7 @@ function Civitai() {
   const views = useCivitaiViews();
   const searches = useCivitaiSearches();
   const goTo = useGoToView();
+  const civitai = useCivitaiOpener();
   const qc = useQueryClient();
   const profileId = useSession((s) => s.profileId);
   const setFilter = useCivitai((s) => s.setFilter);
@@ -314,10 +316,7 @@ function Civitai() {
                       kind={civitaiKind(v.type) ?? "checkpoints"}
                       thumb={v.image?.thumb ?? null}
                       typeLabel={CIVITAI_TYPE_LABELS[v.type] ?? v.type}
-                      onClick={() => {
-                        openCivitaiModel(v.modelId, v.name);
-                        goTo("models");
-                      }}
+                      onClick={() => civitai.model({ modelId: v.modelId, name: v.name })}
                       onContextMenu={(e) =>
                         openContextMenu(e, [
                           {

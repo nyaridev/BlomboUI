@@ -245,6 +245,11 @@ export const MIGRATIONS: readonly string[] = [
   UPDATE images SET size = -1
   WHERE lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg' OR lower(path) LIKE '%.webp';
   `,
+  // 11: models named by Civitai AIR keep their Civitai ids (summary.civitai): read those again.
+  `
+  UPDATE images SET size = -1 WHERE summary LIKE '%"Civitai model %' OR path LIKE 'civitai/%'
+    OR lower(path) LIKE '%.jpg' OR lower(path) LIKE '%.jpeg' OR lower(path) LIKE '%.webp';
+  `,
 ];
 
 function migrate(db: DatabaseSync): void {

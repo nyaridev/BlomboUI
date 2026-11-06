@@ -230,6 +230,25 @@ export function readClock(): Promise<ClockFormat | null> {
   });
 }
 
+/**
+ * Open a web page in the system browser (the desktop window's links to Civitai). Callers check
+ * the address first; it goes to the OS as one argument, never through a shell.
+ */
+export function openInBrowser(url: string): Promise<void> {
+  return new Promise((resolve) => {
+    const child =
+      process.platform === "win32"
+        ? spawn("rundll32", ["url.dll,FileProtocolHandler", url], { detached: true })
+        : spawn(process.platform === "darwin" ? "open" : "xdg-open", [url], {
+            detached: true,
+            stdio: "ignore",
+          });
+    child.on("error", () => resolve());
+    child.unref();
+    setTimeout(resolve, 50);
+  });
+}
+
 /** Open a folder in the OS file manager. Same rule as below: only paths the caller resolved. */
 export function openInFileManager(dir: string): Promise<void> {
   return new Promise((resolve) => {

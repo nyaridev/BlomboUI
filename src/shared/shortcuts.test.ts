@@ -52,7 +52,7 @@ describe("shortcuts", () => {
     let overrides = setShortcut([], "palette", "Ctrl+1");
     expect(overrides).toEqual([{ action: "palette", keys: "Ctrl+1" }]);
     const bound = resolveShortcuts(overrides);
-    expect(shortcutConflicts(bound).get("Ctrl+1")).toEqual(["view.generate", "palette"]);
+    expect(shortcutConflicts(bound).get("Ctrl+1")).toEqual(["tab.1", "palette"]);
     // Back to the default: the override goes away.
     overrides = setShortcut(overrides, "palette", "ctrl+k");
     expect(overrides).toEqual([]);

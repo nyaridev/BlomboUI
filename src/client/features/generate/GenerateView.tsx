@@ -12,45 +12,59 @@ import { cn } from "@client/lib/cn";
 import { glide } from "@client/lib/motion";
 import { useSettings, useUpdateSettings } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Button, Spinner, Splitter, Tabs } from "@client/ui";
-import { GenerateSettings } from "@shared/settings";
+import { Button, Spinner, Splitter, type TabItem, Tabs } from "@client/ui";
+import type { WorkTab } from "@shared/constants";
+import { GenerateSettings, generateTabs, UiSettings } from "@shared/settings";
 import { useLocation } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { BatchView } from "./batch/BatchView";
 import { ImageStage } from "./blocks/ImageStage";
-import { ModelsStrip, type StripTarget } from "./blocks/ModelsStrip";
+import { ModelsStrip } from "./blocks/ModelsStrip";
 import { GenerateActions, Prompts } from "./blocks/Prompts";
 import { CustomizeBar, Inspector, LayoutPicker } from "./Customize";
 import { GenerateTour } from "./GenerateTour";
 import { ImageDropOverlay, useImageDrop } from "./ImageDrop";
 import { adoptBrowserLayouts } from "./layouts";
-import { ModelGrid, type PickerTab } from "./ModelGrid";
+import { ModelGrid } from "./ModelGrid";
 import { ParamsColumn } from "./ParamsColumn";
 import { StartWithWorkflow } from "./StartWithWorkflow";
 import { useLayout, useValues } from "./state";
 import { useActiveWorkflow } from "./workflow";
+import { useWorkTab } from "./worktab";
 
-type WorkTab = "generation" | PickerTab;
+const WORK_TAB_ITEMS: Record<WorkTab, TabItem<WorkTab>> = {
+  generation: { value: "generation", label: "Generation", icon: "sliders" },
+  checkpoints: { value: "checkpoints", label: "Checkpoints", icon: "models" },
+  loras: { value: "loras", label: "LoRAs", icon: "layers" },
+  wildcards: { value: "wildcards", label: "Wildcards", icon: "wildcards" },
+  other: { value: "other", label: "Other", icon: "stack" },
+};
+const DEFAULT_UI = UiSettings.parse({});
 
 const DEFAULT_SHARE = GenerateSettings.parse({}).paramsShare;
 
 const item = { hidden: { opacity: 0, y: 12 }, show: { opacity: 1, y: 0, transition: glide } };
 
 export function GenerateView() {
-  const [tab, setTab] = useState<WorkTab>("generation");
   // The strip tile the picker is changing; any other way of changing tabs forgets it.
-  const [target, setTarget] = useState<StripTarget | null>(null);
+  const savedTab = useWorkTab((s) => s.tab);
+  const target = useWorkTab((s) => s.target);
+  const changeTab = useWorkTab((s) => s.show);
+  const pick = useWorkTab((s) => s.pick);
+  const settings = useSettings().data;
+  const tabs = generateTabs(settings?.ui ?? DEFAULT_UI);
+  // A strip tile may open a hidden picker; any other hidden tab falls back to Generation.
+  const tab: WorkTab = tabs.shown.includes(savedTab) || target ? savedTab : "generation";
+  const tabItems = [...new Set([...tabs.shown, tab])]
+    .sort((a, b) => tabs.order.indexOf(a) - tabs.order.indexOf(b))
+    .map((t) => WORK_TAB_ITEMS[t]);
   // The params' share of the row: follows the splitter while dragging, saved when it's let go.
-  const savedShare = useSettings().data?.generate.paramsShare;
+  const savedShare = settings?.generate.paramsShare;
   const updateSettings = useUpdateSettings();
   const [share, setShare] = useState<number | null>(null);
   const row = useRef<HTMLDivElement>(null);
   const paramsShare = share ?? savedShare ?? DEFAULT_SHARE;
-  const changeTab = (next: WorkTab) => {
-    setTab(next);
-    setTarget(null);
-  };
   const customizing = useLayout((s) => s.customizing);
   const setCustomizing = useLayout((s) => s.setCustomizing);
   const active = useActiveWorkflow();
@@ -64,8 +78,8 @@ export function GenerateView() {
   });
 
   useEffect(() => {
-    if (!visible) setTarget(null);
-  }, [visible]);
+    if (!visible) pick(null);
+  }, [visible, pick]);
 
   // Show the workflow's saved values when it becomes active (before paint, so a switch never
   // shows one workflow's controls with the other's values).
@@ -110,13 +124,7 @@ export function GenerateView() {
       }}
     >
       <motion.div variants={item} data-tour="models">
-        <ModelsStrip
-          target={target}
-          onTarget={(next, nextTab) => {
-            setTarget(next);
-            if (nextTab) setTab(nextTab);
-          }}
-        />
+        <ModelsStrip target={target} onTarget={(next, nextTab) => pick(next, nextTab)} />
       </motion.div>
 
       <motion.div variants={item} className="flex gap-3 max-lg:flex-col">
@@ -136,13 +144,7 @@ export function GenerateView() {
             onChange={changeTab}
             label="Workspace"
             className="min-w-0 flex-1"
-            items={[
-              { value: "generation", label: "Generation", icon: "sliders" },
-              { value: "checkpoints", label: "Checkpoints", icon: "models" },
-              { value: "loras", label: "LoRAs", icon: "layers" },
-              { value: "wildcards", label: "Wildcards", icon: "wildcards" },
-              { value: "other", label: "Other", icon: "stack" },
-            ]}
+            items={tabItems}
           />
           {tab === "generation" && !customizing ? (
             <div className="flex items-center gap-1.5 pb-1.5 max-lg:hidden">
@@ -158,7 +160,7 @@ export function GenerateView() {
         <div
           className={cn(
             "mb-3 flex flex-col gap-3 rounded-lg border border-line bg-surface p-3",
-            tab === "generation" && "rounded-tl-none",
+            tabItems[0]?.value === tab && "rounded-tl-none",
           )}
         >
           {tab === "generation" ? (
@@ -194,7 +196,7 @@ export function GenerateView() {
             <ModelGrid
               tab={tab}
               target={target}
-              onTarget={setTarget}
+              onTarget={(next) => pick(next)}
               onDone={() => changeTab("generation")}
             />
           )}

@@ -2,12 +2,15 @@
  * Header: workflow button · search | main views | system status · errors · avatar.
  * Views that aren't daily tools (Settings, History, Errors, Help) live in the avatar menu.
  * Below 1024px the main views move to a bottom bar (MobileNav) and the desktop-only tools hide.
+ * Which main views show, their order and their labels come from Settings → Interface.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
+import { useSettings } from "@client/lib/queries";
 import { IconButton, type MenuEntry, Tabs } from "@client/ui";
 import type { MainView, ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
+import { headerTabs, UiSettings } from "@shared/settings";
 import { useNavigate } from "@tanstack/react-router";
 import { usePalette } from "../commands";
 import { useShortcutLabel } from "../useShortcuts";
@@ -15,16 +18,22 @@ import { AvatarMenu } from "./AvatarMenu";
 import { SystemCluster } from "./SystemCluster";
 import { WorkflowSwitcher } from "./WorkflowSwitcher";
 
-const NAV: Array<{
-  value: MainView;
-  label: string;
-  icon: "generate" | "gallery" | "models" | "file-info" | "compare";
-}> = [
-  { value: "generate", label: "Generate", icon: "generate" },
-  { value: "gallery", label: "Gallery", icon: "gallery" },
-  { value: "models", label: "Models", icon: "models" },
-  { value: "file-info", label: "File Info", icon: "file-info" },
-];
+const NAV: Record<
+  MainView,
+  { value: MainView; label: string; icon: "generate" | "gallery" | "models" | "file-info" }
+> = {
+  generate: { value: "generate", label: "Generate", icon: "generate" },
+  gallery: { value: "gallery", label: "Gallery", icon: "gallery" },
+  models: { value: "models", label: "Models", icon: "models" },
+  "file-info": { value: "file-info", label: "File Info", icon: "file-info" },
+};
+const DEFAULT_UI = UiSettings.parse({});
+
+/** The main views that show, in the profile's order, and how their labels show. */
+function useNav() {
+  const ui = useSettings().data?.ui ?? DEFAULT_UI;
+  return { items: headerTabs(ui).shown.map((v) => NAV[v]), labels: ui.headerLabels };
+}
 
 export function Header({
   profile,
@@ -36,9 +45,13 @@ export function Header({
   view: ViewId;
 }) {
   const go = useGo(profileId);
+  const nav = useNav();
+  // Labels hide on narrow windows (Auto) or always (Icons only); screen readers keep them.
+  const labelClass =
+    nav.labels === "icons" ? "sr-only" : nav.labels === "auto" ? "max-[1380px]:sr-only" : "";
   // Compare belongs to Generate: its tab stays lit there, named after it, with both in its menu.
   const shownView = view === "compare" ? "generate" : view;
-  const isMain = NAV.some((n) => n.value === shownView);
+  const isMain = nav.items.some((n) => n.value === shownView);
   const generateMenu: MenuEntry[] = [
     { id: "generate", label: "Generate", icon: "generate", onSelect: () => go("generate") },
     { id: "compare", label: "Compare", icon: "compare", onSelect: () => go("compare") },
@@ -66,20 +79,18 @@ export function Header({
       <nav aria-label="Main" className="max-lg:hidden">
         <Tabs
           label="Main views"
-          items={NAV.map((n) =>
+          items={nav.items.map((n) =>
             n.value === "generate"
               ? {
                   ...n,
                   ...(view === "compare" ? { icon: "compare" as const } : {}),
                   label: (
-                    <span className="max-[1380px]:hidden">
-                      {view === "compare" ? "Compare" : n.label}
-                    </span>
+                    <span className={labelClass}>{view === "compare" ? "Compare" : n.label}</span>
                   ),
                   menu: generateMenu,
                   menuLabel: "Generate or Compare",
                 }
-              : { ...n, label: <span className="max-[1380px]:hidden">{n.label}</span> },
+              : { ...n, label: <span className={labelClass}>{n.label}</span> },
           )}
           value={isMain ? (shownView as MainView) : ("" as MainView)}
           onChange={go}
@@ -107,12 +118,13 @@ function useGo(profileId: string) {
 /** Narrow screens only: the main views as a bottom tab bar, within thumb reach. */
 export function MobileNav({ profileId, view }: { profileId: string; view: ViewId }) {
   const go = useGo(profileId);
+  const { items } = useNav();
   return (
     <nav
       aria-label="Main"
-      className="grid grid-cols-4 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
+      className="grid auto-cols-fr grid-flow-col border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
-      {NAV.map((n) => {
+      {items.map((n) => {
         const active = n.value === view || (n.value === "generate" && view === "compare");
         return (
           <button

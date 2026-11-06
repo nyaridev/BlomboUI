@@ -838,8 +838,12 @@ function Grid({
     onDownload(c);
   };
   const width = useElementWidth(innerRef);
-  const cols = Math.min(MAX_COLS, Math.max(1, Math.floor((width + GAP) / (MIN_CARD + GAP))));
-  const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : MIN_CARD;
+  // Settings → Interface's card size scales the narrowest card and the most a row holds.
+  const scale = useSettings().data?.ui.modelsCardScale ?? 1;
+  const minCard = MIN_CARD * scale;
+  const maxCols = Math.max(1, Math.round(MAX_COLS / scale));
+  const cols = Math.min(maxCols, Math.max(1, Math.floor((width + GAP) / (minCard + GAP))));
+  const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : minCard;
   const rowH = Math.round((cardW * 4) / 3) + FOOTER + GAP;
   const rows = Math.ceil(items.length / cols);
   const virtualizer = useVirtualizer({

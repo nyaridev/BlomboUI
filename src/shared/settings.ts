@@ -8,6 +8,7 @@
  */
 import { z } from "zod";
 import { BrowseFilter, CIVITAI_SITES, FollowedCreator, SavedFilter } from "./civitai.ts";
+import { MAIN_VIEWS, type MainView, WORK_TABS, type WorkTab } from "./constants.ts";
 import { salvage } from "./salvage.ts";
 import { SET_RESOLUTIONS, SIZE_MODES } from "./sizes.ts";
 
@@ -46,6 +47,85 @@ export const AppearanceSettings = z.object({
   contrast: z.boolean().default(false),
   clock: z.enum(CLOCK_PREFS).default("system"),
 });
+
+/** The header's tab labels: hidden on narrow windows, always shown, or icons only. */
+export const HEADER_LABELS = ["auto", "always", "icons"] as const;
+export type HeaderLabels = (typeof HEADER_LABELS)[number];
+
+/** Where a profile opens: where it was left, or always one view. */
+export const START_VIEWS = ["last", ...MAIN_VIEWS] as const;
+export type StartView = (typeof START_VIEWS)[number];
+
+/** Card sizes are a share of the built-in size (1: as designed). */
+const CardScale = z.number().min(0.6).max(1.6).default(1);
+
+/**
+ * How the app is arranged: which header and Generate tabs show and in what order, what the
+ * number keys follow, card sizes and where a profile opens.
+ */
+export const UiSettings = z.object({
+  headerOrder: z
+    .array(z.enum(MAIN_VIEWS))
+    .max(MAIN_VIEWS.length)
+    .default(() => [...MAIN_VIEWS]),
+  headerHidden: z.array(z.enum(MAIN_VIEWS)).max(MAIN_VIEWS.length).default([]),
+  generateTabOrder: z
+    .array(z.enum(WORK_TABS))
+    .max(WORK_TABS.length)
+    .default(() => [...WORK_TABS]),
+  generateTabHidden: z.array(z.enum(WORK_TABS)).max(WORK_TABS.length).default([]),
+  /** Ctrl+1… and Alt+1… count only the tabs that show; off, a hidden tab keeps its number. */
+  numberKeysSkipHidden: z.boolean().default(true),
+  headerLabels: z.enum(HEADER_LABELS).default("auto"),
+  /** Cards in Generate's model pickers. */
+  pickerCardScale: CardScale,
+  /** Cards in Models (Local, Civitai, Wildcards). */
+  modelsCardScale: CardScale,
+  startView: z.enum(START_VIEWS).default("generate"),
+});
+export type UiSettings = z.infer<typeof UiSettings>;
+
+/**
+ * Tabs in the saved order (unknown ones dropped, missing ones added where the default puts
+ * them) and the ones that show. `keep` never hides; at least one tab always shows.
+ */
+export function arrangeTabs<T extends string>(
+  all: readonly T[],
+  order: readonly T[],
+  hidden: readonly T[],
+  keep: readonly T[] = [],
+): { order: T[]; shown: T[] } {
+  const known = order.filter((t, i) => all.includes(t) && order.indexOf(t) === i);
+  // A missing tab goes right after the tab it follows by default.
+  for (const [i, t] of all.entries()) {
+    if (known.includes(t)) continue;
+    const before = all.slice(0, i).findLast((b) => known.includes(b));
+    known.splice(before ? known.indexOf(before) + 1 : 0, 0, t);
+  }
+  const shown = known.filter((t) => keep.includes(t) || !hidden.includes(t));
+  return { order: known, shown: shown.length ? shown : known.slice(0, 1) };
+}
+
+/**
+ * The tab number key `n` (1-based) opens: the nth tab that shows, or with `skipHidden` off the
+ * nth in order, so numbers stay put and a hidden tab's number does nothing.
+ */
+export function tabForNumber<T extends string>(
+  tabs: { order: T[]; shown: T[] },
+  n: number,
+  skipHidden: boolean,
+): T | null {
+  const tab = (skipHidden ? tabs.shown : tabs.order)[n - 1];
+  return tab && tabs.shown.includes(tab) ? tab : null;
+}
+
+export function headerTabs(ui: UiSettings): { order: MainView[]; shown: MainView[] } {
+  return arrangeTabs(MAIN_VIEWS, ui.headerOrder, ui.headerHidden);
+}
+
+export function generateTabs(ui: UiSettings): { order: WorkTab[]; shown: WorkTab[] } {
+  return arrangeTabs(WORK_TABS, ui.generateTabOrder, ui.generateTabHidden, ["generation"]);
+}
 
 export const GallerySettings = z.object({
   layout: z.enum(GALLERY_LAYOUTS).default("justified"),
@@ -242,6 +322,7 @@ export const HelpSettings = z.object({
 export const Settings = z.object({
   version: z.literal(SETTINGS_VERSION).default(SETTINGS_VERSION),
   appearance: AppearanceSettings.prefault({}),
+  ui: UiSettings.prefault({}),
   gallery: GallerySettings.prefault({}),
   civitai: CivitaiSettings.prefault({}),
   generate: GenerateSettings.prefault({}),
@@ -261,6 +342,7 @@ const Section = z.record(z.string(), z.unknown());
 export const SettingsPatch = z
   .object({
     appearance: Section,
+    ui: Section,
     gallery: Section,
     civitai: Section,
     generate: Section,

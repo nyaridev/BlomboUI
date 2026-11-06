@@ -65,3 +65,7 @@ export const SUB_VIEWS = ["compare"] as const;
 export type SubView = (typeof SUB_VIEWS)[number];
 
 export type ViewId = MainView | MenuView | SubView;
+
+/** Generate's tabs under the prompts, in their default order (Generation always shows). */
+export const WORK_TABS = ["generation", "checkpoints", "loras", "wildcards", "other"] as const;
+export type WorkTab = (typeof WORK_TABS)[number];

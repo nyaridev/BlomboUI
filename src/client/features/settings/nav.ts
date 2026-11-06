@@ -5,6 +5,7 @@ import { create } from "zustand";
 export type SettingsPage =
   | "overview"
   | "appearance"
+  | "interface"
   | "generate"
   | "files"
   | "leftovers"
@@ -38,6 +39,14 @@ export const SETTINGS_PAGES: Array<{
     icon: "palette",
     group: "Profile",
     keywords: "theme color accent font motion contrast",
+  },
+  {
+    id: "interface",
+    label: "Interface",
+    icon: "layout-rows",
+    group: "Profile",
+    keywords:
+      "header tabs order hide reorder generate tabs number keys ctrl alt card size start open on labels icons",
   },
   {
     id: "files",

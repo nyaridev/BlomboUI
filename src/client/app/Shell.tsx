@@ -20,6 +20,7 @@ import { ModelInfoDialog } from "../features/models/ModelInfoDialog";
 import { Header, MobileNav } from "./header/Header";
 import { Palette } from "./Palette";
 import { viewFromPath } from "./router";
+import { useStartView } from "./startView";
 import { useTheme } from "./theme";
 import { useShortcuts } from "./useShortcuts";
 
@@ -105,6 +106,7 @@ export function Shell() {
   const [visited, setVisited] = useState<Set<ViewId>>(() => new Set([view]));
   useBridgeToasts();
   useShortcuts();
+  useStartView(profileId, view);
 
   useEffect(() => {
     startLive();

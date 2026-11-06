@@ -1,11 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
+  arrangeTabs,
   fontStack,
+  generateTabs,
+  headerTabs,
   mergeSettings,
   migrateSettings,
   readSettings,
   Settings,
   SettingsPatch,
+  tabForNumber,
+  UiSettings,
 } from "./settings.ts";
 
 describe("settings", () => {
@@ -158,5 +163,36 @@ describe("readSettings", () => {
   it("reads garbage as defaults", () => {
     expect(readSettings("nope").settings.gallery.tileSize).toBe(220);
     expect(readSettings({ gallery: 7 }).settings.gallery.tileSize).toBe(220);
+  });
+});
+
+describe("tab arrangement", () => {
+  it("keeps the saved order, drops unknown tabs and adds missing ones where they belong", () => {
+    const all = ["a", "b", "c", "d"] as const;
+    expect(arrangeTabs(all, ["c", "a", "a", "x" as "a"], [])).toEqual({
+      order: ["c", "d", "a", "b"],
+      shown: ["c", "d", "a", "b"],
+    });
+    expect(arrangeTabs(all, ["d", "b"], []).order).toEqual(["a", "d", "b", "c"]);
+  });
+
+  it("never hides every tab, nor a kept one", () => {
+    expect(arrangeTabs(["a", "b"], ["a", "b"], ["a", "b"]).shown).toEqual(["a"]);
+    const ui = UiSettings.parse({ generateTabHidden: ["generation", "loras"] });
+    expect(generateTabs(ui).shown).toEqual(["generation", "checkpoints", "wildcards", "other"]);
+  });
+
+  it("numbers tabs that show, or keeps numbers in place with hidden ones doing nothing", () => {
+    const tabs = headerTabs(
+      UiSettings.parse({
+        headerOrder: ["models", "generate", "gallery", "file-info"],
+        headerHidden: ["generate"],
+      }),
+    );
+    expect(tabForNumber(tabs, 1, true)).toBe("models");
+    expect(tabForNumber(tabs, 2, true)).toBe("gallery");
+    expect(tabForNumber(tabs, 2, false)).toBeNull();
+    expect(tabForNumber(tabs, 3, false)).toBe("gallery");
+    expect(tabForNumber(tabs, 4, true)).toBeNull();
   });
 });

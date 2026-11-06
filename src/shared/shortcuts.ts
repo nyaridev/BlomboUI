@@ -16,32 +16,44 @@ export interface ShortcutAction {
   keys: string;
   /** Opens a view (the palette lists it there too). */
   view?: ViewId;
+  /**
+   * Opens the header tab (`header`) or Generate tab (`generate`) in this place, counted as
+   * Settings → Interface arranges them. Not in the palette: the views are there by name.
+   */
+  tab?: { of: "header" | "generate"; n: number };
 }
 
+/** Header tabs Ctrl+1… opens, and Generate tabs Alt+1… opens. */
+const HEADER_KEYS = 4;
+const GENERATE_KEYS = 5;
+const ORDINALS = ["first", "second", "third", "fourth", "fifth"];
+
 export const SHORTCUT_ACTIONS: ShortcutAction[] = [
-  {
-    id: "view.generate",
-    label: "Go to Generate",
-    group: "Views",
-    keys: "Ctrl+1",
-    view: "generate",
-  },
-  { id: "view.gallery", label: "Go to Gallery", group: "Views", keys: "Ctrl+2", view: "gallery" },
-  { id: "view.models", label: "Go to Models", group: "Views", keys: "Ctrl+3", view: "models" },
+  ...Array.from({ length: HEADER_KEYS }, (_, i) => ({
+    id: `tab.${i + 1}`,
+    label: `Open the ${ORDINALS[i]} header tab`,
+    group: "Views" as const,
+    keys: `Ctrl+${i + 1}`,
+    tab: { of: "header" as const, n: i + 1 },
+  })),
+  { id: "view.generate", label: "Go to Generate", group: "Views", keys: "", view: "generate" },
+  { id: "view.gallery", label: "Go to Gallery", group: "Views", keys: "", view: "gallery" },
+  { id: "view.models", label: "Go to Models", group: "Views", keys: "", view: "models" },
   /** Models → Wildcards (no `view`: runAction opens the tab). */
-  { id: "view.wildcards", label: "Go to Wildcards", group: "Views", keys: "Ctrl+4" },
-  {
-    id: "view.file-info",
-    label: "Go to File Info",
-    group: "Views",
-    keys: "Ctrl+5",
-    view: "file-info",
-  },
+  { id: "view.wildcards", label: "Go to Wildcards", group: "Views", keys: "Ctrl+5" },
+  { id: "view.file-info", label: "Go to File Info", group: "Views", keys: "", view: "file-info" },
   { id: "view.history", label: "Go to History", group: "Views", keys: "Ctrl+6", view: "history" },
   { id: "view.errors", label: "Go to Errors", group: "Views", keys: "Ctrl+8", view: "errors" },
   { id: "view.settings", label: "Open Settings", group: "Views", keys: "Ctrl+,", view: "settings" },
   { id: "view.help", label: "Open Help", group: "Views", keys: "F1", view: "help" },
   { id: "generate", label: "Generate", group: "Generate", keys: "Ctrl+Enter" },
+  ...Array.from({ length: GENERATE_KEYS }, (_, i) => ({
+    id: `worktab.${i + 1}`,
+    label: `Open the ${ORDINALS[i]} Generate tab`,
+    group: "Generate" as const,
+    keys: `Alt+${i + 1}`,
+    tab: { of: "generate" as const, n: i + 1 },
+  })),
   { id: "interrupt", label: "Stop this image", group: "Generate", keys: "Ctrl+Shift+Enter" },
   { id: "cancel", label: "Cancel and clear the queue", group: "Generate", keys: "" },
   { id: "palette", label: "Command palette", group: "App", keys: "Ctrl+K" },

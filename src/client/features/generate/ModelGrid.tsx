@@ -102,7 +102,7 @@ const OTHER_KINDS: Array<{ value: ModelKind; label: string }> = [
 
 /**
  * Cards (2:3) fill the row: 5 a row beside the folders, 7 without them; fewer on narrow screens
- * so a card never gets thinner than MIN_CARD_W.
+ * so a card never gets thinner than MIN_CARD_W. Settings → Interface scales both (card size).
  */
 const COLUMNS = { tree: 5, wide: 7 } as const;
 const MIN_CARD_W = 150;
@@ -205,6 +205,7 @@ export function ModelGrid({
   const reloadWildcards = useWildcardsChanged();
   const localList = useLocalModels().data;
   const settings = useSettings().data;
+  const cardScale = (browse ? settings?.ui.modelsCardScale : settings?.ui.pickerCardScale) ?? 1;
   const updateSettings = useUpdateSettings();
   const showLoaded = settings?.generate.pickerShowLoaded ?? true;
   // ComfyUI lists names inside each kind folder; the local list has the same files with
@@ -809,8 +810,16 @@ export function ModelGrid({
                   favorite: !favorites.has(item.id),
                 })
               }
-              columns={browse ? Number.POSITIVE_INFINITY : showTree ? COLUMNS.tree : COLUMNS.wide}
-              card={browse ? BROWSE_CARD : undefined}
+              columns={
+                browse
+                  ? Number.POSITIVE_INFINITY
+                  : Math.max(1, Math.round((showTree ? COLUMNS.tree : COLUMNS.wide) / cardScale))
+              }
+              card={
+                browse
+                  ? { ...BROWSE_CARD, min: BROWSE_CARD.min * cardScale }
+                  : { min: MIN_CARD_W * cardScale, ratio: CARD_RATIO }
+              }
               onInfo={tab === "wildcards" ? (item) => setWildcardInfo(item.id) : undefined}
             />
           )}

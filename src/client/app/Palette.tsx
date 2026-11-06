@@ -52,7 +52,7 @@ export function Palette() {
     const keys = resolveShortcuts(overrides ?? []);
     const out: PaletteItem[] = [];
     for (const a of SHORTCUT_ACTIONS) {
-      if (a.id === "palette") continue;
+      if (a.id === "palette" || a.tab) continue;
       const combo = comboParts(keys.get(a.id) ?? "");
       out.push({
         id: `action:${a.id}`,

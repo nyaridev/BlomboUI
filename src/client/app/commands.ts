@@ -7,12 +7,21 @@
 
 import { cancelAll, generate, interrupt } from "@client/features/generate/actions";
 import { useValues } from "@client/features/generate/state";
+import { useWorkTab } from "@client/features/generate/worktab";
 import { type SettingsPage, useSettingsNav } from "@client/features/settings/nav";
 import { api } from "@client/lib/api";
 import { qk, queryClient } from "@client/lib/queries";
+import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
 import type { ViewId } from "@shared/constants";
-import { SHORTCUT_ACTIONS } from "@shared/shortcuts";
+import {
+  generateTabs,
+  headerTabs,
+  type Settings,
+  tabForNumber,
+  UiSettings,
+} from "@shared/settings";
+import { SHORTCUT_ACTIONS, type ShortcutAction } from "@shared/shortcuts";
 import { create } from "zustand";
 import { useModelsNav } from "../features/models/nav";
 
@@ -59,10 +68,32 @@ export function openSettings(go: Go, page: SettingsPage): void {
   go("settings");
 }
 
+/** The open profile's arrangement of tabs (Settings → Interface). */
+function currentUi(): UiSettings {
+  const key = qk.settings(useSession.getState().profileId);
+  return queryClient.getQueryData<Settings>(key)?.ui ?? UiSettings.parse({});
+}
+
+/** Ctrl+1… and Alt+1…: the tab in that place, as Settings → Interface arranges them. */
+function openTab(tab: NonNullable<ShortcutAction["tab"]>, go: Go): boolean {
+  const ui = currentUi();
+  if (tab.of === "header") {
+    const view = tabForNumber(headerTabs(ui), tab.n, ui.numberKeysSkipHidden);
+    if (view) go(view);
+    return view !== null;
+  }
+  const work = tabForNumber(generateTabs(ui), tab.n, ui.numberKeysSkipHidden);
+  if (!work) return false;
+  useWorkTab.getState().show(work);
+  go("generate");
+  return true;
+}
+
 /** Run a shortcut action by id. Returns false for an unknown id. */
 export function runAction(id: string, go: Go): boolean {
   const action = SHORTCUT_ACTIONS.find((a) => a.id === id);
   if (!action) return false;
+  if (action.tab) return openTab(action.tab, go);
   if (action.view) {
     go(action.view);
     return true;

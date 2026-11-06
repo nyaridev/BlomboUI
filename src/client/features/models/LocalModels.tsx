@@ -22,6 +22,7 @@ import {
   useMoveModel,
   useRenameModel,
   useSetModelFavorite,
+  useSettings,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import {
@@ -426,8 +427,9 @@ function CardGrid({
   const scrollRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const width = useElementWidth(innerRef);
-  const cols = Math.max(1, Math.floor((width + GAP) / (MIN_CARD + GAP)));
-  const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : MIN_CARD;
+  const minCard = MIN_CARD * (useSettings().data?.ui.modelsCardScale ?? 1);
+  const cols = Math.max(1, Math.floor((width + GAP) / (minCard + GAP)));
+  const cardW = width > 0 ? (width - GAP * (cols - 1)) / cols : minCard;
   const rowH = Math.round((cardW * 4) / 3) + GAP;
   const rows = Math.ceil(models.length / cols);
   const virtualizer = useVirtualizer({

@@ -342,7 +342,14 @@ function Swatch({ name, varName, ink }: { name: string; varName: string; ink?: b
   );
 }
 
-export function DesignLab({ standalone }: { standalone?: boolean }) {
+export function DesignLab({
+  standalone,
+  switcher,
+}: {
+  standalone?: boolean;
+  /** Inside a profile: the Components / Saved data switch (LabView). */
+  switcher?: ReactNode;
+}) {
   const theme = useTheme((s) => s.theme);
   const accent = useTheme((s) => s.accent);
   const setTheme = useTheme((s) => s.set);
@@ -405,6 +412,7 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               Design Lab
             </span>
           )}
+          {switcher}
           <Segmented
             size="sm"
             value={theme}

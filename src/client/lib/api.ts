@@ -52,6 +52,7 @@ import type {
   SamplerLists,
 } from "@shared/comfy";
 import type { ModelKind } from "@shared/constants";
+import type { DevImageMeta, DevStorage } from "@shared/dev";
 import type {
   Download,
   DownloadHistoryPage,
@@ -327,6 +328,9 @@ export const api = {
     request<HomeUse[]>("GET", `/gallery/uses?kind=${kind}&seed=${seed}`),
   galleryImages: (q: GalleryQueryInput) =>
     request<GalleryPage>("GET", `/gallery/images?${query(q)}`),
+  /** Dev mode only (the Data page): the profile's folder and tables, one image's metadata. */
+  devStorage: () => request<DevStorage>("GET", "/dev/storage"),
+  devImage: (id: number) => request<DevImageMeta>("GET", `/dev/images/${id}`),
   galleryFacets: (library: string) =>
     request<GalleryFacets>("GET", `/gallery/facets?library=${encodeURIComponent(library)}`),
   galleryImage: (id: number) => request<ImageDetails>("GET", `/gallery/images/${id}`),

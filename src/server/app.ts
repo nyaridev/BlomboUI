@@ -15,6 +15,7 @@ import { batchRoutes } from "./routes/batch.ts";
 import { bridgeAdminRoutes, bridgeRoutes } from "./routes/bridge.ts";
 import { civitaiRoutes } from "./routes/civitai.ts";
 import { comfyRoutes } from "./routes/comfy.ts";
+import { devRoutes } from "./routes/dev.ts";
 import { downloadRoutes } from "./routes/downloads.ts";
 import { fileInfoRoutes } from "./routes/fileinfo.ts";
 import { galleryRoutes } from "./routes/gallery.ts";
@@ -92,6 +93,7 @@ export function createApp(services: Services) {
   api.route("/downloads", downloadRoutes(services.downloads));
   api.route("/manager", managerRoutes(services.catalog));
   api.route("/fileinfo", fileInfoRoutes(gallery, models));
+  if (config.dev) api.route("/dev", devRoutes(services.devInfo));
   api.all("*", (c) => c.json({ error: "Unknown API route.", code: "not_found" }, 404));
   app.route("/api", api);
 

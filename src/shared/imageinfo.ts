@@ -22,6 +22,22 @@ export type LoraUse = z.infer<typeof LoraUse>;
 export const CivitaiRef = z.object({ modelId: z.number().int(), versionId: z.number().int() });
 export type CivitaiRef = z.infer<typeof CivitaiRef>;
 
+/**
+ * What Blombo writes into every image it makes, beside ComfyUI's `prompt` (API graph) and
+ * `workflow` (canvas) chunks: ComfyUI's `extra_pnginfo.blombo`, a PNG text chunk "blombo".
+ */
+export const BlomboImageMeta = z.object({
+  /** The Blombo workflow's id and name. */
+  workflow: z.string().nullable(),
+  name: z.string().nullable(),
+  seed: z.number().nullable(),
+  /** The Generate screen's values by binding id, as set (prompts still hold their <lora:> tags). */
+  values: z.record(z.string(), z.unknown()),
+  /** The prompts as they ran by role: wildcards filled in, trigger words added, LoRA tags out. */
+  prompts: z.record(z.string(), z.string()),
+});
+export type BlomboImageMeta = z.infer<typeof BlomboImageMeta>;
+
 /** The settings worth showing (and searching) for one image. */
 export const ImageSummary = z.object({
   source: z.enum(IMAGE_SOURCES),

@@ -9,6 +9,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ComfyStatus } from "../../shared/comfy.ts";
 import { outputPrefix, workflowFolder } from "../../shared/gallery.ts";
+import type { BlomboImageMeta } from "../../shared/imageinfo.ts";
 import {
   type GenerateBody,
   type GenerateResponse,
@@ -562,7 +563,7 @@ export class JobQueue extends Emitter<QueueEvents> {
             values: run.values,
             // What the gallery and File info show: the prompt as it ran (the LoRAs are in the graph).
             prompts: compiled.shown,
-          },
+          } satisfies BlomboImageMeta,
         },
       });
       if (gone()) {

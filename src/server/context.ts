@@ -27,6 +27,7 @@ import { NodePackInstaller } from "./services/comfy/nodepacks.ts";
 import { OWN_SLOT } from "./services/comfy/slots.ts";
 import { StatsSampler } from "./services/comfy/stats.ts";
 import { ComfySupervisor } from "./services/comfy/supervisor.ts";
+import { DevInfoService } from "./services/devinfo.ts";
 import { DownloadQueue } from "./services/downloads.ts";
 import { ImportService } from "./services/gallery/imports.ts";
 import { GalleryService } from "./services/gallery/index.ts";
@@ -48,6 +49,8 @@ import { WorkflowService } from "./services/workflows/store.ts";
 
 export interface Services {
   config: ServerConfig;
+  /** The dev-only Data page (routes registered in dev mode only). */
+  devInfo: DevInfoService;
   profiles: ProfileService;
   supervisor: ComfySupervisor;
   workflows: WorkflowService;
@@ -440,6 +443,7 @@ export function createServices(config: ServerConfig): Services {
 
   return {
     config,
+    devInfo: new DevInfoService({ profiles, dbs, gallery }),
     profiles,
     supervisor,
     workflows,

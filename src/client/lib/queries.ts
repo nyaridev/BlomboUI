@@ -57,6 +57,8 @@ export const qk = {
   gallery: (profileId: string | null) => ["gallery", profileId] as const,
   galleryOverview: (profileId: string | null) => ["gallery", profileId, "overview"] as const,
   galleryHome: (profileId: string | null) => ["gallery", profileId, "home"] as const,
+  devStorage: (profileId: string | null) => ["dev-storage", profileId] as const,
+  devImage: (profileId: string | null, id: number | null) => ["dev-image", profileId, id] as const,
   galleryImages: (profileId: string | null, q: GalleryQueryInput) =>
     ["gallery", profileId, "images", q] as const,
   galleryFacets: (profileId: string | null, library: string) =>
@@ -429,6 +431,26 @@ export function useGalleryUses(kind: UseKind, seed: number) {
     queryKey: [...qk.gallery(profileId), "uses", kind, seed],
     queryFn: () => api.galleryUses(kind, seed),
     enabled: profileId !== null,
+  });
+}
+
+/** The Data page (dev mode only): what the open profile keeps on disk. */
+export function useDevStorage() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.devStorage(profileId),
+    queryFn: api.devStorage,
+    enabled: profileId !== null,
+  });
+}
+
+/** The Data page: one gallery image's metadata, as written. */
+export function useDevImage(id: number | null) {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.devImage(profileId, id),
+    queryFn: () => api.devImage(id as number),
+    enabled: profileId !== null && id !== null,
   });
 }
 

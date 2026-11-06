@@ -61,7 +61,7 @@ export function ProfileGrid(props: ProfileGridProps) {
   return (
     <div className="relative h-full overflow-auto bg-bg">
       {/* Over the page, so the cards center on the whole window, not on what's below it. */}
-      <header className="absolute inset-x-0 top-0 z-10 flex items-center px-6 pt-5">
+      <header className="absolute inset-x-0 top-0 z-10 flex items-center px-6 pt-5 max-sm:justify-center">
         <Wordmark muted />
       </header>
       {/* The same space above and below, enough to clear the header and the version. */}
@@ -86,9 +86,10 @@ export function ProfileGrid(props: ProfileGridProps) {
             </button>
           </li>
         </ul>
-        {/* In the page's corner, or after the cards once they scroll, so it never covers one. */}
+        {/* In the page's corner (centered under the one column on phones), or after the cards
+            once they scroll, so it never covers one. */}
         {props.version ? (
-          <div className="absolute right-6 bottom-5">
+          <div className="absolute inset-x-6 bottom-5 flex justify-end max-sm:justify-center">
             <Button
               variant="ghost"
               size="sm"

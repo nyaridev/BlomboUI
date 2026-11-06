@@ -65,6 +65,7 @@ export const FIXED_SHORTCUTS: Array<{ label: string; where: string; keys: string
   { label: "Favorite", where: "Lightbox", keys: "F" },
   { label: "Rate 1–5 stars (0 clears)", where: "Lightbox", keys: "1–5 / 0" },
   { label: "Zoom to 100%", where: "Lightbox", keys: "Z" },
+  { label: "Show or hide the details", where: "Lightbox", keys: "I" },
   { label: "Move to trash", where: "Lightbox", keys: "Delete" },
   { label: "Close", where: "Lightbox, dialogs, palette", keys: "Escape" },
   { label: "Save", where: "Wildcards", keys: "Ctrl+S" },

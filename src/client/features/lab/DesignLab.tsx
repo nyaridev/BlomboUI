@@ -1853,6 +1853,30 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
             <StarRating value={4} readOnly />
             <span className="font-mono text-xs text-fg-3">{stars} of 5</span>
           </Row>
+          <Row label="On the lightbox (scrim)">
+            {/* The lightbox's controls with its details hidden: no fill, white in every theme. */}
+            <div className="flex items-center gap-0.5 rounded-lg bg-black/94 px-3 py-2">
+              <span className="mr-2 text-xs text-white/55 tabular">3 / 31</span>
+              <StarRating
+                tone="scrim"
+                size="sm"
+                value={stars}
+                onChange={setStars}
+                className="mr-1"
+              />
+              <IconButton
+                variant="scrim"
+                icon="heart"
+                label="Add to favorites"
+                size="sm"
+                className="text-pink-ink [&_svg]:fill-current"
+              />
+              <IconButton variant="scrim" icon="generate" label="Use these settings" size="sm" />
+              <IconButton variant="scrim" icon="sidebar" label="Show details" size="sm" />
+              <IconButton variant="scrim" icon="x" label="Close" size="sm" />
+              <IconButton variant="scrim" icon="generate" label="Disabled" size="sm" disabled />
+            </div>
+          </Row>
           <Row label="Tour">
             <Button icon="play" onClick={() => setTour(true)} data-tour="lab-tour">
               Start a sample tour

@@ -1,7 +1,8 @@
 /**
  * Star rating, 0–5. Click a star to set it, click the same star again to clear; arrow keys move
  * one star, 0–5 set it, Delete clears. A radio group for screen readers. `readOnly` shows stars
- * only (gallery tiles).
+ * only (gallery tiles). `tone="scrim"` is for the lightbox's dark backdrop: empty stars in white
+ * at low strength, in every theme.
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
@@ -13,6 +14,7 @@ export function StarRating({
   size = "md",
   readOnly,
   label = "Rating",
+  tone = "default",
   className,
 }: {
   value: number;
@@ -20,9 +22,11 @@ export function StarRating({
   size?: "sm" | "md";
   readOnly?: boolean;
   label?: string;
+  tone?: "default" | "scrim";
   className?: string;
 }) {
   const [hover, setHover] = useState<number | null>(null);
+  const empty = tone === "scrim" ? "text-white/35" : "text-fg-4";
   const px = size === "sm" ? 12 : 17;
   const shown = hover ?? value;
   const set = (n: number) => onChange?.(Math.max(0, Math.min(5, n)));
@@ -38,7 +42,7 @@ export function StarRating({
             key={n}
             name="star"
             size={px}
-            className={n <= value ? "fill-current text-yellow-ink" : "text-fg-4"}
+            className={n <= value ? "fill-current text-yellow-ink" : empty}
           />
         ))}
       </span>
@@ -77,7 +81,7 @@ export function StarRating({
             size={px}
             className={cn(
               "transition-colors",
-              n <= shown ? "fill-current text-yellow-ink" : "text-fg-4",
+              n <= shown ? "fill-current text-yellow-ink" : empty,
               hover !== null && n <= shown && "opacity-80",
             )}
           />

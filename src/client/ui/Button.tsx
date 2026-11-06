@@ -86,7 +86,7 @@ export interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement>
   label: string;
   shortcut?: string;
   size?: "xs" | "sm" | "md" | "lg" | "tall";
-  variant?: "ghost" | "secondary" | "primary" | "danger" | "overlay";
+  variant?: "ghost" | "secondary" | "primary" | "danger" | "overlay" | "scrim";
   active?: boolean;
   /** Working: a spinner in place of the icon, and no clicks until it's done. */
   loading?: boolean;
@@ -111,6 +111,8 @@ const iconVariants = {
   danger: `text-fg-3 hover:bg-red/15 hover:text-red-ink ${bareOff}`,
   /** Over a picture (cards): dark and white whatever the theme, like ModelCard's corner buttons. */
   overlay: `bg-black/60 text-white/85 backdrop-blur-[2px] hover:bg-black/80 hover:text-white aria-expanded:bg-black/80 aria-expanded:text-white ${bareOff}`,
+  /** On the dark full-screen backdrop (the lightbox): no fill until pointed at, white in every theme. */
+  scrim: "text-white/70 hover:bg-white/10 hover:text-white disabled:text-white/25",
 };
 
 export function IconButton({
@@ -140,7 +142,7 @@ export function IconButton({
         base,
         box,
         iconVariants[variant],
-        active && variant !== "overlay" && "bg-field text-accent-ink",
+        active && variant !== "overlay" && variant !== "scrim" && "bg-field text-accent-ink",
         className,
       )}
       {...rest}

@@ -3,7 +3,11 @@
  * with what the image says about how it was made, plus its actions (use these settings, import
  * the workflow, File Info, reveal, copy, favorite, move to trash).
  *
- * Keys: ← → browse, Esc close, F favorite, Z zoom, Delete move to trash.
+ * The details sheet can be hidden (I, or its button): the image takes the whole width and a
+ * few controls float over the backdrop's corner without a fill (where you are, rating,
+ * favorite, use these settings, show details, close). The choice is kept in this window.
+ *
+ * Keys: ← → browse, Esc close, F favorite, Z zoom, I details, Delete move to trash.
  */
 
 import { Icon } from "@client/icons/Icon";
@@ -21,10 +25,20 @@ import {
   useTrashImages,
 } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
-import { Badge, Button, CopyButton, IconButton, PropertyList, Skeleton, toast } from "@client/ui";
+import {
+  Badge,
+  Button,
+  CopyButton,
+  IconButton,
+  PropertyList,
+  Skeleton,
+  StarRating,
+  toast,
+} from "@client/ui";
 import { fileUrl, type GalleryImage, type ImageDetails, playTime } from "@shared/gallery";
-import { motion } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { type PointerEvent, useCallback, useEffect, useRef, useState } from "react";
+import { create } from "zustand";
 import { useFileInfoTarget } from "../fileinfo/state";
 import { applyImageSettings } from "../generate/applySettings";
 import { controlImageFromGallery } from "../generate/blocks/stages";
@@ -34,6 +48,28 @@ import { copyImage } from "./imageMenu";
 import { Marks } from "./Marks";
 import { ModelLinks } from "./ModelLinks";
 import { StagePlayer, stillOrAnimated } from "./media";
+
+const DETAILS_KEY = "blombo.lightboxDetails";
+
+/** Whether the details sheet shows; kept in this window (localStorage). */
+const useDetailsShown = create<{ shown: boolean; toggle: () => void }>((set) => ({
+  shown: (() => {
+    try {
+      return localStorage.getItem(DETAILS_KEY) !== "hidden";
+    } catch {
+      return true;
+    }
+  })(),
+  toggle: () =>
+    set((s) => {
+      try {
+        localStorage.setItem(DETAILS_KEY, s.shown ? "hidden" : "shown");
+      } catch {
+        // Storage can be unavailable; it still switches for this session.
+      }
+      return { shown: !s.shown };
+    }),
+}));
 
 export function Lightbox({
   images,
@@ -113,7 +149,14 @@ export function Lightbox({
   useHotkey("ArrowLeft", () => go(-1));
   useHotkey("f", () => favorite.mutate({ ids: [current.id], favorite: !current.favorite }));
   useHotkey("z", () => setZoom((z) => !z));
+  useHotkey("i", () => useDetailsShown.getState().toggle());
   useHotkey("Delete", remove);
+  const shown = useDetailsShown((s) => s.shown);
+  const reuseSettings = () => {
+    const d = details.data;
+    if (!d) return;
+    void applyImageSettings(d.settings, d.summary.seed).then((ok) => ok && onGo("generate"));
+  };
 
   const strip = images.slice(Math.max(0, idx - 10), idx + 11);
 
@@ -131,8 +174,70 @@ export function Lightbox({
       ref={dialogRef}
       tabIndex={-1}
     >
-      <div className="relative flex min-w-0 flex-1 flex-col max-lg:h-[60svh] max-lg:flex-none">
+      <div
+        className={cn(
+          "relative flex min-w-0 flex-1 flex-col",
+          // Narrow screens: the details stack under the image; without them it fills the screen.
+          shown ? "max-lg:h-[60svh] max-lg:flex-none" : "max-lg:h-full",
+        )}
+      >
         <Stage image={current} zoom={zoom} onZoom={setZoom} />
+        <AnimatePresence>
+          {shown ? null : (
+            <motion.div
+              key="controls"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.12 }}
+              className="absolute top-2 right-3 z-10 flex items-center gap-0.5"
+            >
+              <span className="mr-2 text-xs text-white/55 tabular">
+                {(idx + 1).toLocaleString()} / {images.length.toLocaleString()}
+              </span>
+              <StarRating
+                tone="scrim"
+                size="sm"
+                value={current.rating}
+                onChange={(rating) => rate.mutate({ ids: [current.id], rating })}
+                className="mr-1"
+              />
+              <IconButton
+                variant="scrim"
+                icon="heart"
+                label={current.favorite ? "Remove from favorites" : "Add to favorites"}
+                shortcut="F"
+                size="sm"
+                className={current.favorite ? "text-pink-ink [&_svg]:fill-current" : undefined}
+                onClick={() => favorite.mutate({ ids: [current.id], favorite: !current.favorite })}
+              />
+              <IconButton
+                variant="scrim"
+                icon="generate"
+                label="Use these settings"
+                size="sm"
+                disabled={!details.data || details.data.summary.source === "none"}
+                onClick={reuseSettings}
+              />
+              <IconButton
+                variant="scrim"
+                icon="sidebar"
+                label="Show details"
+                shortcut="I"
+                size="sm"
+                onClick={() => useDetailsShown.getState().toggle()}
+              />
+              <IconButton
+                variant="scrim"
+                icon="x"
+                label="Close"
+                shortcut="Esc"
+                size="sm"
+                onClick={onClose}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <button
           type="button"
           aria-label="Previous image"
@@ -175,19 +280,23 @@ export function Lightbox({
           ))}
         </div>
       </div>
-      <Details
-        image={current}
-        index={idx}
-        count={images.length}
-        details={details.data}
-        loading={details.isLoading}
-        error={details.error?.message ?? null}
-        onClose={onClose}
-        onFavorite={() => favorite.mutate({ ids: [current.id], favorite: !current.favorite })}
-        onRemove={remove}
-        removing={trash.isPending}
-        onGo={onGo}
-      />
+      {shown ? (
+        <Details
+          image={current}
+          index={idx}
+          count={images.length}
+          details={details.data}
+          loading={details.isLoading}
+          error={details.error?.message ?? null}
+          onClose={onClose}
+          onHide={() => useDetailsShown.getState().toggle()}
+          onFavorite={() => favorite.mutate({ ids: [current.id], favorite: !current.favorite })}
+          onUseSettings={reuseSettings}
+          onRemove={remove}
+          removing={trash.isPending}
+          onGo={onGo}
+        />
+      ) : null}
     </motion.div>
   );
 }
@@ -310,7 +419,9 @@ function Details({
   loading,
   error,
   onClose,
+  onHide,
   onFavorite,
+  onUseSettings,
   onRemove,
   removing,
   onGo,
@@ -322,7 +433,10 @@ function Details({
   loading: boolean;
   error: string | null;
   onClose: () => void;
+  /** Hide the sheet (the image takes the whole width). */
+  onHide: () => void;
   onFavorite: () => void;
+  onUseSettings: () => void;
   onRemove: () => void;
   removing: boolean;
   onGo: (view: "generate" | "file-info") => void;
@@ -368,6 +482,7 @@ function Details({
             className={image.favorite ? "text-pink-ink [&_svg]:fill-current" : undefined}
             onClick={onFavorite}
           />
+          <IconButton icon="sidebar" label="Hide details" shortcut="I" size="sm" onClick={onHide} />
           <IconButton icon="x" label="Close" shortcut="Esc" size="sm" onClick={onClose} />
         </span>
       </div>
@@ -487,12 +602,7 @@ function Details({
           icon="generate"
           className="col-span-2"
           disabled={!details || s?.source === "none"}
-          onClick={() => {
-            if (!details) return;
-            void applyImageSettings(details.settings, details.summary.seed).then(
-              (ok) => ok && onGo("generate"),
-            );
-          }}
+          onClick={onUseSettings}
         >
           Use these settings
         </Button>

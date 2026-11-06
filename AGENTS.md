@@ -19,7 +19,7 @@ This file is the source of truth for every coding agent (Claude Code, Cursor, Co
 |---|---|
 | `start-web.bat` / `npm run start` | Build the client if needed, serve on :4380, open the browser |
 | `start-app.bat` / `npm run start:app` | Same, in the Tauri window (builds it once; needs Rust) |
-| `start-dev.bat` / `npm run dev` | API on :4381 (`node --watch`) + Vite on :4382 with HMR |
+| `start-dev.bat` / `npm run dev` | API on :4381 (`node --watch`) + Vite on :4382 with HMR. The first `--dev` start makes the **Dev profile** (`DEV_PROFILE_ID`, every built-in workflow, its models, outputs and wildcards folders in `runtime/dev/`), which is listed only in dev mode |
 | `npm run dev:app` | Dev mode inside the desktop window |
 | `npm run check` | **typecheck + lint + tests + rules sync check. Run before you finish** |
 | `npm run typecheck` / `lint` / `format` / `test` | Individually (TypeScript 7, Biome, Vitest) |

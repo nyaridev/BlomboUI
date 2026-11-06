@@ -16,10 +16,12 @@
 import type { Server } from "node:http";
 import { serve } from "@hono/node-server";
 import { APP_NAME, PORTS } from "../shared/constants.ts";
+import { DEV_PROFILE_ID } from "../shared/profile.ts";
 import { createApp } from "./app.ts";
 import { createConfig, parseFlags } from "./config.ts";
 import { createServices } from "./context.ts";
 import { openInAppWindow, openInBrowser } from "./services/window.ts";
+import { listPresets } from "./services/workflows/presets.ts";
 
 const config = createConfig(parseFlags(process.argv.slice(2)));
 const url = `http://${config.host}:${config.port}`;
@@ -40,6 +42,16 @@ function openWindow(): void {
 
 const services = createServices(config);
 const app = createApp(services);
+
+// Dev mode's own profile, made on the first dev start with every built-in workflow.
+if (await services.profiles.ensureDev()) {
+  const presets = await listPresets(config.presetsDir);
+  await services.installPresets(
+    DEV_PROFILE_ID,
+    presets.map((p) => p.manifest.id),
+  );
+  console.log(`  ✦ Made the Dev profile (folders in ${config.runtimeDir}/dev)`);
+}
 
 const server = serve({ fetch: app.fetch, port: config.port, hostname: config.host }, () => {
   const mode = config.dev ? "dev" : config.open === "app" ? "app" : "web";

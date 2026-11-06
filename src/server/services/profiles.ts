@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { z } from "zod";
 import {
   type CreateProfileBody,
+  DEV_PROFILE_ID,
   type FolderKind,
   foldersFromPaths,
   migrateProfile,
@@ -116,10 +117,15 @@ export class ProfileService extends Emitter<ProfileEvents> {
       const profile = await this.find(id);
       if (profile) out.push(profile);
     }
+    if (this.config.dev && !reg.order.includes(DEV_PROFILE_ID)) {
+      const dev = await this.find(DEV_PROFILE_ID);
+      if (dev) out.push(dev);
+    }
     return out;
   }
 
   async find(id: string): Promise<Profile | null> {
+    if (id === DEV_PROFILE_ID && !this.config.dev) return null;
     if (!(await exists(this.profileFile(id)))) return null;
     const raw: unknown = JSON.parse(await fs.readFile(this.profileFile(id), "utf8"));
     if (raw && typeof raw === "object" && "folders" in raw) return Profile.parse(raw);
@@ -143,10 +149,7 @@ export class ProfileService extends Emitter<ProfileEvents> {
 
   async create(body: CreateProfileBody): Promise<Profile> {
     const reg = await this.registry();
-    const base = slugifyProfileName(body.name);
-    let id = base;
-    for (let n = 2; reg.order.includes(id) || (await exists(this.dir(id))); n++)
-      id = `${base}-${n}`;
+    const id = await this.freeId(body.name);
 
     const profile = Profile.parse({
       id,
@@ -182,9 +185,39 @@ export class ProfileService extends Emitter<ProfileEvents> {
     const reg = await this.registry();
     const base = slugifyProfileName(name);
     let id = base;
-    for (let n = 2; reg.order.includes(id) || (await exists(this.dir(id))); n++)
+    for (
+      let n = 2;
+      id === DEV_PROFILE_ID || reg.order.includes(id) || (await exists(this.dir(id)));
+      n++
+    )
       id = `${base}-${n}`;
     return id;
+  }
+
+  /**
+   * Makes the dev profile (dev mode only) when it isn't there yet, with its models, outputs and
+   * wildcards folders in runtime/dev/. Returns whether it was made; an existing one is left as is.
+   */
+  async ensureDev(): Promise<boolean> {
+    if (!this.config.dev || (await exists(this.profileFile(DEV_PROFILE_ID)))) return false;
+    const root = path.join(this.config.runtimeDir, "dev");
+    const paths = {
+      models: path.join(root, "models"),
+      outputs: path.join(root, "outputs"),
+      wildcards: path.join(root, "wildcards"),
+    };
+    for (const folder of Object.values(paths)) await fs.mkdir(folder, { recursive: true });
+    await fs.mkdir(path.join(this.dir(DEV_PROFILE_ID), "workflows"), { recursive: true });
+    await fs.mkdir(path.join(this.dir(DEV_PROFILE_ID), "layouts"), { recursive: true });
+    const profile = Profile.parse({
+      id: DEV_PROFILE_ID,
+      name: "Dev",
+      accent: "orange",
+      folders: foldersFromPaths(paths),
+      createdAt: new Date().toISOString(),
+    });
+    await writeJsonAtomic(this.profileFile(DEV_PROFILE_ID), profile);
+    return true;
   }
 
   /** List a profile whose folder was just written (an imported export). */

@@ -8,6 +8,14 @@ import { slugId } from "./settings.ts";
 
 export const ProfileId = z.string().regex(/^[a-z0-9][a-z0-9-]{0,47}$/, "Invalid profile id");
 
+/**
+ * Dev mode's own profile (`--dev`): made on the first dev start with its folders in
+ * runtime/dev/, so tests can download real models without touching the user's. It isn't in
+ * profiles.json's order, and outside dev mode the server acts as if it didn't exist. No other
+ * profile gets this id.
+ */
+export const DEV_PROFILE_ID = "dev";
+
 /** The three main folders the profile wizard picks (each can be empty). */
 export const ProfilePaths = z.object({
   /** ComfyUI models root (checkpoints/, loras/, vae/ …). Also the Models view's root. */

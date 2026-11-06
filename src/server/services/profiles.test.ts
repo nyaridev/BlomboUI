@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp } from "../app.ts";
 import { createConfig } from "../config.ts";
 import { createServices, type Services } from "../context.ts";
+import { ProfileService } from "./profiles.ts";
 
 const DEAD = "http://127.0.0.1:9";
 let dir: string;
@@ -104,5 +105,48 @@ describe("creating a profile", () => {
       profiles: Array<{ name: string }>;
     };
     expect(list.profiles.some((p) => p.name === "Blocked")).toBe(false);
+  });
+});
+
+describe("the dev profile", () => {
+  it("is made in dev mode only, with folders in runtime/dev, and hidden outside dev mode", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "blombo-devprofile-"));
+    const flags = {
+      port: 4398,
+      open: "none" as const,
+      dataDir: path.join(root, "data"),
+      runtimeDir: path.join(root, "runtime"),
+    };
+    try {
+      const plain = new ProfileService(createConfig({ ...flags, dev: false }));
+      expect(await plain.ensureDev()).toBe(false);
+
+      const dev = new ProfileService(createConfig({ ...flags, dev: true }));
+      expect(await dev.ensureDev()).toBe(true);
+      expect(await dev.ensureDev()).toBe(false);
+      const [listed] = await dev.list();
+      expect(listed?.id).toBe("dev");
+      expect(listed?.folders.models[0]?.path).toBe(path.join(root, "runtime", "dev", "models"));
+      expect((await fs.stat(path.join(root, "runtime", "dev", "outputs"))).isDirectory()).toBe(
+        true,
+      );
+      expect((await dev.registry()).order).toEqual([]);
+      // A profile named "Dev" never takes its id.
+      const named = await dev.create({
+        name: "Dev",
+        accent: "blue",
+        theme: "blombo",
+        paths: { models: "", outputs: "", wildcards: "" },
+        comfy: { mode: "managed", slot: "latest" },
+        presets: [],
+      });
+      expect(named.id).toBe("dev-2");
+      expect((await dev.list()).map((p) => p.id)).toEqual(["dev-2", "dev"]);
+
+      expect((await plain.list()).map((p) => p.id)).toEqual(["dev-2"]);
+      expect(await plain.find("dev")).toBeNull();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });

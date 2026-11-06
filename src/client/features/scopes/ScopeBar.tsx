@@ -1,6 +1,6 @@
 /**
- * The scope bar beside a model grid's filters (Models → Local, the Generate pickers): the scopes
- * whose pictures cards show. Each picked scope is a chip: click it to make it optional (a
+ * The scope bar, a row of its own under a model grid's search and filters (Models → Local, the
+ * Generate pickers): the scopes whose pictures cards show. Each picked scope is a chip: click it to make it optional (a
  * picture may leave it out) or required again, × drops it. "Scopes" adds one (searchable, by
  * group; picking one replaces another of its group). Auto takes them from the Generate prompt
  * instead. Hidden while scopes are off (avatar menu → Scopes).
@@ -33,7 +33,7 @@ export function ScopeBar({ className }: { className?: string }) {
         disabled={view.auto}
         onToggle={(id) => setView(togglePick(view, id, scopes))}
       />
-      <div className="scroll-quiet flex min-w-0 items-center gap-1.5 overflow-x-auto">
+      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
         {ids.length === 0 ? (
           <span className="shrink-0 px-1 text-xs text-fg-3">
             {view.auto ? "No scope in the prompt: global pictures" : "Global pictures"}

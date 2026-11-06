@@ -709,7 +709,6 @@ export function ModelGrid({
         <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
           Favorites
         </Chip>
-        {tab === "wildcards" ? null : <ScopeBar className="max-w-80" />}
         <Select<Sort>
           value={sort}
           onChange={pickSort}
@@ -743,6 +742,7 @@ export function ModelGrid({
           />
         )}
       </div>
+      {tab === "wildcards" ? null : <ScopeBar />}
       <div className="flex min-h-0 flex-1 gap-3">
         {showTree && !loading && !unavailable ? (
           <FolderTree

@@ -311,7 +311,6 @@ export function LocalModels() {
           <Chip icon="heart" selected={onlyFavorites} onClick={() => setOnlyFavorites((v) => !v)}>
             Favorites
           </Chip>
-          <ScopeBar className="max-w-96" />
           <div className="ml-auto flex items-center gap-2">
             <LookupStatus />
             <Select<Sort>
@@ -343,6 +342,7 @@ export function LocalModels() {
             />
           </div>
         </div>
+        <ScopeBar />
         <div className="flex min-h-0 flex-1 gap-3">
           {showTree && models.length ? (
             <FolderTree

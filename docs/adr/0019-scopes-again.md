@@ -51,8 +51,9 @@ profile's trash (`trash/model-pictures/`), then forgets it.
   combination when that's all there is.
 - Nothing fits: the global picture (then Civitai's, then the drawn fallback).
 
-**Picking** is the scope bar beside Models → Local's and the Generate pickers' filters (shown
-only while scopes are on): picked scopes are chips (click: required ↔ optional, ×: drop), a
+**Picking** is the scope bar, a row of its own under Models → Local's and the Generate pickers'
+search and filters (shown only while scopes are on): picked scopes are chips (click: required ↔
+optional, ×: drop), a
 Scopes menu adds them (picking one drops the others of its group), and Auto takes them from the
 Generate prompt's tags instead (`autoScopes`: every scope with a tag in the prompt, the best one
 per group; Auto's picks are all optional). One `ScopeFollower` in Shell works the pick out, so

@@ -234,7 +234,9 @@ export class ModelService {
   }
 
   async list(force = false): Promise<ModelList> {
-    if (force) this.invalidate();
+    // A rescan means files changed outside Blombo: ComfyUI's lists, the lookup and every window
+    // follow, as after a download.
+    if (force) this.changed();
     // A scan already running may be for another profile or folder, or older than a change:
     // wait for it, then scan again unless the cache now matches.
     for (let attempt = 0; attempt < 4; attempt++) {

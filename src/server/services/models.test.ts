@@ -146,6 +146,14 @@ describe("local models", () => {
     await expect(models.rename("loras/plain.safetensors", "../evil")).rejects.toThrow();
   });
 
+  it("tells ComfyUI's lists and the other windows on a rescan, as after a download", async () => {
+    const before = changed;
+    await models.list(true);
+    expect(changed).toBe(before + 1);
+    await models.list();
+    expect(changed).toBe(before + 1);
+  });
+
   it("moves a model inside its kind folder and refuses collisions", async () => {
     const m = await models.move("loras/plain.safetensors", "style");
     expect(m.id).toBe("loras/style/plain.safetensors");

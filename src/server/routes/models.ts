@@ -33,10 +33,8 @@ export function modelRoutes(models: ModelService, lookup: ModelLookup) {
 
   r.get("/local", async (c) => {
     const rescan = c.req.query("rescan") === "1";
-    const list = await models.list(rescan);
-    // A rescan may find new files to match on Civitai.
-    if (rescan) lookup.start();
-    return c.json(list);
+    // A rescan also refreshes ComfyUI's model lists and matches new files on Civitai.
+    return c.json(await models.list(rescan));
   });
 
   /** Background hashing and Civitai matching (progress also comes as `models.lookup`). */

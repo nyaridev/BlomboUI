@@ -5,7 +5,7 @@
  */
 import { Icon } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
-import { IconButton, Tabs } from "@client/ui";
+import { IconButton, type MenuEntry, Tabs } from "@client/ui";
 import type { MainView, ViewId } from "@shared/constants";
 import type { Profile } from "@shared/profile";
 import { useNavigate } from "@tanstack/react-router";
@@ -18,7 +18,7 @@ import { WorkflowSwitcher } from "./WorkflowSwitcher";
 const NAV: Array<{
   value: MainView;
   label: string;
-  icon: "generate" | "gallery" | "models" | "wildcards" | "file-info";
+  icon: "generate" | "gallery" | "models" | "wildcards" | "file-info" | "compare";
 }> = [
   { value: "generate", label: "Generate", icon: "generate" },
   { value: "gallery", label: "Gallery", icon: "gallery" },
@@ -37,7 +37,13 @@ export function Header({
   view: ViewId;
 }) {
   const go = useGo(profileId);
-  const isMain = NAV.some((n) => n.value === view);
+  // Compare belongs to Generate: its tab stays lit there, named after it, with both in its menu.
+  const shownView = view === "compare" ? "generate" : view;
+  const isMain = NAV.some((n) => n.value === shownView);
+  const generateMenu: MenuEntry[] = [
+    { id: "generate", label: "Generate", icon: "generate", onSelect: () => go("generate") },
+    { id: "compare", label: "Compare", icon: "compare", onSelect: () => go("compare") },
+  ];
   const keys = useShortcutLabel();
   const openPalette = usePalette((s) => s.set);
 
@@ -61,11 +67,22 @@ export function Header({
       <nav aria-label="Main" className="max-lg:hidden">
         <Tabs
           label="Main views"
-          items={NAV.map((n) => ({
-            ...n,
-            label: <span className="max-[1380px]:hidden">{n.label}</span>,
-          }))}
-          value={isMain ? (view as MainView) : ("" as MainView)}
+          items={NAV.map((n) =>
+            n.value === "generate"
+              ? {
+                  ...n,
+                  ...(view === "compare" ? { icon: "compare" as const } : {}),
+                  label: (
+                    <span className="max-[1380px]:hidden">
+                      {view === "compare" ? "Compare" : n.label}
+                    </span>
+                  ),
+                  menu: generateMenu,
+                  menuLabel: "Generate or Compare",
+                }
+              : { ...n, label: <span className="max-[1380px]:hidden">{n.label}</span> },
+          )}
+          value={isMain ? (shownView as MainView) : ("" as MainView)}
           onChange={go}
           className={cn(!isMain && "[&_[role=tab]]:text-fg-3")}
         />
@@ -97,7 +114,7 @@ export function MobileNav({ profileId, view }: { profileId: string; view: ViewId
       className="grid grid-cols-5 border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] lg:hidden"
     >
       {NAV.map((n) => {
-        const active = n.value === view;
+        const active = n.value === view || (n.value === "generate" && view === "compare");
         return (
           <button
             key={n.value}

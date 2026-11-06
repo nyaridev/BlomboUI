@@ -10,9 +10,12 @@
  *           choice parameter, the resolution, or a prompt search/replace
  *   thumbs  one image per picked model, saved as that model's picture (no UI for now)
  *
+ * Compare (shared/compare.ts) plans its rows with the same axes, any number of them.
+ *
  * Pure: the server plans with it, the client counts runs and checks values with it.
  */
 import { z } from "zod";
+import { comfyNameOf, type ModelList } from "./models.ts";
 import { INSTANT_LORAS, InstantLora, readInstantLoras } from "./prompt/instant.ts";
 import type { Binding } from "./workflow/manifest.ts";
 
@@ -253,6 +256,94 @@ export function parseSize(text: string): [number, number] | null {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
+/* ── axes as an editor holds them ─────────────────────────────────────────── */
+
+/**
+ * What an axis changes, as the Scripts block and Compare edit it: "none", "replace" (prompt
+ * S/R), "resolution", "lora", or a binding id. Models, LoRAs and choices are picked (`picks`),
+ * the rest typed (`text`).
+ */
+export const AxisDraft = z.object({
+  type: z.string().max(200),
+  text: z.string().max(4000).default(""),
+  picks: z.array(z.string().max(400)).max(50).default([]),
+});
+export type AxisDraft = z.infer<typeof AxisDraft>;
+
+export const NO_AXIS: AxisDraft = { type: "none", text: "", picks: [] };
+
+/** A LoRA's saved strength by its ComfyUI name, or null (it runs at 1). */
+export type LoraWeight = (file: string) => number | null;
+
+/** Each local LoRA's saved strength, by ComfyUI name. */
+export function loraWeights(list: ModelList | undefined): LoraWeight {
+  const key = (file: string) => file.replace(/\\/g, "/").toLowerCase();
+  const map = new Map(
+    (list?.models ?? [])
+      .filter((m) => m.kind === "loras")
+      .map((m) => [key(comfyNameOf(m)), m.weight]),
+  );
+  return (file) => map.get(key(file)) ?? null;
+}
+
+/** Without an extension, as LoRA tags and instant LoRAs name a LoRA. */
+export const loraName = (file: string) =>
+  file.replace(/\\/g, "/").replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
+
+/** How an axis type takes its values. */
+export function axisInput(type: string, bindings: Binding[]): "none" | "models" | "list" | "text" {
+  if (type === "none") return "none";
+  if (type === "lora") return "models";
+  if (type === "resolution") return "list";
+  if (type === "replace") return "text";
+  const b = bindings.find((x) => x.id === type);
+  if (b?.type === "model") return "models";
+  if (b?.type === "enum" || b?.type === "bool") return "list";
+  return "text";
+}
+
+/** What an axis type is called ("Sampler", "LoRA", "Prompt S/R"). */
+export function axisName(type: string, bindings: Binding[]): string {
+  if (type === "lora") return "LoRA";
+  if (type === "resolution") return "Resolution";
+  if (type === "replace") return "Prompt S/R";
+  return bindings.find((b) => b.id === type)?.label ?? type;
+}
+
+/**
+ * An edited axis as the request's axis, or null for "none". `name` goes into what's wrong
+ * ("Pick the values for X."); `weight` gives LoRAs their saved strength (null: 1).
+ */
+export function axisFromDraft(
+  draft: AxisDraft,
+  bindings: Binding[],
+  name: string,
+  weight: LoraWeight | null,
+): AxisSpec | null {
+  const kind = axisInput(draft.type, bindings);
+  if (kind === "none") return null;
+  const picks = draft.picks.filter(Boolean);
+  if ((kind === "models" || kind === "list") && !picks.length)
+    throw new ScriptError(`Pick the values for ${name}.`);
+  if (draft.type === "lora")
+    return {
+      type: "lora",
+      values: picks.map((file) => ({ name: loraName(file), strength: weight?.(file) ?? 1 })),
+    };
+  if (draft.type === "resolution") return { type: "resolution", values: picks };
+  if (draft.type === "replace") {
+    const values = splitList(draft.text.replace(/\n/g, ","));
+    if (!values.length) throw new ScriptError(`Type the text to find for ${name}, then its swaps.`);
+    return { type: "replace", values };
+  }
+  const b = bindings.find((x) => x.id === draft.type);
+  if (!b) throw new ScriptError(`Pick a type for ${name}.`);
+  if (b.type === "bool") return { type: "binding", binding: b.id, values: picks.map(Number) };
+  if (kind === "models" || kind === "list")
+    return { type: "binding", binding: b.id, values: picks };
+  return { type: "binding", binding: b.id, values: parseAxisValues(draft.text, b) };
+}
+
 /* ── planning ─────────────────────────────────────────────────────────────── */
 
 function need(bindings: Binding[], id: string): Binding {
@@ -308,7 +399,7 @@ function inPrompts(bindings: Binding[], values: Record<string, unknown>, search:
     throw new ScriptError(`"${search}" isn't in the prompts. Pick text the prompt has.`);
 }
 
-interface AxisCell {
+export interface AxisCell {
   /** The value alone ("20") and with its type ("Steps: 20"). */
   value: string;
   label: string;
@@ -316,14 +407,19 @@ interface AxisCell {
   apply: (values: Record<string, unknown>) => string[];
 }
 
-interface Axis {
+export interface Axis {
   name: string;
   /** Two axes with the same key change the same thing. */
   key: string;
   cells: AxisCell[];
 }
 
-function axisCells(axis: AxisSpec, bindings: Binding[], values: Record<string, unknown>): Axis {
+/** An axis's values as cells that set them (checked against the workflow and its prompts). */
+export function axisCells(
+  axis: AxisSpec,
+  bindings: Binding[],
+  values: Record<string, unknown>,
+): Axis {
   if (axis.type === "replace") {
     const search = axis.values[0] as string;
     inPrompts(bindings, values, search);

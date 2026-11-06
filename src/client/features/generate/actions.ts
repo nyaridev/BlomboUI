@@ -8,10 +8,11 @@ import { qk, queryClient } from "@client/lib/queries";
 import { useSession } from "@client/lib/session";
 import { toast } from "@client/ui";
 import type { ModelList } from "@shared/models";
+import { loraWeights } from "@shared/scripts";
 import type { WorkflowDetail } from "@shared/workflow/manifest";
 import type { StageReport } from "@shared/workflow/stages";
 import { useLastRun } from "./preview";
-import { buildScript, loraWeights, useScript } from "./scripts";
+import { buildScript, useScript } from "./scripts";
 import { takePendingSave, useValues } from "./state";
 
 const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -61,7 +62,7 @@ export async function generate(): Promise<void> {
   // A script on: Generate runs it (one click, many images).
   const draft = useScript.getState().draft;
   let script: ReturnType<typeof buildScript> | null = null;
-  if (draft.on) {
+  if (draft.on && draft.kind !== "compare") {
     const profileId = useSession.getState().profileId;
     const detail = queryClient.getQueryData<WorkflowDetail>(qk.workflow(profileId, workflowId));
     script = buildScript(draft, detail?.bindings ?? [], values, {

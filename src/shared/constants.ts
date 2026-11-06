@@ -60,4 +60,8 @@ export type MainView = (typeof MAIN_VIEWS)[number];
 export const MENU_VIEWS = ["settings", "history", "errors", "help", "lab", "data"] as const;
 export type MenuView = (typeof MENU_VIEWS)[number];
 
-export type ViewId = MainView | MenuView;
+/** Views that belong to a main view (the header's Generate tab opens Compare from its menu). */
+export const SUB_VIEWS = ["compare"] as const;
+export type SubView = (typeof SUB_VIEWS)[number];
+
+export type ViewId = MainView | MenuView | SubView;

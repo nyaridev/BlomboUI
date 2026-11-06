@@ -8,34 +8,35 @@
  *           replacing a text in the prompts; each line runs once, or the batch count and size
  *   xy      an X and a Y type (None, the workflow's models, LoRA, resolution, its parameters,
  *           Prompt S/R) with their values, plus how the grid is drawn
+ *   compare no script on Generate: a button that opens the Compare view (every combination of
+ *           any number of settings, as saved comparisons) and what's running there
  */
 import { Icon } from "@client/icons/Icon";
-import { useLocalModels, useSettings } from "@client/lib/queries";
+import { useLocalModels } from "@client/lib/queries";
 import {
   Button,
   Checkbox,
   Collapsible,
   Field,
   IconButton,
-  MultiSelect,
   Select,
   Slider,
   TextArea,
   TextField,
 } from "@client/ui";
-import type { ModelKind } from "@shared/constants";
-import { MAX_GRID_MARGIN, MAX_SCRIPT_RUNS, type MatrixInsert } from "@shared/scripts";
-import type { Binding } from "@shared/workflow/manifest";
-import { useMemo, useRef } from "react";
-import { useChoiceFilter } from "../hiddenChoices";
-import { samplerLabel } from "../labels";
 import {
   type AxisDraft,
-  axisInput,
+  loraWeights,
+  MAX_GRID_MARGIN,
+  type MatrixInsert,
+  NO_AXIS,
+} from "@shared/scripts";
+import type { Binding } from "@shared/workflow/manifest";
+import { useMemo, useRef } from "react";
+import { CompareScriptPanel } from "../../compare/ScriptPanel";
+import {
   axisTypes,
   buildScript,
-  loraWeights,
-  NO_AXIS,
   SCRIPT_LABELS,
   type ScriptChoice,
   type ScriptDraft,
@@ -43,7 +44,7 @@ import {
 } from "../scripts";
 import { useValues } from "../state";
 import { useBindings } from "../workflow";
-import { ModelPicks } from "./ModelPicks";
+import { AxisValues } from "./AxisValues";
 
 /** The current script, planned against the current values (shared by the block and the button). */
 export function useBuiltScript() {
@@ -74,9 +75,11 @@ export function ScriptsBlock() {
       title="Scripts"
       icon="layout-grid"
       subtitle={
-        draft.on
-          ? `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} image${count === 1 ? "" : "s"}`}`
-          : undefined
+        !draft.on
+          ? undefined
+          : draft.kind === "compare"
+            ? "Compare · its own view"
+            : `${SCRIPT_LABELS[draft.kind]} · ${built.error ? "needs a fix" : `${count} image${count === 1 ? "" : "s"}`}`
       }
       enabled={draft.on}
       onEnabledChange={(on) => set({ on })}
@@ -90,12 +93,15 @@ export function ScriptsBlock() {
           options={[
             { value: "matrix", label: SCRIPT_LABELS.matrix },
             { value: "xy", label: SCRIPT_LABELS.xy },
+            { value: "compare", label: SCRIPT_LABELS.compare },
           ]}
         />
         {draft.kind === "matrix" ? (
           <MatrixEditor draft={draft.matrix} bindings={bindings} />
-        ) : (
+        ) : draft.kind === "xy" ? (
           <XYEditor draft={draft.xy} bindings={bindings} />
+        ) : (
+          <CompareScriptPanel />
         )}
         {draft.on && built.error ? (
           <p className="flex items-start gap-1.5 text-xs text-warning">
@@ -290,12 +296,6 @@ function XYEditor({ draft, bindings }: { draft: ScriptDraft["xy"]; bindings: Bin
   );
 }
 
-/** The model kind a models axis picks from. */
-function axisKind(type: string, bindings: Binding[]): ModelKind {
-  if (type === "lora") return "loras";
-  return (bindings.find((b) => b.id === type)?.modelKind as ModelKind) ?? "checkpoints";
-}
-
 function AxisRow({
   name,
   axis,
@@ -310,7 +310,6 @@ function AxisRow({
   onChange: (axis: AxisDraft) => void;
 }) {
   const types = axisTypes(bindings, other);
-  const input = axisInput(axis.type, bindings);
   return (
     <div className={ROW}>
       <Field label={`${name} type`}>
@@ -322,99 +321,8 @@ function AxisRow({
         />
       </Field>
       <Field label={`${name} values`}>
-        {input === "none" ? (
-          <Select
-            size="sm"
-            value={null}
-            placeholder="Pick a type first"
-            disabled
-            options={[]}
-            onChange={() => {}}
-          />
-        ) : input === "models" ? (
-          <AxisModels
-            axis={axis}
-            bindings={bindings}
-            label={`${name} values`}
-            onChange={onChange}
-          />
-        ) : input === "list" ? (
-          <AxisList axis={axis} bindings={bindings} onChange={onChange} />
-        ) : (
-          <TextField
-            size="sm"
-            mono
-            aria-label={`${name} values`}
-            value={axis.text}
-            placeholder={axis.type === "replace" ? "fox, cat, owl" : "4, 6, 8 · 10-30 (+5)"}
-            onChange={(e) => onChange({ ...axis, text: e.target.value })}
-          />
-        )}
+        <AxisValues axis={axis} bindings={bindings} label={`${name} values`} onChange={onChange} />
       </Field>
     </div>
-  );
-}
-
-function AxisModels({
-  axis,
-  bindings,
-  label,
-  onChange,
-}: {
-  axis: AxisDraft;
-  bindings: Binding[];
-  label: string;
-  onChange: (axis: AxisDraft) => void;
-}) {
-  const kind = axisKind(axis.type, bindings);
-  const type = axis.type === "lora" ? "LoRA" : bindings.find((x) => x.id === axis.type)?.label;
-  return (
-    <ModelPicks
-      kind={kind}
-      value={axis.picks}
-      label={label}
-      title={`${label} · ${type ?? "Models"}`}
-      onChange={(picks) => onChange({ ...axis, picks })}
-    />
-  );
-}
-
-function AxisList({
-  axis,
-  bindings,
-  onChange,
-}: {
-  axis: AxisDraft;
-  bindings: Binding[];
-  onChange: (axis: AxisDraft) => void;
-}) {
-  const settings = useSettings().data;
-  const b = bindings.find((x) => x.id === axis.type);
-  const filter = useChoiceFilter(
-    b?.role === "sampler.name" ? "sampler" : b?.role === "sampler.scheduler" ? "scheduler" : null,
-  );
-  const options =
-    axis.type === "resolution"
-      ? (settings?.generate.setResolutions ?? []).map((r) => ({
-          value: r,
-          label: r.replace("x", "×"),
-        }))
-      : b?.type === "bool"
-        ? [
-            { value: "1", label: "On" },
-            { value: "0", label: "Off" },
-          ]
-        : filter(b?.options ?? [], "").map((o) => ({
-            value: o,
-            label: b?.role === "sampler.name" ? samplerLabel(o) : o,
-          }));
-  return (
-    <MultiSelect
-      size="sm"
-      value={axis.picks}
-      placeholder="Pick values"
-      onChange={(picks) => onChange({ ...axis, picks: picks.slice(0, MAX_SCRIPT_RUNS) })}
-      options={options}
-    />
   );
 }

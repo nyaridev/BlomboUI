@@ -73,6 +73,8 @@ export interface RunSpec {
   inputs?: RunInput[];
   /** Show the images without saving them (an XY plot that keeps only its grid). */
   preview?: boolean;
+  /** Stage settings of its own (a comparison's), instead of the workflow's. */
+  stages?: WorkflowManifest["stages"];
 }
 
 interface Run {
@@ -283,6 +285,7 @@ export class JobQueue extends Emitter<QueueEvents> {
         group: r.group,
         inputs: r.inputs ?? [],
         preview: r.preview,
+        ...(r.stages ? { stages: r.stages } : {}),
       }),
     );
     this.prepareComfy();

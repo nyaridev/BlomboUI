@@ -9,7 +9,15 @@ import { MODEL_KINDS } from "./constants.ts";
 import { JobState, JobTiming } from "./jobs.ts";
 import { StagesRecord } from "./workflow/manifest.ts";
 
-export const JOB_KINDS = ["generate", "matrix", "xy", "thumbs", "batch", "grid"] as const;
+export const JOB_KINDS = [
+  "generate",
+  "matrix",
+  "xy",
+  "thumbs",
+  "batch",
+  "grid",
+  "compare",
+] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 
 export const JobRecord = z.object({

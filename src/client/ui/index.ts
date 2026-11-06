@@ -26,6 +26,7 @@ export {
   Popover,
   Tooltip,
 } from "./floating";
+export { type CompareMode, type CompareSide, ImageCompare } from "./ImageCompare";
 export { ImageViewer, type ViewerImage } from "./ImageViewer";
 export { Field, TextArea, TextField } from "./inputs";
 export {

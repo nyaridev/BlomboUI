@@ -49,12 +49,12 @@ export const JobTiming = z.object({
 export type JobTiming = z.infer<typeof JobTiming>;
 
 /**
- * Jobs that one click queued together: a script's cells or a batch's files. The script and batch
- * services follow their group and put the results together (a grid, thumbnails, output files).
+ * Jobs that one click queued together: a script's cells, a batch's files or a comparison's
+ * combinations (its id is the comparison's). The script, batch and compare services follow their group and put the results together (a grid, thumbnails, output files).
  */
 export const JobGroup = z.object({
   id: z.string(),
-  kind: z.enum(["matrix", "xy", "thumbs", "batch", "grid"]),
+  kind: z.enum(["matrix", "xy", "thumbs", "batch", "grid", "compare"]),
   /** "XY plot · CFG scale × Steps", "Remove background". */
   title: z.string(),
   /** This job's place in the group (0-based) and the group's size. */

@@ -5,32 +5,23 @@
  * what's wrong before anything is queued.
  */
 
-import { comfyNameOf, type ModelList } from "@shared/models";
 import {
+  type AxisDraft,
   axisBindings,
+  axisFromDraft,
+  type LoraWeight,
   type MatrixInsert,
-  parseAxisValues,
+  NO_AXIS,
   planScript,
   type Script,
   ScriptError,
   type ScriptPlan,
-  splitList,
 } from "@shared/scripts";
 import type { Binding } from "@shared/workflow/manifest";
 import { create } from "zustand";
 
-export type ScriptChoice = "matrix" | "xy";
-
-/**
- * What an axis changes: "none", "replace" (prompt S/R), "resolution", "lora", or a binding id.
- * Models and LoRAs are picked as tiles (`picks`), choices from a list (`picks`), the rest typed
- * (`text`).
- */
-export interface AxisDraft {
-  type: string;
-  text: string;
-  picks: string[];
-}
+/** compare: no script here; the block opens the Compare view (features/compare). */
+export type ScriptChoice = "matrix" | "xy" | "compare";
 
 export interface ScriptDraft {
   on: boolean;
@@ -59,9 +50,8 @@ export interface ScriptDraft {
 export const SCRIPT_LABELS: Record<ScriptChoice, string> = {
   matrix: "Prompt matrix",
   xy: "XY plot",
+  compare: "Compare",
 };
-
-export const NO_AXIS: AxisDraft = { type: "none", text: "", picks: [] };
 
 export const initialScript: ScriptDraft = {
   on: false,
@@ -108,68 +98,7 @@ export interface BuiltScript {
 /** What else building a script needs: the batch count, and a LoRA's saved strength. */
 export interface BuildContext {
   count: number;
-  loraWeight: (file: string) => number | null;
-}
-
-/** Each local LoRA's saved strength, by ComfyUI name. */
-export function loraWeights(list: ModelList | undefined): BuildContext["loraWeight"] {
-  const key = (file: string) => file.replace(/\\/g, "/").toLowerCase();
-  const map = new Map(
-    (list?.models ?? [])
-      .filter((m) => m.kind === "loras")
-      .map((m) => [key(comfyNameOf(m)), m.weight]),
-  );
-  return (file) => map.get(key(file)) ?? null;
-}
-
-/** Without an extension, as LoRA tags and instant LoRAs name a LoRA. */
-export const loraName = (file: string) =>
-  file.replace(/\\/g, "/").replace(/\.(safetensors|ckpt|pt|pth|bin)$/i, "");
-
-/** How an axis type takes its values. */
-export function axisInput(type: string, bindings: Binding[]): "none" | "models" | "list" | "text" {
-  if (type === "none") return "none";
-  if (type === "lora") return "models";
-  if (type === "resolution") return "list";
-  if (type === "replace") return "text";
-  const b = bindings.find((x) => x.id === type);
-  if (b?.type === "model") return "models";
-  if (b?.type === "enum" || b?.type === "bool") return "list";
-  return "text";
-}
-
-function axis(
-  draft: AxisDraft,
-  bindings: Binding[],
-  name: string,
-  ctx: BuildContext,
-  loraStrength: boolean,
-): unknown {
-  const kind = axisInput(draft.type, bindings);
-  if (kind === "none") return null;
-  const picks = draft.picks.filter(Boolean);
-  if ((kind === "models" || kind === "list") && !picks.length)
-    throw new ScriptError(`Pick the values for ${name}.`);
-  if (draft.type === "lora")
-    return {
-      type: "lora",
-      values: picks.map((file) => ({
-        name: loraName(file),
-        strength: (loraStrength ? ctx.loraWeight(file) : null) ?? 1,
-      })),
-    };
-  if (draft.type === "resolution") return { type: "resolution", values: picks };
-  if (draft.type === "replace") {
-    const values = splitList(draft.text.replace(/\n/g, ","));
-    if (!values.length) throw new ScriptError(`Type the text to find for ${name}, then its swaps.`);
-    return { type: "replace", values };
-  }
-  const b = bindings.find((x) => x.id === draft.type);
-  if (!b) throw new ScriptError(`Pick a type for ${name}.`);
-  if (b.type === "bool") return { type: "binding", binding: b.id, values: picks.map(Number) };
-  if (kind === "models" || kind === "list")
-    return { type: "binding", binding: b.id, values: picks };
-  return { type: "binding", binding: b.id, values: parseAxisValues(draft.text, b) };
+  loraWeight: LoraWeight;
 }
 
 /** The draft as a script, planned against these values; null script when the script is off. */
@@ -179,7 +108,7 @@ export function buildScript(
   values: Record<string, unknown>,
   ctx: BuildContext,
 ): BuiltScript {
-  if (!draft.on) return { script: null, plan: null, error: null };
+  if (!draft.on || draft.kind === "compare") return { script: null, plan: null, error: null };
   try {
     let input: unknown;
     if (draft.kind === "matrix") {
@@ -203,8 +132,8 @@ export function buildScript(
       const xy = draft.xy;
       input = {
         kind: "xy",
-        x: axis(xy.x, bindings, "X", ctx, xy.loraStrength),
-        y: axis(xy.y, bindings, "Y", ctx, xy.loraStrength),
+        x: axisFromDraft(xy.x, bindings, "X", xy.loraStrength ? ctx.loraWeight : null),
+        y: axisFromDraft(xy.y, bindings, "Y", xy.loraStrength ? ctx.loraWeight : null),
         legend: xy.legend,
         legendType: xy.legendType,
         randomSeeds: xy.randomSeeds,

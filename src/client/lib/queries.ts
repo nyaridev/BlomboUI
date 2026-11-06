@@ -6,6 +6,7 @@ import type {
   CivitaiPeriod,
   ImageSort,
 } from "@shared/civitai";
+import type { CompareTask } from "@shared/compare";
 import type { ModelKind } from "@shared/constants";
 import type { DownloadHistoryPage, EnqueueBody } from "@shared/downloads";
 import type {
@@ -80,6 +81,7 @@ export const qk = {
   modelMarks: (profileId: string | null) => ["history", profileId, "model-marks"] as const,
   errorLog: (profileId: string | null) => ["error-log", profileId] as const,
   snippets: (profileId: string | null) => ["snippets", profileId] as const,
+  compare: (profileId: string | null) => ["compare", profileId] as const,
   /** Files in the models folder (not ComfyUI's lists, which are `models`). */
   localModels: (profileId: string | null) => ["local-models", profileId] as const,
   modelDetails: (profileId: string | null, id: string | null) =>
@@ -1111,4 +1113,27 @@ export function useRemoveSnippet() {
     mutationFn: (id: string) => api.removeSnippet(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["snippets"] }),
   });
+}
+
+/* ── compare ──────────────────────────────────────────────────────────── */
+
+/**
+ * The profile's comparisons, newest change first. The live bus keeps them current while a view
+ * follows the "compare" topic.
+ */
+export function useCompareTasks() {
+  const profileId = useSession((s) => s.profileId);
+  return useQuery({
+    queryKey: qk.compare(profileId),
+    queryFn: api.compareTasks,
+    enabled: profileId !== null,
+  });
+}
+
+/** Put a comparison the server answered with into the list (the bus says it too, maybe later). */
+export function putCompare(task: CompareTask): void {
+  const profileId = useSession.getState().profileId;
+  queryClient.setQueryData<CompareTask[]>(qk.compare(profileId), (old) =>
+    old ? [task, ...old.filter((t) => t.id !== task.id)] : old,
+  );
 }

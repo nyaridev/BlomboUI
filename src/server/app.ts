@@ -15,6 +15,7 @@ import { batchRoutes } from "./routes/batch.ts";
 import { bridgeAdminRoutes, bridgeRoutes } from "./routes/bridge.ts";
 import { civitaiRoutes } from "./routes/civitai.ts";
 import { comfyRoutes } from "./routes/comfy.ts";
+import { compareRoutes } from "./routes/compare.ts";
 import { devRoutes } from "./routes/dev.ts";
 import { downloadRoutes } from "./routes/downloads.ts";
 import { fileInfoRoutes } from "./routes/fileinfo.ts";
@@ -63,6 +64,7 @@ export function createApp(services: Services) {
     workflowRoutes(config, workflows, supervisor, services.layouts, services.bridge),
   );
   api.route("/scripts", scriptRoutes(services.scripts));
+  api.route("/compare", compareRoutes(services.compare));
   api.route("/batch", batchRoutes(services.batch));
   api.route("/layouts", layoutRoutes(services.layouts, workflows));
   api.route("/stages", stageRoutes(services.stages));

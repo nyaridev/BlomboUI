@@ -12,12 +12,14 @@
  *           either is open)
  *   downloads the download queue and its progress (the header shows it, so every window follows)
  *   batch   the batch runner's files (while a batch workflow is open)
+ *   compare comparisons changing, and each combination's run (while Compare or its script is open)
  * Errors, profile switches, model-folder and wildcards-folder changes go to everyone.
  */
 import { z } from "zod";
 import { BatchItem, BatchRun } from "./batch.ts";
 import { ResyncReport } from "./bridge.ts";
 import { ComfyLogLine, ComfyStatus, SystemStats } from "./comfy.ts";
+import { CompareResult, CompareTask } from "./compare.ts";
 import { DownloadProgress, DownloadsSnapshot } from "./downloads.ts";
 import { GalleryImage, SyncState } from "./gallery.ts";
 import { InstallState, NodeInstallState } from "./install.ts";
@@ -33,6 +35,7 @@ export const LIVE_TOPICS = [
   "install",
   "downloads",
   "batch",
+  "compare",
 ] as const;
 export const LiveTopic = z.enum(LIVE_TOPICS);
 export type LiveTopic = z.infer<typeof LiveTopic>;
@@ -99,6 +102,15 @@ export const ServerMessage = z.discriminatedUnion("t", [
   z.object({ t: z.literal("batch"), run: BatchRun.nullable() }),
   /** One file of the running batch changed. */
   z.object({ t: z.literal("batch.item"), batchId: z.string(), item: BatchItem }),
+  /** A comparison was made, changed, started or stopped (null task: removed). */
+  z.object({ t: z.literal("compare"), id: z.string(), task: CompareTask.nullable() }),
+  /** One combination's run changed. */
+  z.object({
+    t: z.literal("compare.result"),
+    id: z.string(),
+    result: CompareResult,
+    running: z.boolean(),
+  }),
 ]);
 export type ServerMessage = z.infer<typeof ServerMessage>;
 

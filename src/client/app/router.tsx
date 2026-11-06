@@ -2,7 +2,7 @@
  * Routes. `/` is the profile screen. `/p/$profileId/…` is the app; the Shell stays mounted for
  * every view under a profile and keeps Generate and Gallery alive (hidden) when you switch away.
  */
-import { MAIN_VIEWS, MENU_VIEWS, type ViewId } from "@shared/constants";
+import { MAIN_VIEWS, MENU_VIEWS, SUB_VIEWS, type ViewId } from "@shared/constants";
 import {
   createRootRoute,
   createRoute,
@@ -92,7 +92,7 @@ declare module "@tanstack/react-router" {
   }
 }
 
-const VIEWS = new Set<string>([...MAIN_VIEWS, ...MENU_VIEWS]);
+const VIEWS = new Set<string>([...MAIN_VIEWS, ...MENU_VIEWS, ...SUB_VIEWS]);
 
 export function viewFromPath(pathname: string): ViewId {
   const part = pathname.split("/")[3];

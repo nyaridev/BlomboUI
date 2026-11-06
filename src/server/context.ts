@@ -10,6 +10,7 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { CIVITAI_SITE_URLS } from "../shared/civitai.ts";
 import type { AppError } from "../shared/live.ts";
+import { loraWeights } from "../shared/scripts.ts";
 import type { Settings } from "../shared/settings.ts";
 import type { ServerConfig } from "./config.ts";
 import { ProfileDbs } from "./db/profileDb.ts";
@@ -27,6 +28,7 @@ import { NodePackInstaller } from "./services/comfy/nodepacks.ts";
 import { OWN_SLOT } from "./services/comfy/slots.ts";
 import { StatsSampler } from "./services/comfy/stats.ts";
 import { ComfySupervisor } from "./services/comfy/supervisor.ts";
+import { CompareService } from "./services/compare.ts";
 import { DevInfoService } from "./services/devinfo.ts";
 import { DownloadQueue } from "./services/downloads.ts";
 import { ImportService } from "./services/gallery/imports.ts";
@@ -72,6 +74,7 @@ export interface Services {
   autocomplete: AutocompleteService;
   bridge: BridgeService;
   scripts: ScriptService;
+  compare: CompareService;
   batch: BatchService;
   history: HistoryService;
   snippets: SnippetService;
@@ -269,10 +272,13 @@ export function createServices(config: ServerConfig): Services {
     publish: (topic, msg) => {
       bus.publish(topic, msg);
       // New outputs appear in the gallery as they land, without a rescan.
-      if (msg.t === "job.image")
+      if (msg.t === "job.image") {
+        const jobId = msg.jobId;
         void gallery
           .ingestOutput(msg.image)
+          .then((image) => compare.onImage(jobId, image))
           .catch((error) => console.warn("Couldn't index a new image:", error));
+      }
     },
     publishBinary: (topic, frame) => bus.publishBinary(topic, frame),
     reportError,
@@ -360,6 +366,13 @@ export function createServices(config: ServerConfig): Services {
       models.invalidate();
       bus.publish(null, { t: "models.changed" });
     },
+  });
+  const compare = new CompareService({
+    queue: jobs,
+    profiles,
+    workflows,
+    publish: (msg) => bus.publish("compare", msg),
+    loraWeight: async () => loraWeights(await models.list()),
   });
   const batch = new BatchService({
     queue: jobs,
@@ -467,6 +480,7 @@ export function createServices(config: ServerConfig): Services {
     autocomplete,
     bridge,
     scripts,
+    compare,
     batch,
     history,
     snippets,

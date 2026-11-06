@@ -7,6 +7,7 @@
 import type { BatchRun } from "@shared/batch";
 import type { ResyncReport } from "@shared/bridge";
 import type { ComfyLogLine, ComfyStatus, SystemStats } from "@shared/comfy";
+import type { CompareTask } from "@shared/compare";
 import type { Download, DownloadProgress } from "@shared/downloads";
 import type { GalleryImage, SyncState } from "@shared/gallery";
 import type { InstallState, NodeInstallState } from "@shared/install";
@@ -156,6 +157,8 @@ const TOPIC_STATE: Partial<Record<LiveTopic, () => void>> = {
   batch: () => useLive.setState({ batch: null }),
   install: () => useLive.setState({ install: null, nodeInstall: null }),
   gallery: () => useLive.setState({ gallerySync: null }),
+  // Not updated while nobody follows: the next view reads the server's list again.
+  compare: () => void queryClient.invalidateQueries({ queryKey: ["compare"] }),
 };
 
 /** Follow an extra topic while a component is mounted (e.g. logs while the log view is open). */
@@ -332,6 +335,33 @@ function onJson(text: string): void {
       const items = run.items.slice();
       items[msg.item.index] = msg.item;
       useLive.setState({ batch: { ...run, items } });
+      break;
+    }
+    case "compare": {
+      const key = qk.compare(useSession.getState().profileId);
+      const task = msg.task;
+      queryClient.setQueryData<CompareTask[]>(key, (old) =>
+        old
+          ? task
+            ? [task, ...old.filter((t) => t.id !== msg.id)]
+            : old.filter((t) => t.id !== msg.id)
+          : old,
+      );
+      break;
+    }
+    case "compare.result": {
+      const key = qk.compare(useSession.getState().profileId);
+      queryClient.setQueryData<CompareTask[]>(key, (old) =>
+        old?.map((t) =>
+          t.id === msg.id
+            ? {
+                ...t,
+                running: msg.running,
+                results: t.results.map((r) => (r.key === msg.result.key ? msg.result : r)),
+              }
+            : t,
+        ),
+      );
       break;
     }
     case "download.progress": {

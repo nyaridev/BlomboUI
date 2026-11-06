@@ -2,6 +2,7 @@
  * Typed fetch wrapper for /api. Errors come back as ApiError with the server's message and
  * code, so the UI can show "what went wrong and what to do" instead of a status number.
  */
+
 import type {
   ApiErrorBody,
   CheckPathResult,
@@ -51,6 +52,7 @@ import type {
   FreeMemoryBody,
   SamplerLists,
 } from "@shared/comfy";
+import type { CompareTask, CompareUpdateInput, NewCompareInput } from "@shared/compare";
 import type { ModelKind } from "@shared/constants";
 import type { DevImageMeta, DevStorage } from "@shared/dev";
 import type {
@@ -381,6 +383,16 @@ export const api = {
   errorLog: () => request<AppError[]>("GET", "/history/errors"),
   clearErrorLog: (ids?: string[]) =>
     request<{ removed: number }>("POST", "/history/errors/clear", { ids }),
+  compareTasks: () => request<CompareTask[]>("GET", "/compare"),
+  newCompare: (body: NewCompareInput) => request<CompareTask>("POST", "/compare", body),
+  updateCompare: (id: string, body: CompareUpdateInput) =>
+    request<CompareTask>("PATCH", `/compare/${encodeURIComponent(id)}`, body),
+  removeCompare: (id: string) => request<void>("DELETE", `/compare/${encodeURIComponent(id)}`),
+  cloneCompare: (id: string) =>
+    request<CompareTask>("POST", `/compare/${encodeURIComponent(id)}/clone`),
+  startCompare: (id: string, mode: "missing" | "all") =>
+    request<CompareTask>("POST", `/compare/${encodeURIComponent(id)}/start`, { mode }),
+  stopCompare: (id: string) => request<void>("POST", `/compare/${encodeURIComponent(id)}/stop`),
   snippets: () => request<Snippet[]>("GET", "/history/snippets"),
   saveSnippet: (body: SaveSnippetBody) => request<Snippet>("POST", "/history/snippets", body),
   removeSnippet: (id: string) =>

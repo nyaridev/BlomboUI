@@ -5,13 +5,16 @@
  * little taller, `bg-surface`, and joins the `bg-surface` panel placed right under the tabs
  * (the panel draws the line; give its corner under the first tab `rounded-tl-none`). A tab with `checked` gets a checkbox before
  * its label that turns its view on or off (the Generate passes: Hires fix, ADetailer…); the
- * checkbox is the tab's sibling, not inside the tab button.
+ * checkbox is the tab's sibling, not inside the tab button. A tab with `menu` gets a small
+ * chevron at its right end that opens a menu (the header's Generate tab: Generate or Compare);
+ * the chevron is a sibling too, so the tab itself still switches with one click.
  */
 import { Icon, type IconName } from "@client/icons/Icon";
 import { cn } from "@client/lib/cn";
 import { snappy } from "@client/lib/motion";
 import { LayoutGroup, motion } from "motion/react";
 import { type KeyboardEvent, type ReactNode, useId, useRef } from "react";
+import { Menu, type MenuEntry } from "./floating";
 import { Checkbox } from "./toggles";
 
 export interface TabItem<T extends string> {
@@ -23,6 +26,9 @@ export interface TabItem<T extends string> {
   checked?: boolean;
   onCheckedChange?: (checked: boolean) => void;
   checkLabel?: string;
+  /** A chevron after the label that opens these entries; `menuLabel` names it. */
+  menu?: MenuEntry[];
+  menuLabel?: string;
 }
 
 export function Tabs<T extends string>({
@@ -70,6 +76,7 @@ export function Tabs<T extends string>({
         {items.map((item, i) => {
           const active = item.value === value;
           const checkable = item.checked !== undefined;
+          const menu = item.menu?.length ? item.menu : null;
           const tab = (
             <button
               key={item.value}
@@ -91,6 +98,7 @@ export function Tabs<T extends string>({
                     ? "z-10 -mb-px h-10 rounded-t-md border border-b-0 border-line bg-surface"
                     : "rounded-t-md border border-b-0 border-line hover:bg-surface/50"),
                 checkable && "pl-9",
+                menu && "pr-7",
                 active ? "text-fg" : "text-fg-3 hover:text-fg-2",
               )}
             >
@@ -119,6 +127,30 @@ export function Tabs<T extends string>({
               </span>
             </button>
           );
+          if (menu)
+            return (
+              <span key={item.value} className="relative inline-flex shrink-0">
+                {tab}
+                <Menu
+                  placement="bottom-start"
+                  items={menu}
+                  trigger={
+                    <button
+                      type="button"
+                      aria-label={item.menuLabel ?? "More views"}
+                      className={cn(
+                        "absolute top-1/2 right-1 z-20 flex size-5 -translate-y-1/2 items-center justify-center rounded-sm transition-colors focus-ring",
+                        active
+                          ? "text-fg-3 hover:bg-surface-2 hover:text-fg"
+                          : "text-fg-4 hover:text-fg-2",
+                      )}
+                    >
+                      <Icon name="chevron-down" size={13} />
+                    </button>
+                  }
+                />
+              </span>
+            );
           if (!checkable) return tab;
           return (
             <span key={item.value} className="relative inline-flex shrink-0">

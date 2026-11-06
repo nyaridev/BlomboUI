@@ -76,6 +76,7 @@ import type { BatchRun } from "@shared/batch";
 import { ACCENTS, THEME_LABELS, THEMES } from "@shared/constants";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { CompareLab } from "./CompareLab";
 
 const SECTIONS = [
   ["brand", "Brand"],
@@ -94,6 +95,7 @@ const SECTIONS = [
   ["cards", "Cards"],
   ["library", "Library"],
   ["batch", "Batch"],
+  ["compare", "Compare"],
   ["prompt", "Prompt editor"],
   ["guides", "Guides"],
 ] as const;
@@ -968,7 +970,21 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
               value={tab}
               onChange={setTab}
               items={[
-                { value: "generate", label: "Generate", icon: "generate" },
+                {
+                  value: "generate",
+                  label: "Generate",
+                  icon: "generate",
+                  menuLabel: "Generate or Compare",
+                  menu: [
+                    {
+                      id: "g",
+                      label: "Generate",
+                      icon: "generate",
+                      onSelect: () => setTab("generate"),
+                    },
+                    { id: "c", label: "Compare", icon: "compare", onSelect: () => undefined },
+                  ],
+                },
                 { value: "gallery", label: "Gallery", icon: "gallery" },
                 { value: "models", label: "Models", icon: "models" },
                 { value: "wildcards", label: "Wildcards", icon: "wildcards" },
@@ -1794,6 +1810,14 @@ export function DesignLab({ standalone }: { standalone?: boolean }) {
           <div className="max-w-xl">
             <BatchRunView run={SAMPLE_BATCH} />
           </div>
+        </Section>
+
+        <Section
+          id="compare"
+          title="Compare"
+          text="ImageCompare: two images in one box. Flip switches on a click or Space, the slider reveals one under the other (drag, or ← →), side by side splits the box."
+        >
+          <CompareLab />
         </Section>
 
         <Section

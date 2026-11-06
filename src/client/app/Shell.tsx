@@ -64,6 +64,9 @@ const SavedData = import.meta.env.DEV
 const ErrorsView = lazyView(() =>
   import("../features/errors/ErrorsView").then((m) => ({ default: m.ErrorsView })),
 );
+const CompareView = lazyView(() =>
+  import("../features/compare/CompareView").then((m) => ({ default: m.CompareView })),
+);
 const HelpView = lazyView(() =>
   import("../features/help/HelpView").then((m) => ({ default: m.HelpView })),
 );
@@ -92,6 +95,8 @@ function renderView(view: ViewId): ReactNode {
       return <ErrorsView />;
     case "help":
       return <HelpView />;
+    case "compare":
+      return <CompareView />;
   }
 }
 

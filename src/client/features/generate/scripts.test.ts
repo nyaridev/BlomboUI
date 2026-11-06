@@ -1,6 +1,7 @@
+import { axisInput } from "@shared/scripts";
 import type { Binding } from "@shared/workflow/manifest";
 import { describe, expect, it } from "vitest";
-import { axisInput, axisTypes, buildScript, initialScript, type ScriptDraft } from "./scripts";
+import { axisTypes, buildScript, initialScript, type ScriptDraft } from "./scripts";
 
 const bindings: Binding[] = [
   {

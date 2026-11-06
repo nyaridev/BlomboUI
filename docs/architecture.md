@@ -189,7 +189,7 @@ prompt.json → apply values to bindings → expand wildcards → <lora:…> tag
 
 **Templates are gone.** Values live in the workflow. **Duplicate** creates a sibling package with a new name, and changes stay local to that copy. **Export** writes a `.blombo` zip: manifest, graphs, linked layout, thumbnail.
 
-**Scripts and batch** (ADR-0014): the Generate screen's Scripts block turns one click into a prompt matrix, an XY plot or thumbnails; `kind: "batch"` workflows show the batch runner instead of the prompts. Both queue groups of runs in the one server queue (`JobGroup`); `services/scripts.ts` composites grids and saves thumbnails as model pictures, `services/batch.ts` uploads each input file and writes results and sidecar captions into the output folder.
+**Scripts and batch** (ADR-0014): the Generate screen's Scripts block turns one click into a prompt matrix, an XY plot or thumbnails; `kind: "batch"` workflows show the batch runner instead of the prompts. Both queue groups of runs in the one server queue (`JobGroup`); `services/scripts.ts` composites grids and saves thumbnails as model pictures, `services/batch.ts` uploads each input file and writes results and sidecar captions into the output folder. **Compare** (`services/compare.ts`) is the saved, many-axes form of the XY plot: a comparison runs every combination of its rows as one group and keeps which gallery image is which combination, so its view can lay them out in a grid and run only what's missing.
 
 Details: [`workflows.md`](workflows.md) · ADR [0003](adr/0003-workflow-packages.md) · ADR [0004](adr/0004-stages.md) · ADR [0009](adr/0009-comfy-bridge.md) · ADR [0014](adr/0014-scripts-and-batch-runner.md).
 

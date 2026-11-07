@@ -129,8 +129,13 @@ describe("Civitai downloads", () => {
     const d = await q().enqueue({ source: "civitai", modelId: 1003, versionId: 10033 });
     const failed = await finished(d.id);
     expect(failed.state).toBe("error");
-    expect(failed.error).toMatch(/API key/);
+    expect(failed.error).toMatch(/needs your API key/);
+    // A key Civitai doesn't take: its "log in" answer says so, not "early access".
+    await o.services.civitai.setKey("WRONG_KEY", false);
+    await q().resume(d.id);
+    expect((await finished(d.id)).error).toMatch(/didn't take your API key/);
     await o.services.civitai.setKey(FAKE_KEY, false);
+    const from = o.fake.requests.length;
     await q().resume(d.id);
     const done = await waitFor(() => {
       const x = q()
@@ -139,6 +144,17 @@ describe("Civitai downloads", () => {
       return x?.state === "done" ? x : null;
     });
     expect(done.state).toBe("done");
+    // The key goes to the download route as header and token, not into the redirect.
+    const sent = o.fake.requests.slice(from);
+    const first = sent.find((r) => r.path.startsWith("/api/download/models/10033"));
+    expect(first?.path).toContain(`token=${FAKE_KEY}`);
+    expect(first?.auth).toBe(`Bearer ${FAKE_KEY}`);
+    expect(sent.find((r) => r.path.startsWith("/blobs/"))?.path).not.toContain("token=");
+    expect(
+      q()
+        .snapshot()
+        .items.find((i) => i.id === d.id)?.error,
+    ).toBeNull();
     await o.services.civitai.removeKey();
   });
 

@@ -53,7 +53,7 @@ import {
   writeFileIfAbsent,
 } from "../lib/fsx.ts";
 import { HttpError } from "../lib/http.ts";
-import { fetchFollow } from "../lib/remote.ts";
+import { fetchFollow, readLimited } from "../lib/remote.ts";
 import type { CivitaiService } from "./civitai/index.ts";
 import { infoSidecar, lookupInfo, previewSource, primaryFile } from "./civitai/normalize.ts";
 import type { ModelLookup } from "./lookup.ts";
@@ -679,8 +679,8 @@ export class DownloadQueue {
         res = await this.request(item, 0, key, abort.signal);
       }
       if (!res.ok) {
-        await res.body?.cancel().catch(() => undefined);
-        throw new DownloadError(this.describeStatus(res.status, item, key));
+        const reason = await refusalReason(res, item.job.civitaiAuth);
+        throw new DownloadError(this.describeStatus(res.status, item, key, reason));
       }
       const hash = createHash("sha256");
       await hashInto(hash, part.path, part.offset);
@@ -703,9 +703,15 @@ export class DownloadQueue {
     key: string | null,
     signal: AbortSignal,
   ): Promise<Response> {
-    return fetchFollow(item.job.url, {
+    const origin = this.deps.civitai.api.origin;
+    const url = new URL(item.job.url);
+    // Civitai's download route can ignore the header and answer "log in" (seen 2026-11); it also
+    // takes ?token=, the form its docs keep for download tools. Only on its own origin, and only
+    // in the request, never in the saved job.
+    if (key && url.origin === origin) url.searchParams.set("token", key);
+    return fetchFollow(url.href, {
       headers: offset > 0 ? { range: `bytes=${offset}-` } : {},
-      auth: key ? { origin: this.deps.civitai.api.origin, header: `Bearer ${key}` } : undefined,
+      auth: key ? { origin, header: `Bearer ${key}` } : undefined,
       signal,
       fetch: this.deps.fetch,
     });
@@ -791,11 +797,18 @@ export class DownloadQueue {
     this.update(item, { state: "error", error: message, finishedAt: Date.now() });
   }
 
-  private describeStatus(status: number, item: Item, key: string | null): string {
+  private describeStatus(
+    status: number,
+    item: Item,
+    key: string | null,
+    reason: string | null,
+  ): string {
     if (status === 401 || status === 403)
       return item.job.civitaiAuth
         ? key
-          ? "Civitai refused the download with your API key. The file may be early access or need you to log in on Civitai."
+          ? reason && /logged in|log in/i.test(reason)
+            ? "Civitai didn't take your API key for this download. Copy the key again from Civitai → Account settings → API keys into Settings → Civitai, then retry."
+            : `Civitai refused the download with your API key${reason ? `: ${reason}` : ". The file may be early access, or need something on your Civitai account."}`
           : "Civitai needs your API key for this download. Add it in Settings → Civitai, then retry."
         : "The server refused the download (it may need a login). Download it in your browser and put it in the models folder.";
     if (status === 404) return "The file isn't there anymore.";
@@ -976,5 +989,24 @@ export class DownloadQueue {
         this.update(item, { state: "paused" }, false);
       }
     if (this.progressTimer) clearTimeout(this.progressTimer);
+  }
+}
+
+/** Civitai's own words for a refusal (`{"message": …}`), or null; the body is always closed. */
+async function refusalReason(res: Response, civitai: boolean): Promise<string | null> {
+  if (!civitai) {
+    await res.body?.cancel().catch(() => undefined);
+    return null;
+  }
+  try {
+    const body = JSON.parse(new TextDecoder().decode(await readLimited(res, 16_384))) as {
+      message?: unknown;
+    };
+    return typeof body.message === "string" && body.message.trim()
+      ? body.message.trim().replace(/\.?$/, ".")
+      : null;
+  } catch {
+    await res.body?.cancel().catch(() => undefined);
+    return null;
   }
 }

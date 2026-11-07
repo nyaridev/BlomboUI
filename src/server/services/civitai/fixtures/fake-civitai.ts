@@ -404,7 +404,9 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
     const auth = req.headers.authorization ?? null;
     requests.push({ path: `${p}${url.search}`, auth, range: req.headers.range ?? null });
     const authed = auth === `Bearer ${FAKE_KEY}`;
-    if (auth && !authed && p.startsWith("/api/")) return json(res, 401, { error: "Unauthorized" });
+    // Like Civitai, downloads treat a wrong key as no key (see the refusal below).
+    if (auth && !authed && p.startsWith("/api/") && !p.startsWith("/api/download/"))
+      return json(res, 401, { error: "Unauthorized" });
     void (async () => {
       let m: RegExpExecArray | null;
       m = /^\/api\/models\/([\w.-]+)\/([\w.-]+)$/.exec(p);
@@ -586,7 +588,10 @@ export async function startFakeCivitai(opts: FakeCivitaiOptions = {}): Promise<F
         );
         if (!entry) return json(res, 404, { error: "File not found" });
         if (entry.version.earlyAccess && !authed)
-          return json(res, 401, { error: "Early access: log in to download" });
+          return json(res, 401, {
+            error: "Unauthorized",
+            message: "The creator of this asset requires you to be logged in to download it",
+          });
         res.writeHead(307, { location: `/blobs/${entry.file.id}` });
         return res.end();
       }

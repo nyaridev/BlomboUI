@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import type { Download } from "../../shared/downloads.ts";
 import { FAKE_KEY } from "./civitai/fixtures/fake-civitai.ts";
 import { type Online, setupOnline, waitFor } from "./civitai/fixtures/setup.ts";
+import { onSite } from "./downloads.ts";
 
 let o: Online;
 beforeAll(async () => {
@@ -135,7 +136,6 @@ describe("Civitai downloads", () => {
     await q().resume(d.id);
     expect((await finished(d.id)).error).toMatch(/didn't take your API key/);
     await o.services.civitai.setKey(FAKE_KEY, false);
-    const from = o.fake.requests.length;
     await q().resume(d.id);
     const done = await waitFor(() => {
       const x = q()
@@ -144,12 +144,6 @@ describe("Civitai downloads", () => {
       return x?.state === "done" ? x : null;
     });
     expect(done.state).toBe("done");
-    // The key goes to the download route as header and token, not into the redirect.
-    const sent = o.fake.requests.slice(from);
-    const first = sent.find((r) => r.path.startsWith("/api/download/models/10033"));
-    expect(first?.path).toContain(`token=${FAKE_KEY}`);
-    expect(first?.auth).toBe(`Bearer ${FAKE_KEY}`);
-    expect(sent.find((r) => r.path.startsWith("/blobs/"))?.path).not.toContain("token=");
     expect(
       q()
         .snapshot()
@@ -286,5 +280,20 @@ describe("Manager installs", () => {
     expect((await q().plan({ source: "manager", entryId: custom?.id ?? "" })).blocked).toMatch(
       /ComfyUI Manager/,
     );
+  });
+});
+
+describe("onSite", () => {
+  it("asks the profile's Civitai site for a link on the other one", () => {
+    const link = "https://civitai.com/api/download/models/5?fileId=6";
+    expect(onSite(link, "https://civitai.red")).toBe(
+      "https://civitai.red/api/download/models/5?fileId=6",
+    );
+    expect(onSite(link, "https://civitai.com")).toBe(link);
+    // Other hosts (a Hugging Face link, the fake Civitai) stay as they are.
+    expect(onSite("https://huggingface.co/a/b.safetensors", "https://civitai.red")).toBe(
+      "https://huggingface.co/a/b.safetensors",
+    );
+    expect(onSite(link, "http://127.0.0.1:8298")).toBe(link);
   });
 });

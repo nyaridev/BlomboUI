@@ -17,7 +17,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { CIVITAI_TYPE_LABELS, civitaiKind } from "../../shared/civitai.ts";
+import { CIVITAI_SITE_URLS, CIVITAI_TYPE_LABELS, civitaiKind } from "../../shared/civitai.ts";
 import type { ModelKind } from "../../shared/constants.ts";
 import {
   aliasFor,
@@ -704,12 +704,7 @@ export class DownloadQueue {
     signal: AbortSignal,
   ): Promise<Response> {
     const origin = this.deps.civitai.api.origin;
-    const url = new URL(item.job.url);
-    // Civitai's download route can ignore the header and answer "log in" (seen 2026-11); it also
-    // takes ?token=, the form its docs keep for download tools. Only on its own origin, and only
-    // in the request, never in the saved job.
-    if (key && url.origin === origin) url.searchParams.set("token", key);
-    return fetchFollow(url.href, {
+    return fetchFollow(onSite(item.job.url, origin), {
       headers: offset > 0 ? { range: `bytes=${offset}-` } : {},
       auth: key ? { origin, header: `Bearer ${key}` } : undefined,
       signal,
@@ -990,6 +985,20 @@ export class DownloadQueue {
       }
     if (this.progressTimer) clearTimeout(this.progressTimer);
   }
+}
+
+const CIVITAI_ORIGINS = Object.values(CIVITAI_SITE_URLS).map((u) => new URL(u).origin);
+
+/**
+ * A Civitai download link on the profile's site (`origin`), the one the key is sent to:
+ * civitai.red's model answers link downloads on civitai.com (seen 2026-11), and either site
+ * serves the file. Any other link stays as it is.
+ */
+export function onSite(link: string, origin: string): string {
+  const url = new URL(link);
+  return CIVITAI_ORIGINS.includes(url.origin) && CIVITAI_ORIGINS.includes(origin)
+    ? new URL(`${url.pathname}${url.search}`, origin).href
+    : link;
 }
 
 /** Civitai's own words for a refusal (`{"message": …}`), or null; the body is always closed. */

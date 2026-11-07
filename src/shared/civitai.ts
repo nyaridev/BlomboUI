@@ -254,7 +254,7 @@ export const CivitaiCard = z.object({
   downloads: z.number(),
   likes: z.number(),
   image: CivitaiImage.nullable(),
-  /** Newest version id. */
+  /** The version the card shows: the newest, or the newest on the filter's base models. */
   versionId: z.number().nullable(),
   /** When the newest version came out (ISO), for the Following feed's order. */
   publishedAt: z.string().nullable().default(null),

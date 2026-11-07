@@ -733,7 +733,7 @@ type ModelsQuery = ReturnType<typeof useCivitaiModels> | ReturnType<typeof useCi
 /** The results grid with its loading, error and empty states (Browse and Following). */
 export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
   const open = useCivitai((s) => s.open);
-  const [downloading, setDownloading] = useState<number | null>(null);
+  const [downloading, setDownloading] = useState<CivitaiCard | null>(null);
   const settings = useSettings().data;
   const blurNsfw = useCivitai((s) => s.blur);
   const showMarks = settings?.civitai.marks ?? true;
@@ -791,14 +791,18 @@ export function Results({ q, empty }: { q: ModelsQuery; empty: ReactNode }) {
         blurNsfw={blurNsfw}
         mark={(c) => cardMark(c, downloads, showMarks)}
         onOpen={(c, background) => open(c.id, c.name, background, c.versionId)}
-        onDownload={(c) => setDownloading(c.id)}
+        onDownload={setDownloading}
         onEnd={() => {
           if (q.hasNextPage && !q.isFetchingNextPage) void q.fetchNextPage();
         }}
         loadingMore={q.isFetchingNextPage}
         fetching={q.isFetching && !q.isFetchingNextPage}
       />
-      <DownloadDialog modelId={downloading} onClose={() => setDownloading(null)} />
+      <DownloadDialog
+        modelId={downloading?.id ?? null}
+        versionId={downloading?.versionId ?? undefined}
+        onClose={() => setDownloading(null)}
+      />
     </>
   );
 }

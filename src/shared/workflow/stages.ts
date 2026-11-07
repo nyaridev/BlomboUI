@@ -290,6 +290,18 @@ export const SourceSettings = z.object({
   last: StageImage.nullable().default(null),
   /** Continue a video: the video so far; the new part follows its last frames. */
   video: StageVideo.nullable().default(null),
+  /**
+   * A swap's parts (services/longvideo.ts sets it per run, never saved): the whole window of the
+   * input video they read and each part's longest, in seconds, so Continue a video reads the next.
+   */
+  window: z
+    .object({
+      start: z.number().min(0),
+      seconds: z.number().min(0),
+      part: z.number().positive(),
+    })
+    .nullable()
+    .default(null),
   /** The painted mask, the image's size: white is redrawn, black is kept. */
   mask: StageImage.nullable().default(null),
   /** How much the sampler changes the image (the main sampler's denoise). */

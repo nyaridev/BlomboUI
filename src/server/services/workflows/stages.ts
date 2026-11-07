@@ -406,12 +406,17 @@ function instancesFor(
       const b = bindingFor(ctx.bindings, role);
       return Math.max(0, Number(b ? ctx.values[b.id] : 0) || 0);
     };
-    const window = partWindow(
-      { start: seconds("video.start"), seconds: seconds("video.seconds") },
-      madeFps,
-      count("video.frames", 81),
-      s.video?.frames ?? Math.round((s.video?.duration ?? 0) * madeFps),
-    );
+    // A chain of parts says its whole window and part length (Generate's Length × Parts);
+    // otherwise the window is the values' and a part the model's longest.
+    const made = s.video?.frames ?? Math.round((s.video?.duration ?? 0) * madeFps);
+    const window = s.window
+      ? partWindow(s.window, madeFps, Math.round(s.window.part * madeFps), made)
+      : partWindow(
+          { start: seconds("video.start"), seconds: seconds("video.seconds") },
+          madeFps,
+          count("video.frames", 81),
+          made,
+        );
     return [
       {
         key: "source",

@@ -4,14 +4,19 @@
   "stage": "source",
   "family": "diffusion",
   "name": "Continue a video (MiniMax H3)",
-  "description": "Continues a MiniMax H3 video: its last 5 frames and their sound are anchored at the start of the new video (MiniMaxH3AddGuide), and after decoding the earlier frames and sound are put in front of the new ones (without the 5 it started from), so the result is the whole video. Core nodes only.",
+  "description": "Continues a MiniMax H3 video: its last 5 frames and their sound are anchored at the start of the new video (MiniMaxH3AddGuide), and after decoding the earlier frames and sound are put in front of the new ones (without the 5 it started from), so the result is the whole video. On the character swap, the next part reads the input video from 5 frames before the end of the video so far, so those frames line up. Core nodes only.",
   "attach": "before_sampler",
   "modes": [
     "extend"
   ],
   "fits": [
-    "MiniMaxH3ImageToVideo"
+    "MiniMaxH3ImageToVideo",
+    "MiniMaxH3ReferenceToVideo"
   ],
+  "roles": {
+    "video.start": "windowStart",
+    "video.seconds": "windowLength"
+  },
   "requires": [
     "POSITIVE",
     "VAE",

@@ -48,6 +48,7 @@ function setup(preset: string) {
     stages: { smooth: { enabled: true, multiplier: 2 } },
   } as unknown as WorkflowManifest;
   const runs: RunSpec[] = [];
+  const plain: unknown[] = [];
   const messages: ServerMessage[] = [];
   let onFinished: (job: Job) => void = () => undefined;
   const queue = {
@@ -59,6 +60,10 @@ function setup(preset: string) {
     addRuns: (_m: WorkflowManifest, specs: RunSpec[]) => {
       runs.push(...specs);
       return specs.map((s) => ({ id: `job-${runs.length}`, group: s.group }) as Job);
+    },
+    enqueue: async (b: unknown) => {
+      plain.push(b);
+      return { jobs: [], values: {} };
     },
   } as unknown as JobQueue;
   const copied: string[] = [];
@@ -90,7 +95,7 @@ function setup(preset: string) {
     } as Job);
     await new Promise((r) => setTimeout(r, 10));
   };
-  return { manifest, service, runs, finish, copied, messages };
+  return { manifest, service, runs, plain, finish, copied, messages };
 }
 
 const body = (prompts: string[]) => ({
@@ -166,6 +171,82 @@ describe("long video", () => {
     // The first part reads only its own window (81 frames from 1 s).
     expect(runs[0]?.values[id("video.start")]).toBe(1);
     expect(runs[0]?.values[id("video.seconds")]).toBe(2.7);
+  });
+
+  it("repeats a swap's Length by Long video's Parts, each part continuing from the last", async () => {
+    const { manifest, service, runs, finish } = setup("minimax-h3-swap");
+    const id = (role: string) => manifest.bindings.find((b) => b.role === role)?.id ?? "";
+    manifest.values = {
+      ...manifest.values,
+      [id("video.input")]: "0123456789abcdef.mp4",
+      [id("video.start")]: 1,
+      [id("video.seconds")]: 4,
+    };
+    const res = await service.split({
+      workflowId: "minimax-h3-swap",
+      values: {},
+      count: 1,
+      loop: false,
+      script: { kind: "long", segments: 2, prompts: ["walks in", "sits down"] },
+    });
+    expect(res?.jobs).toHaveLength(1);
+    // Two parts of 4 s: the first reads 1 s – 5 s of the video, with the first prompt.
+    expect(runs[0]?.group).toMatchObject({ kind: "long", total: 2 });
+    expect(runs[0]?.values).toMatchObject({
+      [id("video.start")]: 1,
+      [id("video.seconds")]: 4,
+      [id("prompt.positive")]: "walks in",
+    });
+    await finish();
+    // The next continues the first, knowing the whole window: 8 s less the 5 frames (at H3's
+    // 24 fps) the parts share, each part at most 4 s.
+    const next = runs[1];
+    expect(next?.stages?.source).toMatchObject({ mode: "extend", video: VIDEO });
+    expect(next?.stages?.source?.window).toEqual({ start: 1, seconds: 8 - 5 / 24, part: 4 });
+    expect(next?.values[id("prompt.positive")]).toBe("sits down");
+  });
+
+  it("runs SCAIL's parts in as many runs as its 81 frames need, each with its part's prompt", async () => {
+    const { manifest, service, runs } = setup("scail2-replace");
+    const id = (role: string) => manifest.bindings.find((b) => b.role === role)?.id ?? "";
+    manifest.values = {
+      ...manifest.values,
+      [id("video.input")]: "0123456789abcdef.mp4",
+      [id("video.start")]: 0,
+      [id("video.seconds")]: 5,
+    };
+    await service.split({
+      workflowId: "scail2-replace",
+      values: {},
+      count: 1,
+      loop: false,
+      script: { kind: "long", segments: 2, prompts: ["one", "two"] },
+    });
+    // About 10 s at 30 fps is 295 frames: 81, then 76 more each, so 4 runs, 2 per part.
+    expect(runs[0]?.group).toMatchObject({ total: 4 });
+    expect(runs[0]?.values[id("video.seconds")]).toBe(2.7);
+    expect(runs[0]?.values[id("prompt.positive")]).toBe("one");
+  });
+
+  it("runs Parts that fit in one run once, as a plain click", async () => {
+    const { manifest, service, runs, plain } = setup("minimax-h3-swap");
+    const id = (role: string) => manifest.bindings.find((b) => b.role === role)?.id ?? "";
+    manifest.values = {
+      ...manifest.values,
+      [id("video.input")]: "0123456789abcdef.mp4",
+      [id("video.start")]: 8,
+      [id("video.seconds")]: 5,
+    };
+    // The 10 s video has only 2 s left from 8 s.
+    await service.split({
+      workflowId: "minimax-h3-swap",
+      values: {},
+      count: 1,
+      loop: false,
+      script: { kind: "long", segments: 3, prompts: [] },
+    });
+    expect(runs).toHaveLength(0);
+    expect(plain).toMatchObject([{ script: undefined }]);
   });
 
   it("refuses a workflow that can't continue a video", async () => {

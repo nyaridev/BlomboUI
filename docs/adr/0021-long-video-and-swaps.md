@@ -97,6 +97,11 @@ ComfyUI 0.44 has the core nodes for all of it: `LoadVideo`, `GetVideoComponents`
   needs nothing else.
 - A part with Smooth motion on can't be continued at the same frame rate: continue the unsmoothed
   parts, and smooth the last.
-- H3's swap continues only as separate clips for now: its extend package fits H3's image to video
-  node, not the reference one.
+- Both swaps continue: H3's extend package also fits its reference to video node, and sets the
+  reference window like SCAIL's (`roles`). Parts (Long video's, shown under Length on the swap
+  card) repeats Length: N parts of L seconds read N × L of the input video, less the 5 frames each
+  next part shares, and the chain passes that whole window and L to the splicer
+  (`SourceSettings.window`) so each part reads the next L. SCAIL still makes at most 81 frames a
+  run, so a part longer than that runs in several. H3 rounds each part to its 17k + 5 frame grid,
+  so the total can be a little shorter or longer than N × L.
 - SCAIL keeps the driving video's whole sound track, as ComfyUI's template does.

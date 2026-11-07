@@ -10,9 +10,10 @@
  * that doesn't finish, or a switch to another profile ends the chain.
  *
  * A workflow that reads its input video in a window (the character swaps: Start at, Length) runs
- * as such a chain on a plain click when the window holds more frames than one run makes (`split`).
- * Its first part reads only its own window; each next one's window is worked out by the splicer
- * from the video so far (`partWindow`), so the file is never read whole.
+ * as such a chain when the window holds more frames than one run makes, or when Long video's Parts
+ * repeat Length (`split`, `swapWindow`). Its first part reads only its own window; each next one's
+ * window is worked out by the splicer from the video so far and the chain's window
+ * (`SourceSettings.window`, `partWindow`), so the file is never read whole.
  */
 import { randomUUID } from "node:crypto";
 import { mediaOf } from "../../shared/gallery.ts";
@@ -20,10 +21,15 @@ import type { GenerateBody, GenerateResponse, Job } from "../../shared/jobs.ts";
 import type { ServerMessage } from "../../shared/live.ts";
 import { randomSeed } from "../../shared/random.ts";
 import { planScript, ScriptError, type ScriptPlan } from "../../shared/scripts.ts";
-import { partWindow, videoParts } from "../../shared/videoparts.ts";
+import { partWindow, type SwapWindow, swapWindow } from "../../shared/videoparts.ts";
 import type { WorkflowManifest } from "../../shared/workflow/manifest.ts";
 import { bindingFor } from "../../shared/workflow/manifest.ts";
-import { isStageFile, readStages, type StageVideo } from "../../shared/workflow/stages.ts";
+import {
+  isStageFile,
+  readStages,
+  type SourceSettings,
+  type StageVideo,
+} from "../../shared/workflow/stages.ts";
 import { HttpError } from "../lib/http.ts";
 import { type JobQueue, nextSeed } from "./jobs.ts";
 import type { ProfileService } from "./profiles.ts";
@@ -47,7 +53,12 @@ interface Chain {
   seeds: number[];
   /** Values the first part runs with instead: a windowed video's first window. */
   first: Record<string, unknown>;
+  /** A windowed video's whole window, for each next part's (null for other workflows). */
+  window: SourceSettings["window"];
 }
+
+/** A windowed input video's window: its runs, and the first one's window. */
+type InputWindow = SwapWindow & { first: { start: number; seconds: number } };
 
 export class LongVideoService {
   private readonly deps: LongVideoDeps;
@@ -59,41 +70,64 @@ export class LongVideoService {
   }
 
   /**
-   * A plain click on a workflow that reads a window of its input video longer than one run makes:
-   * run it as a chain of parts. Null when one run does it.
+   * A click on a workflow that reads a window of its input video (a plain one, or Long video's
+   * Parts repeating Length): run it as a chain of the runs that window takes. Null when it isn't
+   * such a workflow, or for a plain click that one run does.
    */
   async split(body: GenerateBody): Promise<GenerateResponse | null> {
-    if (body.script) return null;
+    const long = body.script?.kind === "long" ? body.script : null;
+    if (body.script && !long) return null;
     const manifest = await this.deps.workflows.get(body.workflowId);
-    const window = await this.window(manifest.bindings, { ...manifest.values, ...body.values });
-    if (!window || window.parts < 2) return null;
-    return this.run({ ...body, script: { kind: "long", segments: window.parts, prompts: [] } });
+    const asked = long?.segments ?? 1;
+    const values = { ...manifest.values, ...body.values };
+    const window = await this.window(manifest.bindings, values, asked);
+    if (!window) return null;
+    // Parts that fit in one run (a video shorter than one Length): run it once.
+    if (window.parts < 2)
+      return long ? this.deps.queue.enqueue({ ...body, script: undefined }) : null;
+    // Each run takes the prompt of the part it falls in (SCAIL may run a part in several).
+    const prompts = Array.from(
+      { length: window.parts },
+      (_, i) => long?.prompts[Math.floor((i * asked) / window.parts)] ?? "",
+    );
+    return this.run({ ...body, script: { kind: "long", segments: window.parts, prompts } }, window);
   }
 
-  /** The window a workflow reads of its input video, and how many parts it takes. */
-  private async window(bindings: WorkflowManifest["bindings"], values: Record<string, unknown>) {
+  /**
+   * The window a workflow reads of its input video, in `parts` of Length (1: Length is the whole
+   * window), and the runs it takes. Null for a workflow without a windowed input video.
+   */
+  private async window(
+    bindings: WorkflowManifest["bindings"],
+    values: Record<string, unknown>,
+    parts: number,
+  ): Promise<InputWindow | null> {
     const value = (role: string) => {
       const b = bindingFor(bindings, role);
       return b ? values[b.id] : undefined;
     };
     const file = value("video.input");
-    const partFrames = Number(value("video.frames"));
-    if (!isStageFile(file) || !bindingFor(bindings, "video.seconds") || !(partFrames > 0))
-      return null;
+    if (!isStageFile(file) || !bindingFor(bindings, "video.seconds")) return null;
     const info = await this.deps.stages.videoInfo(file);
     if (!info.fps || !info.duration) return null;
     const want = {
       start: Number(value("video.start")) || 0,
       seconds: Number(value("video.seconds")) || 0,
     };
-    const fps = info.fps;
-    return {
-      ...videoParts(want, { seconds: info.duration, fps }, partFrames),
-      first: partWindow(want, fps, partFrames, 0),
-    };
+    // The result's frame rate (H3 makes 24 fps; SCAIL the video's), and the model's longest run.
+    const madeFps = Number(value("video.fps")) || info.fps;
+    const most = Number(value("video.frames"));
+    const plan = swapWindow(
+      want,
+      parts,
+      { seconds: info.duration, fps: info.fps },
+      madeFps,
+      most > 0 ? most : Number.POSITIVE_INFINITY,
+    );
+    return { ...plan, first: partWindow(plan, madeFps, Math.round(plan.part * madeFps), 0) };
   }
 
-  async run(body: GenerateBody): Promise<GenerateResponse> {
+  async run(body: GenerateBody, window: InputWindow | null = null): Promise<GenerateResponse> {
     if (body.script?.kind !== "long")
       throw new HttpError(400, "No long video to run.", "no_script");
     const profileId = this.deps.profiles.active;
@@ -123,7 +157,6 @@ export class LongVideoService {
         "no_extend",
       );
     // The first part reads only its own window of a windowed input video.
-    const window = await this.window(saved.bindings, saved.values);
     const first: Record<string, unknown> = {};
     for (const [role, v] of [
       ["video.start", window?.first.start],
@@ -140,6 +173,7 @@ export class LongVideoService {
       manifest: saved,
       plan,
       first,
+      window: window ? { start: window.start, seconds: window.seconds, part: window.part } : null,
       seeds: plan.cells.map((c) =>
         mode === "random" ? randomSeed() : nextSeed(mode, seed, c.repeat ?? 0),
       ),
@@ -154,7 +188,7 @@ export class LongVideoService {
     const cell = plan.cells[index];
     const last = index === plan.cells.length - 1;
     const stages = readStages(manifest.stages);
-    if (video) stages.source = { ...stages.source, mode: "extend", video };
+    if (video) stages.source = { ...stages.source, mode: "extend", video, window: chain.window };
     if (!last) stages.smooth = { ...stages.smooth, enabled: false };
     const [job] = this.deps.queue.addRuns(manifest, [
       {

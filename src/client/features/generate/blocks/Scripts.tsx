@@ -343,7 +343,10 @@ function LongEditor({ draft }: { draft: ScriptDraft["long"] }) {
   const fps = useRoleBinding("video.fps");
   const frames = useValues((s) => (length ? Number(s.values[length.id]) : Number.NaN));
   const rate = useValues((s) => (fps ? Number(s.values[fps.id]) : Number.NaN));
-  const part = frames / rate;
+  // A character swap's part is its Length of the input video (set beside it, on the card).
+  const swap = useRoleBinding("video.seconds");
+  const swapSeconds = useValues((s) => (swap ? Number(s.values[swap.id]) : Number.NaN));
+  const part = swap ? swapSeconds : frames / rate;
   const each = Number.isFinite(part) && part > 0 ? Math.round(part * 10) / 10 : null;
   return (
     <div className="flex flex-col gap-3">

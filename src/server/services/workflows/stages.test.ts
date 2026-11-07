@@ -830,6 +830,44 @@ describe("character swaps (SCAIL 2, MiniMax H3)", () => {
     expect(joined.inputs["images.image0"]).toEqual([partsId, 0]);
     expect(p["29"]?.inputs.images).toEqual([joinedId, 0]);
   });
+
+  it("H3's swap continues: the last frames anchor, the reference video moves on", () => {
+    // A first part of 4 s (H3 makes 90 frames for it, at 24 fps), of 2 parts from 1 s.
+    const VIDEO = {
+      ...IMAGE,
+      file: "00112233aabbccdd.mp4",
+      label: "so-far.mp4",
+      duration: 90 / 24,
+      frames: 90,
+      fps: 24,
+    };
+    const prompt = load("preset:minimax-h3-swap");
+    expect(sourceModes(prompt, packages, analyze(prompt, info).bindings, "video")).toContain(
+      "extend",
+    );
+    const p = run(
+      "preset:minimax-h3-swap",
+      {
+        source: {
+          mode: "extend",
+          video: VIDEO,
+          window: { start: 1, seconds: 8 - 5 / 24, part: 4 },
+        },
+      },
+      { stageImages: { [VIDEO.file]: "blombo/00112233aabbccdd.mp4" } },
+    ).prompt;
+    expectValidGraph(p);
+    // The guide puts the video so far's last 5 frames at the start of the new part.
+    const [guideId, guide] = one(p, "MiniMaxH3AddGuide");
+    expect(guide.inputs).toMatchObject({ positive: ["10", 0], latent: ["10", 1] });
+    expect(p["14"]?.inputs.conditioning).toEqual([guideId, 0]);
+    // The reference window starts 5 frames before the end of the 90 made (a quarter frame early),
+    // for the part's 4 s.
+    expect(p["24"]?.inputs.start_time).toBe(4.531);
+    expect(p["25"]?.inputs.value).toBe(4);
+    const [joinedId] = one(p, "BatchImagesNode");
+    expect(p["18"]?.inputs.images).toEqual([joinedId, 0]);
+  });
 });
 
 describe("smooth motion (frame interpolation)", () => {

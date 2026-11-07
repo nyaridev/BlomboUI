@@ -5,6 +5,9 @@
  * next part is a Continue a video run whose window starts `PART_OVERLAP` frames before the end of
  * the video so far, so the frames line up. Used by Generate (what a run will make), the queue
  * (how many parts) and the splicer (each part's window).
+ *
+ * Generate's Parts (Scripts → Long video on a swap) repeats Length: 2 parts of 5 s read 10 s of
+ * the video, less the frames each next part shares with the one before (`swapWindow`).
  */
 
 /** Frames each next part shares with the video so far (SCAIL anchors on the last 5). */
@@ -54,6 +57,38 @@ export function videoParts(
     parts: count(frames),
     shortened,
   };
+}
+
+export interface SwapWindow extends VideoParts {
+  /** The longest window one part reads, in seconds. */
+  part: number;
+}
+
+/**
+ * What a swap reads and runs: `parts` of `want.seconds` each (1 on a plain click), every run at
+ * most `maxFrames` (the model's longest, SCAIL's 81; Infinity when Length is the limit) at
+ * `madeFps`, the frame rate the result is made at (H3's 24, or the video's own). With Parts, each
+ * next part reads a whole Length from 5 frames before the end of the one before, so the window
+ * is that much shorter than Length × Parts.
+ */
+export function swapWindow(
+  want: VideoWindow,
+  parts: number,
+  file: { seconds: number; fps: number },
+  madeFps: number,
+  maxFrames: number,
+): SwapWindow {
+  const repeat = parts > 1 && want.seconds > 0;
+  const seconds = repeat
+    ? parts * want.seconds - ((parts - 1) * PART_OVERLAP) / madeFps
+    : want.seconds;
+  const part = Math.min(maxFrames / madeFps, repeat ? want.seconds : Number.POSITIVE_INFINITY);
+  const plan = videoParts(
+    { start: want.start, seconds },
+    { seconds: file.seconds, fps: madeFps },
+    Math.round(part * madeFps),
+  );
+  return { ...plan, part };
 }
 
 /**

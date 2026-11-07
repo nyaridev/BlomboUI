@@ -12,11 +12,12 @@ export function jobRoutes(queue: JobQueue, scripts: ScriptService, longVideo: Lo
 
   r.post("/", async (c) => {
     const body = await readJson(c, GenerateBody);
-    if (body.script?.kind === "long") return c.json(await longVideo.run(body), 201);
-    if (body.script) return c.json(await scripts.run(body), 201);
-    // A swap whose window of its video is longer than one run makes runs in parts.
+    // A swap runs in parts when its window of the video is longer than one run makes, or when
+    // Long video's Parts repeat its Length.
     const parts = await longVideo.split(body);
     if (parts) return c.json(parts, 201);
+    if (body.script?.kind === "long") return c.json(await longVideo.run(body), 201);
+    if (body.script) return c.json(await scripts.run(body), 201);
     const res = await queue.enqueue(body);
     // A click that makes several images gets a batch grid (not Generate forever's endless runs).
     if (!body.loop) scripts.followClick(res.jobs);

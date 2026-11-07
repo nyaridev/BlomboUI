@@ -135,6 +135,8 @@ function Page({
         <div className="flex min-w-0 flex-col gap-4 max-[1000px]:contents">
           {images.length ? (
             <CivitaiCarousel
+              // Another version starts a new carousel: nothing of the last one's pictures stays.
+              key={version?.id}
               images={images}
               label={`${model.name} images`}
               onIndex={setShown}
@@ -260,7 +262,10 @@ function Page({
                   <Select
                     label="Version"
                     value={String(versionId)}
-                    onChange={(v) => setVersionId(Number(v))}
+                    onChange={(v) => {
+                      setVersionId(Number(v));
+                      setShown(0);
+                    }}
                     options={model.versions.map((v) => ({
                       value: String(v.id),
                       label: v.name,

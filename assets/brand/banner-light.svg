@@ -2,15 +2,14 @@
   <title id="t">BlomboUI</title>
   <desc id="d">A friendly face for ComfyUI. Profiles, workflows you import, a Generate screen you arrange, a gallery and your models.</desc>
   <rect width="1280" height="320" rx="24" fill="#f6f3ee"/>
-  <g transform="translate(51.4 12.9) scale(0.52)">
-    <path fill="#0d0f12" fill-rule="evenodd" d="M116 196V184A44 44 0 0 1 160 140H352A44 44 0 0 1 396 184V196ZM116 210H396V253A37 37 0 0 0 396 327V328A44 44 0 0 1 352 372H160A44 44 0 0 1 116 328V327A37 37 0 0 0 116 253ZM199 290A21 38 0 1 0 241 290A21 38 0 1 0 199 290ZM271 290A21 38 0 1 0 313 290A21 38 0 1 0 271 290ZM86 290A30 30 0 1 0 146 290A30 30 0 1 0 86 290ZM105 290A11 11 0 1 0 127 290A11 11 0 1 0 105 290Z"/>
-    <circle cx="396" cy="290" r="30" fill="#e04800"/>
-  </g>
-  <path d="M341 75.6V170.8M341 142.8A28 28 0 1 0 397 142.8A28 28 0 1 0 341 142.8M437 75.6V170.8M475 142.8A28 28 0 1 0 531 142.8A28 28 0 1 0 475 142.8M569 114.8V170.8M569 139.8A25 25 0 0 1 619 139.8V170.8M619 139.8A25 25 0 0 1 669 139.8V170.8M715 75.6V170.8M715 142.8A28 28 0 1 0 771 142.8A28 28 0 1 0 715 142.8M807 142.8A28 28 0 1 0 863 142.8A28 28 0 1 0 807 142.8" fill="none" stroke="#0d0f12" stroke-width="22.4" stroke-linecap="round" stroke-linejoin="round"/>
-  <text x="332" y="266" fill="#6b6b66" font-family="'Segoe UI', Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22">A friendly face for ComfyUI.</text>
-  <g font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="16" fill="#6b6b66" text-anchor="end">
-    <text x="1180" y="150">profiles · workflows</text>
-    <text x="1180" y="182">gallery · models</text>
-  </g>
-  <rect x="1194" y="134" width="6" height="56" rx="3" fill="#e04800"/>
+  <defs><pattern id="dots-light" width="24" height="24" patternUnits="userSpaceOnUse"><circle cx="12" cy="12" r="1.6" fill="#6b6b66"/></pattern><radialGradient id="fadeg-light" cx="640" cy="160" r="640" gradientUnits="userSpaceOnUse"><stop offset="0.35" stop-color="#000"/><stop offset="1" stop-color="#fff"/></radialGradient><mask id="fade-light"><rect width="1280" height="320" fill="url(#fadeg-light)"/></mask></defs>
+  <rect width="1280" height="320" rx="24" fill="url(#dots-light)" mask="url(#fade-light)" opacity="0.5"/>
+  <g transform="translate(334 47.7) scale(0.55)"><g transform="translate(51.4 12.9) scale(0.52)"><path fill="#0d0f12" fill-rule="evenodd" d="M116 196V184A44 44 0 0 1 160 140H352A44 44 0 0 1 396 184V196ZM116 210H396V253A37 37 0 0 0 396 327V328A44 44 0 0 1 352 372H160A44 44 0 0 1 116 328V327A37 37 0 0 0 116 253ZM199 290A21 38 0 1 0 241 290A21 38 0 1 0 199 290ZM271 290A21 38 0 1 0 313 290A21 38 0 1 0 271 290ZM86 290A30 30 0 1 0 146 290A30 30 0 1 0 86 290ZM105 290A11 11 0 1 0 127 290A11 11 0 1 0 105 290Z"/><circle cx="396" cy="290" r="30" fill="#e04800"/></g></g>
+  <g transform="translate(281.2 40.4) scale(0.7)"><path d="M341 75.6V170.8M341 142.8A28 28 0 1 0 397 142.8A28 28 0 1 0 341 142.8M437 75.6V170.8M475 142.8A28 28 0 1 0 531 142.8A28 28 0 1 0 475 142.8M569 114.8V170.8M569 139.8A25 25 0 0 1 619 139.8V170.8M619 139.8A25 25 0 0 1 669 139.8V170.8M715 75.6V170.8M715 142.8A28 28 0 1 0 771 142.8A28 28 0 1 0 715 142.8M807 142.8A28 28 0 1 0 863 142.8A28 28 0 1 0 807 142.8" fill="none" stroke-width="22.4" stroke-linecap="round" stroke-linejoin="round" stroke="#0d0f12"/></g>
+  <text x="640" y="222" fill="#6b6b66" font-family="'Segoe UI', Inter, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="22" text-anchor="middle">A friendly face for ComfyUI.</text>
+  <rect x="365.5" y="246" width="104" height="32" rx="16" fill="none" stroke="#e04800" stroke-opacity="0.6" stroke-width="1.5"/><text x="417.5" y="267" fill="#e04800" font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="15" text-anchor="middle">profiles</text>
+  <rect x="481.5" y="246" width="113" height="32" rx="16" fill="none" stroke="#e04800" stroke-opacity="0.6" stroke-width="1.5"/><text x="538" y="267" fill="#e04800" font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="15" text-anchor="middle">workflows</text>
+  <rect x="606.5" y="246" width="104" height="32" rx="16" fill="none" stroke="#e04800" stroke-opacity="0.6" stroke-width="1.5"/><text x="658.5" y="267" fill="#e04800" font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="15" text-anchor="middle">generate</text>
+  <rect x="722.5" y="246" width="95" height="32" rx="16" fill="none" stroke="#e04800" stroke-opacity="0.6" stroke-width="1.5"/><text x="770" y="267" fill="#e04800" font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="15" text-anchor="middle">gallery</text>
+  <rect x="829.5" y="246" width="86" height="32" rx="16" fill="none" stroke="#e04800" stroke-opacity="0.6" stroke-width="1.5"/><text x="872.5" y="267" fill="#e04800" font-family="'JetBrains Mono', Consolas, Menlo, monospace" font-size="15" text-anchor="middle">models</text>
 </svg>

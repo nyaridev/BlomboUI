@@ -57,3 +57,7 @@ npm run check
 `npm run check` runs types, lint, tests and the rules sync. The Design Lab at `/lab` shows every token, icon and
 control in every theme. Agents start at [AGENTS.md](AGENTS.md); the map is
 [docs/architecture.md](docs/architecture.md), the look is [docs/design-system.md](docs/design-system.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
